@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use baml_type::{MediaKind, RuntimeTy, TypeName};
+use baml_type::{MediaKind, RealizedTy, TyTemplate, TypeName};
 
 /// FQN of the recursive `json` type alias declared in `baml.json`.
 /// Mirrors `baml_base::qualified_name::BAML_JSON_JSON`; inlined here to
@@ -25,10 +25,10 @@ const BAML_JSON_JSON: &str = "baml.json.json";
 
 /// The runtime type of an untyped `json` value: the recursive `baml.json.json`
 /// alias (`null | bool | int | float | string | json[] | map<string, json>`).
-/// Recursive aliases stay opaque in `RuntimeTy`, so this is the most precise
+/// Recursive aliases stay opaque in `RealizedTy`, so this is the most precise
 /// element/value type available for containers parsed from untyped JSON.
-pub(super) fn json_alias_ty() -> RuntimeTy {
-    RuntimeTy::TypeAlias(
+pub(super) fn json_alias_ty() -> RealizedTy {
+    RealizedTy::TypeAlias(
         TypeName::from_dotted_path(BAML_JSON_JSON),
         baml_type::TyAttr::default(),
     )
@@ -49,8 +49,8 @@ where
     r
 }
 
-/// Build the runtime registration key for a `RuntimeTy::Class(qtn, ...)` /
-/// `RuntimeTy::Enum(qtn, _)` lookup against `BexVm::resolved_class_names`.
+/// Build the runtime registration key for a `RealizedTy::Class(qtn, ...)` /
+/// `RealizedTy::Enum(qtn, _)` lookup against `BexVm::resolved_class_names`.
 ///
 /// Compiler-side `display_name` strips the `user.` prefix from
 /// user-defined types for nicer diagnostic strings, but
@@ -524,13 +524,11 @@ pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
 // ─── Error throwers ───────────────────────────────────────────────────────────
 
 fn throw_json_parse_error(vm: &mut BexVm, message: String) -> Result<Value, VmInternalError> {
-    let class_ptr = vm
-        .resolved_class_names
-        .get(JSON_PARSE_ERROR_FQN)
-        .copied()
-        .ok_or_else(|| VmInternalError::MissingNativeFunction {
+    let class_ptr = vm.lookup_type_by_fqn(JSON_PARSE_ERROR_FQN).ok_or_else(|| {
+        VmInternalError::MissingNativeFunction {
             name: JSON_PARSE_ERROR_FQN.to_string(),
-        })?;
+        }
+    })?;
     let message_val = Value::object(vm.alloc_string(message));
     Ok(Value::object(
         vm.alloc_instance(class_ptr, vec![message_val]),
@@ -543,9 +541,7 @@ fn throw_json_decode_error(
     path: &str,
 ) -> Result<Value, VmInternalError> {
     let class_ptr = vm
-        .resolved_class_names
-        .get(JSON_DECODE_ERROR_FQN)
-        .copied()
+        .lookup_type_by_fqn(JSON_DECODE_ERROR_FQN)
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_DECODE_ERROR_FQN.to_string(),
         })?;
@@ -563,9 +559,7 @@ fn throw_json_serialization_error(
     reason: &str,
 ) -> Result<Value, VmInternalError> {
     let class_ptr = vm
-        .resolved_class_names
-        .get(JSON_SERIALIZATION_ERROR_FQN)
-        .copied()
+        .lookup_type_by_fqn(JSON_SERIALIZATION_ERROR_FQN)
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_SERIALIZATION_ERROR_FQN.to_string(),
         })?;
@@ -595,16 +589,6 @@ fn raise_serialize(
         Ok(v) => VmRustFnError::Thrown(v),
         Err(e) => VmRustFnError::InternalError(e),
     }
-}
-
-/// Public helper for native methods outside `json.rs` that need to throw a
-/// `JsonSerializationError` without a path context (e.g. `Uint8Array.to_json`).
-pub fn raise_serialize_no_path(
-    vm: &mut BexVm,
-    message: impl Into<String>,
-    reason: &str,
-) -> VmRustFnError {
-    raise_serialize(vm, message, "", reason)
 }
 
 // ─── serde_json ↔ VM Value conversion (untyped) ──────────────────────────────
@@ -656,7 +640,7 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
                 .collect();
             // Untyped JSON object: string keys, `json` values.
             Value::object(vm.tlab.alloc(Object::Map(Map::new(
-                RuntimeTy::string(),
+                RealizedTy::string(),
                 json_alias_ty(),
                 entries,
             ))))
@@ -666,7 +650,7 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
 
 /// Convert a VM `Value` into a `serde_json::Value`, ignoring declared types.
 ///
-/// Used for `RuntimeTy::TypeAlias(BAML_JSON_JSON)` and for class fields whose runtime
+/// Used for `RealizedTy::TypeAlias(BAML_JSON_JSON)` and for class fields whose runtime
 /// field type is intentionally untyped or unavailable.
 pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
     use bex_vm_types::ValueKind;
@@ -693,10 +677,30 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                 serde_json::Value::Object(entries)
             }
             Object::Bigint(bi) => serde_json::Value::String(bi.to_string()),
+            // An enum variant renders as its variant-name string, matching the
+            // typed (`ty_value_to_serde`) and structural (`render_to_serde`)
+            // walkers. This is reached when a variant flows through an arm that
+            // delegates to the untyped converter — e.g. `ty_value_to_serde`'s
+            // `RealizedTy::Union` arm for a field typed `E | ...` (including the
+            // optional enum `E?` == `E | null`). Without this, such fields
+            // serialized as `null` (B-728).
+            Object::Variant(var) => {
+                let (enm, index) = (var.enm, var.index);
+                match vm.get_object(enm) {
+                    Object::Enum(e) => e
+                        .variants
+                        .get(index)
+                        .map(|v| serde_json::Value::String(v.name.clone()))
+                        .unwrap_or(serde_json::Value::Null),
+                    _ => serde_json::Value::Null,
+                }
+            }
             Object::Instance(_)
             | Object::Class(_)
             | Object::Enum(_)
-            | Object::Variant(_)
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::Function(_)
             | Object::Future(_)
             | Object::UnscheduledFuture(_)
@@ -717,7 +721,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
 
 // ─── Typed JSON serialize ────────────────────────────────────────────────────
 
-/// Serialize a VM `Value` to a JSON string driven by the runtime `RuntimeTy`.
+/// Serialize a VM `Value` to a JSON string driven by the runtime `RealizedTy`.
 ///
 /// Walks the value matching the shape of `ty`.  Throws
 /// `JsonSerializationError` for non-representable types (`uint8array`,
@@ -725,7 +729,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
 pub fn json_to_string_typed(
     vm: &mut BexVm,
     v: Value,
-    ty: &RuntimeTy,
+    ty: &RealizedTy,
 ) -> Result<String, VmRustFnError> {
     let mut path = String::new();
     let json_val = ty_value_to_serde(vm, v, ty, &mut path)?;
@@ -748,21 +752,21 @@ pub fn json_to_string_typed(
 fn ty_value_to_serde(
     vm: &mut BexVm,
     value: Value,
-    ty: &RuntimeTy,
+    ty: &RealizedTy,
     path: &mut String,
 ) -> Result<serde_json::Value, VmRustFnError> {
     match ty {
         // Primitive shapes: emit the value directly through value_to_serde,
         // which is total for scalar values.
-        RuntimeTy::Null { .. } => Ok(serde_json::Value::Null),
-        RuntimeTy::Int { .. }
-        | RuntimeTy::Float { .. }
-        | RuntimeTy::Bool { .. }
-        | RuntimeTy::String { .. } => Ok(value_to_serde(vm, value)),
-        RuntimeTy::Bigint { .. } => Ok(value_to_serde(vm, value)),
-        RuntimeTy::Literal(_, _, _) => Ok(value_to_serde(vm, value)),
+        RealizedTy::Null { .. } => Ok(serde_json::Value::Null),
+        RealizedTy::Int { .. }
+        | RealizedTy::Float { .. }
+        | RealizedTy::Bool { .. }
+        | RealizedTy::String { .. } => Ok(value_to_serde(vm, value)),
+        RealizedTy::Bigint { .. } => Ok(value_to_serde(vm, value)),
+        RealizedTy::Literal(_, _, _) => Ok(value_to_serde(vm, value)),
 
-        RuntimeTy::List(elem, _) => {
+        RealizedTy::List(elem, _) => {
             let items = match value.as_object_ptr() {
                 Some(ptr) => match vm.get_object(ptr) {
                     Object::Array(arr) => arr.to_vec(),
@@ -780,7 +784,7 @@ fn ty_value_to_serde(
             Ok(serde_json::Value::Array(out))
         }
 
-        RuntimeTy::Map { value: vty, .. } => {
+        RealizedTy::Map { value: vty, .. } => {
             let entries = match value.as_object_ptr() {
                 Some(ptr) => match vm.get_object(ptr) {
                     Object::Map(m) => m.to_index_map(),
@@ -798,20 +802,20 @@ fn ty_value_to_serde(
             Ok(serde_json::Value::Object(out))
         }
 
-        RuntimeTy::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
+        RealizedTy::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
             Ok(value_to_serde(vm, value))
         }
 
-        RuntimeTy::TypeAlias(_, _) => {
+        RealizedTy::TypeAlias(_, _) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
             Ok(value_to_serde(vm, value))
         }
 
-        RuntimeTy::Class(qtn, _type_args, _) | RuntimeTy::Interface(qtn, _type_args, _, _) => {
+        RealizedTy::Class(qtn, _type_args, _) | RealizedTy::Interface(qtn, _type_args, _, _) => {
             serialize_class_instance(vm, value, qtn, path)
         }
 
-        RuntimeTy::Enum(_, _) => match value.as_object_ptr() {
+        RealizedTy::Enum(_, _) => match value.as_object_ptr() {
             Some(ptr) => match vm.get_object(ptr) {
                 Object::Variant(var) => {
                     let enm_ptr = var.enm;
@@ -834,24 +838,48 @@ fn ty_value_to_serde(
             None => Err(raise_serialize(vm, "expected enum variant", path, "enum")),
         },
 
-        RuntimeTy::EnumVariant(_, name, _) => Ok(serde_json::Value::String(name.to_string())),
+        RealizedTy::EnumVariant(_, name, _) => Ok(serde_json::Value::String(name.to_string())),
 
-        RuntimeTy::Media(kind, _) => serialize_media(vm, value, *kind, path),
+        RealizedTy::Media(kind, _) => serialize_media(vm, value, *kind, path),
 
-        RuntimeTy::Uint8Array { .. } => Err(raise_serialize(
+        RealizedTy::Uint8Array { .. } => Err(raise_serialize(
             vm,
             "uint8array requires explicit encoding (use to_base64() or to_hex())",
             path,
             "uint8array",
         )),
 
-        RuntimeTy::Union(_, _) => {
-            // Tagged structurally — dispatch on the runtime Value shape rather
-            // than trying each member. Matches json-alias union semantics.
-            Ok(value_to_serde(vm, value))
+        RealizedTy::Union(members, _) => {
+            // Select the first declared member that contains the runtime value,
+            // using the same ordered, decidable membership relation as `is` and
+            // typed match arms. Serialization then remains fully type-directed:
+            // a class/media/uint8array member behaves exactly as it would outside
+            // the union, and values outside every member fail the type contract.
+            let member = members.iter().find(|member| {
+                crate::type_match::value_matches_template(
+                    vm,
+                    value,
+                    &TyTemplate::from((*member).clone()),
+                    &[],
+                )
+                // A template built from a `RealizedTy` carries no frame refs
+                // and no projections, so substitution cannot fail.
+                .unwrap_or_else(|e| {
+                    unreachable!("realized union-member template failed to substitute: {e}")
+                })
+            });
+            match member {
+                Some(member) => ty_value_to_serde(vm, value, member, path),
+                None => Err(raise_serialize(
+                    vm,
+                    "value is not a member of the union",
+                    path,
+                    "union",
+                )),
+            }
         }
 
-        RuntimeTy::Resource { .. } | RuntimeTy::PromptAst { .. } => Err(raise_serialize(
+        RealizedTy::Resource { .. } | RealizedTy::PromptAst { .. } => Err(raise_serialize(
             vm,
             "cannot serialize opaque type",
             path,
@@ -859,31 +887,25 @@ fn ty_value_to_serde(
         )),
 
         // Compiler-only / non-representable variants.
-        RuntimeTy::Function { .. } => Err(raise_serialize(
+        RealizedTy::Function { .. } => Err(raise_serialize(
             vm,
             "cannot serialize function values",
             path,
             "function",
         )),
-        RuntimeTy::Future(_, _, _) => Err(raise_serialize(
+        RealizedTy::Future(_, _, _) => Err(raise_serialize(
             vm,
             "cannot serialize future values",
             path,
             "future",
         )),
-        RuntimeTy::WatchAccessor(_, _) => Err(raise_serialize(
-            vm,
-            "cannot serialize watch accessors",
-            path,
-            "watch_accessor",
-        )),
-        RuntimeTy::BuiltinUnknown { .. } => Err(raise_serialize(
+        RealizedTy::BuiltinUnknown { .. } => Err(raise_serialize(
             vm,
             "cannot serialize unknown type",
             path,
             "unknown",
         )),
-        RuntimeTy::Void { .. } => {
+        RealizedTy::Void { .. } => {
             // `void` has no declared JSON shape to validate against here.
             // Use structural serialization of the produced value.
             // Instantiated generic class fields normally use `field_template`
@@ -892,18 +914,16 @@ fn ty_value_to_serde(
         }
 
         // Type-level and opaque types carry no serializable runtime value:
-        // reflection types (`TypeVar`, `AssociatedTypeProjection`, `Type`),
-        // opaque Rust state (`RustType`), and the bottom type (`Never`).
-        RuntimeTy::TypeVar(_, _)
-        | RuntimeTy::AssociatedTypeProjection { .. }
-        | RuntimeTy::Never { .. }
-        | RuntimeTy::RustType { .. }
-        | RuntimeTy::Type { .. } => Err(raise_serialize(
-            vm,
-            "cannot serialize compiler-only type",
-            path,
-            "compiler_only",
-        )),
+        // reflection types (`Type`), opaque Rust state (`RustType`), and the
+        // bottom type (`Never`).
+        RealizedTy::Never { .. } | RealizedTy::RustType { .. } | RealizedTy::Type { .. } => {
+            Err(raise_serialize(
+                vm,
+                "cannot serialize compiler-only type",
+                path,
+                "compiler_only",
+            ))
+        }
     }
 }
 
@@ -912,7 +932,7 @@ fn ty_value_to_serde(
 ///
 /// Special-cases media classes (`baml.media.Pdf`/`Audio`/`Video`/`Image`)
 /// which are stored as `Object::Instance` with a `_data: Object::RustData`
-/// field.  Detected by class FQN; a leading `RuntimeTy::Media(_)` would have
+/// field.  Detected by class FQN; a leading `RealizedTy::Media(_)` would have
 /// already routed through `serialize_media`.
 fn serialize_class_instance(
     vm: &mut BexVm,
@@ -980,7 +1000,7 @@ fn serialize_class_instance(
         // Substitute class-level type-args into the field's template so
         // generic positions (`item: T` in `Container<T>`) resolve to the
         // concrete type carried on `Instance::class_type_args`.
-        let field_ty = cf.field_template.substitute(&class_type_args);
+        let field_ty = vm.realize_field_ty(&cf.field_template, &class_type_args);
         let field_json = with_path_segment(path, format_args!(".{}", cf.name), |p| {
             ty_value_to_serde(vm, field_value, &field_ty, p)
         })?;
@@ -1041,14 +1061,21 @@ fn serialize_media(
     Ok(serde_json::Value::Object(obj))
 }
 
-fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<baml_builtins2::MediaValue>> {
+pub(crate) fn read_media_value(
+    vm: &BexVm,
+    value: Value,
+) -> Option<Arc<baml_builtins2::MediaValue>> {
     let ptr = value.as_object_ptr()?;
-    let inst = match vm.get_object(ptr) {
-        Object::Instance(inst) => inst,
+    let (class, data_value) = match vm.get_object(ptr) {
+        Object::Instance(inst) => (inst.class, inst.fields.first()?.load()),
         _ => return None,
     };
-    // Media classes have a single `_data: $rust_type` field.
-    let data_value = inst.fields.first()?.load();
+    let class_name = match vm.get_object(class) {
+        Object::Class(class) => class.name.render_dotted(false),
+        _ => return None,
+    };
+    media_kind_from_fqn(class_name.as_str())?;
+
     let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
         Object::RustData(arc) => arc.clone().downcast::<baml_builtins2::MediaValue>().ok(),
@@ -1059,14 +1086,14 @@ fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<baml_builtins2::Medi
 // ─── Typed JSON deserialize ──────────────────────────────────────────────────
 
 /// Parse a JSON string and coerce it to a VM `Value` of the given runtime
-/// `RuntimeTy`.
+/// `RealizedTy`.
 ///
 /// Throws `JsonParseError` for invalid JSON and `JsonDecodeError` when the
 /// parsed JSON does not match the target type.
 pub fn json_from_string_typed(
     vm: &mut BexVm,
     s: &str,
-    ty: &RuntimeTy,
+    ty: &RealizedTy,
 ) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
@@ -1084,21 +1111,21 @@ pub fn json_from_string_typed(
 fn ty_serde_to_value(
     vm: &mut BexVm,
     json: &serde_json::Value,
-    ty: &RuntimeTy,
+    ty: &RealizedTy,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
     match ty {
-        RuntimeTy::Null { .. } => match json {
+        RealizedTy::Null { .. } => match json {
             serde_json::Value::Null => Ok(Value::NULL),
             _ => Err(raise_decode(vm, "expected null", path)),
         },
 
-        RuntimeTy::Bool { .. } => match json {
+        RealizedTy::Bool { .. } => match json {
             serde_json::Value::Bool(b) => Ok(Value::bool(*b)),
             _ => Err(raise_decode(vm, "expected boolean", path)),
         },
 
-        RuntimeTy::Int { .. } => match json {
+        RealizedTy::Int { .. } => match json {
             serde_json::Value::Number(n) => n.as_i64().and_then(Value::try_int).ok_or_else(|| {
                 raise_decode(
                     vm,
@@ -1110,13 +1137,13 @@ fn ty_serde_to_value(
         },
 
         // Bigint JSON decoding is not yet implemented (Phase 9+).
-        RuntimeTy::Bigint { .. } => Err(raise_decode(
+        RealizedTy::Bigint { .. } => Err(raise_decode(
             vm,
             "bigint JSON decoding not yet implemented",
             path,
         )),
 
-        RuntimeTy::Float { .. } => match json {
+        RealizedTy::Float { .. } => match json {
             serde_json::Value::Number(n) => {
                 if let Some(f) = n.as_f64() {
                     Ok(Value::object(vm.alloc_float(f)))
@@ -1127,12 +1154,12 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected number", path)),
         },
 
-        RuntimeTy::String { .. } => match json {
+        RealizedTy::String { .. } => match json {
             serde_json::Value::String(s) => Ok(Value::object(vm.alloc_string(s.clone()))),
             _ => Err(raise_decode(vm, "expected string", path)),
         },
 
-        RuntimeTy::List(elem, _) => match json {
+        RealizedTy::List(elem, _) => match json {
             serde_json::Value::Array(arr) => {
                 let mut items = Vec::with_capacity(arr.len());
                 for (i, item) in arr.iter().enumerate() {
@@ -1149,7 +1176,7 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected array", path)),
         },
 
-        RuntimeTy::Map { value: vty, .. } => match json {
+        RealizedTy::Map { value: vty, .. } => match json {
             serde_json::Value::Object(map) => {
                 let mut entries: IndexMap<bex_vm_types::BexStr, Value> =
                     IndexMap::with_capacity(map.len());
@@ -1161,7 +1188,7 @@ fn ty_serde_to_value(
                 }
                 // BAML maps are always string-keyed at runtime.
                 Ok(Value::object(vm.tlab.alloc(Object::Map(Map::new(
-                    RuntimeTy::string(),
+                    RealizedTy::string(),
                     (**vty).clone(),
                     entries,
                 )))))
@@ -1169,32 +1196,32 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected object", path)),
         },
 
-        RuntimeTy::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
+        RealizedTy::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
             Ok(serde_to_value(vm, json))
         }
 
-        RuntimeTy::TypeAlias(_, _) => {
+        RealizedTy::TypeAlias(_, _) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
             Ok(serde_to_value(vm, json))
         }
 
-        RuntimeTy::Class(qtn, type_args, _) => {
+        RealizedTy::Class(qtn, type_args, _) => {
             if let Some(kind) = media_kind_from_fqn(qtn.display_name().as_str()) {
                 return deserialize_media(vm, json, kind, qtn, path);
             }
             deserialize_class_instance(vm, json, qtn, type_args, path)
         }
 
-        RuntimeTy::Interface(qtn, type_args, _, _) => {
+        RealizedTy::Interface(qtn, type_args, _, _) => {
             deserialize_class_instance(vm, json, qtn, type_args, path)
         }
 
-        RuntimeTy::Enum(qtn, _) => match json {
+        RealizedTy::Enum(qtn, _) => match json {
             serde_json::Value::String(s) => deserialize_enum_variant(vm, qtn, s, path),
             _ => Err(raise_decode(vm, "expected enum variant string", path)),
         },
 
-        RuntimeTy::EnumVariant(qtn, name, _) => match json {
+        RealizedTy::EnumVariant(qtn, name, _) => match json {
             serde_json::Value::String(s) if s == name.as_str() => {
                 deserialize_enum_variant(vm, qtn, s, path)
             }
@@ -1205,15 +1232,15 @@ fn ty_serde_to_value(
             )),
         },
 
-        RuntimeTy::Media(kind, _) => deserialize_media_by_kind(vm, json, *kind, path),
+        RealizedTy::Media(kind, _) => deserialize_media_by_kind(vm, json, *kind, path),
 
-        RuntimeTy::Uint8Array { .. } => Err(raise_decode(
+        RealizedTy::Uint8Array { .. } => Err(raise_decode(
             vm,
             "uint8array requires explicit encoding (use from_base64() or from_hex())",
             path,
         )),
 
-        RuntimeTy::Union(members, _) => {
+        RealizedTy::Union(members, _) => {
             // Try each member structurally; first match wins.
             for member in members {
                 let mut tmp_path = path.clone();
@@ -1224,7 +1251,7 @@ fn ty_serde_to_value(
             Err(raise_decode(vm, "no union member matched", path))
         }
 
-        RuntimeTy::Literal(lit, _, _) => match (lit, json) {
+        RealizedTy::Literal(lit, _, _) => match (lit, json) {
             (baml_type::Literal::Bool(b), serde_json::Value::Bool(jb)) if b == jb => {
                 Ok(Value::bool(*jb))
             }
@@ -1256,15 +1283,14 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "literal mismatch", path)),
         },
 
-        RuntimeTy::Resource { .. } | RuntimeTy::PromptAst { .. } => {
+        RealizedTy::Resource { .. } | RealizedTy::PromptAst { .. } => {
             Err(raise_decode(vm, "cannot deserialize opaque type", path))
         }
 
-        RuntimeTy::Function { .. }
-        | RuntimeTy::Future(_, _, _)
-        | RuntimeTy::WatchAccessor(_, _)
-        | RuntimeTy::BuiltinUnknown { .. }
-        | RuntimeTy::Void { .. } => {
+        RealizedTy::Function { .. }
+        | RealizedTy::Future(_, _, _)
+        | RealizedTy::BuiltinUnknown { .. }
+        | RealizedTy::Void { .. } => {
             // These variants do not provide a concrete JSON schema to validate
             // against here. Preserve structural JSON conversion for values
             // whose shape is already JSON-representable.
@@ -1272,13 +1298,11 @@ fn ty_serde_to_value(
         }
 
         // Type-level and opaque types are not valid decode targets: reflection
-        // types (`TypeVar`, `AssociatedTypeProjection`, `Type`), opaque Rust
-        // state (`RustType`), and the bottom type (`Never`).
-        RuntimeTy::TypeVar(_, _)
-        | RuntimeTy::AssociatedTypeProjection { .. }
-        | RuntimeTy::Never { .. }
-        | RuntimeTy::RustType { .. }
-        | RuntimeTy::Type { .. } => Err(raise_decode(vm, "cannot decode compiler-only type", path)),
+        // types (`Type`), opaque Rust state (`RustType`), and the bottom type
+        // (`Never`).
+        RealizedTy::Never { .. } | RealizedTy::RustType { .. } | RealizedTy::Type { .. } => {
+            Err(raise_decode(vm, "cannot decode compiler-only type", path))
+        }
     }
 }
 
@@ -1286,7 +1310,7 @@ fn deserialize_class_instance(
     vm: &mut BexVm,
     json: &serde_json::Value,
     qtn: &TypeName,
-    type_args: &[RuntimeTy],
+    type_args: &[RealizedTy],
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
     let map = match json {
@@ -1300,11 +1324,8 @@ fn deserialize_class_instance(
         }
     };
 
-    let key = class_lookup_key(qtn);
     let class_ptr = vm
-        .resolved_class_names
-        .get(&key)
-        .copied()
+        .lookup_type(qtn)
         .ok_or_else(|| raise_decode(vm, format!("class `{qtn}` not found"), path))?;
     let class_fields = match vm.get_object(class_ptr) {
         Object::Class(c) => c.fields.clone(),
@@ -1322,7 +1343,7 @@ fn deserialize_class_instance(
         // Substitute class-level type-args into the field's template so a
         // `Container<User>::item` field decodes against `User` rather than
         // erased runtime metadata.
-        let field_ty = cf.field_template.substitute(type_args);
+        let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
         let v = with_path_segment(path, format_args!(".{}", cf.name), |p| {
             let field_json_owned;
             let field_json: &serde_json::Value = if let Some(v) = map.get(cf.name.as_str()) {
@@ -1344,7 +1365,7 @@ fn deserialize_class_instance(
     }
 
     Ok(Value::object(vm.tlab.alloc(Object::Instance(
-        Instance::new(class_ptr, type_args.to_vec(), field_values),
+        Instance::new(class_ptr, type_args.into(), field_values),
     ))))
 }
 
@@ -1354,11 +1375,8 @@ fn deserialize_enum_variant(
     variant_name: &str,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
-    let key = class_lookup_key(qtn);
     let enm_ptr = vm
-        .resolved_class_names
-        .get(&key)
-        .copied()
+        .lookup_type(qtn)
         .ok_or_else(|| raise_decode(vm, format!("enum `{qtn}` not found"), path))?;
     let idx = match vm.get_object(enm_ptr) {
         Object::Enum(e) => e.variants.iter().position(|v| v.name == variant_name),
@@ -1440,11 +1458,8 @@ fn deserialize_media(
         }
     };
 
-    let key = class_lookup_key(qtn);
     let class_ptr = vm
-        .resolved_class_names
-        .get(&key)
-        .copied()
+        .lookup_type(qtn)
         .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
     let data_val = Value::object(vm.alloc_rust_data(media_arc));
     Ok(Value::object(vm.alloc_instance(class_ptr, vec![data_val])))
@@ -1456,7 +1471,7 @@ fn deserialize_media(
 /// `serde_json::Value` and running `ty_serde_to_value`. Used by
 /// [`json_to_dispatch`] for leaf types (primitives, enums, media, literals)
 /// that can never carry a `baml.FromJson` override.
-fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &RuntimeTy) -> NativeCallResult {
+fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResult {
     let serde = value_to_serde(vm, j);
     let mut path = String::new();
     match ty_serde_to_value(vm, &serde, ty, &mut path) {
@@ -1515,18 +1530,18 @@ pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
 ///   target wins; otherwise decode per-field via [`class_from_json_start`];
 /// - everything else (primitives, enums, media, literals, type-aliases): a
 ///   structural decode (no overrides possible).
-fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RuntimeTy) -> NativeCallResult {
+fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResult {
     match ty {
-        RuntimeTy::Union(members, _) if members.iter().any(RuntimeTy::is_null) => {
+        RealizedTy::Union(members, _) if members.iter().any(RealizedTy::is_null) => {
             if j.is_null() {
                 NativeCallResult::Done(Value::NULL)
             } else {
                 json_to_dispatch(vm, j, &ty.strip_null())
             }
         }
-        RuntimeTy::List(elem, _) => list_from_json_start(vm, j, elem),
-        RuntimeTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
-        RuntimeTy::Class(qtn, type_args, _) | RuntimeTy::Interface(qtn, type_args, _, _)
+        RealizedTy::List(elem, _) => list_from_json_start(vm, j, elem),
+        RealizedTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
+        RealizedTy::Class(qtn, type_args, _) | RealizedTy::Interface(qtn, type_args, _, _)
             if media_kind_from_fqn(qtn.display_name().as_str()).is_none() =>
         {
             match try_yield_interface_from_json(vm, j, ty) {
@@ -1549,7 +1564,7 @@ fn class_from_json_start(
     vm: &mut BexVm,
     j: Value,
     qtn: &TypeName,
-    type_args: &[RuntimeTy],
+    type_args: &[RealizedTy],
 ) -> NativeCallResult {
     let map: IndexMap<bex_vm_types::BexStr, Value> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
@@ -1570,7 +1585,7 @@ fn class_from_json_start(
             ));
         }
     };
-    let class_ptr = match vm.resolved_class_names.get(&class_lookup_key(qtn)).copied() {
+    let class_ptr = match vm.lookup_type(qtn) {
         Some(p) => p,
         None => {
             return NativeCallResult::Error(raise_decode(
@@ -1591,9 +1606,9 @@ fn class_from_json_start(
         }
     };
     // Resolve each field's json value + its (type-arg-substituted) field type.
-    let mut fields: Vec<(Value, RuntimeTy)> = Vec::with_capacity(class_fields.len());
+    let mut fields: Vec<(Value, RealizedTy)> = Vec::with_capacity(class_fields.len());
     for cf in &class_fields {
-        let field_ty = cf.field_template.substitute(type_args);
+        let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
         let field_json = match map.get(cf.name.as_str()) {
             Some(v) => *v,
             // Optional (`T?` == `T | null`) fields may be absent → null.
@@ -1617,8 +1632,8 @@ fn class_from_json_start(
 fn class_drive(
     vm: &mut BexVm,
     class_ptr: HeapPtr,
-    class_type_args: Vec<RuntimeTy>,
-    fields: Vec<(Value, RuntimeTy)>,
+    class_type_args: Vec<RealizedTy>,
+    fields: Vec<(Value, RealizedTy)>,
     mut results: Vec<Value>,
     mut idx: usize,
 ) -> NativeCallResult {
@@ -1653,15 +1668,15 @@ fn class_drive(
         };
     }
     NativeCallResult::Done(Value::object(vm.tlab.alloc(Object::Instance(
-        Instance::new(class_ptr, class_type_args, results),
+        Instance::new(class_ptr, class_type_args.into(), results),
     ))))
 }
 
 /// Resumes [`class_drive`] after one field's `baml.json.to` decode returns.
 struct ClassFromJsonCont {
     class_ptr: HeapPtr,
-    class_type_args: Vec<RuntimeTy>,
-    fields: Vec<(Value, RuntimeTy)>,
+    class_type_args: Vec<RealizedTy>,
+    fields: Vec<(Value, RealizedTy)>,
     results: Vec<Value>,
     idx: usize,
 }
@@ -1723,10 +1738,10 @@ impl Continuation for ClassFromJsonCont {
 fn try_yield_interface_from_json(
     vm: &mut BexVm,
     j: Value,
-    ty: &RuntimeTy,
+    ty: &RealizedTy,
 ) -> Option<NativeCallResult> {
     let (qtn, type_args) = match ty {
-        RuntimeTy::Class(qtn, type_args, _) | RuntimeTy::Interface(qtn, type_args, _, _) => {
+        RealizedTy::Class(qtn, type_args, _) | RealizedTy::Interface(qtn, type_args, _, _) => {
             (qtn, type_args)
         }
         _ => return None,
@@ -1746,7 +1761,7 @@ fn try_yield_interface_from_json(
 
 // ── List dispatch ─────────────────────────────────────────────────────────────
 
-fn list_from_json_start(vm: &mut BexVm, j: Value, elem_ty: &RuntimeTy) -> NativeCallResult {
+fn list_from_json_start(vm: &mut BexVm, j: Value, elem_ty: &RealizedTy) -> NativeCallResult {
     let array = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
             Object::Array(a) => a.to_vec(),
@@ -1767,7 +1782,7 @@ fn list_from_json_start(vm: &mut BexVm, j: Value, elem_ty: &RuntimeTy) -> Native
 fn list_drive(
     vm: &mut BexVm,
     array: Vec<Value>,
-    elem_ty: RuntimeTy,
+    elem_ty: RealizedTy,
     mut results: Vec<Value>,
     mut idx: usize,
 ) -> NativeCallResult {
@@ -1817,13 +1832,13 @@ fn list_drive(
 /// True for class/interface/list/map (after peeling an optional wrapper); false
 /// for leaf types (primitives, enums, media, literals) — which decode
 /// structurally and can never carry an override.
-fn needs_driver_decode(ty: &RuntimeTy) -> bool {
+fn needs_driver_decode(ty: &RealizedTy) -> bool {
     matches!(
         peel_optional(ty),
-        RuntimeTy::Class(..)
-            | RuntimeTy::Interface(..)
-            | RuntimeTy::List(..)
-            | RuntimeTy::Map { .. }
+        RealizedTy::Class(..)
+            | RealizedTy::Interface(..)
+            | RealizedTy::List(..)
+            | RealizedTy::Map { .. }
     )
 }
 
@@ -1839,7 +1854,7 @@ fn missing_to_driver() -> NativeCallResult {
 
 struct ListFromJsonCont {
     array: Vec<Value>,
-    elem_ty: RuntimeTy,
+    elem_ty: RealizedTy,
     results: Vec<Value>,
     idx: usize,
 }
@@ -1872,7 +1887,7 @@ impl Continuation for ListFromJsonCont {
 
 // ── Map dispatch ──────────────────────────────────────────────────────────────
 
-fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &RuntimeTy) -> NativeCallResult {
+fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &RealizedTy) -> NativeCallResult {
     let entries: Vec<(bex_vm_types::BexStr, Value)> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
             Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
@@ -1890,7 +1905,7 @@ fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &RuntimeTy) -> NativeCa
 fn map_drive(
     vm: &mut BexVm,
     entries: Vec<(bex_vm_types::BexStr, Value)>,
-    val_ty: RuntimeTy,
+    val_ty: RealizedTy,
     mut results: IndexMap<bex_vm_types::BexStr, Value>,
     mut idx: usize,
 ) -> NativeCallResult {
@@ -1929,7 +1944,7 @@ fn map_drive(
     }
     // Type-directed: string keys, decode value type carried from `val_ty`.
     let map_val = Value::object(vm.tlab.alloc(Object::Map(Map::new(
-        RuntimeTy::string(),
+        RealizedTy::string(),
         val_ty,
         results,
     ))));
@@ -1938,7 +1953,7 @@ fn map_drive(
 
 struct MapFromJsonCont {
     entries: Vec<(bex_vm_types::BexStr, Value)>,
-    val_ty: RuntimeTy,
+    val_ty: RealizedTy,
     results: IndexMap<bex_vm_types::BexStr, Value>,
     idx: usize,
 }
@@ -1987,7 +2002,7 @@ impl Continuation for MapFromJsonCont {
 /// If `ty` is a nullable union (`T | null`) and `v` is `Value::Null`, returns
 /// `Some(Null)`. Otherwise `None` — caller should dispatch on the inner
 /// (non-null) type.
-fn optional_null_short_circuit(v: Value, ty: &RuntimeTy) -> Option<Value> {
+fn optional_null_short_circuit(v: Value, ty: &RealizedTy) -> Option<Value> {
     if ty.is_nullable_union() && v.is_null() {
         Some(Value::NULL)
     } else {
@@ -1998,9 +2013,9 @@ fn optional_null_short_circuit(v: Value, ty: &RuntimeTy) -> Option<Value> {
 /// Strip the outer nullable-union wrapper, if any. Used by the list/map walker
 /// so that `T | null` element types still dispatch through `C.from_json` for
 /// the non-null member.
-fn peel_optional(ty: &RuntimeTy) -> &RuntimeTy {
-    if let RuntimeTy::Union(members, _) = ty {
-        if members.iter().any(RuntimeTy::is_null) {
+fn peel_optional(ty: &RealizedTy) -> &RealizedTy {
+    if let RealizedTy::Union(members, _) = ty {
+        if members.iter().any(RealizedTy::is_null) {
             if let Some(inner) = members.iter().find(|m| !m.is_null()) {
                 if members.iter().filter(|m| !m.is_null()).count() == 1 {
                     return inner;
@@ -2014,7 +2029,7 @@ fn peel_optional(ty: &RuntimeTy) -> &RuntimeTy {
 /// Synchronous (no-yield) decode of `v` as `ty`. For class-with-override
 /// elements the caller must use the yield path; this helper structurally
 /// decodes everything else.
-fn decode_value_sync(vm: &mut BexVm, v: Value, ty: &RuntimeTy) -> Result<Value, VmRustFnError> {
+fn decode_value_sync(vm: &mut BexVm, v: Value, ty: &RealizedTy) -> Result<Value, VmRustFnError> {
     let serde = value_to_serde(vm, v);
     let mut path = String::new();
     ty_serde_to_value(vm, &serde, ty, &mut path)

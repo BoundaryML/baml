@@ -16,237 +16,6 @@ fn user.FarIndented() -> string {
     }
 }
 
-fn user.FirstLineFlush() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "first\n          nested under first";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ForLoopVerbatim(xs: string[]) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string[] // xs // param
-    let _2: string //  __m3_for
-    let _3: baml.iter.Iterator<Item = string, Error = never>
-    let _4: type
-    let _5: unknown
-    let _6: bool
-    let _7: unknown
-    let _8: bool
-    let _9: type
-    let _10: bool
-    let _11: type
-    let _12: type
-    let _13: bool
-    let _14: type
-    let _15: type
-    let _16: type
-    let _17: bool
-    let _18: type
-    let _19: bool
-    let _20: unknown
-    let _21: bool
-    let _22: type
-    let _23: type
-    let _24: type
-    let _25: bool
-    let _26: unknown
-    let _27: bool
-    let _28: unknown
-    let _29: bool
-    let _30: type
-    let _31: type
-    let _32: bool
-    let _33: string
-    let _34: string // x
-    let _35: string
-    let _36: string
-    let _37: string
-    let _38: string
-    let _39: string
-    let _40: type
-
-    bb0: {
-        _2 = const "";
-        goto -> bb1;
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _3 = call const fn baml.iter.Iterable$for$T[].iter<copy _4>(copy _1) -> [bb2];
-    }
-
-    bb2: {
-        _6 = is_type(copy _3, baml.iter.Flatten<_, string, never, never>);
-        branch copy _6 -> [bb22, bb3];
-    }
-
-    bb3: {
-        _8 = is_type(copy _3, baml.iter.ArrayIterator<string>);
-        branch copy _8 -> [bb21, bb4];
-    }
-
-    bb4: {
-        _10 = is_type(copy _3, baml.iter.StepBy<string, never>);
-        branch copy _10 -> [bb20, bb5];
-    }
-
-    bb5: {
-        _13 = is_type(copy _3, baml.iter.Chain<string, never, never>);
-        branch copy _13 -> [bb19, bb6];
-    }
-
-    bb6: {
-        _17 = is_type(copy _3, baml.iter.Repeat<string>);
-        branch copy _17 -> [bb18, bb7];
-    }
-
-    bb7: {
-        _19 = is_type(copy _3, baml.iter.Map<_, string, never, never>);
-        branch copy _19 -> [bb17, bb8];
-    }
-
-    bb8: {
-        _21 = is_type(copy _3, baml.iter.Filter<string, never, never>);
-        branch copy _21 -> [bb16, bb9];
-    }
-
-    bb9: {
-        _25 = is_type(copy _3, baml.iter.FilterMap<_, string, never, never>);
-        branch copy _25 -> [bb15, bb10];
-    }
-
-    bb10: {
-        _27 = is_type(copy _3, baml.iter.FlatMap<_, string, never, never, never>);
-        branch copy _27 -> [bb14, bb11];
-    }
-
-    bb11: {
-        _29 = is_type(copy _3, baml.iter.Peekable<string, never>);
-        branch copy _29 -> [bb13, bb12];
-    }
-
-    bb12: {
-        unreachable;
-    }
-
-    bb13: {
-        _30 = load_type(string);
-        _31 = load_type(never);
-        _5 = call const fn baml.iter.Peekable.Iterator.next<copy _30, copy _31>(copy _3) -> [bb23];
-    }
-
-    bb14: {
-        _28 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _3);
-        _5 = call copy _28() -> [bb23];
-    }
-
-    bb15: {
-        _26 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _3);
-        _5 = call copy _26() -> [bb23];
-    }
-
-    bb16: {
-        _22 = load_type(string);
-        _23 = load_type(never);
-        _24 = load_type(never);
-        _5 = call const fn baml.iter.Filter.Iterator.next<copy _22, copy _23, copy _24>(copy _3) -> [bb23];
-    }
-
-    bb17: {
-        _20 = make_bound_method baml.iter.Map.Iterator.next(copy _3);
-        _5 = call copy _20() -> [bb23];
-    }
-
-    bb18: {
-        _18 = load_type(string);
-        _5 = call const fn baml.iter.Repeat.Iterator.next<copy _18>(copy _3) -> [bb23];
-    }
-
-    bb19: {
-        _14 = load_type(string);
-        _15 = load_type(never);
-        _16 = load_type(never);
-        _5 = call const fn baml.iter.Chain.Iterator.next<copy _14, copy _15, copy _16>(copy _3) -> [bb23];
-    }
-
-    bb20: {
-        _11 = load_type(string);
-        _12 = load_type(never);
-        _5 = call const fn baml.iter.StepBy.Iterator.next<copy _11, copy _12>(copy _3) -> [bb23];
-    }
-
-    bb21: {
-        _9 = load_type(string);
-        _5 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _9>(copy _3) -> [bb23];
-    }
-
-    bb22: {
-        _7 = make_bound_method baml.iter.Flatten.Iterator.next(copy _3);
-        _5 = call copy _7() -> [bb23];
-    }
-
-    bb23: {
-        _32 = is_type(copy _5, baml.iter.Done);
-        branch copy _32 -> [bb26, bb24];
-    }
-
-    bb24: {
-        _33 = copy _5;
-        fresh_cell(_34);
-        _34 = copy _33;
-        _35 = copy _2;
-        _39 = copy _34;
-        _40 = load_type(string);
-        _38 = call const fn baml.String.from<copy _40>(copy _39) -> [bb25];
-    }
-
-    bb25: {
-        _37 = const "- " + copy _38;
-        _36 = copy _37 + const "\n";
-        _2 = copy _35 + copy _36;
-        goto -> bb2;
-    }
-
-    bb26: {
-        _0 = copy _2;
-        goto -> bb27;
-    }
-
-    bb27: {
-        return;
-    }
-}
-
-fn user.MultilineInterpVerbatim() -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string
-    let _2: type
-
-    bb0: {
-        _2 = load_type(string);
-        _1 = call const fn baml.String.from<copy _2>(const "x") -> [bb1];
-    }
-
-    bb1: {
-        _0 = const "value: " + copy _1;
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
 fn user.Ragged() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -305,6 +74,99 @@ fn user.WithInterps(name: string, count: int) -> string {
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.FirstLineFlush() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "first\n          nested under first";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ForLoopVerbatim(xs: string[]) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string[] // xs // param
+    let _2: string //  __m3_for
+    let _3: baml.iter.Iterator<Error = never, Item = string>
+    let _4: unknown
+    let _5: bool
+    let _6: string
+    let _7: string // x
+    let _8: string
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: string
+    let _13: type
+
+    bb0: {
+        _2 = const "";
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _4, baml.iter.Done);
+        branch copy _5 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _6 = copy _4;
+        fresh_cell(_7);
+        _7 = copy _6;
+        _8 = copy _2;
+        _12 = copy _7;
+        _13 = load_type(string);
+        _11 = call const fn baml.String.from<copy _13>(copy _12) -> [bb4];
+    }
+
+    bb4: {
+        _10 = const "- " + copy _11;
+        _9 = copy _10 + const "\n";
+        _2 = copy _8 + copy _9;
+        goto -> bb1;
+    }
+
+    bb5: {
+        _0 = copy _2;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.MultilineInterpVerbatim() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string
+    let _2: type
+
+    bb0: {
+        _2 = load_type(string);
+        _1 = call const fn baml.String.from<copy _2>(const "x") -> [bb1];
+    }
+
+    bb1: {
+        _0 = const "value: " + copy _1;
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }

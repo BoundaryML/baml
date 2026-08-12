@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-function user.BadAssign(j: baml.json.json) -> int  [expr] {
-  {  } j
-}

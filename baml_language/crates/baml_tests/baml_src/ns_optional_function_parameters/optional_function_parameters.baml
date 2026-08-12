@@ -28,7 +28,7 @@ function ofp_source_defaults_named_overrides_and_required_by_name() -> int[] {
 }
 
 test "source_defaults_named_overrides_and_required_by_name" {
-    assert.is_true(baml.deep_equals(ofp_source_defaults_named_overrides_and_required_by_name(), [14, 107, 15]))
+    assert.equal(ofp_source_defaults_named_overrides_and_required_by_name(), [14, 107, 15])
 }
 
 // ─── mutable_default_array_is_fresh_per_call ─────────────────────────────────
@@ -43,7 +43,7 @@ function ofp_mutable_default_array_is_fresh_per_call() -> int {
 }
 
 test "mutable_default_array_is_fresh_per_call" {
-    assert.is_true(baml.deep_equals(ofp_mutable_default_array_is_fresh_per_call(), 11))
+    assert.equal(ofp_mutable_default_array_is_fresh_per_call(), 11)
 }
 
 // ─── optional_dropping_adapter_uses_defaults_for_hidden_params ───────────────
@@ -53,12 +53,12 @@ function combine(x: int, a: int = 10, b: int = 100) -> int {
 }
 
 function ofp_optional_dropping_adapter_uses_defaults_for_hidden_params() -> int {
-  let f: (x: int, b?: int) -> int = combine
+  let f: (x: int, b?: int) -> int throws never = combine
   f(1, b = 5)
 }
 
 test "optional_dropping_adapter_uses_defaults_for_hidden_params" {
-    assert.is_true(baml.deep_equals(ofp_optional_dropping_adapter_uses_defaults_for_hidden_params(), 205))
+    assert.equal(ofp_optional_dropping_adapter_uses_defaults_for_hidden_params(), 205)
 }
 
 // ─── default_named_call_args_do_not_reuse_body_call_metadata ─────────────────
@@ -72,7 +72,7 @@ function ofp_default_named_call_args_do_not_reuse_body_call_metadata(value: int 
 }
 
 test "default_named_call_args_do_not_reuse_body_call_metadata" {
-    assert.is_true(baml.deep_equals(ofp_default_named_call_args_do_not_reuse_body_call_metadata(), 120))
+    assert.equal(ofp_default_named_call_args_do_not_reuse_body_call_metadata(), 120)
 }
 
 // ─── host_call_omitted_default_and_explicit_null_are_distinct ────────────────
@@ -83,9 +83,9 @@ function classify(value: int? = 7) -> int {
 
 // omitted → uses default 7; explicit null → returns 1
 test "host_call_omitted_default_returns_default" {
-    assert.is_true(baml.deep_equals(classify(), 7))
+    assert.equal(classify(), 7)
 }
 
 test "host_call_explicit_null_returns_1" {
-    assert.is_true(baml.deep_equals(classify(value = null), 1))
+    assert.equal(classify(value = null), 1)
 }

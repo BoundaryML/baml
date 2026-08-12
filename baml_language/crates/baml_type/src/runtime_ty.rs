@@ -127,11 +127,6 @@ impl RuntimeTy {
         )
     }
 
-    /// `Class(name, args)` under the implicit `user` package.
-    pub fn user_class_with_args(name: &str, args: Vec<RuntimeTy>) -> Self {
-        RuntimeTy::Class(TypeName::local(Name::new(name)), args, TyAttr::default())
-    }
-
     /// `unknown` (the top type) with default attributes.
     pub fn unknown() -> Self {
         RuntimeTy::BuiltinUnknown {
@@ -172,26 +167,6 @@ impl RuntimeTy {
         matches!(self, RuntimeTy::Union(members, _) if members.iter().any(RuntimeTy::is_null))
     }
 
-    /// Check if this is the void type.
-    pub fn is_void(&self) -> bool {
-        matches!(self, RuntimeTy::Void { .. })
-    }
-
-    /// Check if this is a primitive type (including literals of primitive types).
-    pub fn is_primitive(&self) -> bool {
-        matches!(
-            self,
-            RuntimeTy::Int { .. }
-                | RuntimeTy::Bigint { .. }
-                | RuntimeTy::Float { .. }
-                | RuntimeTy::String { .. }
-                | RuntimeTy::Bool { .. }
-                | RuntimeTy::Null { .. }
-                | RuntimeTy::Uint8Array { .. }
-                | RuntimeTy::Literal(..)
-        )
-    }
-
     // --- Transforms ---
 
     /// Remove `null` from a nullable union, collapsing the result. The inverse
@@ -214,37 +189,20 @@ impl RuntimeTy {
         }
     }
 
-    // --- Rendering / subtyping ---
+    // --- Rendering ---
     //
-    // These reuse `Ty`'s implementation via the infallible upcast so the
-    // structural logic lives in exactly one place. The value remains a
-    // statically runtime-safe `RuntimeTy`; the upcast is purely to share the
-    // algorithm. None of these are on a VM-hot path.
-
-    /// User-facing rendering — see [`Ty::render_user_facing`].
-    pub fn render_user_facing(&self) -> String {
-        Ty::from(self).render_user_facing()
-    }
-
-    /// Canonical structural rendering — see [`Ty::render_canonical`].
-    pub fn render_canonical(&self) -> String {
-        Ty::from(self).render_canonical()
-    }
-
-    /// Render with a custom strategy — see [`Ty::render_with`].
-    pub fn render_with(&self, s: &dyn crate::TyRenderStrategy) -> String {
-        Ty::from(self).render_with(s)
-    }
-
-    /// Structural subtyping — see [`Ty::is_subtype_of`].
-    pub fn is_subtype_of(&self, other: &RuntimeTy) -> bool {
-        Ty::from(self).is_subtype_of(&Ty::from(other))
-    }
+    // These reuse `Ty`'s implementation so the rendering logic lives in exactly
+    // one place. The upcast is [`RuntimeTy::as_ty`] — a zero-cost borrow, not a
+    // clone — so sharing the algorithm costs nothing; the value remains a
+    // statically runtime-safe `RuntimeTy`. (Subtyping/equivalence have no method
+    // form: they need nominal facts, so callers go through
+    // [`crate::normalize`]'s `TypeContext` entry points with the richest context
+    // the site can reach.)
 }
 
 impl std::fmt::Display for RuntimeTy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&Ty::from(self), f)
+        std::fmt::Display::fmt(self.as_ty(), f)
     }
 }
 
@@ -406,10 +364,7 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             attr,
         } => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(lower_to_runtime(base, resolved)?),
-            interface: interface
-                .as_ref()
-                .map(|i| lower_interface_to_runtime(i, resolved).map(Box::new))
-                .transpose()?,
+            interface: Box::new(lower_interface_to_runtime(interface, resolved)?),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -421,13 +376,11 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             Box::new(lower_to_runtime(error, resolved)?),
             attr.clone(),
         ),
-        Ty::WatchAccessor(inner, attr) => {
-            RuntimeTy::WatchAccessor(Box::new(lower_to_runtime(inner, resolved)?), attr.clone())
-        }
-
         // Error-recovery sentinels cannot exist in a type-checked program.
         Ty::Unknown { .. } => return Err(NotRuntimeTy { variant: "Unknown" }),
         Ty::Error { .. } => return Err(NotRuntimeTy { variant: "Error" }),
+        // An inference hole must have been filled during type checking.
+        Ty::Infer { .. } => return Err(NotRuntimeTy { variant: "Infer" }),
     })
 }
 
@@ -540,12 +493,12 @@ mod tests {
     #[test]
     fn round_trip_associated_type_projection() {
         let ty = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::TypeVar(Name::new("T"), def())),
-            interface: Some(Box::new(Interface {
+            base: Box::new(Ty::type_var("T")),
+            interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],
                 associated_types: vec![],
-            })),
+            }),
             member: Name::new("Item"),
             attr: def(),
         };

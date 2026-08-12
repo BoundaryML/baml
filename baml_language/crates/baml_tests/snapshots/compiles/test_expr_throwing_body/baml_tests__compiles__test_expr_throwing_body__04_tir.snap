@@ -9,7 +9,7 @@ function user.risky() -> void throws string {
 }
 function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("throwing body bec...", () -> void { ... }, null) : void
+    registry.register_test_at("root", "throwing body bec...", () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
         {
           risky()

@@ -10,7 +10,7 @@ use std::{
 
 use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
 
-use crate::baml_core::cffi::BamlHandleType;
+use crate::baml_bridge::cffi::BamlHandleType;
 
 /// Newtype wrapper around opaque `$rust_type` objects
 /// (`Arc<dyn Any + Send + Sync>`) stored as a handle.
@@ -81,6 +81,10 @@ impl CffiHandleTableEntry {
                     MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
                     MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
                 },
+                BexExternalAdt::TaggedHeapHandle {
+                    ty: bex_project::RuntimeTy::Function { .. },
+                    ..
+                } => BamlHandleType::FunctionRef,
                 BexExternalAdt::TaggedHeapHandle { .. } => BamlHandleType::AdtTaggedHeapHandle,
             },
         }
@@ -191,6 +195,19 @@ impl CffiHandleTable {
             .is_some()
     }
 
+    /// Return the number of currently owned handle-table keys.
+    pub fn len(&self) -> usize {
+        self.entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+    }
+
+    /// Return whether the handle table currently owns no keys.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Atomically resolve and remove. Returns the entry or None if the
     /// key was already absent.
     pub fn drain(&self, key: u64) -> Option<Arc<CffiHandleTableEntry>> {
@@ -215,7 +232,7 @@ mod tests {
     use bex_project::{BexExternalValue, HostValueArc, HostValueKind};
 
     use super::*;
-    use crate::{baml_core::cffi::baml_outbound_value::Value as BamlValueVariant, value_encode};
+    use crate::{baml_bridge::cffi::baml_outbound_value::Value as BamlValueVariant, value_encode};
 
     fn make_function_ref() -> CffiHandleTableEntry {
         CffiHandleTableEntry::FunctionRef { global_index: 42 }

@@ -2,32 +2,29 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] error: Expected function name, found integer
-   ╭─[ syntax_errors.baml:6:10 ]
-   │
- 6 │ function 123Invalid() {}
-   │          ─┬─  
-   │           ╰─── Expected function name, found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
+  [parse] E0010
 
-  [parse] error: Expected return type (->), found '{'
-   ╭─[ syntax_errors.baml:6:23 ]
-   │
+  × unexpected token
+   ╭─[syntax_errors.baml:6:10]
  6 │ function 123Invalid() {}
-   │                       ┬  
-   │                       ╰── Expected return type (->), found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·          ─┬─
+   ·           ╰── expected `function name`, found `integer`
+   ╰────
 
-  [parse] error: Expected '}', found EOF
-   ╭─[ syntax_errors.baml:6:25 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[syntax_errors.baml:6:23]
  6 │ function 123Invalid() {}
-   │                         │ 
-   │                         ╰─ Expected '}', found EOF
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                       ┬
+   ·                       ╰── expected `return type (->)`, found `'{'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[syntax_errors.baml:6:25]
+ 6 │ function 123Invalid() {}
+   ·                         ▲
+   ·                         ╰── expected `'}'`, found `EOF`
+   ╰────

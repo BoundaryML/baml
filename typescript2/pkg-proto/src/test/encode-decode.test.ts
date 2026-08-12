@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { encodeCallArgs, encodeRunArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
-import { CallFunctionArgs, InboundMapEntry } from '../generated/baml_core/cffi/v1/baml_inbound';
-import { BamlHandleType } from '../generated/baml_core/cffi/v1/baml_handle';
-import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_core/cffi/v1/baml_outbound';
-import { BamlTyPrimitiveKind } from '../generated/baml_core/cffi/v1/baml_type';
+import { CallFunctionArgs, InboundMapEntry } from '../generated/baml_bridge/cffi/v1/baml_inbound';
+import { BamlHandleType } from '../generated/baml_bridge/cffi/v1/baml_handle';
+import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_bridge/cffi/v1/baml_outbound';
+import { BamlTyPrimitiveKind } from '../generated/baml_bridge/cffi/v1/baml_type';
 
 function decodeDelimitedEntries(bytes: Uint8Array): InboundMapEntry[] {
   const entries: InboundMapEntry[] = [];
@@ -119,10 +119,15 @@ describe('encodeCallArgs', () => {
     const custom = {
       toBaml() {
         return {
+          valueType: {
+            ty: {
+              $case: 'classTy' as const,
+              classTy: { name: 'MyClass', typeArgs: [] },
+            },
+          },
           value: {
             $case: 'classValue',
             classValue: {
-              classTy: { name: 'MyClass', typeArgs: [] },
               fields: [
                 {
                   key: { $case: 'stringKey', stringKey: 'x' },
@@ -138,8 +143,94 @@ describe('encodeCallArgs', () => {
     const decoded = CallFunctionArgs.decode(bytes);
     const val = decoded.kwargs[0].value;
     expect(val?.value?.$case).toBe('classValue');
-    if (val?.value?.$case === 'classValue') {
-      expect(val.value.classValue.classTy?.name).toBe('MyClass');
+    expect(val?.valueType?.ty).toEqual({
+      $case: 'classTy',
+      classTy: { name: 'MyClass', typeArgs: [] },
+    });
+  });
+
+  it('preserves a sparse exact literal type on the value node', () => {
+    const draft = {
+      toBaml() {
+        return {
+          valueType: {
+            ty: {
+              $case: 'literal' as const,
+              literal: {
+                literal: {
+                  $case: 'stringValue' as const,
+                  stringValue: 'draft',
+                },
+              },
+            },
+          },
+          value: {
+            $case: 'stringValue' as const,
+            stringValue: 'draft',
+          },
+        };
+      },
+    };
+
+    const decoded = CallFunctionArgs.decode(encodeCallArgs({ status: draft }, 131));
+    const value = decoded.kwargs[0].value;
+    expect(value?.valueType?.ty).toEqual({
+      $case: 'literal',
+      literal: {
+        literal: { $case: 'stringValue', stringValue: 'draft' },
+      },
+    });
+    expect(value?.value).toEqual({
+      $case: 'stringValue',
+      stringValue: 'draft',
+    });
+  });
+
+  it('encodes a $baml enum marker as an enumValue', () => {
+    const bytes = encodeCallArgs(
+      { c: { $baml: { enum: 'user.Color', value: 'Red' } } },
+      127,
+    );
+    const decoded = CallFunctionArgs.decode(bytes);
+    const val = decoded.kwargs[0].value;
+    expect(val?.value?.$case).toBe('enumValue');
+    if (val?.value?.$case === 'enumValue') {
+      expect(val.value.enumValue.name).toBe('user.Color');
+      expect(val.value.enumValue.value).toBe('Red');
+    }
+  });
+
+  it('rejects malformed $baml enum markers instead of emitting a map', () => {
+    expect(() =>
+      encodeCallArgs({ c: { $baml: { enum: 'user.Color' } } }, 129),
+    ).toThrow(/enum marker/);
+    expect(() =>
+      encodeCallArgs({ c: { $baml: { enum: 'user.Color', value: 3 } } }, 130),
+    ).toThrow(/enum marker/);
+  });
+
+  it('encodes enum markers in nested positions (list element, class field)', () => {
+    const bytes = encodeCallArgs(
+      {
+        box: {
+          $baml: { type: 'user.Box' },
+          colors: [{ $baml: { enum: 'user.Color', value: 'Green' } }],
+        },
+      },
+      128,
+    );
+    const decoded = CallFunctionArgs.decode(bytes);
+    const val = decoded.kwargs[0].value;
+    expect(val?.value?.$case).toBe('classValue');
+    if (val?.value?.$case !== 'classValue') return;
+    const colors = val.value.classValue.fields[0]?.value;
+    expect(colors?.value?.$case).toBe('listValue');
+    if (colors?.value?.$case !== 'listValue') return;
+    const first = colors.value.listValue.values[0];
+    expect(first?.value?.$case).toBe('enumValue');
+    if (first?.value?.$case === 'enumValue') {
+      expect(first.value.enumValue.name).toBe('user.Color');
+      expect(first.value.enumValue.value).toBe('Green');
     }
   });
 });

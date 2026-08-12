@@ -371,7 +371,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ needs.determine-version.outputs.version_string }}
+          name: BAML v0 ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}
           body_path: CHANGELOG.txt
           draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}

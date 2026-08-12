@@ -10,14 +10,14 @@ this exercises the full host->engine round-trip for both flavors:
 each with its ``_async`` sibling. ``asyncio_mode = "auto"`` (set in build.rs)
 runs ``async def test_*`` without an explicit decorator.
 
-Node counterpart: ``crates/typescript_node/function_calls/customizable/methods_on_classes.test.ts``.
+Node counterpart: ``crates/typescript/function_calls/customizable/methods_on_classes.test.ts``.
 """
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.methods_on_classes import Greeter
 
 
-def test_method_bindings_exist():
+def test_methods_on_classes_method_bindings_exist():
     # Static bindings hang off the class; instance bindings carry `self`.
     assert callable(Greeter.create)
     assert callable(Greeter.create_async)
@@ -27,33 +27,33 @@ def test_method_bindings_exist():
     assert callable(Greeter.greet_async)
 
 
-def test_static_create_round_trips():
+def test_methods_on_classes_static_create_round_trips():
     g = Greeter.create("ada")
     assert isinstance(g, Greeter)
     assert g.name == "ada"
 
 
-async def test_static_create_async_round_trips():
+async def test_methods_on_classes_static_create_async_round_trips():
     g = await Greeter.create_async("grace")
     assert isinstance(g, Greeter)
     assert g.name == "grace"
 
 
-def test_instance_who_round_trips():
+def test_methods_on_classes_instance_who_round_trips():
     g = Greeter.create("hopper")
     assert g.who() == "hopper"
 
 
-async def test_instance_who_async_round_trips():
+async def test_methods_on_classes_instance_who_async_round_trips():
     g = await Greeter.create_async("hopper")
     assert await g.who_async() == "hopper"
 
 
-def test_instance_greet_with_arg_round_trips():
+def test_methods_on_classes_instance_greet_with_arg_round_trips():
     g = Greeter.create("lovelace")
     assert g.greet("hi") == "hi"
 
 
-async def test_instance_greet_async_with_arg_round_trips():
+async def test_methods_on_classes_instance_greet_async_with_arg_round_trips():
     g = await Greeter.create_async("lovelace")
     assert await g.greet_async("hi") == "hi"

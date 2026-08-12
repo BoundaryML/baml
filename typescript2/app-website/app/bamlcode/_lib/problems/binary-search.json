@@ -1,0 +1,18 @@
+{
+  "slug": "binary-search",
+  "id": 704,
+  "title": "Binary Search",
+  "difficulty": "Easy",
+  "category": "Binary Search",
+  "statement": "Given a sorted (ascending) array of distinct integers `nums` and an integer `target`, return the index of `target` if it is in `nums`, or `-1` if it is not.\n\nYou must write an algorithm with `O(log n)` runtime.\n\n**Example**\n\n```\nnums = [-1, 0, 3, 5, 9, 12], target = 9  => 4\nnums = [-1, 0, 3, 5, 9, 12], target = 2  => -1\n```",
+  "signature": "function Search(nums: int[], target: int) -> int",
+  "starter": "function Search(nums: int[], target: int) -> int {\n  // Return the index of target, or -1 if absent.\n  return -1;\n}",
+  "solution": "function Search(nums: int[], target: int) -> int {\n  let lo = 0;\n  let hi = nums.length() - 1;\n  while (lo <= hi) {\n    let mid = (lo + hi) / 2;\n    let v = nums[mid];\n    if (v == target) {\n      return mid;\n    }\n    if (v < target) {\n      lo = mid + 1;\n    } else {\n      hi = mid - 1;\n    }\n  }\n  return -1;\n}",
+  "tests": [
+    { "call": "Search([-1, 0, 3, 5, 9, 12], 9)", "expected": "4" },
+    { "call": "Search([-1, 0, 3, 5, 9, 12], 2)", "expected": "-1" },
+    { "call": "Search([5], 5)", "expected": "0" },
+    { "call": "Search([5], -5)", "expected": "-1", "hidden": true },
+    { "call": "Search([1, 2, 3, 4, 5, 6, 7], 7)", "expected": "6", "hidden": true }
+  ]
+}

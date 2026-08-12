@@ -39,75 +39,18 @@ function user.bare_type_arm(v: int | string) -> int throws never {
 function user.call_int_callback(cb: (int) -> int throws never) -> int throws never {
   { : int
     match (cb : (int) -> int throws __effect_param_0) : int
-      f: (int) -> int =>
-        f(10) : int
+      f: (int) -> int throws unknown =>
+        f<__effect_param_0>(10) : int
   }
 }
-function user.dispatch_callback(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int throws never {
-  { : int | 0
-    match (cb : ((int) -> int throws never) | ((string) -> string throws never)) : int | 0
-      f: (int) -> int =>
-        f(0) : int
-      (string) -> string =>
+function user.call_optional_callback(cb: ((int) -> int throws never) | null) -> int throws never {
+  { : 0 | int
+    match (cb : ((int) -> int throws never) | null) : 0 | int
+      null =>
         0 : 0
+      f: (int) -> int throws never =>
+        f(1) : int
   }
-}
-function user.call_either_int_caller(cb: ((int) -> int throws never) | ((bool) -> int throws never)) -> int throws never {
-  { : 1 | 2
-    match (cb : ((int) -> int throws never) | ((bool) -> int throws never)) : 1 | 2
-      (int) -> int =>
-        1 : 1
-      (bool) -> int =>
-        2 : 2
-  }
-}
-function user.dispatch_with_wildcard(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int throws never {
-  { : 1 | 0
-    match (cb : ((int) -> int throws never) | ((string) -> int throws never)) : 1 | 0
-      (int) -> int =>
-        1 : 1
-      _ =>
-        0 : 0
-  }
-}
-function user.unwrap_typed<T>(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T throws never {
-  { : T
-    match (cb : ((int) -> T throws never) | ((string) -> T throws never)) : T
-      f: (int) -> T =>
-        f<T>(0) : T
-      f: (string) -> T =>
-        f<T>("") : T
-  }
-}
-function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int throws never {
-  { : int | 0
-    match (f : ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) : int | 0
-      triple: (int) -> ((int) -> ((int) -> int)) =>
-        triple(1)(2)(3) : int
-      pair: (string) -> ((string) -> string) =>
-        0 : 0
-  }
-}
-function user.call_with_callback(runner: (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)) -> int throws never {
-  { : int
-    match (runner : (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)) : int
-      r: ((int) -> int) -> int =>
-        r((x: int) -> int { ... }) : int
-          (x: int) -> int { ... } : (x: int) -> int throws never
-            {
-              x + 1
-            }
-      r: ((string) -> int) -> int =>
-        r((s: string) -> int { ... }) : int
-          (s: string) -> int { ... } : (s: string) -> int throws never
-            {
-              0
-            }
-  }
-}
-lambda user.call_with_callback {
-}
-lambda user.call_with_callback {
 }
 function user.literal_widens_to_int(v: int) -> int throws never {
   { : int
@@ -116,10 +59,10 @@ function user.literal_widens_to_int(v: int) -> int throws never {
         n : int
   }
 }
-function user.fn_return_widens(cb: (int) -> int | string throws never) -> int throws never {
+function user.fn_return_widens(cb: (int) -> int throws never) -> int throws never {
   { : 1
-    match (cb : (int) -> int | string throws __effect_param_0) : 1
-      (int) -> int | string =>
+    match (cb : (int) -> int throws never) : 1
+      (int) -> int | string throws unknown =>
         1 : 1
   }
 }
@@ -141,8 +84,8 @@ function user.paren_chains_in_or(v: int) -> int throws never {
 function user.fn_pattern(cb: (int) -> int throws never) -> int throws never {
   { : int
     match (cb : (int) -> int throws __effect_param_0) : int
-      f: (int) -> int =>
-        f(0) : int
+      f: (int) -> int throws unknown =>
+        f<__effect_param_0>(0) : int
   }
 }
 function user.for_let_with_narrow(items: int[]) -> int throws never {
@@ -168,7 +111,7 @@ function user.for_let_ascription(items: int[]) -> int throws never {
 function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int throws never {
   { : int
     let total = 0 : 0 -> int
-    for f: (int) -> int in items
+    for f: (int) -> int throws never in items
       { : void
         total Add= f(0) : int
       }

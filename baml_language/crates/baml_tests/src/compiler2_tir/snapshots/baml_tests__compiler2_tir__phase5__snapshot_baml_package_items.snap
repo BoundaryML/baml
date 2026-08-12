@@ -3,34 +3,42 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  class Array<T> { methods: [filled, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
-  class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, parse, random] }
+  type AnyFunction
+  class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
+  class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, to_int, parse, random] }
   class Bool { methods: [] }
   type Comparable
+  type Concrete
   class Float { methods: [is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf] }
+  type FloatStats
   type FromJson
   class Int { methods: [abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, delete, get_or_insert, clear] }
   class Null { methods: [] }
   type Sortable
-  class String { methods: [from, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points] }
+  class String { methods: [from, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, substring, replace, index_of, char_at, code_point_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, to_code_points, from_code_points] }
+  type Summable
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [_to_string_impl, implements, implemented_by, implementors, to_string] }
+  class TypeValue { methods: [_to_string_impl, implements, implemented_by, to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
   function _cleanup_begin<T>
   function _compare_shim<T>
   function _float_total_cmp
   function _from_json_shim<T>
   function _is_primitive_array<T>
+  function _mean_float
+  function _median_float
   function _rust_sort<A>
+  function _sum_float
+  function _sum_int
   function _to_json_default<T>
   function _to_json_shim<T>
   function _to_string_default<T>
   function _to_string_shim<T>
+  function _trunc_to_int
   function deep_copy<T>
-  function deep_equals<T>
 namespace baml.csv:
   class CsvError { methods: [] }
   enum CsvErrorKind
@@ -76,10 +84,12 @@ namespace baml.csv:
 namespace baml.env:
   function get
   function get_or_panic
+  function get_or_panic_lenient
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
   class DevOther { methods: [] }
+  class ErrorContext { methods: [root_cause, _to_string_impl, to_string] }
   class GenericSdkError { methods: [] }
   class HostCallable { methods: [] }
   class InvalidArgument { methods: [] }
@@ -92,6 +102,7 @@ namespace baml.errors:
   class StackTrace { methods: [_to_string_impl, to_string] }
   class Timeout { methods: [] }
   class TypeMismatch { methods: [] }
+  class UnknownError { methods: [] }
   class Unsupported { methods: [] }
 namespace baml.events:
 namespace baml.fs:
@@ -104,6 +115,8 @@ namespace baml.fs:
   function read
   function read_dir
   function remove
+  function remove_dir
+  function remove_dir_all
   function size
   function write
   function write_bytes
@@ -164,62 +177,26 @@ namespace baml.iter:
 namespace baml.json:
   class JsonDecodeError { methods: [] }
   class JsonParseError { methods: [] }
+  class JsonPathError { methods: [] }
   class JsonSerializationError { methods: [] }
   type json
+  function _path_field
+  function _path_index
   function deserialize<T>
   function field
   function from<T>
   function from_json<T>
   function from_string<T>
   function parse
+  function path<T>
+  function path_or<T>
+  function schema
   function serialize<T>
   function stringify
   function stringify_pretty
   function to<T>
   function to_json<T>
   function to_string<T>
-namespace baml.llm:
-  class AnthropicOptions { methods: [] }
-  class AzureOpenAiOptions { methods: [] }
-  class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot] }
-  enum ClientType
-  class Context { methods: [output_format_with] }
-  class ContextClient { methods: [] }
-  class ExecutionContext { methods: [] }
-  class MediaUrlHandler { methods: [] }
-  class OrchestrationStep { methods: [] }
-  class OutputFormat { methods: [] }
-  class PlannerState { methods: [rr_local_offset, rr_pick_index] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
-  class PrimitiveClientOptions { methods: [] }
-  class PromptAst { methods: [] }
-  class RetryPolicy { methods: [] }
-  class Role { methods: [] }
-  class Stream<TStream, TFinal> { methods: [next, final] }
-  class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens] }
-  class StreamCache<TStream, TFinal> { methods: [new] }
-  class VertexAiOptions { methods: [] }
-  function __sap_parse_final<TStream, TFinal>
-  function __sap_parse_partial<TStream, TFinal>
-  function assemble_prompt_ast
-  function build_output_format
-  function build_prompt_context
-  function build_request
-  function build_request_stream
-  function call_llm_function<T>
-  function from_shorthand
-  function get_jinja_template
-  function get_return_type
-  function make_role
-  function parse<TStream, TFinal>
-  function prompt
-  function prompt_template_for
-  function render_output_format
-  function render_prompt
-  function stream_llm_function<TStream, TFinal>
-namespace baml.math:
-  function trunc
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
@@ -232,8 +209,20 @@ namespace baml.net:
   class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close] }
   function _timeout_nanos
 namespace baml.ops:
+  type Add
   type Compare
+  type Divide
   type Equals
+  type Multiply
+  type Negate
+  type Remainder
+  type Subtract
+  function __union_add
+  function __union_div
+  function __union_mul
+  function __union_neg
+  function __union_rem
+  function __union_sub
   function equals_equals
 namespace baml.panics:
   class AllocFailure { methods: [] }
@@ -253,24 +242,54 @@ namespace baml.panics:
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
+namespace baml.prompt:
+  class AnthropicOptions { methods: [] }
+  class AzureOpenAiOptions { methods: [] }
+  class BedrockOptions { methods: [] }
+  class Context { methods: [output_format_with] }
+  class ContextClient { methods: [] }
+  class GoogleAiOptions { methods: [] }
+  class MediaUrlHandler { methods: [] }
+  class OutputFormat { methods: [] }
+  class PrimitiveClientOptions { methods: [] }
+  class Role { methods: [] }
+  class VertexAiOptions { methods: [] }
+  function build_output_format
+  function get_return_type
+  function make_role
+  function render_output_format
+namespace baml.random:
+  class ChaCha20 { methods: [new, _new, random, random_int] }
+  type Rng
+  class SystemRandom { methods: [get, random, random_int] }
+  class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
+namespace baml.sap:
+  class NoYield { methods: [] }
+  class ParseCache<TStream, TFinal> { methods: [new] }
+  function __new_parse_cache<TStream, TFinal>
+  function __parse_final<TStream, TFinal>
+  function __parse_partial<TStream, TFinal>
+  function parse<T>
+  function parse_type
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
   class SpawnParams<T, E> { methods: [] }
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
-namespace baml.stream:
-  class StreamFinished { methods: [] }
-  class StreamNoYield { methods: [] }
 namespace baml.sys:
+  class Process { methods: [write_stdin, close_stdin, wait, kill, close] }
+  class ProcessExit { methods: [ok] }
+  class ProcessLineStream { methods: [_next, close, iter, next] }
   class ProcessOptions { methods: [] }
   class ShellOutput { methods: [ok] }
   function argv
+  function collect_garbage
   function exec
   function exit
-  function now_ms
   function panic
   function shell
   function sleep
+  function start_process
 namespace baml.time:
   class AmbiguousTimeError { methods: [] }
   type Disambiguation
@@ -293,6 +312,10 @@ namespace baml.toml:
   function item_from_json
   function item_to_json
   function table_from_json
+namespace baml.ws:
+  class WsStream { methods: [send, next, close] }
+  function _connect
+  function connect
 namespace baml.yaml:
   class YamlParseError { methods: [] }
   function deserialize<T>

@@ -2,11 +2,11 @@
 // method name, `obj.as<InterfaceName>.method()` selects the right vtable.
 
 interface Serializer {
-  function encode(self) -> string
+  function encode(self) -> string throws never
 }
 
 interface IntSerializer {
-  function encode(self) -> int
+  function encode(self) -> int throws never
 }
 
 class Data {

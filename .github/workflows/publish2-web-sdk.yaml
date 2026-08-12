@@ -1,0 +1,113 @@
+name: BAML SDK Release - Publish Web npm
+
+# Publishes the platform-independent Web/Workers package built by
+# build2-web-sdk.reusable.yaml. The calling release workflow owns the build and
+# publish gates and passes the same frozen release plan to both jobs.
+#
+# npm trusted publishing matches the calling workflow identity, so the npm
+# trusted publisher for @boundaryml/baml-bridge-web must name
+# release-baml-language.yml with no GitHub Actions environment.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit to publish from"
+        type: string
+        required: true
+      channel:
+        description: "Release channel (nightly|canary); selects the npm dist-tag"
+        type: string
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publish-npm:
+    name: Publish Web npm
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Download Web SDK dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-sdk-dist
+          path: baml_language/sdks/typescript/bridge_typescript_web/dist
+
+      - name: Setup Node.js
+        # This publisher only uses npm. Enabling the repository composite's pnpm
+        # cache without installing dependencies makes its post-job cache save fail
+        # after a successful publish.
+        uses: actions/setup-node@v6
+        with:
+          node-version: latest
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Ensure npm CLI supports trusted publishing
+        run: |
+          set -euo pipefail
+          required_version="11.5.1"
+          current_version="$(npm --version)"
+          if [ "$(printf '%s\n' "$required_version" "$current_version" | sort -V | head -n1)" != "$required_version" ]; then
+            echo "npm $current_version is lower than required $required_version" >&2
+            exit 1
+          fi
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+
+      - name: Verify downloaded package
+        working-directory: baml_language/sdks/typescript/bridge_typescript_web
+        run: |
+          set -euo pipefail
+          plan_version="$(jq -r .canonical_version ../../../../release-plan.json)"
+          node_version="$(jq -r .version ../bridge_typescript/package.json)"
+          web_version="$(jq -r .version package.json)"
+          if [[ "$plan_version" != "$node_version" || "$plan_version" != "$web_version" ]]; then
+            echo "::error::BAML npm package version mismatch: release plan=$plan_version, @boundaryml/baml-bridge=$node_version, @boundaryml/baml-bridge-web=$web_version"
+            exit 1
+          fi
+          test -s dist/wasm/bridge_web_core_bg.wasm
+          test -s dist/workerd-wasm/bridge_web_core_bg.wasm
+          test -s dist/workerd/index.js
+          npm pack --dry-run --json > package-dry-run.json
+          test "$(jq -r '.[0].version' package-dry-run.json)" = "$plan_version"
+
+      - name: Publish to npm
+        working-directory: baml_language/sdks/typescript/bridge_typescript_web
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          if [[ "$CHANNEL" == "canary" ]]; then
+            tag="latest"
+          else
+            tag="$CHANNEL"
+          fi
+          name="$(jq -r .name package.json)"
+          version="$(jq -r .version package.json)"
+          existing="$(npm view "${name}@${version}" version 2>/dev/null || true)"
+          if [[ "$existing" == "$version" ]]; then
+            echo "Skipping ${name}@${version} (already published)"
+          else
+            npm publish --access public --tag "$tag" --loglevel verbose
+          fi

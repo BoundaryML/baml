@@ -9,7 +9,7 @@ use std::fmt;
 use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::PrimitiveType;
+use crate::{BuiltinTypeName, PrimitiveType};
 
 /// Which package a type is defined in. `Local` is the user's own (implicit
 /// root) package — the "current" package for everything a user writes;
@@ -117,6 +117,23 @@ impl QualifiedTypeName {
         &self.name
     }
 
+    /// Whether this is the generated stream-view companion for a local type.
+    ///
+    /// Stream types currently use the `$stream` source-level suffix. Keeping
+    /// this query on the compiler-owned qualified name avoids duplicating that
+    /// identity rule in each code generator.
+    pub fn is_stream(&self) -> bool {
+        self.name.as_str().ends_with("$stream")
+    }
+
+    /// The unqualified source name, without the generated stream prefix.
+    pub fn bare_name(&self) -> &str {
+        self.name
+            .as_str()
+            .strip_suffix("$stream")
+            .unwrap_or_else(|| self.name.as_str())
+    }
+
     pub fn is_builtin_root_type(&self, name: &str) -> bool {
         self.package().as_str() == "baml" && self.namespace.is_empty() && self.name.as_str() == name
     }
@@ -125,14 +142,6 @@ impl QualifiedTypeName {
     /// (i.e. it is a panic class or the `Panic` type alias).
     pub fn is_panic_type(&self) -> bool {
         baml_base::is_panic_namespace(self.package().as_str(), &self.namespace)
-    }
-
-    pub fn to_path_in_package(&self) -> Vec<Name> {
-        self.namespace
-            .iter()
-            .chain(std::iter::once(&self.name))
-            .cloned()
-            .collect::<Vec<_>>()
     }
 
     /// The flat `[package, ...namespace]` path, matching the legacy
@@ -212,25 +221,10 @@ impl QualifiedTypeName {
         self.render_dotted(true)
     }
 
-    /// If this names a builtin `baml` companion class that has a lowercase
-    /// primitive/keyword alias, return that alias: `baml.String` → `string`,
-    /// `baml.media.Image` → `image`, `baml.json.json` → `json`. Returns `None`
-    /// for any other type (including user types and non-aliased `baml` types
-    /// such as `baml.json.JsonObject`).
-    ///
-    /// This is the single collapse rule used by the describe/hover canonical
-    /// type printer; it must stay in sync with
-    /// [`PrimitiveType::builtin_class_path`].
-    pub fn builtin_alias(&self) -> Option<&'static str> {
+    /// Return the primitive represented by a builtin companion class.
+    pub fn builtin_primitive(&self) -> Option<PrimitiveType> {
         if self.package().as_str() != "baml" {
             return None;
-        }
-        // `json` is the `baml.json.json` type alias, not a `PrimitiveType`.
-        if self.namespace.len() == 1
-            && self.namespace[0].as_str() == "json"
-            && self.name.as_str() == "json"
-        {
-            return Some("json");
         }
         let path: Vec<&str> = self
             .namespace
@@ -238,7 +232,28 @@ impl QualifiedTypeName {
             .map(Name::as_str)
             .chain(std::iter::once(self.name.as_str()))
             .collect();
-        PrimitiveType::from_builtin_class_path(&path).map(|p| p.alias())
+        PrimitiveType::from_builtin_class_path(&path)
+    }
+
+    /// If this names a builtin `baml` companion class that has a lowercase
+    /// primitive/keyword alias, return that alias: `baml.String` → `string`,
+    /// `baml.media.Image` → `image`, `baml.json.json` → `json`. Returns `None`
+    /// for any other type (including user types and non-aliased `baml` types
+    /// such as `baml.json.JsonObject`).
+    ///
+    /// This is the single collapse rule used by the describe/hover canonical
+    /// type printer and delegates to [`BuiltinTypeName`]'s registry.
+    pub fn builtin_alias(&self) -> Option<&'static str> {
+        if self.package().as_str() != "baml" {
+            return None;
+        }
+        let path: Vec<&str> = self
+            .namespace
+            .iter()
+            .map(Name::as_str)
+            .chain(std::iter::once(self.name.as_str()))
+            .collect();
+        BuiltinTypeName::from_builtin_definition_path(&path).map(BuiltinTypeName::alias)
     }
 }
 
@@ -277,23 +292,11 @@ mod alias_tests {
 
     #[test]
     fn primitive_alias_class_path_roundtrips() {
-        for p in [
-            PrimitiveType::Int,
-            PrimitiveType::Bigint,
-            PrimitiveType::Float,
-            PrimitiveType::String,
-            PrimitiveType::Bool,
-            PrimitiveType::Null,
-            PrimitiveType::Uint8Array,
-            PrimitiveType::Image,
-            PrimitiveType::Audio,
-            PrimitiveType::Video,
-            PrimitiveType::Pdf,
-        ] {
+        for p in PrimitiveType::ALL {
             let path = p.builtin_class_path();
             assert_eq!(
                 PrimitiveType::from_builtin_class_path(path),
-                Some(p.clone()),
+                Some(p),
                 "round-trip failed for {p:?} via {path:?}"
             );
             // The alias matches the Display spelling.
@@ -324,6 +327,19 @@ mod alias_tests {
         assert_eq!(baml_qtn(&[], "Int").builtin_alias(), Some("int"));
         assert_eq!(baml_qtn(&["media"], "Image").builtin_alias(), Some("image"));
         assert_eq!(baml_qtn(&["media"], "Pdf").builtin_alias(), Some("pdf"));
+    }
+
+    #[test]
+    fn builtin_primitive_recognizes_companion_classes() {
+        assert_eq!(
+            baml_qtn(&[], "String").builtin_primitive(),
+            Some(PrimitiveType::String)
+        );
+        assert_eq!(
+            baml_qtn(&["media"], "Image").builtin_primitive(),
+            Some(PrimitiveType::Image)
+        );
+        assert_eq!(baml_qtn(&["json"], "json").builtin_primitive(), None);
     }
 
     #[test]

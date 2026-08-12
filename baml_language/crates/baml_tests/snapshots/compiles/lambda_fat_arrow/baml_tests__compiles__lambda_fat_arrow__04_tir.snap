@@ -87,3 +87,8 @@ lambda user.test_mixed {
 }
 lambda user.test_mixed {
 }
+function user.test_top_level_fat_arrow(x: int) -> int throws never {
+  { : int
+    x + 1 : int
+  }
+}

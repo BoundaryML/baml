@@ -56,7 +56,7 @@ pub(crate) fn render_typemap_module(
 
     let mut out = String::new();
     out.push_str("from __future__ import annotations\n\n");
-    out.push_str("from baml_core import BamlTypeMap\n\n");
+    out.push_str("from baml_bridge import BamlTypeMap\n\n");
 
     write_entries(&mut out, "_CLASS_ENTRIES", &classes);
     out.push('\n');

@@ -4,23 +4,23 @@
 
     baml_py.BamlClientError: Type mismatch: Value of type 'string'
     does not match any member of union [Void { ... },
-    Class(TypeName { name: "StreamFinished", ... })]
+    Class(TypeName { name: "Done", ... })]
 
-`baml.llm.Stream<T, S>.next() -> S | baml.stream.StreamFinished` is a
+`ai.stream.Stream<T, S>.next() -> S | ai.stream.Done` is a
 generic instance method whose return type mentions a class-level
 TypeVar. The host-side lowering for that call (`tir2_to_template`)
 doesn't substitute the instantiation's `S` into the lifted return
 type, so the union still contains `Ty::TypeVar`, which collapses to
 `Ty::Void`. The runtime then sees a concrete `string` arrive and
-fails to find a member of `[Void, StreamFinished]` that accepts it.
+fails to find a member of `[Void, Done]` that accepts it.
 
 This test isolates the same pattern in a single-shot call, no LLM, no
-streams, no `StreamFinished` union — just `WrapperMethods<T>.get_value(self)
+streams, no `Done` union — just `WrapperMethods<T>.get_value(self)
 -> T` invoked from Python on a `WrapperMethods<string>` instance. If the
 fix lands, this test goes green without touching the streaming path.
 """
 
-def test_generic():
+def test_generic_generic():
     """`WrapperMethods<string>.get_value_or_marker()` should still round-trip
     a string when the declared return is `T | WrapperMarker`.
 
@@ -33,7 +33,7 @@ def test_generic():
           }
         }
 
-    Mirrors `Stream.next(self) -> S | baml.stream.StreamFinished`: a
+    Mirrors `Stream.next(self) -> S | ai.stream.Done`: a
     class-level TypeVar fused into a union with a concrete class. If
     the host-side lifting fails to substitute `T → string` for this
     method's return type, `find_matching_member` will reject the
@@ -47,7 +47,7 @@ def test_generic():
     assert w.get_value_or_marker() == "hello"
 
 
-def test_generic_wrapper_get_value():
+def test_generic_generic_wrapper_get_value():
     """`WrapperMethods<string>.get_value()` should round-trip a string.
 
     Equivalent BAML:

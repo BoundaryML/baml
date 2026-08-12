@@ -69,12 +69,12 @@ function NestedGenericReturn() -> map<string, map<string, map<string, int | stri
 }
 
 // ===== Return type: deeply nested function type exceeding limit =====
-function DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> {
+function DeepFnReturn() -> (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never {
     1
 }
 
 // ===== Deeply nested param types =====
-function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string {
+function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> ((y: int) -> ((z: int) -> string throws never) throws never)) -> string {
     "done"
 }
 
@@ -452,7 +452,7 @@ function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
 // ===== LLM function basic =====
 function LlmBasic(name: string) -> string {
     client GPT4
-    prompt #"Say hello to {{name}}"#
+    prompt `Say hello to ${name}`
 }
 
 
@@ -463,22 +463,22 @@ function LlmBasic(name: string) -> string {
 // ===== LLM function with multi-line prompt =====
 function LlmMultiLine(text: string) -> string {
     client GPT4
-    prompt #"
+    prompt `
         Analyze the following text:
-        {{ text }}
+        ${text}
         Return a summary.
-    "#
+    `
 }
 
 // ===== LLM function with string client =====
 function LlmStringClient(text: string) -> string {
     client "openai/gpt-4o"
-    prompt #"Summarize: {{ text }}"#
+    prompt `Summarize: ${text}`
 }
 
 // ===== LLM function prompt before client (order test) =====
 function LlmReversedOrder(text: string) -> string {
-    prompt #"Summarize: {{ text }}"#
+    prompt `Summarize: ${text}`
     client GPT4
 }
 
@@ -487,10 +487,10 @@ function LlmReversedOrder(text: string) -> string {
 // ===== LLM function with wrapping signature =====
 function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
     client GPT4
-    prompt #"
-        Context: {{ first_context }} {{ second_context }} {{ third_context }}
-        Query: {{ user_query }}
-    "#
+    prompt `
+        Context: ${first_context} ${second_context} ${third_context}
+        Query: ${user_query}
+    `
 }
 
 // ===== Extraneous whitespace on function =====

@@ -1,7 +1,7 @@
 //! Unit tests for the `LoadType` instruction and the `type_args` calling convention.
 //!
 //! These tests exercise Phase 3 of the type-reflection implementation:
-//! - `TyTemplate::Concrete(...)` → `LoadType` materialises the concrete `RuntimeTy`
+//! - `TyTemplate::from(...)` → `LoadType` materialises the concrete `RuntimeTy`
 //! - `TyTemplate::TypeArgRef(0)` → `LoadType` substitutes from `frame.type_args[0]`
 //! - Composite templates (e.g. `Array(TypeArgRef(0))`) substitute correctly
 //! - `Call { ntypeargs }` pops type args from the stack and stores them in the frame
@@ -13,7 +13,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, Value,
@@ -49,6 +49,8 @@ fn inject_function(
     let func = Function {
         name: fn_name.to_string(),
         source_file: String::new(),
+        docstring: None,
+        declared_name: None,
         arity: 0,
         real_local_count: 0,
         bytecode,
@@ -56,14 +58,18 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        return_type: RuntimeTy::int(),
+        return_type: baml_type::TyTemplate::Int {
+            attr: baml_type::TyAttr::default(),
+        },
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![],
         display_type_params: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
-        throws_type: None,
+        throws_type: baml_type::TyTemplate::Never {
+            attr: baml_type::TyAttr::default(),
+        },
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
@@ -114,11 +120,11 @@ fn run_with_bytecode_keep_vm(
 
 // ─── 3.1 & 3.5 ── LoadType with a fully-concrete template ───────────────────
 
-/// `LoadType(k)` where `k` is a `ConstValue::Type(TyTemplate::Concrete(int))`
+/// `LoadType(k)` where `k` is a `ConstValue::Type(TyTemplate::from(int))`
 /// should push an `Object::Type` whose inner `RuntimeTy` is `RuntimeTy::int()`.
 #[test]
 fn load_type_concrete_int() {
-    let template = TyTemplate::Concrete(RuntimeTy::int());
+    let template = TyTemplate::from(baml_type::RealizedTy::int());
     let (result, vm) = run_with_bytecode_keep_vm(
         "user.test_load_int",
         vec![Instruction::LoadType(0), Instruction::Return],
@@ -131,27 +137,31 @@ fn load_type_concrete_int() {
     match vm.get_object(ptr) {
         Object::Type(ty) => assert_eq!(
             **ty,
-            RuntimeTy::int(),
-            "LoadType(int) should materialise RuntimeTy::int"
+            RealizedTy::int(),
+            "LoadType(int) should materialise RealizedTy::int"
         ),
         other => panic!("expected Object::Type, got {other:?}"),
     }
 }
 
-/// A `TyTemplate::Concrete(string)` produces a `RuntimeTy::string()` payload distinct
-/// from a `TyTemplate::Concrete(int)`, and the resulting heap objects compare
-/// unequal under `deep_equals`.
+/// A `TyTemplate::from(string)` produces a `RuntimeTy::string()` payload distinct
+/// from a `TyTemplate::from(int)`, and the resulting heap objects compare
+/// unequal under `==`.
 #[test]
 fn load_type_concrete_string_different_from_int() {
     let (r_int, vm_int) = run_with_bytecode_keep_vm(
         "user.test_load_int2",
         vec![Instruction::LoadType(0), Instruction::Return],
-        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::int()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::int(),
+        ))],
     );
     let (r_str, vm_str) = run_with_bytecode_keep_vm(
         "user.test_load_str",
         vec![Instruction::LoadType(0), Instruction::Return],
-        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::string()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::string(),
+        ))],
     );
 
     let Some(p_int) = r_int.as_object_ptr() else {
@@ -170,8 +180,8 @@ fn load_type_concrete_string_different_from_int() {
         other => panic!("expected Object::Type for string, got {other:?}"),
     };
 
-    assert_eq!(int_ty, RuntimeTy::int());
-    assert_eq!(str_ty, RuntimeTy::string());
+    assert_eq!(int_ty, RealizedTy::int());
+    assert_eq!(str_ty, RealizedTy::string());
     assert_ne!(
         int_ty, str_ty,
         "int and string LoadType payloads must differ"
@@ -211,7 +221,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame must exist");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RuntimeTy::string()];
+            bf.type_args = vec![RealizedTy::string()];
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -225,7 +235,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
         }
     };
 
-    // The result must be an Object::Type wrapping RuntimeTy::string()
+    // The result must be an Object::Type wrapping RealizedTy::string()
     let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
@@ -234,7 +244,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                RuntimeTy::string(),
+                RealizedTy::string(),
                 "TypeArgRef(0) should resolve to string"
             );
         }
@@ -248,7 +258,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
 /// should produce `Object::Type(RuntimeTy::list(int))`.
 #[test]
 fn load_type_array_of_type_arg_ref() {
-    let template = TyTemplate::Array(Box::new(TyTemplate::TypeArgRef(0)));
+    let template = TyTemplate::list(TyTemplate::TypeArgRef(0));
     let fn_name = "user.test_array_typearg";
 
     let mut program = compile_source(STUB_SOURCE);
@@ -272,7 +282,7 @@ fn load_type_array_of_type_arg_ref() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame must exist");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RuntimeTy::int()];
+            bf.type_args = vec![RealizedTy::int()];
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -294,7 +304,7 @@ fn load_type_array_of_type_arg_ref() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                RuntimeTy::list(RuntimeTy::int()),
+                RealizedTy::list(RealizedTy::int()),
                 "Array(TypeArgRef(0)) with int → int[]"
             );
         }
@@ -350,7 +360,9 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
             },
             Instruction::Return,
         ],
-        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::string()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::string(),
+        ))],
     );
     let _ = inner_obj_idx; // suppress unused warning
 
@@ -377,8 +389,8 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                RuntimeTy::string(),
-                "inner function should receive RuntimeTy::string() via type arg"
+                RealizedTy::string(),
+                "inner function should receive RealizedTy::string() via type arg"
             );
         }
         other => panic!("expected Object::Type, got {other:?}"),

@@ -23,8 +23,9 @@ use common::{EngineProgram, assert_engine_executes};
 async fn union_typed_let_else_binds_first_member() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
-class WlA { v int }
-class WlB { v int }
+interface WlHasV { v int }
+class WlA { v int  implements WlHasV {} }
+class WlB { v int  implements WlHasV {} }
 class WlStop {}
 
 function f() -> int {
@@ -47,8 +48,9 @@ function main() -> int { f() }
 async fn union_typed_let_else_binds_second_member() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
-class WlA { v int }
-class WlB { v int }
+interface WlHasV { v int }
+class WlA { v int  implements WlHasV {} }
+class WlB { v int  implements WlHasV {} }
 class WlStop {}
 
 function f() -> int {
@@ -93,8 +95,9 @@ function main() -> int { f() }
 async fn union_typed_match_arm_binds_first_member() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
-class WlA { v int }
-class WlB { v int }
+interface WlHasV { v int }
+class WlA { v int  implements WlHasV {} }
+class WlB { v int  implements WlHasV {} }
 class WlStop {}
 
 function f() -> int {
@@ -118,8 +121,9 @@ function main() -> int { f() }
 async fn union_typed_match_arm_binds_second_member() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
-class WlA { v int }
-class WlB { v int }
+interface WlHasV { v int }
+class WlA { v int  implements WlHasV {} }
+class WlB { v int  implements WlHasV {} }
 class WlStop {}
 
 function f() -> int {
@@ -144,8 +148,9 @@ function main() -> int { f() }
 async fn union_typed_let_else_takes_else_on_non_member() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
-class WlA { v int }
-class WlB { v int }
+interface WlHasV { v int }
+class WlA { v int  implements WlHasV {} }
+class WlB { v int  implements WlHasV {} }
 class WlStop {}
 
 function f() -> int {

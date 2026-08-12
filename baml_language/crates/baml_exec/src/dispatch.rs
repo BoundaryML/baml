@@ -29,7 +29,7 @@ pub enum DispatchResult {
 pub fn validate_help_param(engine: &BexEngine, function_name: &str) -> Result<()> {
     let params = engine
         .function_params(function_name)
-        .with_context(|| format!("Failed to resolve target `{function_name}`"))?;
+        .with_context(|| format!("failed to resolve target `{function_name}`"))?;
     if params.iter().any(|(name, _, _)| *name == "help") {
         anyhow::bail!(
             "Target `{function_name}` declares a parameter named `help`, \
@@ -63,7 +63,7 @@ pub async fn dispatch_target(
 ) -> Result<DispatchResult> {
     let func_info = engine
         .find_user_function(target_name)
-        .ok_or_else(|| anyhow!("Function `{target_name}` not found"))?;
+        .ok_or_else(|| anyhow!("function `{target_name}` not found"))?;
 
     // BEP-027 §"Auto-CLI conventions": `help` is reserved at entry-point
     // resolution under both `baml run` and `baml pack`. Pack catches this
@@ -193,13 +193,13 @@ pub async fn build_args_from_signature(
                 // expectations and bare engine callers stay friendly.
                 if crate::is_auto_cli_primitive(ty) {
                     anyhow::bail!(
-                        "Missing required argument `--{name}` (type: {ty}).\n\
-                         Pass it after `--`: ... -- --{name} <value>"
+                        "missing required argument `--{name}` (type: {ty}).\n\
+                         pass it after `--`: `... -- --{name} <value>`"
                     );
                 }
                 anyhow::bail!(
-                    "Missing required argument `{name}` (type: {ty}).\n\
-                     Pass it via `--json-args '{{\"{name}\": ...}}'` \
+                    "missing required argument `{name}` (type: {ty}).\n\
+                     pass it via `--json-args '{{\"{name}\": ...}}'` \
                      (or `--json-args @file` / `--json-args -` for stdin)."
                 );
             }
@@ -360,7 +360,7 @@ mod tests {
         .await
         .unwrap_err();
         let msg = format!("{err}");
-        assert!(msg.contains("Missing required argument"), "got: {msg}");
+        assert!(msg.contains("missing required argument"), "got: {msg}");
         // Hint about `--` separator (added recently).
         assert!(msg.contains("--"), "got: {msg}");
     }

@@ -1,0 +1,391 @@
+---
+title: "Tech Preview: Workflows"
+description: Specify complex workflows directly in BAML
+slug: workflows
+date: June 14, 2025
+tags: ['announcements']
+author:
+  name: Greg Hale
+  imageUrl: /greg.jpg
+  linkedin: https://www.linkedin.com/in/imalsogreg/
+---
+
+
+
+<Tip>
+This is a Tech Preview. Do not use these features in production.
+The purpose of the preview is to stimulate ideas for building Workflows and
+Agents in BAML. The implementation has many bugs and will undergo many breaking
+changes before stabilization.
+</Tip>
+
+## Workflows
+
+Building an app around LLMs is a fundamentally different process from
+developing one around traditional software components, so it requires a
+fundamentally different set of tools. BAML’s raison d’exister is to provide
+exactly those tools. The BAML VSCode extension and playground at
+[promptfiddle.com](http://promptfiddle.com) are specialized for
+building AI functions, then compiling those functions into a form
+that fits naturally into the rest of your software stack.
+
+This new paradigm of separating LLM function development from other business
+logic has proved so useful that some users began to wonder: does BAML really need
+to stop at the level of a single LLM function?
+
+So, we decided to try moving the boundary between LLM and
+application - from the level of single LLM prompts, up to the level of workflows
+and agentic loops. In the near future, you can craft multi-model workflows and
+agents directly in BAML.
+
+This Tech Preview is our way of asking for your participation in
+building the right abstractions, to make a step-change in the types of
+AI-augmented apps you can ship.
+
+<Tip>
+The new syntax in this Tech Preview is experimental and guaranteed to change
+with almost every minor release of BAML. We do not recommend using these
+features in production BAML apps until they have stabilized and gone through
+more rigorous testing. To keep track of the stabilization effort, please join
+our [Discord](https://discord.gg/yzaTpQ3tdT)!
+</Tip>
+
+<Video src="/blog/expression-language/four-seasons-small-inorder.mp4" />
+
+## BAML Expressions and Functions
+
+BAML now allows you to write expressions in more places.
+Some example expressions:
+
+```rust
+1                          // Number
+
+"hi"                       // String
+
+[1,1,2,3]                  // List of items
+
+MyFunction(1, "hi")        // Application of a function to arguments
+
+[1,1, Plus(1,1)]           // List involving another function
+
+{ a 1                      // Maps
+  b 2
+}
+
+MyClass {                  // Class instance
+  name: "Alonzo Church",
+  age: 121,
+}
+```
+
+Expressions can now be used to define global variables, and to implement
+functions:
+
+<BamlBlock name="2" bamlCode={`
+// A global variable.
+let poem_subject = "Math";
+
+// Another global.
+let default_poem = ClaudePoem(poem_subject);
+
+// A function that calls other functions.
+function RunPoemFaceoff(
+    subject: string,
+    length: int
+) -> Comparison {
+    let poem1 = ClaudePoem(subject, length);
+    let poem2 = OpenAIPoem(subject, length);
+    ComparePoems(subject, poem1, poem2)
+}
+
+function ClaudePoem(
+    subject: string,
+    length: int
+) -> string {
+    client Claude
+    prompt #"
+      Write a {{ length }} line
+      poem about {{ subject }}.
+    "#
+}
+
+test Test {
+  functions [RunPoemFaceoff]
+  args {
+    subject "love"
+    length 5
+  }
+}
+
+function OpenAIPoem(
+    subject: string,
+    length: int
+) -> string {
+    client GPT4
+    prompt #"
+      Write a {{ length }} line poem about {{ subject }}.
+    "#
+}
+
+class Comparison {
+    poem_1_score int @description("1-10 rating of the first poem's quality")
+    poem_2_score int @description("1-10 rating of the second poem's quality")
+    reasoning string @description("Reasons for the above scores, explicitly contrasting the poems.")
+}
+
+function ComparePoems(
+    subject: string,
+    poem_1: string,
+    poem_2: string
+) -> Comparison {
+    client GPT4
+    prompt #"
+      Two poets have written poems on the subject of {{ subject }}.
+      Please grade and compare them according to the output schema.
+      
+      {{ ctx.output_format }}
+    "#
+}
+
+client<llm> GPT4 {
+    // Use one of the following: https://docs.boundaryml.com/docs/snippets/clients/providers/openai
+    provider openai
+    // You can pass in any parameters from the OpenAI Python documentation into the options block.
+    options {
+      model gpt-4
+      api_key env.OPENAI_API_KEY
+    }
+} 
+
+client<llm> Claude {
+    provider anthropic
+    options {
+      model claude-3-haiku-20240307
+      api_key env.ANTHROPIC_API_KEY
+      max_tokens 1000
+
+    }
+}
+`}
+/>
+
+Run the `RunPoemFaceoff > Test` test and you will see that BAML
+has called two different models to generate poems on a shared topic,
+then made a third model call to compare the poems:
+
+```json
+Poem 1:
+"The heart beats, fabric of love's tapestry,
+Woven by hands unseen but truly felt.
+Such sweet surrender, love's grand mystery,
+In your arms, all hardness starts to melt."
+
+Poem 2:
+"Amore, amore, eternal flame,
+In the ocean of affection, we were same.
+Too many layers of desire,
+Burned in the fire of your gaze, oh dame."
+
+{
+  "poem_1_score": 8,
+  "poem_2_score": 7,
+  "reasoning": "
+    Both poems convey a deep and passionate understanding of love.
+    However, the first poem carries a softer, more delicate
+    connotation, using the metaphor of weaving, suggesting that
+    love is intricate, complex, and painstakingly created.
+    Meanwhile, the second poem uses the metaphor of a flame and an
+    ocean, suggesting love is all-consuming, powerful, and endless.
+    While both are beautifully written, Poem 1 captures the
+    reader's emotions more gently with its subtle metaphors and
+    tender wording. Poem 2, while filled with powerful imagery,
+    might score slightly lower due to its raw intensity and direct
+    portrayal of passion, which may not resonate with every reader.
+  "
+}
+```
+
+This diagram shows the graph of related variables and functions.
+Some frameworks let you build your Workflows and agents by building
+graphs with nodes and edges. We believe the ideas are clearer
+in code!
+
+<Image
+   src="/blog/expression-language/poem_flow.png"
+   alt="The RunPoemFaceoff function depends on various functions"
+   width={800}
+   height={200}
+ />
+
+## Doing more in BAML
+
+The `RunPoemFaceoff()`  function in our previous example combines three
+different LLM calls in a way that previously required one of our
+client SDK languages (e.g. Python, TypeScript, Go, etc). Why might you want to
+compose these function directly in BAML?
+
+1. The whole pipeline of LLM functions works together as a unit. Writing in it
+   BAML with the playground allows you to iterate on that unit, making sure the
+   components work together as expected, with inline tests.
+2. In-editor highligting shows you the execution order and timing of your
+   pipeline’s components under realistic conditions. It is possible to recover
+   similar data via tracing (and you still can!), but having
+   a quick view of it during iteration is extremely valuable.
+3. Integration with Boundary Studio will give you full pipeline-level traces and
+   other insights, which would otherwise be split across multiple LLM function
+   calls.
+
+If you’ve used BAML before, you know how productive it can be to
+iterate on LLM functions in the playground. By allowing you to say more about
+your LLM calls within BAML, we let you extend the playground experience to more
+of your app development, only dropping back to the client SDK for truly
+application-level concerns, like talking to the database or running
+authentication middleware.
+
+## Extending LLM functions with live data
+
+In addition to composing LLM functions together, you can compose LLM functions
+with data fetched from the internet, using the new `fetch_value` function.
+
+<BamlBlock name="2" bamlCode={`
+class Todo {
+    id int
+    todo string
+    completed bool
+    userId int
+}
+
+function GetTodo() -> Todo {
+    std::fetch_value<Todo>(std::Request {
+      base_url: "https://dummyjson.com/todos/1",
+      headers: {},
+      query_params: {},
+    })
+}
+      
+function UseFunction() -> string {
+    let todo = GetTodo();
+    LlmDescribeTodo(todo)
+}
+
+
+function LlmDescribeTodo(
+    todo: Todo
+) -> string {
+    client GPT4
+    prompt #"
+      Please describe the following todo item: {{todo}}
+    "#
+}
+
+test UseFunction() {
+    functions [UseFunction]
+    args {}
+}
+
+client<llm> GPT4 {
+    provider openai
+    options {
+      model gpt-4
+      api_key env.OPENAI_API_KEY
+    }
+} 
+`}
+/>
+
+
+## Limitations
+
+The scope of this tech preview is very limited, especially compared to
+general-purpose programming languages. We do not yet support:
+
+- Loops
+- Mutable variables
+- Record access
+- Disk IO
+- Modules & imports
+- Breakpoint debugging
+- A standard library
+
+We agree that these features are all necessary for building Workflows. We just
+haven’t implemented them yet, since the focus of this Tech Preview is on
+directly composing LLM functions.
+
+<Tip>
+
+It is interesting to note that many incomplete aspects of the language can be
+patched with custom LLM functions, albeit inefficiently. For example, if you
+need to access the name field of your custom type type CatOrStudent = Cat |
+Student, for use in a downstream function, and our language doesn’t support
+record access for unions, you can patch this with a custom LLM function:
+
+```rust
+type CatOrStudent = Cat | Student
+
+let my_cat = Cat { name: "Kiki", age: 15 };
+
+// This function greets a cat or a student. BAML does not yet
+// support accessing record fields, especially under a union.
+// And it does not support building strings. But we can patch
+// these deficiencies using our own LLM functions.
+fn Greeting(recipient: CatOrStudent) -> string {
+  let recipient_name = CatOrStudentName(recipient)
+  Printf("Hello {0}, it's great to meet you, {0}!", [recipient_name])
+}
+
+// This function patches the fact that we can't natively
+// do record access or union discrimination in BAML.
+function CatOrStudentName(input: CatOrStudent) -> string {
+  client Llama2
+  prompt #"
+    Extract the 'name' field from this data as 
+    a raw string: {{ input }}
+  "#
+}
+
+// This function patches the fact that we have to format
+// strings in BAML. (We actually do have template_strings in
+// BAML, which solve this issue. But we are pretending they
+// don't exist, to show how general the patching solution is).
+function Printf(fmt: string, args: string[]) -> string {
+  client Llama2
+  prompt #"
+    Replace the bracketed numbers in the format string with
+    the corresponding arguments.
+    
+    Format string: {{ fmt }}
+    
+    Arguments: {{ args }}
+    
+    Return the result as a raw string.
+}
+```
+</Tip>
+
+## What's Next?
+
+Our goal in releasing this Tech Preview is to gather feedback and ideas for
+letting you do more in BAML. Please try it out! Would you move some of your
+business logic up into BAML? Are there features that would encourage you
+to do so?.
+
+Soon, we plan to extend the BAML to include the basic
+features you would expect in a normal language: if/else, error handling,
+loops, etc. We will introduce these features in an order that makes the
+most sense for LLM-pipeline based applications.
+
+The piece of business logic we believe is most ripe for direct BAML support is
+the “agentic loop”. The ultimate goal of the current push toward more expressive
+BAML expressions, is to take the pain and awkwardness out of building agents.
+We hope BAML can both simplify the concept of
+tool use, and allows you to make smarter decisions about managing state, tools,
+and sub-functions. You might already have your own ideas about how this could
+work in BAML v1. If so, let us know! Everything is in flux, and we think we
+will deliver something useful very soon.
+
+Don't forget, join our [Discord](https://discord.gg/yzaTpQ3tdT) community -
+we'll be there to answer any LLM or prompting questions that you have!
+
+<div className="mt-2 pr-4 pl-4 border rounded-lg bg-gray-50">
+  P.S. If you're curious why we created a new programming language for LLMs, check [this post](/blog/ai-agents-need-new-syntax) out!
+</div>

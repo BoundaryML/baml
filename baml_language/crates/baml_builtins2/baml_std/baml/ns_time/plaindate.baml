@@ -5,7 +5,7 @@
 class PlainDate {
     /// Internal representation: days since 1970-01-01 on the proleptic
     /// Gregorian calendar.
-    _days: int;
+    _days: int,
 
     /// Creates a `PlainDate` from calendar components. `month` and `day`
     /// are 1-based.
@@ -13,7 +13,11 @@ class PlainDate {
     /// Throws `root.errors.InvalidArgument` if a component is out of range
     /// (e.g. month 13, Feb 30) or the year is outside ±9999.
     //baml:mut_vm
-    function from_components(year: int, month: int, day: int) -> PlainDate throws root.errors.InvalidArgument {
+    function from_components(
+        year: int,
+        month: int,
+        day: int,
+    ) -> PlainDate throws root.errors.InvalidArgument {
         $rust_function
     }
     /// Parses an ISO 8601 calendar date: `1979-05-27`.
@@ -27,7 +31,9 @@ class PlainDate {
     implements baml.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (_) {
-                root.errors.InvalidArgument { message } => root.sys.panic("PlainDate.to_string: " + message),
+                root.errors.InvalidArgument { message } => {
+                    root.sys.panic("PlainDate.to_string: " + message)
+                },
             }
         }
     }
@@ -68,17 +74,25 @@ class PlainDate {
     implements baml.FromJson {
         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
             match (j) {
-                string => PlainDate.parse(j) catch (_) {
-                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                string => {
+                    PlainDate.parse(j) catch (_) {
+                        root.errors.ParseError { message } => {
+                            throw baml.json.JsonDecodeError { message: message, path: "" }
+                        },
+                    }
                 },
-                _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601 date string", path: "" }
+                _ => {
+                    throw baml.json.JsonDecodeError { message: "Expected ISO 8601 date string", path: "" }
+                },
             }
         }
     }
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
             self._to_string_impl() catch (_) {
-                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+                root.errors.InvalidArgument { message } => {
+                    throw baml.json.JsonSerializationError { message: message, path: "" }
+                },
             }
         }
     }

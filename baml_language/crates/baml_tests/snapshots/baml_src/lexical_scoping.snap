@@ -3,106 +3,137 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function lexical_scoping.$init_test_ns_lexical_scoping_lexical_scoping(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "same_scope_shadow"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "outer_restored"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "initializer_uses_previous"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "shadow_param"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "for_loop_restores_outer"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "nested_outer_restored"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "capture_before_after_shadow"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule1_while_no_leakage"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule1_while_observed_inner_shadow"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule2_block_outer_mutation_escapes"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule2_for_outer_mutation_escapes"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule3_block_shadow_then_assign_inner_does_not_escape"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule2_pre_shadow_mutation_escapes_post_shadow_does_not"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "declared_type_restored_across_scope"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "lambdas_capture_match_and_catch_pattern_bindings"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "match_and_catch_pattern_bindings_restore_outer_locals"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "multi_clause_catch_uses_clause_local_binding"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lexical_scoping"
+    load_const "closure_parameter_resolves_in_for_iterable"
+    make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lexical_scoping"
+    load_const "closure_parameter_resolves_in_while_condition"
+    make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -122,27 +153,27 @@ function lexical_scoping.capture_before_after_shadow() -> int {
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 0)>, 1
     call_indirect
-    store_var _6
+    load_const 10
+    mul_int
+    store_var _5
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 1)>, 1
     call_indirect
-    store_var _8
-    load_var _6
-    load_const 10
-    mul_int
-    load_var _8
+    load_var _5
     add_int
     return
 }
 
 function lexical_scoping.capture_catch_arm_binding() -> string {
-    load_var ?2
+    load_var ?3
     make_cell
-    store_var ?2
+    store_var ?3
     call user.lexical_scoping.throw_string
     jump L2
     load_var e
-    is_type string
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -151,8 +182,8 @@ function lexical_scoping.capture_catch_arm_binding() -> string {
     rethrow
 
   L1:
-    load_var e
-    store_deref ?2
+    load_var _2
+    store_deref ?3
     load_var s
     make_closure .<lambda(capture_catch_arm_binding, 0)>, 1
     call_indirect
@@ -238,6 +269,69 @@ function lexical_scoping.catch_base_uses_outer_lambda() -> int {
     return
 }
 
+function lexical_scoping.closure_parameter_in_for_iterable() -> int {
+    load_const 0
+    store_var sum
+    load_type int
+    load_type never
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_type int
+    alloc_array 4
+    make_closure .<lambda(closure_parameter_in_for_iterable, 0)>, 0
+    call baml.Array.filter
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+
+  L0:
+    load_var _7
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+    load_var _8
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 3
+    add_int
+    store_var sum
+    jump L0
+
+  L2:
+    load_var sum
+    return
+}
+
+function lexical_scoping.closure_parameter_in_while_condition() -> int {
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    make_closure .<lambda(closure_parameter_in_while_condition, 0)>, 0
+    call_indirect
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var i
+    return
+
+  L2:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
 function lexical_scoping.declared_type_restored_outer() -> string {
     load_const "outer"
     return
@@ -249,175 +343,34 @@ function lexical_scoping.fail() -> int {
 }
 
 function lexical_scoping.for_loop_restores_outer() -> int {
-    load_type int
     load_const 2
     load_const 3
     load_type int
     alloc_array 2
-    call baml.iter.Iterable$for$T[].iter
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    is_type baml.iter.Flatten<...>
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L20
+    jump L2
 
   L1:
-    load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L2
-    jump L19
-
-  L2:
-    load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L3
-    jump L18
-
-  L3:
-    load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L4
-    jump L17
-
-  L4:
-    load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L5
-    jump L16
-
-  L5:
-    load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L6
-    jump L15
-
-  L6:
-    load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L7
-    jump L14
-
-  L7:
-    load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L8
-    jump L13
-
-  L8:
-    load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L9
-    jump L12
-
-  L9:
-    load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L10
-    jump L11
-
-  L10:
-    load_var _3
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L24
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.Peekable.Iterator.next
-    store_var _5
-    jump L21
-
-  L11:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L12:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L13:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
-    call baml.iter.Filter.Iterator.next
-    store_var _5
-    jump L21
-
-  L14:
-    load_var _3
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L15:
-    load_type int
-    load_var _3
-    call baml.iter.Repeat.Iterator.next
-    store_var _5
-    jump L21
-
-  L16:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
-    call baml.iter.Chain.Iterator.next
-    store_var _5
-    jump L21
-
-  L17:
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.StepBy.Iterator.next
-    store_var _5
-    jump L21
-
-  L18:
-    load_type int
-    load_var _3
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _5
-    jump L21
-
-  L19:
-    load_var _3
-    call baml.iter.Range.Iterator.next
-    store_var _5
-    jump L21
-
-  L20:
-    load_var _3
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _5
-
-  L21:
-    load_var _5
-    is_type baml.iter.Done
-    pop_jump_if_false L22
-    jump L23
-
-  L22:
-    load_var _5
+    load_var _4
     store_var x
     jump L0
 
-  L23:
+  L2:
     load_const 1
     return
-
-  L24:
-    unreachable
 }
 
 function lexical_scoping.initializer_uses_previous() -> int {
@@ -451,13 +404,14 @@ function lexical_scoping.match_and_catch_main() -> int {
     store_var _2
     call user.lexical_scoping.match_later_arm_uses_outer
     store_var _4
-    call user.lexical_scoping.catch_base_uses_outer_lambda
-    store_var _6
-    load_var2 1 2
+    load_var2 2 3
     load_const 100
     mul_int
     add_int
-    load_var _6
+    store_var _1
+    call user.lexical_scoping.catch_base_uses_outer_lambda
+    store_var _6
+    load_var2 1 4
     load_const 10000
     mul_int
     add_int
@@ -587,162 +541,33 @@ function lexical_scoping.rule2_block_outer_mutation_escapes() -> int {
 function lexical_scoping.rule2_for_outer_mutation_escapes() -> int {
     load_const 1
     store_var x
-    load_type int
     load_const 1
     load_type int
     alloc_array 1
-    call baml.iter.Iterable$for$T[].iter
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    is_type baml.iter.Flatten<...>
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L20
+    jump L2
 
   L1:
-    load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L2
-    jump L19
-
-  L2:
-    load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L3
-    jump L18
-
-  L3:
-    load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L4
-    jump L17
-
-  L4:
-    load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L5
-    jump L16
-
-  L5:
-    load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L6
-    jump L15
-
-  L6:
-    load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L7
-    jump L14
-
-  L7:
-    load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L8
-    jump L13
-
-  L8:
-    load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L9
-    jump L12
-
-  L9:
-    load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L10
-    jump L11
-
-  L10:
-    load_var _3
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L24
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.Peekable.Iterator.next
-    jump L21
-
-  L11:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    jump L21
-
-  L12:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    jump L21
-
-  L13:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
-    call baml.iter.Filter.Iterator.next
-    jump L21
-
-  L14:
-    load_var _3
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    jump L21
-
-  L15:
-    load_type int
-    load_var _3
-    call baml.iter.Repeat.Iterator.next
-    jump L21
-
-  L16:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
-    call baml.iter.Chain.Iterator.next
-    jump L21
-
-  L17:
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.StepBy.Iterator.next
-    jump L21
-
-  L18:
-    load_type int
-    load_var _3
-    call baml.iter.ArrayIterator.Iterator.next
-    jump L21
-
-  L19:
-    load_var _3
-    call baml.iter.Range.Iterator.next
-    jump L21
-
-  L20:
-    load_var _3
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-
-  L21:
-    is_type baml.iter.Done
-    pop_jump_if_false L22
-    jump L23
-
-  L22:
     load_const 2
     store_var x
     jump L0
 
-  L23:
+  L2:
     load_var x
     return
-
-  L24:
-    unreachable
 }
 
 function lexical_scoping.rule2_pre_shadow_mutation_escapes_post_shadow_does_not() -> int {

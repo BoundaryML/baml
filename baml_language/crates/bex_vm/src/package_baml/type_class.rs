@@ -1,10 +1,10 @@
-use bex_vm_types::types::{InterfaceImplementorEntry, Object, Value};
+use bex_vm_types::types::{Object, Value};
 
 use super::{BamlClassTypeValue, PackageBamlImpl, resolve};
 use crate::BexVm;
 
 impl BamlClassTypeValue for PackageBamlImpl {
-    /// Returns the `RuntimeTy`'s display name.  Includes namespaces and (for
+    /// Returns the `RealizedTy`'s display name.  Includes namespaces and (for
     /// non-`user` packages) the package prefix, so two distinct types never
     /// collide on this string — package names are unique within a workspace,
     /// so eliding the implicit `user.` prefix is unambiguous.
@@ -24,14 +24,15 @@ impl BamlClassTypeValue for PackageBamlImpl {
 
     /// BEP-044: `class_t.implements(iface_t)`.
     ///
-    /// Selects over the per-package `interface_impls` registry: an impl applies
-    /// when its `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
+    /// Selects over the program-wide impl-rule index: an impl applies when its
+    /// `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
     /// implemented-interface args / associated bindings match the requested
-    /// instantiation. The orphan rule localizes the candidates to `class_t`'s
-    /// package and the interface's package; bound obligations recurse the same
-    /// way. Because the compiler (E0125) forces a class to implement every
-    /// interface in its `requires` closure, "direct impl" already covers
-    /// transitive satisfaction.
+    /// instantiation. Candidates are every impl of the interface in the program —
+    /// the orphan rule does *not* localize them to `class_t`'s or the interface's
+    /// package (see [`crate::package_load::PackageIndex`]); bound obligations
+    /// recurse the same way. Because the compiler (E0125) forces a class to
+    /// implement every interface in its `requires` closure, "direct impl" already
+    /// covers transitive satisfaction.
     fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         let Some(self_ty) = type_value_ty(vm, *self_value) else {
             return false;
@@ -39,7 +40,12 @@ impl BamlClassTypeValue for PackageBamlImpl {
         let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *other) else {
             return false;
         };
-        resolve::type_implements(vm, &self_ty, &iface_name, &iface_args, &iface_assoc)
+        resolve::ImplResolver::new(vm).type_implements(
+            &self_ty,
+            &iface_name,
+            &iface_args,
+            &iface_assoc,
+        )
     }
 
     /// BEP-044: `iface_t.implemented_by(class_t)` — same answer as
@@ -47,68 +53,41 @@ impl BamlClassTypeValue for PackageBamlImpl {
     fn implemented_by(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         Self::implements(vm, other, self_value)
     }
-
-    /// BEP-044: `iface_t.implementors()` returns the concrete classes that
-    /// nominally satisfy this interface, in deterministic lexicographic order by
-    /// qualified name. Returns `[]` when `self_value` is not an interface (e.g. a
-    /// class type or a primitive type).
-    ///
-    /// Derived from the same per-package `interface_impls` registry as
-    /// [`Self::implements`] (via `resolve::implementor_entries`), so the two
-    /// reflection directions cannot disagree. A generic class is reported by its
-    /// base and a blanket impl by every loaded class its bounds admit, so a
-    /// specific generic instantiation (`Box<int>`) is not separately enumerable.
-    ///
-    /// Returns a raw `Vec<Value>`; the codegen glue wraps it into an
-    /// `Object::Array` allocation. The element `Object::Type` values are
-    /// allocated here because they each require a fresh TLAB slot.
-    fn implementors(vm: &mut BexVm, self_value: &Value) -> Vec<Value> {
-        let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *self_value)
-        else {
-            return Vec::new();
-        };
-        resolve::implementor_entries(vm, &iface_name)
-            .into_iter()
-            // Keep only implementors recorded at the requested instantiation
-            // (any, when the request or implementor entry carries no type args /
-            // associated bindings) — args and assoc handled symmetrically.
-            .filter(|(_, impl_args, impl_assoc)| {
-                (iface_args.is_empty()
-                    || impl_args.is_empty()
-                    || resolve::ty_args_equivalent(impl_args, &iface_args))
-                    && (impl_assoc.is_empty()
-                        || resolve::associated_bindings_equivalent(impl_assoc, &iface_assoc))
-            })
-            .map(|(ty, _, _)| Value::object(vm.tlab.alloc(Object::Type(Box::new(ty)))))
-            .collect()
-    }
 }
 
-/// The concrete `RuntimeTy` wrapped by a `type` value (class, enum, interface,
+/// The concrete `RealizedTy` wrapped by a `type` value (class, enum, interface,
 /// primitive, container, …), or `None` if `value` isn't a `type`.
-fn type_value_ty(vm: &BexVm, value: Value) -> Option<baml_type::RuntimeTy> {
+fn type_value_ty(vm: &BexVm, value: Value) -> Option<baml_type::RealizedTy> {
     match vm.get_object(value.as_object_ptr()?) {
         Object::Type(ty) => Some(ty.as_ref().clone()),
         _ => None,
     }
 }
 
+/// A realized interface instantiation as reflected off a value: the type's
+/// qualified name, its realized generic arguments, and its associated bindings.
+type RealizedTypeInstantiation = (
+    baml_type::TypeName,
+    Vec<baml_type::RealizedTy>,
+    Vec<(baml_type::Name, baml_type::RealizedTy)>,
+);
+
 /// Returns the type's base name plus its generic arguments (e.g.
 /// `[string]` for `Box<string>`). Used by reflection to discriminate generic
 /// interface instantiations.
-fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<InterfaceImplementorEntry> {
+fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<RealizedTypeInstantiation> {
     let ptr = value.as_object_ptr()?;
     let Object::Type(ty) = vm.get_object(ptr) else {
         return None;
     };
     match ty.as_ref() {
-        baml_type::RuntimeTy::Class(name, args, _) => {
+        baml_type::RealizedTy::Class(name, args, _) => {
             Some((name.clone(), args.clone(), Vec::new()))
         }
-        baml_type::RuntimeTy::Interface(name, args, associated_bindings, _) => {
+        baml_type::RealizedTy::Interface(name, args, associated_bindings, _) => {
             Some((name.clone(), args.clone(), associated_bindings.clone()))
         }
-        baml_type::RuntimeTy::Enum(name, _) => Some((name.clone(), Vec::new(), Vec::new())),
+        baml_type::RealizedTy::Enum(name, _) => Some((name.clone(), Vec::new(), Vec::new())),
         other => primitive_type_name(other).map(|name| (name, Vec::new(), Vec::new())),
     }
 }
@@ -119,14 +98,14 @@ fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<InterfaceImplement
 /// structural — the registry bakes their for-types as `Concrete(RuntimeTy::Int { .. })`
 /// etc. (`baml_compiler2_mir`'s `tir2_to_template`), matched by `resolve::match_template`
 /// — so this is a reflection key, never compared against a baked pattern.
-fn primitive_type_name(ty: &baml_type::RuntimeTy) -> Option<baml_type::TypeName> {
+fn primitive_type_name(ty: &baml_type::RealizedTy) -> Option<baml_type::TypeName> {
     let name = match ty {
-        baml_type::RuntimeTy::Int { .. } => "int",
-        baml_type::RuntimeTy::Bigint { .. } => "bigint",
-        baml_type::RuntimeTy::Float { .. } => "float",
-        baml_type::RuntimeTy::String { .. } => "string",
-        baml_type::RuntimeTy::Bool { .. } => "bool",
-        baml_type::RuntimeTy::Null { .. } => "null",
+        baml_type::RealizedTy::Int { .. } => "int",
+        baml_type::RealizedTy::Bigint { .. } => "bigint",
+        baml_type::RealizedTy::Float { .. } => "float",
+        baml_type::RealizedTy::String { .. } => "string",
+        baml_type::RealizedTy::Bool { .. } => "bool",
+        baml_type::RealizedTy::Null { .. } => "null",
         _ => return None,
     };
     Some(baml_type::QualifiedTypeName::local(baml_type::Name::new(

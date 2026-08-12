@@ -63,6 +63,39 @@ async fn decode_typed_rows() {
     );
 }
 
+/// Regression: a user-package enum field must resolve when decoding typed rows.
+/// `Target::Enum` once resolved through a package-eliding fqn lookup that only
+/// worked for builtin enums, so a user enum decoded as "enum not found".
+#[tokio::test]
+async fn decode_user_enum_rows() {
+    let output = baml_test!(
+        r#"
+        enum Color { Red Green Blue }
+        class Row {
+            name string
+            color Color
+        }
+        function main() -> string {
+            let rows = baml.csv.decode<Row>("name,color\nsky,Blue\ngrass,Green\n");
+            let out = "";
+            for (let r in rows) {
+                let c = match (r.color) {
+                    Color.Red => "Red",
+                    Color.Green => "Green",
+                    Color.Blue => "Blue",
+                };
+                out = out + r.name + "=" + c + ";";
+            }
+            out
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.map_err(|e| format!("{e:?}")),
+        ok_string("sky=Blue;grass=Green;")
+    );
+}
+
 /// Streaming reader over an in-memory source: iterator + get<T>.
 #[tokio::test]
 async fn reader_streaming_get() {

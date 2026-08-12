@@ -32,6 +32,6 @@ function main() -> int {
       File "test.baml", line 11, in user.one
       File "test.baml", line 7, in user.two
       File "test.baml", line 3, in user.three
-    uncaught throw: String("boom")
+    uncaught throw: "boom"
     "#);
 }

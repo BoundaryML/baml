@@ -1,6 +1,8 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod manifest;
+pub mod platforms;
+pub mod skills;
 
 use std::{
     fs::{self, OpenOptions},
@@ -13,6 +15,28 @@ use std::{
 use anyhow::{Context, Result};
 pub use manifest::{Artifact, Channel, ToolchainManifest, WrapperManifest};
 use sha2::{Digest, Sha256};
+
+/// Resolve the BAML home directory (`~/.baml`), the root under which the
+/// toolchain stores installed releases, config, and other per-user state.
+///
+/// Resolution order:
+///   1. `$BAML_HOME`, if set.
+///   2. `$HOME` (or `$USERPROFILE` on Windows) joined with `.baml`.
+///   3. A relative `.baml` as a last resort when no home directory is known.
+///
+/// This is the single source of truth shared by the `baml` wrapper and the
+/// `baml-cli` toolchain binary; don't reimplement it.
+pub fn baml_home() -> PathBuf {
+    std::env::var_os("BAML_HOME")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+                .map(|home| home.join(".baml"))
+        })
+        .unwrap_or_else(|| PathBuf::from(".baml"))
+}
 
 pub const MANIFEST_SCHEMA: u32 = 1;
 pub const DEFAULT_MANIFEST_BASE_URL: &str = "https://pkg.boundaryml.com/manifest/v1";
@@ -273,7 +297,7 @@ pub fn release_host_target_triple() -> Result<&'static str> {
         ("windows", "x86_64", _) => Ok("x86_64-pc-windows-msvc"),
         ("windows", "aarch64", _) => Ok("aarch64-pc-windows-msvc"),
         (os, arch, _) => anyhow::bail!(
-            "No released BAML artifact is available for {arch}-{os}. \
+            "no released BAML artifact is available for {arch}-{os}. \
              Install the matching toolchain via `baml toolchain install <version>`."
         ),
     }
@@ -284,7 +308,7 @@ pub fn validate_release_target_triple(target: &str) -> Result<&str> {
         Ok(target)
     } else {
         anyhow::bail!(
-            "Unsupported release target `{target}`. Supported targets: {}",
+            "unsupported release target `{target}`. Supported targets: {}",
             SUPPORTED_RELEASE_TARGETS.join(", ")
         )
     }
@@ -316,7 +340,7 @@ pub fn validate_sha256(hash: &str) -> Result<String> {
     if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
         Ok(hash.to_ascii_lowercase())
     } else {
-        anyhow::bail!("Invalid SHA-256 checksum `{hash}`")
+        anyhow::bail!("invalid SHA-256 checksum `{hash}`")
     }
 }
 
@@ -757,7 +781,7 @@ mod tests {
     fn test_validate_release_target_triple_rejects_unknown_target() {
         let err = validate_release_target_triple("wasm32-unknown-unknown").unwrap_err();
         let msg = format!("{err}");
-        assert!(msg.contains("Unsupported release target"), "got: {msg}");
+        assert!(msg.contains("unsupported release target"), "got: {msg}");
         assert!(msg.contains("aarch64-pc-windows-msvc"), "got: {msg}");
     }
 

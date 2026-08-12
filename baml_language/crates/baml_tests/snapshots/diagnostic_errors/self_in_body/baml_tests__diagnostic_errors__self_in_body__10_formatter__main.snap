@@ -1,0 +1,63 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// `Self` in a method *body* type position.
+//
+// In a CLASS method body `Self` has no substitution today — a class body cannot
+// name its own instantiation as a value type — so every body-position `Self`
+// there is an unresolved-type error. The sound alternative is to name the
+// enclosing type explicitly, e.g. `Box<T>` (exercised as a runtime test in
+// `ns_match_self_workaround`).
+//
+// In an INTERFACE default-method body `Self` is a real rigid type variable
+// bounded by the interface, so body-position `Self` (patterns, `is`,
+// turbofish, `let` annotations) resolves symbolically and is NOT an error —
+// the interface half below compiles clean.
+//
+// In an IMPLEMENTS-BLOCK body (in-body or free) `Self` is statically
+// substituted to the block's `for` target and is likewise not an error —
+// exercised as runtime tests in `ns_self_frame_slot`, not pinned here.
+
+// ── Class-body method: match arm, `is`, and turbofish ────────────────────────
+
+class Box<T> {
+    v: T,
+    function which(self, other: Box<int> | Box<string>) -> string {
+        match (other) {
+            let s: Self => "self",
+            _ => "other",
+        }
+    }
+    function is_self(self, other: Box<int> | Box<string>) -> bool {
+        other is Self
+    }
+    function let_self(self, other: Box<int>) -> int {
+        let a: Self = other;
+        1
+    }
+    function nested_self(self, w: Box<Self>) -> int {
+        match (w) {
+            let s: Box<Self> => 1,
+            _ => 0,
+        }
+    }
+    function turbofish_self(self) -> string {
+        reflect.type_of<Self>().to_string()
+    }
+}
+
+// ── Interface default-method body (the previously-silent hole) ───────────────
+
+interface Tester {
+    function eq(self, other: Self) -> bool throws never
+    function check(self, other: Self) -> bool throws never {
+        other is Self
+    }
+    function describe(self) -> string throws never {
+        reflect.type_of<Self>().to_string()
+    }
+    function bind_self(self, other: Self) -> bool throws never {
+        let a: Self = other;
+        true
+    }
+}

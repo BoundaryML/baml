@@ -2,7 +2,6 @@
 
 use std::fmt;
 
-use ariadne;
 use borsh::{BorshDeserialize, BorshSerialize};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
@@ -75,23 +74,6 @@ impl FileId {
         FileId(u32::MAX)
     }
 
-    /// Create a synthetic `FileId` for the stream expansion of `origin`.
-    ///
-    /// Sets tag `0x1` on the origin's index bits. Deterministic: same origin
-    /// always produces the same synthetic id.
-    pub fn stream_expansion(origin: FileId) -> FileId {
-        debug_assert!(
-            origin.0 & 0xF000_0000 == 0,
-            "cannot expand a non-origin FileId"
-        );
-        FileId(origin.0 | 0x1000_0000)
-    }
-
-    /// Returns `true` if this `FileId` refers to a synthetic stream expansion file.
-    pub fn is_stream_expansion(self) -> bool {
-        self.0 & 0xF000_0000 == 0x1000_0000
-    }
-
     pub fn as_u32(self) -> u32 {
         self.0
     }
@@ -158,13 +140,6 @@ impl Span {
         Span { file_id, range }
     }
 
-    pub fn at_offset(file_id: FileId, offset: TextSize) -> Self {
-        Span {
-            file_id,
-            range: TextRange::empty(offset),
-        }
-    }
-
     /// Create a fake span for testing or when no real span is available.
     ///
     /// Uses a sentinel `FileId` (`u32::MAX`) that's unlikely to conflict with real files.
@@ -173,22 +148,6 @@ impl Span {
             file_id: FileId::sentinel(),
             range: TextRange::empty(TextSize::new(0)),
         }
-    }
-}
-
-impl ariadne::Span for Span {
-    type SourceId = FileId;
-    fn source(&self) -> &Self::SourceId {
-        &self.file_id
-    }
-    fn start(&self) -> usize {
-        let range = self.range.start().into()..self.range.end().into();
-        range.start()
-    }
-
-    fn end(&self) -> usize {
-        let range = self.range.start().into()..self.range.end().into();
-        range.end()
     }
 }
 
@@ -221,7 +180,7 @@ impl TypePath {
         Self(vec![name])
     }
 
-    /// Build a `TypePath` from a compile-time dotted literal like `"baml.llm.Client"`.
+    /// Build a `TypePath` from a compile-time dotted literal like `"ai.Prompt"`.
     /// Use only at synthetic construction sites; runtime input should come from
     /// already-segmented data (e.g., parser tokens).
     pub fn from_dotted(s: &str) -> Self {
@@ -280,6 +239,57 @@ impl MediaKind {
             MediaKind::Generic => "media",
         }
     }
+
+    /// The stdlib wrapper class (`baml.media.*`) that carries this media kind
+    /// as a nominal value; `None` for `Generic`, which has no wrapper class.
+    ///
+    /// Single source of truth for the kind ↔ wrapper-class mapping, together
+    /// with [`MediaKind::from_wrapper_class_name`]. Consumers must resolve
+    /// wrapper class names through these instead of local string matches.
+    pub const fn wrapper_class_name(self) -> Option<&'static str> {
+        match self {
+            MediaKind::Image => Some("baml.media.Image"),
+            MediaKind::Audio => Some("baml.media.Audio"),
+            MediaKind::Video => Some("baml.media.Video"),
+            MediaKind::Pdf => Some("baml.media.Pdf"),
+            MediaKind::Generic => None,
+        }
+    }
+
+    /// Inverse of [`MediaKind::wrapper_class_name`]: the media kind carried by
+    /// a stdlib media wrapper class, or `None` for any other class name.
+    pub fn from_wrapper_class_name(name: &str) -> Option<Self> {
+        match name {
+            "baml.media.Image" => Some(MediaKind::Image),
+            "baml.media.Audio" => Some(MediaKind::Audio),
+            "baml.media.Video" => Some(MediaKind::Video),
+            "baml.media.Pdf" => Some(MediaKind::Pdf),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod media_kind_wrapper_tests {
+    use super::MediaKind;
+
+    #[test]
+    fn wrapper_class_name_round_trips() {
+        for kind in [
+            MediaKind::Image,
+            MediaKind::Audio,
+            MediaKind::Video,
+            MediaKind::Pdf,
+        ] {
+            let name = kind
+                .wrapper_class_name()
+                .expect("concrete kind has a wrapper");
+            assert_eq!(MediaKind::from_wrapper_class_name(name), Some(kind));
+        }
+        assert_eq!(MediaKind::Generic.wrapper_class_name(), None);
+        assert_eq!(MediaKind::from_wrapper_class_name("baml.media.File"), None);
+        assert_eq!(MediaKind::from_wrapper_class_name("user.Image"), None);
+    }
 }
 
 impl fmt::Display for MediaKind {
@@ -323,16 +333,6 @@ impl fmt::Display for Literal {
 /// Module identifier (for multi-file support)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(u32);
-
-impl ModuleId {
-    pub fn new(id: u32) -> Self {
-        ModuleId(id)
-    }
-
-    pub fn as_u32(self) -> u32 {
-        self.0
-    }
-}
 
 /// Severity level for diagnostics
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -17,12 +17,18 @@
 import { defaultSessionStore, type SessionStore } from './session-store';
 import { BOUNDARY_PROXY_URL_KEY, getProxyEnvVarConfig } from './proxy-config';
 
-/** Provider keys seeded on first load; the proxy swaps in real keys upstream. */
+/** Provider keys seeded on first load; the proxy swaps in real keys upstream.
+ * Every key here must have a matching entry in the proxy allowlist
+ * (app-fiddleproxy/server.js) so the placeholder is replaced server-side. */
 const DEFAULT_ENV_VARS: Record<string, string> = {
   OPENAI_API_KEY: 'placeholder',
   ANTHROPIC_API_KEY: 'placeholder',
+  AI_GATEWAY_API_KEY: 'placeholder',
 };
-const DEFAULTS_SEEDED_STORAGE_KEY = 'baml-playground-defaults-seeded';
+// Bump the version suffix whenever DEFAULT_ENV_VARS gains a key, so existing
+// visitors re-seed once and pick up the new placeholder (v2 added
+// AI_GATEWAY_API_KEY). User-entered values still win — the seed merges them last.
+const DEFAULTS_SEEDED_STORAGE_KEY = 'baml-playground-defaults-seeded-v2';
 
 let store: SessionStore = defaultSessionStore;
 

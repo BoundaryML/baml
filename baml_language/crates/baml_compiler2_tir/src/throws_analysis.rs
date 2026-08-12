@@ -15,6 +15,7 @@ pub(crate) trait ThrowsAnalysisContext {
 
     fn instantiated_callee_throws(
         &self,
+        call_expr_id: ExprId,
         callee_expr_id: ExprId,
         args: &[ExprId],
         unwrap_optional_callee: bool,
@@ -155,8 +156,21 @@ pub(crate) fn collect_escaping_throws<C: ThrowsAnalysisContext>(
     context: &C,
     body: &ExprBody,
 ) -> BTreeSet<Ty> {
+    collect_escaping_throws_from(context, body, body.root_expr)
+}
+
+/// [`collect_escaping_throws`] rooted at an arbitrary expression of `body`.
+///
+/// A lambda's body is an expression inside the enclosing function's arena, so
+/// its throw surface must be collected from *its* root — walking `body.root_expr`
+/// would compute the enclosing function's surface instead.
+pub(crate) fn collect_escaping_throws_from<C: ThrowsAnalysisContext>(
+    context: &C,
+    body: &ExprBody,
+    root: Option<ExprId>,
+) -> BTreeSet<Ty> {
     let mut out = BTreeSet::new();
-    if let Some(root) = body.root_expr {
+    if let Some(root) = root {
         collect_from_expr(context, root, body, &mut out);
     }
     out
@@ -177,6 +191,7 @@ fn collect_value_throw_facts<C: ThrowsAnalysisContext>(
 
 pub(crate) fn collect_callee_escaping_throws<C: ThrowsAnalysisContext>(
     context: &C,
+    call_expr_id: ExprId,
     callee_expr_id: ExprId,
     args: &[ExprId],
     body: &ExprBody,
@@ -185,9 +200,12 @@ pub(crate) fn collect_callee_escaping_throws<C: ThrowsAnalysisContext>(
 ) {
     let mut accounted = false;
 
-    if let Some(throws) =
-        context.instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
-    {
+    if let Some(throws) = context.instantiated_callee_throws(
+        call_expr_id,
+        callee_expr_id,
+        args,
+        unwrap_optional_callee,
+    ) {
         out.extend(flatten_ty_to_facts(&throws));
         accounted = true;
     }
@@ -302,6 +320,13 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *value, body, out);
             collect_value_throw_facts(context, *value, out);
         }
+        Expr::Return { value } => {
+            // Evaluating the returned value may throw; walk it. The value is
+            // returned, not raised, so do not charge it as a thrown error.
+            if let Some(value) = value {
+                collect_from_expr(context, *value, body, out);
+            }
+        }
         Expr::Call { callee, args, .. } => {
             collect_from_expr(context, *callee, body, out);
             let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
@@ -344,6 +369,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             let unwrap_optional = matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. });
             collect_callee_escaping_throws(
                 context,
+                expr_id,
                 *callee,
                 &arg_exprs,
                 body,
@@ -357,7 +383,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             for arg in args {
                 collect_from_expr(context, arg.expr, body, out);
             }
-            collect_callee_escaping_throws(context, *callee, &arg_exprs, body, true, out);
+            collect_callee_escaping_throws(context, expr_id, *callee, &arg_exprs, body, true, out);
         }
         Expr::Catch { base, clauses } => {
             if let Some(residual) = context.catch_residual_throws(expr_id) {
@@ -518,7 +544,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, *tag, body, out);
                 // A tagged template invokes the tag fn, so its declared `throws`
                 // escape just like a direct call's would.
-                collect_callee_escaping_throws(context, *tag, &[], body, false, out);
+                collect_callee_escaping_throws(context, expr_id, *tag, &[], body, false, out);
             }
             collect_from_template_segments(context, segments, body, out);
         }

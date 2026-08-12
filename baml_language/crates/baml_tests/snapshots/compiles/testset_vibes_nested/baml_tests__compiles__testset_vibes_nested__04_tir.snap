@@ -2,37 +2,38 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.GPT4o$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "GPT4o", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
 class user.Sentiment {
   feeling: string
   confidence: float
   reasoning: string
 }
-function user.ClassifySentiment(text: string, client: baml.llm.Client = GPT4o) -> user.Sentiment throws never {
-  baml.llm.call_llm_function<T>(client, "ClassifySentiment", map { "text": text }) : user.Sentiment
+function user.ClassifySentiment(text: string, client: ai.Client | null = null) -> user.Sentiment throws never {
+  ai.Agent.new<Sentiment>(client = client).run(ClassifySentiment$spec(text)).value : user.Sentiment
 }
-function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "ClassifySentiment", map { "text": text }) : baml.llm.PromptAst
+function user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<user.Sentiment> throws never {
+  ai.FunctionSpec { spec_name: "ClassifySentiment", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<user.Sentiment>
 }
-function user.ClassifySentiment$build_request(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "ClassifySentiment", map { "text": text }) : baml.http.Request
+lambda user.ClassifySentiment$spec {
 }
-function user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "ClassifySentiment", map { "text": text }) : baml.http.Request
+function user.ClassifySentiment$render_prompt(text: string) -> ai.Prompt throws never {
+  ClassifySentiment$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<Sentiment>())) : ai.Prompt
 }
-function user.GenerateTests(count: int, topic: string, client: baml.llm.Client = GPT4o) -> string[] throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateTests", map { "count": count, "topic": topic }) : string[]
+function user.ClassifySentiment$parse(json: string) -> user.Sentiment throws never {
+  baml.sap.parse<T>(json) : user.Sentiment
 }
-function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.PromptAst
+function user.GenerateTests(count: int, topic: string, client: ai.Client | null = null) -> string[] throws never {
+  ai.Agent.new<string[]>(client = client).run(GenerateTests$spec(count, topic)).value : string[]
 }
-function user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.http.Request
+function user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[]> throws never {
+  ai.FunctionSpec { spec_name: "GenerateTests", args: map { "count": count, "topic": topic }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<string[]>
 }
-function user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.http.Request
+lambda user.GenerateTests$spec {
+}
+function user.GenerateTests$render_prompt(count: int, topic: string) -> ai.Prompt throws never {
+  GenerateTests$spec(count, topic).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string[]>())) : ai.Prompt
+}
+function user.GenerateTests$parse(json: string) -> string[] throws never {
+  baml.sap.parse<T>(json) : string[]
 }
 function user.Foo() -> string | image throws never {
   { : string
@@ -48,21 +49,23 @@ function user.Foo() -> string | image throws never {
     x : string
   }
 }
-function user.ClassifySentiment2(text: string, client: baml.llm.Client = GPT4o) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "ClassifySentiment2", map { "text": text }) : string
+function user.ClassifySentiment2(text: string, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(ClassifySentiment2$spec(text)).value : string
 }
-function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "ClassifySentiment2", map { "text": text }) : baml.llm.PromptAst
+function user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "ClassifySentiment2", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<string>
 }
-function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "ClassifySentiment2", map { "text": text }) : baml.http.Request
+lambda user.ClassifySentiment2$spec {
 }
-function user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "ClassifySentiment2", map { "text": text }) : baml.http.Request
+function user.ClassifySentiment2$render_prompt(text: string) -> ai.Prompt throws never {
+  ClassifySentiment2$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
+}
+function user.ClassifySentiment2$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
 function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test_set("test", (testset: testing.TestCollector) -> void { ... }, null) : void
+    registry.register_test_set_at("root", "test", (testset: testing.TestCollector) -> void { ... }, null) : void
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
         {
           let topics = ["happy", "sad"]
@@ -93,30 +96,12 @@ class user.Sentiment$stream {
   confidence: float | null
   reasoning: string | null
 }
-function user.ClassifySentiment$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
-  baml.llm.stream_llm_function(client, "ClassifySentiment", map { "text": text }) : baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>
+function user.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
+  ai.stream.from_spec(ClassifySentiment$spec(text), client = client) : ai.stream.Stream<user.Sentiment$stream | null, user.Sentiment>
 }
-function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>
+function user.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string[], string[]> throws never {
+  ai.stream.from_spec(GenerateTests$spec(count, topic), client = client) : ai.stream.Stream<string[], string[]>
 }
-function user.ClassifySentiment$parse(json: string, client: baml.llm.Client = GPT4o) -> user.Sentiment throws never {
-  baml.llm.parse<TFinal>(json) : user.Sentiment
-}
-function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string[], string[]> throws never {
-  baml.llm.stream_llm_function(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.Stream<string[], string[]>
-}
-function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string[], string[]> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string[], string[]>
-}
-function user.GenerateTests$parse(json: string, client: baml.llm.Client = GPT4o) -> string[] throws never {
-  baml.llm.parse<TFinal>(json) : string[]
-}
-function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "ClassifySentiment2", map { "text": text }) : baml.llm.Stream<string | null, string>
-}
-function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-}
-function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client = GPT4o) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
+function user.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(ClassifySentiment2$spec(text), client = client) : ai.stream.Stream<string | null, string>
 }

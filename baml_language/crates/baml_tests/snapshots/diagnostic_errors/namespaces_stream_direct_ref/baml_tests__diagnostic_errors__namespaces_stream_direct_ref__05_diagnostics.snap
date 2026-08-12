@@ -2,42 +2,38 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected string, got string | null
-    ╭─[ main.baml:21:5 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:21:5]
  21 │     c.key
-    │     ──┬──  
-    │       ╰──── type mismatch: expected string, got string | null
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·     ──┬──
+    ·       ╰── expected `string`, found `string | null`
+    ╰────
 
-  [type] error: type mismatch: expected string, got string | null
-    ╭─[ main.baml:26:5 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:26:5]
  26 │     r.text
-    │     ───┬──  
-    │        ╰──── type mismatch: expected string, got string | null
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·     ───┬──
+    ·        ╰── expected `string`, found `string | null`
+    ╰────
 
-  [type] error: type mismatch: expected string, got string | null
-    ╭─[ models.baml:13:5 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[models.baml:13:5]
  13 │     r.text
-    │     ───┬──  
-    │        ╰──── type mismatch: expected string, got string | null
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·     ───┬──
+    ·        ╰── expected `string`, found `string | null`
+    ╰────
 
-  [type] error: type mismatch: expected string, got string | null
-    ╭─[ models.baml:18:5 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[models.baml:18:5]
  18 │     c.key
-    │     ──┬──  
-    │       ╰──── type mismatch: expected string, got string | null
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·     ──┬──
+    ·       ╰── expected `string`, found `string | null`
+    ╰────

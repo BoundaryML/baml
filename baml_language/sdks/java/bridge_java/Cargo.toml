@@ -1,0 +1,33 @@
+[package]
+name = "bridge_java"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+# Produces `libbridge_java.so` / `.dylib` / `bridge_java.dll`. Loaded by the
+# JVM via `System.load(BAML_JAVA_BRIDGE_LIB)` (see sdks/java/baml_bridge).
+name = "bridge_java"
+crate-type = [ "cdylib" ]
+
+# Feature wiring mirrors `bridge_python` so the in-process engine is equally
+# capable: the JVM analog links the same bundled HTTP client + AWS crypto so a
+# generated SDK's LLM functions work, not just the pure-BAML primitives slice.
+[features]
+default = [ "bundle-http", "aws-crypto" ]
+bundle-http = [ "bridge_cffi/bundle-http" ]
+aws-crypto = [ "bundle-http", "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
+ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
+
+[dependencies]
+bex_project = { workspace = true }
+bridge_cffi = { workspace = true }
+bridge_ctypes = { workspace = true }
+indexmap = { workspace = true }
+jni = { workspace = true }
+prost = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
+
+[package.metadata.ci]
+wasm_support = false

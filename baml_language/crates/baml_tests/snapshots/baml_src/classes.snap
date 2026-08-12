@@ -3,118 +3,137 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function classes.$init_test_ns_classes_classes(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.classes"
     load_const "class_constructor"
     make_closure .<lambda($init_test_ns_classes_classes, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "class_constructor_return_directly"
     make_closure .<lambda($init_test_ns_classes_classes, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "constructor_with_preceding_variables"
     make_closure .<lambda($init_test_ns_classes_classes, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "nested_construction_dead_store"
     make_closure .<lambda($init_test_ns_classes_classes, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "nested_construction_field_access"
     make_closure .<lambda($init_test_ns_classes_classes, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "nested_construction_inner_field_access"
     make_closure .<lambda($init_test_ns_classes_classes, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "nested_field_read"
     make_closure .<lambda($init_test_ns_classes_classes, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "nested_field_read_separate_construction"
     make_closure .<lambda($init_test_ns_classes_classes, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "nested_constructor_with_preceding_variables"
     make_closure .<lambda($init_test_ns_classes_classes, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "spread_before_named_fields"
     make_closure .<lambda($init_test_ns_classes_classes, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "spread_after_named_fields"
     make_closure .<lambda($init_test_ns_classes_classes, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "multiple_spreads"
     make_closure .<lambda($init_test_ns_classes_classes, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "spread_does_not_break_locals"
     make_closure .<lambda($init_test_ns_classes_classes, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "field_assignment"
     make_closure .<lambda($init_test_ns_classes_classes, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "field_compound_assignment"
     make_closure .<lambda($init_test_ns_classes_classes, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "nested_field_assignment"
     make_closure .<lambda($init_test_ns_classes_classes, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "nested_field_compound_assignment"
     make_closure .<lambda($init_test_ns_classes_classes, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "method_call"
     make_closure .<lambda($init_test_ns_classes_classes, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.classes"
     load_const "mutable_self_method"
     make_closure .<lambda($init_test_ns_classes_classes, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -160,8 +179,7 @@ function classes.constructor_with_preceding_variables_fn() -> int {
     load_const 100
     load_const 200
     init_instance user.classes.MyClass .x, .y
-    store_var obj
-    load_var obj
+    store_var_load_var obj
     load_field .x
     load_var obj
     load_field .y
@@ -277,8 +295,7 @@ function classes.nested_constructor_with_preceding_variables_fn() -> int {
     init_instance user.classes.CInnerVal .val
     load_const 50
     init_instance user.classes.COuterXI .inner, .x
-    store_var obj
-    load_var obj
+    store_var_load_var obj
     load_field .inner
     load_field .val
     load_var obj

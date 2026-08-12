@@ -1,19 +1,16 @@
 use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name;
-use baml_compiler2_ast::ExprBody;
-use baml_compiler2_hir::{
-    body::FunctionBody, file_package, loc::FunctionLoc, package::PackageId, scope::ScopeKind,
-};
+use baml_compiler2_ast::{BuiltinKind, ExprBody};
+use baml_compiler2_hir::{body::FunctionBody, file_package, loc::FunctionLoc, package::PackageId};
 use rustc_hash::FxHashMap;
 
 use crate::{
     inference::{CallPlan, MemberResolution, ScopeInference, infer_scope_types},
-    lower_type_expr::lower_type_expr_in_ns,
     package_interface::package_resolution_context,
     throw_inference::{function_throw_sets, throw_set_key},
     throws_analysis::ThrowsAnalysisContext,
-    ty::{Ty, TyAttr},
+    ty::{FunctionParamMode, FunctionParamTy, ParamTy, Ty, TyAttr},
 };
 
 fn join_throw_facts(facts: &BTreeSet<Ty>) -> Ty {
@@ -34,24 +31,30 @@ fn lowered_declared_callable_throws<'db>(
     function: FunctionLoc<'db>,
 ) -> Option<Ty> {
     let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
-    generic_params.extend(sig.user_generic_params.iter().cloned());
-    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
+    let generic_params = crate::generic_env::function_generic_env(db, function)
+        .source_params()
+        .to_vec();
 
-    sig.throws.as_ref().map(|declared_throws| {
+    sig.throws.map(|declared_throws| {
         let mut diags = Vec::new();
-        lower_type_expr_in_ns(
-            db,
+        crate::lower_type_expr::lower_type_ref(
+            &sig.type_refs,
             declared_throws,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
+            &crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: &pkg_info.namespace_path,
+                generic_params: &generic_params,
+                bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                    db, function,
+                ),
+                self_ty: None,
+            },
             &mut diags,
         )
     })
@@ -62,25 +65,30 @@ fn signature_cycle_initial_callable_throws<'db>(
     function: FunctionLoc<'db>,
 ) -> Ty {
     let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
-    generic_params.extend(sig.user_generic_params.iter().cloned());
-    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
+    let generic_params = crate::generic_env::function_generic_env(db, function)
+        .source_params()
+        .to_vec();
 
+    let param_scope = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: &pkg_info.namespace_path,
+        generic_params: &generic_params,
+        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(db, function),
+        self_ty: None,
+    };
     let mut facts = BTreeSet::new();
     for param in &sig.params {
         let mut diags = Vec::new();
-        let lowered = lower_type_expr_in_ns(
-            db,
-            &param.ty,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
+        let lowered = crate::lower_type_expr::lower_type_ref(
+            &sig.type_refs,
+            param.type_ref,
+            &param_scope,
             &mut diags,
         );
         if let Ty::Function { throws, .. } = lowered {
@@ -91,28 +99,185 @@ fn signature_cycle_initial_callable_throws<'db>(
     join_throw_facts(&facts)
 }
 
-fn enclosing_class_generic_params(
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
-    function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
-) -> Vec<Name> {
-    item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
-        .unwrap_or_default()
+// ── Declaration-site resolved signature ────────────────────────────────────
+
+/// The declaration-site resolved signature of a function or method: every
+/// annotation on the declaration lowered to a TIR [`Ty`], with `Self` bound to
+/// the enclosing class's receiver type when there is one.
+///
+/// This is the *declared* surface only. The inferred throws contract is a
+/// separate fact with its own convergence rules — pair this with
+/// [`callable_throws`] (as [`crate::package_interface::ExportedFunction`]
+/// does) when the effective contract is needed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionSignatureTy {
+    /// Parameters in declaration order, `self` included for instance methods
+    /// (its type is the receiver type). A default-valued parameter is
+    /// [`FunctionParamMode::Optional`].
+    pub params: Vec<FunctionParamTy>,
+    /// The declared return type; `Ty::Error` when no annotation was written —
+    /// a declaration-site fact is either written or a malformed declaration,
+    /// never an inference hole.
+    pub return_type: Ty,
+    /// The declared `throws` clause, lowered; `None` when omitted.
+    pub declared_throws: Option<Ty>,
+    /// The function's own generic parameters — user-declared plus the
+    /// synthetic callback effect parameters introduced by bounded signature
+    /// elaboration. Excludes the enclosing type's parameters.
+    pub generic_params: Vec<ParamTy>,
+    /// `Some` when the body is a `$rust_function`/`$rust_io_function`/
+    /// `$compiler_intrinsic` marker rather than BAML code.
+    pub builtin_kind: Option<BuiltinKind>,
+}
+
+impl FunctionSignatureTy {
+    /// The signature as a `Ty::Function`, with the throws slot supplied by the
+    /// caller (normally [`callable_throws`]; `Ty::Function` carries no generic
+    /// parameters, so [`Self::generic_params`] survive as free `Ty::TypeVar`s
+    /// for call-site inference to bind).
+    pub fn to_function_ty(&self, throws: Ty) -> Ty {
+        Ty::Function {
+            params: self.params.clone(),
+            ret: Box::new(self.return_type.clone()),
+            throws: Box::new(throws),
+            attr: TyAttr::default(),
+        }
+    }
+}
+
+/// Resolve the declaration-site signature of `function`.
+///
+/// The single lowering path for a declared signature; `package_interface`'s
+/// exports are assembled from it. Owner handling:
+///
+/// - free function — lowered in the file's namespace scope;
+/// - class method (including in-body/merged `implements` methods) — `Self`
+///   is bound to the class receiver, and a bare `self` parameter adopts it;
+/// - interface default method / free-impl method — lowered without a `Self`
+///   binding, so `Self`/`Self.Assoc` mentions resolve to `Ty::Error` and a
+///   bare `self` stays `Ty::Unknown`. Call-site resolution substitutes
+///   correctly (`impl_rules::realize_with_symbolic_self`); binding `Self`
+///   symbolically *here* is the eventual fix, tracked separately.
+///
+/// Lowering diagnostics are dropped, matching the export path: the checked
+/// diagnostics for a signature are produced by inference, not by this query.
+#[salsa::tracked(returns(ref))]
+pub fn function_signature_ty<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> FunctionSignatureTy {
+    use baml_compiler2_ppir::item_data::MethodOwner;
+
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
+    let body = baml_compiler2_ppir::function_body(db, function);
+    let generic_env = crate::generic_env::function_generic_env(db, function);
+    let owner = baml_compiler2_ppir::item_data::method_owner(db, function);
+
+    // Class methods lower in the *class's* scope (same file by construction —
+    // in-body methods and merged `implements` blocks never cross files).
+    let pkg_info = file_package::file_package(db, function.file(db));
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+
+    let self_ty = match owner {
+        Some(MethodOwner::Class(class_loc)) => {
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+            Some(crate::lower_type_expr::self_type_for_class_data(
+                class_data,
+                generic_env
+                    .parent()
+                    .expect("class method generic environment has a parent")
+                    .params(),
+                &pkg_info.namespace_path,
+                pkg_info.package.clone(),
+            ))
+        }
+        Some(MethodOwner::Interface(_) | MethodOwner::FreeImpl(_)) | None => None,
+    };
+
+    let ctx = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: &pkg_info.namespace_path,
+        generic_params: generic_env.source_params(),
+        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(db, function),
+        self_ty: self_ty.clone(),
+    };
+    let mut diags = Vec::new();
+    let lower = |id: baml_compiler2_hir::type_ref::TypeRefId,
+                 diags: &mut Vec<crate::infer_context::TirTypeError>| {
+        crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &ctx, diags)
+    };
+
+    let mut params = Vec::new();
+    for param in &sig.params {
+        // A bare `self` has no written annotation (its elaborated ref is
+        // `Unknown`); it adopts the receiver type when one is bound.
+        let param_ty = match (&self_ty, param.name.as_str()) {
+            (Some(self_ty), "self")
+                if matches!(
+                    sig.type_refs[param.type_ref].kind,
+                    baml_compiler2_hir::type_ref::TypeRefKind::Unknown
+                ) =>
+            {
+                self_ty.clone()
+            }
+            _ => lower(param.type_ref, &mut diags),
+        };
+        params.push(FunctionParamTy {
+            name: Some(param.name.clone()),
+            ty: param_ty,
+            mode: if param.has_default {
+                FunctionParamMode::Optional
+            } else {
+                FunctionParamMode::Required
+            },
+        });
+    }
+
+    let return_type = sig.return_type.map_or(
+        Ty::Error {
+            attr: TyAttr::default(),
+        },
+        |id| lower(id, &mut diags),
+    );
+
+    let declared_throws = sig.throws.map(|id| lower(id, &mut diags));
+
+    let generic_params = sig
+        .user_generic_params
+        .iter()
+        .chain(sig.synthetic_effect_params.iter())
+        .map(|name| {
+            generic_env
+                .resolve_param(name)
+                .expect("function generic parameter is in its environment")
+                .clone()
+        })
+        .collect();
+
+    FunctionSignatureTy {
+        params,
+        return_type,
+        declared_throws,
+        generic_params,
+        builtin_kind: match body.as_ref() {
+            FunctionBody::Builtin(kind) => Some(*kind),
+            _ => None,
+        },
+    }
 }
 
 fn callable_short_name<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Name {
-    let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let func_data = &item_tree[function.id(db)];
+    let func_data = baml_compiler2_ppir::item_data::function_data(db, function);
 
-    if let Some(class_data) = item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function.id(db)))
+    // Only a class owner qualifies the name — interface default methods and
+    // free-impl methods keep their bare name, preserving the throw-set key
+    // format the scan produced.
+    if let Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) =
+        baml_compiler2_ppir::item_data::method_owner(db, function)
     {
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
         Name::new(format!("{}.{}", class_data.name, func_data.name))
     } else {
         func_data.name.clone()
@@ -123,23 +288,6 @@ fn callable_key<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Name
     let namespace = file_package::file_package(db, function.file(db)).namespace_path;
     let short_name = callable_short_name(db, function);
     throw_set_key(&namespace, &short_name)
-}
-
-fn function_scope_id<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
-    let file = function.file(db);
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let func_data = &item_tree[function.id(db)];
-
-    index.scope_ids.iter().copied().find(|scope_id| {
-        let scope = &index.scopes[scope_id.file_scope_id(db).index() as usize];
-        matches!(scope.kind, ScopeKind::Function)
-            && scope.range == func_data.span
-            && scope.name.as_ref() == Some(&func_data.name)
-    })
 }
 
 fn named_callee_key<'db>(
@@ -219,11 +367,12 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
 
     fn instantiated_callee_throws(
         &self,
+        call_expr_id: baml_compiler2_ast::ExprId,
         callee_expr_id: baml_compiler2_ast::ExprId,
         args: &[baml_compiler2_ast::ExprId],
         unwrap_optional_callee: bool,
     ) -> Option<Ty> {
-        let call_plan = self.inference.call_plan_for_provided_args(args);
+        let call_plan = self.inference.call_plan(call_expr_id);
         instantiated_callee_throws(
             self.inference,
             self.aliases,
@@ -291,6 +440,9 @@ pub(crate) fn instantiated_callee_throws(
     unwrap_optional_callee: bool,
     call_plan: Option<&CallPlan>,
 ) -> Option<Ty> {
+    if let Some(throws) = call_plan.and_then(|plan| plan.instantiated_throws.clone()) {
+        return Some(throws);
+    }
     let callee_ty = inference.expression_type(callee_expr_id)?;
     let typed_callee = if unwrap_optional_callee {
         crate::narrowing::remove_null(callee_ty)
@@ -323,7 +475,7 @@ pub(crate) fn instantiated_callee_throws(
         } else {
             effective_params.iter().zip(args.iter().copied()).collect()
         };
-        let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+        let mut bindings: FxHashMap<ParamTy, Ty> = FxHashMap::default();
         for (param, arg_expr_id) in pairs {
             let arg_ty = inference
                 .expression_type(arg_expr_id)
@@ -333,7 +485,13 @@ pub(crate) fn instantiated_callee_throws(
                 });
             crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
         }
-        crate::generics::substitute_ty(throws, &bindings)
+        let substituted = crate::generics::substitute_ty(throws, &bindings);
+        if crate::generics::contains_typevar(&substituted)
+            && let Some(instantiated) = call_plan.and_then(|plan| plan.instantiated_throws.as_ref())
+        {
+            return instantiated.clone();
+        }
+        substituted
     };
 
     match &typed_callee {
@@ -368,6 +526,33 @@ fn callable_throws_cycle_initial<'db>(
 
 #[salsa::tracked(returns(ref), cycle_initial=callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Ty {
+    // A seeded value from a previous compile short-circuits body
+    // inference for a clean function, returning exactly the `Ty` this query
+    // produced last time. `seeds.by_path(db)` is a *tracked* read of the
+    // `SeededCallableThrows` input (present-from-construction, empty until
+    // seeded), so a later seed reliably invalidates this memo. The seed is
+    // keyed by (source path, item-tree `LocalItemId`) — process-independent for
+    // byte-identical files. Only functions the reuse plan proved clean are
+    // seeded, so a converged fixpoint value is returned without re-entering the
+    // callee body; a dirty function is never in the map and infers below.
+    if let Some(seeds) = db.seeded_callable_throws() {
+        // `by_path(db)` is the tracked read (kept unconditional so a later seed
+        // still invalidates this memo), but the path-display allocation and the
+        // lookup are skipped whenever no seeds were injected — the LSP and every
+        // cold CLI compile hold the empty map, so this guard avoids a per-eval
+        // `String` allocation on the hot `callable_throws` path.
+        let by_path = seeds.by_path(db);
+        if !by_path.is_empty() {
+            let path = function.file(db).path(db).display().to_string();
+            if let Some(ty) = by_path
+                .get(&path)
+                .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
+            {
+                return ty.clone();
+            }
+        }
+    }
+
     if let Some(declared_throws) = lowered_declared_callable_throws(db, function) {
         return declared_throws;
     }
@@ -378,21 +563,22 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
 
     match baml_compiler2_ppir::function_body(db, function).as_ref() {
         FunctionBody::Expr(body) => {
-            let Some(scope_id) = function_scope_id(db, function) else {
+            let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, function)
+            else {
                 return Ty::Unknown {
                     attr: TyAttr::default(),
                 };
             };
             let inference = infer_scope_types(db, scope_id);
-            let res_ctx = package_resolution_context(db, pkg_id);
-            let aliases = crate::inference::package_alias_map(db, res_ctx);
+            // Salsa-cached per package — previously rebuilt for every callable.
+            let aliases = crate::inference::package_resolved_aliases(db, pkg_id);
             let facts = crate::throws_analysis::collect_escaping_throws(
                 &CallableThrowsAnalysis {
                     db,
                     pkg_id,
                     ns_context: &pkg_info.namespace_path,
                     inference,
-                    aliases: &aliases,
+                    aliases,
                 },
                 body,
             );

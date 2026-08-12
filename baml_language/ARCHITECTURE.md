@@ -140,7 +140,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 **What lives here:**
 - **Companion function expansion** — LLM functions are expanded into the base function plus generated companions (`render_prompt`, `build_request`, `parse`).
 - **Client desugaring** — `client<llm>` blocks are desugared into a top-level `Let` binding (the `Client` object) plus an optional `$new` companion function (the `PrimitiveClient` constructor).
-- **Lambda expression body extraction** — Lambda bodies are lifted into their own scope-addressable units for downstream analysis.
+- **Lambda expression bodies** — A lambda's body is lowered into the enclosing function's arena and referenced by `ExprId`; the lambda gets its own scope, not its own arena.
 - **LLM function normalization** — There is no concept of "LLM function" downstream. LLM functions become regular functions with declarative metadata attached.
 - **Type expression lowering** — Source-level type syntax is converted to `TypeExpr` nodes.
 - **Config item lowering** — Config block syntax (used in clients, generators, etc.) is lowered to AST expressions.
@@ -169,6 +169,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 - **Shadowing rules** — The HIR decides where shadowing is allowed (e.g., a match arm variable may shadow a function parameter).
 - **Lambda capture analysis** — Which variables a lambda captures is determined here. You don't need to know the type to know *what* is captured, only what names are in scope.
 - **Package and namespace aggregation** — Cross-file symbol merging happens here.
+- **Item tree + type-reference arena** — A span-free `ItemTree` (items keyed by position-independent `LocalItemId`) with a parallel `ItemTreeSourceMap`, plus a flat span-free `TypeRef` arena that replaces inline `ast::TypeExpr`. `ItemTreeBuilder` constructs both together and records the item↔scope and method→owner indices. This is the substrate the PPIR firewall queries front (see [Salsa Early Cutoff](#salsa-early-cutoff-how-edits-stay-local)).
 
 **What does NOT live here:**
 - Node transformations. The HIR should NOT construct new AST nodes. If you find yourself doing that, the work belongs in the AST layer.
@@ -199,11 +200,13 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 - Synthesis of `*$stream` variants for classes and type aliases
 - Stream expansion logic (`stream_expand`, `expand_partial`)
 - SAP (streaming attribute propagation) attributes
-- Canonical queries that merge original items with synthetic stream items
+- **The canonical item layer** — `ppir::file_item_tree` merges original items with the synthetic stream items, and the per-item **firewall queries** (`item_data`: enumeration + `*_data` + `*_source_map`) that front the item tree live here.
 
-**How it works:** The PPIR generates synthetic AST items (the stream variants) and feeds them **back into the HIR**. This means the flow is actually: HIR → PPIR → back to HIR (with expanded symbols) → TIR. The TIR then consumes the enriched HIR index that includes both original and stream-expanded items.
+**How it works:** The PPIR generates synthetic AST items (the stream variants) and re-runs the HIR builder over the *merged* list — originals first, then synthetics appended. The flow is HIR → PPIR → (re-run the HIR builder on merged items) → TIR. PPIR's tree is **canonical**, but it is an internal substrate: downstream layers read it **only through the firewall queries** in `item_data` (enumeration + `*_data` + `*_source_map`) — never `file_item_tree` directly, and never the HIR pre-expansion tree. A `ClassLoc`/`FunctionLoc` therefore unambiguously means a canonical item. (Originals keep identical `LocalItemId`s in the pre-expansion and canonical trees because they are allocated first, in the same order — which is what makes a HIR-derived `*Loc` safe to pass to a firewall query. This is enforced: `file_item_tree` is `pub(crate)` in both HIR and PPIR, so no downstream crate can reach the raw tree at all.)
 
-**Key Salsa query:** `ppir_expansion_items(db, file)` — Synthetic stream items per file
+**Key Salsa queries:**
+- `ppir_expansion_items(db, file)` — Synthetic stream items per file
+- Firewall queries (`item_data`) — the consumer API over the canonical item tree: enumeration (`file_classes` / `file_functions` / …), lookup (`class_data` / `function_data` / …), and spans (`class_source_map` / …). `file_item_tree` itself is the internal substrate these are built on, not for direct downstream use.
 
 ---
 
@@ -236,7 +239,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 5. This recursively resolves until a leaf type is reached.
 
 **Key Salsa queries:**
-- `infer_scope_types(db, scope_id)` — Per-scope type inference. This is the main query. It returns types for a single scope, NOT a monolithic per-function result. This gives fine-grained incrementality: editing a lambda body only recomputes that lambda's types, not the enclosing function's.
+- `infer_scope_types(db, scope_id)` — Per-scope type inference. This is the main query. It returns types for a single scope, NOT a monolithic per-function result. Note that a lambda body is *not* independently incremental: it lives in the enclosing function's `ExprBody`, so editing it invalidates that function's body query and hence its inference.
 - `resolve_name_at(db, file, offset, name)` — On-demand name resolution with type information.
 
 ---
@@ -430,9 +433,24 @@ A `client<llm>` block desugars into **two AST items**:
 
 ### Lambda Expression Bodies
 
-Lambda bodies are extracted into their own scope-addressable AST units during CST→AST lowering. This is necessary because:
-- Lambdas need their own scope for per-scope incremental inference.
-- Capture analysis (which happens in HIR) needs each lambda to be a distinct scope.
+A lambda's body is lowered into the **enclosing function's** `ExprBody`, and the
+lambda holds an `ExprId` pointing at it — the same shape as rust-analyzer's
+`Expr::Closure { body: ExprId }`. One arena per function (or top-level `let`),
+never one per lambda.
+
+Lambdas still get their own `ScopeKind::Lambda` scope, because both of the
+reasons they need one are about *scopes*, not arenas:
+- per-scope incremental inference,
+- capture analysis in HIR, which needs each lambda to be a distinct scope.
+
+Scopes and arenas are therefore orthogonal. Two consequences worth knowing:
+- An `ExprId` is unambiguous within a function but **not** within a file, so
+  file-level maps key on `ExprMetadataKey` (arena owner + id), which is rustc's
+  `HirId { owner, local_id }`.
+- Analyses that must not attribute a lambda's behaviour to its definer — effect
+  (`throws`) inference, call-graph edges — cannot scan the arena flatly, because
+  a lambda's expressions are siblings of the function's own. They walk
+  structurally via `ExprBody::reachable_excluding_lambdas`.
 
 ---
 
@@ -569,9 +587,18 @@ baml_test! {
 
 ## Rules for Adding Spans to Data Structures
 
-**Do not add `TextRange` or span fields to your data structures.** There is a dedicated mechanism for associating spans with nodes. If you add `TextRange` directly to a data structure, you break Salsa incrementality for everything downstream — a change to whitespace (which changes spans but not semantics) will unnecessarily invalidate all dependent queries.
+**The load-bearing invariant: anything a memoized, `PartialEq`-compared query *returns* must be span-free.** Salsa only overwrites a memoized value when the new one is *not* `Eq` to the old, so a span inside a query result is a trap either way:
 
-Use expression IDs and the span lookup infrastructure instead. If you're unsure how to associate span information with a new construct, ask before implementing.
+- If the span is inside `PartialEq`, a whitespace edit makes the value compare unequal and **destroys early cutoff** for everything downstream.
+- If the span is *ignored* by `PartialEq` (as `ast::TypeExpr` does with its own `span`), the value compares equal, Salsa keeps the old memo, and the query **serves a stale span forever**.
+
+Concretely:
+
+- **Do not add `TextRange`/span fields to data that flows out of a tracked query.** Type references use the span-free `TypeRef` arena (ids into a per-item store), not `ast::TypeExpr`. Attributes use the span-free `item_tree::Attribute`, not `ast::RawAttribute` (whose `PartialEq` *includes* its span — a subtle transitive leak through any `TypeExpr`).
+- **Spans live in a parallel `*_source_map` query**, keyed by the same id (`LocalItemId` / `TypeRefId`), never inline with the data.
+- The one place spans may remain inline is the coarse `no_eq` index (`file_semantic_index` and its `ItemTree`): because that query is `no_eq` it is always recomputed, so its spans are always fresh — never stale. Everything *fronting* it (the firewall `*_data` queries) must be span-free.
+
+If you're unsure how to associate span information with a new construct, ask before implementing.
 
 ---
 
@@ -713,22 +740,27 @@ The Salsa query model has one critical optimization beyond basic memoization: **
 
 ### How it works in practice
 
-Every item is physically split into **two** tracked queries: one for semantic data (span-free), one for source maps (spans only). For example, `function_signature` returns names and `TypeExpr`s with no `TextRange`, while `function_signature_source_map` returns only spans. The type checker reads the semantic query but never the source map query.
+The item tree is produced by a single coarse query, `file_semantic_index`, marked `no_eq` — it always reports "changed", so its spans are always fresh but it provides no cutoff itself. In front of it sit fine-grained **firewall queries** (in `baml_compiler2_ppir::item_data`), one family per item kind:
 
-Items are keyed by **position-independent IDs** — a hash of the item's name, not its position in the file. Adding a blank line before `function Greet(...)` doesn't change the hash of `"Greet"`, so the Salsa query key stays the same and cached results survive.
+- *Enumeration* — `file_classes(file)` / `file_functions(file)` / … return a `Vec` of interned `*Loc` handles (a `ClassLoc` carries its own file plus a position-independent `LocalItemId`).
+- *Lookup* — `class_data(ClassLoc)` / `function_data(FunctionLoc)` / … return **span-free** semantic data. Type references inside them are ids into a per-item `TypeRef` arena — a flat, span-free replacement for `ast::TypeExpr` — never `TextRange`s.
+- *Spans* — `class_source_map(ClassLoc)` / `function_source_map(FunctionLoc)` / … are separate queries holding the spans, keyed by the same `*Loc`. The type checker reads the data query; only diagnostics read the source-map query.
+
+Because the `*_data` queries are tracked and `PartialEq`-compared, a whitespace or comment edit that shifts spans but not semantics leaves them **byte-identical** → `PartialEq` returns `true` → anything depending on a `*_data` query cuts off. **This is why the data must be span-free** (see [Rules for Adding Spans](#rules-for-adding-spans-to-data-structures)): a span inside a `PartialEq`-compared result would either destroy the cutoff or, if `PartialEq` ignored it, serve a *stale* span forever.
+
+Items are keyed by **position-independent IDs** — `LocalItemId` is a hash of the item's name plus a collision index, not its position in the file. Adding a blank line before `function Greet(...)` doesn't change the hash of `"Greet"`, so the `FunctionLoc` key stays the same and cached results survive.
 
 ### Concrete trace: adding a comment to a file
 
 User adds `// comment` to `file_a.baml`. File B is untouched.
 
 1. `file_a.text` is marked changed.
-2. `file_semantic_index(file_a)` re-runs (it's marked `no_eq`, so always reports "changed").
-3. `namespace_items(user_root)` re-runs — re-collects contributions from all files. But the result is identical: same names, same definition handles. Its `PartialEq` returns `true`. **Early cutoff fires.**
-4. `package_items` — NOT re-run (its dependency didn't change).
-5. `infer_scope_types` for any scope — NOT re-run.
-6. `file_semantic_index(file_b)` — NOT re-run (its input `file_b.text` is unchanged).
+2. `file_semantic_index(file_a)` re-runs (`no_eq` — always "changed"); its spans are refreshed.
+3. Each per-item firewall query for `file_a` (`class_data`, `function_data`, …) re-runs but **early-cuts**: the semantic data is identical, so its `PartialEq` returns `true`. Its `*_source_map` twin re-runs and *does* change (new spans) — correctly, since positions moved.
+4. `namespace_items(user_root)` re-runs and early-cuts when the name set is unchanged. (Exception: a file already holding a *duplicate-name* conflict currently carries a `name_span` in the conflict record, so a cosmetic edit there loses cutoff — a known gap being closed.)
+5. `file_semantic_index(file_b)` — NOT re-run (its input `file_b.text` is unchanged), so nothing about file B recomputes.
 
-Result: a comment addition re-runs the lexer and HIR for that one file, then stops. A whitespace edit shifts spans but leaves `TypeExpr` trees identical → `function_signature` early-cuts → type inference stays cached.
+**Status / caveat.** The **item layer** is fully behind the firewall: every consumer (TIR, MIR, emit, LSP, project, CLI, tests) reads items through the `item_data` queries, and the raw doors (`file_item_tree` in both HIR and PPIR) are `pub(crate)`. The remaining red edge is the **scope tree**: `infer_scope_types` (and the LSP scope walkers) still read the coarse `no_eq` `file_semantic_index` directly for scopes/bindings, and therefore re-run on *any* edit to their file today. Realizing end-to-end cutoff (a comment edit not re-running type inference) requires fronting the scope tree with the same kind of fine-grained queries (`scope_owner`/`function_scope` exist; the per-scope data queries do not yet). The incremental tests in `baml_tests` pin what actually holds today, and one of them (`comment_edit_does_not_reexecute_type_inference`) is deliberately `#[ignore]`d precisely because inference still reads the coarse index.
 
 ---
 

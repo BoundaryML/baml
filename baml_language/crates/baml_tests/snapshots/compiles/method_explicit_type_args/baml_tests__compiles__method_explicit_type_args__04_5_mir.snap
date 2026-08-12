@@ -2,6 +2,21 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.Foo.zero(self: Foo) -> null | T {
+    // Locals:
+    let _0: null | T // _0 // return
+    let _1: Foo // self // param
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.use_method_type_args() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -34,21 +49,6 @@ fn user.use_method_type_args() -> int {
     }
 
     bb4: {
-        return;
-    }
-}
-
-fn user.Foo.zero(self: Foo) -> T | null {
-    // Locals:
-    let _0: T | null // _0 // return
-    let _1: Foo // self // param
-
-    bb0: {
-        _0 = const null;
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }

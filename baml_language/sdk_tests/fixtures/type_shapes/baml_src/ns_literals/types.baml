@@ -63,3 +63,11 @@ function round_trip_literal_false(x: false) -> false {
 function round_trip_literals(l: Literals) -> Literals {
   l
 }
+
+// Mixed-base literal union: every alternative is a literal of a different
+// base type, so hosts with typed literals must dispatch by value.
+type Flag = "active" | 1 | true
+
+function round_trip_flag(f: Flag) -> Flag {
+  f
+}

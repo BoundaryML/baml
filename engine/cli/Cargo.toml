@@ -22,8 +22,8 @@ unused_variables = "deny"
 anyhow.workspace = true
 axum.workspace = true
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
-baml-runtime = { path = "../baml-runtime", features = ["internal"] }
-language-server = { path = "../language_server" }
+baml-runtime = { path = "../baml-runtime", default-features = false, features = ["internal"] }
+language-server = { path = "../language_server", default-features = false }
 baml-types.workspace = true
 baml-log.workspace = true
 base64.workspace = true
@@ -42,7 +42,6 @@ dunce = "1.0.4"
 either.workspace = true
 env_logger.workspace = true
 etcetera = "0.8.0"
-eventsource-stream = "0.2.3"
 futures.workspace = true
 http.workspace = true
 http-body.workspace = true
@@ -79,23 +78,14 @@ mime_guess = "2.0.4"
 mime = "0.3.17"
 
 # For tracing
-envy = "0.4.2"
 chrono = "0.4.38"
-stream-cancel = "0.8.2"
 async-std = "1.12.0"
 fastrand = "2.1.0"
 test-log = "0.2.16"
 infer = "0.16.0"
 url = "2.5.2"
 shell-escape = "0.1.5"
-aws-sigv4 = "1.2.2"
-aws-credential-types = "1.2.0"
-aws-smithy-async = "1.2.1"
-aws-smithy-runtime-api = "1.7.0"
-aws-smithy-types = "1.2.0"
-aws-smithy-runtime = "1.6.0"
 enum_dispatch = "0.3.13"
-aws-smithy-json = "0.60.7"
 jsonwebtoken = "9.3.0"
 pretty_assertions = "1.4.0"
 sha2 = "0.10.8"
@@ -112,10 +102,17 @@ ctrlc = "3.4"
 # openssl = { version = "0.10", optional = true }
 
 [features]
+default = ["bedrock"]
+# AWS Bedrock provider support, forwarded through the runtime stack. On by
+# default; a parent (e.g. baml-python-ffi) that sets default-features = false on
+# this crate drops the aws-* dependency tree.
+bedrock = ["baml-runtime/bedrock", "language-server/bedrock"]
 defaults = []
 internal = []
 skip-integ-tests = []
-static-ssl = ["reqwest/native-tls-vendored"]
+# Kept as a no-op alias: rustls-tls (the default now) already statically links its
+# crypto (ring), so there is no system OpenSSL to opt into anymore.
+static-ssl = ["reqwest/rustls-tls"]
 
 [dev-dependencies]
 assert_cmd = "2"

@@ -8,6 +8,7 @@ import {
   filterExecutionProfileProjection,
   runToGraphNodeValues,
   runToDisplayRun,
+  runToOutputChunks,
   runToTraceRows,
 } from './run-store-projections';
 import type { GraphRuntimeOverlay, Run, ValueRef } from './worker-protocol';
@@ -619,7 +620,7 @@ describe('run-store-projections', () => {
     ]);
   });
 
-  it('projects direct root run result values onto a single visible descendant graph node', () => {
+  it('projects root run result values onto the provided root graph node instead of the only visible descendant', () => {
     const bytes = outboundImageBytes('https://example.com/direct-llm.png');
     const valueRef = valueRefFixture('direct_llm_result', bytes);
     const run = runFixture({
@@ -647,16 +648,18 @@ describe('run-store-projections', () => {
       payloads: [],
     });
 
-    const values = runToGraphNodeValues(
+    const valuesByNodeId = runToGraphNodeValues(
       run,
       {
         ...graphOverlayFixture(12, ['inner-llm-call']),
         unattachedCallNodeIds: ['root-user-function'],
       },
       cacheWith('direct_llm_result', bytes),
-    ).get('12');
+      { rootGraphNodeId: '1' },
+    );
 
-    expect(values).toEqual([
+    expect(valuesByNodeId.get('12')).toBeUndefined();
+    expect(valuesByNodeId.get('1')).toEqual([
       expect.objectContaining({
         id: 'root-result',
         role: 'callOutput',
@@ -665,6 +668,239 @@ describe('run-store-projections', () => {
           media_type: 'image',
           url: 'https://example.com/direct-llm.png',
         }),
+      }),
+    ]);
+  });
+
+  it('keeps root input and result separate from child call values', () => {
+    const rootInputBytes = outboundStringBytes('Paulo Rodrigues');
+    const rootResultBytes = outboundStringBytes(
+      'Hello, Paulo. Your full name is Paulo Rodrigues!',
+    );
+    const childInputBytes = outboundStringBytes('Paulo Rodrigues');
+    const childOutputBytes = outboundStringBytes('["Paulo","Rodrigues"]');
+    const rootInputRef = valueRefFixture('root_input_screenshot', rootInputBytes);
+    const rootResultRef = valueRefFixture('root_result_screenshot', rootResultBytes);
+    const childInputRef = valueRefFixture('child_input', childInputBytes);
+    const childOutputRef = valueRefFixture('child_output', childOutputBytes);
+    const run = runFixture({
+      status: 'succeeded',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-main',
+      result: {
+        valueRef: rootResultRef,
+        rendererHint: null,
+        supportingPayloadIds: [],
+      },
+      calls: [
+        callFixture({
+          id: 'root-main',
+          functionName: 'throws.main',
+          payloadIds: [],
+        }),
+        callFixture({
+          id: 'child-call',
+          functionName: 'throws.child',
+          parentId: 'root-main',
+          payloadIds: ['payload-child-input', 'payload-child-output'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'payload-root-input',
+          timestampMs: 98,
+          kind: {
+            type: 'capturedValue',
+            role: 'rootInput',
+            label: 'inputs',
+            valueRef: rootInputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-child-input',
+          callNodeId: 'child-call',
+          timestampMs: 99,
+          kind: {
+            type: 'capturedValue',
+            role: 'callInput',
+            label: 'inputs',
+            valueRef: childInputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-child-output',
+          callNodeId: 'child-call',
+          timestampMs: 100,
+          kind: {
+            type: 'capturedValue',
+            role: 'callOutput',
+            label: 'output',
+            valueRef: childOutputRef,
+          },
+        }),
+      ],
+    });
+
+    const valuesByNodeId = runToGraphNodeValues(
+      run,
+      {
+        ...graphOverlayFixture(12, ['child-call']),
+        unattachedCallNodeIds: ['root-main'],
+      },
+      cacheWithEntries({
+        root_input_screenshot: rootInputBytes,
+        root_result_screenshot: rootResultBytes,
+        child_input: childInputBytes,
+        child_output: childOutputBytes,
+      }),
+      { rootGraphNodeId: '1' },
+    );
+
+    expect(valuesByNodeId.get('12')).toEqual([
+      expect.objectContaining({
+        id: 'payload-child-input',
+        role: 'callInput',
+        label: 'inputs',
+        value: 'Paulo Rodrigues',
+      }),
+      expect.objectContaining({
+        id: 'payload-child-output',
+        role: 'callOutput',
+        label: 'output',
+        value: '["Paulo","Rodrigues"]',
+      }),
+    ]);
+    expect(valuesByNodeId.get('1')).toEqual([
+      expect.objectContaining({
+        id: 'payload-root-input',
+        role: 'callInput',
+        label: 'inputs',
+        value: 'Paulo Rodrigues',
+      }),
+      expect.objectContaining({
+        id: 'root-result',
+        role: 'callOutput',
+        label: 'output',
+        value: 'Hello, Paulo. Your full name is Paulo Rodrigues!',
+      }),
+    ]);
+  });
+
+  it('keeps child call errors separate from root errors', () => {
+    const childErrorBytes = outboundStringBytes('child failed');
+    const rootErrorBytes = outboundStringBytes('root failed');
+    const childErrorRef = valueRefFixture('child_error', childErrorBytes);
+    const rootErrorRef = valueRefFixture('root_error', rootErrorBytes);
+    const run = runFixture({
+      status: 'failed',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-main',
+      error: {
+        class: 'Runtime',
+        message: 'root failed',
+        details: null,
+        valueRef: rootErrorRef,
+      },
+      calls: [
+        callFixture({
+          id: 'root-main',
+          functionName: 'throws.main',
+          payloadIds: [],
+          status: 'errored',
+        }),
+        callFixture({
+          id: 'child-call',
+          functionName: 'throws.child',
+          parentId: 'root-main',
+          payloadIds: ['payload-child-error'],
+          status: 'errored',
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'payload-child-error',
+          callNodeId: 'child-call',
+          timestampMs: 100,
+          kind: {
+            type: 'capturedValue',
+            role: 'callError',
+            label: 'error',
+            valueRef: childErrorRef,
+          },
+        }),
+      ],
+    });
+
+    const valuesByNodeId = runToGraphNodeValues(
+      run,
+      {
+        ...graphOverlayFixture(12, ['child-call']),
+        unattachedCallNodeIds: ['root-main'],
+      },
+      cacheWithEntries({
+        child_error: childErrorBytes,
+        root_error: rootErrorBytes,
+      }),
+      { rootGraphNodeId: '1' },
+    );
+
+    expect(valuesByNodeId.get('12')).toEqual([
+      expect.objectContaining({
+        id: 'payload-child-error',
+        role: 'callError',
+        label: 'error',
+        value: 'child failed',
+      }),
+    ]);
+    expect(valuesByNodeId.get('1')).toEqual([
+      expect.objectContaining({
+        id: 'root-error',
+        role: 'callError',
+        label: 'error',
+        value: 'root failed',
+      }),
+    ]);
+  });
+
+  it('projects root errors without captured values onto the root graph node', () => {
+    const run = runFixture({
+      status: 'failed',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-main',
+      error: {
+        class: 'Runtime',
+        message: 'plain runtime failure',
+        details: null,
+        valueRef: null,
+      },
+      calls: [
+        callFixture({
+          id: 'root-main',
+          functionName: 'throws.main',
+          payloadIds: [],
+          status: 'errored',
+        }),
+      ],
+    });
+
+    const valuesByNodeId = runToGraphNodeValues(
+      run,
+      {
+        ...graphOverlayFixture(12, []),
+        unattachedCallNodeIds: ['root-main'],
+      },
+      undefined,
+      { rootGraphNodeId: '1' },
+    );
+
+    expect(valuesByNodeId.get('1')).toEqual([
+      expect.objectContaining({
+        id: 'root-error',
+        role: 'callError',
+        label: 'error',
+        value: null,
+        state: 'error',
+        diagnostic: 'plain runtime failure',
       }),
     ]);
   });
@@ -1009,6 +1245,51 @@ describe('run-store-projections', () => {
     );
     expect(executionProfileColorKey(block, 'origin')).toBe('user');
     expect(executionProfileColorKey(block, 'thread')).toBe('thread-a');
+  });
+
+  it('keeps baml.io output chunks verbatim, in order, with streams interleaved', () => {
+    const run = runFixture({
+      payloads: [
+        payloadFixture({
+          id: 'out-1',
+          timestampMs: 100,
+          // An escape sequence split across two print calls: reshaping or
+          // reordering chunks would corrupt it.
+          kind: { type: 'output', stream: 'stdout', text: '[3' },
+        }),
+        payloadFixture({
+          id: 'out-2',
+          timestampMs: 101,
+          kind: { type: 'output', stream: 'stderr', text: 'warn\n' },
+        }),
+        payloadFixture({
+          id: 'out-3',
+          timestampMs: 102,
+          kind: { type: 'output', stream: 'stdout', text: '1mred[0m' },
+        }),
+        payloadFixture({
+          id: 'log-1',
+          timestampMs: 103,
+          kind: {
+            type: 'log',
+            level: 'info',
+            message: 'not output',
+            source: null,
+            valueRef: null,
+          },
+        }),
+      ],
+    });
+
+    expect(runToOutputChunks(run)).toEqual([
+      { id: 'out-1', stream: 'stdout', text: '[3', timestampMs: 100 },
+      { id: 'out-2', stream: 'stderr', text: 'warn\n', timestampMs: 101 },
+      { id: 'out-3', stream: 'stdout', text: '1mred[0m', timestampMs: 102 },
+    ]);
+  });
+
+  it('returns no output chunks for a run that never printed', () => {
+    expect(runToOutputChunks(runFixture({ payloads: [] }))).toEqual([]);
   });
 });
 

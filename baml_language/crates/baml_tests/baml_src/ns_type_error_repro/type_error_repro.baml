@@ -1,15 +1,23 @@
 // Minimal reproduction tests for "type error: expected int, got any".
 //
-// Converted from crates/baml_tests/tests/type_error_repro.rs. These are
-// runtime regression tests — every test compiles AND runs.
+// Runtime regression tests — every test compiles AND runs.
 //
 // Tests that mutate locals or use multi-step indexed writes go through a
 // top-level `function` helper so they aren't affected by the test-block
-// local-boxing VM behavior (a `let` local compared against a literal with
-// `deep_equals` in a test block can mismatch; code inside a function is fine).
+// local-boxing VM behavior (a `let` local compared against a literal in a test
+// block can mismatch; code inside a function is fine).
 //
-// Bytecode-snapshot-only tests (no output.result assertion in Rust) are
-// converted to `is_ok` style: the test passes if the body runs without error.
+// Bytecode-snapshot-only tests are structured with test-running functions so
+// the test passes if the body compiles and runs without error.
+//
+// Cannot express in BAML corpus (require compile-error diagnostic assertions):
+// - array_index_with_null_is_rejected_at_compile_time  (type mismatch: int | null subscript)
+// - int_literal_above_max_is_rejected_at_compile_time  (E0150 oversize int literal)
+// - negated_int_literal_below_min_is_rejected_at_compile_time  (E0150)
+// - parenthesized_oversized_literal_is_rejected  (E0150)
+// - map_with_int_key_is_rejected_at_compile_time  (map keys must be `string`)
+// - generic_map_key_annotation_is_rejected  (map keys must be `string`; got `K`)
+// - map_with_int_alias_key_is_rejected_at_compile_time  (map keys must be `string`; got alias)
 
 // ============================================================================
 // §0 — Bytecode-snapshot tests (is_ok: compile-and-run only)
@@ -27,7 +35,7 @@ test "bytecode_1d_array_write_local" {
     null
 }
 
-// Bytecode-only: 1D array write through a field on self. No result assertion in Rust.
+// Bytecode-only: 1D array write through a field on self.
 class BytecodeContainer {
     items string[]
 
@@ -48,7 +56,7 @@ test "bytecode_1d_array_write_through_field" {
     null
 }
 
-// Bytecode-only: 1D array READ through a field on self. Also has is_ok assertion.
+// Bytecode-only: 1D array READ through a field on self.
 class BytecodeContainerRead {
     items string[]
 
@@ -67,7 +75,7 @@ test "bytecode_1d_array_read_through_field" {
     null
 }
 
-// Bytecode-only: 2D array write on a local variable. Also has is_ok assertion.
+// Bytecode-only: 2D array write on a local variable.
 function bytecode_2d_array_write_local_body() -> string {
     let cells = [["a", "b"], ["c", "d"]];
     cells[1][0] = "x";
@@ -79,7 +87,7 @@ test "bytecode_2d_array_write_local" {
     null
 }
 
-// Bytecode-only: 2D array write through a field on self. No result assertion in Rust.
+// Bytecode-only: 2D array write through a field on self.
 class BytecodeGrid {
     cells string[][]
 
@@ -100,7 +108,7 @@ test "bytecode_2d_array_write_through_field" {
     null
 }
 
-// Bytecode-only: map write through a field on self. No result assertion in Rust.
+// Bytecode-only: map write through a field on self.
 class BytecodeScores {
     data map<string, int>
 
@@ -121,7 +129,7 @@ test "bytecode_map_write_through_field" {
     null
 }
 
-// Bytecode-only: map write on a local variable. Also has is_ok assertion.
+// Bytecode-only: map write on a local variable.
 function bytecode_map_write_local_body() -> int {
     let scores: map<string, int> = {};
     scores["alice"] = 100;
@@ -133,7 +141,7 @@ test "bytecode_map_write_local" {
     null
 }
 
-// Bytecode-only: non-self param array write. No result assertion in Rust.
+// Bytecode-only: non-self param array write.
 class BytecodeContainerNonSelf {
     items string[]
 }
@@ -158,14 +166,10 @@ test "bytecode_non_self_param_array_write" {
 // §1 — Array indexing with null produces a type error
 // ============================================================================
 
-// BUG: TracedVmInternalError (type errors raised inside the VM) is not
-// catchable via a BAML catch expression. The Rust test asserts
-// `output.result.unwrap_err()` — i.e. a raw VM error — which corresponds to
-// `TracedVmInternalError { source: TypeError { expected: Int, got: Object(Any) } }`.
-// That error type propagates as an uncatchable host-level error; `_ =>` in a
-// catch arm only matches user-thrown values (throw "..." / throw Class { … }).
-// There is no BAML-level way to assert "this expression raises a VM type error",
-// so this test cannot be faithfully converted.
+// BUG: VM type errors (raised inside the VM) are not catchable via a BAML
+// catch expression — only user-thrown values (throw "..." / throw Class { … })
+// are catchable. There is no BAML-level way to assert this expression raises
+// a VM type error, so this test cannot be expressed in the corpus.
 //
 // test "array_index_with_null_says_got_any" {
 //     {
@@ -662,4 +666,75 @@ function non_self_param_array_write_body() -> string {
 
 test "non_self_param_array_write" {
     assert.equal(non_self_param_array_write_body(), "z")
+}
+
+// ============================================================================
+// §13 — The optional index `?.[]` is null-safe in the *index* too
+// ============================================================================
+
+// `?.[]` is the null-safe index operator, so a null subscript short-circuits
+// the whole expression to null instead of aborting the VM (it used to crash
+// with `got any`). The base guard and the index guard are symmetric.
+function optional_index_with_null_index_body() -> int? {
+    let arr: int[]? = [10, 20, 30];
+    let i: int? = null;
+    arr?.[i]
+}
+
+test "optional_index_with_null_index_returns_null" {
+    assert.equal(optional_index_with_null_index_body(), null)
+}
+
+// A valid (non-null) index through `?.[]` still returns the element.
+function optional_index_with_valid_index_body() -> int? {
+    let arr: int[]? = [10, 20, 30];
+    let i: int? = 1;
+    arr?.[i]
+}
+
+test "optional_index_with_valid_index_returns_element" {
+    assert.equal(optional_index_with_valid_index_body(), 20)
+}
+
+// ============================================================================
+// §14 — Integer literals at the i63 `int` range boundary (B-266)
+// ============================================================================
+
+// `int.min_value()` (`-2^62`) must remain writable as a negated literal even
+// though `+2^62` is not a legal `int` literal: the leading `-` forms a single
+// negative literal. (Mirrors the i64::MIN literal rule in Rust/Java/C#.)
+function negated_int_min_literal_body() -> int {
+    -4611686018427387904
+}
+
+test "negated_int_min_literal_is_valid" {
+    assert.equal(negated_int_min_literal_body(), -4611686018427387904)
+}
+
+// ============================================================================
+// §15 — String-denoting alias map keys are accepted (B-533)
+// ============================================================================
+
+type TypeErrReproStrKey = string
+
+// A `map` keyed by an alias that denotes `string` type-checks and runs.
+function map_with_string_alias_key_body() -> int {
+    let counts: map<TypeErrReproStrKey, int> = {};
+    let _ = counts.set("x", 1);
+    counts.get("x") ?? 0
+}
+
+test "map_with_string_alias_key_is_accepted" {
+    assert.equal(map_with_string_alias_key_body(), 1)
+}
+
+// A union of string-denoting aliases is also a legal key type.
+function map_with_repeated_string_alias_union_key_body() -> int {
+    let counts: map<TypeErrReproStrKey | TypeErrReproStrKey, int> = {};
+    let _ = counts.set("x", 1);
+    counts.get("x") ?? 0
+}
+
+test "map_with_repeated_string_alias_union_key_is_accepted" {
+    assert.equal(map_with_repeated_string_alias_union_key_body(), 1)
 }

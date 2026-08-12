@@ -3,7 +3,7 @@ name = "baml-python-ffi"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
-description = "BAML python bindings (Cargo.toml)"
+description = "BAML v0 — Python runtime for baml_client"
 license = "Apache-2.0"
 
 [lib]
@@ -22,11 +22,11 @@ too_many_arguments = "allow"
 
 [dependencies]
 anyhow.workspace = true
-baml-cli.workspace = true
+baml-cli = { path = "../cli", default-features = false }
 baml-ids.workspace = true
 baml-log.workspace = true
 baml-compiler = { path = "../baml-compiler" }
-baml-runtime = { path = "../baml-runtime" }
+baml-runtime = { path = "../baml-runtime", default-features = false, features = ["internal"] }
 baml-types.workspace = true
 dashmap = "5.5"
 internal-baml-core.workspace = true
@@ -50,11 +50,9 @@ pyo3-async-runtimes = { version = "0.23", features = [
   "attributes",
   "tokio-runtime",
 ] }
-pythonize = "0.23"
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-stream-cancel = "0.8"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["full"] }
 tracing-subscriber = { version = "0.3.18", features = [
@@ -70,6 +68,9 @@ ctrlc = "3.4.5"
 pyo3-build-config = "0.21.2"
 
 [features]
-default = []
+default = ["bedrock"]
+# AWS Bedrock provider support (forwards to baml-runtime). On by default; build
+# with --no-default-features to drop the aws-* dependency tree.
+bedrock = ["baml-runtime/bedrock", "baml-cli/bedrock"]
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 thir-interpreter = ["baml-runtime/thir-interpreter"]

@@ -151,25 +151,27 @@ async fn sysop_fs_exists_callable_as_entry_point() {
     assert!(ok.is_ok(), "bytecode entry must still resolve: {ok:?}");
 }
 
-/// `baml.math.trunc(value: float) -> int` is a `$rust_function` →
-/// `FunctionKind::Native`. Calling it as an entry point should truncate
-/// toward zero and return `3`, not reject with `NotInvokableAsEntry`.
+/// `baml.sys.argv() -> string[]` is a `$rust_function` → `FunctionKind::Native`.
+/// Calling it as an entry point should run the native and return the argument
+/// array, not reject with `NotInvokableAsEntry`. The engine here is built
+/// without host argv, so the array is legitimately empty — the shape is what
+/// this asserts.
 #[tokio::test]
-async fn native_trunc_callable_as_entry_point() {
+async fn native_argv_callable_as_entry_point() {
     let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
 
     let result = eng
         .call_function(
-            "baml.math.trunc",
-            vec![BexExternalValue::Float(3.7)],
+            "baml.sys.argv",
+            vec![],
             FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
         )
         .await;
 
     match result {
-        Ok(BexExternalValue::Int(n)) => assert_eq!(n, 3, "trunc(3.7) should be 3"),
-        other => panic!("expected Ok(Int(3)) from baml.math.trunc as entry, got {other:?}"),
+        Ok(BexExternalValue::Array { .. }) => {}
+        other => panic!("expected Ok(Array {{ .. }}) from baml.sys.argv as entry, got {other:?}"),
     }
 }
 

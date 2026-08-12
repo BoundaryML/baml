@@ -1,12 +1,47 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-pub type InterfaceAssociatedBindings = Vec<(baml_type::Name, baml_type::RuntimeTy)>;
-pub type InterfaceImplementorEntry = (
-    baml_type::TypeName,
-    Vec<baml_type::RuntimeTy>,
-    InterfaceAssociatedBindings,
-);
+use crate::HeapPtr;
+
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct InterfaceDef {
+    // Signature
+    pub name: baml_type::TypeName,
+    pub args: Vec<(baml_type::Name, Vec<baml_type::RuntimeInterface>)>,
+    pub requires: Vec<baml_type::RuntimeInterface>,
+
+    // Member Types
+    pub assoc: Vec<(baml_type::Name, baml_type::RuntimeInterface)>,
+    /// The interface's declared fields, in declaration order. **Position is
+    /// identity**: a field's index here is the index every implementation's
+    /// [`RuntimeImplRule::field_links`] is baked against, and the index a
+    /// `VirtualLoadField` / `VirtualStoreField` carries. Entries are therefore never
+    /// dropped, reordered, or deduplicated.
+    pub fields: Vec<InterfaceFieldDef>,
+    pub methods: Vec<InterfaceMethodDef>,
+}
+
+/// One field an interface declares, at its dispatch index (its position in
+/// [`InterfaceDef::fields`]).
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct InterfaceFieldDef {
+    pub name: baml_type::Name,
+    /// The field's declared type, exactly as written. An interface field's type may
+    /// depend on the implementor (`key: Self.Key`); such a type stays a structural
+    /// `TypeVar`/`AssociatedTypeProjection` here — the `RuntimeTy` family carries
+    /// both — and is resolved dynamically against the receiver's impl, never
+    /// pre-collapsed to a frame slot (an interface *declaration* has no frame).
+    pub ty: baml_type::RuntimeTy,
+}
+
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct InterfaceMethodDef {
+    pub name: baml_type::Name,
+    pub args: Vec<baml_type::RuntimeTy>,
+    pub kwargs: Vec<(baml_type::Name, baml_type::RuntimeTy)>,
+    pub returns: baml_type::RuntimeTy,
+    pub errors: baml_type::RuntimeTy,
+}
 
 /// A single interface bound on an impl's generic parameter — `T extends I`, or a
 /// generic / associated-bound form (`T extends Container<U>`, `T extends
@@ -29,14 +64,16 @@ pub struct InterfaceBound {
 /// `frame` is the callee's type-argument layout as templates (De Bruijn over the
 /// impl's generic params), realized against the impl's bound type args at
 /// dispatch. For an impl's **own** method this is the impl's own generics; for an
-/// **inherited default** it is the interface's generic args followed by its
-/// associated types in *declared* order — the default was compiled against the
-/// interface's frame (its body refers to the interface's associated types), not
-/// the implementor's generics. Realizing this frame is what lets a default like
-/// `Iterator.collect` resolve `Item`/`Error` under an open-world virtual call.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+/// **inherited default** it is `Self`, the interface's generic args, then its
+/// associated types in *declared* order. The default was compiled against the
+/// interface's frame, not the implementor's generics. Realizing this frame is
+/// what lets a default like `Iterator.collect` resolve `Self`, `Item`, and
+/// `Error` under an open-world virtual call.
+// No `PartialEq`/`Eq`: `fqn` is a `HeapPtr`, so a derived `Eq` would be pointer
+// identity rather than structural equality — a footgun with no current caller.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct MethodImpl {
-    pub fqn: String,
+    pub fqn: HeapPtr,
     pub frame: Vec<baml_type::TyTemplate>,
 }
 
@@ -44,8 +81,12 @@ pub struct MethodImpl {
 /// (`resolve_implements_rule`) — the analog of a rustc `ImplSource` plus its
 /// resolved method `Instance`s. Mirrors the compiler's `InterfaceImplRule`
 /// (`baml_compiler2_tir::interfaces`) with the method handles attached.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+// No `PartialEq`/`Eq`: `interface_head` (and `methods`' `fqn`) is a `HeapPtr`, so
+// a derived `Eq` would be pointer identity, not structural equality.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct RuntimeImplRule {
+    /// Points at the [`InterfaceDef`] for this implementation.
+    pub interface_head: HeapPtr,
     /// The implementor pattern; a `TyTemplate::TypeArgRef(n)` leaf is the impl's
     /// n-th generic parameter (de Bruijn). E.g. `implement<T> I for Wrap<T>` →
     /// `Class(Wrap, [TypeArgRef(0)])`, `implement I for Foo` →
@@ -68,24 +109,26 @@ pub struct RuntimeImplRule {
     pub interface_args: Vec<baml_type::TyTemplate>,
     /// Associated-type bindings of the implemented interface.
     pub interface_assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
-    /// Method name → its [`MethodImpl`] (callee FQN + invocation frame), resolved
-    /// to a callee at dispatch time. Complete: the methods this impl overrides
-    /// *plus* the interface's inherited default methods (the bake merges them in,
-    /// an override winning over the default), so a lookup resolves any interface
-    /// method. (A direct global index/handle would be faster and may replace the
-    /// FQN later.)
+    /// Method name → its [`MethodImpl`] (the callee's `Object::Function` pointer +
+    /// invocation frame), resolved at dispatch time. Complete: the methods this
+    /// impl overrides *plus* the interface's inherited default methods (the bake
+    /// merges them in, an override winning over the default), so a lookup resolves
+    /// any interface method.
     pub methods: IndexMap<baml_type::Name, MethodImpl>,
+    /// Interface field index → the implementor's physical slot in
+    /// [`Instance::fields`](super::Instance::fields). Indexed by position in the
+    /// implemented [`InterfaceDef::fields`], so a virtual field access carries only
+    /// that index — no name on the operand stack, no lookup at dispatch.
+    ///
+    /// **Positional and total**: exactly one entry per field the interface declares,
+    /// with the explicit `field as class_field` link applied and the same-name
+    /// default filled in. E0124 (every interface field covered) is what makes
+    /// totality a fact about well-formed programs rather than a runtime check, so
+    /// resolution is an in-bounds index and never fails.
+    ///
+    /// A class slot index is well-defined here because E0126 confines every
+    /// field-bearing impl to an in-body `implements` block: `for_ty_pattern`'s head
+    /// is then exactly one class, whose layout is fixed and lives in the same
+    /// package as this rule. Empty for an impl of a field-less interface.
+    pub field_links: Box<[u32]>,
 }
-
-/// A single package's interface-implementation table, keyed by the implemented
-/// interface's base `TypeName`; each value lists the impls of that interface
-/// **declared in this package**. The runtime resolver selects the rule whose
-/// `for_ty_pattern` matches a value's concrete type (with bounds satisfied),
-/// mirroring rustc trait selection. See `Program::interface_impls` for how these
-/// per-package tables are combined.
-pub type InterfaceImpls = IndexMap<baml_type::TypeName, Vec<RuntimeImplRule>>;
-
-/// The whole-program interface registry: package name → that package's
-/// [`InterfaceImpls`]. Split by package so a dynamically-loaded package adds an
-/// entry without rebuilding the others.
-pub type InterfaceImplsByPackage = IndexMap<baml_type::Name, InterfaceImpls>;

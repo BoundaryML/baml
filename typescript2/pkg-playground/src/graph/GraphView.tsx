@@ -38,6 +38,11 @@ import {
   maxNodeDepth,
   zoomToRevealDepth,
 } from './lod';
+import {
+  groupValuePreviewSourceNodeId,
+  isGroupValuePreviewNode,
+  liftGroupValuePreviews,
+} from './value-previews';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
 import { GraphThemeContext, useGraphTheme } from './theme';
@@ -327,11 +332,13 @@ function GraphViewInner({
         : zoomToRevealDepth(viewportZoom, maxDepth);
 
   const lodModel = useMemo(
-    () =>
-      applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, {
+    () => {
+      const model = applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, {
         revealDepth,
         expanded,
-      }),
+      });
+      return liftGroupValuePreviews(model.nodes, model.edges);
+    },
     [graphModel, revealDepth, expanded],
   );
 
@@ -354,9 +361,20 @@ function GraphViewInner({
 
   const effectiveRunStatus = runStatus ?? run?.status;
   const effectiveRunError = runError ?? run?.error?.message ?? null;
+  const rootGraphNodeId =
+    graphModel.graphNodes.find((node) => node.type === 'function')?.id ?? null;
   const graphNodeValues = useMemo(
-    () => runToGraphNodeValues(run, graphRuntimeOverlay, valueBodyCache),
-    [run, graphRuntimeOverlay, valueBodyCache, valueBodyCacheVersion],
+    () =>
+      runToGraphNodeValues(run, graphRuntimeOverlay, valueBodyCache, {
+        rootGraphNodeId,
+      }),
+    [
+      run,
+      graphRuntimeOverlay,
+      valueBodyCache,
+      valueBodyCacheVersion,
+      rootGraphNodeId,
+    ],
   );
 
   const runtimeInputsRef = useRef({
@@ -403,7 +421,22 @@ function GraphViewInner({
 
       return baseNodes.map((node) => {
         const runtime = runtimeByNode.get(node.id);
-        const valuePreviews = latestGraphNodeValues.get(node.id) ?? [];
+        const previewSourceNodeId = groupValuePreviewSourceNodeId(node);
+        const valuePreviews = previewSourceNodeId
+          ? (latestGraphNodeValues.get(previewSourceNodeId) ?? [])
+          : node.data.groupValuePreviewsLifted
+            ? []
+            : (latestGraphNodeValues.get(node.id) ?? []);
+        const executionState =
+          previewSourceNodeId != null
+            ? (runtimeByNode.get(previewSourceNodeId)?.executionState ??
+              runtime?.executionState)
+            : runtime?.executionState;
+        const errorMessage =
+          previewSourceNodeId != null
+            ? (runtimeByNode.get(previewSourceNodeId)?.errorMessage ??
+              runtime?.errorMessage)
+            : runtime?.errorMessage;
 
         return {
           ...node,
@@ -412,10 +445,13 @@ function GraphViewInner({
             result: undefined,
             hasResult: undefined,
             valuePreviews,
-            executionState: runtime?.executionState ?? ('not-started' as const),
-            errorMessage: runtime?.errorMessage,
+            executionState: executionState ?? ('not-started' as const),
+            errorMessage,
             customRenderers: latestCustomRenderers,
-            selected: node.id === selectedId,
+            selected:
+              node.id === selectedId ||
+              (previewSourceNodeId != null &&
+                previewSourceNodeId === selectedId),
           },
         };
       });
@@ -440,10 +476,18 @@ function GraphViewInner({
         setLayoutReady(true);
         if (refitAfterLayoutRef.current) {
           refitAfterLayoutRef.current = false;
-          // Wait a frame so ReactFlow has measured the re-laid nodes.
-          requestAnimationFrame(() => {
-            fitView({ padding: 0.2, minZoom: 0.3, maxZoom: 1.5, duration: 250 });
-          });
+          // Let ReactFlow commit the re-laid nodes and re-measure their rotated
+          // positions into the store before fitting — a couple of frames isn't
+          // enough (fitView then sees the pre-rotation bounds and the toggled
+          // graph looks uncentred). A short timeout matches the resize refit,
+          // which settles reliably.
+          setTimeout(() => {
+            // Match the manual "fit view" control, which calls fitView() with no
+            // options (padding 0.1, instance zoom range). Passing our own tighter
+            // padding/maxZoom here left the toggled graph more zoomed out than
+            // that button; defaults make it fit just as snugly.
+            fitView({ duration: 250 });
+          }, 150);
         }
       })
       .catch((err) => {
@@ -510,20 +554,31 @@ function GraphViewInner({
     decorateNodesWithRuntime,
   ]);
 
-  // Update selected state on nodes
-  useEffect(() => {
-    setNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        data: { ...n.data, selected: n.id === String(selectedNodeId) },
-      })),
-    );
-  }, [selectedNodeId, setNodes]);
-
   // Auto-pan viewport to center the selected node — only when it's off-screen
   const { setCenter, getNode, getViewport, fitView } = useReactFlow();
   const containerWidth = useStore((s) => s.width);
   const containerHeight = useStore((s) => s.height);
+
+  // Refit when ReactFlow's measured container size changes — e.g. dragging the
+  // editor/graph splitter or resizing the window. ReactFlow keeps the viewport
+  // transform across resizes, so without this the graph holds its old pan/zoom
+  // and no longer fits the new size. Skip the first measurement (the `fitView`
+  // prop handles initial paint) and debounce so we fit once the drag settles,
+  // not on every intermediate width during the gesture.
+  const didMeasureRef = useRef(false);
+  useEffect(() => {
+    if (!containerWidth || !containerHeight) return undefined;
+    if (!didMeasureRef.current) {
+      didMeasureRef.current = true;
+      return undefined;
+    }
+    const t = setTimeout(() => {
+      // Defaults (padding 0.1, instance zoom range) match the manual "fit view"
+      // control so a resize fits as snugly as that button.
+      fitView({ duration: 200 });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [containerWidth, containerHeight, fitView]);
   // Auto-pan to the selected node — but the node may not be laid out yet (e.g.
   // the LOD reveal effect above surfaces it only on a later layout). So record
   // the request on selection change, then fulfill it once the node actually
@@ -601,7 +656,13 @@ function GraphViewInner({
         toggleExpanded(node.id);
         return;
       }
-      onNodeClick(Number(node.id));
+      const nodeId = isGroupValuePreviewNode(node)
+        ? (groupValuePreviewSourceNodeId(node) ?? node.id)
+        : node.id;
+      const numericNodeId = Number(nodeId);
+      if (Number.isFinite(numericNodeId)) {
+        onNodeClick(numericNodeId);
+      }
     },
     [onNodeClick, expanded, toggleExpanded],
   );

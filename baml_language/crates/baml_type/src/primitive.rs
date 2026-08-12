@@ -4,7 +4,9 @@ use std::fmt;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
 pub enum PrimitiveType {
     Int,
     Bigint,
@@ -20,6 +22,20 @@ pub enum PrimitiveType {
 }
 
 impl PrimitiveType {
+    pub const ALL: [PrimitiveType; 11] = [
+        PrimitiveType::Int,
+        PrimitiveType::Bigint,
+        PrimitiveType::Float,
+        PrimitiveType::Bool,
+        PrimitiveType::Null,
+        PrimitiveType::String,
+        PrimitiveType::Uint8Array,
+        PrimitiveType::Image,
+        PrimitiveType::Audio,
+        PrimitiveType::Video,
+        PrimitiveType::Pdf,
+    ];
+
     /// Map primitives with builtin companion classes to their class path in the `baml` package.
     ///
     /// Media primitives (`image`, `audio`, `video`, `pdf`) have corresponding
@@ -70,29 +86,126 @@ impl PrimitiveType {
         }
     }
 
+    /// Resolve a lowercase source spelling to its semantic primitive.
+    pub fn from_alias(alias: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|primitive| primitive.alias() == alias)
+    }
+
     /// Inverse of [`builtin_class_path`](Self::builtin_class_path): map a class
     /// path (relative to the `baml` package, e.g. `["media", "Image"]`) back to
     /// the primitive it is the companion class for.
     pub fn from_builtin_class_path(path: &[&str]) -> Option<Self> {
-        const ALL: [PrimitiveType; 11] = [
-            PrimitiveType::Int,
-            PrimitiveType::Bigint,
-            PrimitiveType::Float,
-            PrimitiveType::Bool,
-            PrimitiveType::Null,
-            PrimitiveType::String,
-            PrimitiveType::Uint8Array,
-            PrimitiveType::Image,
-            PrimitiveType::Audio,
-            PrimitiveType::Video,
-            PrimitiveType::Pdf,
-        ];
-        ALL.into_iter().find(|p| p.builtin_class_path() == path)
+        Self::ALL
+            .into_iter()
+            .find(|primitive| primitive.builtin_class_path() == path)
     }
 }
 
 impl fmt::Display for PrimitiveType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.alias())
+    }
+}
+
+/// A built-in source-level type name.
+///
+/// Primitive values have companion classes in the `baml` package. `json` is a
+/// stdlib type alias, while `void`, `never`, and `unknown` are compiler
+/// intrinsics with no addressable definition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BuiltinTypeName {
+    Primitive(PrimitiveType),
+    Json,
+    Void,
+    Never,
+    Unknown,
+}
+
+impl BuiltinTypeName {
+    pub fn from_alias(alias: &str) -> Option<Self> {
+        if let Some(primitive) = PrimitiveType::from_alias(alias) {
+            return Some(Self::Primitive(primitive));
+        }
+        Some(match alias {
+            "json" => Self::Json,
+            "void" => Self::Void,
+            "never" => Self::Never,
+            "unknown" => Self::Unknown,
+            _ => return None,
+        })
+    }
+
+    pub fn alias(self) -> &'static str {
+        match self {
+            Self::Primitive(primitive) => primitive.alias(),
+            Self::Json => "json",
+            Self::Void => "void",
+            Self::Never => "never",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    /// The path of this type's definition relative to the `baml` package.
+    ///
+    /// Compiler intrinsics deliberately return `None`: their documentation is
+    /// supplied by the language-topic registry instead.
+    pub fn builtin_definition_path(self) -> Option<&'static [&'static str]> {
+        match self {
+            Self::Primitive(primitive) => Some(primitive.builtin_class_path()),
+            Self::Json => Some(&["json", "json"]),
+            Self::Void | Self::Never | Self::Unknown => None,
+        }
+    }
+
+    pub fn from_builtin_definition_path(path: &[&str]) -> Option<Self> {
+        if path == ["json", "json"] {
+            return Some(Self::Json);
+        }
+        PrimitiveType::from_builtin_class_path(path).map(Self::Primitive)
+    }
+}
+
+impl fmt::Display for BuiltinTypeName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.alias())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn primitive_aliases_roundtrip() {
+        for primitive in PrimitiveType::ALL {
+            assert_eq!(
+                PrimitiveType::from_alias(primitive.alias()),
+                Some(primitive)
+            );
+        }
+        assert_eq!(PrimitiveType::from_alias("void"), None);
+    }
+
+    #[test]
+    fn builtin_type_names_distinguish_definitions_from_intrinsics() {
+        assert_eq!(
+            BuiltinTypeName::from_alias("string")
+                .and_then(BuiltinTypeName::builtin_definition_path),
+            Some(&["String"][..])
+        );
+        assert_eq!(
+            BuiltinTypeName::from_alias("json").and_then(BuiltinTypeName::builtin_definition_path),
+            Some(&["json", "json"][..])
+        );
+        assert_eq!(
+            BuiltinTypeName::from_alias("never").and_then(BuiltinTypeName::builtin_definition_path),
+            None
+        );
+        assert_eq!(
+            BuiltinTypeName::from_builtin_definition_path(&["json", "json"]),
+            Some(BuiltinTypeName::Json)
+        );
     }
 }

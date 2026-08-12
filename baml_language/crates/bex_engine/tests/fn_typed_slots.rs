@@ -4,6 +4,7 @@ mod common;
 use std::sync::Arc;
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_heap::CollectionLevel;
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -37,7 +38,7 @@ async fn clean_lambda_into_fn_param() {
 #[tokio::test]
 async fn clean_lambda_into_class_field() {
     let r = run(r#"
-        class F { f (int) -> int }
+        class F { f (int) -> int throws never }
         function main() -> int {
             let holder = F { f: (x: int) -> int { x * 2 } };
             let g = holder.f;
@@ -46,6 +47,85 @@ async fn clean_lambda_into_class_field() {
     "#)
     .await;
     assert_eq!(r, BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn returned_callbacks_share_captured_mutable_state() {
+    let source = r#"
+        class Callbacks {
+            increment: () -> null throws never
+            observe: () -> int throws never
+        }
+
+        class State {
+            count: int
+        }
+
+        function make_callbacks() -> Callbacks {
+            let state = State { count: 0 }
+            Callbacks {
+                increment: () -> null {
+                    state.count += 1
+                    null
+                },
+                observe: () -> int {
+                    state.count
+                }
+            }
+        }
+
+        function increment_callback(callbacks: Callbacks) -> () -> null throws never {
+            callbacks.increment
+        }
+
+        function observe_callback(callbacks: Callbacks) -> () -> int throws never {
+            callbacks.observe
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine"),
+    );
+    let context = || FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+
+    let callbacks = engine
+        .call_function("make_callbacks", vec![], context(), false)
+        .await
+        .expect("callbacks should be returned as a rooted handle");
+    assert!(matches!(callbacks, BexExternalValue::Handle(_)));
+
+    let increment = engine
+        .call_function(
+            "increment_callback",
+            vec![callbacks.clone()],
+            context(),
+            false,
+        )
+        .await
+        .expect("increment callback should be returned as a rooted handle");
+    let BexExternalValue::Handle(increment) = increment else {
+        panic!("increment callback should be a handle");
+    };
+    let observe = engine
+        .call_function("observe_callback", vec![callbacks], context(), false)
+        .await
+        .expect("observe callback should be returned as a rooted handle");
+    let BexExternalValue::Handle(observe) = observe else {
+        panic!("observe callback should be a handle");
+    };
+
+    engine
+        .call_callable(increment, vec![], context(), true)
+        .await
+        .expect("increment callback should run");
+    engine.collect_garbage(CollectionLevel::Major).await;
+    let observed = engine
+        .call_callable(observe, vec![], context(), true)
+        .await
+        .expect("observe callback should run after garbage collection");
+
+    assert_eq!(observed, BexExternalValue::Int(1));
 }
 
 /// Throws semantics around fn-typed slots: an omitted `throws` on a callback

@@ -1,7 +1,9 @@
-template_string Greeting(name: string = "world") #"hello {{ name }}"#
+function Greeting(name: string = "world") -> string {
+    `hello ${name}`
+}
 
-type NamedFilter = (query: string, filter?: string?) -> int
-type NamedLimit = (query: string, limit?: string?) -> int
+type NamedFilter = (query: string, filter?: string?) -> int throws never
+type NamedLimit = (query: string, limit?: string?) -> int throws never
 
 class Counter {
   value int

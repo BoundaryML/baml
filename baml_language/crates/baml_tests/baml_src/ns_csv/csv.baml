@@ -258,7 +258,9 @@ function csv_bom_stripped_by_default() -> string {
     // A real UTF-8 BOM (EF BB BF) via a byte-string source.
     let rows = baml.csv.parse(b"\xEF\xBB\xBFid\n7\n");
     let r = baml.csv.reader(b"\xEF\xBB\xBFid\n7\n");
-    let h = r.headers() ?? [];
+    // `headers()` is `string[]?`; the empty fallback needs a `string[]` type so
+    // the coalesced value is `string[]` (a bare `[]` is otherwise `_[]`).
+    let h: string[] = r.headers() ?? [];
     grid(rows) + "/" + join(h, "|")
 }
 
@@ -297,7 +299,8 @@ test "csv_blank_records" {
 
 function csv_trim_all() -> string {
     let r = baml.csv.reader("  name , score \n  alice ,  9 \n", options = baml.csv.ReaderOptions { trim: "all" });
-    let h = join(r.headers() ?? [], "|");
+    let headers: string[] = r.headers() ?? [];
+    let h = join(headers, "|");
     let row = match (r.next()) {
         baml.iter.Done => "none",
         let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
@@ -1181,7 +1184,7 @@ test "csv_writer_bom" {
 }
 
 function csv_writer_text_on_file_writer_throws() -> string {
-    let path = "/tmp/baml_csv_text_on_file_" + baml.json.stringify(baml.sys.now_ms()) + ".csv";
+    let path = `/tmp/baml_csv_text_on_file_${baml.time.Instant.now().to_timestamp_milliseconds()}.csv`;
     let w = baml.csv.create(path);
     let err = {
         w.text();
@@ -1230,7 +1233,7 @@ test "csv_stringify_records_roundtrip" {
 // ─── File IO ────────────────────────────────────────────────────────────────
 
 function csv_file_roundtrip() -> string {
-    let path = "/tmp/baml_csv_file_roundtrip_" + baml.json.stringify(baml.sys.now_ms()) + ".csv";
+    let path = `/tmp/baml_csv_file_roundtrip_${baml.time.Instant.now().to_timestamp_milliseconds()}.csv`;
     let bytes = baml.csv.write<OutRow>(path, [
         OutRow { id: 1, note: "hello" },
         OutRow { id: 2, note: null },
@@ -1249,7 +1252,7 @@ test "csv_file_roundtrip" {
 }
 
 function csv_open_streams_file() -> string {
-    let path = "/tmp/baml_csv_open_streams_" + baml.json.stringify(baml.sys.now_ms()) + ".csv";
+    let path = `/tmp/baml_csv_open_streams_${baml.time.Instant.now().to_timestamp_milliseconds()}.csv`;
     baml.fs.write(path, "n\n10\n20\n30\n");
     let r = baml.csv.open(path);
     let total = 0;
@@ -1266,7 +1269,7 @@ test "csv_open_streams_file" {
 }
 
 function csv_create_then_fs_read() -> string {
-    let path = "/tmp/baml_csv_create_read_" + baml.json.stringify(baml.sys.now_ms()) + ".csv";
+    let path = `/tmp/baml_csv_create_read_${baml.time.Instant.now().to_timestamp_milliseconds()}.csv`;
     let w = baml.csv.create(path);
     w.write_header(["k", "v"]);
     let record: baml.csv.CsvValue[] = ["x", 1];
@@ -1515,7 +1518,7 @@ function csv_caller_owned_handles_stay_open() -> string {
     // Handles passed to writer(file)/reader(file) belong to the caller:
     // closing the CSV handle must not close them. open()/create() handles
     // are owned and do get closed.
-    let path = "/tmp/baml_csv_caller_owned_" + baml.json.stringify(baml.sys.now_ms()) + ".csv";
+    let path = `/tmp/baml_csv_caller_owned_${baml.time.Instant.now().to_timestamp_milliseconds()}.csv`;
     let wf = baml.fs.open(path, "w");
     let w = baml.csv.writer(wf);
     let record: baml.csv.CsvValue[] = ["x", 1];

@@ -1,5 +1,5 @@
 //! Rewrite the absolute size ceilings in `.cargo/size-gate.toml` in place,
-//! preserving the file's comments and structure via `toml_edit`.
+//! preserving the file's structure via `toml_edit`.
 //!
 //! This is the write-side counterpart to the per-platform `max_file_bytes`
 //! / `max_gzip_bytes` ceilings that `compare.rs` reads. The daily baseline
@@ -13,6 +13,7 @@ use toml_edit::{DocumentMut, Item, Table, Value};
 
 use crate::{
     config::{Config, GateMetric},
+    human_size,
     measure::ArtifactMeasurement,
 };
 
@@ -22,7 +23,7 @@ use crate::{
 /// For each (platform, artifact) pair we write the ceiling for the
 /// artifact's *gated* metric only: `max_file_bytes` for file-gated
 /// artifacts (binaries) and `max_gzip_bytes` for gzip-gated ones (WASM).
-/// Existing tables and comments are preserved; only the numeric value on
+/// Existing tables are preserved; only the value on
 /// the ceiling key is replaced.
 ///
 /// Returns `true` if the config file was changed on disk.
@@ -55,8 +56,9 @@ pub(crate) fn sync_ceilings(
             let ceiling = ceiling_for(gated_bytes, margin_pct);
             set_ceiling(&mut doc, name, platform, key, ceiling);
             updates += 1;
+            let formatted_ceiling = human_size::format(ceiling);
             eprintln!(
-                "  ceiling {name} [{platform}] {key} = {ceiling} ({gated_bytes} + {margin_pct}%)"
+                "  ceiling {name} [{platform}] {key} = {formatted_ceiling} ({gated_bytes} + {margin_pct}%)"
             );
         }
     }
@@ -109,7 +111,7 @@ fn set_ceiling(doc: &mut DocumentMut, name: &str, platform: &str, key: &str, val
         });
 
     if let Some(table) = platform_table {
-        table[key] = Item::Value(underscored_int(value));
+        table[key] = Item::Value(human_readable_size(value));
     }
 }
 
@@ -122,36 +124,11 @@ fn implicit_table() -> Item {
     Item::Table(t)
 }
 
-/// An integer value rendered with `_` digit grouping (e.g. `15_519_843`)
-/// to match the hand-written style of the rest of the config.
-///
-/// `toml_edit`'s repr setters are private, so we mint the formatted value by
-/// parsing a one-line fragment, then normalise its decor to a single
-/// leading space so it renders as `key = 15_519_843`.
-fn underscored_int(n: u64) -> Value {
-    let fragment = format!("x = {}", group_digits(n));
-    let doc: DocumentMut = fragment.parse().expect("grouped integer is valid TOML");
-    let mut v = doc["x"]
-        .as_value()
-        .expect("parsed fragment has a value")
-        .clone();
+fn human_readable_size(bytes: u64) -> Value {
+    let mut v = Value::from(human_size::format(bytes));
     v.decor_mut().set_prefix(" ");
     v.decor_mut().set_suffix("");
     v
-}
-
-/// Insert `_` separators every three digits from the right.
-fn group_digits(n: u64) -> String {
-    let s = n.to_string();
-    let len = s.len();
-    let mut out = String::with_capacity(len + len / 3);
-    for (i, c) in s.chars().enumerate() {
-        if i > 0 && (len - i).is_multiple_of(3) {
-            out.push('_');
-        }
-        out.push(c);
-    }
-    out
 }
 
 #[cfg(test)]
@@ -167,9 +144,18 @@ mod tests {
     }
 
     #[test]
-    fn group_digits_inserts_separators() {
-        assert_eq!(group_digits(15_519_843), "15_519_843");
-        assert_eq!(group_digits(100), "100");
-        assert_eq!(group_digits(1_000), "1_000");
+    fn set_ceiling_writes_a_human_readable_toml_string() {
+        let mut doc = DocumentMut::new();
+        set_ceiling(
+            &mut doc,
+            "baml-cli",
+            "aarch64-apple-darwin",
+            "max_file_bytes",
+            21_956_782,
+        );
+        assert_eq!(
+            doc.to_string(),
+            "[artifacts.baml-cli.platform.aarch64-apple-darwin]\nmax_file_bytes = \"20.9 MiB\"\n"
+        );
     }
 }

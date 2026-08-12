@@ -80,34 +80,34 @@ class GuessResponse {
 
 function GenerateFamousPersonName(previous_names: string[]) -> string {
   client GPT4o
-  prompt #"
-    {{ previous_names }}
-  "#
+  prompt `
+    ${previous_names}
+  `
 }
 
 function SimulateHumanGuess(history: string[]) -> string {
   client GPT4o
-  prompt #"
-    {{ history }}
-  "#
+  prompt `
+    ${history}
+  `
 }
 
 function TakeGuess(user_guess: string, famous_person_name: string, history: string[]) -> GuessResponse {
   client GPT4o
-  prompt #"
-    {{ user_guess }}
-    {{ famous_person_name }}
-    {{ history }}
-    {{ ctx.output_format }}
-  "#
+  prompt `
+    ${user_guess}
+    ${famous_person_name}
+    ${history}
+    ${ctx.output_format}
+  `
 }
 
 function GuessGameAgent() -> GuessResponse {
   let history: string[] = []
   let famous_person_name = GenerateFamousPersonName([])
   log.info({"famous_person_name":
-  watch let user_input = SimulateHumanGuess(history)
-  watch let guess_response = TakeGuess(user_input, famous_person_name, history)
+  let user_input = SimulateHumanGuess(history)
+  let guess_response = TakeGuess(user_input, famous_person_name, history)
   guess_response
 }
 "##;

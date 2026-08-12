@@ -3,7 +3,7 @@
 /// Equivalent to `Temporal.PlainTime` (TC39).
 class PlainTime {
     /// Internal representation: nanoseconds since midnight, in `[0, 24h)`.
-    _nanoseconds: int;
+    _nanoseconds: int,
 
     /// Creates a `PlainTime` from clock components. Defaulted components
     /// are passed by name: `PlainTime.from_components(7, minute = 32)`.
@@ -77,10 +77,16 @@ class PlainTime {
     implements baml.FromJson {
         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
             match (j) {
-                string => PlainTime.parse(j) catch (_) {
-                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                string => {
+                    PlainTime.parse(j) catch (_) {
+                        root.errors.ParseError { message } => {
+                            throw baml.json.JsonDecodeError { message: message, path: "" }
+                        },
+                    }
                 },
-                _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601 time string", path: "" }
+                _ => {
+                    throw baml.json.JsonDecodeError { message: "Expected ISO 8601 time string", path: "" }
+                },
             }
         }
     }

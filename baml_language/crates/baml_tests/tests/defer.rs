@@ -347,3 +347,98 @@ function main() -> string[] {
         vec!["body", "awaited"]
     );
 }
+
+// ── Unwinding panics ───────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn defer_runs_once_when_a_panic_unwinds_through_it() {
+    // A panic reaches the defer through the unwind landing pad, exactly like a
+    // typed throw does. The emitter used to sink the panicking `10 / 0` past
+    // the `return`'s inline defer replay, so the body ran on the way out AND
+    // again in the pad.
+    let output = baml_test!(
+        r#"
+function risky(log: string[]) -> int throws unknown {
+  defer { log.push("D") }
+  return 10 / 0
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  risky(log) catch (e) { baml.panics.DivisionByZero => -1 }
+  log
+}
+"#
+    );
+    assert_eq!(expect_strings(output.result.unwrap()), vec!["D"]);
+}
+
+#[tokio::test]
+async fn nested_defers_run_once_each_when_a_panic_unwinds() {
+    // The whole chain ran twice (`inner,outer,inner,outer`) for the same reason.
+    let output = baml_test!(
+        r#"
+function risky(log: string[]) -> int throws unknown {
+  defer { log.push("outer") }
+  defer { log.push("inner") }
+  return 10 / 0
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  risky(log) catch (e) { baml.panics.DivisionByZero => -1 }
+  log
+}
+"#
+    );
+    assert_eq!(
+        expect_strings(output.result.unwrap()),
+        vec!["inner", "outer"]
+    );
+}
+
+#[tokio::test]
+async fn defer_runs_once_when_a_call_free_body_sees_a_panic() {
+    // Same shape with a defer body that compiles to statements rather than a
+    // call, so the replay lands in the returning block itself. Observed through
+    // a field write, which survives the unwind.
+    let output = baml_test!(
+        r#"
+class Counter { n: int }
+
+function risky(c: Counter) -> int throws unknown {
+  defer { c.n = c.n - 1 }
+  return 10 / 0
+}
+
+function main() -> int {
+  let c = Counter { n: 10 }
+  risky(c) catch (e) { baml.panics.DivisionByZero => -1 }
+  c.n
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(9));
+}
+
+#[tokio::test]
+async fn a_panicking_binding_runs_before_later_side_effects() {
+    // The underlying emitter bug without any `defer`: `10 / 0` must panic where
+    // it is bound, before the `push` that follows it.
+    let output = baml_test!(
+        r#"
+function risky(log: string[]) -> int throws unknown {
+  let x = 10 / 0
+  log.push("after")
+  return x
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  risky(log) catch (e) { baml.panics.DivisionByZero => -1 }
+  log
+}
+"#
+    );
+    assert!(expect_strings(output.result.unwrap()).is_empty());
+}

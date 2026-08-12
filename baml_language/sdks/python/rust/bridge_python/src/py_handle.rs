@@ -84,6 +84,18 @@ impl BamlPyHandle {
         let new_key = handle_clone(self.handle_key, "BamlPyHandle._clone_key_for_wire")?;
         Ok((new_key, self.handle_type))
     }
+
+    /// Borrow this handle key as a call target without transferring ownership.
+    fn _key_for_call(&self) -> PyResult<u64> {
+        use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
+
+        if self.handle_type != BamlHandleType::FunctionRef as u64 {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "handle does not reference a BAML callable",
+            ));
+        }
+        Ok(self.handle_key)
+    }
 }
 
 impl BamlPyHandle {
@@ -108,7 +120,7 @@ impl Drop for BamlPyHandle {
         // variants; the owners drop them through their own release path.
         // Mirrors `bridge_wasm/src/handle.rs`'s `Drop` for the same
         // reason.
-        use bridge_ctypes::baml_core::cffi::BamlHandleType;
+        use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
         let ht_i32 = i32::try_from(self.handle_type).unwrap_or(-1);
         let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
             || ht_i32 == BamlHandleType::HostValueOpaque as i32;

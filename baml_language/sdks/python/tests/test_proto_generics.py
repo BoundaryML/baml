@@ -1,6 +1,6 @@
 """Unit tests for the generic-aware encoder/decoder helpers added in 13b.
 
-These tests exercise the pure-Python helpers in `baml_core.proto`
+These tests exercise the pure-Python helpers in `baml_bridge.proto`
 directly — they don't go through the Rust FFI, so they isolate the
 serialization changes from the rest of the bridge.
 
@@ -24,15 +24,15 @@ from typing import Generic, List, TypeVar
 
 import pydantic
 
-from baml_core.proto import (  # noqa: E402
+from baml_bridge.proto import (  # noqa: E402
     _base_class_for_fqn,
     _ty_to_python_type,
     _parameterize_tys,
     _set_inbound_value,
     python_type_to_wire_ty,
 )
-from baml_core.typemap import BamlTypeMap, get_type_map, set_type_map
-from baml_core.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
+from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
+from baml_bridge.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
 
 
 def _set_primitive(kind):
@@ -106,7 +106,7 @@ def test_base_class_for_fqn_passes_non_generic_through():
 
 
 def test_inbound_class_value_carries_base_fqn():
-    """13b §2.1 — `Box[int](item=5)` serializes with `cv.class_ty.name` set to
+    """13b §2.1 — `Box[int](item=5)` serializes with `value_type.class_ty.name` set to
     the base class's FQN, not the parameterized form. The runtime here is
     not initialized so `_derive_baml_fqn` returns ""; what matters is that
     the encoder reaches the Pydantic branch with the *base* class on the
@@ -315,7 +315,7 @@ def _build_class_value(fqn: str, fields: list, type_args: list):
 def test_decode_class_parameterizes_with_generic_args():
     """13b §3.1, §3.4 — a generic class with `type_args = [int]` decodes
     to a `Box[int]` instance, not bare `Box`."""
-    from baml_core import proto as proto_mod
+    from baml_bridge import proto as proto_mod
 
     tm = _fresh_typemap_with(Box)
 
@@ -337,7 +337,7 @@ def test_decode_class_graceful_degradation_when_args_empty():
     """13b §3.5 — when the Rust producer hasn't been updated yet,
     `type_args` is empty. Decode still produces a usable instance —
     just unparameterized."""
-    from baml_core import proto as proto_mod
+    from baml_bridge import proto as proto_mod
 
     tm = _fresh_typemap_with(Box)
 
@@ -356,7 +356,7 @@ def test_decode_class_nested_generic():
     Models the `Crate<Box<int>>` shape (Crate's T is bound to `Box<int>`,
     so `contents: List[T]` becomes `List[Box[int]]`).
     """
-    from baml_core import proto as proto_mod
+    from baml_bridge import proto as proto_mod
 
     tm = _fresh_typemap_with(Box, Crate)
 
@@ -386,34 +386,41 @@ def test_decode_class_nested_generic():
 
 
 # ---------------------------------------------------------------------------
-# Phase 2/4: generic instance args carry `class_ty`; `_types=` is dict-only
+# Phase 2/4: generic instance args carry sparse `value_type`; `_types=` is dict-only
 # ---------------------------------------------------------------------------
 
 import pytest  # noqa: E402
 
-from baml_core import _resolve_types_kwarg  # noqa: E402
-from baml_core.cffi.v1 import baml_type_pb2  # noqa: E402
+from baml_bridge import _resolve_types_kwarg  # noqa: E402
+from baml_bridge.cffi.v1 import baml_type_pb2  # noqa: E402
 
 
-def test_generic_instance_carries_class_ty():
+def test_generic_instance_carries_sparse_value_type():
     """A generic instance argument (`Box[int]`) carries its concrete class type
-    args in the value-level `class_ty` channel."""
+    args in the node-level `value_type` channel."""
     inbound = baml_inbound_pb2.InboundValue()
     _set_inbound_value(inbound, Box[int](item=5), kwarg_name="x")
-    cv = inbound.class_value
-    assert cv.HasField("class_ty")
-    assert len(cv.class_ty.type_args) == 1
-    assert cv.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
+    assert inbound.HasField("value_type")
+    assert len(inbound.value_type.class_ty.type_args) == 1
+    assert inbound.value_type.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
 
 
-def test_non_generic_instance_class_ty_has_no_type_args():
-    """A non-generic instance still binds its class via `class_ty` (the FQN
+def test_unbound_generic_instance_carries_nominal_sparse_value_type():
+    """An erased generic keeps nominal identity while omitting unknown args."""
+    inbound = baml_inbound_pb2.InboundValue()
+    _set_inbound_value(inbound, Box(item=5), kwarg_name="x")
+    assert inbound.WhichOneof("value") == "class_value"
+    assert inbound.HasField("value_type")
+    assert len(inbound.value_type.class_ty.type_args) == 0
+
+
+def test_non_generic_instance_value_type_has_no_type_args():
+    """A non-generic instance still binds its class via `value_type` (the FQN
     channel, now the sole class-name source) but carries no type args."""
     inbound = baml_inbound_pb2.InboundValue()
     _set_inbound_value(inbound, Plain(a=1), kwarg_name="x")
-    cv = inbound.class_value
-    assert cv.HasField("class_ty")
-    assert len(cv.class_ty.type_args) == 0
+    assert inbound.HasField("value_type")
+    assert len(inbound.value_type.class_ty.type_args) == 0
 
 
 def test_resolve_types_requires_dict_for_generic():
@@ -447,7 +454,7 @@ def test_resolve_types_empty_params_rejects_types_kwarg():
 # Phase 6: `fn[...]` subscript desugars to the `_types={...}` dict form
 # ---------------------------------------------------------------------------
 
-from baml_core import _GenericCallable  # noqa: E402
+from baml_bridge import _GenericCallable  # noqa: E402
 
 
 def test_generic_callable_subscript_desugars_to_types_dict():

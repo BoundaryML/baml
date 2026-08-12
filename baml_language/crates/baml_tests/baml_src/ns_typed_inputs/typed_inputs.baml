@@ -10,7 +10,7 @@ function double(x: int) -> int {
 }
 
 test "int_input" {
-    assert.is_true(baml.deep_equals(double(21), 42))
+    assert.equal(double(21), 42)
 }
 
 function greet(name: string) -> string {
@@ -26,7 +26,7 @@ function add(a: int, b: int) -> int {
 }
 
 test "multiple_inputs" {
-    assert.is_true(baml.deep_equals(add(10, 32), 42))
+    assert.equal(add(10, 32), 42)
 }
 
 function negate(b: bool) -> bool {
@@ -34,7 +34,7 @@ function negate(b: bool) -> bool {
 }
 
 test "bool_input" {
-    assert.is_true(baml.deep_equals(negate(true), false))
+    assert.is_true(!negate(true))
 }
 
 function half(x: float) -> float {
@@ -42,7 +42,7 @@ function half(x: float) -> float {
 }
 
 test "float_input" {
-    assert.is_true(baml.deep_equals(half(10.0), 5.0))
+    assert.equal(half(10.0), 5.0)
 }
 
 // array_input: sum uses a for-loop accumulator local; moved to a helper so
@@ -56,7 +56,7 @@ function sum(arr: int[]) -> int {
 }
 
 test "array_input" {
-    assert.is_true(baml.deep_equals(sum([1, 2, 3, 4]), 10))
+    assert.equal(sum([1, 2, 3, 4]), 10)
 }
 
 class Point {
@@ -69,7 +69,7 @@ function magnitude_squared(p: Point) -> int {
 }
 
 test "class_input" {
-    assert.is_true(baml.deep_equals(magnitude_squared(Point { x: 3, y: 4 }), 25))
+    assert.equal(magnitude_squared(Point { x: 3, y: 4 }), 25)
 }
 
 // map_input: call get_value with a literal map and a literal key.
@@ -79,7 +79,7 @@ function get_value(m: map<string, int>, key: string) -> int {
 }
 
 test "map_input" {
-    assert.is_true(baml.deep_equals(get_value({"foo": 42, "bar": 100}, "foo"), 42))
+    assert.equal(get_value({"foo": 42, "bar": 100}, "foo"), 42)
 }
 
 function is_null(x: int?) -> bool {
@@ -87,7 +87,7 @@ function is_null(x: int?) -> bool {
 }
 
 test "null_input" {
-    assert.is_true(baml.deep_equals(is_null(null), true))
+    assert.is_true(is_null(null))
 }
 
 function concat(a: string, b: string, c: string) -> string {

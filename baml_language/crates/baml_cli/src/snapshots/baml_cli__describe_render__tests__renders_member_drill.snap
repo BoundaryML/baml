@@ -1,0 +1,5 @@
+---
+source: crates/baml_cli/src/describe_render.rs
+expression: "render(&db, \"baml.Comparable.compare\")"
+---
+function compare(self, other: Self) -> int throws (Self as baml.Comparable).CompareError   (required by Comparable)

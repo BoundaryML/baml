@@ -1,0 +1,124 @@
+---
+title: "Software Factories Still Need Human Operators: Building 6 BAML SDKs for 6 Programming Languages in 1 Week"
+description: How 6 engineers built 6 BAML SDKs for 6 programming languages in 1 week
+slug: software-factories-need-human-operators
+date: July 24, 2026
+tags: ['Engineering']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+  linkedin: https://www.linkedin.com/in/sxlijin/
+---
+
+# Software Factories Still Need Human Operators: Building 6 BAML SDKs for 6 Programming Languages in 1 Week
+ 
+If you maintain software, you know that adding dependencies in new programming language to an existing code base is stupidly painful.
+
+To call a function in the new language, you can't just write `let value = callNewLangFunction(arg1, arg2)` in your existing codebase:
+
+- you have to add code to serialize your function arguments in your existing language;
+- you have to add code to deserialize them in the new language;
+- you have to add code to serialize return values in the new language; and
+- you have to add code to deserialize them in your existing language.
+
+If that wasn't enough, you also need to make decisions about the shape of the cross-language interface -- usually some kind of REST interface -- based on what you can and can't serialize. And then, for every new language you add, you need to repeat this entire process.
+
+That's a lot of work.
+
+It is, though, also a somewhat repeatable process: the implementation details change based on, say, how Python values with type `AnnotatedBox[string]` or `List[Union[int, Color]]` get translated to Go values/types, or how they get translated to Swift values/types - and the devil is in the details, it's true - but it's still a repeatable process.
+
+This sounds like an opportunity to build a software factory!
+
+And so we did.
+
+In related news, we're excited to announce that as of today, the BAML compiler now has a feature, `baml generate`, that allows you to write `callBamlFunction()` in 8 different programming languages:
+
+- C++
+- C#
+- Go
+- Java
+- Python
+- Rust
+- Typescript (Node, Cloudflare Workers, and browser)
+- Swift
+
+Six of these language bridges - C++, C#, Go, Java, Rust, and Swift - were each built by 1 engineer, on our team, over the course of a single week.
+
+# Building the factory
+
+So, how did we do it? What did we need to make this possible? Three things:
+
+1. rigorously designed technical architecture and abstractions
+2. high-quality reference documentation, with the correct distribution of information density
+3. skilled human operators, who know how to push their coding agents to their limits
+
+In other words, you need to spend a lot of time doing hard technical work to _build_ the factory, not just to operate the factory.
+
+(I don't see any evidence yet that _dark_ factories - black boxes that can take wildly underspecified descriptions and produce high-quality output - are viable yet.)
+
+# Technical Foundations: 1 engineer, 2 months
+
+Each BAML bridge, as I alluded to earlier, needs to have code to serialize and deserialize values, but that's not sufficient. The full list looks more like this:
+
+1. rules for translating values and types from one language to the other language.
+2. serialization formats for both inbound value passing (passing a value from the host language to BAML) and outbound value passing (passing a value from BAML to the host language)
+3. a universal, untyped interface, for invoking BAML from the host language, that treats everything as untyped blobs
+4. SDK generator logic, that generates a typed interface which the host language can use to invoke BAML functions in a type-safe manner.
+
+Once you have all of this, `baml generate` can then generate type-safe BAML function bindings in the host language of your choosing:
+
+- for example, given a BAML function `function ExtractResume(raw_resume: string) -> Resume`,
+- we can generate a Python function binding `def ExtractResume(raw_resume: string) -> Resume` , 
+- which Python users can then invoke as `resume_object = baml_sdk.ExtractResume("John Doe is a ...")`
+
+It took me 2 months to design and implement all of this for Python and Typescript (while we were making major changes in the compiler and type system at the same time!), all the while keeping in mind that we wanted to support more bridges in the future:
+
+- we defined rules for how every BAML value and type is translated into Python in [`ref-python-type-mappings.md`](https://github.com/BoundaryML/baml/blob/b74b83a3ab4bd0e681e03b352a3873b3ffcb1d8b/baml_language/sdks/agent-docs/bridge-ref/ref-python-type-mappings.md), and then implemented it in various places such as [`translate_ty`](https://github.com/BoundaryML/baml/blob/af29aa2429752b03348c4a56008ebb7afe9d1725/baml_language/sdks/python/rust/sdkgen_python_pydantic2/src/translate_ty.rs)
+- we defined the serialization formats as [`baml_inbound.proto`](https://github.com/BoundaryML/baml/blob/af29aa2429752b03348c4a56008ebb7afe9d1725/baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_inbound.proto) and [`baml_outbound.proto`](https://github.com/BoundaryML/baml/blob/6307b61214918700537dcea46113fd0ccdaf1c30/baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_outbound.proto)
+- the universal interface is a shared library with C bindings [`baml_cffi.h`](https://github.com/BoundaryML/baml/blob/af29aa2429752b03348c4a56008ebb7afe9d1725/baml_language/crates/bridge_cffi/include/baml_cffi.h#L1), and every bridge is built on top of this, either loading it statically or dynamically (Python, for example, statically bundles it and makes it accessible via `pip install baml-bridge` in [`bridge_python`](https://github.com/BoundaryML/baml/tree/af29aa2429752b03348c4a56008ebb7afe9d1725/baml_language/sdks/python/rust/bridge_python))
+- SDK generator logic rules are defined in [`ref-python-examples.md`](https://github.com/BoundaryML/baml/blob/bridge-docs/baml_language/sdks/agent-docs/bridge-ref/ref-python-examples.md) and then implemented in [`sdkgen_python_pydantic2`](https://github.com/BoundaryML/baml/blob/b74b83a3ab4bd0e681e03b352a3873b3ffcb1d8b/baml_language/sdks/python/rust/sdkgen_python_pydantic2/src/lib.rs)
+
+In addition to all of these shared designs and implementation patterns, we also set up test infrastructure to exercise end-to-end tests of each SDK:
+
+- a standardized pattern for running SDK tests for each bridge (`cargo nextest run -p sdk_test_python_pydantic2`, `cargo nextest run -p sdk_test_typescript_node`, `cargo nextest run -p sdk_test_<bridge>`)
+- each SDK test suite's setup builds the universal interface and the bridge-specific library that loads the C interface from `HEAD`
+- each SDK test suite then also runs type checking and each test case in that language
+- CI workflows that do all of the above, fanning out across Linux, MacOS, and Windows
+
+# Documentation: 1 engineer, 1 day
+
+In the process of building the Python and Typescript bridges, I had already distilled - largely by hand! - a lot of the rules for Python and TS into a number of documents: [`ref-python-examples.md`](https://github.com/BoundaryML/baml/blob/b74b83a3ab4bd0e681e03b352a3873b3ffcb1d8b/baml_language/sdks/agent-docs/bridge-ref/ref-python-examples.md), [`ref-python-inbound-encoding.md`](https://github.com/BoundaryML/baml/blob/b74b83a3ab4bd0e681e03b352a3873b3ffcb1d8b/baml_language/sdks/agent-docs/bridge-ref/ref-python-inbound-encoding.md), [`ref-python-outbound-encoding.md`](https://github.com/BoundaryML/baml/blob/b74b83a3ab4bd0e681e03b352a3873b3ffcb1d8b/baml_language/sdks/agent-docs/bridge-ref/ref-python-outbound-encoding.md), and [`ref-python-type-mappings.md`](https://github.com/BoundaryML/baml/blob/b74b83a3ab4bd0e681e03b352a3873b3ffcb1d8b/baml_language/sdks/agent-docs/bridge-ref/ref-python-type-mappings.md).
+
+To make it possible for every engineer on our team to add a new bridge, I also prepared another document, again, largely by hand: [`ref-python-state-of-completeness.md`](https://github.com/BoundaryML/baml/blob/b74b83a3ab4bd0e681e03b352a3873b3ffcb1d8b/baml_language/sdks/agent-docs/bridge-ref/ref-python-state-of-completeness.md).
+
+But if we're going all-in on software factories, why did I spend time preparing these documents?
+
+One of the very tricky parts of all of this is that for BAML bridges, it's very important that our value and type translation rules are _recursively_ correct, so that we can correctly generate SDKs for any BAML code that a user writes. The result of this, though, is that listing out test cases is insufficient to steer an agent to the correct implementation.
+
+For example, after we designed the implementation of callbacks as arguments, e.g. `function invoke_callback(cb: () -> string) -> string`, and had our agents get it working, we found that second-order functions as arguments didn't work: `function invoke_callback(cb2: (() -> string) -> string) -> string`. By telling the agent that this was working, the agent was able to make it work: but then second-order callbacks that took two arguments didn't work, and third-order callbacks also didn't work.
+
+You can see how this happens: no matter how many individual test cases you have, it's impossible to exhaustively enumerate the set of scenarios in which the implementation needs to work, because the set of scenarios is infinite. And there's no amount of adding n+1 fixes that will actually fix the core problem, which is that the recursive implementation is wrong.
+
+Agent-written documentation in general, we found, suffered from this type of problem: it would generate documentation to cover all the basic cases, it would generate documentation covering all sorts of permutations of the basic cases, but it wouldn't correctly identify the complex recursive cases where agents made mistakes.
+
+So if we were going to ask everyone on the team to spend a week building a bridge, we needed documents that had the most _useful_ distribution of information density:
+
+- enumerate the basic cases,
+- describe how the basic cases should be composed, but using the bare minimum needed to show off composition, and importantly:
+- explicitly describe recursively correct implementations needed to steer the agents correctly.
+
+No matter how big model contexts get, being able to convey an idea with 100 words instead of 5000 words will always be valuable.
+
+# Human Operators: 6 engineers, 6 days each
+
+Once we had all of this, we were able to hand everything off to the team and have everyone spend a week building a bridge. Even with the work broken down to the extent that we had, we knew that there were novel questions that needed solving (BAML, for example, has anonymous unions, so the BAML bridge for Go needs to specially handle that, because Go doesn't have anonymous unions).
+
+Because of this, we knew it couldn't be as simple as "implement a Go SDK for BAML" - as I said above, BAML needs *recursively* correct implementations, and models frequently get these wrong (not always! but in the more complex scenarios we do see this). That being said, referring back to all of the above, implementing a bridge for each new language is still a huge undertaking, and needs a human operator who knows how to push their coding agents to the limits.
+
+This also means, yes, occasionally producing bad work because it's too heavily skewed towards slop.
+
+It's a new paradigm for software engineering, where every successive model release moves the needle in terms of what we can push our agents to do, and therefore the only way we can live at the frontier is to constantly test where the frontier is. That means taking on challenges like, well, building 6 new BAML bridges in a week :)
+
+# Try it out!
+
+Give BAML a spin: point your coding agent at boundaryml.com/quickstart to both install BAML and set up the BAML skill for your coding harness (your agent can use baml describe generator to figure out how to embed BAML into your Python code, or your Typescript app for Cloudflare Workers, Go, etc), and let us know how it goes!

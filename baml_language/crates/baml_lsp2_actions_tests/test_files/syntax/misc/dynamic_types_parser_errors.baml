@@ -1,6 +1,6 @@
 function TypeBuilderFn(from_text: string) -> Resume {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
   type_builder {
     class Foo {
       foo string
@@ -102,167 +102,206 @@ test IncompleteSyntax {
 
 //----
 //- diagnostics
-// error: Expected Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute., found identifier
-//     ╭─[ misc_dynamic_types_parser_errors.baml:40:13 ]
-//     │
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:40:13]
 //  40 │     dynamic Bar {
-//     │             ─┬─
-//     │              ╰─── Expected Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute., found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     ╭─[ misc_dynamic_types_parser_errors.baml:40:13 ]
-//     │
+//     ·             ─┬─
+//     ·              ╰── expected `Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute.`, found `identifier`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:40:17]
 //  40 │     dynamic Bar {
-//     │             ─┬─
-//     │              ╰─── Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected class, enum, dynamic class, dynamic enum, or type alias, found '{'
-//     ╭─[ misc_dynamic_types_parser_errors.baml:40:17 ]
-//     │
-//  40 │     dynamic Bar {
-//     │                 ┬
-//     │                 ╰── Expected class, enum, dynamic class, dynamic enum, or type alias, found '{'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     ╭─[ misc_dynamic_types_parser_errors.baml:41:7 ]
-//     │
+//     ·                 ┬
+//     ·                 ╰── expected `class, enum, dynamic class, dynamic enum, or type alias`, found `'{'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:41:7]
 //  41 │       bar int
-//     │       ─┬─
-//     │        ╰─── Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     ╭─[ misc_dynamic_types_parser_errors.baml:41:11 ]
-//     │
+//     ·       ─┬─
+//     ·        ╰── expected `class, enum, dynamic class, dynamic enum, or type alias`, found `identifier`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:41:11]
 //  41 │       bar int
-//     │           ─┬─
-//     │            ╰─── Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected top-level declaration, found identifier
-//     ╭─[ misc_dynamic_types_parser_errors.baml:44:3 ]
-//     │
+//     ·           ─┬─
+//     ·            ╰── expected `class, enum, dynamic class, dynamic enum, or type alias`, found `identifier`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:44:3]
 //  44 │   args {
-//     │   ──┬─
-//     │     ╰─── Expected top-level declaration, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected top-level declaration, found '{'
-//     ╭─[ misc_dynamic_types_parser_errors.baml:44:8 ]
-//     │
+//     ·   ──┬─
+//     ·     ╰── expected `top-level declaration`, found `identifier`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:44:8]
 //  44 │   args {
-//     │        ┬
-//     │        ╰── Expected top-level declaration, found '{'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected top-level declaration, found identifier
-//     ╭─[ misc_dynamic_types_parser_errors.baml:45:5 ]
-//     │
+//     ·        ┬
+//     ·        ╰── expected `top-level declaration`, found `'{'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:45:5]
 //  45 │     from_text "Test"
-//     │     ────┬────
-//     │         ╰────── Expected top-level declaration, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected top-level declaration, found '"'
-//     ╭─[ misc_dynamic_types_parser_errors.baml:45:15 ]
-//     │
+//     ·     ────┬────
+//     ·         ╰── expected `top-level declaration`, found `identifier`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:45:15]
 //  45 │     from_text "Test"
-//     │               ┬
-//     │               ╰── Expected top-level declaration, found '"'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected top-level declaration, found identifier
-//     ╭─[ misc_dynamic_types_parser_errors.baml:45:16 ]
-//     │
+//     ·               ┬
+//     ·               ╰── expected `top-level declaration`, found `'"'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:45:16]
 //  45 │     from_text "Test"
-//     │                ──┬─
-//     │                  ╰─── Expected top-level declaration, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected top-level declaration, found '"'
-//     ╭─[ misc_dynamic_types_parser_errors.baml:45:20 ]
-//     │
+//     ·                ──┬─
+//     ·                  ╰── expected `top-level declaration`, found `identifier`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:45:20]
 //  45 │     from_text "Test"
-//     │                    ┬
-//     │                    ╰── Expected top-level declaration, found '"'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected top-level declaration, found '}'
-//     ╭─[ misc_dynamic_types_parser_errors.baml:46:3 ]
-//     │
+//     ·                    ┬
+//     ·                    ╰── expected `top-level declaration`, found `'"'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:46:3]
 //  46 │   }
-//     │   ┬
-//     │   ╰── Expected top-level declaration, found '}'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected top-level declaration, found '}'
-//     ╭─[ misc_dynamic_types_parser_errors.baml:47:1 ]
-//     │
+//     ·   ┬
+//     ·   ╰── expected `top-level declaration`, found `'}'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:47:1]
 //  47 │ }
-//     │ ┬
-//     │ ╰── Expected top-level declaration, found '}'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected type alias name, found dynamic
-//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
-//     │
+//     · ┬
+//     · ╰── expected `top-level declaration`, found `'}'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_dynamic_types_parser_errors.baml:54:5]
 //  54 │     dynamic class Bar {
-//     │     ───┬───
-//     │        ╰───── Expected type alias name, found dynamic
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected '=', found dynamic
-//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
-//     │
-//  54 │     dynamic class Bar {
-//     │     ───┬───
-//     │        ╰───── Expected '=', found dynamic
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected type, found dynamic
-//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
-//     │
-//  54 │     dynamic class Bar {
-//     │     ───┬───
-//     │        ╰───── Expected type, found dynamic
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: unresolved type: Resume
-//    ╭─[ misc_dynamic_types_parser_errors.baml:1:46 ]
-//    │
+//     ·     ───┬───
+//     ·        ╰── expected `type alias name`, found `dynamic`
+//     ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//    ╭─[misc_dynamic_types_parser_errors.baml:1:46]
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
-//    │                                              ───┬──
-//    │                                                 ╰──── unresolved type: Resume
-//    │
-//    │ Note: Error code: E0002
-// ───╯
-// error: unresolved type: Resume
-//     ╭─[ misc_dynamic_types_parser_errors.baml:1:53 ]
-//     │
+//    ·                                              ──────
+//    ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//     ╭─[misc_dynamic_types_parser_errors.baml:1:53]
 //   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
-//     ┆ ┆
-//  12 │ ├─▶ }
-//     │ │
-//     │ ╰─────── unresolved type: Resume
-//     │
-//     │     Note: Error code: E0002
-// ────╯
+//   2 │ │     client "openai/gpt-4o-mini"
+//   3 │ │     prompt `Hello`
+//   4 │ │     type_builder {
+//   5 │ │       class Foo {
+//   6 │ │         foo string
+//   7 │ │       }
+//   8 │ │       dynamic class Bar {
+//   9 │ │         bar int
+//  10 │ │       }
+//  11 │ │     }
+//  12 │ ╰─▶ }
+//     ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//     ╭─[misc_dynamic_types_parser_errors.baml:1:1]
+//   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
+//   2 │ │     client "openai/gpt-4o-mini"
+//   3 │ │     prompt `Hello`
+//   4 │ │     type_builder {
+//   5 │ │       class Foo {
+//   6 │ │         foo string
+//   7 │ │       }
+//   8 │ │       dynamic class Bar {
+//   9 │ │         bar int
+//  10 │ │       }
+//  11 │ │     }
+//  12 │ ╰─▶ }
+//     ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//     ╭─[misc_dynamic_types_parser_errors.baml:1:53]
+//   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
+//   2 │ │     client "openai/gpt-4o-mini"
+//   3 │ │     prompt `Hello`
+//   4 │ │     type_builder {
+//   5 │ │       class Foo {
+//   6 │ │         foo string
+//   7 │ │       }
+//   8 │ │       dynamic class Bar {
+//   9 │ │         bar int
+//  10 │ │       }
+//  11 │ │     }
+//  12 │ ╰─▶ }
+//     ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//     ╭─[misc_dynamic_types_parser_errors.baml:1:1]
+//   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
+//   2 │ │     client "openai/gpt-4o-mini"
+//   3 │ │     prompt `Hello`
+//   4 │ │     type_builder {
+//   5 │ │       class Foo {
+//   6 │ │         foo string
+//   7 │ │       }
+//   8 │ │       dynamic class Bar {
+//   9 │ │         bar int
+//  10 │ │       }
+//  11 │ │     }
+//  12 │ ╰─▶ }
+//     ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//    ╭─[misc_dynamic_types_parser_errors.baml:1:46]
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    ·                                              ──────
+//    ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//     ╭─[misc_dynamic_types_parser_errors.baml:1:1]
+//   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
+//   2 │ │     client "openai/gpt-4o-mini"
+//   3 │ │     prompt `Hello`
+//   4 │ │     type_builder {
+//   5 │ │       class Foo {
+//   6 │ │         foo string
+//   7 │ │       }
+//   8 │ │       dynamic class Bar {
+//   9 │ │         bar int
+//  10 │ │       }
+//  11 │ │     }
+//  12 │ ╰─▶ }
+//     ╰────

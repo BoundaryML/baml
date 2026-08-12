@@ -72,7 +72,7 @@ Boundary Cloud - Rust backend, Typescript / Nextjs frontend
 
 **Do we really need a new programming language?** Watch this [conference talk](https://www.youtube.com/watch?v=2tWnjEGzRss)
 
-**Do people actually use BAML?** Yes, but don't trust us, we could be lying. ask around on [boudnaryml.com/discord](https://www.boundaryml.com/discord)
+**Do people actually use BAML?** Yes, but don't trust us, we could be lying. ask around on [boundaryml.com/discord](https://www.boundaryml.com/discord)
 
 Generally speaking, no prior knowledge needed, but you should be able to take any problem, and solve it. If graph / tree problems are stressful, Boundary is probably not a good fit. If questions like the following seem fun, this is gonna be a heck of ride.
 

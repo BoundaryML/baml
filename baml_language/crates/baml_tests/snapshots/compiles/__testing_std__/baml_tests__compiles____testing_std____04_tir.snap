@@ -16,6 +16,9 @@ class testing.TestSetRegistration {
   collector: testing.TestSetBody
   runner: testing.TestSetRunner | null
 }
+class testing.InvalidTestName {
+  message: string
+}
 class testing.TestCollector {
   prefix: string
   tests: testing.TestRegistration[]
@@ -28,6 +31,14 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector thro
 }
 function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: testing.TestBody, runner: testing.TestRunner | null) -> void throws never {
   { : void
+    if (name.includes("::") : bool) : null
+      { : never
+        throw InvalidTestName { message: "test name may not..." + name } : testing.InvalidTestName
+      }
+    else
+      { : null
+        null : null
+      }
     let full_name = : string
       if (self.prefix == "" : bool) : string
         { : string
@@ -35,7 +46,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
         }
       else
         { : string
-          self.prefix + "/" + name : string
+          self.prefix + "::" + name : string
         }
     let count = 0 : 0 -> int
     let hash_prefix = full_name + "#" : string
@@ -64,6 +75,14 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
 }
 function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner | null) -> void throws never {
   { : void
+    if (name.includes("::") : bool) : null
+      { : never
+        throw InvalidTestName { message: "testset name may ..." + name } : testing.InvalidTestName
+      }
+    else
+      { : null
+        null : null
+      }
     let full_name = : string
       if (self.prefix == "" : bool) : string
         { : string
@@ -71,7 +90,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
         }
       else
         { : string
-          self.prefix + "/" + name : string
+          self.prefix + "::" + name : string
         }
     let count = 0 : 0 -> int
     let hash_prefix = full_name + "#" : string
@@ -96,6 +115,18 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
           full_name : string
         }
     let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner }) : int
+  }
+}
+function testing.TestCollector.register_test_at(self: testing.TestCollector, owner: string, name: string, body: testing.TestBody, runner: testing.TestRunner | null) -> void throws never {
+  { : void
+    let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets } : testing.TestCollector
+    scoped.register_test(name, body, runner) : void
+  }
+}
+function testing.TestCollector.register_test_set_at(self: testing.TestCollector, owner: string, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner | null) -> void throws never {
+  { : void
+    let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets } : testing.TestCollector
+    scoped.register_test_set(name, collector, runner) : void
   }
 }
 function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration throws never {
@@ -182,7 +213,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        if (name.starts_with(k + "/") : bool) : void
+        if (name.starts_with(k + "::") : bool) : void
           { : never
             return sub.run_test(name) : testing.TestReport
           }
@@ -202,7 +233,7 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        if (name.starts_with(k + "/") : bool) : void
+        if (name.starts_with(k + "::") : bool) : void
           { : never
             return sub.run_testset(name) : testing.TestSetReport
           }
@@ -220,23 +251,24 @@ function testing.TestRegistry.run_selected(self: testing.TestRegistry, names: st
     root.run_testset(root.testset_children_selected(self, names), null) : testing.TestSetReport
   }
 }
-function testing.TestRegistry.run_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> testing.FlatTestReport throws never {
+function testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> testing.FlatTestReport throws never {
   { : testing.FlatTestReport
+    let selected_names = root.select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude) : string[]
     let report = : testing.TestSetReport
-      if (include.length() == 0 && exclude.length() == 0 : bool) : testing.TestSetReport
+      if (profile_include.length() == 0 && profile_exclude.length() == 0 && cli_include.length() == 0 && cli_exclude.length() == 0 : bool) : testing.TestSetReport
         { : testing.TestSetReport
           self.run_all() : testing.TestSetReport
         }
       else
         { : testing.TestSetReport
-          self.run_selected(root.select_names(self, include, exclude)) : testing.TestSetReport
+          self.run_selected(selected_names) : testing.TestSetReport
         }
-    root.flatten_with_tolerated(report) : testing.FlatTestReport
+    root.flatten_with_tolerated(report, selected_names) : testing.FlatTestReport
   }
 }
-function testing.TestRegistry.list_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> string[] throws never {
+function testing.TestRegistry.list_filtered(self: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] throws never {
   { : string[]
-    root.select_names(self, include, exclude) : string[]
+    root.select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude) : string[]
   }
 }
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws never {
@@ -252,7 +284,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        if (name.starts_with(k + "/") : bool) : void
+        if (name.starts_with(k + "::") : bool) : void
           { : never
             return sub.expand_set(name) : testing.SerializedTestDef[]
           }
@@ -267,10 +299,16 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
         existing : testing.TestRegistry
       null =>
         { : testing.TestRegistry
-          let start = baml.sys.now_ms() : int
+          let start = baml.time.Instant.now() : baml.time.Instant
           let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] } : testing.TestCollector
           ts.collector(sub_collector) : void
-          let elapsed = baml.sys.now_ms() - start : int
+          let elapsed = : int
+            catch (start.elapsed().to_milliseconds().to_int() : int) : int
+              catch (_)
+                baml.errors.InvalidArgument { message: message } =>
+                  { : never
+                    baml.sys.panic("testing: expansio..." + message) : never
+                  }
           let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
           self.expansions.set(ts.name, sub_registry) : testing.TestRegistry | null
           sub_registry : testing.TestRegistry
@@ -358,7 +396,7 @@ function testing._name_selected(name: string, names: string[]) -> bool throws ne
 }
 function testing._has_selected_descendant(prefix: string, names: string[]) -> bool throws never {
   { : false
-    let descendant_prefix = prefix + "/" : string
+    let descendant_prefix = prefix + "::" : string
     for selected in names
       { : null
         if (selected.starts_with(descendant_prefix) : bool) : null
@@ -380,10 +418,12 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     let has_error = false : false -> bool
     let failed_names: string[] = [] : string[]
     let results: ChildReport[] = [] : testing.ChildReport[]
+    let result_names: string[] = [] : string[]
     for named_result in named_results
       { : void
         let result = named_result.report : testing.ChildReport
         results.push(result) : int
+        result_names.push(named_result.name) : int
         let outcome = : testing.Outcome
           match (result : testing.ChildReport) : testing.Outcome
             report: TestReport =>
@@ -402,14 +442,16 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
                 report: TestReport =>
                   [named_result.name] : string[]
                 report: TestSetReport =>
-                  if (report.failed_names.length() > 0 : bool) : string[]
-                    { : string[]
-                      report.failed_names : string[]
-                    }
-                  else
-                    { : string[]
-                      [named_result.name] : string[]
-                    }
+                  { : string[]
+                    if (report.failed_names.length() > 0 : bool) : string[]
+                      { : string[]
+                        report.failed_names : string[]
+                      }
+                    else
+                      { : string[]
+                        [named_result.name] : string[]
+                      }
+                  }
             for name in child_failed_names
               { : int
                 failed_names.push(name) : int
@@ -424,7 +466,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
               }
           }
       }
-    let outcome: Outcome = : "error" | "pass" | "fail" -> "pass" | "fail" | "error"
+    let outcome: Outcome = : "error" | "pass" | "fail" -> "error" | "fail" | "pass"
       if (has_error : bool) : "error" | "pass" | "fail"
         { : "error"
           "error" : "error"
@@ -438,21 +480,17 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
           { : "fail"
             "fail" : "fail"
           }
-    TestSetReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), failed_names: failed_names, results: results } : testing.TestSetReport
+    TestSetReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), failed_names: failed_names, results: results, result_names: result_names } : testing.TestSetReport
   }
 }
 function testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    let futures: baml.future.Future<NamedChildReport, null>[] = [] : Future<testing.NamedChildReport, null>[]
+    let futures: baml.future.Future<NamedChildReport, never>[] = [] : Future<testing.NamedChildReport, never>[]
     for child in children
       { : int
         futures.push(spawn { () -> { ... } }) : int
       }
-    let named_results = : testing.NamedChildReport[]
-      catch (await baml.future.all_complete(futures) : testing.NamedChildReport[]) : testing.NamedChildReport[]
-        catch_all (e)
-          _ =>
-            baml.sys.panic("unexpected test c...") : never
+    let named_results = await baml.future.all_complete(futures) : testing.NamedChildReport[]
     root.aggregate_reports(named_results) : testing.TestSetReport
   }
 }
@@ -463,17 +501,19 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | n
     let base_run: TestReportThunk = : () -> testing.TestReport throws never
       () -> TestReport { ... } : () -> testing.TestReport throws never
         {
-          let start = baml.sys.now_ms()
+          let start = baml.time.Instant.now()
           let result = ...
             { 1 stmts + tail } catch_all (e) { p: baml.panics.UserPanic => { 0 stmts + tail }, p: baml.panics.AssertionFailed => { 0 stmts + tail }, baml.panics.Panic => { 0 stmts + tail }, _ => { 0 stmts + tail } }
-          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start, message: result.message }] }
+          let duration = ...
+            start.elapsed().to_milliseconds().to_int() catch (_) { baml.errors.InvalidArgument { message: message } => { 0 stmts + tail } }
+          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: duration, message: result.message }] }
         }
     match (runner : testing.TestRunner | null) : testing.TestReport
       null =>
         base_run() : testing.TestReport
       r: TestRunner =>
         { : testing.TestReport
-          let wrapped: TestReportThunk = r(base_run) : testing.TestReportThunk -> () -> testing.TestReport throws never
+          let wrapped: TestReportThunk = r(base_run) : () -> testing.TestReport throws never
           wrapped() : testing.TestReport
         }
   }
@@ -491,30 +531,7 @@ function testing.run_testset(children: testing.TestSetChild[], runner: testing.T
 }
 function testing.expansion_error_report(name: string) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name + "/(testset error)"], results: [] } : testing.TestSetReport
-  }
-}
-class testing.FilterPat {
-  func_pat: string
-  test_pat: string
-}
-class testing.NameSplit {
-  head: string
-  tail: string
-}
-function testing.split_top(path: string) -> testing.NameSplit throws never {
-  { : testing.NameSplit
-    if let <pat> = path.index_of("/") { 0 stmts + tail } else { 0 stmts + tail } : testing.NameSplit
-  }
-}
-function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] throws never {
-  { : testing.FilterPat[]
-    let out: FilterPat[] = [] : testing.FilterPat[]
-    for s in raw
-      { : int
-        if let <pat> = s.index_of("::") { 0 stmts + tail } else { 1 stmts + tail } : int
-      }
-    out : testing.FilterPat[]
+    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name + "::(testset error)"], results: [], result_names: [] } : testing.TestSetReport
   }
 }
 function testing.glob_match(subject: string, pattern: string) -> bool throws never {
@@ -523,7 +540,7 @@ function testing.glob_match(subject: string, pattern: string) -> bool throws nev
     let n = parts.length() : int
     if (n == 1 : bool) : void
       { : never
-        return subject == pattern : bool
+        return subject.index_of(pattern) != null : bool
       }
     let first = parts[0] : string
     let last = parts[n - 1] : string
@@ -556,23 +573,11 @@ function testing.glob_match(subject: string, pattern: string) -> bool throws nev
     true : true
   }
 }
-function testing.filter_match(expr: string, subject: string) -> bool throws never {
-  { : true | bool
-    if (expr == "" : bool) : true | bool
-      { : true
-        true : true
-      }
-    else
-      { : bool
-        root.glob_match(subject, expr) : bool
-      }
-  }
-}
-function testing.any_pattern_matches(pats: testing.FilterPat[], function_name: string, test_name: string) -> bool throws never {
+function testing.any_pattern_matches(pats: string[], canonical_id: string) -> bool throws never {
   { : false
     for p in pats
       { : void
-        if (root.filter_match(p.func_pat, function_name) && root.filter_match(p.test_pat, test_name) : bool) : void
+        if (root.glob_match(canonical_id, p) : bool) : void
           { : never
             return true : true
           }
@@ -580,10 +585,9 @@ function testing.any_pattern_matches(pats: testing.FilterPat[], function_name: s
     false : false
   }
 }
-function testing.leaf_selected(name: string, include: testing.FilterPat[], exclude: testing.FilterPat[]) -> bool throws never {
+function testing.leaf_selected(name: string, include: string[], exclude: string[]) -> bool throws never {
   { : bool
-    let split = root.split_top(name) : testing.NameSplit
-    if (root.any_pattern_matches(exclude, split.head, split.tail) : bool) : void
+    if (root.any_pattern_matches(exclude, name) : bool) : void
       { : never
         return false : false
       }
@@ -591,22 +595,91 @@ function testing.leaf_selected(name: string, include: testing.FilterPat[], exclu
       { : never
         return true : true
       }
-    root.any_pattern_matches(include, split.head, split.tail) : bool
+    root.any_pattern_matches(include, name) : bool
+  }
+}
+function testing.leaf_selected_layered(name: string, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> bool throws never {
+  { : bool
+    root.leaf_selected(name, profile_include, profile_exclude) && root.leaf_selected(name, cli_include, cli_exclude) : bool
+  }
+}
+function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool throws never {
+  { : false
+    let descendant_prefix = prefix + "::" : string
+    for pattern in excludes
+      { : void
+        if (pattern.index_of("*") == null && descendant_prefix.index_of(pattern) != null : bool) : void
+          { : never
+            return true : true
+          }
+        if (pattern.ends_with("*") && root.glob_match(descendant_prefix, pattern) : bool) : void
+          { : never
+            return true : true
+          }
+      }
+    false : false
+  }
+}
+function testing.pattern_may_match_descendant(pattern: string, prefix: string) -> bool throws never {
+  { : true | bool
+    let descendant_prefix = prefix + "::" : string
+    match (pattern.index_of("*") : int | null) : true | bool
+      null =>
+        true : true
+      star: int =>
+        { : bool
+          let literal = pattern.substring(0, star) : string
+          descendant_prefix.starts_with(literal) || literal.starts_with(descendant_prefix) : bool
+        }
+  }
+}
+function testing.subtree_may_be_selected(prefix: string, include: string[], exclude: string[]) -> bool throws never {
+  { : false
+    if (root.subtree_excluded(prefix, exclude) : bool) : void
+      { : never
+        return false : false
+      }
+    if (include.length() == 0 : bool) : void
+      { : never
+        return true : true
+      }
+    for pattern in include
+      { : void
+        if (root.pattern_may_match_descendant(pattern, prefix) : bool) : void
+          { : never
+            return true : true
+          }
+      }
+    false : false
+  }
+}
+function testing.select_names_layered(registry: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] throws never {
+  { : string[]
+    let out: string[] = [] : string[]
+    for t in registry.collector.tests
+      { : void
+        if (root.leaf_selected_layered(t.name, profile_include, profile_exclude, cli_include, cli_exclude) : bool) : void
+          { : int
+            out.push(t.name) : int
+          }
+      }
+    for ts in registry.collector.testsets
+      { : void
+        if (root.subtree_may_be_selected(ts.name, profile_include, profile_exclude) && root.subtree_may_be_selected(ts.name, cli_include, cli_exclude) : bool) : void
+          { : void
+            let names = root.collect_subtree_names_layered(registry, ts, profile_include, profile_exclude, cli_include, cli_exclude) : string[]
+            for name in names
+              { : int
+                out.push(name) : int
+              }
+          }
+      }
+    out : string[]
   }
 }
 function testing.select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[] throws never {
   { : string[]
-    let inc = root.parse_filter_patterns(include) : testing.FilterPat[]
-    let exc = root.parse_filter_patterns(exclude) : testing.FilterPat[]
-    let out: string[] = [] : string[]
-    for name in root.collect_leaf_names(registry)
-      { : void
-        if (root.leaf_selected(name, inc, exc) : bool) : void
-          { : void
-            out.push(name) : int
-          }
-      }
-    out : string[]
+    root.select_names_layered(registry, [], [], include, exclude) : string[]
   }
 }
 function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] throws never {
@@ -630,10 +703,44 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
   { : string[]
     catch (root.collect_leaf_names(registry.expand_testset_registry(ts)) : string[]) : string[]
       catch_all (e)
+        err: InvalidTestName =>
+          throw err : never
         baml.panics.Panic =>
-          [ts.name + "/(failed to expand)"] : string[]
+          [ts.name + "::(failed to expand)"] : string[]
         _ =>
-          [ts.name + "/(failed to expand)"] : string[]
+          [ts.name + "::(failed to expand)"] : string[]
+  }
+}
+function testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: testing.TestSetRegistration, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] throws never {
+  { : string[]
+    catch (root.select_names_layered(registry.expand_testset_registry(ts), profile_include, profile_exclude, cli_include, cli_exclude) : string[]) : string[]
+      catch_all (e)
+        err: InvalidTestName =>
+          throw err : never
+        baml.panics.Panic =>
+          { : string[]
+            let sentinel = ts.name + "::(failed to expand)" : string
+            if (root.leaf_selected_layered(sentinel, profile_include, profile_exclude, cli_include, cli_exclude) : bool) : string[]
+              { : string[]
+                [sentinel] : string[]
+              }
+            else
+              { : string[]
+                [] : string[]
+              }
+          }
+        _ =>
+          { : string[]
+            let sentinel = ts.name + "::(failed to expand)" : string
+            if (root.leaf_selected_layered(sentinel, profile_include, profile_exclude, cli_include, cli_exclude) : bool) : string[]
+              { : string[]
+                [sentinel] : string[]
+              }
+            else
+              { : string[]
+                [] : string[]
+              }
+          }
   }
 }
 class testing.LeafCounts {
@@ -641,6 +748,11 @@ class testing.LeafCounts {
   failed: int
   tolerated: int
   total: int
+}
+class testing.LeafIdentities {
+  passed: string[]
+  failed: string[]
+  tolerated: string[]
 }
 function testing.count_leaves(results: testing.ChildReport[], tolerated_by_parent: bool) -> testing.LeafCounts throws never {
   { : testing.LeafCounts
@@ -693,7 +805,7 @@ function testing.count_leaves(results: testing.ChildReport[], tolerated_by_paren
     LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total } : testing.LeafCounts
   }
 }
-function testing.flatten_with_tolerated(report: testing.TestSetReport) -> testing.FlatTestReport throws never {
+function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names: string[]) -> testing.FlatTestReport throws never {
   { : testing.FlatTestReport
     let top_tolerated = report.outcome == "pass" : bool
     let counts = : testing.LeafCounts
@@ -712,7 +824,183 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport) -> testin
           }
     let messages: string[] = [] : string[]
     root.collect_leaf_messages(report.results, messages) : void
-    FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, failed_names: report.failed_names, messages: messages } : testing.FlatTestReport
+    let all_failed_names: string[] = [] : string[]
+    root.collect_all_failed_names(report, all_failed_names) : void
+    let executed = LeafIdentities { passed: [], failed: [], tolerated: [] } : testing.LeafIdentities
+    root.collect_leaf_identities(report, top_tolerated, selected_names, executed) : void
+    let identities = : testing.LeafIdentities
+      if (executed.passed.length() == counts.passed && executed.failed.length() == counts.failed && executed.tolerated.length() == counts.tolerated : bool) : testing.LeafIdentities
+        { : testing.LeafIdentities
+          executed : testing.LeafIdentities
+        }
+      else
+        if (selected_names.length() == counts.total : bool) : testing.LeafIdentities
+          { : testing.LeafIdentities
+            root.classify_selected_names(selected_names, report.failed_names, all_failed_names) : testing.LeafIdentities
+          }
+        else
+          { : testing.LeafIdentities
+            LeafIdentities { passed: [], failed: [], tolerated: [] } : testing.LeafIdentities
+          }
+    FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, passed_names: identities.passed, failed_names: identities.failed, tolerated_names: identities.tolerated, messages: messages } : testing.FlatTestReport
+  }
+}
+function testing.classify_selected_names(selected_names: string[], hard_failed_names: string[], all_failed_names: string[]) -> testing.LeafIdentities throws never {
+  { : testing.LeafIdentities
+    let out = LeafIdentities { passed: [], failed: [], tolerated: [] } : testing.LeafIdentities
+    for name in selected_names
+      { : int
+        if (root.failure_matches_selected(name, all_failed_names) : bool) : int
+          { : int
+            if (root.failure_matches_selected(name, hard_failed_names) : bool) : int
+              { : int
+                out.failed.push(name) : int
+              }
+            else
+              { : int
+                out.tolerated.push(name) : int
+              }
+          }
+        else
+          { : int
+            out.passed.push(name) : int
+          }
+      }
+    out : testing.LeafIdentities
+  }
+}
+function testing.name_in(name: string, names: string[]) -> bool throws never {
+  { : false
+    for candidate in names
+      { : void
+        if (candidate == name : bool) : void
+          { : never
+            return true : true
+          }
+      }
+    false : false
+  }
+}
+function testing.failure_matches_selected(selected: string, failed_names: string[]) -> bool throws never {
+  { : false
+    if (root.name_in(selected, failed_names) : bool) : void
+      { : never
+        return true : true
+      }
+    let sentinel_suffix = "::(failed to expand)" : "::(failed to expand)" -> string
+    if (selected.ends_with(sentinel_suffix) : bool) : void
+      { : void
+        let prefix = selected.substring(0, selected.length() - sentinel_suffix.length()) + "::" : string
+        for failed in failed_names
+          { : void
+            if (failed.starts_with(prefix) : bool) : void
+              { : never
+                return true : true
+              }
+          }
+      }
+    false : false
+  }
+}
+function testing.collect_leaf_identities(report: testing.TestSetReport, tolerated_by_parent: bool, selected_names: string[], out: testing.LeafIdentities) -> void throws never {
+  { : void
+    match (report.result_names : string[] | null) : void
+      null =>
+        null : null
+      names: string[] =>
+        { : void
+          let limit = : int
+            if (names.length() < report.results.length() : bool) : int
+              { : int
+                names.length() : int
+              }
+            else
+              { : int
+                report.results.length() : int
+              }
+          { : void
+            let i = 0 : 0 -> int
+            while i < limit
+              { : void
+                let name = names[i] : string
+                match (report.results[i] : testing.ChildReport) : void
+                  leaf: TestReport =>
+                    { : int
+                      if (leaf.outcome == "pass" : bool) : int
+                        { : int
+                          out.passed.push(name) : int
+                        }
+                      else
+                        if (tolerated_by_parent : bool) : int
+                          { : int
+                            out.tolerated.push(name) : int
+                          }
+                        else
+                          { : int
+                            out.failed.push(name) : int
+                          }
+                    }
+                  nested: TestSetReport =>
+                    { : void
+                      let nested_tolerated = tolerated_by_parent || nested.outcome == "pass" : bool
+                      if (nested.results.length() > 0 : bool) : void
+                        { : void
+                          root.collect_leaf_identities(nested, nested_tolerated, selected_names, out) : void
+                        }
+                      else
+                        if (nested.failed > 0 : bool) : int | null
+                          { : int
+                            let sentinel = name + "::(failed to expand)" : string
+                            let identity = : string
+                              if (root.name_in(sentinel, selected_names) : bool) : string
+                                { : string
+                                  sentinel : string
+                                }
+                              else
+                                if (nested.failed_names.length() > 0 : bool) : string
+                                  { : string
+                                    nested.failed_names[0] : string
+                                  }
+                                else
+                                  { : string
+                                    name + "::(testset error)" : string
+                                  }
+                            if (nested_tolerated : bool) : int
+                              { : int
+                                out.tolerated.push(identity) : int
+                              }
+                            else
+                              { : int
+                                out.failed.push(identity) : int
+                              }
+                          }
+                        else
+                          { : null
+                            null : null
+                          }
+                    }
+              }
+          }
+        }
+  }
+}
+function testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]) -> void throws never {
+  { : void
+    for name in report.failed_names
+      { : void
+        if (Not root.name_in(name, out) : bool) : void
+          { : int
+            out.push(name) : int
+          }
+      }
+    for child in report.results
+      { : void
+        match (child : testing.ChildReport) : void
+          TestReport =>
+            null : null
+          nested: TestSetReport =>
+            root.collect_all_failed_names(nested, out) : void
+      }
   }
 }
 function testing.collect_leaf_messages(results: testing.ChildReport[], out: string[]) -> void throws never {
@@ -747,6 +1035,9 @@ class testing.TestSetRegistration$stream {
   collector: testing.TestSetBody$stream | null
   runner: testing.TestSetRunner$stream | null
 }
+class testing.InvalidTestName$stream {
+  message: string | null
+}
 class testing.TestCollector$stream {
   prefix: string | null
   tests: testing.TestRegistration$stream[]
@@ -767,19 +1058,16 @@ class testing.TestRegistry$stream {
   expansions: map<string, testing.TestRegistry$stream>
   loading_time_ms: int | null
 }
-class testing.FilterPat$stream {
-  func_pat: string | null
-  test_pat: string | null
-}
-class testing.NameSplit$stream {
-  head: string | null
-  tail: string | null
-}
 class testing.LeafCounts$stream {
   passed: int | null
   failed: int | null
   tolerated: int | null
   total: int | null
+}
+class testing.LeafIdentities$stream {
+  passed: string[]
+  failed: string[]
+  tolerated: string[]
 }
 
 --- <builtin>/testing/runners.baml ---
@@ -923,7 +1211,7 @@ function testing.PassRate(threshold: float) -> testing.TestSetRunner throws neve
                 {
                   "fail"
                 }
-          TestSetReport { outcome: outcome, passed: report.passed, failed: report.failed, total: report.total, failed_names: report.failed_names, results: report.results }
+          TestSetReport { outcome: outcome, passed: report.passed, failed: report.failed, total: report.total, failed_names: report.failed_names, results: report.results, result_names: report.result_names }
         }
   }
 }
@@ -1003,6 +1291,7 @@ class testing.TestSetReport {
   total: int
   failed_names: string[]
   results: testing.ChildReport[]
+  result_names: string[] | null
 }
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
 class testing.NamedChildReport {
@@ -1026,7 +1315,9 @@ class testing.FlatTestReport {
   failed: int
   tolerated: int
   total: int
+  passed_names: string[]
   failed_names: string[]
+  tolerated_names: string[]
   messages: string[]
 }
 type testing.Outcome$stream = "pass" | "fail" | "error"
@@ -1046,6 +1337,7 @@ class testing.TestSetReport$stream {
   total: int | null
   failed_names: string[]
   results: testing.ChildReport$stream[]
+  result_names: string[] | null
 }
 type testing.ChildReport$stream = testing.TestReport$stream | testing.TestSetReport$stream
 class testing.NamedChildReport$stream {
@@ -1069,6 +1361,8 @@ class testing.FlatTestReport$stream {
   failed: int | null
   tolerated: int | null
   total: int | null
+  passed_names: string[]
   failed_names: string[]
+  tolerated_names: string[]
   messages: string[]
 }

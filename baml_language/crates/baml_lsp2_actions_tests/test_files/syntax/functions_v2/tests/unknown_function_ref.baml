@@ -2,7 +2,7 @@
 
 function RealFunction(input: string) -> string {
   client "openai/gpt-4"
-  prompt #"Test function"#
+  prompt `Test function`
 }
 
 test TestWithUnknown {

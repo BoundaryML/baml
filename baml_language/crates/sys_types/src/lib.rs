@@ -279,14 +279,6 @@ pub struct OpErrorBody {
 }
 
 impl OpErrorBody {
-    /// Construct an `OpErrorBody` carrying a host-thrown value. The engine
-    /// reads the value through `materialize_host_throw`.
-    pub fn host_thrown_value(value: BexExternalValue) -> Self {
-        Self {
-            payload: OpErrorPayload::HostThrown(Box::new(value)),
-        }
-    }
-
     /// Attach the originating [`SysOp`], yielding a full [`OpError`] ready
     /// for [`SysOpResult`].
     pub fn into_op_error(self, fn_name: SysOp) -> OpError {
@@ -416,21 +408,6 @@ pub enum SysOpResult {
 /// into a full [`SysOpResult`] via [`into_result`](SysOpOutput::into_result),
 /// which converts `T` into [`BexExternalValue`] using [`AsBexExternalValue`]
 /// and attaches the `SysOp`.
-///
-/// # Example
-///
-/// ```ignore
-/// impl SysOpFs for MyProvider {
-///     fn baml_fs_open(path: String) -> SysOpOutput<FsFile> {
-///         SysOpOutput::async_op(async move {
-///             let file = File::open(&path).await
-///                 .map_err(|e| VmBamlError::Io { message: format!("open failed: {e}") })?;
-///             let handle = REGISTRY.register_file(file, path);
-///             Ok(FsFile { _handle: handle })
-///         })
-///     }
-/// }
-/// ```
 #[allow(clippy::large_enum_variant)]
 pub enum SysOpOutput<T = BexExternalValue> {
     /// Operation completed synchronously.
@@ -633,10 +610,6 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Used by `resolve_client` to return `FunctionRef` values.
     pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
 
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    /// Prepended to templates by `get_jinja_template`.
-    pub template_strings_macros: Arc<String>,
-
     /// Per-call cancellation token.
     ///
     /// Defaults to a never-cancelled token for the shared engine context.
@@ -669,7 +642,6 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
         Self {
             llm_functions: self.llm_functions.clone(),
             function_global_indices: self.function_global_indices.clone(),
-            template_strings_macros: self.template_strings_macros.clone(),
             cancel: self.cancel.clone(),
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),
@@ -691,10 +663,6 @@ pub struct EngineSysOpContext {
     /// Maps function names to their global indices in the VM.
     /// Used by `resolve_client` to return `FunctionRef` values.
     pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
-
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    /// Prepended to templates by `get_jinja_template`.
-    pub template_strings_macros: Arc<String>,
 
     /// Pre-extracted class definitions for output format rendering.
     /// Keyed by class name.
@@ -718,8 +686,6 @@ pub struct EngineSysOpContext {
 /// This is built during engine construction by reading function objects from the heap,
 /// so that LLM `sys_ops` don't need to access raw heap pointers.
 pub struct LlmFunctionInfo {
-    /// The Jinja prompt template for this function.
-    pub prompt_template: String,
     /// The client name (e.g., `"MyClient"`) declared in the function.
     pub client_name: String,
     /// The expected return type, used for response parsing.
@@ -793,7 +759,6 @@ impl SysOpContext {
         Self {
             llm_functions: Arc::new(std::collections::HashMap::new()),
             function_global_indices: Arc::new(std::collections::HashMap::new()),
-            template_strings_macros: Arc::new(String::new()),
             cancel: CancellationToken::new(),
             class_definitions: Arc::new(
                 indexmap::IndexMap::<baml_type::TypeName, ClassDefinition>::new(),
@@ -821,7 +786,6 @@ impl EngineSysOpContext {
         SysOpContext {
             llm_functions: self.llm_functions.clone(),
             function_global_indices: self.function_global_indices.clone(),
-            template_strings_macros: self.template_strings_macros.clone(),
             cancel,
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),

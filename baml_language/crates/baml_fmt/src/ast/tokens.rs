@@ -10,7 +10,6 @@ pub trait Token {
     fn span(&self) -> TextRange;
 }
 
-pub trait KeywordToken: Token {}
 macro_rules! define_keyword_tokens {
     ($($keyword:literal => SyntaxKind::$syntax_kind:ident => $name:ident;)*) => {
         $(
@@ -42,7 +41,6 @@ macro_rules! define_keyword_tokens {
                     Ok(Self::new_from_span(token.text_range()))
                 }
             }
-            impl KeywordToken for $name {}
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     f.write_str($keyword)
@@ -82,12 +80,15 @@ define_keyword_tokens! {
     "match" => SyntaxKind::KW_MATCH => Match;
     "catch" => SyntaxKind::KW_CATCH => Catch;
     "catch_all" => SyntaxKind::KW_CATCH_ALL => CatchAll;
-    "watch" => SyntaxKind::KW_WATCH => Watch;
+    "catch_all_panics" => SyntaxKind::KW_CATCH_ALL_PANICS => CatchAllPanics;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "is" => SyntaxKind::KW_IS => Is;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
+    "spawn" => SyntaxKind::KW_SPAWN => Spawn;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
+    "type" => SyntaxKind::KW_TYPE => TypeKw;
+    "as" => SyntaxKind::KW_AS => As;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -128,7 +129,6 @@ impl std::fmt::Display for BindingKeyword {
     }
 }
 
-pub trait PunctuationToken: Token {}
 macro_rules! define_punctuation_tokens {
     ($($punct:literal => SyntaxKind::$syntax_kind:ident => $name:ident;)*) => {
         $(
@@ -160,7 +160,6 @@ macro_rules! define_punctuation_tokens {
                     Ok(Self::new_from_span(token.text_range()))
                 }
             }
-            impl PunctuationToken for $name {}
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     f.write_str($punct)
@@ -520,6 +519,40 @@ impl KnownKind for IntegerLiteral {
     }
 }
 
+/// A boolean / null literal — `true` (`KW_TRUE`), `false` (`KW_FALSE`), or
+/// `null` (`KW_NULL`). One token type spanning the three re-lexed kinds.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct KeywordLiteral {
+    pub token_span: TextRange,
+}
+impl KeywordLiteral {
+    /// Does not verify that the span is actually a boolean/null literal token.
+    #[must_use]
+    pub fn new_from_span(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+}
+impl FromCST for KeywordLiteral {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        match token.kind() {
+            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
+                Ok(Self::new_from_span(token.text_range()))
+            }
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KW_TRUE, KW_FALSE, or KW_NULL".into(),
+                found,
+                at: token.text_range(),
+            }),
+        }
+    }
+}
+impl Token for KeywordLiteral {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FloatLiteral {
     pub token_span: TextRange,
@@ -560,10 +593,41 @@ impl Word {
         Self { token_span }
     }
 }
+
+/// True for token kinds the parser accepts as identifiers in name positions.
+///
+/// The lexer emits dedicated keyword kinds for these words, but the parser
+/// keeps them valid as field, parameter, method, and member-access names
+/// (e.g. a class field or parameter named `client`, or `x.implements(y)` on
+/// the reflection `type` value). The CST therefore contains the keyword kind
+/// where the strong AST expects a name, and [`Word::from_cst`] must accept it.
+/// Mirrors `at_member_name` and `parse_parameter` in `baml_compiler_parser`.
+#[must_use]
+pub fn is_word_like(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_IMPLEMENTS
+            | SyntaxKind::KW_IMPLEMENT
+            | SyntaxKind::KW_EXTENDS
+            | SyntaxKind::KW_REQUIRES
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
+    )
+}
+
 impl FromCST for Word {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::WORD)?;
+        if !is_word_like(token.kind()) {
+            return Err(StrongAstError::UnexpectedKind {
+                expected: SyntaxKind::WORD,
+                found: token.kind(),
+                at: token.text_range(),
+            });
+        }
         Ok(Self::new_from_span(token.text_range()))
     }
 }

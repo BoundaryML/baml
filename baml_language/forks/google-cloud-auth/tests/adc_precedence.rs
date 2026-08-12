@@ -111,6 +111,8 @@ async fn metadata_is_last_resort() {
 #[tokio::test]
 async fn metadata_failure_surfaces_no_credentials() {
     // No disk creds and a metadata server that refuses -> NoCredentials.
+    // Uses a distinct scope: metadata tokens are cached process-wide keyed by
+    // scope, and `metadata_is_last_resort` mints one under the default scope.
     let io = MockIo::new()
         .env("HOME", "/home/dev")
         .http(|_m, _u, _h, _b| {
@@ -119,7 +121,8 @@ async fn metadata_failure_surfaces_no_credentials() {
                 body: String::new(),
             })
         });
-    let err = token_from_adc(&io, CLOUD_PLATFORM_SCOPE).await.unwrap_err();
+    let scope = "https://www.googleapis.com/auth/userinfo.email";
+    let err = token_from_adc(&io, scope).await.unwrap_err();
     assert!(matches!(err, AuthError::NoCredentials(_)), "got {err:?}");
     let _ = gac(); // silence unused helper on some toolchains
 }

@@ -21,6 +21,7 @@ export type RunStoreDisplayRun = {
   testName?: string;
   argsJson: string;
   fetchLogs: FetchLogEntry[];
+  outputChunks: RunOutputChunk[];
   inputRequests: Array<{ id: string; prompt: string | null }>;
   rootInput: BamlJsValue | null;
   result: BamlJsValue | null;
@@ -72,6 +73,24 @@ type LogPayloadEvent = PayloadEvent & {
   kind: Extract<PayloadEvent['kind'], { type: 'log' }>;
 };
 
+/**
+ * One `baml.io` stream write, exactly as the VM produced it.
+ *
+ * Deliberately not split into lines or otherwise reshaped. The text may carry
+ * ANSI escape sequences, and a single sequence can straddle two chunks, so the
+ * only safe consumer is a terminal emulator fed the chunks in order.
+ */
+export type RunOutputChunk = {
+  id: string;
+  stream: 'stdout' | 'stderr';
+  text: string;
+  timestampMs: number;
+};
+
+type OutputPayloadEvent = PayloadEvent & {
+  kind: Extract<PayloadEvent['kind'], { type: 'output' }>;
+};
+
 export type RunTraceCallValueRole = 'callInput' | 'callOutput' | 'callError';
 
 export type RunTraceCallValue = {
@@ -99,6 +118,10 @@ type RootInputPayloadEvent = PayloadEvent & {
 };
 
 export type GraphNodeValuePreview = RunTraceCallValue;
+
+export type RunToGraphNodeValuesOptions = {
+  rootGraphNodeId?: string | null;
+};
 
 export type ExecutionProfileOrigin = 'user' | 'library' | 'system' | 'unknown';
 
@@ -158,6 +181,7 @@ export function runToDisplayRun(
     testName: identity.testName,
     argsJson: argsJsonByBoundaryId[run.boundaryId] ?? run.request.argsSummary ?? '',
     fetchLogs: payloadsToFetchLogs(run.payloads),
+    outputChunks: runToOutputChunks(run),
     inputRequests: payloadsToPendingInputs(run.payloads),
     rootInput: decodeRootInputValue(run, valueBodyCache),
     result: decodeRunResultValue(run, valueBodyCache),
@@ -223,55 +247,63 @@ export function runToGraphNodeValues(
   run: Run | null | undefined,
   overlay: GraphRuntimeOverlay | null | undefined,
   valueBodyCache?: ValueBodyCache,
+  options: RunToGraphNodeValuesOptions = {},
 ): Map<string, GraphNodeValuePreview[]> {
   const valuesByNodeId = new Map<string, GraphNodeValuePreview[]>();
-  if (
-    !run ||
-    !overlay ||
-    overlay.entries.length === 0 ||
-    run.calls.length === 0
-  ) {
+  if (!run) {
     return valuesByNodeId;
   }
 
   const nodeIdsByCallId = new Map<string, string[]>();
-  for (const entry of overlay.entries) {
-    const nodeId = String(entry.cfgNodeId);
-    for (const callNodeId of entry.callNodeIds) {
-      const ids = nodeIdsByCallId.get(callNodeId);
-      if (ids) ids.push(nodeId);
-      else nodeIdsByCallId.set(callNodeId, [nodeId]);
+  if (overlay && overlay.entries.length > 0) {
+    for (const entry of overlay.entries) {
+      const nodeId = String(entry.cfgNodeId);
+      for (const callNodeId of entry.callNodeIds) {
+        const ids = nodeIdsByCallId.get(callNodeId);
+        if (ids) ids.push(nodeId);
+        else nodeIdsByCallId.set(callNodeId, [nodeId]);
+      }
     }
   }
 
-  const callsByPayloadId = callIdsByPayloadId(run);
-  for (const payload of run.payloads) {
-    if (!isCallValuePayload(payload)) continue;
-    const value = payloadToTraceCallValue(run.boundaryId, payload, valueBodyCache);
+  if (nodeIdsByCallId.size > 0) {
+    const callsByPayloadId = callIdsByPayloadId(run);
+    for (const payload of run.payloads) {
+      if (!isCallValuePayload(payload)) continue;
+      const value = payloadToTraceCallValue(run.boundaryId, payload, valueBodyCache);
 
-    const nodeIds = new Set<string>();
-    for (const callId of callIdsForPayload(payload, callsByPayloadId)) {
-      for (const nodeId of nodeIdsByCallId.get(callId) ?? []) {
-        nodeIds.add(nodeId);
+      const nodeIds = new Set<string>();
+      for (const callId of callIdsForPayload(payload, callsByPayloadId)) {
+        for (const nodeId of nodeIdsByCallId.get(callId) ?? []) {
+          nodeIds.add(nodeId);
+        }
       }
-    }
-    if (nodeIds.size === 0) continue;
+      if (nodeIds.size === 0) continue;
 
-    for (const nodeId of nodeIds) {
-      addGraphNodeValue(valuesByNodeId, nodeId, value);
+      for (const nodeId of nodeIds) {
+        addGraphNodeValue(valuesByNodeId, nodeId, value);
+      }
     }
   }
 
   const rootInput = rootInputToGraphValue(run, valueBodyCache);
-  if (rootInput && run.rootCallNodeId) {
-    for (const nodeId of graphNodeIdsForRootResult(run, nodeIdsByCallId)) {
+  if (rootInput) {
+    for (const nodeId of graphNodeIdsForRootValues(
+      run,
+      nodeIdsByCallId,
+      options.rootGraphNodeId,
+    )) {
       addGraphNodeValue(valuesByNodeId, nodeId, rootInput);
     }
   }
 
   const rootValue = rootResultToGraphValue(run, valueBodyCache);
-  if (rootValue && run.rootCallNodeId) {
-    for (const nodeId of graphNodeIdsForRootResult(run, nodeIdsByCallId)) {
+  if (rootValue) {
+    for (const nodeId of graphNodeIdsForRootValues(
+      run,
+      nodeIdsByCallId,
+      options.rootGraphNodeId,
+    )) {
       addGraphNodeValue(valuesByNodeId, nodeId, rootValue);
     }
   }
@@ -816,6 +848,27 @@ function traceLogsByCallId(
   return logsByCallId;
 }
 
+/**
+ * Ordered `baml.io` stream writes for a run.
+ *
+ * stdout and stderr stay interleaved in emission order, the way a real
+ * terminal shows them. The `stream` tag is kept for filtering, not for
+ * reordering: pulling one stream out on its own would scramble the sequence.
+ */
+export function runToOutputChunks(run: Run): RunOutputChunk[] {
+  const chunks: RunOutputChunk[] = [];
+  for (const payload of run.payloads) {
+    if (!isOutputPayload(payload)) continue;
+    chunks.push({
+      id: payload.id,
+      stream: payload.kind.stream,
+      text: payload.kind.text,
+      timestampMs: payload.timestampMs,
+    });
+  }
+  return chunks;
+}
+
 function traceCallValuesByCallId(
   run: Run,
   valueBodyCache?: ValueBodyCache,
@@ -912,40 +965,18 @@ function payloadToTraceCallValue(
   };
 }
 
-function graphNodeIdsForRootResult(
+function graphNodeIdsForRootValues(
   run: Run,
   nodeIdsByCallId: Map<string, string[]>,
+  rootGraphNodeId: string | null | undefined,
 ): string[] {
+  if (rootGraphNodeId) return [rootGraphNodeId];
+
   const rootCallNodeId = run.rootCallNodeId;
   if (!rootCallNodeId) return [];
 
   const directNodeIds = nodeIdsByCallId.get(rootCallNodeId);
-  if (directNodeIds && directNodeIds.length > 0) return directNodeIds;
-
-  const callsById = new Map(run.calls.map((call) => [call.id, call]));
-  const descendantNodeIds = new Set<string>();
-  for (const call of run.calls) {
-    if (!isDescendantCall(call.id, rootCallNodeId, callsById)) continue;
-    for (const nodeId of nodeIdsByCallId.get(call.id) ?? []) {
-      descendantNodeIds.add(nodeId);
-    }
-  }
-  return descendantNodeIds.size === 1 ? [...descendantNodeIds] : [];
-}
-
-function isDescendantCall(
-  callId: string,
-  ancestorId: string,
-  callsById: Map<string, Run['calls'][number]>,
-): boolean {
-  const seen = new Set<string>([callId]);
-  let parentId = callsById.get(callId)?.parentId ?? null;
-  while (parentId && !seen.has(parentId)) {
-    if (parentId === ancestorId) return true;
-    seen.add(parentId);
-    parentId = callsById.get(parentId)?.parentId ?? null;
-  }
-  return false;
+  return directNodeIds ?? [];
 }
 
 function rootInputToGraphValue(
@@ -974,12 +1005,14 @@ function rootResultToGraphValue(
   run: Run,
   valueBodyCache?: ValueBodyCache,
 ): GraphNodeValuePreview | null {
-  if (run.error?.valueRef) {
-    const projected = projectValueRef(
-      run.boundaryId,
-      run.error.valueRef,
-      valueBodyCache,
-    );
+  if (run.error) {
+    const projected = run.error.valueRef
+      ? projectValueRef(run.boundaryId, run.error.valueRef, valueBodyCache)
+      : {
+          state: 'error' as const,
+          value: null,
+          diagnostic: run.error.message,
+        };
     return {
       id: 'root-error',
       timestampMs: run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs,
@@ -1074,6 +1107,10 @@ function projectPayloadBodyState(
 
 function isLogPayload(payload: PayloadEvent): payload is LogPayloadEvent {
   return payload.kind.type === 'log';
+}
+
+function isOutputPayload(payload: PayloadEvent): payload is OutputPayloadEvent {
+  return payload.kind.type === 'output';
 }
 
 function isCallValuePayload(payload: PayloadEvent): payload is CallValuePayloadEvent {

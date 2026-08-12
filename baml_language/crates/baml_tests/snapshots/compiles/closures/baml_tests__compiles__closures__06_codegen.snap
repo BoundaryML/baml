@@ -1,16 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function user.Box.unwrap(self: Box<T>) -> T {
+function user.Box.unwrap(self: Box<#0>) -> #0 {
     load_var self
     load_field .value
     return
@@ -246,7 +237,7 @@ function user.test_unbound_higher_order() -> string[] {
     init_instance user.Employee .first, .last
     load_type Employee
     alloc_array 1
-    load_global user.Employee.full_name
+    load_const user.Employee.full_name
     call user.apply_to_each
     return
 }
@@ -263,7 +254,7 @@ function user.test_unbound_in_map() -> string[] {
     init_instance user.Employee .first, .last
     load_type Employee
     alloc_array 2
-    load_global user.Employee.full_name
+    load_const user.Employee.full_name
     call baml.Array.map
     return
 }

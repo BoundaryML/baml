@@ -1,4 +1,4 @@
-"""Unit tests for baml_core.typemap (25a2 §4.1).
+"""Unit tests for baml_bridge.typemap (25a2 §4.1).
 
 These tests exercise the FQN → class registry in isolation; no codegen,
 no proto, no runtime. Each test uses a fresh BamlTypeMap instance to
@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from baml_core import BamlError
-from baml_core.typemap import BamlTypeMap
+from baml_bridge import BamlError
+from baml_bridge.typemap import BamlTypeMap
 
 
 def test_from_lazy_entries_resolves_class_via_importlib():
@@ -93,13 +93,13 @@ def test_py_type_to_baml_type_returns_empty_for_unknown():
 
 def test_stdlib_reverse_overrides_seeded():
     """Every typemap seeds the PyO3-identity → `baml.media.*` /
-    `baml.llm.Stream` reverse-map overrides at construction time."""
-    from baml_core.baml_py import BamlImage, BamlAudio, BamlVideo, BamlPdf
-    from baml_core import BamlStream
+    `ai.stream.Stream` reverse-map overrides at construction time."""
+    from baml_bridge.baml_py import BamlImage, BamlAudio, BamlVideo, BamlPdf
+    from baml_bridge import BamlStream
 
     tm = BamlTypeMap()
     assert tm.py_type_to_baml_type(BamlImage) == "baml.media.Image"
     assert tm.py_type_to_baml_type(BamlAudio) == "baml.media.Audio"
     assert tm.py_type_to_baml_type(BamlVideo) == "baml.media.Video"
     assert tm.py_type_to_baml_type(BamlPdf) == "baml.media.Pdf"
-    assert tm.py_type_to_baml_type(BamlStream) == "baml.llm.Stream"
+    assert tm.py_type_to_baml_type(BamlStream) == "ai.stream.Stream"

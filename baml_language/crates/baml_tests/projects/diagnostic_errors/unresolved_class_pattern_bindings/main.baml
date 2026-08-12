@@ -1,0 +1,71 @@
+class Address {
+    zip: int,
+}
+
+class Person {
+    age: int,
+    address: Address,
+}
+
+function let_shorthand(person: Person) -> int {
+    let Missing { age } = person;
+    age
+}
+
+function let_renamed(person: Person) -> int {
+    let Missing { age: let years } = person;
+    years
+}
+
+function let_nested(person: Person) -> int {
+    let Missing { address: Address { zip } } = person;
+    zip;
+    zip.missing
+}
+
+function let_else_binding(person: Person) -> int {
+    let Missing { age } = person else {
+        return 0;
+    };
+    age
+}
+
+function if_let_binding(person: Person) -> int {
+    if let Missing { age } = person {
+        age
+    } else {
+        0
+    }
+}
+
+function while_let_binding(person: Person) -> int {
+    while let Missing { age } = person {
+        return age;
+    }
+    0
+}
+
+function for_binding(person: Person) -> int {
+    for (let Missing { age } in [person]) {
+        return age;
+    }
+    0
+}
+
+function match_binding(person: Person) -> int {
+    match (person) {
+        Missing { age } => age,
+        _ => 0,
+    }
+}
+
+function throws_person(person: Person) -> int throws Person {
+    throw person
+}
+
+function catch_arm_binding(person: Person) -> int {
+    throws_person(person) catch (error) {
+        Missing { age } => age,
+        _ => 0
+    }
+}

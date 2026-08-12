@@ -1,0 +1,18 @@
+[package]
+name = "sdk_test_csharp"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+base64 = { workspace = true }
+bex_project = { workspace = true }
+bridge_ctypes = { workspace = true }
+indexmap = { workspace = true }
+prost = { workspace = true }
+
+[build-dependencies]
+sdk_test_harness_setup = { path = "../../harness_setup" }
+
+[package.metadata.ci]
+wasm_support = false

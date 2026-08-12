@@ -1,0 +1,81 @@
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const dist = resolve(packageRoot, "dist");
+const workerd = resolve(dist, "workerd");
+const workerdWasm = resolve(dist, "workerd-wasm");
+
+rmSync(workerd, { recursive: true, force: true });
+mkdirSync(workerd, { recursive: true });
+
+for (const file of ["index.js", "index.js.map", "index.d.ts", "index.d.ts.map", "native.d.ts", "native.d.ts.map"]) {
+  cpSync(resolve(dist, file), resolve(workerd, file));
+}
+cpSync(resolve(dist, "shared"), resolve(workerd, "shared"), { recursive: true });
+
+const workerdProtoPath = resolve(workerd, "shared/proto/baml_cffi.js");
+const workerdProto = readFileSync(workerdProtoPath, "utf8");
+const protobufImport = "var $protobuf = __toESM(require_minimal2(), 1);";
+const workerdSafeProto = workerdProto.replace(protobufImport, `${protobufImport}
+$protobuf.util.Buffer = null;
+$protobuf.configure();`);
+if (workerdSafeProto === workerdProto) {
+  throw new Error("could not select protobufjs's Uint8Array reader/writer for workerd");
+}
+writeFileSync(workerdProtoPath, workerdSafeProto);
+
+const workerdIndexPath = resolve(workerd, "index.js");
+const workerdIndex = readFileSync(workerdIndexPath, "utf8");
+writeFileSync(workerdIndexPath, `import { readFileSync } from "node:fs";
+import { installReadFileSync } from "./native.js";
+
+installReadFileSync((path) => readFileSync(path));
+
+${workerdIndex}`);
+
+const browserCoreImport = 'from "./wasm/bridge_web_core.js";';
+const workerdCoreImport = 'from "../workerd-wasm/bridge_web_core.js";';
+const browserDefaultImport = "import initWasm, {";
+const browserInitCall = "await initWasm();";
+const browserSourceMap = "//# sourceMappingURL=native.js.map";
+const browserNative = readFileSync(resolve(dist, "native.js"), "utf8");
+for (const expected of [browserDefaultImport, browserCoreImport, browserInitCall, browserSourceMap]) {
+  if (!browserNative.includes(expected)) {
+    throw new Error("could not prepare the workerd WASM loader");
+  }
+}
+const workerdNative = browserNative
+  .replace(browserDefaultImport, "import {")
+  .replace(browserCoreImport, workerdCoreImport)
+  .replace(browserInitCall, "")
+  .replace(browserSourceMap, "");
+
+if (
+  !workerdNative.includes(workerdCoreImport) ||
+  workerdNative.includes(browserDefaultImport) ||
+  workerdNative.includes(browserCoreImport) ||
+  workerdNative.includes(browserInitCall) ||
+  workerdNative.includes(browserSourceMap)
+) {
+  throw new Error("could not prepare the workerd WASM loader");
+}
+writeFileSync(resolve(workerd, "native.js"), workerdNative);
+
+// Cloudflare documents this explicit instantiation for wasm-bindgen's bundler output:
+// https://developers.cloudflare.com/workers/languages/rust/#javascript-plumbing-wasm-bindgen
+// Keep this export workerd-only: nodejs_compat also exposes a Node-like `process` global.
+writeFileSync(resolve(workerdWasm, "bridge_web_core.js"), `
+import * as imports from "./bridge_web_core_bg.js";
+import workerdModule from "./bridge_web_core_bg.wasm";
+
+const instance = new WebAssembly.Instance(workerdModule, {
+  "./bridge_web_core_bg.js": imports,
+});
+imports.__wbg_set_wasm(instance.exports);
+instance.exports.__wbindgen_start();
+
+export default async function initWasm() {}
+export * from "./bridge_web_core_bg.js";
+`);

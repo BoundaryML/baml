@@ -12,7 +12,7 @@ use crate::Name;
 /// Prefix used for standard library items in qualified names.
 ///
 /// All `Namespace::BamlStd` and standard `Namespace::Builtin` items
-/// are displayed with this prefix (e.g., `baml.llm.call_llm_function`).
+/// are displayed with this prefix (e.g., `baml.prompt.render_output_format`).
 pub const BAML_STD_PREFIX: &str = "baml.";
 
 /// FQN (as a display string) of the recursive `json` type alias defined in
@@ -21,6 +21,14 @@ pub const BAML_STD_PREFIX: &str = "baml.";
 /// Used as a sentinel across Phases 3 and 6 to short-circuit alias-body
 /// recursion for output-format rendering, SAP streaming, and Python codegen.
 pub const BAML_JSON_JSON: &str = "baml.json.json";
+
+/// Canonical host-facing typed AI stream. Compiler synthesis, engine handle
+/// lifting, and SDK generators must share this identity rather than carrying
+/// independent string literals.
+pub const AI_STREAM_STREAM: &str = "ai.stream.Stream";
+
+/// Canonical nominal end-of-stream marker used by AI streams.
+pub const AI_STREAM_DONE: &str = "ai.stream.Done";
 
 /// A qualified name that unambiguously identifies an item.
 ///
@@ -123,70 +131,6 @@ impl QualifiedName {
         }
     }
 
-    /// Create a [`QualifiedName`] for a method on a local class.
-    ///
-    /// The method is identified by `ClassName.methodName` format.
-    /// This is used for user-defined methods like `Baz.Greeting`.
-    pub fn local_method(class_name: &Name, method_name: &Name) -> Self {
-        Self {
-            namespace: Namespace::Local,
-            name: Self::local_method_from_str(class_name.as_str(), method_name.as_str()),
-        }
-    }
-
-    /// Format a local method name from string parts.
-    ///
-    /// Returns the `Name` in `ClassName.methodName` format.
-    /// This is the single source of truth for method name formatting.
-    ///
-    /// Use this when working with CST tokens (which provide `&str`).
-    /// For `Name` inputs, prefer [`Self::local_method`] which returns a full [`QualifiedName`].
-    pub fn local_method_from_str(class_name: &str, method_name: &str) -> Name {
-        Name::new(format!("{class_name}.{method_name}"))
-    }
-
-    /// Get the display name (cached for repeated use).
-    ///
-    /// This is a convenience method that returns the result of `display()`
-    /// as a `Name`. For most uses, calling `display()` directly is preferred.
-    pub fn display_name(&self) -> Name {
-        Name::new(self.display())
-    }
-
-    /// Get the module path as a vector of names.
-    ///
-    /// Returns the path segments for this qualified name:
-    /// - Local: empty vector
-    /// - Builtin: `["baml"]` + path segments (e.g., `["baml", "Array"]` for `baml.Array.length`)
-    /// - `BamlStd`: `["baml"]` + path segments
-    /// - `UserModule`: `module_path`
-    /// - Package: `[package_name]` + `module_path`
-    ///
-    pub fn module_path(&self) -> Vec<Name> {
-        match &self.namespace {
-            Namespace::Local => vec![],
-            Namespace::Builtin { path } => {
-                let mut p = vec![Name::new("baml")];
-                p.extend(path.iter().cloned());
-                p
-            }
-            Namespace::BamlStd { path } => {
-                let mut p = vec![Name::new("baml")];
-                p.extend(path.iter().cloned());
-                p
-            }
-            Namespace::UserModule { module_path } => module_path.clone(),
-            Namespace::Package {
-                package_name,
-                module_path,
-            } => {
-                let mut p = vec![package_name.clone()];
-                p.extend(module_path.iter().cloned());
-                p
-            }
-        }
-    }
-
     /// Create a [`QualifiedName`] for a builtin item.
     ///
     /// # Arguments
@@ -254,37 +198,6 @@ impl QualifiedName {
             // User module path
             Self::user_module(module_path.to_vec(), item_name)
         }
-    }
-
-    /// Create a [`QualifiedName`] from path segments (e.g., `["baml", "Array", "length"]`).
-    ///
-    /// The last segment becomes the name, earlier segments become the path.
-    pub fn from_path_segments(segments: &[Name]) -> Self {
-        assert!(
-            !segments.is_empty(),
-            "cannot create QualifiedName from empty path"
-        );
-        if segments.len() == 1 {
-            return Self::local(segments[0].clone());
-        }
-
-        let name = segments.last().unwrap().clone();
-        let path = &segments[..segments.len() - 1];
-
-        if path[0].as_str() == "baml" {
-            // baml.* paths are builtins with the "baml" prefix stripped
-            Self::builtin(path[1..].to_vec(), name)
-        } else {
-            // User module path
-            Self::user_module(path.to_vec(), name)
-        }
-    }
-
-    /// Create a [`QualifiedName`] for a builtin method on a receiver type.
-    ///
-    /// E.g., `builtin_method("image", "from_url")` creates a path like `baml.image.from_url`.
-    pub fn builtin_method(receiver_type: Name, method_name: Name) -> Self {
-        Self::builtin(vec![receiver_type], method_name)
     }
 
     /// Create a [`QualifiedName`] for a builtin primitive type (int, float, string, bool, etc.).

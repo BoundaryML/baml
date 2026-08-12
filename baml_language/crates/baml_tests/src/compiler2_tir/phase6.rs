@@ -530,7 +530,7 @@ fn optional_call_basic() {
     let file = db.add_file(
         "test.baml",
         r#"
-function f(callback: ((x: int) -> int)?) -> int? {
+function f(callback: ((x: int) -> int throws never)?) -> int? {
     return callback?.(42)
 }
 "#,
@@ -594,7 +594,7 @@ fn optional_call_arg_type_checking() {
     let file = db.add_file(
         "test.baml",
         r#"
-function f(callback: ((x: int) -> int)?) -> int? {
+function f(callback: ((x: int) -> int throws never)?) -> int? {
     return callback?.("wrong")
 }
 "#,
@@ -604,7 +604,7 @@ function f(callback: ((x: int) -> int)?) -> int? {
       { : never
         return callback?.("wrong") : int | null
       }
-      !! 74..81: type mismatch: expected int, got "wrong"
+      !! 87..94: type mismatch: expected int, got "wrong"
     }
     "#);
 }
@@ -615,7 +615,7 @@ fn optional_call_checks_higher_order_function_arguments() {
     let file = db.add_file(
         "test.baml",
         r#"
-function demo(cb: (((x: int) -> int) -> int)?) -> int? throws never {
+function demo(cb: (((x: int) -> int throws never) -> int throws never)?) -> int? throws never {
   let risky = (x: int) -> int throws string {
     throw "boom"
   }
@@ -634,7 +634,7 @@ function demo(cb: (((x: int) -> int) -> int)?) -> int? throws never {
             }
         cb?.(risky) : int | null
       }
-      !! 146..151: type mismatch: expected (x: int) -> int throws never, got (x: int) -> int throws string
+      !! 172..177: type mismatch: expected (x: int) -> int throws never, got (x: int) -> int throws string
     }
     lambda user.demo {
     }
@@ -647,7 +647,7 @@ fn optional_call_through_type_alias() {
     let file = db.add_file(
         "test.baml",
         r#"
-type MaybeFn = ((x: int) -> int)?
+type MaybeFn = ((x: int) -> int throws never)?
 function f(callback: MaybeFn) -> int? {
     return callback?.(42)
 }
@@ -723,7 +723,7 @@ fn optional_call_expected_nonoptional_still_mismatches() {
     let file = db.add_file(
         "test.baml",
         r#"
-function f(cb: ((x: int) -> int)?) -> int {
+function f(cb: ((x: int) -> int throws never)?) -> int {
     return cb?.(1)
 }
 "#,
@@ -733,7 +733,7 @@ function f(cb: ((x: int) -> int)?) -> int {
       { : never
         return cb?.(1) : int | null
       }
-      !! 56..63: type mismatch: expected int, got int | null
+      !! 69..76: type mismatch: expected int, got int | null
     }
     ");
 }
@@ -744,7 +744,7 @@ fn optional_call_nullable_return_preserves_phase0() {
     let file = db.add_file(
         "test.baml",
         r#"
-function f(cb: ((x: int) -> string?)?) -> string? {
+function f(cb: ((x: int) -> string? throws never)?) -> string? {
     return cb?.(1)
 }
 "#,
@@ -1157,7 +1157,7 @@ function forward(cb: (x: int) -> int throws string) -> int {
     return cb(1)
 }
 
-function make() -> ((cb: (x: int) -> int throws string) -> int) {
+function make() -> ((cb: (x: int) -> int throws string) -> int throws string) {
     return forward
 }
 
@@ -1639,7 +1639,7 @@ fn optional_call_arity_mismatch() {
     let file = db.add_file(
         "test.baml",
         r#"
-function f(callback: ((x: int) -> int)?) -> int? {
+function f(callback: ((x: int) -> int throws never)?) -> int? {
     return callback?.(1, 2)
 }
 "#,
@@ -1649,7 +1649,7 @@ function f(callback: ((x: int) -> int)?) -> int? {
       { : never
         return callback?.(1, 2) : int | null
       }
-      !! 63..79: expected 1 argument(s), got 2
+      !! 76..92: expected 1 argument(s), got 2
     }
     ");
 }
@@ -1738,116 +1738,6 @@ function f() -> int {
 }
 
 #[test]
-fn array_rest_binding_annotation_must_be_array_type() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f() -> int {
-    let [..let rest: int] = [1, 2]
-    return 0
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("rest pattern `..` cannot carry a sub-pattern"),
-        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
-    );
-}
-
-#[test]
-fn array_rest_binding_array_annotation_is_valid() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f() -> int {
-    let [..let rest: int[]] = [1, 2]
-    return rest[0]
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("let [..rest: int[]] = [1, 2] : int[]"),
-        "rest pattern annotation should be checked against the rest slice type, got:\n{output}"
-    );
-    assert!(
-        !output.contains("type mismatch"),
-        "array rest annotation should be valid, got:\n{output}"
-    );
-}
-
-#[test]
-fn array_rest_cannot_use_class_destructure_for_rest_slice() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-class Box {
-    value int
-}
-
-function f(boxes: Box[]) -> int {
-    let [..Box { value }] = boxes
-    return value
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("rest pattern `..` cannot carry a sub-pattern"),
-        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
-    );
-}
-
-#[test]
-fn array_nested_rest_annotation_must_match_rest_slice() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    match (xs) {
-        [..[let x]: int] => x,
-        _ => 0
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("rest pattern `..` cannot carry a sub-pattern"),
-        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
-    );
-}
-
-#[test]
-fn nested_refutable_array_under_rest_is_rejected_in_let() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    let [..[let x]] = xs
-    return x
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("refutable pattern in let binding"),
-        "nested exact array under rest should still make the let refutable, got:\n{output}"
-    );
-}
-
-#[test]
 fn refutable_array_pattern_is_rejected_in_for_binding() {
     let mut db = make_db();
     let file = db.add_file(
@@ -1896,6 +1786,139 @@ function f(value: A | B) -> int {
     assert!(
         output.contains("Or-pattern alternatives bind `x` with conflicting types"),
         "same or-pattern binding name with incompatible types should be rejected, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_let_reports_field_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Point {
+    value int
+}
+
+function f() -> int {
+    let Point { valeu } = Point { value: 1 }
+    valeu
+    return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Point` has no field `valeu`"),
+        "unknown field in let-pattern should be diagnosed at the pattern, got:\n{output}"
+    );
+    assert!(
+        output.contains("Did you mean `value`?"),
+        "unknown let-pattern field should include typo suggestion, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unresolved name: valeu"),
+        "unknown field pattern should not cascade into unresolved binding errors, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_match_does_not_make_next_arm_unreachable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Point {
+    x int
+    y int
+}
+
+function f(p: Point) -> string {
+    match (p) {
+        Point { xx: 5 } => "a",
+        Point { x, y } => "b",
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Point` has no field `xx`"),
+        "unknown field in match-pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unreachable arm"),
+        "unknown class field should not collapse the arm into an irrefutable class pattern, got:\n{output}"
+    );
+}
+
+/// Ensures an unknown-field arm suppresses usefulness diagnostics.
+#[test]
+fn class_destructure_unknown_field_arm_does_not_emit_non_exhaustive_match() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class A {
+    value int
+}
+
+class B {
+    value int
+}
+
+function f(v: A | B) -> string {
+    match (v) {
+        A { valeu: 1 } => "a",
+        B { value } => "b",
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `A` has no field `valeu`"),
+        "unknown field in match-pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        !output.contains("non-exhaustive match"),
+        "invalid match arms should suppress dependent non-exhaustive diagnostics, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_for_binding_reports_field_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Item {
+    value int
+}
+
+function f(items: Item[]) -> int {
+    for (let Item { valeu } in items) {
+        valeu
+    }
+    return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Item` has no field `valeu`"),
+        "unknown field in for-binding pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        output.contains("Did you mean `value`?"),
+        "unknown for-binding field should include typo suggestion, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unresolved name: valeu"),
+        "for-binding unknown fields should not cascade into unresolved-name diagnostics, got:\n{output}"
     );
 }
 

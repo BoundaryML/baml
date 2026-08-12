@@ -13,5 +13,5 @@ export type {
   InboundListValue,
   InboundMapValue,
   CallFunctionArgs,
-} from './generated/baml_core/cffi/v1/baml_inbound';
-export { BamlOutboundValue } from './generated/baml_core/cffi/v1/baml_outbound';
+} from './generated/baml_bridge/cffi/v1/baml_inbound';
+export { BamlOutboundValue } from './generated/baml_bridge/cffi/v1/baml_outbound';

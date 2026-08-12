@@ -6,7 +6,7 @@ plan: the wire format is hex (base sixteen) via `bigint_value`, and Python
 through `bigint_value`.
 """
 
-from baml_core import BamlRuntime, call_function_sync, call_function
+from baml_bridge import BamlRuntime, call_function_sync, call_function
 
 
 BIGINT_BAML = """\

@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0007
+
+  × type `int[]` has no member `len`
+    ╭─[main.baml:14:23]
+ 14 │     consume([1, 2, 3].len())
+    ·                       ───
+    ╰────
+
+  [type] E0007
+
+  × type `int[]` has no member `len`
+    ╭─[main.baml:25:24]
+ 25 │     identity([1, 2, 3].len())
+    ·                        ───
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[main.baml:35:5]
+ 35 │     phantom()
+    ·     ─────────
+    ╰────

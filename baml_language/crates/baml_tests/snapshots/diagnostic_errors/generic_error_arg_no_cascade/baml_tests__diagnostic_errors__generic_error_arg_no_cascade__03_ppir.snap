@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 47042
+---
+=== PPIR ===
+function user.broken_arg() -> int  [expr] {
+  {  } consume([1, 2, 3].len())
+}
+function user.broken_arg_bound_from_expected() -> int  [expr] {
+  {  } identity([1, 2, 3].len())
+}
+function user.consume(x: T) -> int  [expr] {
+  {  } 0
+}
+function user.identity(x: T) -> T  [expr] {
+  {  } x
+}
+function user.phantom() -> int  [expr] {
+  {  } 0
+}
+function user.still_reports() -> int  [expr] {
+  {  } phantom()
+}

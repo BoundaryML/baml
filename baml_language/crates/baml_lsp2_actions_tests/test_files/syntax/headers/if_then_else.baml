@@ -49,12 +49,10 @@ function ComplexHeaderTest(x: int) -> int {
 
 //----
 //- diagnostics
-// error: unresolved name: y
-//     ╭─[ headers_if_then_else.baml:17:5 ]
-//     │
+// E0003
+//
+//   × unresolved name: `y`
+//     ╭─[headers_if_then_else.baml:17:5]
 //  17 │     y
-//     │     ┬  
-//     │     ╰── unresolved name: y
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
+//     ·     ─
+//     ╰────

@@ -1,6 +1,6 @@
 [project]
-name = "baml_core"
-version = "0.12.1"
+name = "baml_bridge"
+version = "0.16.0"
 description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 license = "Apache-2.0"
@@ -46,15 +46,15 @@ build-backend = "maturin"
 [tool.maturin]
 python-source = "src"
 manifest-path = "rust/bridge_python/Cargo.toml"
-module-name = "baml_core.baml_py"
-include = [{ path = "src/baml_core/py.typed", format = ["sdist", "wheel"] }]
+module-name = "baml_bridge.baml_py"
+include = [{ path = "src/baml_bridge/py.typed", format = ["sdist", "wheel"] }]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "-n auto"
 
 [tool.ruff]
-extend-exclude = ["src/baml_core/cffi/v1/*_pb2.py"]
+extend-exclude = ["src/baml_bridge/cffi/v1/*_pb2.py"]
 
 [tool.ty.environment]
 extra-paths = ["tests/sim"]

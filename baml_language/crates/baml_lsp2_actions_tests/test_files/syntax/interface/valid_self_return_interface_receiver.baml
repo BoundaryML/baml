@@ -4,7 +4,7 @@
 
 interface Cloneable {
   value: int
-  function clone(self) -> Self
+  function clone(self) -> Self throws never
 }
 
 class Box {

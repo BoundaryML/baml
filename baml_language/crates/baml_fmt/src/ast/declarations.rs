@@ -129,7 +129,7 @@ pub struct FunctionDecl {
     pub name: t::Word,
     pub generic_params: Option<super::GenericParamList>,
     pub params: FunctionParamList,
-    pub arrow: t::Arrow,
+    pub arrow: super::FunctionArrow,
     pub return_type: Type,
     pub throws: Option<ThrowsClause>,
     pub body: FunctionDeclBody,
@@ -233,8 +233,13 @@ impl Printable for FunctionDecl {
             // It fits in single line!
             printer.append_from_printer(param_printer);
             printer.print_spaces(1);
-            printer.print_raw_token(&self.arrow);
-            printer.print_spaces(1);
+            // Normalize the permissively accepted `=>` spelling to `->`.
+            printer.print_str("->");
+            self.arrow.print_separator_before(
+                Some(self.return_type.leftmost_token()),
+                shape.indent + printer.config.indent_width,
+                printer,
+            );
             printer.append_from_printer(return_type_printer);
             if self.throws.is_some() {
                 printer.print_spaces(1);
@@ -251,14 +256,13 @@ impl Printable for FunctionDecl {
             let _ = self.params.print_multi_line(params_shape, printer);
 
             printer.print_spaces(1);
-            printer.print_raw_token(&self.arrow);
-            printer.print_spaces(1);
-
-            // Trivia between -> and return type
-            let (_, arrow_trailing) = printer.trivia.get_for_range_split(self.arrow.span());
-            printer.print_trivia_squished(arrow_trailing);
-            let return_type_leading = printer.trivia.get_leading_for_element(&self.return_type);
-            printer.print_trivia_squished(return_type_leading);
+            // Normalize the permissively accepted `=>` spelling to `->`.
+            printer.print_str("->");
+            self.arrow.print_separator_before(
+                Some(self.return_type.leftmost_token()),
+                shape.indent + printer.config.indent_width,
+                printer,
+            );
 
             let curr_line_len = printer.current_line_len();
             let return_type_shape = Shape {
@@ -599,16 +603,18 @@ impl Printable for FunctionParam {
 /// Any of the valid function bodies in a [`FunctionDecl`].
 #[derive(Debug)]
 pub enum FunctionDeclBody {
-    Llm(LlmFunctionBody),
+    // Boxed: the LLM body (client/tools/prompt fields) dwarfs `BlockExpr`
+    // (clippy::large_enum_variant).
+    Llm(Box<LlmFunctionBody>),
     Block(BlockExpr),
 }
 impl FromCST for FunctionDeclBody {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
         match node.kind() {
-            SyntaxKind::LLM_FUNCTION_BODY => Ok(FunctionDeclBody::Llm(LlmFunctionBody::from_cst(
-                SyntaxElement::Node(node),
-            )?)),
+            SyntaxKind::LLM_FUNCTION_BODY => Ok(FunctionDeclBody::Llm(Box::new(
+                LlmFunctionBody::from_cst(SyntaxElement::Node(node))?,
+            ))),
             SyntaxKind::EXPR_FUNCTION_BODY => {
                 let mut visitor = SyntaxNodeIter::new(&node);
                 let block: BlockExpr = visitor.expect_parse()?;
@@ -649,9 +655,11 @@ impl Printable for FunctionDeclBody {
 #[derive(Debug)]
 pub struct LlmFunctionBody {
     pub open_brace: t::LBrace,
-    /// Not guaranteed that client is before prompt in the input.
+    /// Fields may appear in any order in the input; printing canonicalizes to
+    /// client, tools, prompt.
     pub client: ClientField,
-    /// Not guaranteed that client is before prompt in the input.
+    /// Optional `tools [a, b]` list (BEP spec mode).
+    pub tools: Option<ToolsField>,
     pub prompt: PromptField,
     /// Optional `type_builder { ... }` block for inline schema overrides.
     pub type_builder: Option<TypeBuilderBlock>,
@@ -659,6 +667,27 @@ pub struct LlmFunctionBody {
 }
 impl FromCST for LlmFunctionBody {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        // A duplicate LLM-body field is a hard error, not an overwrite: the
+        // parser has no duplicate check for `type_builder`, and silently
+        // printing only the survivor would DELETE the other block from the
+        // user's source. An errored declaration is left unformatted instead.
+        fn fill<T>(
+            slot: &mut Option<T>,
+            value: T,
+            kind: SyntaxKind,
+            parent_range: TextRange,
+        ) -> Result<(), StrongAstError> {
+            if slot.is_some() {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "at most one field of each kind in an LLM function body".into(),
+                    found: kind,
+                    at: parent_range,
+                });
+            }
+            *slot = Some(value);
+            Ok(())
+        }
+
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::LLM_FUNCTION_BODY)?;
 
@@ -666,31 +695,52 @@ impl FromCST for LlmFunctionBody {
 
         let open_brace = it.expect_parse()?;
 
-        let first = it.expect_node("CLIENT_FIELD or PROMPT_FIELD")?;
-        let (client, prompt) = match first.kind() {
-            SyntaxKind::CLIENT_FIELD => {
-                let client = ClientField::from_cst(SyntaxElement::Node(first))?;
-                let prompt: PromptField = it.expect_parse()?;
-                (client, prompt)
+        // Fields appear in any order; collect until the close brace.
+        let mut client: Option<ClientField> = None;
+        let mut tools: Option<ToolsField> = None;
+        let mut prompt: Option<PromptField> = None;
+        let mut type_builder: Option<TypeBuilderBlock> = None;
+        loop {
+            if let Some(n) = it.next_if_kind(SyntaxKind::CLIENT_FIELD) {
+                fill(
+                    &mut client,
+                    ClientField::from_cst(n)?,
+                    SyntaxKind::CLIENT_FIELD,
+                    node.text_range(),
+                )?;
+            } else if let Some(n) = it.next_if_kind(SyntaxKind::TOOLS_FIELD) {
+                fill(
+                    &mut tools,
+                    ToolsField::from_cst(n)?,
+                    SyntaxKind::TOOLS_FIELD,
+                    node.text_range(),
+                )?;
+            } else if let Some(n) = it.next_if_kind(SyntaxKind::PROMPT_FIELD) {
+                fill(
+                    &mut prompt,
+                    PromptField::from_cst(n)?,
+                    SyntaxKind::PROMPT_FIELD,
+                    node.text_range(),
+                )?;
+            } else if let Some(n) = it.next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK) {
+                fill(
+                    &mut type_builder,
+                    TypeBuilderBlock::from_cst(n)?,
+                    SyntaxKind::TYPE_BUILDER_BLOCK,
+                    node.text_range(),
+                )?;
+            } else {
+                break;
             }
-            SyntaxKind::PROMPT_FIELD => {
-                let prompt = PromptField::from_cst(SyntaxElement::Node(first))?;
-                let client: ClientField = it.expect_parse()?;
-                (client, prompt)
-            }
-            found => {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "CLIENT_FIELD or PROMPT_FIELD".into(),
-                    found,
-                    at: first.text_range(),
-                });
-            }
-        };
-
-        let type_builder = it
-            .next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK)
-            .map(TypeBuilderBlock::from_cst)
-            .transpose()?;
+        }
+        let client = client.ok_or(StrongAstError::MissingExpectedElement {
+            expected: SyntaxKind::CLIENT_FIELD,
+            parent: node.text_range(),
+        })?;
+        let prompt = prompt.ok_or(StrongAstError::MissingExpectedElement {
+            expected: SyntaxKind::PROMPT_FIELD,
+            parent: node.text_range(),
+        })?;
 
         let close_brace = it.expect_parse()?;
 
@@ -699,6 +749,7 @@ impl FromCST for LlmFunctionBody {
         Ok(LlmFunctionBody {
             open_brace,
             client,
+            tools,
             prompt,
             type_builder,
             close_brace,
@@ -727,6 +778,11 @@ impl Printable for LlmFunctionBody {
         self.client.print(inner_shape, printer);
         printer.print_trivia_trailing(client_trailing);
         printer.print_newline();
+
+        if let Some(tools) = &self.tools {
+            printer.print_standalone_with_trivia(tools, inner_indent);
+            printer.print_newline();
+        }
 
         printer.print_standalone_with_trivia(&self.prompt, inner_indent);
         printer.print_newline();
@@ -792,13 +848,9 @@ impl FromCST for ClientField {
                 })
             }
             SyntaxKind::PATH_EXPR => ClientName::Path(PathExpr::from_cst(name)?),
-            found => {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "STRING_LITERAL, WORD, or PATH_EXPR".into(),
-                    found,
-                    at: name.text_range(),
-                });
-            }
+            // Any other node is an ai.Client expression (a constructor call,
+            // a wrapper, ...) — print through the expression machinery.
+            _ => ClientName::Expr(Box::new(Expression::from_cst(name)?)),
         };
 
         it.expect_end()?;
@@ -844,6 +896,8 @@ impl Printable for ClientField {
 pub enum ClientName {
     Path(PathExpr),
     String(t::QuotedString),
+    /// An arbitrary ai.Client expression (`client openai.OpenAiClient.new(...)`).
+    Expr(Box<Expression>),
 }
 
 impl Printable for ClientName {
@@ -851,18 +905,21 @@ impl Printable for ClientName {
         match self {
             ClientName::Path(path) => printer.print(path, shape),
             ClientName::String(string) => printer.print(string, shape),
+            ClientName::Expr(expr) => printer.print(expr.as_ref(), shape),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ClientName::Path(path) => path.leftmost_token(),
             ClientName::String(string) => string.leftmost_token(),
+            ClientName::Expr(expr) => expr.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ClientName::Path(path) => path.rightmost_token(),
             ClientName::String(string) => string.rightmost_token(),
+            ClientName::Expr(expr) => expr.rightmost_token(),
         }
     }
 }
@@ -928,6 +985,72 @@ impl Printable for PromptField {
     }
     fn rightmost_token(&self) -> TextRange {
         self.string.rightmost_token()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::TOOLS_FIELD`] node: `tools [a, b]` in an
+/// LLM function body (BEP spec mode). The value is an arbitrary expression
+/// producing the tool list.
+#[derive(Debug)]
+pub struct ToolsField {
+    pub keyword: t::Word,
+    pub colon: Option<t::Colon>,
+    pub value: Expression,
+}
+
+impl FromCST for ToolsField {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TOOLS_FIELD)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // It's a word; we are only in a TOOLS_FIELD context if it is `tools`.
+        let keyword = it.expect_parse()?;
+
+        let colon = it
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
+            .transpose()?;
+
+        let value = Expression::from_cst(it.expect_next("a tools expression")?)?;
+
+        it.expect_end()?;
+
+        Ok(ToolsField {
+            keyword,
+            colon,
+            value,
+        })
+    }
+}
+
+impl KnownKind for ToolsField {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TOOLS_FIELD
+    }
+}
+
+impl Printable for ToolsField {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        let colon_trailing = if let Some(colon) = &self.colon {
+            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+            colon_trailing
+        } else {
+            &[][..]
+        };
+        printer.print_str(": ");
+        printer.print_trivia_squished(colon_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        printer.print_trivia_squished(value_leading);
+        printer.print(&self.value, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.value.rightmost_token()
     }
 }
 
@@ -1049,6 +1172,9 @@ impl FromCST for ClassDecl {
                 }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
+                }
+                SyntaxKind::HEADER_COMMENT => {
+                    items.push(ClassItem::HeaderComment(t::HeaderComment::from_cst(elem)?));
                 }
                 SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {
                     // Stray delimiter not following a field - skip silently
@@ -1349,7 +1475,7 @@ impl Printable for ImplementsTarget {
 /// BEP-057 associated type declaration or implementation witness.
 #[derive(Debug)]
 pub struct AssociatedTypeDecl {
-    pub keyword: t::Word,
+    pub keyword: t::TypeKw,
     pub name: t::Word,
     pub bound: Option<(t::Extends, Type)>,
     pub default: Option<(t::Equals, Type)>,
@@ -1438,7 +1564,7 @@ impl Printable for AssociatedTypeDecl {
 #[derive(Debug)]
 pub struct InterfaceFieldLink {
     pub interface_field: t::Word,
-    pub as_token: t::Word,
+    pub as_token: t::As,
     pub class_field: t::Word,
 }
 
@@ -1488,6 +1614,7 @@ pub enum ImplementsItem {
     FieldLink(InterfaceFieldLink, Option<ClassFieldDelimiter>),
     Field(ClassField, Option<ClassFieldDelimiter>),
     Function(FunctionDecl),
+    HeaderComment(t::HeaderComment),
 }
 
 impl ImplementsItem {
@@ -1517,6 +1644,10 @@ impl Printable for ImplementsItem {
                 info
             }
             ImplementsItem::Function(function) => function.print(shape, printer),
+            ImplementsItem::HeaderComment(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
         }
     }
 
@@ -1526,6 +1657,7 @@ impl Printable for ImplementsItem {
             ImplementsItem::FieldLink(link, _) => link.leftmost_token(),
             ImplementsItem::Field(field, _) => field.leftmost_token(),
             ImplementsItem::Function(function) => function.leftmost_token(),
+            ImplementsItem::HeaderComment(header) => header.span(),
         }
     }
 
@@ -1541,6 +1673,7 @@ impl Printable for ImplementsItem {
                 Self::delimiter_rightmost(delimiter.as_ref(), || field.rightmost_token())
             }
             ImplementsItem::Function(function) => function.rightmost_token(),
+            ImplementsItem::HeaderComment(header) => header.span(),
         }
     }
 }
@@ -1622,6 +1755,11 @@ impl FromCST for ImplementsBlock {
                 }
                 SyntaxKind::FUNCTION_DEF => {
                     items.push(ImplementsItem::Function(FunctionDecl::from_cst(elem)?));
+                }
+                SyntaxKind::HEADER_COMMENT => {
+                    items.push(ImplementsItem::HeaderComment(t::HeaderComment::from_cst(
+                        elem,
+                    )?));
                 }
                 SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {}
                 SyntaxKind::R_BRACE => {
@@ -1712,6 +1850,7 @@ pub enum ClassItem {
     Function(FunctionDecl),
     Implements(ImplementsBlock),
     BlockAttribute(BlockAttribute),
+    HeaderComment(t::HeaderComment),
     Unknown(TextRange),
 }
 
@@ -1723,6 +1862,9 @@ impl FromCST for ClassItem {
             SyntaxKind::IMPLEMENTS_BLOCK => ClassItem::Implements(ImplementsBlock::from_cst(elem)?),
             SyntaxKind::BLOCK_ATTRIBUTE => {
                 ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?)
+            }
+            SyntaxKind::HEADER_COMMENT => {
+                ClassItem::HeaderComment(t::HeaderComment::from_cst(elem)?)
             }
             found => {
                 return Err(StrongAstError::UnexpectedKindDesc {
@@ -1760,6 +1902,10 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.print(shape, printer),
             ClassItem::Implements(block) => block.print(shape, printer),
             ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
+            ClassItem::HeaderComment(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
             ClassItem::Unknown(range) => {
                 printer.print_input_range(*range);
                 PrintInfo::default_multi_lined()
@@ -1772,6 +1918,7 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.leftmost_token(),
             ClassItem::Implements(block) => block.leftmost_token(),
             ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
+            ClassItem::HeaderComment(header) => header.span(),
             ClassItem::Unknown(range) => *range,
         }
     }
@@ -1785,6 +1932,7 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.rightmost_token(),
             ClassItem::Implements(block) => block.rightmost_token(),
             ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
+            ClassItem::HeaderComment(header) => header.span(),
             ClassItem::Unknown(range) => *range,
         }
     }
@@ -1830,12 +1978,17 @@ impl FromCST for EnumDecl {
                     let variant = StrongAstError::assert_is_node(elem)?;
                     let variant = EnumVariant::from_cst(SyntaxElement::Node(variant))?;
 
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
+                    let delimiter = match it.peek().map(SyntaxElement::kind) {
+                        Some(SyntaxKind::COMMA) => Some(EnumVariantDelimiter::Comma(
+                            t::Comma::from_cst(it.next().expect("peeked"))?,
+                        )),
+                        Some(SyntaxKind::SEMICOLON) => Some(EnumVariantDelimiter::Semicolon(
+                            t::Semicolon::from_cst(it.next().expect("peeked"))?,
+                        )),
+                        _ => None,
+                    };
 
-                    items.push(EnumItem::Variant(variant, comma));
+                    items.push(EnumItem::Variant(variant, delimiter));
                 }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     let attr = BlockAttribute::from_cst(elem)?;
@@ -1919,20 +2072,35 @@ impl Printable for EnumDecl {
 /// Any of the valid items in an [`EnumDecl`].
 #[derive(Debug)]
 pub enum EnumItem {
-    Variant(EnumVariant, Option<t::Comma>),
+    Variant(EnumVariant, Option<EnumVariantDelimiter>),
     BlockAttribute(BlockAttribute),
+}
+
+#[derive(Debug)]
+pub enum EnumVariantDelimiter {
+    Comma(t::Comma),
+    Semicolon(t::Semicolon),
+}
+
+impl EnumVariantDelimiter {
+    fn span(&self) -> TextRange {
+        match self {
+            Self::Comma(comma) => comma.span(),
+            Self::Semicolon(semicolon) => semicolon.span(),
+        }
+    }
 }
 
 impl Printable for EnumItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            EnumItem::Variant(variant, comma) => {
+            EnumItem::Variant(variant, delimiter) => {
                 let info = variant.print(shape, printer);
-                if let Some(comma) = &comma {
-                    printer.print_raw_token(comma);
-                } else {
-                    printer.print_str(",");
+                if let Some(delimiter) = delimiter {
+                    let (leading, _) = printer.trivia.get_for_range_split(delimiter.span());
+                    printer.print_trivia_squished(leading);
                 }
+                printer.print_str(",");
                 info
             }
             EnumItem::BlockAttribute(attr) => attr.print(shape, printer),
@@ -1946,9 +2114,9 @@ impl Printable for EnumItem {
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            EnumItem::Variant(variant, comma) => {
-                if let Some(comma) = comma {
-                    comma.span()
+            EnumItem::Variant(variant, delimiter) => {
+                if let Some(delimiter) = delimiter {
+                    delimiter.span()
                 } else {
                     variant.rightmost_token()
                 }
@@ -2485,7 +2653,9 @@ pub enum ConfigItemKey {
 impl FromCST for ConfigItemKey {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::WORD => t::Word::from_cst(elem).map(ConfigItemKey::Word),
+            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
+                t::Word::from_cst(elem).map(ConfigItemKey::Word)
+            }
             SyntaxKind::STRING_LITERAL => {
                 t::QuotedString::from_cst(elem).map(ConfigItemKey::String)
             }
@@ -3307,8 +3477,7 @@ impl Printable for TemplateStringDecl {
 /// Corresponds to a [`SyntaxKind::TYPE_ALIAS_DEF`] node.
 #[derive(Debug)]
 pub struct TypeAliasDecl {
-    /// For some reason, type is not currently a keyword
-    pub keyword: t::Word,
+    pub keyword: t::TypeKw,
     pub name: t::Word,
     pub equals: t::Equals,
     pub type_expr: Type,
@@ -3322,7 +3491,7 @@ impl FromCST for TypeAliasDecl {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        // keyword: "type" (it's actually just a WORD, not a keyword)
+        // keyword: `type` (KW_TYPE)
         let keyword = it.expect_parse()?;
 
         // name

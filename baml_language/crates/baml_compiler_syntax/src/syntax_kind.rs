@@ -40,17 +40,23 @@ pub enum SyntaxKind {
     KW_MATCH,
     KW_CATCH,
     KW_CATCH_ALL,
+    KW_CATCH_ALL_PANICS,
     KW_THROWS,
     KW_SPAWN,
     KW_AWAIT,
     KW_DEFER,
 
     // Other keywords
-    KW_WATCH,
     KW_INSTANCEOF,
     KW_IS,
     KW_DYNAMIC,
     KW_WITH,
+    // Contextual keywords re-lexed from a `Word` at parse time (no lexer token).
+    KW_AS,    // `.as<T>` cast / `(T as I)` / `field as field`
+    KW_TYPE,  // associated-type / type-alias `type Name ...`
+    KW_TRUE,  // `true` boolean literal
+    KW_FALSE, // `false` boolean literal
+    KW_NULL,  // `null` literal
 
     // Literals
     WORD,            // Any word (non-keyword identifier)
@@ -174,6 +180,7 @@ pub enum SyntaxKind {
     PROMPT_FIELD,
     CLIENT_REFERENCE,
     CLIENT_FIELD, // 'client' field in LLM function
+    TOOLS_FIELD,  // 'tools' field in LLM function (BEP: tools: [fn, ...])
     DEFAULT_IMPL,
 
     // Class components
@@ -197,6 +204,11 @@ pub enum SyntaxKind {
 
     // Client components
     CLIENT_TYPE, // <llm> part
+    /// `client Name = <expr>;` — a named client value declaration (the
+    /// single-path replacement for `client<llm>` config blocks). Children:
+    /// `KW_CLIENT`, `WORD` (name), `EQUALS`, one expression node/token,
+    /// optional `SEMICOLON`.
+    CLIENT_VALUE_DEF,
     CONFIG_BLOCK,
     CONFIG_ITEM,
     CONFIG_VALUE,
@@ -251,6 +263,11 @@ pub enum SyntaxKind {
     FIELD_ACCESS_EXPR,
     /// Explicit interface/static upcast projection: `<expr>.as<T>`.
     UPCAST_EXPR,
+    /// LLM function spec reference: `MyFunc@spec` (postfix `@spec` on a path).
+    ///
+    /// Structure: `<PATH_EXPR> AT WORD("spec")`. Lowered by renaming the
+    /// path's last segment to the `<name>$spec` companion function.
+    SPEC_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///
     /// Structure: `<base_expr> QUESTION_DOT WORD`
@@ -337,6 +354,22 @@ pub enum SyntaxKind {
     /// `BINDING_PATTERN` so downstream code doesn't have to text-match `_`.
     WILDCARD_PATTERN,
     THROW_EXPR,
+    /// `return expr?` in expression position — a diverging expression of type
+    /// `never` (mirrors `THROW_EXPR`). Lets `return` appear as a `catch`/`match`
+    /// arm value (e.g. `_ => return 0`) without the statement-only restriction.
+    /// Statement-position `return` still parses as `RETURN_STMT`.
+    RETURN_EXPR,
+    /// `break` in expression position — a diverging expression of type `never`
+    /// (mirrors `RETURN_EXPR`). Lets `break` appear as a `catch`/`match` arm
+    /// value (e.g. `0 => break`) without the statement-only restriction.
+    /// Statement-position `break` still parses as `BREAK_STMT`.
+    BREAK_EXPR,
+    /// `continue` in expression position — a diverging expression of type
+    /// `never` (mirrors `RETURN_EXPR`). Lets `continue` appear as a
+    /// `catch`/`match` arm value (e.g. `0 => continue`) without the
+    /// statement-only restriction. Statement-position `continue` still parses
+    /// as `CONTINUE_STMT`.
+    CONTINUE_EXPR,
     /// `spawn name_expr? block` — BEP-034 spawn expression.
     /// Structure: `KW_SPAWN [expr] BLOCK_EXPR`.
     SPAWN_EXPR,
@@ -362,7 +395,6 @@ pub enum SyntaxKind {
     WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
-    WATCH_LET,
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
@@ -411,13 +443,6 @@ pub enum SyntaxKind {
     BACKTICK_ELSE,     // ${else}
     BACKTICK_ENDIF,    // ${endif}
 
-    // Template components (inside raw strings)
-    TEMPLATE_CONTENT,       // Plain text (deprecated, use PROMPT_TEXT)
-    TEMPLATE_INTERPOLATION, // {{ expr }} - Jinja expressions
-    TEMPLATE_CONTROL,       // {% for ... %} - Jinja statements
-    TEMPLATE_COMMENT,       // {# comment #} - Jinja comments
-    PROMPT_TEXT,            // Plain text between Jinja constructs
-
     // Error recovery
     ERROR,
 
@@ -448,20 +473,6 @@ impl SyntaxKind {
         matches!(
             self,
             SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT | SyntaxKind::HEADER_COMMENT
-        )
-    }
-
-    /// Check if this is a literal token.
-    pub fn is_literal(self) -> bool {
-        matches!(
-            self,
-            SyntaxKind::BIGINT_LITERAL
-                | SyntaxKind::INTEGER_LITERAL
-                | SyntaxKind::FLOAT_LITERAL
-                | SyntaxKind::STRING_LITERAL
-                | SyntaxKind::RAW_STRING_LITERAL
-                | SyntaxKind::BYTE_STRING_LITERAL
-                | SyntaxKind::BACKTICK_STRING_LITERAL
         )
     }
 
@@ -530,6 +541,7 @@ impl SyntaxKind {
                 | Self::KW_LET
                 | Self::KW_CONST
                 | Self::KW_IN
+                | Self::KW_IS
                 | Self::KW_BREAK
                 | Self::KW_CONTINUE
                 | Self::KW_RETURN
@@ -537,13 +549,16 @@ impl SyntaxKind {
                 | Self::KW_MATCH
                 | Self::KW_CATCH
                 | Self::KW_CATCH_ALL
+                | Self::KW_CATCH_ALL_PANICS
                 | Self::KW_THROWS
                 | Self::KW_SPAWN
                 | Self::KW_AWAIT
                 | Self::KW_DEFER
-                | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC
+                | Self::KW_WITH
+                | Self::KW_AS
+                | Self::KW_TYPE
         )
     }
 }

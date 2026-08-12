@@ -17,7 +17,7 @@ use bex_events::{
 
 use crate::{
     trace_heap::{TraceHeap, TraceSnapshotHandle},
-    trace_value_encode::encode_trace_snapshot_body,
+    trace_value_encode::{encode_trace_snapshot_body, render_encoded_trace_value},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,6 +61,21 @@ pub struct EncodedTraceValue {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct TraceDrainReport {
     pub encoded: Vec<EncodedTraceValue>,
+    pub failures: Vec<TraceDrainFailure>,
+}
+
+/// A captured BAML log whose value body has already been rendered by the
+/// engine. Consumers do not need to know how trace snapshots are encoded or
+/// persisted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderedTraceLog {
+    pub metadata: TraceLogMetadata,
+    pub body: String,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct TraceLogDrainReport {
+    pub logs: Vec<RenderedTraceLog>,
     pub failures: Vec<TraceDrainFailure>,
 }
 
@@ -114,6 +129,13 @@ impl TraceCaptureConfig {
             max_pending_log_drafts,
             max_pending_root_result_drafts: Self::ROOT_RESULT_RESERVED_DRAFTS,
         }
+    }
+
+    /// Capture only structured BAML log bodies, up to a bounded number of
+    /// pending events.
+    #[must_use]
+    pub fn logs_only(max_pending_log_drafts: usize) -> Self {
+        Self::enabled_with_budgets(0, max_pending_log_drafts)
     }
 
     #[must_use]
@@ -359,34 +381,13 @@ impl TraceCaptureProducer {
     ) -> TraceDrainReport {
         let mut report = TraceDrainReport::default();
         while let Some(draft) = self.pop_pending() {
-            let Some(snapshot) = self.trace_heap.get(draft.snapshot) else {
-                report.failures.push(TraceDrainFailure {
-                    boundary_id: draft.boundary_id,
-                    call: draft.call,
-                    kind: draft.kind,
-                    log: draft.log,
-                    snapshot: draft.snapshot,
-                    reason: TraceDrainFailureReason::SnapshotMissing,
-                    diagnostic: format!(
-                        "trace snapshot {} was already released",
-                        draft.snapshot.raw()
-                    ),
-                });
-                continue;
-            };
-            let body = match encode_trace_snapshot_body(&snapshot) {
+            let body = match self.encode_snapshot(&draft) {
                 Ok(body) => body,
-                Err(err) => {
+                Err((reason, diagnostic)) => {
                     let _ = self.trace_heap.release(draft.snapshot);
-                    report.failures.push(TraceDrainFailure {
-                        boundary_id: draft.boundary_id,
-                        call: draft.call,
-                        kind: draft.kind,
-                        log: draft.log,
-                        snapshot: draft.snapshot,
-                        reason: TraceDrainFailureReason::EncodeFailed,
-                        diagnostic: err,
-                    });
+                    report
+                        .failures
+                        .push(Self::drain_failure(&draft, reason, diagnostic));
                     continue;
                 }
             };
@@ -413,6 +414,78 @@ impl TraceCaptureProducer {
             }
         }
         report
+    }
+
+    /// Drain captured logs into display-ready text while retaining their
+    /// structured metadata. Snapshot lookup, wire encoding, decoding, and
+    /// release all remain owned by the engine.
+    #[must_use]
+    pub fn drain_rendered_logs(&self) -> TraceLogDrainReport {
+        let mut report = TraceLogDrainReport::default();
+        while let Some(draft) = self.pop_pending() {
+            let Some(metadata) = draft.log.clone() else {
+                let _ = self.trace_heap.release(draft.snapshot);
+                report.failures.push(Self::drain_failure(
+                    &draft,
+                    TraceDrainFailureReason::RecordFailed,
+                    "rendered log drain encountered a non-log capture".to_string(),
+                ));
+                continue;
+            };
+            let body = match self.encode_snapshot(&draft) {
+                Ok(body) => body,
+                Err((reason, diagnostic)) => {
+                    let _ = self.trace_heap.release(draft.snapshot);
+                    report
+                        .failures
+                        .push(Self::drain_failure(&draft, reason, diagnostic));
+                    continue;
+                }
+            };
+            let _ = self.trace_heap.release(draft.snapshot);
+            match render_encoded_trace_value(&body) {
+                Ok(body) => report.logs.push(RenderedTraceLog { metadata, body }),
+                Err(diagnostic) => report.failures.push(Self::drain_failure(
+                    &draft,
+                    TraceDrainFailureReason::EncodeFailed,
+                    diagnostic,
+                )),
+            }
+        }
+        report
+    }
+
+    fn encode_snapshot(
+        &self,
+        draft: &TraceValueDraft,
+    ) -> Result<Vec<u8>, (TraceDrainFailureReason, String)> {
+        let Some(snapshot) = self.trace_heap.get(draft.snapshot) else {
+            return Err((
+                TraceDrainFailureReason::SnapshotMissing,
+                format!(
+                    "trace snapshot {} was already released",
+                    draft.snapshot.raw()
+                ),
+            ));
+        };
+        encode_trace_snapshot_body(&snapshot)
+            .map_err(|diagnostic| (TraceDrainFailureReason::EncodeFailed, diagnostic))
+    }
+
+    fn drain_failure(
+        draft: &TraceValueDraft,
+        reason: TraceDrainFailureReason,
+        diagnostic: String,
+    ) -> TraceDrainFailure {
+        TraceDrainFailure {
+            boundary_id: draft.boundary_id,
+            call: draft.call,
+            kind: draft.kind,
+            log: draft.log.clone(),
+            snapshot: draft.snapshot,
+            reason,
+            diagnostic,
+        }
     }
 }
 
@@ -594,6 +667,20 @@ mod tests {
         ))
     }
 
+    fn structured_test_snapshot(trace_heap: &TraceHeap) -> TraceSnapshotHandle {
+        trace_heap.insert_for_test(TraceSnapshot::for_test(
+            TraceValueRef::for_test(2),
+            vec![
+                TraceValue::String("ada".to_string()),
+                TraceValue::Int(42),
+                TraceValue::Map(vec![
+                    ("user".to_string(), TraceValueRef::for_test(0)),
+                    ("count".to_string(), TraceValueRef::for_test(1)),
+                ]),
+            ],
+        ))
+    }
+
     #[test]
     fn zero_capacity_capture_does_not_run_copy_closure() {
         let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled(0));
@@ -759,6 +846,31 @@ mod tests {
         assert_eq!(producer.stats().published, 2);
         assert_eq!(producer.stats().skipped_value_queue_full, 1);
         assert_eq!(producer.stats().skipped_log_queue_full, 1);
+    }
+
+    #[test]
+    fn rendered_log_drain_preserves_metadata_and_releases_structured_snapshots() {
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(2));
+        producer
+            .capture_log_with(boundary_id(), trace_key(), |trace_heap| {
+                (fake_log_metadata(), test_snapshot(trace_heap, 42))
+            })
+            .unwrap();
+        producer
+            .capture_log_with(boundary_id(), trace_key(), |trace_heap| {
+                (fake_log_metadata(), structured_test_snapshot(trace_heap))
+            })
+            .unwrap();
+
+        let report = producer.drain_rendered_logs();
+
+        assert!(report.failures.is_empty());
+        assert_eq!(report.logs.len(), 2);
+        assert_eq!(report.logs[0].metadata, fake_log_metadata());
+        assert_eq!(report.logs[0].body, "42");
+        assert_eq!(report.logs[1].body, r#"{"user": "ada", "count": 42}"#);
+        assert_eq!(producer.trace_heap().retained_snapshot_count(), 0);
+        assert!(producer.drain().is_empty());
     }
 
     #[test]

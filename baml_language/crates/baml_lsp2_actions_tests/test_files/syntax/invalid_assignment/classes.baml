@@ -45,48 +45,43 @@ function ClassAssignments() -> int {
 
 //----
 //- diagnostics
-// error: type mismatch: expected Person, got Animal
-//     ╭─[ invalid_assignment_classes.baml:25:7 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:25:7]
 //  25 │     p2 = Animal { species: "Bird", legs: 2 };
-//     │          ─────────────────┬─────────────────
-//     │                           ╰─────────────────── type mismatch: expected Person, got Animal
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Animal, got Person
-//     ╭─[ invalid_assignment_classes.baml:29:7 ]
-//     │
+//     ·          ─────────────────┬─────────────────
+//     ·                           ╰── expected `Person`, found `Animal`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:29:7]
 //  29 │     a2 = Person { name: "Dave", age: 40 };
-//     │          ────────────────┬───────────────
-//     │                          ╰───────────────── type mismatch: expected Animal, got Person
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Person, got "not a person"
-//     ╭─[ invalid_assignment_classes.baml:33:7 ]
-//     │
+//     ·          ────────────────┬───────────────
+//     ·                          ╰── expected `Animal`, found `Person`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:33:7]
 //  33 │     p3 = "not a person";
-//     │          ───────┬──────
-//     │                 ╰──────── type mismatch: expected Person, got "not a person"
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Person, got 42
-//     ╭─[ invalid_assignment_classes.baml:37:7 ]
-//     │
+//     ·          ───────┬──────
+//     ·                 ╰── expected `Person`, found `"not a person"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:37:7]
 //  37 │     p4 = 42;
-//     │          ─┬
-//     │           ╰── type mismatch: expected Person, got 42
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected int, got Person
-//     ╭─[ invalid_assignment_classes.baml:41:6 ]
-//     │
+//     ·          ─┬
+//     ·           ╰── expected `Person`, found `42`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:41:6]
 //  41 │     n = Person { name: "Grace", age: 32 };
-//     │         ────────────────┬────────────────
-//     │                         ╰────────────────── type mismatch: expected int, got Person
-//     │
-//     │ Note: Error code: E0001
-// ────╯
+//     ·         ────────────────┬────────────────
+//     ·                         ╰── expected `int`, found `Person`
+//     ╰────
