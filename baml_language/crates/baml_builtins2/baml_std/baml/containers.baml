@@ -187,6 +187,9 @@ class Array<T> {
     /// Stable: elements the comparator reports as equal keep their relative
     /// order. If the comparator throws, `self` is left in its pre-sort state —
     /// the sorted result is written back only once the whole sort completes.
+    /// Comparator calls run sequentially in a deterministic merge order. Their
+    /// exact order is an implementation detail; comparators should not depend on
+    /// a particular comparison sequence.
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
