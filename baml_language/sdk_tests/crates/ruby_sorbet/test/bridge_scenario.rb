@@ -97,6 +97,7 @@ def terminal_failure(mode: nil, null_field: nil, path: FIXTURE)
                           0
                         end
   assert_equal(expected_free_count, fixture_inspection.count("baml_test_free_count")) if path == FIXTURE
+  first
 end
 
 case ARGV.fetch(0)
@@ -127,7 +128,11 @@ when "open_retry"
 when "terminal_mode"
   terminal_failure(mode: ARGV.fetch(1))
 when "terminal_missing_getter"
-  terminal_failure(path: MISSING_GETTER)
+  error = terminal_failure(path: MISSING_GETTER)
+  assert_equal(
+    "Unable to resolve #{MISSING_GETTER.inspect}!baml_get_api_v1: symbol not found",
+    error.message
+  )
 when "terminal_null_field"
   terminal_failure(null_field: ARGV.fetch(1))
 when "invalid_bytecode_retry_and_identity"

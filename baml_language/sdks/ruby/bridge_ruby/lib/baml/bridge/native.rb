@@ -110,6 +110,11 @@ module Baml
 
         def read_table
           symbol = @library.find_function("baml_get_api_v1")
+          if symbol.nil?
+            raise IncompatibleRuntimeError,
+                  "Unable to resolve #{@path.inspect}!baml_get_api_v1: symbol not found"
+          end
+
           getter = FFI::Function.new(:pointer, [], symbol)
           pointer = getter.call
           if pointer.nil? || pointer.null?
@@ -242,6 +247,8 @@ module Baml
           end
         end
 
+        # The generated call layer will drain this queue after callbacks and
+        # surface errors on the caller's Ruby thread.
         def pop_error
           @errors.pop(true)
         rescue ThreadError

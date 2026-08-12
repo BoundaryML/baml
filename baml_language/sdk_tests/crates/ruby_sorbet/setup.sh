@@ -4,7 +4,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 TEST_ROOT="$PWD"
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
-TARGET_DIR="$WORKSPACE_ROOT/target"
+TARGET_DIR="${CARGO_TARGET_DIR:-$WORKSPACE_ROOT/target}"
+if [[ "$TARGET_DIR" != /* ]]; then
+  TARGET_DIR="$WORKSPACE_ROOT/$TARGET_DIR"
+fi
 FIXTURE_DIR="$TARGET_DIR/ruby-bridge-fixtures"
 INCLUDE_DIR="$WORKSPACE_ROOT/crates/bridge_cffi/include"
 mkdir -p "$FIXTURE_DIR"

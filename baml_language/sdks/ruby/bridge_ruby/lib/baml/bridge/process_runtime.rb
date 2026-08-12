@@ -113,6 +113,8 @@ module Baml
         @result_events << [call_id, bytes, Thread.current.object_id].freeze
       end
 
+      # The generated call layer will drain one event for each native result
+      # before result delivery is enabled.
       def pop_result_event
         @result_events.pop(true)
       rescue ThreadError

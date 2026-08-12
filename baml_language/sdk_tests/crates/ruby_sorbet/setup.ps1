@@ -2,7 +2,11 @@ $ErrorActionPreference = "Stop"
 
 $testRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $workspaceRoot = (Resolve-Path (Join-Path $testRoot "../../..")).Path
-$targetDir = Join-Path $workspaceRoot "target"
+$targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $workspaceRoot "target" }
+if (-not [IO.Path]::IsPathRooted($targetDir)) {
+    $targetDir = Join-Path $workspaceRoot $targetDir
+}
+$targetDir = [IO.Path]::GetFullPath($targetDir)
 $fixtureDir = Join-Path $targetDir "ruby-bridge-fixtures"
 $includeDir = Join-Path $workspaceRoot "crates/bridge_cffi/include"
 New-Item -ItemType Directory -Force -Path $fixtureDir | Out-Null

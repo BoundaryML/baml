@@ -525,6 +525,7 @@ jobs:
               },
               {
                 "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
                 "package-name": "sdk_test_ruby_sorbet",
                 "sdk-path": "ruby_sorbet",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -632,6 +633,7 @@ jobs:
               },
               {
                 "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
                 "package-name": "sdk_test_ruby_sorbet",
                 "sdk-path": "ruby_sorbet",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -744,6 +746,7 @@ jobs:
               },
               {
                 "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
                 "package-name": "sdk_test_ruby_sorbet",
                 "sdk-path": "ruby_sorbet",
                 "install-args": "sccache direnv cargo:cargo-nextest",

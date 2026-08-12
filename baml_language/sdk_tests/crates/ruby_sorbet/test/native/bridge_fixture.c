@@ -38,8 +38,8 @@ static BamlBuffer probe_version(void) {
     return buffer_from_literal("9.9.9");
   }
   if (mode != NULL && strcmp(mode, "invalid-version-utf8") == 0) {
-    static const int8_t invalid[] = {(int8_t)0xff};
-    BamlBuffer buffer = {invalid, sizeof(invalid)};
+    static const uint8_t invalid[] = {UINT8_C(0xff)};
+    BamlBuffer buffer = {(const int8_t *)invalid, sizeof(invalid)};
     return buffer;
   }
   if (mode != NULL && strcmp(mode, "null-version-pointer") == 0) {
