@@ -84,12 +84,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      # mise installs sccache/direnv AND cargo-nextest (cargo: backend ->
-      # cargo-binstall prebuilt), replacing taiki-e/install-action.
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv cargo:cargo-nextest"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -189,10 +186,9 @@ jobs:
         with:
           target: x86_64-unknown-linux-musl
 
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv cargo:cargo-nextest"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -285,10 +281,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv cargo:cargo-nextest"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -386,10 +381,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache, direnv, and cargo-nextest"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv cargo:cargo-nextest"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -859,10 +853,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sdk test tools"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: ${{ matrix.install-args }}
+          fetch_from_github: false
 
       - name: "Install .NET SDK"
         if: matrix.sdk-label == 'csharp'
@@ -1074,10 +1067,9 @@ jobs:
           done
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -1178,10 +1170,9 @@ jobs:
           rustup default "${MSRV}"
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -1255,10 +1246,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -1330,10 +1320,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version

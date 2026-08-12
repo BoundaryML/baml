@@ -65,11 +65,9 @@ jobs:
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
 
-      # Only wasm-pack is needed here.
-      - name: "Install mise"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "github:rustwasm/wasm-pack"
+          fetch_from_github: false
 
       # NOTE: if you add a crate with wasm-gated tests, add a step here.
       - name: "Run wasm-pack tests (sys_llm)"

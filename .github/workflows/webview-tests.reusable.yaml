@@ -48,12 +48,9 @@ jobs:
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
 
-      # node + pnpm come from setup-node2 above; we only need mise for
-      # wasm-pack here.
-      - name: "Install mise"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "github:rustwasm/wasm-pack"
+          fetch_from_github: false
 
       # Path-mapped imports from app-vscode-webview resolve into pkg-playground/wasm
       # and pkg-proto/src/generated, so both must be present before tsc runs.
@@ -106,12 +103,9 @@ jobs:
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
 
-      # node + pnpm come from setup-node2 above; we only need mise for
-      # wasm-pack here.
-      - name: "Install mise"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "github:rustwasm/wasm-pack"
+          fetch_from_github: false
 
       - name: "Build WASM"
         run: pnpm --filter pkg-playground build:wasm
@@ -154,12 +148,9 @@ jobs:
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
 
-      # node + pnpm come from setup-node2 above; we only need mise for
-      # wasm-pack here.
-      - name: "Install mise"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "github:rustwasm/wasm-pack"
+          fetch_from_github: false
 
       - name: "Build WASM"
         run: pnpm --filter pkg-playground build:wasm

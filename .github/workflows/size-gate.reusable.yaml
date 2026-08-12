@@ -58,10 +58,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -144,10 +143,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -234,13 +232,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      # Cargo linking uses rust-lld from the Rust toolchain on Windows. The
-      # extra clang tool is installed through mise for llvm-strip, replacing
-      # the previous Chocolatey LLVM install.
-      - name: "Install sccache, direnv, and clang"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv clang"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -340,10 +334,9 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
@@ -440,10 +433,9 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - uses: jdx/mise-action@v4.0.1
         with:
-          install_args: "sccache direnv"
+          fetch_from_github: false
 
       - name: "Verify sccache"
         run: sccache --version
