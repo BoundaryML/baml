@@ -1000,6 +1000,19 @@ function baml.io.input(prompt: string?) -> string  [builtin]
 function baml.io.print(s: string) -> null  [builtin]
 function baml.io.println(s: string) -> null  [builtin]
 
+--- <builtin>/baml/ns_io/read.baml ---
+function baml.io.read(self: ?, limit: int) -> uint8array?  [missing]
+function baml.io.read_to_end(self: ?) -> uint8array  [expr] {
+  { let buf = b"<0 bytes>"; while let chunk: uint8array = self.read(int.max_value()) { buf = buf.concat(chunk) } } buf
+}
+function baml.io.read_to_string(self: ?) -> string  [expr] {
+  { let buf = self.read_to_end() } string.from_utf8(buf) catch (_) { _ => throw root.errors.ParseError { message: "invalid utf-8" } }
+}
+
+--- <builtin>/baml/ns_io/write.baml ---
+function baml.io.flush(self: ?) -> void  [missing]
+function baml.io.write(self: ?, data: uint8array) -> int  [missing]
+
 --- <builtin>/baml/ns_iter/iter.baml ---
 class baml.iter.ArrayIterator {
   arr: T[]

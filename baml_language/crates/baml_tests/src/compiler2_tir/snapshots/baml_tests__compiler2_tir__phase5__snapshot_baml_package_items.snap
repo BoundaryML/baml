@@ -167,6 +167,8 @@ namespace baml.id:
   function new
   function set
 namespace baml.io:
+  type Read
+  type Write
   function eprint
   function eprintln
   function input

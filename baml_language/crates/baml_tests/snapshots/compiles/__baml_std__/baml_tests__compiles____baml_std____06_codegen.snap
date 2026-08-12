@@ -2853,6 +2853,56 @@ function baml.id.new() -> string {
 function baml.id.set(id: string) -> string {
 }
 
+function baml.io.Read.read_to_end(self: baml.io.Read) -> uint8array {
+    load_const b""
+    call baml.deep_copy
+    store_var buf
+
+  L0:
+    call baml.Int.max_value
+    store_var _4
+    load_var2 1 4
+    load_type baml.io.Read
+    load_const "read"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    store_var _5
+    load_var _5
+    narrow_bind uint8array, slot=5
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var buf
+    return
+
+  L2:
+    load_var2 2 5
+    call baml.Uint8Array.concat
+    store_var buf
+    jump L0
+}
+
+function baml.io.Read.read_to_string(self: baml.io.Read) -> string {
+    load_var self
+    load_type baml.io.Read
+    load_const "read_to_end"
+    virtual_call nargs=1 ntypeargs=0
+    store_var buf
+    load_var buf
+    call baml.String.from_utf8
+    jump L0
+    load_var _
+    throw_if_panic
+    load_const "invalid utf-8"
+    init_instance baml.errors.ParseError .message
+    throw
+
+  L0:
+    return
+}
+
 function baml.io.eprint(s: string) -> null {
 }
 

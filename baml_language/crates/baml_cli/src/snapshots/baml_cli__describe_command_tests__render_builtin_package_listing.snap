@@ -159,6 +159,8 @@ function         baml.io.print                    <builtin>/baml/ns_io/io.baml:8
 function         baml.io.println                  <builtin>/baml/ns_io/io.baml:13
 function         baml.io.eprint                   <builtin>/baml/ns_io/io.baml:18
 function         baml.io.eprintln                 <builtin>/baml/ns_io/io.baml:23
+interface        baml.io.Read                     <builtin>/baml/ns_io/read.baml:1
+interface        baml.io.Write                    <builtin>/baml/ns_io/write.baml:1
 class            baml.iter.Done                   <builtin>/baml/ns_iter/iter.baml:2
 interface        baml.iter.Iterable               <builtin>/baml/ns_iter/iter.baml:6
 interface        baml.iter.Iterator               <builtin>/baml/ns_iter/iter.baml:18

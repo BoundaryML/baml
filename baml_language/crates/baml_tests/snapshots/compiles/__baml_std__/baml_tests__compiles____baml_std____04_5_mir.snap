@@ -4197,6 +4197,116 @@ fn baml.io.eprint = builtin(io)
 
 fn baml.io.eprintln = builtin(io)
 
+fn baml.io.Read.read(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.io.Read.read_to_end(self: baml.io.Read) -> uint8array {
+    // Locals:
+    let _0: uint8array // _0 // return
+    let _1: baml.io.Read // self // param
+    let _2: uint8array // buf
+    let _3: null | uint8array
+    let _4: int
+    let _5: null | uint8array
+    let _6: uint8array // chunk
+    let _7: uint8array
+
+    bb0: {
+        _2 = b"<0 bytes>";
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = call const fn baml.Int.max_value() -> [bb2];
+    }
+
+    bb2: {
+        _3 = virtual_call read as baml.io.Read(copy _1, copy _4) -> [bb3];
+    }
+
+    bb3: {
+        _5 = copy _3;
+        _5 = narrow_bind copy _5 as Uint8Array { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb6, bb4];
+    }
+
+    bb4: {
+        _0 = copy _2;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+
+    bb6: {
+        fresh_cell(_6);
+        _6 = copy _5;
+        _7 = copy _6;
+        _2 = call const fn baml.Uint8Array.concat(copy _2, copy _7) -> [bb1];
+    }
+}
+
+fn baml.io.Read.read_to_string(self: baml.io.Read) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.io.Read // self // param
+    let _2: uint8array // buf
+    let _3: unknown // _
+    let _4: uint8array
+    let _5: baml.errors.ParseError
+
+    bb0: {
+        _2 = virtual_call read_to_end as baml.io.Read(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = copy _2;
+        _0 = call const fn baml.String.from_utf8(copy _4) -> [bb2, unwind: bb3];
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw_if_panic copy _3 -> bb4;
+    }
+
+    bb4: {
+        _5 = baml.errors.ParseError { const "invalid utf-8" };
+        throw copy _5;
+    }
+}
+
+fn baml.io.Write.write(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.io.Write.flush(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn baml.iter.Iterable.iter(_1: void) -> void {
     // Locals:
     let _0: void // return
