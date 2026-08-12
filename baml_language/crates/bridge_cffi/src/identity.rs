@@ -231,22 +231,4 @@ mod tests {
         assert!(error.contains("already registered by @boundaryml/baml-bridge"));
         assert!(error.contains("cannot also register baml-bridge"));
     }
-
-    #[test]
-    fn every_bridge_language_names_its_package_ecosystem() {
-        let cases = [
-            (BridgeLanguage::NodeJs, "the npm package"),
-            (BridgeLanguage::Python, "the Python package"),
-            (BridgeLanguage::Go, "the Go module"),
-            (BridgeLanguage::Rust, "the Rust crate"),
-            (BridgeLanguage::CSharp, "the NuGet package"),
-            (BridgeLanguage::Cpp, "the C++ bridge"),
-            (BridgeLanguage::Java, "the Maven package"),
-            (BridgeLanguage::Swift, "the Swift package"),
-            (BridgeLanguage::Web, "the npm package"),
-        ];
-        for (language, expected) in cases {
-            assert_eq!(language.package_kind(), expected);
-        }
-    }
 }

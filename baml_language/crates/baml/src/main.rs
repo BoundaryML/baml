@@ -91,8 +91,6 @@ struct ProjectConfig {
 struct ProjectToolchain {
     version: Option<String>,
     channel: Option<String>,
-    /// Rejected rather than ignored, so the refusal is explained where someone
-    /// would otherwise sit and wonder why their setting does nothing.
     path: Option<String>,
 }
 
@@ -121,7 +119,7 @@ Usage:
 
 Commands:
   use <canary|nightly|version|path>  Install if needed and select as default
-  pin <version>                      Pin an exact version in the nearest baml.toml
+  pin <canary|nightly|version|path>  Select in the nearest baml.toml
   install <canary|nightly|version>   Download without selecting
   update                             Advance the active channel
   status                             Check latest remote version without installing
@@ -134,16 +132,14 @@ Local toolchains:
   apply to it, and `baml ide install` needs a managed toolchain.
 
     baml toolchain use ~/repos/baml/target/debug/baml-cli
+    baml toolchain pin ./target/debug/baml-cli
     BAML_VERSION=./target/debug/baml-cli baml check
-
-  It is deliberately not settable from baml.toml: a checked-out repository must
-  not be able to choose which binary runs on your machine.
 
 Network behavior:
   list is local-only.
   status checks remote metadata but does not install or change selection.
   status is local-only for a path toolchain, which has nothing remote to check.
-  use, install, and update may download toolchains or change local state.
+  use, pin, install, and update may download toolchains or change local state.
 
 Wrapper updates:
   baml self-update                   Update curl-installed wrapper only
@@ -371,16 +367,16 @@ fn toolchain(args: Vec<String>) -> Result<()> {
             use_toolchain(selector, manifest_base_url.as_deref())
         }
         Some("pin") => {
-            let version = args
-                .get(1)
-                .ok_or_else(|| anyhow!("usage: baml toolchain pin <version>"))?;
+            let selector = args.get(1).ok_or_else(|| {
+                anyhow!("usage: baml toolchain pin <canary|nightly|version|path>")
+            })?;
             if args.len() > 2 {
                 return Err(anyhow!(
-                    "usage: baml toolchain pin <version>\nunexpected arguments: {}",
+                    "usage: baml toolchain pin <canary|nightly|version|path>\nunexpected arguments: {}",
                     args[2..].join(" ")
                 ));
             }
-            pin_toolchain(version, manifest_base_url.as_deref())
+            pin_toolchain(selector, manifest_base_url.as_deref())
         }
         Some("update") => update_toolchain(manifest_base_url.as_deref()),
         Some("status") => status_toolchain(manifest_base_url.as_deref()),
@@ -558,17 +554,16 @@ fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
             let config = toml::from_str::<ProjectConfig>(&text)
                 .with_context(|| format!("failed to parse {}", candidate.display()))?;
             if let Some(toolchain) = config.toolchain {
-                if toolchain.path.is_some() {
-                    return Err(anyhow!(
-                        "{} sets [toolchain] path, which is not supported.\nA checked-out repository must not be able to choose which binary runs on your machine.\nTo use a local build, run: baml toolchain use <path>\nOr set $BAML_VERSION to it for a single command.",
-                        candidate.display()
-                    ));
-                }
                 if let Some(version) = toolchain.version {
                     return Ok(Some((candidate, version)));
                 }
                 if let Some(channel) = toolchain.channel {
                     return Ok(Some((candidate, channel)));
+                }
+                if let Some(path) = toolchain.path {
+                    let base = candidate.parent().unwrap_or_else(|| Path::new("."));
+                    let selector = normalize_selector(&path, base);
+                    return Ok(Some((candidate, selector)));
                 }
             }
         }
@@ -1251,42 +1246,40 @@ fn install_manifest_artifact(
         .map_err(|err| anyhow!("{err}"))
 }
 
-fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
-    if is_path_selector(selector) {
-        let cli = resolve_selector_path(selector, &env::current_dir()?);
-        verify_path_toolchain(&cli, "")?;
-        let mut config = read_config();
-        config.default.selector = cli.display().to_string();
-        write_config(&config)?;
-        println!("selected BAML toolchain {}", cli.display());
-        return Ok(());
+fn prepare_toolchain_selector(
+    selector: &str,
+    base: &Path,
+    override_url: Option<&str>,
+) -> Result<String> {
+    let selector = normalize_selector(selector, base);
+    if is_path_selector(&selector) {
+        verify_path_toolchain(Path::new(&selector), "")?;
+        return Ok(selector);
     }
-    if is_channel(selector) {
-        install_toolchain(selector, true, override_url, false)?;
+    if is_channel(&selector) {
+        install_toolchain(&selector, true, override_url, false)?;
     } else {
         let target = baml_release::release_host_target_triple()?;
-        if !toolchain_cli_path(selector).exists() {
-            let manifest = fetch_manifest(selector, override_url, FetchPolicy::CacheAllowed)?;
+        if !toolchain_cli_path(&selector).exists() {
+            let manifest = fetch_manifest(&selector, override_url, FetchPolicy::CacheAllowed)?;
             let artifact = manifest.artifact_for_target(target)?.clone();
             install_manifest_artifact(&manifest.version, target, artifact, false)?;
         }
     }
+    Ok(selector)
+}
+
+fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
+    let selector = prepare_toolchain_selector(selector, &env::current_dir()?, override_url)?;
 
     let mut config = read_config();
-    config.default.selector = selector.to_string();
+    config.default.selector.clone_from(&selector);
     write_config(&config)?;
     println!("selected BAML toolchain {selector}");
     Ok(())
 }
 
-fn pin_toolchain(version: &str, override_url: Option<&str>) -> Result<()> {
-    if is_channel(version) || is_path_selector(version) || semver::Version::parse(version).is_err()
-    {
-        return Err(anyhow!(
-            "baml toolchain pin requires an exact BAML SemVer, but found {version:?}"
-        ));
-    }
-
+fn pin_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     let cwd = env::current_dir()?;
     let manifest_path = find_project_manifest(&cwd).ok_or_else(|| {
         anyhow!(
@@ -1296,23 +1289,29 @@ fn pin_toolchain(version: &str, override_url: Option<&str>) -> Result<()> {
     })?;
     let content = fs::read_to_string(&manifest_path)
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
-    let updated = pin_version_in_manifest(&content, version)
+    let normalized_selector = normalize_selector(selector, &cwd);
+    let selector_key = if is_channel(&normalized_selector) {
+        "channel"
+    } else if is_path_selector(&normalized_selector) {
+        "path"
+    } else {
+        "version"
+    };
+    let updated = pin_selector_in_manifest(&content, selector_key, &normalized_selector)
         .with_context(|| format!("failed to update {}", manifest_path.display()))?;
 
-    if !toolchain_cli_path(version).exists() {
-        install_toolchain(version, false, override_url, false)?;
-    }
+    let selector = prepare_toolchain_selector(&normalized_selector, &cwd, override_url)?;
 
     write_text_atomic(&manifest_path, &updated)
         .with_context(|| format!("failed to write {}", manifest_path.display()))?;
     println!(
-        "pinned BAML toolchain {version} in {}",
+        "pinned BAML toolchain {selector} in {}",
         manifest_path.display()
     );
     Ok(())
 }
 
-fn pin_version_in_manifest(content: &str, version: &str) -> Result<String> {
+fn pin_selector_in_manifest(content: &str, selector_key: &str, selector: &str) -> Result<String> {
     let mut document = content
         .parse::<DocumentMut>()
         .context("invalid baml.toml")?;
@@ -1326,18 +1325,19 @@ fn pin_version_in_manifest(content: &str, version: &str) -> Result<String> {
         .remove_entry("version")
         .or_else(|| toolchain.remove_entry("channel"))
         .or_else(|| toolchain.remove_entry("path"));
+    toolchain.remove("version");
     toolchain.remove("channel");
     toolchain.remove("path");
 
-    let mut key = Key::new("version");
-    let mut version_value = Value::from(version);
+    let mut key = Key::new(selector_key);
+    let mut selector_value = Value::from(selector);
     if let Some((old_key, old_item)) = decorated_selector {
         *key.leaf_decor_mut() = old_key.leaf_decor().clone();
         if let Some(old_value) = old_item.as_value() {
-            *version_value.decor_mut() = old_value.decor().clone();
+            *selector_value.decor_mut() = old_value.decor().clone();
         }
     }
-    toolchain.insert_formatted(&key, Item::Value(version_value));
+    toolchain.insert_formatted(&key, Item::Value(selector_value));
     Ok(document.to_string())
 }
 
@@ -1920,7 +1920,8 @@ mod tests {
     #[test]
     fn pin_version_adds_toolchain_table_without_reformatting_manifest() {
         let input = "# project comment\n[package]\nname = \"demo\"\n";
-        let output = pin_version_in_manifest(input, "0.15.1-nightly.20260807.a").unwrap();
+        let output =
+            pin_selector_in_manifest(input, "version", "0.15.1-nightly.20260807.a").unwrap();
         assert!(output.starts_with(input), "{output}");
         assert!(
             output.contains("[toolchain]\nversion = \"0.15.1-nightly.20260807.a\""),
@@ -1931,7 +1932,7 @@ mod tests {
     #[test]
     fn pin_version_replaces_conflicting_selector_and_preserves_comments() {
         let input = "[package]\nname = \"demo\"\n\n[toolchain]\n# keep this comment\nchannel = \"nightly\"\n";
-        let output = pin_version_in_manifest(input, "0.16.0").unwrap();
+        let output = pin_selector_in_manifest(input, "version", "0.16.0").unwrap();
         assert!(output.contains("# keep this comment"), "{output}");
         assert!(output.contains("version = \"0.16.0\""), "{output}");
         assert!(!output.contains("channel ="), "{output}");
@@ -1939,10 +1940,36 @@ mod tests {
 
     #[test]
     fn pin_version_rejects_non_table_toolchain() {
-        let error = pin_version_in_manifest("toolchain = \"nightly\"\n", "0.16.0")
+        let error = pin_selector_in_manifest("toolchain = \"nightly\"\n", "version", "0.16.0")
             .unwrap_err()
             .to_string();
         assert!(error.contains("must be a TOML table"), "{error}");
+    }
+
+    #[test]
+    fn pin_selector_writes_each_supported_selector_kind() {
+        for (key, selector) in [
+            ("channel", "canary"),
+            ("channel", "nightly"),
+            ("version", "0.16.0"),
+            ("path", "/work/baml-cli"),
+        ] {
+            let output =
+                pin_selector_in_manifest("[toolchain]\nversion = \"0.15.0\"\n", key, selector)
+                    .unwrap();
+            assert!(
+                output.contains(&format!("{key} = \"{selector}\"")),
+                "{output}"
+            );
+            for conflicting_key in ["version", "channel", "path"] {
+                if conflicting_key != key {
+                    assert!(
+                        !output.contains(&format!("{conflicting_key} =")),
+                        "{output}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

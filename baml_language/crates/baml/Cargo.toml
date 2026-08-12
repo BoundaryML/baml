@@ -32,7 +32,6 @@ console = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
-semver = { workspace = true }
 toml = { workspace = true }
 toml_edit = { workspace = true }
 

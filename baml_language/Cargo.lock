@@ -664,7 +664,6 @@ dependencies = [
  "baml_release",
  "console",
  "reqwest",
- "semver",
  "serde",
  "serde_json",
  "tempfile",

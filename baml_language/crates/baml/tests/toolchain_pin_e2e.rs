@@ -21,6 +21,35 @@ fn install_fake_toolchain(home: &Path, version: &str) {
     .unwrap();
 }
 
+fn cache_channel_manifest(home: &Path, channel: &str, version: &str) {
+    let artifacts = baml_release::SUPPORTED_RELEASE_TARGETS
+        .iter()
+        .map(|target| {
+            (
+                (*target).to_string(),
+                serde_json::json!({
+                    "url": format!("https://example.test/{target}.tar.gz"),
+                    "sha256": "0".repeat(64),
+                }),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>();
+    let cache = home.join("manifest-cache/prod");
+    fs::create_dir_all(&cache).unwrap();
+    fs::write(
+        cache.join(format!("{channel}.json")),
+        serde_json::to_string(&serde_json::json!({
+            "schema": 1,
+            "version": version,
+            "channel": channel,
+            "released_at": "2026-08-12T00:00:00Z",
+            "artifacts": artifacts,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+}
+
 #[test]
 fn pin_updates_nearest_manifest_and_replaces_channel() {
     let temp = tempfile::tempdir().unwrap();
@@ -64,28 +93,128 @@ fn pin_updates_nearest_manifest_and_replaces_channel() {
 }
 
 #[test]
-fn pin_rejects_channels_without_modifying_manifest() {
+fn pin_accepts_canary_and_nightly_channels() {
+    for channel in ["canary", "nightly"] {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let project = temp.path().join("project");
+        fs::create_dir_all(&project).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        install_fake_toolchain(&home, "0.16.0");
+        cache_channel_manifest(&home, channel, "0.16.0");
+        fs::write(
+            project.join("baml.toml"),
+            "[toolchain]\nversion = \"0.15.0\"\n",
+        )
+        .unwrap();
+
+        let output = Command::new(env!("CARGO_BIN_EXE_baml"))
+            .args(["toolchain", "pin", channel])
+            .current_dir(&project)
+            .env("BAML_HOME", &home)
+            .env("HOME", temp.path())
+            .env_remove("BAML_VERSION")
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "{}: {}",
+            channel,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let manifest = fs::read_to_string(project.join("baml.toml")).unwrap();
+        assert!(
+            manifest.contains(&format!("channel = \"{channel}\"")),
+            "{manifest}"
+        );
+        assert!(!manifest.contains("version ="), "{manifest}");
+        let state = fs::read_to_string(home.join("state.toml")).unwrap();
+        assert!(state.contains(&format!("[channels.{channel}]")), "{state}");
+        assert!(state.contains("active_version = \"0.16.0\""), "{state}");
+    }
+}
+
+#[test]
+fn pin_accepts_and_activates_a_local_path() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let project = temp.path().join("project");
-    fs::create_dir_all(&project).unwrap();
+    let nested = project.join("baml_src/nested");
+    let local_cli = nested.join("local").join(if cfg!(windows) {
+        "baml-cli.exe"
+    } else {
+        "baml-cli"
+    });
+    fs::create_dir_all(local_cli.parent().unwrap()).unwrap();
     fs::create_dir_all(&home).unwrap();
-    let original = "[package]\nname = \"demo\"\n";
-    fs::write(project.join("baml.toml"), original).unwrap();
+    fs::write(&local_cli, "").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&local_cli, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::write(
+        project.join("baml.toml"),
+        "[toolchain]\nversion = \"0.16.0\"\n",
+    )
+    .unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_baml"))
-        .args(["toolchain", "pin", "nightly"])
-        .current_dir(&project)
+        .args(["toolchain", "pin", "./local/baml-cli"])
+        .current_dir(&nested)
         .env("BAML_HOME", &home)
         .env("HOME", temp.path())
         .env_remove("BAML_VERSION")
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("requires an exact BAML SemVer"));
-    assert_eq!(
-        fs::read_to_string(project.join("baml.toml")).unwrap(),
-        original
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let manifest = fs::read_to_string(project.join("baml.toml")).unwrap();
+    let expected_cli = nested
+        .canonicalize()
+        .unwrap()
+        .join("local")
+        .join(if cfg!(windows) {
+            "baml-cli.exe"
+        } else {
+            "baml-cli"
+        });
+    assert!(
+        manifest.contains(&format!("path = {:?}", expected_cli.display().to_string())),
+        "{manifest}"
+    );
+    assert!(!manifest.contains("version ="), "{manifest}");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_baml"))
+        .args(["toolchain", "status"])
+        .current_dir(&nested)
+        .env("BAML_HOME", &home)
+        .env("HOME", temp.path())
+        .env_remove("BAML_VERSION")
+        .output()
+        .unwrap();
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&status.stdout);
+    assert!(
+        stdout.contains(&format!("active selector: {}", expected_cli.display())),
+        "{stdout}"
+    );
+    let expected_manifest = project.canonicalize().unwrap().join("baml.toml");
+    assert!(
+        stdout.contains(&format!("source: set by {}", expected_manifest.display())),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("Remote versions were not checked."),
+        "{stdout}"
     );
 }
