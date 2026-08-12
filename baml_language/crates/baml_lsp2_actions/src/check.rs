@@ -114,9 +114,13 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         if tainted.contains(&file_scope_idx) {
             continue;
         }
-        let rendered = render_scope_diagnostics(db, *scope_id);
-        for r in rendered {
-            diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, r));
+        // S17 MEASUREMENT SHIM (temporary): skip the TIR inference layer
+        // to measure exactly which diagnostics it alone produces.
+        if std::env::var("BAML_S17_SKIP_TIR_SCOPE_DIAGS").is_err() {
+            let rendered = render_scope_diagnostics(db, *scope_id);
+            for r in rendered {
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, r));
+            }
         }
     }
 

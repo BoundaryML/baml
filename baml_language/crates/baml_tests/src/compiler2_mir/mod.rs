@@ -735,3 +735,69 @@ function dp_main(p: Person) -> string throws never {
         "providers diverge on a body the recorded tables fully cover"
     );
 }
+
+
+/// S17 measurement probe: dumps every diagnostic_errors project's rendered
+/// diagnostics to `S17_DUMP_PATH` (no-op without it). Paired with check.rs's
+/// `BAML_S17_SKIP_TIR_SCOPE_DIAGS` shim, the two runs' diff is the exact
+/// inference-layer parity set. Both die with S17's completion.
+#[test]
+fn s17_dump_diagnostics() {
+    use std::fmt::Write as _;
+    let Ok(path) = std::env::var("S17_DUMP_PATH") else {
+        return;
+    };
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/projects/diagnostic_errors");
+    let mut out = String::new();
+    let mut dirs: Vec<_> = std::fs::read_dir(root)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.path())
+        .collect();
+    dirs.sort();
+    for dir in dirs {
+        let mut db = baml_project::ProjectDatabase::new();
+        let _root = db.set_project_root(std::path::Path::new("."));
+        let mut files: Vec<_> = walkdir_baml(&dir);
+        files.sort();
+        for f in &files {
+            let content = std::fs::read_to_string(f).unwrap().replace("\r\n", "\n");
+            let rel = f.strip_prefix(&dir).unwrap().to_string_lossy().to_string();
+            db.add_file(&rel, &content);
+        }
+        let all_files = baml_compiler2_hir::compiler2_all_files(&db);
+        let diags = baml_project::collect_compiler2_diagnostics(&db);
+        let mut sources = std::collections::HashMap::new();
+        let mut file_paths = std::collections::HashMap::new();
+        for source_file in &all_files {
+            let file_id = source_file.file_id(&db);
+            sources.insert(file_id, source_file.text(&db).to_string());
+            file_paths.insert(
+                file_id,
+                std::path::PathBuf::from(source_file.path(&db).to_string_lossy().to_string()),
+            );
+        }
+        let config = baml_compiler_diagnostics::RenderConfig::test();
+        let name = dir.file_name().unwrap().to_string_lossy();
+        for d in &diags {
+            let rendered =
+                baml_compiler_diagnostics::render_diagnostic(d, &sources, &file_paths, &config);
+            writeln!(out, "{}\t{}", name, rendered).ok();
+        }
+    }
+    std::fs::write(path, out).unwrap();
+}
+
+fn walkdir_baml(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()) {
+        let p = entry.path();
+        if p.is_dir() {
+            out.extend(walkdir_baml(&p));
+        } else if p.extension().and_then(|e| e.to_str()) == Some("baml") {
+            out.push(p);
+        }
+    }
+    out
+}
