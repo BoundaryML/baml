@@ -970,6 +970,13 @@ impl<'db> InferenceContext<'db> {
         if let Some(rest) = rest
             && let Some(rest_pat) = rest.pat
         {
+            // The rest slot carries a BINDING only: `..let name`
+            // (optionally ascribed). Structural sub-patterns have no
+            // sliced-middle semantics (E0001's rest-sub-pattern rule).
+            if !matches!(body.patterns[rest_pat], Pattern::Bind { .. }) {
+                self.pending_diags
+                    .push(super::PendingDiag::RestNotBinding { pat: rest_pat });
+            }
             // The rest binds the sliced middle: a list of the element.
             let rest_ty = Ty::list(element.clone());
             self.lower_pattern(body, rest_pat, &rest_ty);

@@ -559,6 +559,9 @@ enum PendingDiag {
         pat: PatId,
         class_name: baml_type::Name,
     },
+    RestNotBinding {
+        pat: PatId,
+    },
     OrBindingConflict {
         pat: PatId,
         name: baml_type::Name,
@@ -5379,6 +5382,15 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::RestNotBinding { pat } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::RestSubPatternNotBinding,
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::OrBindingConflict {
                         pat,
                         name,
