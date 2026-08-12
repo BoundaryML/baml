@@ -126,6 +126,9 @@ module Baml
         begin
           @library = FFI::DynamicLibrary.open(path, flags)
         rescue LoadError => error
+          # Opening a file does not create native state. Release the process
+          # claim so a prefork worker can correct the path and retry.
+          @owner_pid = nil
           raise RuntimeLoadError,
                 "Unable to open BAML runtime #{path.inspect}: #{error.message}"
         end

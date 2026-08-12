@@ -122,6 +122,27 @@ when "open_retry"
   assert_raises(Baml::Bridge::RuntimeLoadError) do
     Baml::Bridge.initialize!(VALID_PROGRAM)
   end
+
+  if Process.respond_to?(:fork)
+    read_pipe, write_pipe = IO.pipe
+    child = fork do
+      read_pipe.close
+      begin
+        initialize_fixture
+        write_pipe.write("ok")
+        exit! 0
+      rescue Exception => error
+        write_pipe.write("#{error.class}: #{error.message}")
+        exit! 1
+      end
+    end
+    write_pipe.close
+    status = wait_for_child(child)
+    result = read_pipe.read
+    assert(status.success?, result)
+    assert_equal("ok", result)
+  end
+
   initialize_fixture
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
   assert_equal(3, fixture_inspection.count("baml_test_free_count"))
