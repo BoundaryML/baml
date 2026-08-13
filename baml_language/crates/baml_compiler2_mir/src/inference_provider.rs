@@ -7,7 +7,7 @@
 //! then the old engine and the flag were deleted); the differential MIR
 //! gate diffs pretty-printed bodies per function across the corpus.
 //!
-//! Conversion happens ONCE per body at context construction (hir_ty
+//! Conversion happens ONCE per body at context construction (`hir_ty`
 //! tables are engine-native interned types; the consumer boundary
 //! materializes to the plain family), and the accessors then borrow from
 //! the converted tables exactly as they borrow from `ScopeInference`.

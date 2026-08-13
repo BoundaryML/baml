@@ -39,7 +39,7 @@ function Remand(s: Situation) -> string {
 //- diagnostics
 // E0063
 //
-//   ⚠ unreachable arm
+//   × unreachable arm
 //     ╭─[functions_v2_match.baml:32:12]
 //  32 │       _ => "...",
 //     ·            ─────

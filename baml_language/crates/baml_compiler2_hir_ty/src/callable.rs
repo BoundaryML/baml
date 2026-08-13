@@ -87,7 +87,38 @@ pub fn callable_throws<'db>(
         db,
         baml_compiler2_hir::body::BodyOwnerId::Function(function),
     );
-    CallableThrows(result.throws.to_plain())
+    // The INFERRED contract widens body-internal literal grain to its
+    // primitives (`throw 1` infers `throws int`, TIR's shape): the throws
+    // type is the function's public error surface - SDK generators name
+    // error types from it, and a value-level literal is not a nameable
+    // API type. A WRITTEN clause returned above verbatim - the author's
+    // contract stands as written.
+    CallableThrows(widen_throws_literals(&result.throws.to_plain()))
+}
+
+fn widen_throws_literals(ty: &baml_type::Ty) -> baml_type::Ty {
+    use baml_type::Ty as P;
+    let widen_leaf = |leaf: &P| -> P {
+        match leaf {
+            P::Literal(lit, _, _) => {
+                let attr = baml_type::TyAttr::default();
+                match lit {
+                    baml_base::Literal::Int(_) => P::Int { attr },
+                    baml_base::Literal::Bigint(_) => P::Bigint { attr },
+                    baml_base::Literal::Float(_) => P::Float { attr },
+                    baml_base::Literal::String(_) => P::String { attr },
+                    baml_base::Literal::Bool(_) => P::Bool { attr },
+                }
+            }
+            other => other.clone(),
+        }
+    };
+    match ty {
+        P::Union(members, attr) => {
+            baml_type::unify::normalize_union_members(members.iter().map(widen_leaf), attr.clone())
+        }
+        leaf => widen_leaf(leaf),
+    }
 }
 
 /// Declaration-site resolved signature of a function or method, as the
