@@ -859,30 +859,23 @@ test "assert-equal-failure" {
     );
 }
 
-/// Non-assertion errors should retain their type, fields, and BAML stack
-/// context instead of producing a bare `FAIL` line.
+/// B-356: declared errors thrown by builtins should retain their type, message,
+/// and BAML stack context instead of producing a bare `FAIL` line.
 #[test]
-fn test_thrown_error_prints_rendered_error_context() {
+fn test_json_parse_error_prints_rendered_error_context() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
         tmp.path(),
         r#"
-class ProviderFailure {
-  message string
-  status int
+class Foo {
+  x int
 }
 
-function fail_request() -> void {
-  throw ProviderFailure {
-    message: "provider rejected request",
-    status: 429,
-  }
-}
-
-test "provider-failure" {
-  fail_request()
+test "throws-during-parse" {
+  let value = baml.json.from_string<Foo>("045");
+  assert.is_true(true)
 }
 "#,
     );
@@ -899,19 +892,15 @@ test "provider-failure" {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("user.ProviderFailure"),
+        stderr.contains("baml.json.JsonParseError"),
         "Expected the thrown error type in stderr, got: {stderr}",
     );
     assert!(
-        stderr.contains(r#"message: "provider rejected request""#),
+        stderr.contains(r#"message: "invalid number at line 1 column 2""#),
         "Expected the thrown error message in stderr, got: {stderr}",
     );
     assert!(
-        stderr.contains("status: 429"),
-        "Expected the thrown error fields in stderr, got: {stderr}",
-    );
-    assert!(
-        stderr.contains("main.baml"),
+        stderr.contains("baml_src/main.baml"),
         "Expected BAML source context in stderr, got: {stderr}",
     );
     assert!(
