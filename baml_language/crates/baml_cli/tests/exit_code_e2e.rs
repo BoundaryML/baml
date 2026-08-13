@@ -166,11 +166,10 @@ fn check_from_below_manifest_requires_explicit_project() {
         String::from_utf8_lossy(&implicit.stderr),
     );
     let stderr = String::from_utf8_lossy(&implicit.stderr);
-    let project_root = tmp.path().canonicalize().unwrap();
     assert!(stderr.contains("baml.toml"), "got stderr:\n{stderr}");
     assert!(
-        stderr.contains(&project_root.display().to_string()),
-        "expected project directory in stderr:\n{stderr}",
+        stderr.contains("Change to `"),
+        "expected change-directory guidance in stderr:\n{stderr}",
     );
     assert!(
         stderr.contains("must be run from the directory containing it"),
