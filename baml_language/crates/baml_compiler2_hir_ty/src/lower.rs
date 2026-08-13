@@ -2141,6 +2141,14 @@ pub fn interface_lowering_diagnostics<'db>(
             }
         }
     }
+    // A transitive `requires` graph cycling back to this interface (E0118),
+    // reported with the full witnessing name chain.
+    if let Some(chain) = crate::interfaces::interface_requires_cycle(db, interface) {
+        out.push((
+            source_map.name_span,
+            TirTypeError::InterfaceRequiresCycle { chain },
+        ));
+    }
     for &target in &data.requires {
         let lowered = ctx.lower_type_ref_at(&data.type_refs, target, TypePosition::ConstraintHead);
         if !lowered.has_error() && !matches!(lowered.kind(), TyKind::Interface(..)) {
