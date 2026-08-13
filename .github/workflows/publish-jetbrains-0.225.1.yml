@@ -1,6 +1,6 @@
 name: Publish JetBrains 0.225.1 (one-off)
 
-run-name: Publish JetBrains ${{ inputs.version }} to ${{ inputs.channel }} from ${{ inputs.expected_source_sha }}
+run-name: Replace JetBrains update ${{ inputs.rejected_update_id }} with ${{ inputs.version }} on ${{ inputs.channel }} from ${{ inputs.expected_source_sha }}
 
 on:
   workflow_dispatch:
@@ -19,6 +19,10 @@ on:
           - default
       expected_source_sha:
         description: Full canary commit SHA that must be checked out and published
+        required: true
+        type: string
+      rejected_update_id:
+        description: Exact rejected JetBrains Marketplace update ID to replace
         required: true
         type: string
       confirmation:
@@ -48,7 +52,7 @@ jobs:
     env:
       PLUGIN_ID: com.boundaryml.jetbrains_ext
       MARKETPLACE_PLUGIN_ID: "27455"
-      REJECTED_UPDATE_ID: "1136880"
+      REJECTED_UPDATE_ID: ${{ inputs.rejected_update_id }}
       ORIGINAL_UPLOAD_RUN_ID: "31646749894"
       VERSION: ${{ inputs.version }}
       CHANNEL: ${{ inputs.channel }}
@@ -78,6 +82,10 @@ jobs:
           fi
           if [[ "${CHANNEL}" != "default" ]]; then
             echo "::error::This recovery workflow permits only the production default channel; got ${CHANNEL}."
+            exit 1
+          fi
+          if [[ ! "${REJECTED_UPDATE_ID}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Rejected Marketplace update ID must contain only decimal digits; got ${REJECTED_UPDATE_ID}."
             exit 1
           fi
           if [[ ! "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ || "${actual_sha}" != "${EXPECTED_SOURCE_SHA}" ]]; then
