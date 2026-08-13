@@ -158,7 +158,7 @@ $BAML describe <YourSymbol>         # also works on symbols in the loaded projec
 ```
 
 `describe` resolves symbols against a project. From inside a project dir it just works; from
-elsewhere pass `--from <project-dir>`. Output is capped by `--budget` (default 30) and tells
+elsewhere pass `--project <project-dir>`. Output is capped by `--budget` (default 30) and tells
 you "… N more lines (re-run with a higher --budget)" — raise it to see everything. Anything
 you can't see, `describe` it; do not guess stdlib names or signatures.
 

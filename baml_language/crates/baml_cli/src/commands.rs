@@ -2,7 +2,7 @@
 // Format, and LanguageServer. `baml run` is the top-level entry for
 // standalone execution.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Args, CommandFactory, Parser, Subcommand};
@@ -107,20 +107,6 @@ pub(crate) struct GlobalArgs {
         display_order = 60
     )]
     pub project: Option<PathBuf>,
-}
-
-#[derive(Args, Clone, Debug, Default)]
-pub(crate) struct CompilerArgs {
-    #[arg(
-        short = 'F',
-        long = "features",
-        value_name = "FEATURES",
-        value_delimiter = ',',
-        action = clap::ArgAction::Append,
-        help_heading = "Compiler options",
-        help = "Enable compiler features; repeatable or comma-separated [possible values: beta, display_all_warnings]"
-    )]
-    pub features: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -293,15 +279,6 @@ impl RuntimeCli {
             Err(err) => err.exit(),
         };
 
-        if cli.global.project.is_some() && cli.command.has_legacy_project() {
-            RuntimeCli::command()
-                .error(
-                    clap::error::ErrorKind::ArgumentConflict,
-                    "the argument '--project <PATH>' cannot be used with its deprecated alias",
-                )
-                .exit();
-        }
-        cli.command.apply_project(cli.global.project.as_deref());
         // Record the invoked subcommand's clap name for telemetry, straight
         // from the parsed matches so it always matches what clap registered.
         cli.invoked_subcommand = matches.subcommand_name().map(str::to_string);
@@ -366,18 +343,20 @@ impl RuntimeCli {
             _ => crate::skill_check::SkillCheck::skipped(),
         };
 
+        let project = self.global.project.as_deref();
+
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
-            Commands::Check(args) => args.run(),
-            Commands::Run(args) => args.run(),
-            Commands::Playground(args) => args.run(),
-            Commands::Pack(args) => args.run(),
+            Commands::Check(args) => args.run(project),
+            Commands::Run(args) => args.run(project),
+            Commands::Playground(args) => args.run(project),
+            Commands::Pack(args) => args.run(project),
             Commands::Ide(args) => args.run(),
-            Commands::Agent(args) => args.run(),
-            Commands::Describe(args) => args.run(),
-            Commands::Generate(args) => args.run(),
-            Commands::Test(args) => args.run(),
+            Commands::Agent(args) => args.run(project),
+            Commands::Describe(args) => args.run(project),
+            Commands::Generate(args) => args.run(project),
+            Commands::Test(args) => args.run(project),
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
@@ -392,47 +371,7 @@ impl RuntimeCli {
             Commands::Telemetry(args) => args.run(),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),
-            Commands::Format(args) => args.run(),
-        }
-    }
-}
-
-impl Commands {
-    fn has_legacy_project(&self) -> bool {
-        match self {
-            Self::Check(args) => args.from.is_some(),
-            Self::Format(args) => args.from.is_some(),
-            Self::Describe(args) => args.from.is_some(),
-            Self::Generate(args) => args.has_legacy_project(),
-            Self::Test(args) => args.from.is_some(),
-            Self::Run(args) => args.from.is_some(),
-            Self::Playground(args) => args.from.is_some(),
-            Self::Pack(args) => args.from.is_some(),
-            Self::Agent(crate::agent_command::AgentArgs {
-                command: crate::agent_command::AgentCommand::Install(args),
-            }) => args.dir.is_some(),
-            _ => false,
-        }
-    }
-
-    fn apply_project(&mut self, project: Option<&Path>) {
-        let Some(project) = project else {
-            return;
-        };
-        let project = project.to_path_buf();
-        match self {
-            Self::Check(args) => args.from = Some(project.clone()),
-            Self::Format(args) => args.from = Some(project.clone()),
-            Self::Describe(args) => args.from = Some(project.clone()),
-            Self::Generate(args) => args.apply_project(&project),
-            Self::Test(args) => args.from = Some(project.clone()),
-            Self::Run(args) => args.from = Some(project.clone()),
-            Self::Playground(args) => args.from = Some(project.clone()),
-            Self::Pack(args) => args.from = Some(project.clone()),
-            Self::Agent(crate::agent_command::AgentArgs {
-                command: crate::agent_command::AgentCommand::Install(args),
-            }) => args.dir = Some(project),
-            _ => {}
+            Commands::Format(args) => args.run(project),
         }
     }
 }
@@ -605,9 +544,10 @@ mod tests {
         let cli = RuntimeCli::parse_from_smart(vec![
             "baml-cli".into(),
             "generate".into(),
-            "--from".into(),
+            "--project".into(),
             ".".into(),
         ]);
+        assert_eq!(cli.global.project, Some(PathBuf::from(".")));
         let Commands::Generate(args) = cli.command else {
             panic!("expected generate command");
         };
@@ -621,6 +561,7 @@ mod tests {
             "--project".into(),
             "workspace".into(),
         ]);
+        let project = cli.global.project.clone();
         let Commands::Generate(args) = cli.command else {
             panic!("expected generate command");
         };
@@ -631,7 +572,7 @@ mod tests {
             args.output_type,
             baml_codegen_types::OutputType::PythonPydantic
         );
-        assert_eq!(args.from, Some(PathBuf::from("workspace")));
+        assert_eq!(project, Some(PathBuf::from("workspace")));
     }
 
     #[test]
@@ -922,11 +863,12 @@ mod tests {
             "--project".into(),
             "project".into(),
         ]);
+        let project = cli.global.project.clone();
         let Commands::Run(args) = cli.command else {
             panic!("expected run command");
         };
         assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
-        assert_eq!(args.from, Some(std::path::PathBuf::from("project")));
+        assert_eq!(project, Some(std::path::PathBuf::from("project")));
     }
 
     #[test]
@@ -936,34 +878,9 @@ mod tests {
             vec!["baml", "check", "--project", "workspace"],
         ] {
             let cli = RuntimeCli::parse_from_smart(argv.into_iter().map(str::to_string).collect());
-            let Commands::Check(args) = cli.command else {
-                panic!("expected check command");
-            };
-            assert_eq!(args.from, Some(PathBuf::from("workspace")));
+            assert_eq!(cli.global.project, Some(PathBuf::from("workspace")));
+            assert!(matches!(cli.command, Commands::Check(_)));
         }
-    }
-
-    #[test]
-    fn compiler_features_are_scoped_and_cargo_shaped() {
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml".into(),
-            "check".into(),
-            "-F".into(),
-            "beta,display_all_warnings".into(),
-        ]);
-        let Commands::Check(args) = cli.command else {
-            panic!("expected check command");
-        };
-        assert_eq!(args.compiler.features, ["beta", "display_all_warnings"]);
-
-        let help = crate::help_command::render_for_test(&["check"]);
-        assert!(
-            help.contains("Enable compiler features; repeatable or comma-separated"),
-            "{help}"
-        );
-        assert!(help.contains("[possible values: beta,"), "{help}");
-        assert!(help.contains("display_all_warnings]"), "{help}");
-        assert!(!help.contains("Available features:"), "{help}");
     }
 
     #[test]
@@ -977,13 +894,14 @@ mod tests {
             "--source".into(),
             "skills.tar.gz".into(),
         ]);
+        let project = cli.global.project.clone();
         let Commands::Agent(crate::agent_command::AgentArgs {
             command: crate::agent_command::AgentCommand::Install(args),
         }) = cli.command
         else {
             panic!("expected agent install command");
         };
-        assert_eq!(args.dir, Some(PathBuf::from("workspace")));
+        assert_eq!(project, Some(PathBuf::from("workspace")));
         assert_eq!(args.source.as_deref(), Some("skills.tar.gz"));
     }
 }

@@ -37,7 +37,7 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
     let out_bin = dir.join("out");
     let mut cmd = Command::new(&built.baml_cli);
     cmd.arg("pack")
-        .arg("--from")
+        .arg("--project")
         .arg(dir)
         .arg("-o")
         .arg(&out_bin);
@@ -180,7 +180,7 @@ fn pack_e2e_omits_compile_file_status() {
         .env("BAML_OUTPUT_PRESET", "human")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .arg("pack")
-        .arg("--from")
+        .arg("--project")
         .arg(tmp.path())
         .arg("-o")
         .arg(&out_bin)

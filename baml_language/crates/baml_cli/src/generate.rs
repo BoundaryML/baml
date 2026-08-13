@@ -44,13 +44,6 @@ pub struct GenerateArgs {
     #[command(subcommand)]
     pub command: Option<GenerateCommand>,
 
-    #[command(flatten)]
-    pub compiler: crate::commands::CompilerArgs,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
-
     /// Output directory override (takes precedence over generator config)
     #[arg(
         long = "output-dir",
@@ -72,10 +65,6 @@ pub enum GenerateCommand {
 pub struct AddGeneratorArgs {
     #[arg(value_name = "OUTPUT_TYPE", value_parser = add_output_type_parser())]
     pub output_type: OutputType,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 
     /// Go module import path for the generated baml_sdk package.
     #[arg(long, value_name = "IMPORT_PATH")]
@@ -99,10 +88,10 @@ struct GeneratorDef {
 }
 
 impl AddGeneratorArgs {
-    fn run(&self) -> Result<crate::ExitCode> {
-        let root = crate::project_load::find_project_root_from(self.from.as_deref())?.ok_or_else(
-            || anyhow!("no BAML project found; run `baml init` before adding a generator"),
-        )?;
+    pub(crate) fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
+        let root = crate::project_load::find_project_root_from(project)?.ok_or_else(|| {
+            anyhow!("no BAML project found; run `baml init` before adding a generator")
+        })?;
         let toml_path = root.join("baml.toml");
         if !toml_path.is_file() {
             anyhow::bail!(
@@ -211,29 +200,14 @@ fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(St
 }
 
 impl GenerateArgs {
-    pub(crate) fn has_legacy_project(&self) -> bool {
-        self.from.is_some()
-            || matches!(
-                &self.command,
-                Some(GenerateCommand::Add(args)) if args.from.is_some()
-            )
-    }
-
-    pub(crate) fn apply_project(&mut self, project: &Path) {
-        self.from = Some(project.to_path_buf());
-        if let Some(GenerateCommand::Add(args)) = &mut self.command {
-            args.from = Some(project.to_path_buf());
-        }
-    }
-
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         match &self.command {
-            Some(GenerateCommand::Add(args)) => args.run(),
-            None => self.run_generate(),
+            Some(GenerateCommand::Add(args)) => args.run(project),
+            None => self.run_generate(project),
         }
     }
 
-    fn run_generate(&self) -> Result<crate::ExitCode> {
+    fn run_generate(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         reporter.status(
             "Generating",
@@ -243,7 +217,7 @@ impl GenerateArgs {
         // read-only session: warm seeds where they are provably faithful and
         // the parallel index prime, same as describe.
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            project,
             crate::project_session::CacheUse::ReadOnly,
         )?;
         if session.is_empty() {
@@ -979,10 +953,9 @@ mod tests {
 
         let result = AddGeneratorArgs {
             output_type: OutputType::TypescriptNode,
-            from: Some(directory.path().to_path_buf()),
             sdk_import_path: None,
         }
-        .run()
+        .run(Some(directory.path()))
         .unwrap();
 
         assert!(matches!(result, crate::ExitCode::Success));

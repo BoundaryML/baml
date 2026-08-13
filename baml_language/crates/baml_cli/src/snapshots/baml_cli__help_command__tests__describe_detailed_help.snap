@@ -40,11 +40,6 @@ Options:
       --symbols
           Deprecated alias for invoking `baml describe` without a name
 
-Compiler options:
-  -F, --features <FEATURES>
-          Enable compiler features; repeatable or comma-separated [possible values: beta,
-          display_all_warnings]
-
 Output options:
       --budget <BUDGET>
           Soft maximum number of output lines

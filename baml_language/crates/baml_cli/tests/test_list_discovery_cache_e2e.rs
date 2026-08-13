@@ -99,7 +99,7 @@ fn assert_cold_equals_warm(cli: &Path, extra: &[&str]) {
     create_test_project(tmp.path());
     let cache_dir = tmp.path().join(".discovery-cache");
 
-    let mut args = vec!["test", "--list", "--from", "."];
+    let mut args = vec!["test", "--list", "--project", "."];
     args.extend_from_slice(extra);
 
     // The honest filtered path must not populate an unfiltered cache by
@@ -117,7 +117,7 @@ fn assert_cold_equals_warm(cli: &Path, extra: &[&str]) {
         cli,
         tmp.path(),
         &cache_dir,
-        &["test", "--list", "--from", "."],
+        &["test", "--list", "--project", "."],
         &[],
     );
     let warm = run_list(cli, tmp.path(), &cache_dir, &args, &[]);
@@ -167,7 +167,7 @@ fn list_unfiltered_cold_equals_warm() {
         &cli,
         tmp.path(),
         &cache_dir,
-        &["test", "--list", "--from", "."],
+        &["test", "--list", "--project", "."],
         &[],
     );
     assert!(out.status.success(), "unfiltered `--list` should exit 0");
@@ -208,7 +208,7 @@ fn no_discovery_cache_knob_is_output_neutral() {
     let tmp = tempfile::tempdir().unwrap();
     create_test_project(tmp.path());
     let cache_dir = tmp.path().join(".discovery-cache");
-    let args = ["test", "--list", "--from", "."];
+    let args = ["test", "--list", "--project", "."];
 
     // Warm the discovery cache.
     let cold = run_list(&cli, tmp.path(), &cache_dir, &args, &[]);

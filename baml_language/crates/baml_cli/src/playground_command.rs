@@ -23,16 +23,9 @@ Examples:
   Serve a standalone file on a fixed port:
     baml playground --file script.baml --port 4265")]
 pub struct PlaygroundArgs {
-    #[command(flatten)]
-    pub compiler: crate::commands::CompilerArgs,
-
     /// Standalone single-file source. Loads only this file (no project discovery).
     #[arg(long, value_name = "PATH", help_heading = "Project options")]
     pub file: Option<PathBuf>,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 
     /// Listen on exactly this port (errors if unavailable).
     /// Default: the first free port from 4265.
@@ -46,10 +39,10 @@ pub struct PlaygroundArgs {
 }
 
 impl PlaygroundArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         let playground_dir = resolve_playground_assets()?;
 
-        let roots = workspace_roots(self.from.as_deref(), self.file.as_deref())?;
+        let roots = workspace_roots(project, self.file.as_deref())?;
         let options = baml_lsp_server::PlaygroundServerOptions {
             port: self.port,
             open_browser: !self.no_open

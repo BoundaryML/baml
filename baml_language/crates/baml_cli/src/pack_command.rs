@@ -13,7 +13,7 @@
 // binary's only entry point (no subcommand layer).
 //
 // Standalone single-file sources are loaded via `--file <PATH>`, which
-// is mutually exclusive with `--from <DIR>`. Without either, the project
+// is mutually exclusive with `--project <DIR>`. Without either, the project
 // at the current directory is loaded.
 //
 // The output is the host binary (baml-pack-host) with a `PackEnvelope`
@@ -64,9 +64,6 @@ Examples:
   Package a function from a standalone file:
     baml pack --file script.baml main")]
 pub struct PackArgs {
-    #[command(flatten)]
-    pub compiler: crate::commands::CompilerArgs,
-
     /// Function to package as the executable's only entry point.
     ///
     /// Mutually exclusive with `--function`.
@@ -117,10 +114,6 @@ pub struct PackArgs {
     )]
     pub output_format: OutputFormat,
 
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
-
     #[arg(short = 'e', long = "expression", value_name = "EXPR", hide = true)]
     pub expression: Option<String>,
 }
@@ -136,15 +129,19 @@ struct ResolvedPackTarget {
 }
 
 impl PackArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        self.run_with_reporter(&reporter)
+        self.run_with_reporter(project, &reporter)
     }
 
-    fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
-        self.validate_flags()?;
+    fn run_with_reporter(
+        &self,
+        project: Option<&Path>,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
+        self.validate_flags(project)?;
 
-        let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
+        let (db, program, needs_format_hint) = self.load_and_compile(project, reporter)?;
         let _ = db;
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
@@ -188,7 +185,7 @@ impl PackArgs {
 
         let target_triple = self.resolved_target_triple()?;
         let host_bytes = read_host_binary(target_triple, reporter)?;
-        let basename = self.resolve_output_basename()?;
+        let basename = self.resolve_output_basename(project)?;
         let output_path = self
             .output
             .clone()
@@ -220,7 +217,7 @@ impl PackArgs {
     }
 
     /// Validate flag combinations the clap-side `Args` derive can't catch.
-    fn validate_flags(&self) -> Result<()> {
+    fn validate_flags(&self, project: Option<&Path>) -> Result<()> {
         if self.expression.is_some() {
             anyhow::bail!(
                 "expression mode (`-e` / `--expression`) is not packageable; \
@@ -230,7 +227,7 @@ impl PackArgs {
         // `--file` and `--project` both name a source location. Reject the
         // combination up front instead of silently preferring one. Same rule
         // as `baml run`.
-        validate_file_project_flags(self.file.as_deref(), self.from.as_deref())?;
+        validate_file_project_flags(self.file.as_deref(), project)?;
         if let Some(target) = self.target.as_deref() {
             if looks_like_path(target) {
                 anyhow::bail!(
@@ -265,7 +262,11 @@ impl PackArgs {
         }
     }
 
-    fn load_and_compile(&self, reporter: &Reporter) -> Result<(ProjectDatabase, Program, bool)> {
+    fn load_and_compile(
+        &self,
+        project: Option<&Path>,
+        reporter: &Reporter,
+    ) -> Result<(ProjectDatabase, Program, bool)> {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
@@ -280,7 +281,7 @@ impl PackArgs {
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
         }
-        self.load_and_compile_project(reporter)
+        self.load_and_compile_project(project, reporter)
     }
 
     /// Project-mode load + compile through the bytecode cache — the same warm
@@ -294,10 +295,11 @@ impl PackArgs {
     /// to a fresh compile, so serving from cache never changes the artifact.
     fn load_and_compile_project(
         &self,
+        project: Option<&Path>,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, Program, bool)> {
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            project,
             crate::project_session::CacheUse::ReadWrite,
         )?;
         if session.is_empty() {
@@ -423,10 +425,10 @@ impl PackArgs {
     ///   manifest is present, else the project directory name for a
     ///   manifest-less `baml_src/` project (see
     ///   [`crate::project_load::resolve_project_name`]).
-    fn resolve_output_basename(&self) -> Result<String> {
+    fn resolve_output_basename(&self, project: Option<&Path>) -> Result<String> {
         if let Some(file) = self.file.as_deref() {
             // Keep `--file` hermetic: derive the name from the file path
-            // alone, never from `--from`/project markers. A path with no
+            // alone, never from `--project`/project markers. A path with no
             // usable file-name component (no stem, e.g. `..`, or a non-UTF-8
             // name) can't be named automatically — bail rather than leak the
             // cwd's project context into a single-file pack.
@@ -441,7 +443,7 @@ impl PackArgs {
                     )
                 });
         }
-        crate::project_load::resolve_project_name(self.from.as_deref())
+        crate::project_load::resolve_project_name(project)
     }
 }
 
@@ -705,14 +707,12 @@ mod tests {
 
     fn pack_args() -> PackArgs {
         PackArgs {
-            compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),
             file: None,
             output: None,
             target_triple: None,
             output_format: OutputFormat::Json,
-            from: None,
             expression: None,
         }
     }
@@ -734,14 +734,15 @@ mod tests {
         assert_eq!(targets[0].subcommand_name, "main");
     }
 
-    /// `--file` + `--from` rejected (both name a source).
+    /// `--file` + `--project` rejected (both name a source).
     #[test]
     fn test_pack_rejects_file_plus_explicit_from() {
         let mut args = pack_args();
         args.functions = vec!["main".into()];
         args.file = Some(PathBuf::from("a.baml"));
-        args.from = Some(PathBuf::from("./project"));
-        let err = args.validate_flags().unwrap_err();
+        let err = args
+            .validate_flags(Some(Path::new("./project")))
+            .unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(msg.contains("--file"), "got: {msg}");
@@ -752,7 +753,7 @@ mod tests {
     fn test_pack_rejects_expression_mode() {
         let mut args = pack_args();
         args.expression = Some("2 + 2".to_string());
-        let err = args.run().unwrap_err();
+        let err = args.run(None).unwrap_err();
         let msg = format!("{err}");
         assert!(
             msg.contains("not packageable"),
@@ -768,7 +769,7 @@ mod tests {
     #[test]
     fn test_pack_no_target_errors() {
         let args = pack_args();
-        let err = args.validate_flags().unwrap_err();
+        let err = args.validate_flags(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("no target"), "got: {msg}");
         assert!(msg.contains("-f"), "got: {msg}");
@@ -780,7 +781,7 @@ mod tests {
         let mut args = pack_args();
         args.target = Some("main".to_string());
         args.functions = vec!["Summarize".to_string()];
-        let err = args.validate_flags().unwrap_err();
+        let err = args.validate_flags(None).unwrap_err();
         assert!(format!("{err}").contains("mutually exclusive"));
     }
 
@@ -792,7 +793,7 @@ mod tests {
         let mut args = pack_args();
         args.target = Some("baml_src/main.baml".to_string());
         args.functions = vec!["main".to_string()];
-        let err = args.validate_flags().unwrap_err();
+        let err = args.validate_flags(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("--file"), "expected --file hint; got: {msg}");
         assert!(
@@ -807,7 +808,7 @@ mod tests {
     fn test_pack_bare_path_positional_suggests_file_flag() {
         let mut args = pack_args();
         args.target = Some("./hello.baml".to_string());
-        let err = args.validate_flags().unwrap_err();
+        let err = args.validate_flags(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("--file"), "got: {msg}");
     }
@@ -1081,9 +1082,9 @@ mod tests {
             "[package]\nname = \"my-app\"\n",
         )
         .unwrap();
-        let mut args = pack_args();
-        args.from = Some(tmp.path().to_path_buf());
-        assert_eq!(args.resolve_output_basename().unwrap(), "my-app");
+        let args = pack_args();
+        let project = Some(tmp.path());
+        assert_eq!(args.resolve_output_basename(project).unwrap(), "my-app");
     }
 
     /// `--file foo.baml` → file stem.
@@ -1091,7 +1092,7 @@ mod tests {
     fn test_pack_file_mode_defaults_to_file_stem() {
         let mut args = pack_args();
         args.file = Some(PathBuf::from("scripts/foo.baml"));
-        assert_eq!(args.resolve_output_basename().unwrap(), "foo");
+        assert_eq!(args.resolve_output_basename(None).unwrap(), "foo");
     }
 
     /// `--file` ignores adjacent `baml.toml` — single-file packs are
@@ -1109,15 +1110,15 @@ mod tests {
 
         let mut args = pack_args();
         args.file = Some(baml_file);
-        // `--from` is omitted, and file mode short-circuits project lookup.
+        // No `--project`, and file mode short-circuits project lookup.
         // Stem wins.
-        assert_eq!(args.resolve_output_basename().unwrap(), "hello");
+        assert_eq!(args.resolve_output_basename(None).unwrap(), "hello");
     }
 
     /// A `--file` path with no usable file-name component (here `..`, which
     /// has no `file_stem`) must error rather than fall back to the project
     /// name — `--file` stays hermetic. Even with a valid `baml.toml` in
-    /// `--from`, the result is an error, not the package name.
+    /// `--project`, the result is an error, not the package name.
     #[test]
     fn test_pack_file_mode_nameless_errors_instead_of_consulting_project() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1128,10 +1129,10 @@ mod tests {
         .unwrap();
 
         let mut args = pack_args();
-        args.from = Some(tmp.path().to_path_buf());
+        let project = Some(tmp.path());
         args.file = Some(PathBuf::from("..")); // no file_stem
 
-        let err = args.resolve_output_basename().unwrap_err();
+        let err = args.resolve_output_basename(project).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("-o"), "expected a `-o` hint, got: {msg}");
         assert!(
@@ -1251,10 +1252,12 @@ mod tests {
         .unwrap();
         std::fs::create_dir(tmp.path().join("baml_src")).unwrap();
 
-        let mut args = pack_args();
-        args.from = Some(tmp.path().to_path_buf());
+        let args = pack_args();
+        let project = Some(tmp.path());
         let reporter = Reporter::new();
-        let err = args.load_and_compile_project(&reporter).unwrap_err();
+        let err = args
+            .load_and_compile_project(project, &reporter)
+            .unwrap_err();
         assert!(
             format!("{err}").contains("no `.baml` files"),
             "expected no-files error; got: {err}",

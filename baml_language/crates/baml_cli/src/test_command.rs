@@ -3,7 +3,7 @@
 use std::{
     future::Future,
     io::Write as _,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -50,7 +50,7 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --directory, --from, --features, or --help. With no default profile,
+  --project, --directory, or --help. With no default profile,
   all tests are selected.
 
 Examples:
@@ -63,12 +63,6 @@ Examples:
   Run integration tests except slow tests:
     baml test -i "*::integration::*" -x "slow""#)]
 pub struct TestArgs {
-    #[command(flatten)]
-    pub compiler: crate::commands::CompilerArgs,
-
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
-
     /// Apply a named test profile from `baml.toml`.
     ///
     /// Profile arguments establish the initial test set; command-line filters
@@ -410,11 +404,11 @@ fn finish_engine(ctx: &RunCtx<'_>) -> usize {
 }
 
 impl TestArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            project,
             crate::project_session::CacheUse::ReadWriteTests,
         )?;
         let invocation =
@@ -852,22 +846,13 @@ impl TestArgs {
         for token in tokens {
             let bootstrap = matches!(
                 token.as_str(),
-                "--profile"
-                    | "--no-profile"
-                    | "--project"
-                    | "--directory"
-                    | "--from"
-                    | "--features"
-                    | "--help"
-                    | "-h"
+                "--profile" | "--no-profile" | "--project" | "--directory" | "--help" | "-h"
             ) || token.starts_with("--profile=")
                 || token.starts_with("--project=")
-                || token.starts_with("--directory=")
-                || token.starts_with("--from=")
-                || token.starts_with("--features=");
+                || token.starts_with("--directory=");
             if bootstrap {
                 anyhow::bail!(
-                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, --from, --features, or --help"
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, or --help"
                 );
             }
         }
@@ -1628,14 +1613,6 @@ mod tests {
             Some(crate::output::ColorChoice::Never)
         );
         assert_eq!(globals.output.no_progress, Some(true));
-
-        let error = TestArgs::parse_profile_args("bad_features", &["--features=beta".to_string()])
-            .unwrap_err()
-            .to_string();
-        assert!(
-            error.contains("cannot contain") && error.contains("--features"),
-            "{error}"
-        );
 
         let error = TestArgs::parse_profile_args("bad", &["--profile=other".to_string()])
             .unwrap_err()

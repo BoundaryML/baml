@@ -42,8 +42,8 @@ Use `//` in C++, C#, Go, Java, Rust, Swift, and TypeScript. The reason after the
 ## Test
 
 ```sh
-baml_language/target/debug/baml-cli check --from tools/sdk-parity-lint
-baml_language/target/debug/baml-cli test --from tools/sdk-parity-lint
+baml_language/target/debug/baml-cli check --project tools/sdk-parity-lint
+baml_language/target/debug/baml-cli test --project tools/sdk-parity-lint
 ```
 
 The fixtures cover declaration rules, runtime gates, annotations, duplicate IDs, baseline parsing, exact report rendering, parity improvements, declaration deletion, and weakened required-environment sets.

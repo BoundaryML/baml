@@ -78,7 +78,7 @@ trap cleanup EXIT
 baml_args=(
     run
     --output-format json
-    --from tools/sdk-parity-lint
+    --project tools/sdk-parity-lint
     run_ratchet
     --
     --repo_root "${repo_root}"

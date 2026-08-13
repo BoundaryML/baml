@@ -189,7 +189,7 @@ fn baml_test() {
             "baml_cli",
             "--",
             "test",
-            "--from",
+            "--project",
             concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src"),
         ])
         .env("BAML_CLI_ALLOW_DIRECT", "1")
