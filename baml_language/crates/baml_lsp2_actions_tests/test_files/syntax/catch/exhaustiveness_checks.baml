@@ -34,7 +34,7 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 //- diagnostics
 // E0063
 //
-//   ⚠ unreachable arm
+//   × unreachable arm
 //     ╭─[catch_exhaustiveness_checks.baml:20:12]
 //  20 │       _ => "unreachable"
 //     ·            ─────────────

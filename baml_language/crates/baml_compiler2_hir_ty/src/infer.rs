@@ -514,7 +514,6 @@ enum TaggedTagIssue {
 /// body-position type annotation's ref.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum HoleAnchor {
-    Expr(ExprId),
     TypeRef(baml_compiler2_hir::type_ref::TypeRefId),
 }
 
@@ -4676,63 +4675,6 @@ impl<'db> InferenceContext<'db> {
         (fn_ty, bound, Some(resolution), false)
     }
 
-    /// Callee position on a UNION receiver: every member must yield the
-    /// member as a callable with IDENTICAL parameters and boundness (the
-    /// forced case; differing signatures are S17's ambiguity) - returns
-    /// JOIN, throws union. `None` when any member misses or disagrees;
-    /// the caller falls through to the whole-union sugar tiers.
-    fn union_member_callee(
-        &mut self,
-        call: ExprId,
-        member_expr: ExprId,
-        union_members: &[Ty],
-        member: &baml_type::Name,
-    ) -> Option<(Ty, bool)> {
-        let mut resolved_fns = Vec::new();
-        for member_ty in union_members {
-            let (ty, bound, _, _) = self.member_callee(call, member_expr, member_ty, member);
-            if ty.has_error() {
-                return None;
-            }
-            resolved_fns.push((ty, bound));
-        }
-        let (first, first_bound) = resolved_fns.first()?.clone();
-        let TyKind::Function {
-            params: first_params,
-            ..
-        } = first.kind()
-        else {
-            return None;
-        };
-        let mut rets = Vec::new();
-        let mut throws_parts = Vec::new();
-        for (fn_ty, bound) in &resolved_fns {
-            let TyKind::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } = fn_ty.kind()
-            else {
-                return None;
-            };
-            if *bound != first_bound || params != first_params {
-                return None;
-            }
-            rets.push(ret.clone());
-            throws_parts.push(throws.clone());
-        }
-        let ret = self.join(&rets);
-        let throws = self.union_of(&throws_parts);
-        let fn_ty = Ty::intern(TyKind::Function {
-            params: first_params.clone(),
-            ret,
-            throws,
-            attr: TyAttr::default(),
-        });
-        Some((fn_ty, first_bound))
-    }
-
     /// The `default` receiver's meaning inside an `implements` block:
     /// the block's target interface (its written args and associated
     /// bindings lowered in the owner's frame) plus the IMPLEMENTOR as
@@ -6057,47 +5999,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// The unique impl-provided interface view declaring `field` for one
-    /// concrete receiver: the declaring interface, its realization at
-    /// this receiver, and the field's index in the interface's own
-    /// declared field list.
-    fn member_field_view(
-        &mut self,
-        receiver: &Ty,
-        field: &baml_type::Name,
-    ) -> Option<(
-        baml_compiler2_hir::loc::InterfaceLoc<'db>,
-        baml_type::interned::InterfaceRef,
-        u32,
-    )> {
-        use baml_compiler2_hir::contributions::Definition;
-        let mut found: Option<(
-            baml_compiler2_hir::loc::InterfaceLoc<'db>,
-            baml_type::interned::InterfaceRef,
-            u32,
-        )> = None;
-        for resolved in crate::impls::impls_for_type(self.db, receiver) {
-            let implemented = resolved.implemented();
-            let Some(Definition::Interface(interface)) =
-                self.facts.definition_of(&implemented.name)
-            else {
-                continue;
-            };
-            let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
-            let Some(index) = data.fields.iter().position(|f| f.name == *field) else {
-                continue;
-            };
-            let view = (interface, implemented, index as u32);
-            match &found {
-                None => found = Some(view),
-                Some(existing) if existing.1 == view.1 => {}
-                // Two distinct declaring views: ambiguous, fail-safe.
-                Some(_) => return None,
-            }
-        }
-        found
-    }
-
     /// The recorded resolution for an interface member's declarer, when
     /// one applies (the concrete-field backing link is not resolved yet -
     /// no entry rather than a wrong one).
@@ -7166,7 +7067,6 @@ impl<'db> InferenceContext<'db> {
                     continue;
                 }
                 let location = match at {
-                    HoleAnchor::Expr(expr) => DiagnosticLocation::Expr(expr),
                     HoleAnchor::TypeRef(type_ref) => DiagnosticLocation::TypeRef(type_ref),
                 };
                 diags.push(TirDiagnostic {

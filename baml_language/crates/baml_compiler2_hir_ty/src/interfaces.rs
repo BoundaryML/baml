@@ -120,16 +120,6 @@ pub(crate) fn lower_ref_in_at(
     lowered
 }
 
-/// The AST twin of [`lower_ref_in`]: the `TypeExpr` lowers through hir's
-/// firewall into a scratch store, then the same road.
-pub(crate) fn lower_expr_in(
-    scope: &LowerScope<'_, '_>,
-    expr: &baml_compiler2_ast::TypeExpr,
-    diags: &mut Vec<TirTypeError>,
-) -> Ty {
-    lower_expr_in_at(scope, expr, crate::lower::TypePosition::Existential, diags)
-}
-
 /// [`lower_expr_in`] at an explicit [`crate::lower::TypePosition`].
 pub(crate) fn lower_expr_in_at(
     scope: &LowerScope<'_, '_>,

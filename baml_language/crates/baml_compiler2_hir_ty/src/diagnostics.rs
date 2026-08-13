@@ -1965,7 +1965,7 @@ pub enum DiagnosticLocation {
     ExprSegment(ExprId, usize),
     Stmt(StmtId),
     TypeAnnot(TypeAnnotId),
-    /// A pattern's span (hir_ty's emissions stay arena-anchored; TIR
+    /// A pattern's span (`hir_ty`'s emissions stay arena-anchored; TIR
     /// resolved pattern spans eagerly through its held source map).
     Pat(baml_compiler2_ast::PatId),
     /// A written type reference (body annotation), resolved through the

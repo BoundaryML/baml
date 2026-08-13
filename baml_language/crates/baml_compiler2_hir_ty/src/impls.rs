@@ -193,7 +193,7 @@ pub fn impl_facts<'db>(
         .iter()
         .cloned()
         .zip(param_bounds.iter())
-        .map(|(param, bounds)| (param, bounds.iter().map(|target| target.clone()).collect()))
+        .map(|(param, bounds)| (param, bounds.to_vec()))
         .collect();
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
@@ -369,11 +369,7 @@ impl ResolvedImpl<'_> {
             .into_iter()
             .filter_map(|member| resolved_pin(db, self, self_ty, &member).map(|pin| (member, pin)))
             .collect();
-        InterfaceRef::new(
-            header.name.clone(),
-            header.generics.clone(),
-            associated_types,
-        )
+        InterfaceRef::new(header.name.clone(), header.generics, associated_types)
     }
 }
 

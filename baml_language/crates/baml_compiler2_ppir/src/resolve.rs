@@ -174,11 +174,11 @@ pub fn resolve_path_at<'db>(
     }
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_name = if segments[0].as_str() == "root" {
-        pkg_info.package.clone()
+        &pkg_info.package
     } else {
-        segments[0].clone()
+        &segments[0]
     };
-    let Some(pkg_items) = accessible_package_items(db, file, &pkg_name) else {
+    let Some(pkg_items) = accessible_package_items(db, file, pkg_name) else {
         return ResolvedName::Unknown;
     };
     let after_pkg = &segments[1..];

@@ -897,7 +897,6 @@ fn unify_union_members_at(
     cover_search(&obligations, vars, aliases, bindings, &mut budget, depth)
 }
 
-/// Test-only entry to `unify_union_members_at` starting at depth 0.
 // -- Pure `Ty` walks shared with the runtime engine (baml_type_runtime
 // re-exports these; they live here, beside `TypeBindings`, because the
 // unifier and the reachability oracle substitute through the same maps). --
