@@ -46,7 +46,7 @@ pub(super) struct PatternOutcome {
     pub matched_ty: Ty,
     /// The WRITTEN form to record when it differs from `matched_ty` -
     /// ruling 3 (bindings record what the user wrote; rustc's
-    /// user_provided_types discipline): a type ascription's recorded
+    /// `user_provided_types` discipline): a type ascription's recorded
     /// type is the declared spelling, while `matched_ty` stays the
     /// refined working form that drives narrowing and destructuring.
     pub recorded_ty: Option<Ty>,

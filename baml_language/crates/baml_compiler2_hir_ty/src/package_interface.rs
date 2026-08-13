@@ -377,7 +377,7 @@ fn exported_function<'db>(
     let declared_throws = sig
         .throws_declared
         .then(|| reduce_ground_projections(db, &sig.throws.to_plain(), 8));
-    let callable_throws = crate::callable::callable_throws(db, func_loc).0.clone();
+    let callable_throws = crate::callable::callable_throws(db, func_loc).0;
     let builtin_kind = match body.as_ref() {
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
         _ => None,
@@ -498,7 +498,7 @@ pub fn file_callable_throws_fragment(
         .map(|&func_loc| {
             (
                 func_loc.id(db).as_u32(),
-                crate::callable::callable_throws(db, func_loc).0.clone(),
+                crate::callable::callable_throws(db, func_loc).0,
             )
         })
         .collect();

@@ -109,7 +109,7 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     ╰────
 // E0007
 //
-//   × type `NarrowBar | NarrowFoo` has no member `field`
+//   × type `NarrowBar | NarrowFoo` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[expr_early_return_narrowing.baml:35:12]
 //  35 │     return x.field;
 //     ·            ───────
@@ -132,21 +132,21 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     ╰────
 // E0007
 //
-//   × type `NarrowBar | NarrowFoo` has no member `field`
+//   × type `NarrowBar | NarrowFoo` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[expr_early_return_narrowing.baml:66:12]
 //  66 │     return x.field;
 //     ·            ───────
 //     ╰────
 // E0007
 //
-//   × type `NarrowBar | NarrowFoo` has no member `field`
+//   × type `NarrowBar | NarrowFoo` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[expr_early_return_narrowing.baml:72:12]
 //  72 │     return x.field;
 //     ·            ───────
 //     ╰────
 // E0007
 //
-//   × type `NarrowBar | NarrowFoo` has no member `other`
+//   × type `NarrowBar | NarrowFoo` has no member `other`: its members implement no common interface that declares `other`
 //     ╭─[expr_early_return_narrowing.baml:74:3]
 //  74 │   x.other
 //     ·   ───────

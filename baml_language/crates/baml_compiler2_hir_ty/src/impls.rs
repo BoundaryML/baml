@@ -193,7 +193,7 @@ pub fn impl_facts<'db>(
         .iter()
         .cloned()
         .zip(param_bounds.iter())
-        .map(|(param, bounds)| (param, bounds.to_vec()))
+        .map(|(param, bounds)| (param, bounds.clone()))
         .collect();
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
@@ -521,7 +521,7 @@ pub fn impls_for_type<'db>(
             // never trip it even when their `ParamTy` identity shadows
             // an impl param's.
             let undetermined = |ty: &Ty| !pattern_fully_bound(ty, &params, &bindings);
-            if facts.interface.generics.iter().any(|arg| undetermined(arg))
+            if facts.interface.generics.iter().any(&undetermined)
                 || facts
                     .interface
                     .associated_types
@@ -586,9 +586,7 @@ pub(crate) fn impl_candidates<'db>(
 /// assembly: the receiver's interface is unknown there, so no name
 /// filter applies - all packages, the same walk the ground registry
 /// (`impls_for_type`) does.
-pub(crate) fn all_impl_facts<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-) -> Vec<&'db ImplFacts<'db>> {
+pub(crate) fn all_impl_facts(db: &dyn baml_compiler2_ppir::Db) -> Vec<&ImplFacts<'_>> {
     let mut out = Vec::new();
     for package in all_packages(db) {
         for &block in package_impl_locs(db, package) {

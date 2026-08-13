@@ -90,7 +90,7 @@ pub fn package_coherence_diagnostics<'db>(
         // own × own — each unordered pair once; the later impl carries the error.
         for other in &own[i + 1..] {
             if let Some(indeterminate) =
-                overlap_violation(impls_conflict(db, pkg_id, own_impl, other, &aliases))
+                overlap_violation(impls_conflict(db, pkg_id, own_impl, other, aliases))
             {
                 violations.push(CoherenceViolation {
                     primary: other.span,
@@ -102,7 +102,7 @@ pub fn package_coherence_diagnostics<'db>(
         // own × dependency — the owning package's impl carries the error.
         for dep in &dep_impls {
             if let Some(indeterminate) =
-                overlap_violation(impls_conflict(db, pkg_id, own_impl, dep, &aliases))
+                overlap_violation(impls_conflict(db, pkg_id, own_impl, dep, aliases))
             {
                 violations.push(CoherenceViolation {
                     primary: own_impl.span,

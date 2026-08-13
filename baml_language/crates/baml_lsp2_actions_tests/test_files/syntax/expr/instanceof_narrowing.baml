@@ -77,28 +77,28 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //     ╰────
 // E0007
 //
-//   × type `Bar | Foo` has no member `field`
+//   × type `Bar | Foo` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[expr_instanceof_narrowing.baml:13:16]
 //  13 │         return x.field;
 //     ·                ───────
 //     ╰────
 // E0007
 //
-//   × type `Foo | null` has no member `field`
+//   × type `Foo | null` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[expr_instanceof_narrowing.baml:23:16]
 //  23 │         return x.field;
 //     ·                ───────
 //     ╰────
 // E0007
 //
-//   × type `Bar | Baz | Foo` has no member `field`
+//   × type `Bar | Baz | Foo` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[expr_instanceof_narrowing.baml:36:16]
 //  36 │         return x.field;
 //     ·                ───────
 //     ╰────
 // E0007
 //
-//   × type `Bar | Baz | Foo` has no member `field`
+//   × type `Bar | Baz | Foo` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[expr_instanceof_narrowing.baml:38:16]
 //  38 │         return x.field;
 //     ·                ───────

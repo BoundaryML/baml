@@ -39,8 +39,8 @@ use rustc_hash::FxHashMap;
 /// Everything needed to lower type syntax appearing in one file, for one
 /// generic frame.
 /// One unresolved written type (E0002), anchored at its `TypeRefId` -
-/// r-a's TyLoweringDiagnostic shape (ids here; the check layer resolves
-/// spans through the body's TypeRefSourceMap on demand).
+/// r-a's `TyLoweringDiagnostic` shape (ids here; the check layer resolves
+/// spans through the body's `TypeRefSourceMap` on demand).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoweringDiag {
     pub type_ref: TypeRefId,
@@ -80,7 +80,7 @@ pub enum LoweringDiagKind {
 /// written pin nor a default is diagnosed (Rust's E0191-analog). The head
 /// of a constraint - a generic bound, an `implements`/`requires` target,
 /// a projection qualifier - pins only what it writes. (TIR's third
-/// variant, `ConstructorHead`, has no counterpart here: hir_ty's
+/// variant, `ConstructorHead`, has no counterpart here: `hir_ty`'s
 /// construction road types heads through `infer_object`, not this path.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypePosition {
@@ -208,16 +208,19 @@ impl<'db> LowerCtx<'db> {
         &self.generic_params
     }
 
+    #[must_use]
     pub fn with_frame(mut self, frame: Vec<ParamTy>) -> LowerCtx<'db> {
         self.generic_params = frame;
         self
     }
     /// See `LowerCtx::self_ty`.
+    #[must_use]
     pub fn with_impl_target(mut self, target: Option<baml_type::interned::InterfaceRef>) -> Self {
         self.self_impl_target = target;
         self
     }
 
+    #[must_use]
     pub fn with_self_ty(mut self, self_ty: Option<Ty>) -> Self {
         self.self_ty = self_ty;
         self
@@ -406,7 +409,7 @@ impl<'db> LowerCtx<'db> {
     /// (an enum's dotted member is a variant, already given first
     /// refusal). Lowered through the full path cascade - so a prefix
     /// that is itself a projection (`IntHolder.Item` of
-    /// `IntHolder.Item.Inner`) resolves recursively - at ConstraintHead:
+    /// `IntHolder.Item.Inner`) resolves recursively - at `ConstraintHead`:
     /// an interface-named prefix reaches the caller's projection-base
     /// rejection intact instead of tripping the existential completeness
     /// check first.
@@ -439,7 +442,11 @@ impl<'db> LowerCtx<'db> {
                     refs.iter()
                         .map(|bound| baml_type::Interface {
                             name: bound.name.clone(),
-                            generics: bound.generics.iter().map(|g| g.to_plain()).collect(),
+                            generics: bound
+                                .generics
+                                .iter()
+                                .map(baml_type::interned::Ty::to_plain)
+                                .collect(),
                             associated_types: bound
                                 .associated_types
                                 .iter()
@@ -767,7 +774,7 @@ impl<'db> LowerCtx<'db> {
                 } else {
                     let ns_str = ns_path
                         .iter()
-                        .map(|segment| segment.as_str())
+                        .map(smol_str::SmolStr::as_str)
                         .collect::<Vec<_>>()
                         .join(".");
                     suggestions.push(format!("root.{ns_str}.{item}"));
@@ -866,7 +873,7 @@ impl<'db> LowerCtx<'db> {
                         .cloned()
                         .expect("interface frame starts with Self");
                     let plain_args: Vec<baml_type::Ty> =
-                        args.iter().map(|arg| arg.to_plain()).collect();
+                        args.iter().map(baml_type::interned::Ty::to_plain).collect();
                     for assoc in &data.associated_types {
                         if bindings.iter().any(|(name, _)| name == &assoc.name) {
                             continue;
@@ -1210,7 +1217,7 @@ pub fn interface_declared_params<'db>(
     interface: InterfaceLoc<'db>,
 ) -> Vec<ParamTy> {
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    interface_frame(db, interface)[1..1 + data.generic_params.len()].to_vec()
+    interface_frame(db, interface)[1..=data.generic_params.len()].to_vec()
 }
 
 /// The root generic frame for an impl block: the enclosing class's frame
@@ -1695,14 +1702,14 @@ pub fn owner_impl_target<'db>(
             })
         })
         .collect::<Vec<_>>();
-    for (name, ty) in interface.associated_types.iter() {
+    for (name, ty) in &interface.associated_types {
         if !pins.iter().any(|(have, _)| have == name) {
             pins.push((name.clone(), ty.clone()));
         }
     }
     Some(baml_type::interned::InterfaceRef::new(
         interface.name.clone(),
-        interface.generics.clone(),
+        interface.generics,
         pins,
     ))
 }
@@ -1932,7 +1939,11 @@ fn plain_scope_bounds(
                 refs.iter()
                     .map(|bound| baml_type::Interface {
                         name: bound.name.clone(),
-                        generics: bound.generics.iter().map(|g| g.to_plain()).collect(),
+                        generics: bound
+                            .generics
+                            .iter()
+                            .map(baml_type::interned::Ty::to_plain)
+                            .collect(),
                         associated_types: bound
                             .associated_types
                             .iter()

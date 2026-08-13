@@ -1,7 +1,7 @@
 //! Interface resolution substrate (BEP-044): path→interface resolution and identity, the
 //! transitive `requires` closure, associated-type binding lowering, and the generic
 //! type-pattern matcher used by impl resolution. Relocated from TIR during the S17
-//! retirement; the declaration lowering now rides hir_ty's one `LowerCtx` road.
+//! retirement; the declaration lowering now rides `hir_ty`'s one `LowerCtx` road.
 //!
 //! Nominal subtyping is decided on the `impl_rules` substrate (`impl_data` /
 //! `get_implements_block`), not here: `Class T <: Interface I` iff `T` has an `implements I`
@@ -209,7 +209,7 @@ pub fn interface_declared_param_bounds(
 // `normalized_alias_map`) ──────────────────────────────────────────────────
 
 /// Every type alias visible to `pkg_id` (its own plus its dependency
-/// closure's), resolved to its one-level value through the hir_ty road.
+/// closure's), resolved to its one-level value through the `hir_ty` road.
 #[salsa::tracked(returns(ref))]
 pub fn package_resolved_aliases<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
@@ -573,7 +573,7 @@ impl<'db> InterfaceDeclScope<'db> {
         let generics = {
             let frame = crate::lower::interface_frame(db, iface_loc);
             let declared_len = crate::lower::interface_declared_params(db, iface_loc).len();
-            frame[..1 + declared_len].to_vec()
+            frame[..=declared_len].to_vec()
         };
         let self_param = generics
             .first()
@@ -1561,157 +1561,6 @@ pub fn interface_requires<'db>(
     false
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn qtn(namespace: &[&str], name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(
-            Name::new("user"),
-            namespace.iter().map(|part| Name::new(*part)).collect(),
-            Name::new(name),
-        )
-    }
-
-    fn class(namespace: &[&str], name: &str, args: Vec<Ty>) -> Ty {
-        Ty::Class(qtn(namespace, name), args, TyAttr::default())
-    }
-
-    fn interface(name: &str, args: Vec<Ty>) -> Ty {
-        Ty::Interface(qtn(&[], name), args, vec![], TyAttr::default())
-    }
-
-    fn int() -> Ty {
-        Ty::Int {
-            attr: TyAttr::default(),
-        }
-    }
-
-    fn string() -> Ty {
-        Ty::String {
-            attr: TyAttr::default(),
-        }
-    }
-
-    fn type_var(name: &str) -> Ty {
-        Ty::TypeVar(param(name), TyAttr::default())
-    }
-
-    fn param(name: &str) -> ParamTy {
-        ParamTy::new(0, Name::new(name))
-    }
-
-    #[test]
-    fn match_ty_pattern_rejects_repeated_type_var_conflict() {
-        let pattern = class(&[], "Pair", vec![type_var("T"), type_var("T")]);
-        let good = class(&[], "Pair", vec![int(), int()]);
-        let bad = class(&[], "Pair", vec![int(), string()]);
-        let params = vec![param("T")];
-
-        assert!(
-            match_ty_patterns(
-                &[(&pattern, &good)],
-                &params,
-                &std::collections::HashMap::default()
-            )
-            .is_some()
-        );
-        assert!(
-            match_ty_patterns(
-                &[(&pattern, &bad)],
-                &params,
-                &std::collections::HashMap::default()
-            )
-            .is_none()
-        );
-    }
-
-    #[test]
-    fn match_ty_pattern_matches_enum_variant_against_enum() {
-        let side = Ty::Enum(qtn(&[], "Side"), TyAttr::default());
-        let side_left = Ty::EnumVariant(qtn(&[], "Side"), Name::new("Left"), TyAttr::default());
-        let other = Ty::EnumVariant(qtn(&[], "Coin"), Name::new("Heads"), TyAttr::default());
-        let aliases = std::collections::HashMap::default();
-
-        assert!(
-            match_ty_patterns(&[(&side, &side_left)], &[], &aliases).is_some(),
-            "`Side.Left` should match a `for Side` pattern",
-        );
-        assert!(
-            match_ty_patterns(&[(&side, &other)], &[], &aliases).is_none(),
-            "a variant of a *different* enum must not match",
-        );
-    }
-
-    #[test]
-    fn match_ty_pattern_handles_nested_interface_args() {
-        let pattern = interface(
-            "Container",
-            vec![Ty::List(Box::new(type_var("T")), TyAttr::default())],
-        );
-        let actual = interface(
-            "Container",
-            vec![Ty::List(Box::new(int()), TyAttr::default())],
-        );
-        let params = vec![param("T")];
-
-        let bindings = match_ty_patterns(
-            &[(&pattern, &actual)],
-            &params,
-            &std::collections::HashMap::default(),
-        )
-        .expect("nested list arg should bind T");
-        assert_eq!(bindings.get(&param("T")), Some(&int()));
-    }
-
-    #[test]
-    fn contains_bound_typevar_checks_interface_associated_bindings() {
-        let ty = Ty::Interface(
-            qtn(&[], "Source"),
-            vec![],
-            vec![(
-                Name::new("Item"),
-                Ty::List(Box::new(type_var("T")), TyAttr::default()),
-            )],
-            TyAttr::default(),
-        );
-
-        assert!(contains_bound_typevar(&ty, &[param("T")]));
-        assert!(!contains_bound_typevar(&ty, &[param("U")]));
-    }
-
-    #[test]
-    fn match_ty_pattern_uses_full_qualified_type_names() {
-        let pattern = class(&["alpha"], "Thing", vec![]);
-        let same_short_name = class(&["beta"], "Thing", vec![]);
-
-        assert!(
-            match_ty_patterns(
-                &[(&pattern, &same_short_name)],
-                &[],
-                &std::collections::HashMap::default()
-            )
-            .is_none(),
-            "same short name in different namespaces must not match"
-        );
-    }
-
-    #[test]
-    fn match_ty_pattern_unions_are_order_insensitive_with_bindings() {
-        let pattern = Ty::Union(vec![type_var("T"), string()], TyAttr::default());
-        let actual = Ty::Union(vec![string(), int()], TyAttr::default());
-        let params = vec![param("T")];
-
-        let bindings = match_ty_patterns(
-            &[(&pattern, &actual)],
-            &params,
-            &std::collections::HashMap::default(),
-        )
-        .expect("union members should be matched by type, not position");
-        assert_eq!(bindings.get(&param("T")), Some(&int()));
-    }
-}
-
 // ── Written-type well-formedness: generic-argument bounds ──────────────────
 //
 // rustc's wfcheck for ADT instantiations in signatures, adapted to the
@@ -1725,8 +1574,8 @@ mod tests {
 /// `scope_bounds` is the enclosing scope's param env (a `Box<T>` argument
 /// that is itself a bounded var judges through it). Aliases expand
 /// cycle-guarded; a cyclic alias is its own diagnostic elsewhere.
-pub fn type_generic_bound_errors<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+pub fn type_generic_bound_errors(
+    db: &dyn baml_compiler2_ppir::Db,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     ty: &Ty,
 ) -> Vec<TirTypeError> {
@@ -1829,8 +1678,8 @@ fn collect_type_generic_bound_errors<'db>(
 /// separate requirement, reported independently. Bounds may reference
 /// sibling params (`class Pair<A, B extends Container<A>>`), so the
 /// head's own bindings substitute through them first.
-fn check_head_args<'db>(
-    facts: &crate::facts::Facts<'db>,
+fn check_head_args(
+    facts: &crate::facts::Facts<'_>,
     params: &[ParamTy],
     declared: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
     args: &[Ty],
@@ -1848,7 +1697,11 @@ fn check_head_args<'db>(
         for bound in declared.get(param).into_iter().flatten() {
             let bound_ty = Ty::Interface(
                 bound.name.clone(),
-                bound.generics.iter().map(|g| g.to_plain()).collect(),
+                bound
+                    .generics
+                    .iter()
+                    .map(baml_type::interned::Ty::to_plain)
+                    .collect(),
                 bound
                     .associated_types
                     .iter()
@@ -1933,8 +1786,8 @@ fn projection_poisoned(ty: &Ty) -> bool {
 /// projection, determining the declaring interface. `scope_bounds` is the
 /// enclosing scope's PLAIN param env (a type variable base resolves through
 /// it); `pkg` scopes equivalence and alias expansion.
-pub fn lower_projection<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+pub fn lower_projection(
+    db: &dyn baml_compiler2_ppir::Db,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     base: Ty,
     explicit_interface: Option<Ty>,
@@ -2250,8 +2103,8 @@ fn qualifier_compatible_with_realization(
 /// shadows its own closure (the stdlib's `Iterator requires
 /// Iterable<Item = Self.Item>` pinning idiom depends on it); declarers
 /// dedupe by realized identity across the pool.
-fn resolve_through_roots<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+fn resolve_through_roots(
+    db: &dyn baml_compiler2_ppir::Db,
     roots: Vec<baml_type::Interface>,
     member: &Name,
     undeclared: crate::diagnostics::AssocContainer,
@@ -2306,16 +2159,19 @@ fn determine_concrete<'db>(
     member: &Name,
 ) -> Determination {
     use crate::diagnostics::AssocContainer;
-    let interned = match crate::impls::try_interned_ty(base) {
-        Some(interned) => interned,
-        None => return Determination::Poisoned,
+    let Some(interned) = crate::impls::try_interned_ty(base) else {
+        return Determination::Poisoned;
     };
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
     for resolved in crate::impls::impls_for_type(db, &interned) {
         let view = resolved.implemented_view(db, &interned);
         let interface = baml_type::Interface {
             name: view.name.clone(),
-            generics: view.generics.iter().map(|g| g.to_plain()).collect(),
+            generics: view
+                .generics
+                .iter()
+                .map(baml_type::interned::Ty::to_plain)
+                .collect(),
             associated_types: view
                 .associated_types
                 .iter()
@@ -2387,7 +2243,11 @@ fn concrete_realized_interface<'db>(
         }
         let realized = baml_type::Interface {
             name: view.name.clone(),
-            generics: view.generics.iter().map(|g| g.to_plain()).collect(),
+            generics: view
+                .generics
+                .iter()
+                .map(baml_type::interned::Ty::to_plain)
+                .collect(),
             associated_types: view
                 .associated_types
                 .iter()
@@ -2457,8 +2317,8 @@ pub fn interface_base_without_member_pin(
     base_ty: &Ty,
     member: &Name,
 ) -> Option<QualifiedTypeName> {
-    let facts = crate::facts::Facts::new(db);
     use baml_type::normalize::TypeContext as _;
+    let facts = crate::facts::Facts::new(db);
     let mut seen: FxHashSet<QualifiedTypeName> = FxHashSet::default();
     let mut current = base_ty.clone();
     loop {
@@ -2477,5 +2337,156 @@ pub fn interface_base_without_member_pin(
             }
             _ => return None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn qtn(namespace: &[&str], name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(
+            Name::new("user"),
+            namespace.iter().map(|part| Name::new(*part)).collect(),
+            Name::new(name),
+        )
+    }
+
+    fn class(namespace: &[&str], name: &str, args: Vec<Ty>) -> Ty {
+        Ty::Class(qtn(namespace, name), args, TyAttr::default())
+    }
+
+    fn interface(name: &str, args: Vec<Ty>) -> Ty {
+        Ty::Interface(qtn(&[], name), args, vec![], TyAttr::default())
+    }
+
+    fn int() -> Ty {
+        Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn string() -> Ty {
+        Ty::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn type_var(name: &str) -> Ty {
+        Ty::TypeVar(param(name), TyAttr::default())
+    }
+
+    fn param(name: &str) -> ParamTy {
+        ParamTy::new(0, Name::new(name))
+    }
+
+    #[test]
+    fn match_ty_pattern_rejects_repeated_type_var_conflict() {
+        let pattern = class(&[], "Pair", vec![type_var("T"), type_var("T")]);
+        let good = class(&[], "Pair", vec![int(), int()]);
+        let bad = class(&[], "Pair", vec![int(), string()]);
+        let params = vec![param("T")];
+
+        assert!(
+            match_ty_patterns(
+                &[(&pattern, &good)],
+                &params,
+                &std::collections::HashMap::default()
+            )
+            .is_some()
+        );
+        assert!(
+            match_ty_patterns(
+                &[(&pattern, &bad)],
+                &params,
+                &std::collections::HashMap::default()
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn match_ty_pattern_matches_enum_variant_against_enum() {
+        let side = Ty::Enum(qtn(&[], "Side"), TyAttr::default());
+        let side_left = Ty::EnumVariant(qtn(&[], "Side"), Name::new("Left"), TyAttr::default());
+        let other = Ty::EnumVariant(qtn(&[], "Coin"), Name::new("Heads"), TyAttr::default());
+        let aliases = std::collections::HashMap::default();
+
+        assert!(
+            match_ty_patterns(&[(&side, &side_left)], &[], &aliases).is_some(),
+            "`Side.Left` should match a `for Side` pattern",
+        );
+        assert!(
+            match_ty_patterns(&[(&side, &other)], &[], &aliases).is_none(),
+            "a variant of a *different* enum must not match",
+        );
+    }
+
+    #[test]
+    fn match_ty_pattern_handles_nested_interface_args() {
+        let pattern = interface(
+            "Container",
+            vec![Ty::List(Box::new(type_var("T")), TyAttr::default())],
+        );
+        let actual = interface(
+            "Container",
+            vec![Ty::List(Box::new(int()), TyAttr::default())],
+        );
+        let params = vec![param("T")];
+
+        let bindings = match_ty_patterns(
+            &[(&pattern, &actual)],
+            &params,
+            &std::collections::HashMap::default(),
+        )
+        .expect("nested list arg should bind T");
+        assert_eq!(bindings.get(&param("T")), Some(&int()));
+    }
+
+    #[test]
+    fn contains_bound_typevar_checks_interface_associated_bindings() {
+        let ty = Ty::Interface(
+            qtn(&[], "Source"),
+            vec![],
+            vec![(
+                Name::new("Item"),
+                Ty::List(Box::new(type_var("T")), TyAttr::default()),
+            )],
+            TyAttr::default(),
+        );
+
+        assert!(contains_bound_typevar(&ty, &[param("T")]));
+        assert!(!contains_bound_typevar(&ty, &[param("U")]));
+    }
+
+    #[test]
+    fn match_ty_pattern_uses_full_qualified_type_names() {
+        let pattern = class(&["alpha"], "Thing", vec![]);
+        let same_short_name = class(&["beta"], "Thing", vec![]);
+
+        assert!(
+            match_ty_patterns(
+                &[(&pattern, &same_short_name)],
+                &[],
+                &std::collections::HashMap::default()
+            )
+            .is_none(),
+            "same short name in different namespaces must not match"
+        );
+    }
+
+    #[test]
+    fn match_ty_pattern_unions_are_order_insensitive_with_bindings() {
+        let pattern = Ty::Union(vec![type_var("T"), string()], TyAttr::default());
+        let actual = Ty::Union(vec![string(), int()], TyAttr::default());
+        let params = vec![param("T")];
+
+        let bindings = match_ty_patterns(
+            &[(&pattern, &actual)],
+            &params,
+            &std::collections::HashMap::default(),
+        )
+        .expect("union members should be matched by type, not position");
+        assert_eq!(bindings.get(&param("T")), Some(&int()));
     }
 }

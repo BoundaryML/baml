@@ -624,7 +624,7 @@ pub(crate) fn member_on_interface<'db>(
                 // is the interface's OWN declared field list, not the
                 // requires-closure flattening (which dedups by name and
                 // numbers differently).
-                field_index: index as u32,
+                field_index: u32::try_from(index).expect("interface field count fits u32"),
             },
         });
     }
@@ -941,16 +941,19 @@ fn interface_declares_member<'db>(
 }
 
 /// The spec's TS-style union field read: every arm is a concrete class
-/// whose OWN declared field `name` (realized at the arm's args) has the
-/// SAME type - that one agreed declaration types the access. `None`
-/// whenever an arm is symbolic, lacks the field, or the types disagree.
+/// whose OWN declared field `name` (realized at the arm's args) exists,
+/// and the access types as the JOIN of the per-arm field types - the
+/// discriminant-narrowing shape (`x.type == "foo"` over a tagged class
+/// union) reads the union of the tags. `None` whenever an arm is
+/// symbolic (interface/var arms only reach members through a shared
+/// interface) or lacks the field.
 fn union_class_field_join<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     members: &[Ty],
     name: &Name,
 ) -> Option<Ty> {
-    let mut agreed: Option<Ty> = None;
+    let mut parts: Vec<Ty> = Vec::new();
     for arm in members {
         if matches!(
             arm.kind(),
@@ -963,11 +966,7 @@ fn union_class_field_join<'db>(
             .iter()
             .find(|(field, _)| field == name)
             .map(|(_, ty)| crate::lower::substitute_params(ty, &class_args))?;
-        match &agreed {
-            None => agreed = Some(field_ty),
-            Some(seen) if *seen == field_ty => {}
-            Some(_) => return None,
-        }
+        parts.push(field_ty);
     }
-    agreed
+    (!parts.is_empty()).then(|| Ty::union(parts))
 }
