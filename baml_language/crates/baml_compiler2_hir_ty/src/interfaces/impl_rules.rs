@@ -12,7 +12,7 @@ use baml_type_runtime::contains_typevar;
 
 use super::{
     InterfaceImplOrigin, LowerScope, interface_declared_param_bounds,
-    lower_interface_associated_bindings, lower_ref_in, match_ty_patterns,
+    lower_interface_associated_bindings, lower_ref_in, lower_ref_in_at, match_ty_patterns,
     normalized_arg_implements_bound, resolve_ref_to_interface,
 };
 use crate::{diagnostics::TirTypeError, lower::qualify_def};
@@ -175,7 +175,13 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
             bounds: &TypeVarBoundsMap::default(),
             self_ty: None,
         };
-        let ty = lower_ref_in(&scope, store, bound, diags);
+        let ty = lower_ref_in_at(
+            &scope,
+            store,
+            bound,
+            crate::lower::TypePosition::ConstraintHead,
+            diags,
+        );
         match ty {
             // BEP-062: `baml.AnyFunction` is legal only as a value type; as a
             // bound it is rejected and contributes no constraint.
@@ -339,7 +345,7 @@ pub fn impl_data<'db>(
 
     let mut interface_target_diags = Vec::new();
     // The target is a constraint head: it pins only its written inline bindings.
-    let lowered_interface = lower_ref_in(
+    let lowered_interface = lower_ref_in_at(
         &LowerScope {
             db,
             package_items: pkg_items,
@@ -350,6 +356,7 @@ pub fn impl_data<'db>(
         },
         &block.type_refs,
         block.interface_target,
+        crate::lower::TypePosition::ConstraintHead,
         &mut interface_target_diags,
     );
     let interface_args = if let Ty::Interface(_, args, _, _) = &lowered_interface {
@@ -985,7 +992,14 @@ fn method_generic_bound_interfaces<'db>(
                         bounds: &empty,
                         self_ty: None,
                     };
-                    lower_ref_in(&scope, spec.bound_store(), id, &mut d).as_interface()
+                    lower_ref_in_at(
+                        &scope,
+                        spec.bound_store(),
+                        id,
+                        crate::lower::TypePosition::ConstraintHead,
+                        &mut d,
+                    )
+                    .as_interface()
                 })
                 .collect();
             (declared.name.clone(), conjunction)
@@ -1425,7 +1439,15 @@ pub fn validate_impl_signatures<'db>(
                 &self_bound,
                 &for_ty,
                 &iface_bindings,
-                |scope| lower_ref_in(scope, &iface_data.type_refs, required_ref, &mut d),
+                |scope| {
+                    lower_ref_in_at(
+                        scope,
+                        &iface_data.type_refs,
+                        required_ref,
+                        crate::lower::TypePosition::ConstraintHead,
+                        &mut d,
+                    )
+                },
             );
             // Reduce any `Self.member` projection in the realized obligation so
             // the associated pins below are concrete.

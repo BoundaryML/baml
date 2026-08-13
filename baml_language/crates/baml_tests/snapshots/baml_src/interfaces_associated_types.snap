@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 149
 ---
 function interfaces_associated_types.$init_test_ns_interfaces_associated_types_interfaces_associated_types(registry: testing.TestCollector) -> null {
     load_var registry
@@ -146,7 +145,7 @@ function interfaces_associated_types.AdbUser.AdbSummarizable.summary(self: inter
     return
 }
 
-function interfaces_associated_types.AdbUserHolder.AdbHolder<AdbUser>.get(self: interfaces_associated_types.AdbUserHolder) -> (interfaces_associated_types.AdbUserHolder as interfaces_associated_types.AdbHolder<interfaces_associated_types.AdbUser>).Item {
+function interfaces_associated_types.AdbUserHolder.AdbHolder<AdbUser>.get(self: interfaces_associated_types.AdbUserHolder) -> interfaces_associated_types.AdbUser {
     load_var self
     load_field .user
     return
@@ -186,7 +185,7 @@ function interfaces_associated_types.ApdWidgetHolder.ApdHolder.get(self: interfa
     return
 }
 
-function interfaces_associated_types.BcpTextSource.BcpSource.get(self: interfaces_associated_types.BcpTextSource) -> (interfaces_associated_types.BcpTextSource as interfaces_associated_types.BcpSource<Item = string>).Item {
+function interfaces_associated_types.BcpTextSource.BcpSource.get(self: interfaces_associated_types.BcpTextSource) -> string {
     load_var self
     load_field .text
     return
@@ -214,7 +213,7 @@ function interfaces_associated_types.BspRenderable$for$BspWrapped<T>.render(self
     return
 }
 
-function interfaces_associated_types.BspTextSource.BspSource.get(self: interfaces_associated_types.BspTextSource) -> (interfaces_associated_types.BspTextSource as interfaces_associated_types.BspSource<Item = string>).Item {
+function interfaces_associated_types.BspTextSource.BspSource.get(self: interfaces_associated_types.BspTextSource) -> string {
     load_var self
     load_field .text
     return
@@ -259,7 +258,7 @@ function interfaces_associated_types.Fallible.value_plus_one(self: interfaces_as
     return
 }
 
-function interfaces_associated_types.IngIntIterator.IngIterator.next(self: interfaces_associated_types.IngIntIterator) -> (interfaces_associated_types.IngIntIterator as interfaces_associated_types.IngIterator<Item = int | null>).Item {
+function interfaces_associated_types.IngIntIterator.IngIterator.next(self: interfaces_associated_types.IngIntIterator) -> int | null {
     load_var self
     load_field .value
     return
@@ -305,13 +304,13 @@ function interfaces_associated_types.RmfStringSource.RmfSource.get(self: interfa
     return
 }
 
-function interfaces_associated_types.Ticket.Describable.value(self: interfaces_associated_types.Ticket) -> (interfaces_associated_types.Ticket as interfaces_associated_types.Describable<Output = string>).Output {
+function interfaces_associated_types.Ticket.Describable.value(self: interfaces_associated_types.Ticket) -> string {
     load_var self
     load_field .id
     return
 }
 
-function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> (interfaces_associated_types.UpcEntityBox<#0> as interfaces_associated_types.UpcSummarizes<Key = (#0 as interfaces_associated_types.UpcHasKey).Key>).Key {
+function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> (interfaces_associated_types.UpcEntityBox<#0> as interfaces_associated_types.UpcSummarizes<Key = string>).Key {
     load_var self
     load_field .value
     load_type interfaces_associated_types.UpcHasKey<Key = string>
@@ -907,7 +906,7 @@ function interfaces_associated_types.rpa_main() -> int {
     return
 }
 
-function interfaces_associated_types.upc_entity_key(value: #0) -> (#0 as interfaces_associated_types.UpcHasKey).Key {
+function interfaces_associated_types.upc_entity_key(value: #0) -> string {
     load_var value
     load_type interfaces_associated_types.UpcHasKey<Key = string>
     virtual_load_field .key

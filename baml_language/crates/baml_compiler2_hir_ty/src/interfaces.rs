@@ -91,8 +91,27 @@ pub(crate) fn lower_ref_in(
     id: baml_compiler2_hir::type_ref::TypeRefId,
     diags: &mut Vec<TirTypeError>,
 ) -> Ty {
+    lower_ref_in_at(
+        scope,
+        store,
+        id,
+        crate::lower::TypePosition::Existential,
+        diags,
+    )
+}
+
+/// [`lower_ref_in`] at an explicit [`crate::lower::TypePosition`] - for
+/// constraint heads (bounds, `implements`/`requires` targets), which pin
+/// only what they write.
+pub(crate) fn lower_ref_in_at(
+    scope: &LowerScope<'_, '_>,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    position: crate::lower::TypePosition,
+    diags: &mut Vec<TirTypeError>,
+) -> Ty {
     let ctx = scope_ctx(scope);
-    let lowered = ctx.lower_type_ref(store, id).to_plain();
+    let lowered = ctx.lower_type_ref_at(store, id, position).to_plain();
     diags.extend(
         ctx.take_diagnostics()
             .into_iter()
@@ -108,10 +127,20 @@ pub(crate) fn lower_expr_in(
     expr: &baml_compiler2_ast::TypeExpr,
     diags: &mut Vec<TirTypeError>,
 ) -> Ty {
+    lower_expr_in_at(scope, expr, crate::lower::TypePosition::Existential, diags)
+}
+
+/// [`lower_expr_in`] at an explicit [`crate::lower::TypePosition`].
+pub(crate) fn lower_expr_in_at(
+    scope: &LowerScope<'_, '_>,
+    expr: &baml_compiler2_ast::TypeExpr,
+    position: crate::lower::TypePosition,
+    diags: &mut Vec<TirTypeError>,
+) -> Ty {
     let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
     let id = builder.lower(expr);
     let (store, _spans) = builder.finish();
-    lower_ref_in(scope, &store, id, diags)
+    lower_ref_in_at(scope, &store, id, position, diags)
 }
 
 // ── Interface generic-frame accessors (TIR's `interface_generic_env`) ──────
@@ -170,9 +199,13 @@ pub fn interface_declared_param_bounds(
             .bounds
             .iter()
             .filter_map(|&id| {
-                ctx.lower_type_ref(&data.type_refs, id)
-                    .to_plain()
-                    .as_interface()
+                ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    id,
+                    crate::lower::TypePosition::ConstraintHead,
+                )
+                .to_plain()
+                .as_interface()
             })
             .collect();
         if !constraints.is_empty() {
@@ -436,7 +469,7 @@ fn lower_interface_associated_bindings<'db>(
         .collect()
 }
 
-fn complete_interface_associated_bindings_from_tys<'db>(
+pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     iface: &baml_compiler2_ppir::item_data::InterfaceData<'db>,
@@ -1153,7 +1186,7 @@ pub fn resolve_path_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let ty = lower_expr_in(
+    let ty = lower_expr_in_at(
         &LowerScope {
             db,
             package_items: pkg_items,
@@ -1163,6 +1196,7 @@ pub fn resolve_path_to_interface_identity<'db>(
             self_ty: None,
         },
         target,
+        crate::lower::TypePosition::ConstraintHead,
         &mut diagnostics,
     );
     resolved_interface_from_ty(db, ty)
@@ -1178,7 +1212,7 @@ pub fn resolve_ref_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let ty = lower_ref_in(
+    let ty = lower_ref_in_at(
         &LowerScope {
             db,
             package_items: pkg_items,
@@ -1189,6 +1223,7 @@ pub fn resolve_ref_to_interface_identity<'db>(
         },
         store,
         target,
+        crate::lower::TypePosition::ConstraintHead,
         &mut diagnostics,
     );
     resolved_interface_from_ty(db, ty)

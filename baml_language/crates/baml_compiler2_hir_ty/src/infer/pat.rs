@@ -530,7 +530,7 @@ impl<'db> InferenceContext<'db> {
             short,
         );
 
-        let written: Vec<Ty> = self
+        let written_args: Vec<Ty> = self
             .type_refs
             .pattern_class_args
             .get(&pat)
@@ -539,27 +539,61 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .map(|&type_ref| self.lower_body_annotation(type_ref))
             .collect();
-        // Written args win; else ADOPT the same-interface scrutinee
-        // member's args and pins (the class road's adoption rule).
-        let (args, pins): (Vec<Ty>, Vec<(baml_type::Name, Ty)>) = if !written.is_empty() {
-            (written, Vec::new())
-        } else {
-            let adopted = scrut_members(scrut)
-                .into_iter()
-                .find_map(|member| match member.kind() {
-                    TyKind::Interface(member_qtn, args, pins, _) if *member_qtn == qtn => {
-                        Some((args.to_vec(), pins.to_vec()))
-                    }
-                    _ => None,
-                });
-            adopted.unwrap_or_else(|| {
+        let written_pins: Vec<(baml_type::Name, Ty)> = self
+            .type_refs
+            .pattern_assoc_bindings
+            .get(&pat)
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|(name, type_ref)| (name.clone(), self.lower_body_annotation(*type_ref)))
+            .collect();
+        // Written positions win; anything unwritten ADOPTS from an
+        // arg-compatible same-interface scrutinee member (the class road's
+        // adoption rule) - so `Source { value }` destructures whichever
+        // realization the scrutinee carries, while a written pin
+        // (`Source<Item = string> { value }`) constrains the head and
+        // types its fields.
+        let adopted = scrut_members(scrut)
+            .into_iter()
+            .find_map(|member| match member.kind() {
+                TyKind::Interface(member_qtn, args, pins, _)
+                    if *member_qtn == qtn
+                        && (written_args.is_empty()
+                            || (written_args.len() == args.len()
+                                && written_args.iter().zip(args.iter()).all(|(a, b)| {
+                                    baml_type::normalize::equivalent(
+                                        &a.to_plain(),
+                                        &b.to_plain(),
+                                        &self.facts,
+                                    )
+                                }))) =>
+                {
+                    Some((args.to_vec(), pins.to_vec()))
+                }
+                _ => None,
+            });
+        let (args, pins): (Vec<Ty>, Vec<(baml_type::Name, Ty)>) = {
+            let (adopted_args, adopted_pins) = adopted.unwrap_or_else(|| {
                 (
                     (0..data.generic_params.len())
                         .map(|_| Ty::error())
                         .collect(),
                     Vec::new(),
                 )
-            })
+            });
+            (
+                if written_args.is_empty() {
+                    adopted_args
+                } else {
+                    written_args
+                },
+                if written_pins.is_empty() {
+                    adopted_pins
+                } else {
+                    written_pins
+                },
+            )
         };
         let head = Ty::intern(TyKind::Interface(
             qtn.clone(),
@@ -688,12 +722,30 @@ impl<'db> InferenceContext<'db> {
         }
         let pat_plain = pat_ty.to_plain();
         let scrut_plain = scrut.to_plain();
-        let vars = self.lower.generic_params();
-        if baml_type::unify::all_typevars_within(&pat_plain, vars)
-            && baml_type::unify::all_typevars_within(&scrut_plain, vars)
-            && self.pattern_overlap_verdict(&pat_plain, &scrut_plain)
-                == baml_type::unify::Overlap::No
+        let mismatch = if pat_ty.has_typevar()
+            || scrut.has_typevar()
+            || pat_ty.has_projection()
+            || scrut.has_projection()
         {
+            // Rigid-carrying sides: subtype/equality cannot decide
+            // reachability, so ask the overlap oracle; its `No` is trusted
+            // only when it can see every variable.
+            let vars = self.lower.generic_params();
+            baml_type::unify::all_typevars_within(&pat_plain, vars)
+                && baml_type::unify::all_typevars_within(&scrut_plain, vars)
+                && self.pattern_overlap_verdict(&pat_plain, &scrut_plain)
+                    == baml_type::unify::Overlap::No
+        } else {
+            // Ground pairs: bidirectional subtyping decides (TIR's
+            // `pattern_matchable`), against the whole scrutinee or any
+            // union member. The overlap oracle alone is too lax here -
+            // it answers Yes for any existential pair, but two
+            // same-interface existentials with differing pins share no
+            // value (pins are invariant), which this branch rejects.
+            !self.pattern_matchable(&pat_plain, &scrut_plain)
+                && !self.pattern_overlaps_scrut_member(&pat_plain, &scrut_plain)
+        };
+        if mismatch {
             self.pending_diags
                 .push(super::PendingDiag::PatternScrutMismatch {
                     pat,
@@ -701,6 +753,88 @@ impl<'db> InferenceContext<'db> {
                     found: pat_ty.clone(),
                 });
         }
+    }
+
+    /// Whether an arm with natural type `pat` is *plausible* against a
+    /// scrutinee of type `scrut` - TIR's arm-validity over-approximation.
+    /// Container element positions recurse laxly (a structural pattern's
+    /// element type embeds its sub-patterns); a bare interface head places
+    /// no pin constraint (it destructures any realization); non-container
+    /// pairs use bidirectional subtyping (either direction is a possible
+    /// match - `Dog` matches an `Animal` scrutinee, and vice-versa).
+    fn pattern_matchable(&self, pat: &baml_type::Ty, scrut: &baml_type::Ty) -> bool {
+        use baml_type::Ty as P;
+        let pat = self.expand_alias_chain(pat);
+        let scrut = self.expand_alias_chain(scrut);
+        match (&pat, &scrut) {
+            (P::Never { .. }, _) => true,
+            (P::List(a, _) | P::EvolvingList(a, _), P::List(b, _) | P::EvolvingList(b, _)) => {
+                self.pattern_matchable(a, b)
+            }
+            (
+                P::Map {
+                    key: ka, value: va, ..
+                },
+                P::Map {
+                    key: kb, value: vb, ..
+                },
+            ) => self.pattern_matchable(ka, kb) && self.pattern_matchable(va, vb),
+            (
+                P::Interface(pat_qtn, pat_args, pat_assoc, _),
+                P::Interface(scrut_qtn, scrut_args, _, _),
+            ) if pat_qtn == scrut_qtn
+                && pat_assoc.is_empty()
+                && (pat_args.is_empty()
+                    || (pat_args.len() == scrut_args.len()
+                        && pat_args.iter().zip(scrut_args.iter()).all(|(a, b)| {
+                            baml_type::normalize::equivalent(a, b, &self.facts)
+                        }))) =>
+            {
+                true
+            }
+            _ => {
+                baml_type::normalize::is_subtype(&pat, &scrut, &self.facts)
+                    || baml_type::normalize::is_subtype(&scrut, &pat, &self.facts)
+            }
+        }
+    }
+
+    /// A match arm is valid if its pattern overlaps ANY member of a
+    /// union/optional scrutinee - the arm matches that member's values
+    /// even when other members don't.
+    fn pattern_overlaps_scrut_member(&self, pat: &baml_type::Ty, scrut: &baml_type::Ty) -> bool {
+        let members = self.flatten_union_members(scrut);
+        members.len() > 1
+            && members
+                .iter()
+                .any(|member| self.pattern_matchable(pat, member))
+    }
+
+    fn flatten_union_members(&self, ty: &baml_type::Ty) -> Vec<baml_type::Ty> {
+        match self.expand_alias_chain(ty) {
+            baml_type::Ty::Union(members, _) => members
+                .iter()
+                .flat_map(|member| self.flatten_union_members(member))
+                .collect(),
+            other => vec![other],
+        }
+    }
+
+    /// Follow a top-level alias chain to its target (bounded; a cyclic or
+    /// unknown alias stays as written).
+    fn expand_alias_chain(&self, ty: &baml_type::Ty) -> baml_type::Ty {
+        use baml_type::normalize::TypeContext as _;
+        let mut ty = ty.clone();
+        for _ in 0..64 {
+            let baml_type::Ty::TypeAlias(qtn, _) = &ty else {
+                return ty;
+            };
+            match self.facts.alias_def(qtn) {
+                Some(next) => ty = next,
+                None => return ty,
+            }
+        }
+        ty
     }
 
     fn type_pattern_outcome_inner(&mut self, scrut: &Ty, pat_ty: &Ty) -> PatternOutcome {

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
-assertion_line: 42
 ---
 function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>) -> ai.RunResult<#0> {
         0     load_var 1                                 
@@ -1693,7 +1692,7 @@ function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.
        24   return                 
 }
 
-function ai.internal._schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown> {
+function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
   6    0    load_var 1                         (handler)
        1    call 739 ntypeargs=0               (reflect.signature)
        2    store_var 2                        (sig)
@@ -3167,7 +3166,7 @@ function ai.tools.raw_tool(name: string, description: string, input_schema: map<
        19   throw                  
 }
 
-function ai.tools.tool(handler: baml.AnyFunction, name: string | null, description: string | null, on_error: ai.tools.ErrorMode | null) -> ai.tools.Tool {
+function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>, name: string | null, description: string | null, on_error: ai.tools.ErrorMode | null) -> ai.tools.Tool {
        0    load_var 2             (name)
        1    load_const 0           (<omitted>)
        2    cmp_op ==              
@@ -9571,7 +9570,7 @@ function openai.internal.openai_render(c: openai.OpenAiClient, input: ai.ModelTu
 function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
-function reflect.signature(f: baml.AnyFunction) -> reflect.Signature {
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
 }
 
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {

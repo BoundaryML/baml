@@ -258,7 +258,7 @@ impl ExportedType {
 /// `(IntDecoder as Decoder<..>).Output` IS `int` once the impl is known,
 /// and the export (describe, codegen schemas) should say so. Symbolic
 /// bases (rigid vars) stay - a signature over `T` keeps `T.Item`.
-fn reduce_ground_projections(db: &dyn baml_compiler2_ppir::Db, ty: &Ty, fuel: u32) -> Ty {
+pub fn reduce_ground_projections(db: &dyn baml_compiler2_ppir::Db, ty: &Ty, fuel: u32) -> Ty {
     use baml_type::normalize::{ProjectionStep, TypeContext as _};
     let recurse = |t: &Ty| reduce_ground_projections(db, t, fuel);
     match ty {

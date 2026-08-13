@@ -399,7 +399,11 @@ fn assoc_bound_roots<'db>(
     let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
         .with_frame(interface_frame(interface, db))
         .with_bounds(crate::lower::interface_scope_bounds(db, interface));
-    let bound_ty = ctx.lower_type_ref(&data.type_refs, bound);
+    let bound_ty = ctx.lower_type_ref_at(
+        &data.type_refs,
+        bound,
+        crate::lower::TypePosition::ConstraintHead,
+    );
     let target = InterfaceRef::new(
         interface_ref.name.clone(),
         (interface_ref.generics.to_vec()).into(),

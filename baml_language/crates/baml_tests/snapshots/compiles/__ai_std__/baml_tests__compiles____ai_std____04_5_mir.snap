@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 2495
 ---
 === MIR2 ===
 
@@ -1081,10 +1080,10 @@ fn ai.errors.classify_http(provider: string, status_code: int, body: string) -> 
     }
 }
 
-fn ai.internal._schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown> {
+fn ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
     // Locals:
     let _0: map<string, unknown> // _0 // return
-    let _1: baml.AnyFunction // handler // param
+    let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // handler // param
     let _2: reflect.Signature // sig
     let _3: map<string, unknown> // props
     let _4: string[] // required
@@ -2841,12 +2840,12 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
     let _4: null | ((map<string, unknown>) -> string throws unknown)
     let _5: (map<string, unknown>) -> string throws unknown // rh
     let _6: (map<string, unknown>) -> string throws unknown
-    let _7: null | baml.AnyFunction
-    let _8: null | baml.AnyFunction
-    let _9: baml.AnyFunction // h
+    let _7: null | baml.AnyFunction<Returns = unknown, Throws = unknown>
+    let _8: null | baml.AnyFunction<Returns = unknown, Throws = unknown>
+    let _9: baml.AnyFunction<Returns = unknown, Throws = unknown> // h
     let _10: unknown // value
     let _11: unknown // e
-    let _12: baml.AnyFunction
+    let _12: baml.AnyFunction<Returns = unknown, Throws = unknown>
     let _13: type
     let _14: type
     let _15: unknown
@@ -2881,7 +2880,7 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
     bb1: {
         _7 = copy _1.3;
         _8 = copy _7;
-        _8 = narrow_bind copy _8 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: [], name: "AnyFunction" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb2];
+        _8 = narrow_bind copy _8 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: [], name: "AnyFunction" }, [], [("Returns", BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }), ("Throws", BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb2];
     }
 
     bb2: {
@@ -2960,10 +2959,10 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
     }
 }
 
-fn ai.tools.tool(handler: baml.AnyFunction, name: string | null, description: string | null, on_error: null | ai.tools.ErrorMode) -> ai.tools.Tool {
+fn ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>, name: string | null, description: string | null, on_error: null | ai.tools.ErrorMode) -> ai.tools.Tool {
     // Locals:
     let _0: ai.tools.Tool // _0 // return
-    let _1: baml.AnyFunction // handler // param
+    let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // handler // param
     let _2: string | null // name // param
     let _3: string | null // description // param
     let _4: null | ai.tools.ErrorMode // on_error // param

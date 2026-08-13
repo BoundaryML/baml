@@ -164,12 +164,40 @@ fn lower_ref_in_scope<'db>(
     bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
     self_ty: Option<Tir2Ty>,
 ) -> Tir2Ty {
+    lower_ref_in_scope_at(
+        db,
+        store,
+        id,
+        pkg_items,
+        namespace_path,
+        generic_params,
+        bounds,
+        self_ty,
+        baml_compiler2_hir_ty::lower::TypePosition::Existential,
+    )
+}
+
+/// [`lower_ref_in_scope`] at an explicit position - for `implements` /
+/// dispatch targets, which are constraint heads (written pins only, no
+/// existential completeness demands).
+#[allow(clippy::too_many_arguments)]
+fn lower_ref_in_scope_at<'db>(
+    db: &'db dyn crate::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    generic_params: &[ParamTy],
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    self_ty: Option<Tir2Ty>,
+    position: baml_compiler2_hir_ty::lower::TypePosition,
+) -> Tir2Ty {
     let ctx =
         baml_compiler2_hir_ty::lower::lower_ctx_for_package(db, pkg_items, namespace_path.to_vec())
             .with_frame(generic_params.to_vec())
             .with_bounds(bounds.clone())
             .with_self_ty(self_ty.map(|ty| baml_type::interned::Ty::from_plain(&ty)));
-    ctx.lower_type_ref(store, id).to_plain()
+    ctx.lower_type_ref_at(store, id, position).to_plain()
 }
 
 /// The AST twin of [`lower_ref_in_scope`] (scratch firewall store).
@@ -277,7 +305,7 @@ fn resolve_ref_to_interface_loc<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
 ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
-    let lowered = lower_ref_in_scope(
+    let lowered = lower_ref_in_scope_at(
         db,
         store,
         target,
@@ -286,6 +314,7 @@ fn resolve_ref_to_interface_loc<'db>(
         &[],
         &FxHashMap::default(),
         None,
+        baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
     );
     let Tir2Ty::Interface(qtn, ..) = lowered else {
         return None;
@@ -7493,7 +7522,7 @@ impl<'db> LoweringContext<'db> {
                     // `<Item = int>` bindings. Block-level `type Item = …;`
                     // bindings are appended after (a name is bound at most
                     // once, so first-match lookup is exact).
-                    let (iface_args, mut assoc_bindings) = match lower_ref_in_scope(
+                    let (iface_args, mut assoc_bindings) = match lower_ref_in_scope_at(
                         self.db,
                         &target.type_refs,
                         target.target,
@@ -7502,6 +7531,7 @@ impl<'db> LoweringContext<'db> {
                         &generic_params,
                         &generic_param_bounds,
                         None,
+                        baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
                     ) {
                         Tir2Ty::Interface(_, args, assoc, _) => (args, assoc),
                         // A non-interface resolution was already diagnosed

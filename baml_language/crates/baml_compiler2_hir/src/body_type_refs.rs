@@ -14,6 +14,7 @@
 //! targets, and lambda signature slots. Class-destructure generic args join
 //! when pattern inference needs them.
 
+use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern};
 use rustc_hash::FxHashMap;
 
@@ -32,6 +33,9 @@ pub struct BodyTypeRefs {
     /// Class-destructure generic args (`Box<int> { v }` patterns), in
     /// written order. Never empty when present.
     pub pattern_class_args: FxHashMap<PatId, Box<[TypeRefId]>>,
+    /// Destructure-head associated bindings (`Source<Item = int> { v }`
+    /// patterns), in written order. Never empty when present.
+    pub pattern_assoc_bindings: FxHashMap<PatId, Box<[(Name, TypeRefId)]>>,
     /// Explicit expression-position type arguments (`Call`, `GenericApply`,
     /// and `Object` constructors), in written order. Never empty when
     /// present.
@@ -70,11 +74,26 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, TypeRefSourceMa
                 refs.array_ascriptions
                     .insert(pat_id, builder.lower(type_expr));
             }
-            Pattern::Class { generic_args, .. } if !generic_args.is_empty() => {
-                refs.pattern_class_args.insert(
-                    pat_id,
-                    generic_args.iter().map(|arg| builder.lower(arg)).collect(),
-                );
+            Pattern::Class {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } if !generic_args.is_empty() || !associated_type_bindings.is_empty() => {
+                if !generic_args.is_empty() {
+                    refs.pattern_class_args.insert(
+                        pat_id,
+                        generic_args.iter().map(|arg| builder.lower(arg)).collect(),
+                    );
+                }
+                if !associated_type_bindings.is_empty() {
+                    refs.pattern_assoc_bindings.insert(
+                        pat_id,
+                        associated_type_bindings
+                            .iter()
+                            .map(|binding| (binding.name.clone(), builder.lower(&binding.ty)))
+                            .collect(),
+                    );
+                }
             }
             _ => {}
         }

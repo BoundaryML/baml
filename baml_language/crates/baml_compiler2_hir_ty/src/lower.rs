@@ -58,8 +58,9 @@ pub enum LoweringDiagKind {
     /// A map key type provably outside the string domain (B-267's
     /// contract; `checked_map_key` lowers it to the Error sentinel).
     InvalidMapKey { key: baml_type::Ty },
-    /// A projection-determination error (already in the shared
-    /// vocabulary), carried through the sink verbatim.
+    /// A type error already in the shared vocabulary (projection
+    /// determination, existential completeness), carried through the
+    /// sink verbatim.
     Projection(Box<crate::diagnostics::TirTypeError>),
     /// Written type-argument count disagrees with the declaration
     /// (E0001's type-arity spelling).
@@ -71,6 +72,20 @@ pub enum LoweringDiagKind {
     /// A written function TYPE without a `throws` clause in a position
     /// elaboration could not legalize (E0151).
     FnTypeMissingThrows,
+}
+
+/// Where a type reference stands - TIR's `TypePosition`. An existential
+/// (value) position denotes one complete interface instantiation: omitted
+/// defaulted associated types fill eagerly, and a member with neither a
+/// written pin nor a default is diagnosed (Rust's E0191-analog). The head
+/// of a constraint - a generic bound, an `implements`/`requires` target,
+/// a projection qualifier - pins only what it writes. (TIR's third
+/// variant, `ConstructorHead`, has no counterpart here: hir_ty's
+/// construction road types heads through `infer_object`, not this path.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypePosition {
+    Existential,
+    ConstraintHead,
 }
 
 pub struct LowerCtx<'db> {
@@ -215,13 +230,30 @@ impl<'db> LowerCtx<'db> {
     // -- Span-free surface (signatures, fields, aliases) ----------------------
 
     pub fn lower_type_ref(&self, store: &TypeRefStore, id: TypeRefId) -> Ty {
+        self.lower_type_ref_at(store, id, TypePosition::Existential)
+    }
+
+    /// [`Self::lower_type_ref`] at an explicit [`TypePosition`]. The
+    /// position applies to the reference's HEAD only; nested references
+    /// (generic args, union members, binding values) are existential.
+    pub fn lower_type_ref_at(
+        &self,
+        store: &TypeRefStore,
+        id: TypeRefId,
+        position: TypePosition,
+    ) -> Ty {
         let saved = self.current_ref.replace(Some(id));
-        let ty = self.lower_type_ref_inner(store, id);
+        let ty = self.lower_type_ref_inner(store, id, position);
         self.current_ref.set(saved);
         ty
     }
 
-    fn lower_type_ref_inner(&self, store: &TypeRefStore, id: TypeRefId) -> Ty {
+    fn lower_type_ref_inner(
+        &self,
+        store: &TypeRefStore,
+        id: TypeRefId,
+        position: TypePosition,
+    ) -> Ty {
         let attr = TyAttr::default;
         match &store[id].kind {
             TypeRefKind::Int => Ty::int(),
@@ -303,7 +335,7 @@ impl<'db> LowerCtx<'db> {
                     .iter()
                     .map(|binding| (binding.name.clone(), self.lower_type_ref(store, binding.ty)))
                     .collect();
-                self.lower_path(segments, args, bindings)
+                self.lower_path(segments, args, bindings, position)
             }
             // A projection node: `T.Output` / `(T as I).Output`. The
             // qualifying interface is the written one, or determined from
@@ -330,8 +362,14 @@ impl<'db> LowerCtx<'db> {
                         attr: attr(),
                     });
                 }
-                let explicit =
-                    interface.map(|interface| self.lower_type_ref(store, interface).to_plain());
+                // The qualifier names the interface to project *through* -
+                // a constraint shape, not an existential value: written
+                // pins participate in validating the projection, unwritten
+                // members are neither demanded nor default-filled.
+                let explicit = interface.map(|interface| {
+                    self.lower_type_ref_at(store, interface, TypePosition::ConstraintHead)
+                        .to_plain()
+                });
                 let lowered = crate::interfaces::lower_projection(
                     self.db,
                     &self.plain_bounds_env(),
@@ -339,7 +377,7 @@ impl<'db> LowerCtx<'db> {
                     explicit,
                     member.clone(),
                 );
-                self.record_projection_diags(lowered.diagnostics);
+                self.record_type_errors(lowered.diagnostics);
                 Ty::from_plain(&lowered.ty)
             }
             // `_` lowers to the var-less hole node; consumers apply policy
@@ -361,19 +399,28 @@ impl<'db> LowerCtx<'db> {
     /// caller falls through to the ordinary unresolved-path report).
     /// `None` for prefixes that do not name a type, and for enum heads
     /// (an enum's dotted member is a variant, already given first
-    /// refusal).
+    /// refusal). Lowered through the full path cascade - so a prefix
+    /// that is itself a projection (`IntHolder.Item` of
+    /// `IntHolder.Item.Inner`) resolves recursively - at ConstraintHead:
+    /// an interface-named prefix reaches the caller's projection-base
+    /// rejection intact instead of tripping the existential completeness
+    /// check first.
     fn probe_projection_prefix(&self, prefix: &[Name]) -> Option<Ty> {
-        match self.resolve_type(prefix)? {
-            Definition::Enum(_) => None,
-            _ => {
-                let saved = self.diags.as_ref().map(|d| d.borrow().len());
-                let ty = self.lower_path(prefix, Vec::new(), Vec::new());
-                if let (Some(diags), Some(saved)) = (&self.diags, saved) {
-                    diags.borrow_mut().truncate(saved);
-                }
-                (!ty.has_error()).then_some(ty)
-            }
+        if let Some(Definition::Enum(_)) = self.resolve_type(prefix) {
+            return None;
         }
+        let saved = self.diags.as_ref().map(|d| d.borrow().len());
+        let ty = self.lower_path(prefix, Vec::new(), Vec::new(), TypePosition::ConstraintHead);
+        let clean = match (&self.diags, saved) {
+            (Some(diags), Some(saved)) => {
+                let mut diags = diags.borrow_mut();
+                let clean = diags.len() == saved;
+                diags.truncate(saved);
+                clean
+            }
+            _ => true,
+        };
+        (clean && !ty.has_error()).then_some(ty)
     }
 
     /// The frame's bound env as the PLAIN constraint map the projection
@@ -402,7 +449,7 @@ impl<'db> LowerCtx<'db> {
 
     /// Record projection-determination diagnostics through the sink at the
     /// current ref.
-    fn record_projection_diags(&self, errors: Vec<crate::diagnostics::TirTypeError>) {
+    fn record_type_errors(&self, errors: Vec<crate::diagnostics::TirTypeError>) {
         if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
             for error in errors {
                 diags.borrow_mut().push(LoweringDiag {
@@ -534,12 +581,18 @@ impl<'db> LowerCtx<'db> {
     /// Lowers a resolved (or fallback-resolved) type path. Mirrors TIR's
     /// `lower_path` dispatch and its failure fallbacks: in-scope type var,
     /// then enum-variant reading, then `Error`.
-    fn lower_path(&self, segments: &[Name], args: Vec<Ty>, bindings: Vec<(Name, Ty)>) -> Ty {
+    fn lower_path(
+        &self,
+        segments: &[Name],
+        args: Vec<Ty>,
+        bindings: Vec<(Name, Ty)>,
+        position: TypePosition,
+    ) -> Ty {
         let attr = TyAttr::default;
         let short = segments.last().expect("type paths are never empty");
 
         if let Some(def) = self.resolve_type(segments) {
-            return self.lower_definition(def, short, args, bindings);
+            return self.lower_definition(def, short, args, bindings, position);
         }
 
         // Fallback 1: a single segment naming an in-scope generic param
@@ -633,7 +686,7 @@ impl<'db> LowerCtx<'db> {
                         None,
                         member.clone(),
                     );
-                    self.record_projection_diags(lowered.diagnostics);
+                    self.record_type_errors(lowered.diagnostics);
                     ty = Ty::from_plain(&lowered.ty);
                     if ty.has_error() {
                         return ty;
@@ -655,7 +708,7 @@ impl<'db> LowerCtx<'db> {
                     &head_plain,
                     member,
                 ) {
-                    self.record_projection_diags(vec![
+                    self.record_type_errors(vec![
                         crate::diagnostics::TirTypeError::InterfaceProjectionBase {
                             interface: iface_qtn,
                             member: member.clone(),
@@ -670,7 +723,7 @@ impl<'db> LowerCtx<'db> {
                     None,
                     member.clone(),
                 );
-                self.record_projection_diags(lowered.diagnostics);
+                self.record_type_errors(lowered.diagnostics);
                 return Ty::from_plain(&lowered.ty);
             }
         }
@@ -729,7 +782,8 @@ impl<'db> LowerCtx<'db> {
         def: Definition<'db>,
         short: &Name,
         mut args: Vec<Ty>,
-        mut bindings: Vec<(Name, Ty)>,
+        bindings: Vec<(Name, Ty)>,
+        position: TypePosition,
     ) -> Ty {
         let attr = TyAttr::default;
         match def {
@@ -755,15 +809,109 @@ impl<'db> LowerCtx<'db> {
                 let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface_loc);
                 self.record_arity(short, args.len(), data.generic_params.len());
                 enforce_arity(&mut args, data.generic_params.len());
-                // Written bindings only; defaults and completeness checking
-                // arrive with I5. Sorted for order-insensitive identity.
+                let qtn = self.qualify(def, short);
+                // A binding naming an undeclared member, or re-binding an
+                // already-bound one, is diagnosed and dropped - the lowered
+                // instantiation carries only the interface's declared shape.
+                let mut checked: Vec<(Name, Ty)> = Vec::with_capacity(bindings.len());
+                for (name, value) in bindings {
+                    if !data.associated_types.iter().any(|assoc| assoc.name == name) {
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::UnresolvedType {
+                                name: name.clone(),
+                                suggestions: data
+                                    .associated_types
+                                    .iter()
+                                    .map(|assoc| assoc.name.clone())
+                                    .collect(),
+                            },
+                        ]);
+                        continue;
+                    }
+                    if checked.iter().any(|(seen, _)| *seen == name) {
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::DuplicateAssociatedTypeBinding {
+                                interface: qtn.clone(),
+                                name,
+                            },
+                        ]);
+                        continue;
+                    }
+                    checked.push((name, value));
+                }
+                let mut bindings = checked;
+                // An existential denotes one complete instantiation
+                // (BEP-048 1.7(a)): each omitted defaulted member fills
+                // eagerly - `Self` is the existential itself, so a
+                // Self-referencing default reduces against the pins so
+                // far - and a member with neither a written pin nor a
+                // default is an error (E0191-analog), its slot recovering
+                // as `Ty::Error` so the instantiation keeps the declared
+                // shape. A constraint head pins only what it writes.
+                // Written pins stay VERBATIM: their values live in the
+                // REFERENCING scope's vocabulary, and re-deriving them
+                // through the interface's own frame (whose `Self`/slot
+                // `ParamTy`s collide with any other frame's) would capture
+                // foreign variables. Only the omitted defaults - lowered
+                // once in the interface's frame - realize here.
+                if position == TypePosition::Existential && !data.associated_types.is_empty() {
+                    let iface_params = interface_declared_params(self.db, interface_loc);
+                    let self_param = interface_frame(self.db, interface_loc)
+                        .first()
+                        .cloned()
+                        .expect("interface frame starts with Self");
+                    let plain_args: Vec<baml_type::Ty> =
+                        args.iter().map(|arg| arg.to_plain()).collect();
+                    for assoc in &data.associated_types {
+                        if bindings.iter().any(|(name, _)| name == &assoc.name) {
+                            continue;
+                        }
+                        let Some((default, _diags)) =
+                            crate::interfaces::interface_associated_type_default(
+                                self.db,
+                                interface_loc,
+                                assoc.name.clone(),
+                            )
+                        else {
+                            continue;
+                        };
+                        let self_ty = Ty::intern(TyKind::Interface(
+                            qtn.clone(),
+                            args.clone().into_boxed_slice(),
+                            bindings.clone().into_boxed_slice(),
+                            attr(),
+                        ))
+                        .to_plain();
+                        let realized = crate::interfaces::realize_associated_default(
+                            &default,
+                            &iface_params,
+                            &plain_args,
+                            &self_param,
+                            &self_ty,
+                        );
+                        bindings.push((assoc.name.clone(), Ty::from_plain(&realized)));
+                    }
+                    let missing: Vec<Name> = data
+                        .associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone())
+                        .filter(|name| !bindings.iter().any(|(bound, _)| bound == name))
+                        .collect();
+                    if !missing.is_empty() {
+                        for name in &missing {
+                            bindings.push((name.clone(), Ty::error()));
+                        }
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::MissingAssociatedTypeBindings {
+                                interface: qtn.clone(),
+                                missing,
+                            },
+                        ]);
+                    }
+                }
+                // Sorted for order-insensitive identity.
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
-                Ty::intern(TyKind::Interface(
-                    self.qualify(def, short),
-                    args.into(),
-                    bindings.into(),
-                    attr(),
-                ))
+                Ty::intern(TyKind::Interface(qtn, args.into(), bindings.into(), attr()))
             }
             Definition::Enum(_) => Ty::intern(TyKind::Enum(self.qualify(def, short), attr())),
             // Aliases stay nominal at lowering; expansion is lazy and
@@ -868,7 +1016,7 @@ impl<'db> LowerCtx<'db> {
     /// classes, enums, aliases, and in-scope generic params - with no
     /// written args or bindings.
     pub fn lower_type_path(&self, segments: &[Name]) -> Ty {
-        self.lower_path(segments, Vec::new(), Vec::new())
+        self.lower_path(segments, Vec::new(), Vec::new(), TypePosition::Existential)
     }
 
     /// `LowerCtx::qualify`, exposed for constructor typing.
@@ -1107,9 +1255,11 @@ pub fn impl_generic_bounds<'db>(
                     .bounds
                     .iter()
                     .filter_map(|&type_ref| {
-                        baml_type::interned::InterfaceRef::of_ty(
-                            &ctx.lower_type_ref(&data.type_refs, type_ref),
-                        )
+                        baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+                            &data.type_refs,
+                            type_ref,
+                            TypePosition::ConstraintHead,
+                        ))
                     })
                     .collect();
                 if !bounds.is_empty() {
@@ -1209,8 +1359,11 @@ pub fn class_generic_bounds<'db>(
         let refs: Vec<_> = declared
             .bounds
             .iter()
-            .filter_map(
-                |&type_ref| match ctx.lower_type_ref(&data.type_refs, type_ref).kind() {
+            .filter_map(|&type_ref| {
+                match ctx
+                    .lower_type_ref_at(&data.type_refs, type_ref, TypePosition::ConstraintHead)
+                    .kind()
+                {
                     TyKind::Interface(name, args, pins, _) => {
                         Some(baml_type::interned::InterfaceRef::new(
                             name.clone(),
@@ -1219,8 +1372,8 @@ pub fn class_generic_bounds<'db>(
                         ))
                     }
                     _ => None,
-                },
-            )
+                }
+            })
             .collect();
         if !refs.is_empty() {
             out.insert(param.clone(), refs);
@@ -1259,7 +1412,11 @@ pub fn function_generic_bounds<'db>(
                     .bounds
                     .iter()
                     .filter_map(|&type_ref| {
-                        as_ref(&ctx.lower_type_ref(&class_data.type_refs, type_ref))
+                        as_ref(&ctx.lower_type_ref_at(
+                            &class_data.type_refs,
+                            type_ref,
+                            TypePosition::ConstraintHead,
+                        ))
                     })
                     .collect();
                 if !refs.is_empty() {
@@ -1293,7 +1450,11 @@ pub fn function_generic_bounds<'db>(
                         .bounds
                         .iter()
                         .filter_map(|&type_ref| {
-                            as_ref(&ctx.lower_type_ref(&impl_data.type_refs, type_ref))
+                            as_ref(&ctx.lower_type_ref_at(
+                                &impl_data.type_refs,
+                                type_ref,
+                                TypePosition::ConstraintHead,
+                            ))
                         })
                         .collect();
                     if !bounds.is_empty() {
@@ -1312,7 +1473,13 @@ pub fn function_generic_bounds<'db>(
         let refs: Vec<_> = declared
             .bounds
             .iter()
-            .filter_map(|&type_ref| as_ref(&ctx.lower_type_ref(&data.type_refs, type_ref)))
+            .filter_map(|&type_ref| {
+                as_ref(&ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    type_ref,
+                    TypePosition::ConstraintHead,
+                ))
+            })
             .collect();
         if !refs.is_empty() {
             out.insert(param.clone(), refs);
@@ -1385,7 +1552,13 @@ pub fn interface_scope_bounds<'db>(
         let refs: Vec<_> = declared
             .bounds
             .iter()
-            .filter_map(|&type_ref| as_ref(&ctx.lower_type_ref(&data.type_refs, type_ref)))
+            .filter_map(|&type_ref| {
+                as_ref(&ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    type_ref,
+                    TypePosition::ConstraintHead,
+                ))
+            })
             .collect();
         if !refs.is_empty() {
             out.insert(param.clone(), refs);
@@ -1394,7 +1567,11 @@ pub fn interface_scope_bounds<'db>(
     for assoc in &data.associated_types {
         let param = frame_iter.next();
         if let (Some(param), Some(type_ref)) = (param, assoc.bound)
-            && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, type_ref))
+            && let Some(bound) = as_ref(&ctx.lower_type_ref_at(
+                &data.type_refs,
+                type_ref,
+                TypePosition::ConstraintHead,
+            ))
         {
             out.insert(param.clone(), vec![bound]);
         }
@@ -1496,9 +1673,11 @@ pub fn owner_impl_target<'db>(
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.to_vec())
         .with_bounds(function_generic_bounds(db, function));
-    let interface = baml_type::interned::InterfaceRef::of_ty(
-        &ctx.lower_type_ref(&target.type_refs, target.target),
-    )?;
+    let interface = baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+        &target.type_refs,
+        target.target,
+        TypePosition::ConstraintHead,
+    ))?;
     let mut pins = target
         .associated_type_bindings
         .iter()
@@ -1636,7 +1815,8 @@ pub fn signature_lowering_diagnostics<'db>(
         .iter()
         .flat_map(|g| g.bounds.iter())
     {
-        let lowered = ctx.lower_type_ref(&func_data.type_refs, *bound);
+        let lowered =
+            ctx.lower_type_ref_at(&func_data.type_refs, *bound, TypePosition::ConstraintHead);
         match lowered.kind() {
             // The compiler-derived builtin interface is a VALUE type,
             // never a bound (E0154).
@@ -1648,7 +1828,11 @@ pub fn signature_lowering_diagnostics<'db>(
                     },
                 ));
             }
-            TyKind::Interface(..) => {}
+            TyKind::Interface(..) => {
+                for error in bound_binding_violations(db, &func_data.type_refs, *bound, &lowered) {
+                    out.push((source_map.type_refs.span(*bound), error));
+                }
+            }
             _ if lowered.has_error() => {}
             _ => {
                 out.push((
@@ -1668,6 +1852,65 @@ pub fn signature_lowering_diagnostics<'db>(
             lowering_diag_error(&diag.kind),
         )
     }));
+    out
+}
+
+/// An explicit associated binding written on a generic bound (`P extends
+/// Parser<Output = V>`) must implement that member's own declared bound
+/// (`type Output extends Named`) - the same implements relation the
+/// impl-side binding check enforces. Only WRITTEN bindings: a default is
+/// the interface's own obligation, checked at its declaration; a value
+/// still carrying a type variable resolves at instantiation and fails
+/// open. TIR's bound-side check from `lower_generic_param_interface_bounds`.
+fn bound_binding_violations(
+    db: &dyn baml_compiler2_ppir::Db,
+    store: &TypeRefStore,
+    bound: TypeRefId,
+    lowered: &Ty,
+) -> Vec<crate::diagnostics::TirTypeError> {
+    let TypeRefKind::Path {
+        associated_type_bindings,
+        ..
+    } = &store[bound].kind
+    else {
+        return Vec::new();
+    };
+    if associated_type_bindings.is_empty() {
+        return Vec::new();
+    }
+    let plain = lowered.to_plain();
+    let baml_type::Ty::Interface(qtn, generics, pins, _) = &plain else {
+        return Vec::new();
+    };
+    let head = baml_type::Interface::new(qtn.clone(), generics.clone(), pins.clone());
+    let facts = crate::facts::Facts::new(db);
+    let mut out = Vec::new();
+    for written in associated_type_bindings {
+        // An unknown binding name was diagnosed and dropped by lowering.
+        let Some((_, value)) = pins.iter().find(|(name, _)| *name == written.name) else {
+            continue;
+        };
+        if baml_type_runtime::contains_typevar(value) {
+            continue;
+        }
+        let normalized = baml_type::normalize::normalize(value, &facts);
+        for declared in baml_type::normalize::TypeContext::associated_type_bound(
+            &facts,
+            &head,
+            written.name.clone(),
+        ) {
+            if !crate::interfaces::normalized_arg_implements_bound(&facts, &normalized, &declared) {
+                out.push(
+                    crate::diagnostics::TirTypeError::AssociatedTypeBindingViolatesBound {
+                        interface: qtn.clone(),
+                        name: written.name.clone(),
+                        binding: value.clone(),
+                        bound: declared,
+                    },
+                );
+            }
+        }
+    }
     out
 }
 
@@ -1726,7 +1969,7 @@ pub fn class_lowering_diagnostics<'db>(
         }
     }
     for bound in data.generic_params.iter().flat_map(|g| g.bounds.iter()) {
-        let lowered = ctx.lower_type_ref(&data.type_refs, *bound);
+        let lowered = ctx.lower_type_ref_at(&data.type_refs, *bound, TypePosition::ConstraintHead);
         match lowered.kind() {
             TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
                 out.push((
@@ -1736,7 +1979,11 @@ pub fn class_lowering_diagnostics<'db>(
                     },
                 ));
             }
-            TyKind::Interface(..) => {}
+            TyKind::Interface(..) => {
+                for error in bound_binding_violations(db, &data.type_refs, *bound, &lowered) {
+                    out.push((source_map.type_refs.span(*bound), error));
+                }
+            }
             _ if lowered.has_error() => {}
             _ => {
                 out.push((
@@ -1815,7 +2062,7 @@ pub fn interface_lowering_diagnostics<'db>(
     // generic params carry.
     for assoc in &data.associated_types {
         let Some(bound) = assoc.bound else { continue };
-        let lowered = ctx.lower_type_ref(&data.type_refs, bound);
+        let lowered = ctx.lower_type_ref_at(&data.type_refs, bound, TypePosition::ConstraintHead);
         match lowered.kind() {
             TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
                 out.push((
@@ -1837,8 +2084,65 @@ pub fn interface_lowering_diagnostics<'db>(
             }
         }
     }
+    // An associated type's default must implement its declared bound
+    // (`type Item extends J = V` requires `V` to implement `J`) - the
+    // decl-side analogue of the impl-side binding check, via the same
+    // shared bound-satisfaction helper, judged in the interface's own
+    // param env (a default naming a bounded declared param satisfies the
+    // bound through that param's carried conjunction). A self-referential
+    // default keeps `Self` symbolic and fails open through the
+    // projection's carried bound.
+    {
+        let facts = crate::facts::Facts::with_bounds(
+            db,
+            plain_scope_bounds(interface_scope_bounds(db, interface)),
+        );
+        let own_params: Vec<baml_type::Ty> = interface_declared_params(db, interface)
+            .iter()
+            .map(|param| baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default()))
+            .collect();
+        let head = baml_type::Interface::new(
+            interface_qualified_name(db, interface),
+            own_params,
+            Vec::new(),
+        );
+        for assoc in &data.associated_types {
+            let (Some(default_ref), Some(_)) = (assoc.default, assoc.bound) else {
+                continue;
+            };
+            let Some((default_ty, _diags)) = crate::interfaces::interface_associated_type_default(
+                db,
+                interface,
+                assoc.name.clone(),
+            ) else {
+                continue;
+            };
+            let normalized = baml_type::normalize::normalize(&default_ty, &facts);
+            for declared in baml_type::normalize::TypeContext::associated_type_bound(
+                &facts,
+                &head,
+                assoc.name.clone(),
+            ) {
+                if !crate::interfaces::normalized_arg_implements_bound(
+                    &facts,
+                    &normalized,
+                    &declared,
+                ) {
+                    out.push((
+                        source_map.type_refs.span(default_ref),
+                        TirTypeError::AssociatedTypeDefaultViolatesBound {
+                            interface: interface_qualified_name(db, interface),
+                            name: assoc.name.clone(),
+                            default: default_ty.clone(),
+                            bound: declared,
+                        },
+                    ));
+                }
+            }
+        }
+    }
     for &target in &data.requires {
-        let lowered = ctx.lower_type_ref(&data.type_refs, target);
+        let lowered = ctx.lower_type_ref_at(&data.type_refs, target, TypePosition::ConstraintHead);
         if !lowered.has_error() && !matches!(lowered.kind(), TyKind::Interface(..)) {
             out.push((
                 source_map.type_refs.span(target),
@@ -2068,9 +2372,13 @@ pub fn interface_assoc_default<'db>(
     interface: InterfaceLoc<'db>,
     member: Name,
 ) -> AssocTypeLowering {
-    AssocTypeLowering(lower_assoc_type_ref(db, interface, &member, |assoc| {
-        assoc.default
-    }))
+    AssocTypeLowering(lower_assoc_type_ref(
+        db,
+        interface,
+        &member,
+        TypePosition::Existential,
+        |assoc| assoc.default,
+    ))
 }
 
 /// The declared BOUND of associated type `member` on `interface` (`type
@@ -2085,15 +2393,20 @@ pub fn interface_assoc_bound<'db>(
     interface: InterfaceLoc<'db>,
     member: Name,
 ) -> AssocTypeLowering {
-    AssocTypeLowering(lower_assoc_type_ref(db, interface, &member, |assoc| {
-        assoc.bound
-    }))
+    AssocTypeLowering(lower_assoc_type_ref(
+        db,
+        interface,
+        &member,
+        TypePosition::ConstraintHead,
+        |assoc| assoc.bound,
+    ))
 }
 
 fn lower_assoc_type_ref<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     interface: InterfaceLoc<'db>,
     member: &Name,
+    position: TypePosition,
     select: impl Fn(&baml_compiler2_ppir::item_data::AssociatedTypeData) -> Option<TypeRefId>,
 ) -> Option<Ty> {
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
@@ -2105,7 +2418,7 @@ fn lower_assoc_type_ref<'db>(
     let ctx = lower_ctx_for_file(db, interface.file(db))
         .with_frame(interface_frame(db, interface))
         .with_bounds(interface_scope_bounds(db, interface));
-    Some(ctx.lower_type_ref(&data.type_refs, type_ref))
+    Some(ctx.lower_type_ref_at(&data.type_refs, type_ref, position))
 }
 
 /// Splits a lowered `throws` clause into its named members and whether it

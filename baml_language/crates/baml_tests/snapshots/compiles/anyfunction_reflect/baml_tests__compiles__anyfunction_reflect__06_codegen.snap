@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3766
 ---
 function user.bare_and_pinned() -> int {
     load_const user.web_search
@@ -25,7 +24,7 @@ function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns =
     return
 }
 
-function user.signature_access(f: baml.AnyFunction) -> string {
+function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> string {
     load_var f
     call reflect.signature
     store_var sig

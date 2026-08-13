@@ -140,9 +140,11 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                InterfaceRef::of_ty(
-                                    &ctx.lower_type_ref(&class_data.type_refs, type_ref),
-                                )
+                                InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+                                    &class_data.type_refs,
+                                    type_ref,
+                                    crate::lower::TypePosition::ConstraintHead,
+                                ))
                             })
                             .collect()
                     })
@@ -171,7 +173,11 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                InterfaceRef::of_ty(&ctx.lower_type_ref(&data.type_refs, type_ref))
+                                InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+                                    &data.type_refs,
+                                    type_ref,
+                                    crate::lower::TypePosition::ConstraintHead,
+                                ))
                             })
                             .collect()
                     })
@@ -192,8 +198,11 @@ pub fn impl_facts<'db>(
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
         .with_bounds(bounds_map);
-    let interface =
-        InterfaceRef::of_ty(&ctx.lower_type_ref(&data.type_refs, data.interface_target))?;
+    let interface = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+        &data.type_refs,
+        data.interface_target,
+        crate::lower::TypePosition::ConstraintHead,
+    ))?;
     let associated_types = data
         .associated_type_bindings
         .iter()
@@ -1215,7 +1224,11 @@ fn direct_requires(
     data.requires
         .iter()
         .filter_map(|&required| {
-            let target = InterfaceRef::of_ty(&ctx.lower_type_ref(&data.type_refs, required))?;
+            let target = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+                &data.type_refs,
+                required,
+                crate::lower::TypePosition::ConstraintHead,
+            ))?;
             Some(InterfaceRef::new(
                 target.name.clone(),
                 target

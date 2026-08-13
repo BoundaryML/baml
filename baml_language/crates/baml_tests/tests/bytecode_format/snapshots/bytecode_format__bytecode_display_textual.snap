@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
-assertion_line: 41
 ---
 function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>) -> ai.RunResult<#0> {
     load_var ?1
@@ -1767,7 +1766,7 @@ function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.
     return
 }
 
-function ai.internal._schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown> {
+function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
     load_var handler
     call reflect.signature
     store_var sig
@@ -3044,7 +3043,7 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_field .handler
     store_var _8
     load_var _8
-    narrow_bind baml.AnyFunction, slot=4
+    narrow_bind baml.AnyFunction<Returns = unknown, Throws = unknown>, slot=4
     pop_jump_if_false L1
     jump L2
 
@@ -3238,7 +3237,7 @@ function ai.tools.raw_tool(name: string, description: string, input_schema: map<
     throw
 }
 
-function ai.tools.tool(handler: baml.AnyFunction, name: string | null, description: string | null, on_error: ai.tools.ErrorMode | null) -> ai.tools.Tool {
+function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>, name: string | null, description: string | null, on_error: ai.tools.ErrorMode | null) -> ai.tools.Tool {
     load_var name
     load_const <omitted>
     cmp_op ==
@@ -9815,7 +9814,7 @@ function openai.internal.openai_render(c: openai.OpenAiClient, input: ai.ModelTu
 function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
-function reflect.signature(f: baml.AnyFunction) -> reflect.Signature {
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
 }
 
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {

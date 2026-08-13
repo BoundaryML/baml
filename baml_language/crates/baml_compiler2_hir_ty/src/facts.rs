@@ -114,6 +114,27 @@ impl TypeContext for Facts<'_> {
         ));
         crate::impls::realized_assoc_bound(self.db, &target, &symbolic_self, &assoc)
             .and_then(|bound| bound.to_plain().as_interface())
+            .map(|bound| {
+                // Reduce sibling-pin projections the substitution left behind
+                // (`Producer<(Self as Parser<Item = int>).Item>` -> the pin):
+                // TIR re-lowered the bound with the realized pins in scope, so
+                // its callers always saw the collapsed form; hir_ty realizes a
+                // once-lowered form by substitution, so collapse here at the
+                // oracle boundary.
+                Interface {
+                    name: bound.name,
+                    generics: bound
+                        .generics
+                        .iter()
+                        .map(|arg| baml_type::normalize::normalize(arg, self))
+                        .collect(),
+                    associated_types: bound
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), baml_type::normalize::normalize(ty, self)))
+                        .collect(),
+                }
+            })
             .into_iter()
             .collect()
     }

@@ -558,14 +558,21 @@ fn build_packages(
         // target pins only the associated members it writes (unwritten members
         // bake their declared defaults into the rule; a pinning impl can still
         // discharge a bare bound at runtime).
-        // Constraint heads lower through the same road: hir keeps written
-        // pins only (no eager default realization), which IS the
-        // constraint-head contract.
         let lower_constraint_head = |store: &TypeRefStore,
                                      id: TypeRefId,
                                      generics: &[ParamTy],
                                      bounds: &BoundsMap|
-         -> ty::Ty { lower(store, id, generics, bounds) };
+         -> ty::Ty {
+            baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
+                .with_frame(generics.to_vec())
+                .with_bounds(bounds.clone())
+                .lower_type_ref_at(
+                    store,
+                    id,
+                    baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+                )
+                .to_plain()
+        };
         // Each generic param's interface bound set (`T extends A & B` → {A, B}).
         // A bound is an interface, possibly generic or carrying associated
         // bindings — `split_interface` captures its args/assoc as templates over
@@ -3795,11 +3802,16 @@ fn compute_function_metadata<'db>(
     let lower_scoped =
         |store: &TypeRefStore, id: TypeRefId, _diags: &mut Vec<TirTypeError>| -> Ty {
             let lowered = scoped_ctx().lower_type_ref(store, id).to_plain();
-            if enclosing_interface.is_some() {
+            let realized = if enclosing_interface.is_some() {
                 substitute_ty(&lowered, &interface_signature_bindings)
             } else {
                 lowered
-            }
+            };
+            // Post-substitution normalization: a projection over a ground
+            // base (`(UserRepository as Repository<Record = UserRecord>)
+            // .Record`) reduces to what it IS; a rigid-var base stays
+            // symbolic (`(T as BoxLike).Item`).
+            baml_compiler2_hir_ty::package_interface::reduce_ground_projections(db, &realized, 8)
         };
 
     // Each scoped generic parameter's bound as a displayable `Ty`, kept only when it
@@ -3828,7 +3840,13 @@ fn compute_function_metadata<'db>(
                         .with_bounds(scope_bounds.clone())
                         .with_frame(frame.clone())
                         .with_diagnostics();
-                    let lowered = ctx.lower_type_ref(store, id).to_plain();
+                    let lowered = ctx
+                        .lower_type_ref_at(
+                            store,
+                            id,
+                            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+                        )
+                        .to_plain();
                     let clean = ctx.take_diagnostics().is_empty();
                     let bound_ty = if enclosing_interface.is_some() {
                         substitute_ty(&lowered, &interface_signature_bindings)
@@ -3883,7 +3901,11 @@ fn compute_function_metadata<'db>(
                 let lowered = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
                     .with_bounds(scope_bounds.clone())
                     .with_frame(interface_binding_params.clone())
-                    .lower_type_ref(&store, id)
+                    .lower_type_ref_at(
+                        &store,
+                        id,
+                        baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+                    )
                     .to_plain();
                 Some(substitute_ty(&lowered, &interface_signature_bindings))
             }
@@ -3898,6 +3920,12 @@ fn compute_function_metadata<'db>(
     // silently name the wrong types.
     let frame_params = baml_compiler2_hir_ty::lower::function_generic_frame(db, func_loc);
     let to_template = |tir_ty: &Ty| {
+        // Metadata shows what the type IS: a projection over a ground base
+        // (`(UserRepository as Repository<Record = UserRecord>).Record`)
+        // reduces through the oracle; a rigid-var base stays symbolic
+        // (`(T as BoxLike).Item`), rendered as written.
+        let tir_ty =
+            &baml_compiler2_hir_ty::package_interface::reduce_ground_projections(db, tir_ty, 8);
         if baml_type_runtime::contains_error_recovery(tir_ty) {
             eprintln!(
                 "METADATA_ERROR fn={} ty={}",

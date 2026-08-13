@@ -4482,7 +4482,11 @@ impl<'db> InferenceContext<'db> {
         let function = self.body_owner?;
         let target =
             baml_compiler2_ppir::item_data::method_interface_target(self.db, function).as_ref()?;
-        let target_ty = self.lower.lower_type_ref(&target.type_refs, target.target);
+        let target_ty = self.lower.lower_type_ref_at(
+            &target.type_refs,
+            target.target,
+            crate::lower::TypePosition::ConstraintHead,
+        );
         let TyKind::Interface(name, args, pins, _) = target_ty.kind() else {
             return None;
         };
