@@ -424,17 +424,18 @@ fn install_toolchain_command(args: &[String], manifest_base_url: Option<&str>) -
         }
     }
 
-    let selector = match selector {
-        Some(selector) => selector.to_string(),
+    let (selector, activate_channel) = match selector {
+        Some(selector) => (selector.to_string(), false),
         None => project_toolchain_selector()?
             .map(|(_, selector)| selector)
             .ok_or_else(|| {
                 anyhow!(
                     "no BAML toolchain is pinned in baml.toml\nRun: baml toolchain install <canary|nightly|version>"
                 )
-            })?,
+            })
+            .map(|selector| (selector, true))?,
     };
-    install_toolchain(&selector, false, manifest_base_url, force)
+    install_toolchain(&selector, activate_channel, manifest_base_url, force)
 }
 
 fn is_help_arg(arg: &str) -> bool {
