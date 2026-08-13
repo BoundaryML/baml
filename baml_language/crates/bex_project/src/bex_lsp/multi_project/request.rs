@@ -18,7 +18,7 @@ use lsp_types::{
     WorkspaceServerCapabilities,
 };
 
-use super::{BexMulitProject, LspError, commands, read_for_request, wasm_helpers};
+use super::{BexMultiProject, LspError, commands, read_for_request, wasm_helpers};
 use crate::bex_lsp::{
     multi_project::commands::BexLspCommand,
     position_codec::{PositionCodec, PositionEncoding},
@@ -123,7 +123,7 @@ fn initialize_result(encoding: PositionEncoding) -> lsp_types::InitializeResult 
     }
 }
 
-impl BexLspRequest for BexMulitProject {
+impl BexLspRequest for BexMultiProject {
     fn request_sender(
         &self,
     ) -> Box<
@@ -1123,7 +1123,7 @@ fn definition_kind_to_lsp_symbol_kind(
     }
 }
 
-impl BexMulitProject {
+impl BexMultiProject {
     /// Store `tokens` as the latest semantic tokens for `path` under a fresh
     /// `result_id`, returning that id so the next `full/delta` can diff against it.
     ///
