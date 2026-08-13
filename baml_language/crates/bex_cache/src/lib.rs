@@ -662,8 +662,11 @@ fn ensure_baml_gitignore(cache_dir: &Path) {
     }
 
     let gitignore = baml_dir.join(".gitignore");
-    if fs::read(&gitignore).is_ok_and(|contents| contents == GENERATED_GITIGNORE) {
-        return;
+    match fs::read(&gitignore) {
+        Ok(contents) if contents == GENERATED_GITIGNORE => return,
+        Ok(contents) if contents.as_slice() != b"*\n" => return,
+        Err(error) if error.kind() != io::ErrorKind::NotFound => return,
+        _ => {}
     }
     let _ = fs::write(gitignore, GENERATED_GITIGNORE);
 }
@@ -916,6 +919,22 @@ mod tests {
         assert_eq!(
             fs::read(baml_dir.join(".gitignore")).expect("read refreshed .gitignore"),
             GENERATED_GITIGNORE
+        );
+    }
+
+    #[test]
+    fn project_local_cache_preserves_custom_gitignore() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let baml_dir = dir.path().join("project/.baml");
+        let custom = b"# Keep selected artifacts\n*\n!.gitignore\n!history/\n";
+        fs::create_dir_all(&baml_dir).expect("create .baml");
+        fs::write(baml_dir.join(".gitignore"), custom).expect("write custom .gitignore");
+
+        let _cache = BytecodeCache::open(baml_dir.join("cache"));
+
+        assert_eq!(
+            fs::read(baml_dir.join(".gitignore")).expect("read custom .gitignore"),
+            custom
         );
     }
 
