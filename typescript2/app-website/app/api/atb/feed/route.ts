@@ -45,7 +45,9 @@ const trunc = (s: string | undefined | null, n: number) =>
 
 async function buildFeed(): Promise<Feed> {
   const [trophies, tasks, issues, builds] = await Promise.all([
-    convexQuery<Trophy[]>("trophies:list", { limit: 500 }),
+    // see app/api/atb/state/route.ts: trophies embed turnLog/filesCreated
+    // inline, so a limit of 500 exceeds Convex's per-query byte ceiling.
+    convexQuery<Trophy[]>("trophies:list", { limit: 100 }),
     convexQuery<Task[]>("tasks:list", { limit: 500 }),
     convexQuery<Issue[]>("issues:list", { limit: 500 }),
     convexQuery<Build[]>("bamlBuilds:list", { limit: 50 }),

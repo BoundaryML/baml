@@ -103,7 +103,10 @@ async function buildState(): Promise<AtbState> {
   const [tasks, trophies, issues, cohorts, builds, workers] =
     await Promise.all([
       convexQuery<Task[]>("tasks:list", { limit: 500 }),
-      convexQuery<Trophy[]>("trophies:list", { limit: 500 }),
+      // trophies embed heavy fields inline (turnLog, filesCreated) unlike the
+      // other queue tables, so a limit of 500 blows Convex's per-query byte
+      // ceiling once recent runs get long enough. Keep this well under that.
+      convexQuery<Trophy[]>("trophies:list", { limit: 100 }),
       convexQuery<Issue[]>("issues:list", { limit: 500 }),
       convexQuery<Cohort[]>("cohorts:list", { limit: 100 }),
       convexQuery<Build[]>("bamlBuilds:list", { limit: 50 }),
