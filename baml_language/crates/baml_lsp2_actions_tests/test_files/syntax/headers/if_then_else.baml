@@ -49,6 +49,22 @@ function ComplexHeaderTest(x: int) -> int {
 
 //----
 //- diagnostics
+// E0010
+//
+//   × invalid syntax
+//    ╭─[headers_if_then_else.baml:1:1]
+//  1 │ //# Case 1
+//    · ─────┬────
+//    ·      ╰── header comments (`//#`) are only allowed in expression functions
+//    ╰────
+// E0010
+//
+//   × invalid syntax
+//     ╭─[headers_if_then_else.baml:21:1]
+//  21 │ //# Main Function
+//     · ────────┬────────
+//     ·         ╰── header comments (`//#`) are only allowed in expression functions
+//     ╰────
 // E0003
 //
 //   × unresolved name: `y`

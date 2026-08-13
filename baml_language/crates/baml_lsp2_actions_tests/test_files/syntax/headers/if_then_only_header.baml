@@ -48,6 +48,30 @@ function IfThenOnlyHeader2() -> int {
 
 //----
 //- diagnostics
+// E0010
+//
+//   × invalid syntax
+//    ╭─[headers_if_then_only_header.baml:1:1]
+//  1 │ //# Case 1
+//    · ─────┬────
+//    ·      ╰── header comments (`//#`) are only allowed in expression functions
+//    ╰────
+// E0010
+//
+//   × invalid syntax
+//     ╭─[headers_if_then_only_header.baml:14:1]
+//  14 │ //# Case 2
+//     · ─────┬────
+//     ·      ╰── header comments (`//#`) are only allowed in expression functions
+//     ╰────
+// E0010
+//
+//   × invalid syntax
+//     ╭─[headers_if_then_only_header.baml:32:1]
+//  32 │ //# Case 3
+//     · ─────┬────
+//     ·      ╰── header comments (`//#`) are only allowed in expression functions
+//     ╰────
 // E0001
 //
 //   × `if` without `else` cannot be used as a value; add an `else` branch

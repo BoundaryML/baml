@@ -60,6 +60,14 @@ function NestedIfStatements() -> string {
 
 //----
 //- diagnostics
+// E0010
+//
+//   × invalid syntax
+//    ╭─[headers_nested_if_statements.baml:1:1]
+//  1 │ //# Main Function
+//    · ────────┬────────
+//    ·         ╰── header comments (`//#`) are only allowed in expression functions
+//    ╰────
 // E0001
 //
 //   × mismatched types

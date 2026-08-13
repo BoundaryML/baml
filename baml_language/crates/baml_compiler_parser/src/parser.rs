@@ -861,9 +861,9 @@ impl<'a> Parser<'a> {
 
     /// Check if position i starts a line comment (`//`), including `//#`.
     ///
-    /// Header comments are ordinary trivia by default. Expression-context loops inspect the raw
-    /// token stream with `at_header_comment_start` before normal trivia consumption when they need
-    /// to preserve one as a `HEADER_COMMENT` node.
+    /// Header comments are ordinary trivia for navigation. Expression-context loops inspect the
+    /// raw token stream with `at_header_comment_start` before normal trivia consumption to preserve
+    /// them as `HEADER_COMMENT` nodes; ordinary line-comment consumption reports them as invalid.
     fn is_line_comment_at(&self, i: usize) -> bool {
         if i + 1 < self.tokens.len()
             && self.tokens[i].kind == TokenKind::Slash
@@ -946,6 +946,9 @@ impl<'a> Parser<'a> {
 
     /// Consume a line comment (//) as a single `LINE_COMMENT` token
     fn consume_line_comment(&mut self) {
+        let is_header = self.is_header_comment_at(self.current);
+        let comment_start = self.current;
+
         // Consume both slashes
         let mut text = String::new();
         text.push_str(&self.tokens[self.current].text);
@@ -961,6 +964,15 @@ impl<'a> Parser<'a> {
             }
             text.push_str(&token.text);
             self.current += 1;
+        }
+
+        if is_header {
+            let start = self.tokens[comment_start].span;
+            let end = self.tokens[self.current - 1].span;
+            self.error(
+                "header comments (`//#`) are only allowed in expression functions".to_string(),
+                Self::span_from_to(start, end),
+            );
         }
 
         // Emit as a single token (not wrapped in a node)
@@ -8923,7 +8935,7 @@ interface Response {
     }
 
     #[test]
-    fn header_comments_are_trivia_outside_expression_blocks() {
+    fn header_comments_are_diagnosed_outside_expression_blocks() {
         let source = r#"
 interface Response {
   //# interface members
@@ -8932,7 +8944,7 @@ interface Response {
 
 enum Status {
   //# enum members
-  Ready
+  Ready //# trailing enum header
 }
 
 client<llm> TestClient {
@@ -8969,7 +8981,16 @@ function executable() -> int {
 "#;
 
         let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
+
+        assert_eq!(
+            errors.len(),
+            9,
+            "every non-expression header should produce one diagnostic: {errors:#?}"
+        );
+        assert!(errors.iter().all(|error| {
+            format!("{error:?}")
+                .contains("header comments (`//#`) are only allowed in expression functions")
+        }));
 
         assert_eq!(
             root.descendants()
@@ -8989,7 +9010,7 @@ function executable() -> int {
                     )
                 })
                 .count(),
-            8,
+            9,
             "non-expression headers should be ordinary line-comment trivia"
         );
     }

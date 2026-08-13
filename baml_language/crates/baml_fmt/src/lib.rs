@@ -352,50 +352,13 @@ mod contextual_keyword_identifier_tests {
 mod header_comment_position_tests {
     use super::*;
 
-    /// `//#` header comments must survive formatting in declaration and
-    /// configuration bodies, implements blocks, and between match arms —
-    /// not only at statement boundaries inside blocks.
+    /// `//#` header comments remain structural and survive formatting at executable statement and
+    /// arm boundaries.
     #[test]
-    fn test_header_comments_in_member_positions() {
+    fn test_header_comments_in_expression_positions() {
         let source = concat!(
-            "class Dog {\n",
-            "    //# fields\n",
-            "    name: string,\n",
-            "    //# behavior\n",
-            "    implements Sound {\n",
-            "        //# conformance\n",
-            "        function sound(self) -> string {\n",
-            "            \"woof\"\n",
-            "        }\n",
-            "    }\n",
-            "}\n",
-            "\n",
-            "interface Animal {\n",
-            "    //# methods\n",
-            "    function name(self) -> string\n",
-            "}\n",
-            "\n",
-            "enum Mood {\n",
-            "    //# variants\n",
-            "    Happy\n",
-            "}\n",
-            "\n",
-            "client<llm> Annotated {\n",
-            "    //# configuration\n",
-            "    @@assert(true, true)\n",
-            "    provider openai\n",
-            "}\n",
-            "\n",
-            "test Legacy {\n",
-            "    //# test configuration\n",
-            "    functions []\n",
-            "    type_builder {\n",
-            "        //# generated types\n",
-            "        class Built {}\n",
-            "    }\n",
-            "}\n",
-            "\n",
             "function classify(n: int) -> string {\n",
+            "    //# statements\n",
             "    match (n) {\n",
             "        //# leading header\n",
             "        0 => \"zero\",\n",
@@ -406,28 +369,26 @@ mod header_comment_position_tests {
         );
         let options = FormatOptions::default();
         let formatted = format(source, &options)
-            .expect("formatter should accept header comments in member positions");
-        for needle in [
-            "//# fields",
-            "//# behavior",
-            "//# conformance",
-            "//# methods",
-            "//# variants",
-            "//# configuration",
-            "//# test configuration",
-            "//# generated types",
-            "//# leading header",
-            "//# between arms",
-        ] {
+            .expect("formatter should accept header comments in expression positions");
+        for needle in ["//# statements", "//# leading header", "//# between arms"] {
             assert!(formatted.contains(needle), "lost {needle}:\n{formatted}");
         }
-        assert!(
-            formatted.find("//# configuration").unwrap()
-                < formatted.find("@@assert(true, true)").unwrap(),
-            "config header must stay before the attribute it labels:\n{formatted}"
-        );
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_header_comments_in_declarations_are_rejected() {
+        let error = format(
+            "interface Animal {\n    //# methods\n    function name(self) -> string\n}\n",
+            &FormatOptions::default(),
+        )
+        .expect_err("formatter should reject headers outside expression functions");
+
+        assert!(
+            format!("{error:?}")
+                .contains("header comments (`//#`) are only allowed in expression functions")
+        );
     }
 }
 

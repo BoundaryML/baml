@@ -11,4 +11,11 @@ function MixedChildrenNotFlattened() -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × invalid syntax
+//    ╭─[headers_mixed_children_not_flattened.baml:1:1]
+//  1 │ //# Parent
+//    · ─────┬────
+//    ·      ╰── header comments (`//#`) are only allowed in expression functions
+//    ╰────

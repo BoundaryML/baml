@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[repro.baml:1:1]
+ 1 │ //# Top Level Header
+   · ──────────┬─────────
+   ·           ╰── header comments (`//#`) are only allowed in expression functions
+   ╰────

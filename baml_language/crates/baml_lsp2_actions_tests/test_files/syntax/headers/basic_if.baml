@@ -17,6 +17,14 @@ function BasicIf() -> string {
 
 //----
 //- diagnostics
+// E0010
+//
+//   × invalid syntax
+//    ╭─[headers_basic_if.baml:1:1]
+//  1 │ //# Basic test
+//    · ───────┬──────
+//    ·        ╰── header comments (`//#`) are only allowed in expression functions
+//    ╰────
 // E0001
 //
 //   × mismatched types
