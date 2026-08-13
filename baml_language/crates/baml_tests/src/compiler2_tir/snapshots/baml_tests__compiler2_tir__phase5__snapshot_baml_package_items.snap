@@ -293,6 +293,7 @@ namespace baml.sys:
   function exec
   function exit
   function panic
+  function pid
   function shell
   function sleep
   function start_process

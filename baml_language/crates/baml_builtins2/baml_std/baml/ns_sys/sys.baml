@@ -174,3 +174,12 @@ function exit(code: int) -> never throws never {
 function argv() -> string[] throws never {
     $rust_function
 }
+
+/// Returns the process ID of the current process.
+///
+/// ## Panics
+/// If the environment does not support process IDs (e.g. in a browser), with
+/// `baml.panics.HostUnavailable`.
+function pid() -> int throws never {
+    $rust_io_function
+}

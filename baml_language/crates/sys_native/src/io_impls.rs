@@ -1664,6 +1664,12 @@ impl io::IoNamespaceSys for NativeSysOps {
             Ok(())
         })
     }
+
+    fn pid(&self, _heap: &Arc<BexHeap>, _call_id: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        // `std::process::id` is a `u32` on every platform this crate builds
+        // for, so the widening into BAML's i63 `int` is always exact.
+        SysOpOutput::ok(i64::from(std::process::id()))
+    }
 }
 
 fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {

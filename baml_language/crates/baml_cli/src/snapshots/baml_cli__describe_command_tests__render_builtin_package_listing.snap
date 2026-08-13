@@ -274,6 +274,7 @@ function         baml.sys.collect_garbage         <builtin>/baml/ns_sys/sys.baml
 function         baml.sys.panic                   <builtin>/baml/ns_sys/sys.baml:162
 function         baml.sys.exit                    <builtin>/baml/ns_sys/sys.baml:168
 function         baml.sys.argv                    <builtin>/baml/ns_sys/sys.baml:174
+function         baml.sys.pid                     <builtin>/baml/ns_sys/sys.baml:183
 class            baml.time.Duration               <builtin>/baml/ns_time/duration.baml:4
 class            baml.time.Instant                <builtin>/baml/ns_time/instant.baml:2
 class            baml.time.PlainDate              <builtin>/baml/ns_time/plaindate.baml:5

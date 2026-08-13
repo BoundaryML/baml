@@ -7533,6 +7533,8 @@ fn baml.sys.exit = builtin(vm)
 
 fn baml.sys.argv = builtin(vm)
 
+fn baml.sys.pid = builtin(io)
+
 fn baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return

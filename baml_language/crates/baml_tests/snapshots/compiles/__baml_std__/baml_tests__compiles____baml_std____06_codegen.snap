@@ -5139,6 +5139,9 @@ function baml.sys.exit(code: int) -> never {
 function baml.sys.panic(message: string) -> never {
 }
 
+function baml.sys.pid() -> int {
+}
+
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {
 }
 

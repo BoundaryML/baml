@@ -1660,6 +1660,17 @@ impl io::IoNamespaceSys for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+
+    // `baml.sys.pid` declares `throws never`, so a platform without process
+    // IDs cannot report `Unsupported` as a catchable error — it panics with
+    // `baml.panics.HostUnavailable`, exactly as `SystemRandom` does when no
+    // entropy source is reachable.
+    fn pid(&self, _h: &Arc<BexHeap>, _c: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 impl io::IoClassGlobGlob for DefaultIoOps {
@@ -2275,6 +2286,12 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_sys_sleep(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_pid = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_pid(heap, permit, args, ctx, call_id)
             })
         };
         self
