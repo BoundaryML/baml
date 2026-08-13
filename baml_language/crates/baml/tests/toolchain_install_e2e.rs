@@ -4,6 +4,7 @@ use std::{
     net::TcpListener,
     process::Command,
     thread,
+    time::{Duration, Instant},
 };
 
 fn baml_command(project: &tempfile::TempDir) -> Command {
@@ -20,6 +21,7 @@ fn baml_command(project: &tempfile::TempDir) -> Command {
 
 fn serve_manifest(version: &str, channel: &str) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     let address = listener.local_addr().unwrap();
     let artifacts = baml_release::SUPPORTED_RELEASE_TARGETS
         .iter()
@@ -35,7 +37,22 @@ fn serve_manifest(version: &str, channel: &str) -> (String, thread::JoinHandle<(
         r#"{{"schema":1,"version":"{version}","channel":"{channel}","released_at":"2026-08-13T00:00:00Z","artifacts":{{{artifacts}}}}}"#
     );
     let server = thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let (mut stream, _) = loop {
+            match listener.accept() {
+                Ok(connection) => break connection,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::WouldBlock
+                        && Instant::now() < deadline =>
+                {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    panic!("manifest request was not received within five seconds");
+                }
+                Err(error) => panic!("manifest listener failed: {error}"),
+            }
+        };
         let mut request = [0; 1024];
         let bytes_read = stream.read(&mut request).unwrap();
         assert!(bytes_read > 0);
