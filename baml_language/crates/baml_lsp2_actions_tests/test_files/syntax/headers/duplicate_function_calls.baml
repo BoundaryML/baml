@@ -14,14 +14,6 @@ function CallsDedup() -> string {
 
 //----
 //- diagnostics
-// E0010
-//
-//   × invalid syntax
-//    ╭─[headers_duplicate_function_calls.baml:1:1]
-//  1 │ //# Pipeline
-//    · ──────┬─────
-//    ·       ╰── header comments (`//#`) are only allowed in expression functions
-//    ╰────
 // E0003
 //
 //   × unresolved name: `Foo`

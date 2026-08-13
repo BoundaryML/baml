@@ -352,11 +352,12 @@ mod contextual_keyword_identifier_tests {
 mod header_comment_position_tests {
     use super::*;
 
-    /// `//#` header comments remain structural and survive formatting at executable statement and
-    /// arm boundaries.
+    /// `//#` header comments survive formatting before expression functions and remain structural
+    /// at executable statement and arm boundaries.
     #[test]
     fn test_header_comments_in_expression_positions() {
         let source = concat!(
+            "//# classify values\n",
             "function classify(n: int) -> string {\n",
             "    //# statements\n",
             "    match (n) {\n",
@@ -370,7 +371,12 @@ mod header_comment_position_tests {
         let options = FormatOptions::default();
         let formatted = format(source, &options)
             .expect("formatter should accept header comments in expression positions");
-        for needle in ["//# statements", "//# leading header", "//# between arms"] {
+        for needle in [
+            "//# classify values",
+            "//# statements",
+            "//# leading header",
+            "//# between arms",
+        ] {
             assert!(formatted.contains(needle), "lost {needle}:\n{formatted}");
         }
         let second = format(&formatted, &options).expect("formatter should be idempotent");
@@ -379,16 +385,18 @@ mod header_comment_position_tests {
 
     #[test]
     fn test_header_comments_in_declarations_are_rejected() {
-        let error = format(
+        for source in [
             "interface Animal {\n    //# methods\n    function name(self) -> string\n}\n",
-            &FormatOptions::default(),
-        )
-        .expect_err("formatter should reject headers outside expression functions");
+            "//# generated text\nfunction generate() -> string {\n    client \"openai/gpt-4o\"\n    prompt `hello`\n}\n",
+        ] {
+            let error = format(source, &FormatOptions::default())
+                .expect_err("formatter should reject headers outside expression functions");
 
-        assert!(
-            format!("{error:?}")
-                .contains("header comments (`//#`) are only allowed in expression functions")
-        );
+            assert!(
+                format!("{error:?}")
+                    .contains("header comments (`//#`) are only allowed in expression functions")
+            );
+        }
     }
 }
 

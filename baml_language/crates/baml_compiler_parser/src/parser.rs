@@ -944,8 +944,16 @@ impl<'a> Parser<'a> {
         self.is_block_comment_at(self.current)
     }
 
-    /// Consume a line comment (//) as a single `LINE_COMMENT` token
+    /// Consume a line comment (`//`) as a single `LINE_COMMENT` token.
+    ///
+    /// A header normally produces a diagnostic here. The one trivia-only exception is a header
+    /// immediately before an expression function, which is consumed through
+    /// [`Self::consume_function_header_comment`] instead.
     fn consume_line_comment(&mut self) {
+        self.consume_line_comment_impl(true);
+    }
+
+    fn consume_line_comment_impl(&mut self, diagnose_header: bool) {
         let is_header = self.is_header_comment_at(self.current);
         let comment_start = self.current;
 
@@ -966,7 +974,7 @@ impl<'a> Parser<'a> {
             self.current += 1;
         }
 
-        if is_header {
+        if diagnose_header && is_header {
             let start = self.tokens[comment_start].span;
             let end = self.tokens[self.current - 1].span;
             self.error(
@@ -980,6 +988,32 @@ impl<'a> Parser<'a> {
             kind: SyntaxKind::LINE_COMMENT,
             text,
         });
+    }
+
+    /// Consume a `//#` immediately preceding an expression function as line-comment trivia.
+    ///
+    /// Function-level headers are read from source text by the visualization layer; unlike headers
+    /// inside expression bodies, they must not become `HEADER_COMMENT` statement nodes.
+    fn consume_function_header_comment(&mut self) {
+        while self.current < self.tokens.len() {
+            let kind = self.tokens[self.current].kind;
+            if kind == TokenKind::Whitespace || kind == TokenKind::Newline {
+                self.events.push(Event::Token {
+                    kind: token_kind_to_syntax_kind(kind),
+                    text: self.tokens[self.current].text.clone(),
+                });
+                self.current += 1;
+            } else if self.is_header_comment_at(self.current) {
+                self.consume_line_comment_impl(false);
+                break;
+            } else if self.is_line_comment_at(self.current) {
+                self.consume_line_comment();
+            } else if self.is_block_comment_at(self.current) {
+                self.consume_block_comment();
+            } else {
+                break;
+            }
+        }
     }
 
     /// Consume a block comment (/* ... */) as a single `BLOCK_COMMENT` token
@@ -3194,6 +3228,10 @@ impl<'a> Parser<'a> {
             // Parse fields, methods, implements blocks, and attributes. Header comments are
             // ordinary trivia in declaration bodies.
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.consume_function_header_comment_if_allowed() {
+                    continue;
+                }
+
                 // Error recovery: if we see a top-level keyword (except class-local members),
                 // assume we missed a closing brace
                 let recover_top_level_item = if p.at(TokenKind::Interface) {
@@ -3290,6 +3328,10 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.consume_function_header_comment_if_allowed() {
+                    continue;
+                }
+
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3418,6 +3460,14 @@ impl<'a> Parser<'a> {
     /// token (expected to be `function`), then scan from the *next* token
     /// looking for an `LBrace` at brace/paren/bracket/angle depth 0.
     fn interface_method_has_body(&self) -> bool {
+        self.function_body_start().is_some()
+    }
+
+    /// Locate the opening brace of the function declaration at the current position.
+    ///
+    /// This accepts leading comment trivia and block attributes, and stops at the next declaration
+    /// boundary so a required interface signature cannot borrow a later function's body.
+    fn function_body_start(&self) -> Option<usize> {
         // Locate the `function` token we're about to consume.
         let mut i = self.current;
         loop {
@@ -3436,10 +3486,10 @@ impl<'a> Parser<'a> {
         }
 
         i = self.skip_trivia_and_comments_from(i);
-        // Skip past the `function` keyword if present.
-        if i < self.tokens.len() && self.tokens[i].kind == TokenKind::Function {
-            i += 1;
+        if self.tokens.get(i).map(|token| token.kind) != Some(TokenKind::Function) {
+            return None;
         }
+        i += 1;
 
         let mut paren_depth: i32 = 0;
         let mut bracket_depth: i32 = 0;
@@ -3465,28 +3515,41 @@ impl<'a> Parser<'a> {
                 TokenKind::Greater => angle_depth -= 1,
                 TokenKind::GreaterGreater => angle_depth -= 2,
                 TokenKind::LBrace if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
-                    return true;
+                    return Some(i);
                 }
                 TokenKind::RBrace if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
                     // End of the interface body without finding a body for
                     // this method — it's a required signature.
-                    return false;
+                    return None;
                 }
                 // Encountering the start of another interface member at the
                 // outer level means we're done with this signature.
-                TokenKind::Function
-                | TokenKind::Implements
-                | TokenKind::Implement
-                | TokenKind::AtAt
+                TokenKind::Function | TokenKind::AtAt
                     if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 =>
                 {
-                    return false;
+                    return None;
                 }
                 _ => {}
             }
             i += 1;
         }
-        false
+        None
+    }
+
+    /// Whether the raw header at the current position immediately precedes an expression function.
+    fn header_precedes_expression_function(&self) -> bool {
+        self.at_header_comment_start()
+            && self
+                .function_body_start()
+                .is_some_and(|body_start| !self.looks_like_llm_function_body_from(body_start))
+    }
+
+    fn consume_function_header_comment_if_allowed(&mut self) -> bool {
+        if !self.header_precedes_expression_function() {
+            return false;
+        }
+        self.consume_function_header_comment();
+        true
     }
 
     /// Parse an `implements I { ... }` (or `implement I { ... }`) block inside a class body.
@@ -3513,6 +3576,10 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.consume_function_header_comment_if_allowed() {
+                    continue;
+                }
+
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3611,6 +3678,10 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.consume_function_header_comment_if_allowed() {
+                    continue;
+                }
+
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3973,7 +4044,10 @@ impl<'a> Parser<'a> {
     /// LLM functions contain `client` and `prompt` keywords at brace depth 1.
     /// Expression functions contain `let`, `return`, `if`, `while`, `for`.
     fn looks_like_llm_function_body(&self) -> bool {
-        let mut i = self.current;
+        self.looks_like_llm_function_body_from(self.current)
+    }
+
+    fn looks_like_llm_function_body_from(&self, mut i: usize) -> bool {
         let mut brace_depth = 0;
 
         while i < self.tokens.len() {
@@ -8051,6 +8125,10 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 
     // Parse top-level declarations
     while !parser.at_end() {
+        if parser.consume_function_header_comment_if_allowed() {
+            continue;
+        }
+
         let attributed_item = if parser.at(TokenKind::AtAt) {
             parser.item_keyword_after_leading_block_attributes()
         } else {
@@ -9012,6 +9090,76 @@ function executable() -> int {
                 .count(),
             9,
             "non-expression headers should be ordinary line-comment trivia"
+        );
+    }
+
+    #[test]
+    fn function_headers_are_allowed_only_before_expression_functions() {
+        let source = r#"
+//# top-level expression function
+function top_level() -> int {
+  1
+}
+
+//# top-level LLM function
+function llm() -> string {
+  client "openai/gpt-4o"
+  prompt `hello`
+}
+
+class Methods {
+  //# expression method
+  function value(self) -> int {
+    1
+  }
+
+  //# LLM method
+  function generated(self) -> string {
+    client "openai/gpt-4o"
+    prompt `hello`
+  }
+}
+
+interface DefaultMethods {
+  //# expression default method
+  function implements(self) -> int {
+    1
+  }
+
+  //# required method
+  function required(self) -> int
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+
+        assert_eq!(
+            errors.len(),
+            3,
+            "headers before LLM functions and required signatures should be rejected: {errors:#?}"
+        );
+        assert!(errors.iter().all(|error| {
+            format!("{error:?}")
+                .contains("header comments (`//#`) are only allowed in expression functions")
+        }));
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::HEADER_COMMENT)
+                .count(),
+            0,
+            "function-level headers remain line-comment trivia"
+        );
+        assert_eq!(
+            root.descendants_with_tokens()
+                .filter(|elem| matches!(
+                    elem,
+                    rowan::NodeOrToken::Token(token)
+                        if token.kind() == SyntaxKind::LINE_COMMENT
+                            && token.text().starts_with("//#")
+                ))
+                .count(),
+            6,
+            "allowed and rejected function-level headers should remain line-comment trivia"
         );
     }
 

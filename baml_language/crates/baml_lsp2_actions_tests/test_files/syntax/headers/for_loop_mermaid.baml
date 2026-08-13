@@ -20,11 +20,4 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// E0010
-//
-//   × invalid syntax
-//    ╭─[headers_for_loop_mermaid.baml:1:1]
-//  1 │ //# Loop Processing
-//    · ─────────┬─────────
-//    ·          ╰── header comments (`//#`) are only allowed in expression functions
-//    ╰────
+// <no-diagnostics-expected>

@@ -62,14 +62,6 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 
 //----
 //- diagnostics
-// E0010
-//
-//   × invalid syntax
-//    ╭─[headers_ai_content_pipeline.baml:1:1]
-//  1 │ //# AI Content Pipeline
-//    · ───────────┬───────────
-//    ·            ╰── header comments (`//#`) are only allowed in expression functions
-//    ╰────
 // E0003
 //
 //   × unresolved name: `GetEmails`
