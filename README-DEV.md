@@ -61,33 +61,6 @@ mise upgrade
 mise trust
 ```
 
-## Local Code Reviews with CodeRabbit
-
-The repository's GitHub integration uses CodeRabbit's repository-level UI configuration with the `chill` review profile. CodeRabbit's CLI does not expose a review-profile flag, and CLI reviews intentionally differ from PR reviews, so the local setup leaves the GitHub configuration in place and uses the same repository and default base branch without adding a `.coderabbit.yaml` override.
-
-Install the pinned CLI with the rest of the development tools, then authenticate using CodeRabbit's browser flow. Authentication is stored in CodeRabbit's user-level local storage and must not be added to the repository:
-
-```bash
-mise install http:coderabbit
-coderabbit auth login
-coderabbit auth status
-```
-
-Review all local changes against `canary` with either the repository helper or the equivalent direct command:
-
-```bash
-mise run coderabbit-review
-coderabbit review --base canary
-```
-
-To review only staged changes and edits to tracked files, use:
-
-```bash
-mise run coderabbit-review -- --uncommitted
-```
-
-Untracked files are excluded unless you add them to Git or pass `--include-untracked`. Run `coderabbit doctor` if installation, authentication, repository detection, or service connectivity fails.
-
 ## Manual Setup (Not Recommended)
 
 If you prefer to install tools manually or need to understand what the setup script does:

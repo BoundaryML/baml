@@ -53,14 +53,17 @@ actionlint = "latest"
 ast-grep = "0.44.1"
 
 # Code review tools
-[tools."http:coderabbit"]
+[tools.coderabbit]
 version = "0.7.2"
 
-[tools."http:coderabbit".platforms]
+[tools.coderabbit.platforms]
 macos-x64 = { url = "https://cli.coderabbit.ai/releases/0.7.2/coderabbit-darwin-x64.zip", checksum = "sha256:1f54ea386e9f6ef5277101d54fa6f071af65f88a800a786c6f83976396aeb727" }
 macos-arm64 = { url = "https://cli.coderabbit.ai/releases/0.7.2/coderabbit-darwin-arm64.zip", checksum = "sha256:29944665428720e55aa26a452e8f637858607a76f4722cabb88296f6976ee5b7" }
 linux-x64 = { url = "https://cli.coderabbit.ai/releases/0.7.2/coderabbit-linux-x64.zip", checksum = "sha256:32dd3a5a1238fa68eb7cfa95cc19cf6ad4980882589c616c0e300b920f1bb865" }
 linux-arm64 = { url = "https://cli.coderabbit.ai/releases/0.7.2/coderabbit-linux-arm64.zip", checksum = "sha256:cb2aa4a598fab167cdc6467f0a44be504857cc9866057bd94ea7018481937c5d" }
+
+[tool_alias]
+coderabbit = "http:coderabbit"
 
 [tasks.coderabbit-review]
 run = "coderabbit review --base canary"
