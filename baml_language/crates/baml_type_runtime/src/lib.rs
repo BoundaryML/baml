@@ -676,8 +676,7 @@ pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
 // Moved from `baml_compiler2_tir::generics` (which re-exports them) during the
 // S16 TIR retirement: they are pure walks over the shared vocabulary with no
 // compiler-database dependence, exactly this crate's charter.
-pub use baml_type::unify::bind_type_vars;
-pub use baml_type::unify::{normalize_union_members, substitute_ty};
+pub use baml_type::unify::{bind_type_vars, normalize_union_members, substitute_ty};
 
 /// Deep any-node predicate over a type tree: does `pred` hold for `ty` itself
 /// or for any type nested inside it? The single traversal behind the
