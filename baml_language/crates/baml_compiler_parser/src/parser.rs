@@ -8995,6 +8995,32 @@ function executable() -> int {
     }
 
     #[test]
+    fn header_led_nested_block_is_not_a_map_literal() {
+        let source = r#"
+function nested() -> string {
+  {
+    //# section
+    "value"
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::HEADER_COMMENT),
+            "the nested expression block should preserve its structural header"
+        );
+        assert!(
+            root.descendants()
+                .all(|node| node.kind() != SyntaxKind::MAP_LITERAL),
+            "the header-led nested block must not be parsed as a map literal"
+        );
+    }
+
+    #[test]
     fn parses_interface_default_method_body_after_comments() {
         let source = r#"
 interface Response {
