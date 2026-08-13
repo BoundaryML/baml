@@ -43,8 +43,26 @@ pub(crate) struct BamlToml {
     #[serde(default)]
     pub test: TestManifest,
 
+    /// `[bridge]` — project-wide policy for generated bridges.
+    #[serde(default)]
+    pub bridge: BridgeManifest,
+
     /// Stray top-level keys. Captured (not denied) so typos surface as
     /// warnings and forward-compatible manifests still load.
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
+/// `[bridge]` — policy shared by every generated bridge in the project.
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct BridgeManifest {
+    /// `vcs = "ignore"` (the default) ignores each generated tree as a unit.
+    /// `vcs = "commit"` writes a `.gitignore` that ignores nothing, so a team
+    /// that commits its bridge keeps the tree *and* the ownership manifest
+    /// tracked — which is what lets `bridge generate --check` run from a
+    /// clean checkout.
+    pub vcs: Option<Spanned<String>>,
+
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
 }
@@ -207,6 +225,9 @@ pub(crate) fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
     }
     for key in manifest.test.unknown.keys() {
         warnings.push(format!("ignoring unrecognized key `{key}` in [test]"));
+    }
+    for key in manifest.bridge.unknown.keys() {
+        warnings.push(format!("ignoring unrecognized key `{key}` in [bridge]"));
     }
     for (name, profile) in &manifest.test.profiles {
         for key in profile.unknown.keys() {

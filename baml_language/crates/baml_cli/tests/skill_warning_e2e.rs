@@ -68,7 +68,7 @@ impl TestHome {
         fs::write(self.root.join("config.toml"), "").unwrap();
     }
 
-    /// Run `baml-cli generate` (a warning-whitelisted command) from `cwd`.
+    /// Run `baml-cli bridge generate` (a warning-whitelisted command) from `cwd`.
     /// `$HOME` is pointed at the cwd's parent so the project-skills walk
     /// stays inside the temp tree.
     fn run_from(&self, cwd: &Path, extra_env: &[(&str, &str)]) -> Output {

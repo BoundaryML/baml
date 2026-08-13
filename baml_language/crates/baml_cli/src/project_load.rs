@@ -160,6 +160,7 @@ pub(crate) fn resolve_project_sources_lenient(
         .collect::<Result<Vec<_>>>()?;
     Ok(Some(ResolvedProject {
         root: layout.root,
+        source_root: layout.source_root,
         manifest,
         files,
     }))
@@ -316,6 +317,12 @@ pub(crate) struct ResolvedProject {
     /// Canonical settings root: the directory holding the effective
     /// `baml.toml`, or the explicit standalone source root without a manifest.
     pub root: PathBuf,
+    /// Directory the `.baml` files were discovered under. Usually
+    /// `root/baml_src`, but an explicit `--project` pointing at a disjoint
+    /// source tree makes it something else entirely — so it is recorded
+    /// rather than re-derived, since re-deriving it from `root` would name a
+    /// different file set than the one actually loaded.
+    pub source_root: PathBuf,
     /// `baml.toml` content when present (already validated).
     pub manifest: Option<String>,
     /// Discovered `.baml` files with contents, in discovery (sorted) order.
@@ -376,6 +383,7 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
 
     Ok(ResolvedProject {
         root: layout.root,
+        source_root: layout.source_root,
         manifest,
         files,
     })

@@ -12,7 +12,7 @@ Commands:
   feedback    Report an issue or improvement to Boundary
   fmt         Format BAML source files
   describe    Describe a BAML symbol
-  generate    Generate client code from BAML definitions
+  bridge      Generate and manage client libraries (bridges)
   test        Run BAML tests
   init        Initialize a new BAML project (creates baml.toml)
   new         Create a new BAML project directory

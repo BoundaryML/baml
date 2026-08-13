@@ -188,7 +188,7 @@ fn generate_compilation_error_returns_nonzero_exit_code() {
         "function test_func() -> UndefinedType {\n  \"never called\"\n}\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["bridge", "generate", "--project", "."]);
 
     assert!(
         !output.status.success(),
@@ -233,7 +233,7 @@ function bad_func2() -> UnknownType2 {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["bridge", "generate", "--project", "."]);
 
     assert!(
         !output.status.success(),
@@ -258,7 +258,7 @@ fn generate_valid_project_returns_zero_exit_code() {
         "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["bridge", "generate", "--project", "."]);
 
     assert!(
         output.status.success(),
@@ -294,7 +294,7 @@ fn generate_go_writes_sdk_through_cli() {
         "function echo(value: string) -> string { value }\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["bridge", "generate", "--project", "."]);
     assert!(
         output.status.success(),
         "Go generation failed: {:?}\nstdout: {}\nstderr: {}",
@@ -334,7 +334,7 @@ fn generate_go_first_run_preserves_preexisting_user_files() {
     std::fs::create_dir(&sdk).unwrap();
     std::fs::write(sdk.join("user-notes.txt"), "keep me").unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["bridge", "generate", "--project", "."]);
 
     assert!(
         output.status.success(),
@@ -362,7 +362,7 @@ fn generate_go_removes_stale_owned_files_and_preserves_unknown_files() {
         "class FormerType {\n  value: string\n}\n\nfunction echo(value: string) -> string { value }\n",
     );
 
-    let first = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+    let first = run_baml_cli(built, tmp.path(), &["bridge", "generate", "--project", "."]);
     assert!(
         first.status.success(),
         "initial Go generation failed:\n{}",
@@ -377,7 +377,7 @@ fn generate_go_removes_stale_owned_files_and_preserves_unknown_files() {
         "function echo(value: string) -> string { value }\n",
     )
     .unwrap();
-    let second = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+    let second = run_baml_cli(built, tmp.path(), &["bridge", "generate", "--project", "."]);
     assert!(
         second.status.success(),
         "second Go generation failed:\n{}",
@@ -2081,7 +2081,7 @@ fn generate_without_baml_toml_reports_no_generators() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["bridge", "generate", "--project", "."]);
 
     assert_eq!(
         output.status.code(),

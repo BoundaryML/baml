@@ -132,6 +132,8 @@ fn generate_fixture(
             required_bridge_version: baml_version::CANONICAL_VERSION,
             program_identity,
             output_directory: output_directory.clone(),
+            provenance: crate::harness_output_options().provenance,
+            vcs: crate::harness_output_options().vcs,
         })
     };
     let first =

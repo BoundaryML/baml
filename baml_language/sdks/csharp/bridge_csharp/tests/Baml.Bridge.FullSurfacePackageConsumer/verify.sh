@@ -172,7 +172,7 @@ copy_fixture() {
   cp -R "$source/baml_src" "$generation/"
   (
     cd "$language_root"
-    cargo run --quiet -p baml_cli -- generate --project "$generation"
+    cargo run --quiet -p baml_cli -- bridge generate --project "$generation"
   )
   while IFS= read -r -d '' source_file; do
     relative="${source_file#"$source/"}"

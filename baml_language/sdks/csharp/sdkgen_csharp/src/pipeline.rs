@@ -453,7 +453,19 @@ mod tests {
 
         let root = TempDir::new().unwrap();
         let (_, files) = validate_and_collect(&tree).unwrap();
-        write_generated_output(&root.path().join("baml_client"), files).unwrap();
+        write_generated_output(
+            &root.path().join("baml_client"),
+            files,
+            &baml_codegen_types::OutputOptions {
+                provenance: baml_codegen_types::OutputProvenance {
+                    input_fingerprint: "fingerprint".to_string(),
+                    toolchain_version: "0.0.0-test".to_string(),
+                    generator_name: "client1".to_string(),
+                },
+                vcs: baml_codegen_types::VcsPolicy::Ignore,
+            },
+        )
+        .unwrap();
         assert!(root.path().join("baml_client/BamlProgram.g.cs").is_file());
         assert!(!root.path().join("baml_client/program.baml").exists());
     }
