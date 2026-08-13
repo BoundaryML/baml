@@ -203,6 +203,15 @@ impl TraceCaptureProducer {
         Self::new(TraceCaptureConfig::disabled())
     }
 
+    /// Returns whether another producer handle can still publish captures.
+    ///
+    /// Once this returns `false`, no new producer can be cloned from another
+    /// handle, so a consumer can perform one final drain and stop polling.
+    #[must_use]
+    pub fn has_other_handles(&self) -> bool {
+        Arc::strong_count(&self.inner) > 1
+    }
+
     #[must_use]
     pub fn trace_heap(&self) -> &TraceHeap {
         &self.trace_heap

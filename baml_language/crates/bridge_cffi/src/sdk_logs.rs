@@ -130,6 +130,31 @@ impl SdkLogCapture {
         // Ignore broken stderr: there is no safer diagnostic channel here.
         let _ = stderr.flush();
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_after_root(self) {
+        self.drain_to_stderr();
+        if !self.producer.has_other_handles() {
+            // Observing the last producer is stable: without another handle,
+            // nobody can clone one. Drain once more to close the race with a
+            // producer that published immediately before dropping its handle.
+            self.drain_to_stderr();
+            return;
+        }
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_millis(50));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                self.drain_to_stderr();
+                if !self.producer.has_other_handles() {
+                    self.drain_to_stderr();
+                    return;
+                }
+            }
+        });
+    }
 }
 
 /// Poll while the SDK call is running so long-running BAML functions expose
@@ -145,18 +170,22 @@ where
         let Some(capture) = capture else {
             return future.await;
         };
-        tokio::pin!(future);
-        let mut interval = tokio::time::interval(Duration::from_millis(50));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            tokio::select! {
-                result = &mut future => {
-                    capture.drain_to_stderr();
-                    return result;
+        let result = {
+            tokio::pin!(future);
+            let mut interval = tokio::time::interval(Duration::from_millis(50));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {
+                    result = &mut future => break result,
+                    _ = interval.tick() => capture.drain_to_stderr(),
                 }
-                _ = interval.tick() => capture.drain_to_stderr(),
             }
-        }
+        };
+        // The root future is dropped before checking producer ownership. Any
+        // remaining handles belong to spawned children, including detached
+        // children that are allowed to outlive the root call.
+        capture.finish_after_root();
+        result
     }
 
     #[cfg(target_arch = "wasm32")]

@@ -23,6 +23,16 @@ function sdk_bridge_logs() -> int {
   42
 }
 
+// Detached work can outlive the root SDK call, so its logs exercise the
+// bridge's post-result drain lifecycle.
+function sdk_bridge_detached_log() -> int {
+  spawn with baml.spawn.options(detach = true) {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n))
+    log.info("sdk bridge detached info")
+  }
+  42
+}
+
 function unhandled_spawn_error() -> int throws string {
   throw "boom"
 }
