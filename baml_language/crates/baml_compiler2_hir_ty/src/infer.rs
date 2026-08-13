@@ -3597,8 +3597,12 @@ impl<'db> InferenceContext<'db> {
         lhs: &Ty,
         rhs: Option<&Ty>,
     ) {
+        // SHALLOW error/unknown screening (TIR's gate): a nested error slot
+        // (an incomplete existential's recovered pin) does not silence the
+        // operator report - the operand as written still has no impl, and
+        // that is this diagnostic's claim.
         let dirty = |ty: &Ty| {
-            ty.has_error() || ty.has_infer() || matches!(ty.kind(), TyKind::Unknown { .. })
+            matches!(ty.kind(), TyKind::Error { .. } | TyKind::Unknown { .. }) || ty.has_infer()
         };
         if dirty(lhs) || rhs.is_some_and(dirty) {
             return;
