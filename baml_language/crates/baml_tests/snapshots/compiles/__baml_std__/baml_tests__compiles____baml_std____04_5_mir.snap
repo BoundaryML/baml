@@ -1174,6 +1174,27 @@ fn baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint
     }
 }
 
+fn baml.crypto.Hasher.update(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.crypto.Hasher.finish(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn baml.crypto.Aead.encrypt(_1: void, _2: void, _3: void, _4: void) -> void {
     // Locals:
     let _0: void // return
@@ -1209,6 +1230,12 @@ fn baml.crypto.GenerateKey.random_key(_1: void) -> void {
         unreachable;
     }
 }
+
+fn baml.crypto.Sha256.new = builtin(vm)
+
+fn baml.crypto.Sha256.Hasher.update = builtin(vm)
+
+fn baml.crypto.Sha256.Hasher.finish = builtin(vm)
 
 fn baml.csv.CsvRecord.get(self: baml.csv.CsvRecord, column: string) -> null | T {
     // Locals:

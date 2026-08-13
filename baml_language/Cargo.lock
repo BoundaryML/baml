@@ -1531,6 +1531,7 @@ dependencies = [
  "rand_xoshiro",
  "serde",
  "serde_json",
+ "sha2",
  "smallvec",
  "time",
  "tokio",

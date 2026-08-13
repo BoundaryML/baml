@@ -279,7 +279,20 @@ class baml.crypto.DecryptionFailure$stream {
 --- <builtin>/baml/ns_crypto/interfaces.baml ---
 function baml.crypto.decrypt(self: ?, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array  [missing]
 function baml.crypto.encrypt(self: ?, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array  [missing]
+function baml.crypto.finish(self: ?) -> uint8array  [missing]
 function baml.crypto.random_key(rng: root.random.Rng) -> Self.Key  [missing]
+function baml.crypto.update(self: ?, data: uint8array) -> void  [missing]
+
+--- <builtin>/baml/ns_crypto/sha2.baml ---
+class baml.crypto.Sha256 {
+  _state: $rust_type
+}
+class baml.crypto.Sha256$stream {
+  _state: $rust_type
+}
+function baml.crypto.finish(self: ?) -> uint8array  [builtin]
+function baml.crypto.new() -> baml.crypto.Sha256  [builtin]
+function baml.crypto.update(self: ?, data: uint8array) -> void  [builtin]
 
 --- <builtin>/baml/ns_csv/csv.baml ---
 class baml.csv.CsvError {

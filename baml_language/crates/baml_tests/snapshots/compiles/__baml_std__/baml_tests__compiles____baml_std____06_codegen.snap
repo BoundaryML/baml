@@ -1080,6 +1080,15 @@ function baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -
 function baml.crypto.Aes256GcmSiv.new(key: uint8array) -> baml.crypto.Aes256GcmSiv {
 }
 
+function baml.crypto.Sha256.Hasher.finish(self: baml.crypto.Sha256) -> uint8array {
+}
+
+function baml.crypto.Sha256.Hasher.update(self: baml.crypto.Sha256, data: uint8array) -> void {
+}
+
+function baml.crypto.Sha256.new() -> baml.crypto.Sha256 {
+}
+
 function baml.csv.CsvReader._feed(self: baml.csv.CsvReader, chunk: uint8array) -> null {
 }
 

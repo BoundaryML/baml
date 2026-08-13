@@ -41,8 +41,10 @@ class            baml.Uint8Array                  <builtin>/baml/uint8array.baml
 class            baml.crypto.Aes256GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:24
 class            baml.crypto.Aes128GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:101
 class            baml.crypto.DecryptionFailure    <builtin>/baml/ns_crypto/errors.baml:10
-interface        baml.crypto.Aead                 <builtin>/baml/ns_crypto/interfaces.baml:20
-interface        baml.crypto.GenerateKey          <builtin>/baml/ns_crypto/interfaces.baml:78
+interface        baml.crypto.Hasher               <builtin>/baml/ns_crypto/interfaces.baml:2
+interface        baml.crypto.Aead                 <builtin>/baml/ns_crypto/interfaces.baml:35
+interface        baml.crypto.GenerateKey          <builtin>/baml/ns_crypto/interfaces.baml:93
+class            baml.crypto.Sha256               <builtin>/baml/ns_crypto/sha2.baml:21
 enum             baml.csv.CsvErrorKind            <builtin>/baml/ns_csv/csv.baml:14
 class            baml.csv.CsvError                <builtin>/baml/ns_csv/csv.baml:41
 class            baml.csv.CsvPosition             <builtin>/baml/ns_csv/csv.baml:59

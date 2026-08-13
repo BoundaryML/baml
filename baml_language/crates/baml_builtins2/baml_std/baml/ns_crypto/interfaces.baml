@@ -1,3 +1,18 @@
+/// A stateful hasher that can be used to compute a digest of data.
+interface Hasher {
+    /// Feeds data into the hasher's internal state.
+    function update(self, data: uint8array) -> void throws never
+    /// Returns the digest of the hasher's internal state.
+    ///
+    /// Hasher state may either reset after this call or remain unchanged.
+    /// Implementations should specify which behavior should be expected.
+    /// As a result, opaque callers should not rely on the hasher state after this call.
+    ///
+    /// Provides no contract about the size or format of the digest,
+    /// each implementation should document its own digest format.
+    function finish(self) -> uint8array throws never
+}
+
 /// Authenticated Encryption with Associated Data.
 ///
 /// An `Aead` cipher turns a plaintext into a ciphertext that carries its own

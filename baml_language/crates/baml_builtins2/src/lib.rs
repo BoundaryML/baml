@@ -141,6 +141,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_crypto/errors.baml"),
     builtin!("baml", "ns_crypto/interfaces.baml"),
     builtin!("baml", "ns_crypto/aes_gcm_siv.baml"),
+    builtin!("baml", "ns_crypto/sha2.baml"),
     // --- boundary package ---
     builtin!("boundary", "core.baml"),
     builtin!("boundary", "ns_id/id.baml"),

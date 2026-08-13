@@ -45,6 +45,8 @@ namespace baml.crypto:
   class Aes256GcmSiv { methods: [new, encrypt, decrypt, random_key] }
   class DecryptionFailure { methods: [] }
   type GenerateKey
+  type Hasher
+  class Sha256 { methods: [new, update, finish] }
 namespace baml.csv:
   class CsvError { methods: [] }
   enum CsvErrorKind
