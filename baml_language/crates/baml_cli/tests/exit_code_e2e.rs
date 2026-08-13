@@ -163,6 +163,31 @@ fn check_accepts_standalone_file() {
     );
 }
 
+/// A standalone file and an explicit project are competing source locations.
+#[test]
+fn check_rejects_standalone_file_with_project() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("standalone.baml"),
+        "function main() -> int { 1 }\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["check", "--file", "standalone.baml", "--project", "."],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success(), "unexpected success: {stderr}");
+    assert!(
+        stderr.contains("`--file` and `--project` are mutually exclusive"),
+        "unexpected error: {stderr}"
+    );
+}
+
 /// Compilation errors must result in a non-zero exit code for `baml check`.
 #[test]
 fn check_compilation_error_returns_nonzero_exit_code() {
