@@ -19,7 +19,7 @@ fn update_suggests_the_toolchain_and_wrapper_commands() {
         "{stderr}"
     );
     assert!(
-        stderr.contains("To use the latest BAML toolchain selector, run `baml self-update`."),
+        stderr.contains("To update the BAML wrapper itself, run `baml self-update`."),
         "{stderr}"
     );
 }

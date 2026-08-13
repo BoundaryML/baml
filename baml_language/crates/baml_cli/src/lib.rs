@@ -126,7 +126,7 @@ pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
         return Err(anyhow!(
             "`baml update` is ambiguous.\n\
              To use the latest version of BAML, run `baml toolchain update`.\n\
-             To use the latest BAML toolchain selector, run `baml self-update`."
+             To update the BAML wrapper itself, run `baml self-update`."
         ));
     }
     let cli = commands::RuntimeCli::parse_from_smart(argv);

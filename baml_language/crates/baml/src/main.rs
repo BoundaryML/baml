@@ -155,6 +155,10 @@ language toolchain. Package-manager-managed wrappers refuse self-update and
 print the package-manager upgrade command instead.
 "#;
 
+const UPDATE_GUIDANCE: &str = "`baml update` is ambiguous.\n\
+To use the latest version of BAML, run `baml toolchain update`.\n\
+To update the BAML wrapper itself, run `baml self-update`.";
+
 fn main() {
     let exit = match run() {
         Ok(code) => code,
@@ -176,6 +180,9 @@ fn run() -> Result<i32> {
     if matches!(args.first().map(String::as_str), Some("--version" | "-V")) {
         print_version();
         return Ok(0);
+    }
+    if args.first().map(String::as_str) == Some("update") {
+        return Err(anyhow!(UPDATE_GUIDANCE));
     }
     if args.first().map(String::as_str) == Some("toolchain") {
         args.remove(0);
