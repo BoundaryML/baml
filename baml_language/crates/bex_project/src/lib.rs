@@ -22,7 +22,7 @@ pub use bex_engine::{
     BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
     InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,
     is_cancelled_engine_error,
-    logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
+    logger::{RenderedTraceLog, TraceLogDrainReport, TraceLogMetadata, TraceLogger},
     register_inbound_union_ambiguity_policy,
 };
 pub use bex_external_types::{

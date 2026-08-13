@@ -136,6 +136,7 @@ pub mod buffer;
 pub mod error;
 pub mod handle;
 mod identity;
+mod sdk_logs;
 
 pub use baml_to_host::{
     PreparedCall, error_to_outbound, invoke_prepared, prepare_call, result_to_outbound,
@@ -396,7 +397,7 @@ pub fn new_function_call_id() -> u64 {
 pub fn function_call_context_builder(
     call_id: bex_project::CallId,
 ) -> bex_project::FunctionCallContextBuilder {
-    bex_project::FunctionCallContextBuilder::new(call_id)
+    sdk_logs::configure_call_context(bex_project::FunctionCallContextBuilder::new(call_id))
 }
 
 /// Cancel an in-flight function call by ID.
