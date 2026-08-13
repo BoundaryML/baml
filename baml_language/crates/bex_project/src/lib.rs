@@ -16,8 +16,9 @@ pub use bex_engine::{
     FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,
     UnhandledSpawnErrorHandler, is_cancelled_engine_error, register_inbound_union_ambiguity_policy,
     value_capture::{
-        CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer,
-        TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogMetadata,
+        CaptureKind, EncodedTraceValue, RenderedTraceLog, TraceCaptureConfig, TraceCaptureProducer,
+        TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogDrainReport,
+        TraceLogMetadata,
     },
 };
 pub use bex_external_types::{

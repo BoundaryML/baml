@@ -13,6 +13,16 @@ function single_required_arg(value: string) -> string {
   value
 }
 
+// Exercises structured BAML logs across the host SDK call boundary. The
+// bridge renders these events to stderr according to the BAML_LOG threshold.
+function sdk_bridge_logs() -> int {
+  log.debug("sdk bridge debug")
+  log.info("sdk bridge info")
+  log.warn({ "kind": "sdk bridge warning" })
+  log.error("sdk bridge error")
+  42
+}
+
 function unhandled_spawn_error() -> int throws string {
   throw "boom"
 }
