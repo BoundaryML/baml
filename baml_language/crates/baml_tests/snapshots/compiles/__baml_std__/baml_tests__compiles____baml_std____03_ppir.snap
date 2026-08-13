@@ -91,7 +91,9 @@ function baml.has(self: ?, key: K) -> bool  [builtin]
 function baml.includes(self: ?, item: T) -> bool  [builtin]
 function baml.index_of(self: ?, item: T) -> int?  [builtin]
 function baml.insert(self: ?, item: T, idx: int) -> int  [builtin]
-function baml.join(self: ?, separator: string) -> string  [builtin]
+function baml.join(self: ?, separator: string) -> string  [expr] {
+  {  } match (self) { [] => "", [first, ..rest] => { let joined = string.from(first); for item in rest { joined = joined Add separator Add string.from(item) } } joined }
+}
 function baml.keys(self: ?) -> K[]  [builtin]
 function baml.last_index_of(self: ?, item: T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
