@@ -13,15 +13,6 @@
 name: BAML Release - Build JetBrains
 on:
   workflow_call: {}
-  pull_request:
-    paths:
-      - .github/actions/setup-java/**
-      - .github/workflows/build-jetbrains-release.reusable.yaml
-      - jetbrains/**
-      - README.v0.md
-      - typescript/apps/vscode-ext/language-configuration.json
-      - typescript/apps/vscode-ext/package.json
-      - typescript/apps/vscode-ext/syntaxes/**
   push:
     branches:
       - sam/jetbrains
