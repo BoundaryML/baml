@@ -102,6 +102,14 @@ struct TraceLogDraft {
 }
 
 impl TraceLogger {
+    /// Returns whether another logger handle can still publish events.
+    #[must_use]
+    pub fn has_other_handles(&self) -> bool {
+        self.enabled
+            .as_ref()
+            .is_some_and(|enabled| Arc::strong_count(enabled) > 1)
+    }
+
     #[must_use]
     pub const fn is_enabled(&self) -> bool {
         self.enabled.is_some()
