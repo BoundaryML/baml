@@ -748,14 +748,24 @@ pub fn function_throw_sets<'db>(
                 &crate::callable::callable_throws(db, *func_loc).0,
             )
             .into_iter()
-            .map(|fact| {
-                if baml_type_runtime::contains_error_recovery(&fact) {
+            .filter_map(|fact| {
+                // A bare rigid var (a callback's synthetic effect param in
+                // `throws int | E`) has no runtime representation and
+                // DROPS from the runtime set - the SDK recovers the
+                // host-error arm through its untagged decode fallback
+                // (TIR's runtime sets never carried the var either).
+                // Tagging it as the top type instead would mis-tag the
+                // thrown value's wire envelope and break that fallback.
+                if matches!(fact, Ty::TypeVar(..)) {
+                    return None;
+                }
+                Some(if baml_type_runtime::contains_error_recovery(&fact) {
                     Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     }
                 } else {
                     fact
-                }
+                })
             })
             .collect();
             sets.direct.insert(key.clone(), facts.clone());
