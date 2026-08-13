@@ -10,12 +10,12 @@
 //!   `initialize`. Compiler APIs stay byte-based.
 
 use lsp_types::{
-    CodeLens, CodeLensOptions, CompletionOptions, HoverProviderCapability, InlayHintOptions,
-    InlayHintServerCapabilities, SaveOptions, SemanticTokensFullOptions, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities,
-    WorkspaceServerCapabilities,
+    CodeActionProviderCapability, CodeLens, CodeLensOptions, CompletionOptions,
+    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, SaveOptions,
+    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
+    WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 
 use super::{BexMultiProject, LspError, commands, read_for_request, wasm_helpers};
@@ -47,7 +47,7 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
         code_lens_provider: Some(CodeLensOptions {
             resolve_provider: Some(true),
         }),
-        code_action_provider: None,
+        code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
         execute_command_provider: Some(lsp_types::ExecuteCommandOptions {
             commands: vec![commands::OpenBamlPanel::COMMAND_ID.to_string()],
             work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
@@ -1236,6 +1236,14 @@ mod tests {
         };
 
         assert_eq!(options.will_save, Some(false));
+    }
+
+    #[test]
+    fn capabilities_advertise_code_actions() {
+        assert!(matches!(
+            server_capabilities(PositionEncoding::UTF16).code_action_provider,
+            Some(CodeActionProviderCapability::Simple(true))
+        ));
     }
 
     #[test]
