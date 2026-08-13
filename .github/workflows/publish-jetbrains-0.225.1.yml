@@ -57,21 +57,24 @@ jobs:
       EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
       CONFIRMATION: ${{ inputs.confirmation }}
     steps:
-      - name: Checkout requested canary revision
+      - name: Checkout one-off release tag
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Guard one-off production dispatch
         working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
           expected_confirmation="publish ${PLUGIN_ID} 0.225.1 to default"
+          expected_ref="jetbrains-republish-02251"
           actual_sha="$(git rev-parse HEAD)"
 
-          if [[ "${GITHUB_REF_TYPE}" != "branch" || "${GITHUB_REF_NAME}" != "canary" ]]; then
-            echo "::error::Dispatch this workflow from the canary branch only; got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != "${expected_ref}" ]]; then
+            echo "::error::Dispatch this workflow from the exact ${expected_ref} tag only; got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
             exit 1
           fi
           if [[ "${VERSION}" != "0.225.1" ]]; then
@@ -96,6 +99,14 @@ jobs:
           fi
           if ! git merge-base --is-ancestor f6c01b1d23a6a1f30cc9bef25aa6d7a499a1b287 HEAD; then
             echo "::error::The checked-out revision does not contain the TextMate fix merged by PR #4381."
+            exit 1
+          fi
+
+          canary_comparison="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${EXPECTED_SOURCE_SHA}...canary")"
+          comparison_status="$(jq -r '.status // ""' <<<"${canary_comparison}")"
+          merge_base_sha="$(jq -r '.merge_base_commit.sha // ""' <<<"${canary_comparison}")"
+          if [[ "${merge_base_sha}" != "${EXPECTED_SOURCE_SHA}" || ( "${comparison_status}" != "behind" && "${comparison_status}" != "identical" ) ]]; then
+            echo "::error::Expected source ${EXPECTED_SOURCE_SHA} is not on canary; comparison status=${comparison_status}, merge base=${merge_base_sha}."
             exit 1
           fi
 
