@@ -14,7 +14,7 @@ description: |
   across workflows that run on the same platform AND pass the same
   `install_args` tool set — distinct tool sets are distinct entries by
   design (each holds a different set of installed tools). Our own
-  `cache_key_prefix` (`mise-baml2`, not the upstream default) scopes the
+  `cache_key_prefix` (`mise-baml3`, not the upstream default) scopes the
   whole family, so bumping its trailing number busts every entry at once.
 
 inputs:
@@ -52,12 +52,19 @@ runs:
       uses: cargo-bins/cargo-binstall@main
 
     - name: Install mise
-      uses: jdx/mise-action@v4.0.1
+      uses: jdx/mise-action@v4.2.4
+      env:
+        # The default 10s timeout is too short for the precompiled Python
+        # metadata endpoint during transient infrastructure slowdowns.
+        MISE_FETCH_REMOTE_VERSIONS_TIMEOUT: 60
       with:
+        fetch_from_github: false
         # Our own prefix (not the upstream default), shared across every
         # baml_language workflow. Bump the trailing number to invalidate
         # every consumer's cache at once.
-        cache_key_prefix: mise-baml2
+        # v3 also prevents old caches from restoring mise 2025.10.13, which
+        # cannot install the current Python layout or clang 22.1.7.
+        cache_key_prefix: mise-baml3
         # Only WRITE the cache on canary — mirrors the Swatinem rust-cache
         # `save-if` on the same branch. mise-action's default cache key
         # includes an install_args hash, so each distinct tool set is its own
@@ -78,3 +85,9 @@ runs:
         # defeats install_args entirely and, on Windows where those cargo:*
         # tools fall back to failing source compiles, it breaks the job.
         add_shims_to_path: false
+
+    - name: Disable mise task auto-install
+      shell: bash
+      run: |
+        echo "disabling MISE_TASK_RUN_AUTO_INSTALL, all CI workflows must explicitly install the mise deps they use"
+        echo "MISE_TASK_RUN_AUTO_INSTALL=false" >> "$GITHUB_ENV"
