@@ -2935,6 +2935,10 @@ fn baml.fs.remove_dir = builtin(io)
 
 fn baml.fs.remove_dir_all = builtin(io)
 
+fn baml.fs.chmod = builtin(io)
+
+fn baml.fs.symlink = builtin(io)
+
 fn baml.future.Future.cancel = builtin(vm)
 
 fn baml.future.Future.is_settled = builtin(vm)

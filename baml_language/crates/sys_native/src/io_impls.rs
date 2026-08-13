@@ -889,6 +889,129 @@ impl io::IoNamespaceFs for NativeSysOps {
             .map_err(VmRustFnError::from)
         })
     }
+
+    fn chmod(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        mode: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let mode = match permission_bits(mode) {
+            Ok(mode) => mode,
+            Err(err) => return SysOpOutput::err(err),
+        };
+        SysOpOutput::async_op(async move { chmod_path(&path, mode).await })
+    }
+
+    fn symlink(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        target: String,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            symlink_path(&target, &path)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to create symlink '{path}' -> '{target}': {e}"),
+                })
+                .map_err(VmRustFnError::from)
+        })
+    }
+}
+
+/// Narrow a BAML `int` mode to the POSIX permission bits.
+///
+/// The accepted range is the permission triple plus the setuid/setgid/sticky
+/// digit. Everything else — negative values, file-type bits from a `stat`
+/// result, anything past `u32` — is rejected rather than masked, because a mode
+/// outside that range is a caller mistake and the kernel would silently drop the
+/// extra bits (`chmod_common` masks with `S_IALLUGO`).
+fn permission_bits(mode: i64) -> Result<u32, VmBamlError> {
+    u32::try_from(mode)
+        .ok()
+        .filter(|mode| *mode <= 0o7777)
+        .ok_or_else(|| VmBamlError::InvalidArgument {
+            // `{:#o}` renders a negative `i64` as its 64-bit two's complement,
+            // which reads as a nonsensically large mode; show those in decimal.
+            message: match mode {
+                0.. => {
+                    format!("Invalid file mode {mode:#o}: expected a permission mask in 0..=0o7777")
+                }
+                _ => format!("Invalid file mode {mode}: expected a permission mask in 0..=0o7777"),
+            },
+        })
+}
+
+#[cfg(unix)]
+async fn chmod_path(path: &str, mode: u32) -> Result<(), VmRustFnError> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to set permissions on '{path}': {e}"),
+        })
+        .map_err(VmRustFnError::from)
+}
+
+/// Windows has no mode bits — `Permissions` carries a single read-only flag —
+/// so the owner-write bit decides it and the rest of `mode` is ignored. This
+/// matches libuv (and therefore Node's `fs.chmod`), which tests exactly
+/// `_S_IWRITE`.
+///
+/// Reading the current permissions first is what makes a missing `path` fail
+/// here as it does on unix, rather than silently succeeding.
+#[cfg(windows)]
+async fn chmod_path(path: &str, mode: u32) -> Result<(), VmRustFnError> {
+    let mut permissions = tokio::fs::metadata(path)
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to read permissions of '{path}': {e}"),
+        })?
+        .permissions();
+    permissions.set_readonly((mode & 0o200) == 0);
+    tokio::fs::set_permissions(path, permissions)
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to set permissions on '{path}': {e}"),
+        })
+        .map_err(VmRustFnError::from)
+}
+
+#[cfg(unix)]
+async fn symlink_path(target: &str, path: &str) -> std::io::Result<()> {
+    tokio::fs::symlink(target, path).await
+}
+
+/// Windows picks the link flavor at creation time and cannot change it later,
+/// so `target` is resolved the way the OS will resolve it — a relative target
+/// hangs off the link's own directory — and a directory link is created only
+/// when that resolves to a directory today. A dangling link becomes a file
+/// link, matching Node's autodetect.
+#[cfg(windows)]
+async fn symlink_path(target: &str, path: &str) -> std::io::Result<()> {
+    let target_path = std::path::Path::new(target);
+    let resolved = if target_path.is_absolute() {
+        target_path.to_path_buf()
+    } else {
+        std::path::Path::new(path)
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(""))
+            .join(target_path)
+    };
+    if tokio::fs::metadata(&resolved)
+        .await
+        .is_ok_and(|metadata| metadata.is_dir())
+    {
+        tokio::fs::symlink_dir(target, path).await
+    } else {
+        tokio::fs::symlink_file(target, path).await
+    }
 }
 
 // Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.

@@ -115,6 +115,8 @@ function         baml.fs.read_dir                 <builtin>/baml/ns_fs/fs.baml:1
 function         baml.fs.mkdir                    <builtin>/baml/ns_fs/fs.baml:133
 function         baml.fs.remove_dir               <builtin>/baml/ns_fs/fs.baml:139
 function         baml.fs.remove_dir_all           <builtin>/baml/ns_fs/fs.baml:148
+function         baml.fs.chmod                    <builtin>/baml/ns_fs/fs.baml:171
+function         baml.fs.symlink                  <builtin>/baml/ns_fs/fs.baml:192
 enum             baml.future.FutureState          <builtin>/baml/ns_future/future.baml:21
 class            baml.future.Future               <builtin>/baml/ns_future/future.baml:28
 function         baml.future.all_complete         <builtin>/baml/ns_future/future.baml:80

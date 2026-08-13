@@ -1,7 +1,15 @@
 //! Filesystem operation tests requiring host-side capabilities.
 //!
-//! Tests here need features BAML doesn't support: creating symlinks and
-//! asserting compile-time type mismatches via `#[should_panic]`.
+//! Tests here need things BAML cannot express: asserting a compile-time type
+//! mismatch via `#[should_panic]`, and inspecting host state that `baml.fs`
+//! exposes no reader for — a file's mode bits, and whether a path is a link
+//! rather than what it resolves to.
+//!
+//! The `chmod` and `symlink` tests are Unix-only by design. Windows has no mode
+//! bits (only a read-only attribute), and creating a symlink there needs
+//! Developer Mode or `SeCreateSymbolicLinkPrivilege`, which CI does not grant.
+//! The platform-independent parts of both — argument validation and the errors
+//! for a missing or already-occupied path — are covered by `baml_src/ns_fs`.
 
 use baml_tests::baml_test;
 #[cfg(unix)]
@@ -94,4 +102,148 @@ async fn fs_read_dir_reports_symlink_flag() {
         .expect("expected link.txt entry");
 
     assert_eq!(link["is_symlink"], BexExternalValue::Bool(true));
+}
+
+/// The mode is applied verbatim, not or'd into what the file already had:
+/// `0o600` then `0o644` must land on exactly those bits.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_chmod_sets_the_exact_mode() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
+    let path = format!("{root}/file.txt");
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.chmod("{path}", 0o600);
+                baml.fs.chmod("{path}", 0o644);
+                null
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_ok(), "got: {:?}", output.result);
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+    assert_eq!(mode & 0o7777, 0o644, "mode was {mode:#o}");
+}
+
+/// A mode the kernel would silently mask (here the `S_IFREG` bits of a `stat`
+/// result) is rejected before any syscall, so the file keeps its old mode.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_chmod_rejects_out_of_range_mode() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
+    let path = format!("{root}/file.txt");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                {{
+                    baml.fs.chmod("{path}", 0o100644);
+                    "no error thrown"
+                }} catch (e) {{
+                    baml.errors.InvalidArgument => e.message
+                }}
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::String(message)) = &output.result else {
+        panic!("expected string, got: {:?}", output.result);
+    };
+    assert!(
+        message.contains("0o100644"),
+        "message should name the rejected mode, got: {message}"
+    );
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+    assert_eq!(mode & 0o7777, 0o600, "mode was {mode:#o}");
+}
+
+/// The link is a real symlink (not a copy) and resolves to the target's bytes.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_symlink_creates_a_link_to_the_target() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "content" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                baml.fs.symlink("{root}/target.txt", "{root}/link.txt");
+                baml.fs.read("{root}/link.txt")
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("content".to_string().into()))
+    );
+    let link = format!("{root}/link.txt");
+    assert!(
+        std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        std::fs::read_link(&link).unwrap(),
+        std::path::Path::new(&format!("{root}/target.txt"))
+    );
+}
+
+/// A relative target is stored verbatim — the OS resolves it against the link's
+/// own directory, so the link keeps working regardless of the working directory.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_symlink_stores_a_relative_target_verbatim() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "content" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                baml.fs.symlink("target.txt", "{root}/link.txt");
+                baml.fs.read("{root}/link.txt")
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("content".to_string().into()))
+    );
+    assert_eq!(
+        std::fs::read_link(format!("{root}/link.txt")).unwrap(),
+        std::path::Path::new("target.txt")
+    );
+}
+
+/// Creating a link never clobbers what is already there.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_symlink_onto_an_existing_path_errors() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "target", "taken.txt" => "keep me" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> bool {{
+                {{
+                    baml.fs.symlink("{root}/target.txt", "{root}/taken.txt");
+                    false
+                }} catch (e) {{
+                    baml.errors.Io => true
+                }}
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(
+        std::fs::read_to_string(format!("{root}/taken.txt")).unwrap(),
+        "keep me"
+    );
 }
