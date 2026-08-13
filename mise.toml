@@ -14,6 +14,7 @@ uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
 clang = "22.1.7" # LLVM tools for CI, including llvm-strip
+clang-format = "22.1.7"
 cmake = "4.3.3"
 ninja = "1.13.2"
 

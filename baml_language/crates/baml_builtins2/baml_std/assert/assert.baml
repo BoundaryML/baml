@@ -18,7 +18,13 @@ function not_null(value: unknown?) -> null {
     }
 }
 
-/// Converts any assertion operand into a user-facing string.
+/// Renders one operand of a failed assertion.
+///
+/// Quoted if it is a string, bare otherwise, so the reader can tell the two
+/// apart. Interpolating every operand inside literal quotes printed an int as
+/// `"1"` — a number wearing a string's clothes — and interpolating none printed
+/// `assert.equal(1, "1")` as `left = 1, right = 1`: two identical-looking
+/// values for an assertion that failed precisely because they differ.
 ///
 /// Parameters:
 /// - `value`: The operand value to render.
@@ -27,9 +33,12 @@ function not_null(value: unknown?) -> null {
 /// - A JSON-style string representation for panic messages.
 ///
 /// Errors/Panics:
-/// - Never throws. Falls back to a placeholder when serialization fails.
+/// - Never throws.
 function format_operand(value: unknown) -> string {
-    string.from(value)
+    match (value) {
+        let text: string => `"${text}"`,
+        _ => string.from(value),
+    }
 }
 
 /// Asserts that `actual` equals `expected` exactly. Panics if they differ.
@@ -49,10 +58,7 @@ function format_operand(value: unknown) -> string {
 function equal(actual: unknown, expected: unknown) -> null {
     if (actual != expected) {
         baml.sys.panic(
-            "assertion failed: left = "
-                + format_operand(actual)
-                + ", right = "
-                + format_operand(expected),
+            `assertion failed: left = ${format_operand(actual)}, right = ${format_operand(expected)}`,
         )
     } else {
         null
@@ -80,14 +86,7 @@ function approx_equal(actual: float, expected: float, eps: float) -> null {
         let delta = (actual - expected).abs();
         if (delta.is_nan() || delta > eps) {
             baml.sys.panic(
-                "assertion failed: |left - right| = "
-                    + format_operand(delta)
-                    + ", eps = "
-                    + format_operand(eps)
-                    + ", left = "
-                    + format_operand(actual)
-                    + ", right = "
-                    + format_operand(expected),
+                `assertion failed: |left - right| = "${delta}", eps = "${eps}", left = "${actual}", right = "${expected}"`,
             )
         } else {
             null
@@ -101,5 +100,16 @@ function contains(haystack: string, needle: string) -> null {
         baml.sys.panic("assertion failed: string does not contain expected substring")
     } else {
         null
+    }
+}
+
+/// Asserts that `actual` is of type `T`. Panics if not.
+function is_type<T>(actual: unknown) -> T throws never {
+    match (actual) {
+        T => actual,
+        _ => {
+            let t: type = reflect.type_of<T>();
+            baml.sys.panic(`assertion failed: expected type "${t}", got "${actual}"`)
+        },
     }
 }
