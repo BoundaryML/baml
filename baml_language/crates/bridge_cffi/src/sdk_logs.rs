@@ -14,7 +14,7 @@ use std::{
 #[cfg(not(target_arch = "wasm32"))]
 use bex_project::{
     CaptureDefaults, RenderedTraceLog, TraceCaptureConfig, TraceCaptureProducer,
-    TraceLogDrainReport,
+    TraceLogDrainReport, TraceLogLevel,
 };
 use bex_project::{FunctionCallContext, FunctionCallContextBuilder};
 
@@ -62,6 +62,16 @@ impl LogLevel {
             _ => Self::Info,
         }
     }
+
+    fn capture_level(self) -> Option<TraceLogLevel> {
+        match self {
+            Self::Error => Some(TraceLogLevel::Error),
+            Self::Warn => Some(TraceLogLevel::Warn),
+            Self::Info => Some(TraceLogLevel::Info),
+            Self::Debug => Some(TraceLogLevel::Debug),
+            Self::Off => None,
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -77,10 +87,13 @@ pub(crate) fn configure_call_context(
 ) -> FunctionCallContextBuilder {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        if configured_level() == LogLevel::Off {
+        let Some(level) = configured_level().capture_level() else {
             return builder;
-        }
-        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(MAX_PENDING_LOGS));
+        };
+        let producer = TraceCaptureProducer::new_with_log_level(
+            TraceCaptureConfig::logs_only(MAX_PENDING_LOGS),
+            level,
+        );
         builder
             .with_capture_defaults(CaptureDefaults {
                 values_enabled: false,

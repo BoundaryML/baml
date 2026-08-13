@@ -18,7 +18,7 @@ pub use bex_engine::{
     value_capture::{
         CaptureKind, EncodedTraceValue, RenderedTraceLog, TraceCaptureConfig, TraceCaptureProducer,
         TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogDrainReport,
-        TraceLogMetadata,
+        TraceLogLevel, TraceLogMetadata,
     },
 };
 pub use bex_external_types::{

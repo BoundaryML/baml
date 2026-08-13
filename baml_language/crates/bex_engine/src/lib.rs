@@ -4474,10 +4474,13 @@ impl BexEngine {
             thread_id: BexThreadId(thread.vm.prof_thread_id),
             call_id: BexCallId(thread.vm.current_call_id()),
         };
+        let (level, body) = Self::extract_baml_log_payload(data);
+        if !capture.producer.captures_log_level(level.as_deref()) {
+            return;
+        }
         let _ = capture
             .producer
             .capture_log_with(capture.boundary_id, call, |trace_heap| {
-                let (level, body) = Self::extract_baml_log_payload(data);
                 let metadata = TraceLogMetadata {
                     level,
                     source: Self::source_location_from_event(source_location),

@@ -105,6 +105,25 @@ pub struct TraceCaptureConfig {
     pub max_pending_root_result_drafts: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TraceLogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+}
+
+impl TraceLogLevel {
+    fn parse(raw: Option<&str>) -> Self {
+        match raw.unwrap_or("info").to_ascii_lowercase().as_str() {
+            "error" => Self::Error,
+            "warn" | "warning" => Self::Warn,
+            "debug" | "trace" => Self::Debug,
+            _ => Self::Info,
+        }
+    }
+}
+
 impl TraceCaptureConfig {
     const ROOT_RESULT_RESERVED_DRAFTS: usize = 2;
 
@@ -158,6 +177,7 @@ pub struct TraceCaptureProducer {
 #[derive(Debug)]
 struct TraceCaptureInner {
     config: TraceCaptureConfig,
+    minimum_log_level: Option<TraceLogLevel>,
     reserved_value_slots: usize,
     reserved_log_slots: usize,
     reserved_root_result_slots: usize,
@@ -189,6 +209,7 @@ impl TraceCaptureProducer {
             trace_heap: TraceHeap::new(),
             inner: Arc::new(Mutex::new(TraceCaptureInner {
                 config,
+                minimum_log_level: None,
                 reserved_value_slots: 0,
                 reserved_log_slots: 0,
                 reserved_root_result_slots: 0,
@@ -203,6 +224,22 @@ impl TraceCaptureProducer {
         Self::new(TraceCaptureConfig::disabled())
     }
 
+    /// Create a producer that rejects suppressed log levels before snapshot
+    /// copying or bounded-queue reservation.
+    #[must_use]
+    pub fn new_with_log_level(
+        config: TraceCaptureConfig,
+        minimum_log_level: TraceLogLevel,
+    ) -> Self {
+        let producer = Self::new(config);
+        producer
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .minimum_log_level = Some(minimum_log_level);
+        producer
+    }
+
     /// Returns whether another producer handle can still publish captures.
     ///
     /// Once this returns `false`, no new producer can be cloned from another
@@ -210,6 +247,19 @@ impl TraceCaptureProducer {
     #[must_use]
     pub fn has_other_handles(&self) -> bool {
         Arc::strong_count(&self.inner) > 1
+    }
+
+    /// Returns whether a log at `level` should be copied into this producer.
+    #[must_use]
+    pub fn captures_log_level(&self, level: Option<&str>) -> bool {
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner.config.enabled
+            && inner
+                .minimum_log_level
+                .is_none_or(|minimum| TraceLogLevel::parse(level) <= minimum)
     }
 
     #[must_use]
@@ -639,7 +689,7 @@ mod tests {
         trace_heap::{TraceHeap, TraceSnapshot, TraceSnapshotHandle, TraceValue, TraceValueRef},
         value_capture::{
             CaptureKind, CaptureSkipReason, TraceCaptureConfig, TraceCaptureProducer,
-            TraceDrainFailureReason, TraceLogMetadata,
+            TraceDrainFailureReason, TraceLogLevel, TraceLogMetadata,
         },
     };
 
@@ -880,6 +930,27 @@ mod tests {
         assert_eq!(report.logs[1].body, r#"{"user": "ada", "count": 42}"#);
         assert_eq!(producer.trace_heap().retained_snapshot_count(), 0);
         assert!(producer.drain().is_empty());
+    }
+
+    #[test]
+    fn log_level_filter_rejects_suppressed_events_before_queueing() {
+        let producer = TraceCaptureProducer::new_with_log_level(
+            TraceCaptureConfig::logs_only(1),
+            TraceLogLevel::Error,
+        );
+
+        for _ in 0..10 {
+            assert!(!producer.captures_log_level(Some("debug")));
+        }
+        assert!(producer.captures_log_level(Some("error")));
+        producer
+            .capture_log_with(boundary_id(), trace_key(), |trace_heap| {
+                (fake_log_metadata(), test_snapshot(trace_heap, 42))
+            })
+            .unwrap();
+
+        assert_eq!(producer.drain_rendered_logs().logs.len(), 1);
+        assert_eq!(producer.stats().skipped_log_queue_full, 0);
     }
 
     #[test]
