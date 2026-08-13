@@ -7854,27 +7854,39 @@ impl<'a> Parser<'a> {
     /// We detect the old style and default to new style otherwise, so that
     /// any expression (string concat, function calls, etc.) works as a test name.
     fn looks_like_test_expr_body(&self) -> bool {
-        let Some(next) = self.peek(1) else {
+        let mut i = self.skip_trivia_and_comments_from(self.current);
+        if self.tokens.get(i).map(|token| token.kind) != Some(TokenKind::Test) {
             return true;
-        };
+        }
+        i = self.skip_trivia_and_comments_from(i + 1);
+
         // Old-style is only: `test Name { functions ...}` or `test Name { type_builder ...}`
         // There is no old-style form with parens — `test Name(...)` was never valid old-style
         // syntax (the old parser just emits a "remove parentheses" error).
-        if next.kind == TokenKind::Word {
-            if let Some(after_word) = self.peek(2) {
-                if after_word.kind == TokenKind::LBrace {
-                    // Peek inside the brace: `test Name { functions` or `test Name { type_builder`
-                    if let Some(inside) = self.peek(3) {
-                        if inside.kind == TokenKind::Word
-                            && (inside.text == "functions" || inside.text == "type_builder")
-                        {
-                            return false; // old-style config block
-                        }
-                    }
-                }
-            }
+        if self.tokens.get(i).map(|token| token.kind) != Some(TokenKind::Word) {
+            return true;
         }
-        true
+        i = self.skip_trivia_and_comments_from(i + 1);
+        if self.tokens.get(i).map(|token| token.kind) != Some(TokenKind::LBrace) {
+            return true;
+        }
+        i += 1;
+
+        // Header comments are syntax nodes rather than trivia, but they may appear before the
+        // first config item just like ordinary comments.
+        loop {
+            i = self.skip_trivia_and_comments_from(i);
+            let after_header = self.skip_header_comment_at(i);
+            if after_header == i {
+                break;
+            }
+            i = after_header;
+        }
+
+        !self.tokens.get(i).is_some_and(|inside| {
+            inside.kind == TokenKind::Word
+                && (inside.text == "functions" || inside.text == "type_builder")
+        })
     }
 
     /// Parse an expression-body test: `test <name_expr> [with expr] { body }`
@@ -9022,6 +9034,7 @@ client<llm> TestClient {
 }
 
 test Legacy {
+  //# test config
   functions []
   type_builder {
     //# type builder items
@@ -9058,7 +9071,7 @@ test Legacy {
             root.descendants()
                 .filter(|node| node.kind() == SyntaxKind::HEADER_COMMENT)
                 .count(),
-            6,
+            7,
             "every header comment should remain a distinct syntax node"
         );
     }

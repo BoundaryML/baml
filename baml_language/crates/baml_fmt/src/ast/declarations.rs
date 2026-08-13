@@ -2468,29 +2468,44 @@ impl Printable for ConfigBlock {
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
 
-        let mut block_attrs: Vec<(&BlockAttribute, &ConfigBlockMember, Option<&t::Comma>)> = self
+        let ordered_items: Vec<(&ConfigBlockMember, Option<&t::Comma>)> = if self
             .items
             .iter()
-            .filter_map(|(item, comma)| match item {
-                ConfigBlockMember::BlockAttribute(attr) => Some((attr, item, comma.as_ref())),
-                _ => None,
-            })
-            .collect();
-        block_attrs.sort_by_cached_key(|(attr, _, _)| {
-            attr.name_parts_str(printer.input).collect::<Vec<&str>>()
-        });
-        let other_items = self
-            .items
-            .iter()
-            .filter(|(item, _)| !matches!(item, ConfigBlockMember::BlockAttribute(_)))
-            .map(|(item, comma)| (item, comma.as_ref()));
+            .any(|(item, _)| matches!(item, ConfigBlockMember::HeaderComment(_)))
+        {
+            // A header labels the member after it, so reordering attributes across headers can
+            // change the meaning of the formatted source. Preserve source order in that case.
+            self.items
+                .iter()
+                .map(|(item, comma)| (item, comma.as_ref()))
+                .collect()
+        } else {
+            let mut block_attrs: Vec<(&BlockAttribute, &ConfigBlockMember, Option<&t::Comma>)> =
+                self.items
+                    .iter()
+                    .filter_map(|(item, comma)| match item {
+                        ConfigBlockMember::BlockAttribute(attr) => {
+                            Some((attr, item, comma.as_ref()))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+            block_attrs.sort_by_cached_key(|(attr, _, _)| {
+                attr.name_parts_str(printer.input).collect::<Vec<&str>>()
+            });
+            block_attrs
+                .into_iter()
+                .map(|(_, member, comma)| (member, comma))
+                .chain(
+                    self.items
+                        .iter()
+                        .filter(|(item, _)| !matches!(item, ConfigBlockMember::BlockAttribute(_)))
+                        .map(|(item, comma)| (item, comma.as_ref())),
+                )
+                .collect()
+        };
 
-        let ordered_items = block_attrs
-            .into_iter()
-            .map(|(_, member, comma)| (member, comma))
-            .chain(other_items);
-
-        for (i, (item, comma)) in ordered_items.enumerate() {
+        for (i, (item, comma)) in ordered_items.into_iter().enumerate() {
             let (item_leading, item_trailing) = printer.trivia.get_for_element(item);
             let item_leading = if i == 0 {
                 item_leading.trim_leading_blanks() // this is first item

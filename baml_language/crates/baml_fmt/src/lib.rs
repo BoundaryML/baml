@@ -377,10 +377,12 @@ mod header_comment_position_tests {
             "\n",
             "client<llm> Annotated {\n",
             "    //# configuration\n",
+            "    @@assert(true, true)\n",
             "    provider openai\n",
             "}\n",
             "\n",
             "test Legacy {\n",
+            "    //# test configuration\n",
             "    functions []\n",
             "    type_builder {\n",
             "        //# generated types\n",
@@ -406,12 +408,18 @@ mod header_comment_position_tests {
             "//# conformance",
             "//# variants",
             "//# configuration",
+            "//# test configuration",
             "//# generated types",
             "//# leading header",
             "//# between arms",
         ] {
             assert!(formatted.contains(needle), "lost {needle}:\n{formatted}");
         }
+        assert!(
+            formatted.find("//# configuration").unwrap()
+                < formatted.find("@@assert(true, true)").unwrap(),
+            "config header must stay before the attribute it labels:\n{formatted}"
+        );
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
