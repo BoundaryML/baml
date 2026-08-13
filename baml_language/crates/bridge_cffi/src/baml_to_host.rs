@@ -394,18 +394,22 @@ pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
 pub async fn invoke_prepared(runtime: Arc<dyn Bex>, call: PreparedCall) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_wire();
     let _route = crate::register_active_call_runtime(call.context.host_call_id.0, &runtime);
+    let log_capture = crate::sdk_logs::SdkLogCapture::from_call_context(&call.context);
 
-    let caught = AssertUnwindSafe(async move {
-        match call.target {
-            PreparedTarget::Named(name) => {
-                runtime.call_function(&name, call.args, call.context).await
+    let caught = crate::sdk_logs::run_with_log_capture(
+        log_capture,
+        AssertUnwindSafe(async move {
+            match call.target {
+                PreparedTarget::Named(name) => {
+                    runtime.call_function(&name, call.args, call.context).await
+                }
+                PreparedTarget::Callable(handle) => {
+                    runtime.call_callable(handle, call.args, call.context).await
+                }
             }
-            PreparedTarget::Callable(handle) => {
-                runtime.call_callable(handle, call.args, call.context).await
-            }
-        }
-    })
-    .catch_unwind()
+        })
+        .catch_unwind(),
+    )
     .await;
 
     let result = match caught {
