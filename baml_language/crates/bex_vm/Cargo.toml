@@ -24,6 +24,7 @@ bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
+aes-gcm-siv = { workspace = true }
 base64 = { workspace = true }
 console = { workspace = true }
 getrandom = { workspace = true }

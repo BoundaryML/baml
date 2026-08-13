@@ -312,6 +312,16 @@ rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 # does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not
 # be turned on here unconditionally.
 sha2 = { version = "0.10", features = [ "oid" ] }
+# `baml.crypto`'s AEAD ciphers. `getrandom` is off (it is on by default): keys
+# and nonces come from a caller-supplied `baml.random.Rng`, never from the
+# crate's own entropy source, so the VM keeps building for
+# `wasm32-unknown-unknown` without a JS shim. `zeroize` is on (it is off by
+# default) so the per-message subkeys AES-GCM-SIV derives are wiped after use.
+aes-gcm-siv = { version = "0.12", default-features = false, features = [
+  "aes",
+  "alloc",
+  "zeroize",
+] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

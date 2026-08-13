@@ -38,6 +38,11 @@ class            baml.Null                        <builtin>/baml/null.baml:2
 class            baml.String                      <builtin>/baml/string.baml:5
 class            baml.TypeValue                   <builtin>/baml/type_class.baml:9
 class            baml.Uint8Array                  <builtin>/baml/uint8array.baml:5
+class            baml.crypto.Aes256GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:24
+class            baml.crypto.Aes128GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:101
+class            baml.crypto.DecryptionFailure    <builtin>/baml/ns_crypto/errors.baml:10
+interface        baml.crypto.Aead                 <builtin>/baml/ns_crypto/interfaces.baml:20
+interface        baml.crypto.GenerateKey          <builtin>/baml/ns_crypto/interfaces.baml:78
 enum             baml.csv.CsvErrorKind            <builtin>/baml/ns_csv/csv.baml:14
 class            baml.csv.CsvError                <builtin>/baml/ns_csv/csv.baml:41
 class            baml.csv.CsvPosition             <builtin>/baml/ns_csv/csv.baml:59

@@ -1134,6 +1134,82 @@ fn baml.Int.min_value() -> int {
     }
 }
 
+fn baml.crypto.Aes256GcmSiv.new = builtin(vm)
+
+fn baml.crypto.Aes256GcmSiv.Aead.encrypt = builtin(vm)
+
+fn baml.crypto.Aes256GcmSiv.Aead.decrypt = builtin(vm)
+
+fn baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    // Locals:
+    let _0: uint8array // _0 // return
+    let _1: baml.random.Rng // rng // param
+
+    bb0: {
+        _0 = virtual_call random as baml.random.Rng(copy _1, const 32_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.crypto.Aes128GcmSiv.new = builtin(vm)
+
+fn baml.crypto.Aes128GcmSiv.Aead.encrypt = builtin(vm)
+
+fn baml.crypto.Aes128GcmSiv.Aead.decrypt = builtin(vm)
+
+fn baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    // Locals:
+    let _0: uint8array // _0 // return
+    let _1: baml.random.Rng // rng // param
+
+    bb0: {
+        _0 = virtual_call random as baml.random.Rng(copy _1, const 16_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.crypto.Aead.encrypt(_1: void, _2: void, _3: void, _4: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+    let _3: void // param
+    let _4: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.crypto.Aead.decrypt(_1: void, _2: void, _3: void, _4: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+    let _3: void // param
+    let _4: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.crypto.GenerateKey.random_key(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn baml.csv.CsvRecord.get(self: baml.csv.CsvRecord, column: string) -> null | T {
     // Locals:
     let _0: null | T // _0 // return
