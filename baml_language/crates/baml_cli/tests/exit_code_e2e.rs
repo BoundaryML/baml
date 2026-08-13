@@ -899,8 +899,9 @@ test "throws-during-parse" {
         stderr.contains(r#"message: "invalid number at line 1 column 2""#),
         "Expected the thrown error message in stderr, got: {stderr}",
     );
+    let source_path = Path::new("baml_src").join("main.baml");
     assert!(
-        stderr.contains("baml_src/main.baml"),
+        stderr.contains(&source_path.display().to_string()),
         "Expected BAML source context in stderr, got: {stderr}",
     );
     assert!(
