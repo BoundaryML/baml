@@ -1,6 +1,6 @@
 name: Publish JetBrains 0.225.1 (one-off)
 
-run-name: Replace JetBrains update ${{ inputs.rejected_update_id }} with ${{ inputs.version }} on ${{ inputs.channel }} from ${{ inputs.expected_source_sha }}
+run-name: Replace JetBrains update ${{ inputs.rejected_update_id }} with ${{ inputs.version }} on ${{ inputs.channel }} from ${{ inputs.expected_source_sha }} after CI ${{ inputs.source_ci_run_id }}
 
 on:
   workflow_dispatch:
@@ -21,6 +21,10 @@ on:
         description: Full green canary commit SHA that must be checked out and published
         required: true
         type: string
+      source_ci_run_id:
+        description: Successful CI - BAML Language canary run that created the source tag
+        required: true
+        type: string
       rejected_update_id:
         description: Exact rejected JetBrains Marketplace update ID to replace
         required: true
@@ -31,6 +35,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -55,6 +60,7 @@ jobs:
       VERSION: ${{ inputs.version }}
       CHANNEL: ${{ inputs.channel }}
       EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+      SOURCE_CI_RUN_ID: ${{ inputs.source_ci_run_id }}
       CONFIRMATION: ${{ inputs.confirmation }}
     steps:
       - name: Checkout attested canary revision
@@ -64,6 +70,8 @@ jobs:
 
       - name: Guard one-off production dispatch
         working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -87,6 +95,10 @@ jobs:
             echo "::error::Rejected Marketplace update ID must contain only decimal digits; got ${REJECTED_UPDATE_ID}."
             exit 1
           fi
+          if [[ ! "${SOURCE_CI_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Source CI run ID must contain only decimal digits; got ${SOURCE_CI_RUN_ID}."
+            exit 1
+          fi
           if [[ ! "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ || "${actual_sha}" != "${EXPECTED_SOURCE_SHA}" ]]; then
             echo "::error::Checked-out SHA ${actual_sha} does not equal expected full SHA ${EXPECTED_SOURCE_SHA}."
             exit 1
@@ -100,7 +112,22 @@ jobs:
             exit 1
           fi
 
-          echo "Publishing ${PLUGIN_ID} ${VERSION} to ${CHANNEL} from ${actual_sha}."
+          ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${expected_ref}")"
+          ref_type="$(jq -r '.object.type // ""' <<<"${ref_json}")"
+          ref_sha="$(jq -r '.object.sha // ""' <<<"${ref_json}")"
+          if [[ "${ref_type}" != "commit" || "${ref_sha}" != "${EXPECTED_SOURCE_SHA}" ]]; then
+            echo "::error::Release ref ${expected_ref} resolves to ${ref_type} ${ref_sha}, expected commit ${EXPECTED_SOURCE_SHA}."
+            exit 1
+          fi
+
+          source_run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_CI_RUN_ID}")"
+          if ! jq -e --arg sha "${EXPECTED_SOURCE_SHA}" '.name == "CI - BAML Language" and .path == ".github/workflows/ci.yaml" and .event == "push" and .head_branch == "canary" and .head_sha == $sha and .status == "completed" and .conclusion == "success"' <<<"${source_run}" >/dev/null; then
+            echo "::error::Source CI run ${SOURCE_CI_RUN_ID} is not a successful canary CI run for ${EXPECTED_SOURCE_SHA}."
+            jq '{id, name, path, event, head_branch, head_sha, status, conclusion, html_url}' <<<"${source_run}"
+            exit 1
+          fi
+
+          echo "Publishing ${PLUGIN_ID} ${VERSION} to ${CHANNEL} from ${actual_sha}, attested by CI run ${SOURCE_CI_RUN_ID}."
 
       - name: Refuse an existing Marketplace version
         run: |
