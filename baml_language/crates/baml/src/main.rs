@@ -487,7 +487,11 @@ fn ensure_toolchain_for_ide_install(selector: &ResolvedSelector, args: &[String]
         return Ok(());
     }
 
-    let resolved_version = concrete_version_for_selector(selector).ok();
+    let resolved_version = match concrete_version_for_selector(selector) {
+        Ok(version) => Some(version),
+        Err(_) if channel_needs_initial_setup(&selector.selector, &read_state()) => None,
+        Err(error) => return Err(error),
+    };
     let toolchain_is_installed = resolved_version.as_deref().is_some_and(toolchain_is_usable);
     if toolchain_is_installed {
         return Ok(());
@@ -500,6 +504,10 @@ fn ensure_toolchain_for_ide_install(selector: &ResolvedSelector, args: &[String]
         false,
     )
     .context("failed to set up the BAML toolchain required by `baml ide install`")
+}
+
+fn channel_needs_initial_setup(selector: &str, state: &State) -> bool {
+    is_channel(selector) && !state.channels.contains_key(selector)
 }
 
 fn is_ide_install(args: &[String]) -> bool {
@@ -1803,6 +1811,24 @@ mod tests {
             let args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
             assert!(!is_ide_install(&args), "{args:?}");
         }
+    }
+
+    #[test]
+    fn only_channels_without_active_state_need_initial_setup() {
+        let mut state = State::default();
+        assert!(channel_needs_initial_setup("canary", &state));
+        assert!(!channel_needs_initial_setup("0.16.0", &state));
+
+        state.channels.insert(
+            "canary".to_string(),
+            ChannelState {
+                active_version: "0.16.0".to_string(),
+                resolved_at: "x".to_string(),
+                manifest_path: "y".to_string(),
+                manifest_base_url: Some("https://old.example.test".to_string()),
+            },
+        );
+        assert!(!channel_needs_initial_setup("canary", &state));
     }
 
     fn resolved(selector: &str, source: SelectorSource) -> ResolvedSelector {
