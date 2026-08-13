@@ -5,9 +5,6 @@
 //! Java calls all use the same `BAML_LOG` threshold and stderr format.
 
 use std::future::Future;
-
-use bex_project::{FunctionCallContext, FunctionCallContextBuilder};
-
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
     io::{self, Write},
@@ -19,6 +16,7 @@ use bex_project::{
     CaptureDefaults, RenderedTraceLog, TraceCaptureConfig, TraceCaptureProducer,
     TraceLogDrainReport,
 };
+use bex_project::{FunctionCallContext, FunctionCallContextBuilder};
 
 #[cfg(not(target_arch = "wasm32"))]
 const MAX_PENDING_LOGS: usize = 100_000;
