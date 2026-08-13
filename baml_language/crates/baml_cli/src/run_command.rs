@@ -9,13 +9,17 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
-use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
+use bex_engine::{
+    BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionInfo,
+    value_capture::TraceCaptureProducer,
+};
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
 use crate::{
+    log_output::{LogLevel as RunLogLevel, LogOutput},
     project_load::{
         find_project_root_from, load_project_or_default, resolve_standalone_file,
         validate_file_project_flags,
@@ -212,6 +216,20 @@ pub struct RunArgs {
     )]
     pub output_format: OutputFormat,
 
+    /// Print BAML `log.*` events to stdout at or above this level.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = RunLogLevel::Off,
+        ignore_case = true,
+        value_name = "LEVEL",
+        help = "Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]",
+        hide_default_value = true,
+        hide_possible_values = true,
+        help_heading = "Run output options"
+    )]
+    pub logs: RunLogLevel,
+
     /// Write run logs to a file.
     #[arg(long, help_heading = "Run output options")]
     pub log_file: Option<PathBuf>,
@@ -238,6 +256,24 @@ pub use baml_exec::OutputFormat;
 // ============================================================================
 
 impl RunArgs {
+    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
+        let builder = FunctionCallContextBuilder::new(call_id);
+        LogOutput::new(self.logs, "run").call_context(builder)
+    }
+
+    fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
+        LogOutput::new(self.logs, "run").print(producer);
+    }
+
+    fn block_on_with_logs<T>(
+        &self,
+        rt: &tokio::runtime::Runtime,
+        future: impl std::future::Future<Output = T>,
+        producer: Option<&TraceCaptureProducer>,
+    ) -> T {
+        LogOutput::new(self.logs, "run").block_on(rt, future, producer)
+    }
+
     /// Emit the "your code is unformatted" advisory. This is the one
     /// user-facing warning `baml run` keeps on successful execution.
     fn emit_format_hint_if_needed(reporter: &Reporter, needs_format_hint: bool) {
@@ -633,14 +669,21 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let output_format = self.output_format;
         let start = std::time::Instant::now();
-        let dispatch_result = rt.block_on(baml_exec::dispatch_target(
-            Arc::clone(&engine),
-            function_name,
-            cli_values,
-            json_args,
-            output_format,
-        ));
-        rt.block_on(engine.shutdown());
+        let (call_context, logs) = self.call_context(CallId::next());
+        let dispatch_result = self.block_on_with_logs(
+            &rt,
+            baml_exec::dispatch_target_with_context(
+                Arc::clone(&engine),
+                function_name,
+                cli_values,
+                json_args,
+                output_format,
+                call_context,
+                || self.print_logs(logs.as_ref()),
+            ),
+            logs.as_ref(),
+        );
+        self.block_on_with_logs(&rt, engine.shutdown(), logs.as_ref());
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
@@ -943,16 +986,14 @@ impl RunArgs {
                 attr: baml_type::TyAttr::default(),
             });
         let output_format = self.output_format;
+        let (call_context, logs) = self.call_context(CallId::next());
+        let call_result = self.block_on_with_logs(
+            &rt,
+            engine.call_function("baml_run_expr_main__", vec![], call_context, true),
+            logs.as_ref(),
+        );
         let result: std::result::Result<(), bex_engine::EngineError> = rt.block_on(async {
-            let engine_for_call = Arc::clone(&engine);
-            let value = engine_for_call
-                .call_function(
-                    "baml_run_expr_main__",
-                    vec![],
-                    FunctionCallContextBuilder::new(CallId::next()).build(),
-                    true,
-                )
-                .await?;
+            let value = call_result?;
             if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
                 if let Err(e) =
                     baml_exec::write_output(&engine, value, &return_type, output_format).await
@@ -962,7 +1003,7 @@ impl RunArgs {
             }
             Ok(())
         });
-        rt.block_on(engine.shutdown());
+        self.block_on_with_logs(&rt, engine.shutdown(), logs.as_ref());
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         match result {
@@ -1867,6 +1908,7 @@ mod tests {
             file: None,
             list: false,
             output_format: OutputFormat::Debug,
+            logs: RunLogLevel::Off,
             log_file: None,
             include_generated: false,
             from: None,

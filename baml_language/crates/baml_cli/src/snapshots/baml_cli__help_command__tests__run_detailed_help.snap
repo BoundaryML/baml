@@ -68,6 +68,9 @@ Run output options:
       --output-format <FORMAT>
           Format returned values [default: debug] [possible values: debug, json]
 
+      --logs <LEVEL>
+          Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]
+
       --log-file <LOG_FILE>
           Write run logs to a file
 

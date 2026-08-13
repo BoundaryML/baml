@@ -7,8 +7,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContextBuilder,
-    RuntimeTy,
+    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContext,
+    FunctionCallContextBuilder, RuntimeTy,
 };
 
 use crate::output::{OutputFormat, write_output};
@@ -61,6 +61,33 @@ pub async fn dispatch_target(
     json_args: Option<serde_json::Value>,
     output_format: OutputFormat,
 ) -> Result<DispatchResult> {
+    dispatch_target_with_context(
+        engine,
+        target_name,
+        cli_values,
+        json_args,
+        output_format,
+        FunctionCallContextBuilder::new(CallId::next()).build(),
+        || {},
+    )
+    .await
+}
+
+/// Invoke a target with a caller-provided function context.
+///
+/// The callback runs after the target call completes and before its return
+/// value or error is written. CLI callers use this boundary to flush captured
+/// `log.*` events without changing the default dispatch behavior used by
+/// packaged binaries.
+pub async fn dispatch_target_with_context(
+    engine: Arc<BexEngine>,
+    target_name: &str,
+    cli_values: HashMap<String, BexExternalValue>,
+    json_args: Option<serde_json::Value>,
+    output_format: OutputFormat,
+    call_context: FunctionCallContext,
+    after_call: impl FnOnce(),
+) -> Result<DispatchResult> {
     let func_info = engine
         .find_user_function(target_name)
         .ok_or_else(|| anyhow!("function `{target_name}` not found"))?;
@@ -84,13 +111,9 @@ pub async fn dispatch_target(
     .await?;
 
     let result = engine
-        .call_function_bound_args(
-            target_name,
-            args,
-            FunctionCallContextBuilder::new(CallId::next()).build(),
-            true,
-        )
+        .call_function_bound_args(target_name, args, call_context, true)
         .await;
+    after_call();
 
     match result {
         Ok(value) => {

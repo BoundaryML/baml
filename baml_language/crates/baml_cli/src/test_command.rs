@@ -1,14 +1,11 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{
-    future::Future,
-    io::Write as _,
     path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -16,14 +13,18 @@ use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use baml_type::RuntimeTy;
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CancellationToken, CaptureDefaults,
-    FunctionCallContext, FunctionCallContextBuilder, test_arg_to_external,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer},
+    BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
+    FunctionCallContextBuilder, test_arg_to_external, value_capture::TraceCaptureProducer,
 };
-use clap::{Args, FromArgMatches, ValueEnum};
+use clap::{Args, FromArgMatches};
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{bytecode_cache::CacheContext, reporter::Reporter, test_filter::TestFilter};
+use crate::{
+    bytecode_cache::CacheContext,
+    log_output::{LogLevel as TestLogLevel, LogOutput},
+    reporter::Reporter,
+    test_filter::TestFilter,
+};
 
 /// Run BAML tests.
 ///
@@ -227,36 +228,6 @@ impl TestInvocation {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
-pub enum TestLogLevel {
-    #[default]
-    Off,
-    Error,
-    Warn,
-    Info,
-    Debug,
-}
-
-impl TestLogLevel {
-    fn allows(self, event_level: Option<&str>) -> bool {
-        let threshold = match self {
-            Self::Off => return false,
-            Self::Error => 1,
-            Self::Warn => 2,
-            Self::Info => 3,
-            Self::Debug => 4,
-        };
-        let event = match event_level.unwrap_or("info").to_ascii_lowercase().as_str() {
-            "error" => 1,
-            "warn" | "warning" => 2,
-            "info" => 3,
-            "debug" => 4,
-            _ => 3,
-        };
-        event <= threshold
-    }
-}
-
 /// A legacy `test "name" { functions [Foo] args {…} }` attached to an LLM
 /// function, discovered from HIR. Executed by calling the function directly
 /// with the test args. New-style `testset`/`test` blocks are discovered and run
@@ -335,72 +306,15 @@ impl RunCtx<'_> {
     fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
         let builder =
             FunctionCallContextBuilder::new(call_id).with_cancel_token(self.cancel.clone());
-        if self.logs == TestLogLevel::Off {
-            return (builder.build(), None);
-        }
-
-        // Only log bodies are needed here. Periodic draining keeps this queue
-        // bounded in practice while leaving enough headroom for bursty tests.
-        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(100_000));
-        let context = builder
-            .with_capture_defaults(CaptureDefaults {
-                values_enabled: false,
-                logs_enabled: true,
-            })
-            .with_value_capture(producer.clone())
-            .build();
-        (context, Some(producer))
-    }
-
-    fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
-        let Some(producer) = producer else {
-            return;
-        };
-        let report = producer.drain_rendered_logs();
-        for log in report.logs {
-            if self.logs.allows(log.metadata.level.as_deref()) {
-                let level = log
-                    .metadata
-                    .level
-                    .as_deref()
-                    .unwrap_or("info")
-                    .to_ascii_uppercase();
-                println!("[{level}] {}", log.body);
-            }
-        }
-        for failure in report.failures {
-            eprintln!("WARN test log capture failed: {}", failure.diagnostic);
-        }
-
-        // Redirected stdout is block-buffered. Flush every drained batch so
-        // consumers can observe test logs while the test is still running.
-        let _ = std::io::stdout().flush();
+        LogOutput::new(self.logs, "test").call_context(builder)
     }
 
     fn block_on_with_logs<T>(
         &self,
-        future: impl Future<Output = T>,
+        future: impl std::future::Future<Output = T>,
         producer: Option<&TraceCaptureProducer>,
     ) -> T {
-        let Some(producer) = producer else {
-            return self.rt.block_on(future);
-        };
-        self.rt.block_on(async {
-            tokio::pin!(future);
-            let mut interval = tokio::time::interval(Duration::from_millis(50));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            loop {
-                tokio::select! {
-                    result = &mut future => {
-                        // The future may complete between ticks. Drain once
-                        // more before its PASS/FAIL report is printed.
-                        self.print_logs(Some(producer));
-                        break result;
-                    }
-                    _ = interval.tick() => self.print_logs(Some(producer)),
-                }
-            }
-        })
+        LogOutput::new(self.logs, "test").block_on(self.rt, future, producer)
     }
 }
 
@@ -1573,19 +1487,6 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(consume(&parsed), (1, 1, 1, 3, true));
-    }
-
-    #[test]
-    fn test_log_level_filters_at_or_above_threshold() {
-        assert!(!TestLogLevel::Off.allows(Some("error")));
-        assert!(TestLogLevel::Error.allows(Some("error")));
-        assert!(!TestLogLevel::Error.allows(Some("warn")));
-        assert!(TestLogLevel::Info.allows(Some("error")));
-        assert!(TestLogLevel::Info.allows(Some("warning")));
-        assert!(TestLogLevel::Info.allows(Some("info")));
-        assert!(TestLogLevel::Info.allows(None));
-        assert!(!TestLogLevel::Info.allows(Some("debug")));
-        assert!(TestLogLevel::Debug.allows(Some("debug")));
     }
 
     #[test]

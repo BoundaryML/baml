@@ -453,6 +453,95 @@ fn run_valid_project_outputs_only_program_output() {
     );
 }
 
+/// `baml run` keeps logs silent by default and streams the selected levels
+/// before printing the target's return value when `--logs` is enabled.
+#[test]
+fn run_logs_flag_surfaces_filtered_logs_for_targets_and_expressions() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+function logged() -> string {
+    log.debug("debug-detail");
+    log.info("info-detail");
+    log.warn({"user": "ada", "attempts": [1, 2]});
+    log.error("error-detail");
+    "target-result"
+}
+"#,
+    );
+
+    let quiet = run_baml_cli(built, tmp.path(), &["run", "logged", "--from", "."]);
+    assert!(
+        quiet.status.success(),
+        "default run failed; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&quiet.stdout),
+        String::from_utf8_lossy(&quiet.stderr),
+    );
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    assert!(
+        quiet_stdout.contains("target-result"),
+        "stdout: {quiet_stdout}"
+    );
+    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
+
+    let info = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "logged", "--from", ".", "--logs", "INFO"],
+    );
+    assert!(
+        info.status.success(),
+        "--logs INFO run failed; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&info.stdout),
+        String::from_utf8_lossy(&info.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&info.stdout);
+    assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
+    assert!(
+        stdout.contains(r#"[WARN] {"user": "ada", "attempts": [1, 2]}"#),
+        "stdout: {stdout}"
+    );
+    assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
+    assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
+    assert!(
+        stdout.find("[ERROR] error-detail") < stdout.find("target-result"),
+        "captured logs must be flushed before the return value: {stdout}"
+    );
+
+    let expression = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "run",
+            "--from",
+            ".",
+            "--logs",
+            "INFO",
+            "-e",
+            r#"log.info("expression-detail"); 7"#,
+        ],
+    );
+    assert!(
+        expression.status.success(),
+        "logged expression failed; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&expression.stdout),
+        String::from_utf8_lossy(&expression.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&expression.stdout);
+    assert!(
+        stdout.contains("[INFO] expression-detail"),
+        "stdout: {stdout}"
+    );
+    assert!(stdout.contains('7'), "stdout: {stdout}");
+    assert!(
+        stdout.find("[INFO] expression-detail") < stdout.find('7'),
+        "expression logs must be flushed before the return value: {stdout}"
+    );
+}
+
 /// The formatter advisory is the allowed `baml run` stderr exception.
 #[test]
 fn run_unformatted_project_keeps_format_warning() {
