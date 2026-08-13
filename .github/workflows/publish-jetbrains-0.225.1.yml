@@ -255,12 +255,12 @@ jobs:
               exit 1
             fi
             delete_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output build/marketplace-delete-response.json --write-out '%{http_code}' --request DELETE --header "Authorization: Bearer ${INTELLIJ_PLATFORM_PUBLISH_TOKEN}" "${update_url}")"
-            if [[ "${delete_status}" != "200" && "${delete_status}" != "204" ]]; then
+            if [[ "${delete_status}" != "200" && "${delete_status}" != "204" && "${delete_status}" != "404" ]]; then
               echo "::error::Marketplace rejected deletion of update ${REJECTED_UPDATE_ID}; HTTP ${delete_status}."
               cat build/marketplace-delete-response.json
               exit 1
             fi
-            echo "Removed rejected Marketplace update ${REJECTED_UPDATE_ID}."
+            echo "Rejected Marketplace update ${REJECTED_UPDATE_ID} is absent or was removed."
           elif [[ "${update_status}" != "404" ]]; then
             echo "::error::Could not re-check Marketplace update ${REJECTED_UPDATE_ID}; HTTP ${update_status}."
             cat "${update_file}"
