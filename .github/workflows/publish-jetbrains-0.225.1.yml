@@ -18,7 +18,7 @@ on:
         options:
           - default
       expected_source_sha:
-        description: Full canary commit SHA that must be checked out and published
+        description: Full green canary commit SHA that must be checked out and published
         required: true
         type: string
       rejected_update_id:
@@ -57,7 +57,7 @@ jobs:
       EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
       CONFIRMATION: ${{ inputs.confirmation }}
     steps:
-      - name: Checkout requested canary revision
+      - name: Checkout attested canary revision
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -68,10 +68,11 @@ jobs:
           set -euo pipefail
 
           expected_confirmation="publish ${PLUGIN_ID} 0.225.1 to default"
+          expected_ref="baml-language-source-${EXPECTED_SOURCE_SHA}"
           actual_sha="$(git rev-parse HEAD)"
 
-          if [[ "${GITHUB_REF_TYPE}" != "branch" || "${GITHUB_REF_NAME}" != "canary" ]]; then
-            echo "::error::Dispatch this workflow from the canary branch only; got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != "${expected_ref}" ]]; then
+            echo "::error::Dispatch this workflow from the immutable ${expected_ref} tag only; got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
             exit 1
           fi
           if [[ "${VERSION}" != "0.225.1" ]]; then
