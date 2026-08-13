@@ -90,7 +90,7 @@ function assert.is_type<T>(actual: unknown) -> T throws never {
         actual : T
       _ =>
         { : never
-          let t: type = reflect.type_of() : type
+          let t: type = type.of() : type
           baml.sys.panic(`...`) : never
         }
   }

@@ -4905,35 +4905,32 @@ function assert.is_type(actual: unknown) -> #0 {
   108   0    load_var 1             (actual)
         1    is_type 0              
         2    pop_jump_if_false +2   (to 4)
-        3    jump +24               (to 27)
+        3    jump +20               (to 23)
 
-  111   4    load_type 0            
-        5    load_const 1           (null)
-        6    call_indirect          
-        7    store_var 2            (t)
+  112   4    load_type 1            
 
-  112   8    load_type 2            
-        9    load_var 2             (t)
+  111   5    load_type 0            
+
+  112   6    call 138 ntypeargs=1   (baml.String.from)
+        7    store_var 2            (_8)
+        8    load_type 2            
+        9    load_var 1             (actual)
         10   call 138 ntypeargs=1   (baml.String.from)
-        11   store_var 3            (_9)
-        12   load_type 3            
-        13   load_var 1             (actual)
-        14   call 138 ntypeargs=1   (baml.String.from)
-        15   store_var 4            (_12)
-        16   load_const 4           ("assertion failed: expected type \"")
-        17   load_var 3             (_9)
+        11   store_var 3            (_11)
+        12   load_const 3           ("assertion failed: expected type \"")
+        13   load_var 2             (_8)
+        14   bin_op +               
+        15   load_const 4           ("\", got \"")
+        16   bin_op +               
+        17   load_var 3             (_11)
         18   bin_op +               
-        19   load_const 5           ("\", got \"")
+        19   load_const 5           ("\"")
         20   bin_op +               
-        21   load_var 4             (_12)
-        22   bin_op +               
-        23   load_const 6           ("\"")
-        24   bin_op +               
-        25   call 272 ntypeargs=0   (baml.sys.panic)
-        26   jump +2                (to 28)
+        21   call 272 ntypeargs=0   (baml.sys.panic)
+        22   jump +2                (to 24)
 
-  109   27   load_var 1             (actual)
-        28   return                 
+  109   23   load_var 1             (actual)
+        24   return                 
 }
 
 function assert.not_null(value: unknown | null) -> null {
