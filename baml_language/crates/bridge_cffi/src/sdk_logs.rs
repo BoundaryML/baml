@@ -93,6 +93,8 @@ pub(crate) struct SdkLogCapture {
     logger: TraceLogger,
     #[cfg(not(target_arch = "wasm32"))]
     level: LogLevel,
+    #[cfg(not(target_arch = "wasm32"))]
+    finish_on_drop: bool,
 }
 
 impl SdkLogCapture {
@@ -105,6 +107,7 @@ impl SdkLogCapture {
             Some(Self {
                 logger: context.logger.clone(),
                 level: configured_level(),
+                finish_on_drop: true,
             })
         }
 
@@ -125,28 +128,48 @@ impl SdkLogCapture {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn finish_after_root(self) {
+    fn finish_after_root(&mut self) {
         self.drain_to_stderr();
         if !self.logger.has_other_handles() {
             // Observing the last producer is stable: without another handle,
             // nobody can clone one. Drain once more to close the race with a
             // producer that published immediately before dropping its handle.
             self.drain_to_stderr();
+            self.finish_on_drop = false;
             return;
         }
 
+        let capture = Self {
+            logger: self.logger.clone(),
+            level: self.level,
+            finish_on_drop: false,
+        };
+        self.finish_on_drop = false;
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(50));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
-                self.drain_to_stderr();
-                if !self.logger.has_other_handles() {
-                    self.drain_to_stderr();
+                capture.drain_to_stderr();
+                if !capture.logger.has_other_handles() {
+                    capture.drain_to_stderr();
                     return;
                 }
             }
         });
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for SdkLogCapture {
+    fn drop(&mut self) {
+        if !self.finish_on_drop {
+            return;
+        }
+        self.drain_to_stderr();
+        if self.logger.has_other_handles() && tokio::runtime::Handle::try_current().is_ok() {
+            self.finish_after_root();
+        }
     }
 }
 
@@ -160,7 +183,7 @@ where
 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let Some(capture) = capture else {
+        let Some(mut capture) = capture else {
             return future.await;
         };
         let result = {
