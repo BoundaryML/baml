@@ -1994,12 +1994,16 @@ impl FromCST for EnumDecl {
                     let attr = BlockAttribute::from_cst(elem)?;
                     items.push(EnumItem::BlockAttribute(attr));
                 }
+                SyntaxKind::HEADER_COMMENT => {
+                    items.push(EnumItem::HeaderComment(t::HeaderComment::from_cst(elem)?));
+                }
                 SyntaxKind::R_BRACE => {
                     break t::RBrace::from_cst(elem)?;
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, or R_BRACE".into(),
+                        expected_desc:
+                            "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, HEADER_COMMENT, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -2074,6 +2078,7 @@ impl Printable for EnumDecl {
 pub enum EnumItem {
     Variant(EnumVariant, Option<EnumVariantDelimiter>),
     BlockAttribute(BlockAttribute),
+    HeaderComment(t::HeaderComment),
 }
 
 #[derive(Debug)]
@@ -2104,12 +2109,17 @@ impl Printable for EnumItem {
                 info
             }
             EnumItem::BlockAttribute(attr) => attr.print(shape, printer),
+            EnumItem::HeaderComment(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             EnumItem::Variant(variant, _) => variant.leftmost_token(),
             EnumItem::BlockAttribute(attr) => attr.leftmost_token(),
+            EnumItem::HeaderComment(header) => header.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -2122,6 +2132,7 @@ impl Printable for EnumItem {
                 }
             }
             EnumItem::BlockAttribute(attr) => attr.rightmost_token(),
+            EnumItem::HeaderComment(header) => header.span(),
         }
     }
 }
@@ -2386,10 +2397,14 @@ impl FromCST for ConfigBlock {
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     ConfigBlockMember::BlockAttribute(BlockAttribute::from_cst(elem)?)
                 }
+                SyntaxKind::HEADER_COMMENT => {
+                    ConfigBlockMember::HeaderComment(t::HeaderComment::from_cst(elem)?)
+                }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
                         expected_desc:
-                            "CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE".into(),
+                            "CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, HEADER_COMMENT, or R_BRACE"
+                                .into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -2500,6 +2515,9 @@ impl Printable for ConfigBlock {
                     // keep no comma, print trivia nicely
                     printer.print_trivia_trailing(item_trailing);
                 }
+                (ConfigBlockMember::HeaderComment(_), _) => {
+                    printer.print_trivia_trailing(item_trailing);
+                }
                 (_, Some(comma)) => {
                     // keep the comma, print trivia nicely
                     let (comma_leading, comma_trailing) =
@@ -2538,6 +2556,7 @@ pub enum ConfigBlockMember {
     Item(ConfigItem),
     TypeBuilder(TypeBuilderBlock),
     BlockAttribute(BlockAttribute),
+    HeaderComment(t::HeaderComment),
 }
 
 impl Printable for ConfigBlockMember {
@@ -2546,6 +2565,10 @@ impl Printable for ConfigBlockMember {
             ConfigBlockMember::Item(item) => item.print(shape, printer),
             ConfigBlockMember::TypeBuilder(block) => block.print(shape, printer),
             ConfigBlockMember::BlockAttribute(attr) => attr.print(shape, printer),
+            ConfigBlockMember::HeaderComment(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2553,6 +2576,7 @@ impl Printable for ConfigBlockMember {
             ConfigBlockMember::Item(item) => item.leftmost_token(),
             ConfigBlockMember::TypeBuilder(block) => block.leftmost_token(),
             ConfigBlockMember::BlockAttribute(attr) => attr.leftmost_token(),
+            ConfigBlockMember::HeaderComment(header) => header.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -2560,6 +2584,7 @@ impl Printable for ConfigBlockMember {
             ConfigBlockMember::Item(item) => item.rightmost_token(),
             ConfigBlockMember::TypeBuilder(block) => block.rightmost_token(),
             ConfigBlockMember::BlockAttribute(attr) => attr.rightmost_token(),
+            ConfigBlockMember::HeaderComment(header) => header.span(),
         }
     }
 }
@@ -2966,7 +2991,8 @@ impl FromCST for TypeBuilderBlock {
 
         let mut items = Vec::new();
         let close_brace = loop {
-            let elem = it.expect_next("DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF")?;
+            let elem =
+                it.expect_next("DYNAMIC_TYPE_DEF, CLASS_DEF, ENUM_DEF, or HEADER_COMMENT")?;
             if elem.kind() == SyntaxKind::R_BRACE {
                 break t::RBrace::from_cst(elem)?;
             }
@@ -3040,6 +3066,7 @@ pub enum TypeBuilderItem {
     Class(ClassDecl),
     Enum(EnumDecl),
     TypeAlias(TypeAliasDecl),
+    HeaderComment(t::HeaderComment),
 }
 
 impl FromCST for TypeBuilderItem {
@@ -3080,8 +3107,13 @@ impl FromCST for TypeBuilderItem {
                 let alias = TypeAliasDecl::from_cst(elem)?;
                 Ok(TypeBuilderItem::TypeAlias(alias))
             }
+            SyntaxKind::HEADER_COMMENT => Ok(TypeBuilderItem::HeaderComment(
+                t::HeaderComment::from_cst(elem)?,
+            )),
             _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF".into(),
+                expected_desc:
+                    "DYNAMIC_TYPE_DEF, CLASS_DEF, ENUM_DEF, TYPE_ALIAS_DEF, or HEADER_COMMENT"
+                        .into(),
                 found: elem.kind(),
                 at: elem.text_range(),
             }),
@@ -3105,6 +3137,10 @@ impl Printable for TypeBuilderItem {
             TypeBuilderItem::Class(class) => printer.print(class, shape),
             TypeBuilderItem::Enum(enum_def) => printer.print(enum_def, shape),
             TypeBuilderItem::TypeAlias(alias) => printer.print(alias, shape),
+            TypeBuilderItem::HeaderComment(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -3114,6 +3150,7 @@ impl Printable for TypeBuilderItem {
             TypeBuilderItem::Class(class) => class.leftmost_token(),
             TypeBuilderItem::Enum(enum_def) => enum_def.leftmost_token(),
             TypeBuilderItem::TypeAlias(alias) => alias.leftmost_token(),
+            TypeBuilderItem::HeaderComment(header) => header.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -3123,6 +3160,7 @@ impl Printable for TypeBuilderItem {
             TypeBuilderItem::Class(class) => class.rightmost_token(),
             TypeBuilderItem::Enum(enum_def) => enum_def.rightmost_token(),
             TypeBuilderItem::TypeAlias(alias) => alias.rightmost_token(),
+            TypeBuilderItem::HeaderComment(header) => header.span(),
         }
     }
 }

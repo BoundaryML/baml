@@ -3096,6 +3096,12 @@ impl<'a> Parser<'a> {
 
             // Parse enum variants and attributes
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between enum members.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace
                 if p.at_top_level_keyword() {
                     break;
@@ -7461,6 +7467,12 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::LBrace);
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between config items.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace.
                 // Exceptions - these keywords can appear as config keys:
                 // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
@@ -7573,6 +7585,12 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between type-builder items.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+
                 // Error recovery: if we see a top-level keyword that's not valid in type_builder
                 if p.at_top_level_keyword()
                     && !p.at(TokenKind::Class)
@@ -8979,6 +8997,70 @@ interface Response {
             .collect();
 
         assert_eq!(attrs.len(), 1, "expected interface method block attribute");
+    }
+
+    #[test]
+    fn parses_header_comments_in_all_declaration_block_kinds() {
+        let source = r#"
+interface Response {
+  //# interface members
+  function text(self) -> string
+}
+
+enum Status {
+  //# enum members
+  Ready
+}
+
+client<llm> TestClient {
+  //# config items
+  provider openai
+  options {
+    //# nested config items
+    model "gpt-4o"
+  }
+}
+
+test Legacy {
+  functions []
+  type_builder {
+    //# type builder items
+    class Built {
+      //# class members
+      value string
+    }
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        for parent_kind in [
+            SyntaxKind::INTERFACE_DEF,
+            SyntaxKind::ENUM_DEF,
+            SyntaxKind::CONFIG_BLOCK,
+            SyntaxKind::TYPE_BUILDER_BLOCK,
+            SyntaxKind::CLASS_DEF,
+        ] {
+            assert!(
+                root.descendants().any(|node| {
+                    node.kind() == parent_kind
+                        && node
+                            .children()
+                            .any(|child| child.kind() == SyntaxKind::HEADER_COMMENT)
+                }),
+                "expected a HEADER_COMMENT child in {parent_kind:?}"
+            );
+        }
+
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::HEADER_COMMENT)
+                .count(),
+            6,
+            "every header comment should remain a distinct syntax node"
+        );
     }
 
     #[test]
