@@ -1164,6 +1164,22 @@ impl ProjectDatabase {
                 continue;
             };
 
+            if let Some(loc) = self.resolve_path_function(caller.file(self), segments) {
+                calls.push((
+                    expr_id.into_raw().into_u32(),
+                    CfgCallTarget::Function {
+                        loc,
+                        display_name: self.function_display_name(loc),
+                        dispatch_bindings: inference
+                            .map(|inference| {
+                                self.dispatch_bindings_for_call(inference, body, expr_id, args, loc)
+                            })
+                            .unwrap_or_default(),
+                    },
+                ));
+                continue;
+            }
+
             let callee_name = segments
                 .iter()
                 .map(AsRef::<str>::as_ref)
@@ -1175,6 +1191,24 @@ impl ProjectDatabase {
             ));
         }
         calls
+    }
+
+    fn resolve_path_function<'db>(
+        &'db self,
+        caller_file: SourceFile,
+        callee_path: &[baml_db::Name],
+    ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
+        use baml_compiler2_hir::{contributions::Definition, file_package, package::PackageId};
+        use baml_compiler2_hir_ty::package_interface::ResolvedSource;
+
+        let caller_package = file_package::file_package(self, caller_file);
+        let package_id = PackageId::new(self, caller_package.package.clone());
+        let resolution =
+            baml_compiler2_hir_ty::package_interface::package_resolution_context(self, package_id);
+        match resolution.resolve_value(self, callee_path, &caller_package.namespace_path) {
+            Some((ResolvedSource::Item, Definition::Function(function))) => Some(function),
+            _ => None,
+        }
     }
 
     fn resolved_call_function<'db>(
@@ -2731,6 +2765,95 @@ function Workflow(input: string) -> string {
             prepared.nodes.contains_key(&call_node.id),
             "LLM call must always render"
         );
+    }
+
+    #[test]
+    fn test_cross_namespace_llm_call_node_is_marked_and_rendered() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_workflows/ns_prompts/summarize.baml"),
+            r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt `Summarize ${input}`
+}
+"##,
+        );
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_workflows/workflow.baml"),
+            r#"
+function Workflow(input: string) -> string {
+    prompts.Summarize(input)
+}
+"#,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("workflows.Workflow")
+            .expect("expected graph for workflows.Workflow");
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|node| node.label == "prompts.Summarize(input)")
+            .expect("caller graph should contain the cross-namespace LLM call node");
+        assert!(
+            matches!(call_node.node_type, NodeType::LlmFunction),
+            "cross-namespace LLM call node should be marked as LlmFunction, got {:?}",
+            call_node.node_type
+        );
+        assert_eq!(call_node.llm_client.as_deref(), Some("GPT4"));
+
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        assert!(
+            prepared.nodes.contains_key(&call_node.id),
+            "cross-namespace LLM call must survive visualization preparation"
+        );
+    }
+
+    #[test]
+    fn test_dependency_call_does_not_expand_same_named_user_function() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_http/fetch.baml"),
+            r##"
+function fetch(input: string) -> string {
+    client UserClient
+    prompt `User fetch ${input}`
+}
+"##,
+        );
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/workflow.baml"),
+            r#"
+function Workflow() -> int {
+    let response = baml.http.fetch("https://example.com");
+    response.status
+}
+"#,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("Workflow")
+            .expect("expected graph for Workflow");
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|node| node.label.contains("baml.http.fetch"))
+            .expect("caller graph should contain the dependency call node");
+        assert!(
+            matches!(call_node.node_type, NodeType::OtherScope),
+            "dependency call must not be marked from the same-named user function, got {:?}",
+            call_node.node_type
+        );
+        assert_eq!(call_node.llm_client, None);
     }
 
     #[test]
