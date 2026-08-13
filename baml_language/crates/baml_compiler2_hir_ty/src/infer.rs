@@ -502,11 +502,27 @@ pub enum ParamBinding {
 /// `baml_type::interned` representation (this crate's native vocabulary);
 /// they are materialized to plain `baml_type::Ty` only at consumer
 /// boundaries, after resolve-all guarantees no inference variables remain.
+/// Which BEP-049 SS10 rule a tagged-template tag broke.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum TaggedTagIssue {
+    NotAFunction,
+    NotMarked,
+    BadBodyParam,
+}
+
+/// Where a written `_` hole sits: an expression's turbofish, or a
+/// body-position type annotation's ref.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum HoleAnchor {
+    Expr(ExprId),
+    TypeRef(baml_compiler2_hir::type_ref::TypeRefId),
+}
+
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
 /// types interned (still var-carrying until finish); finalized into the
 /// shared vocabulary with PLAIN types at writeback.
 #[derive(Debug, Clone, PartialEq)]
-enum PendingDiag {
+enum PendingDiag<'db> {
     NonExhaustiveMatch {
         expr: ExprId,
         scrutinee: Ty,
@@ -523,6 +539,28 @@ enum PendingDiag {
         expr: ExprId,
         base: Ty,
         member: baml_type::Name,
+    },
+    /// A body annotation failing the written-type well-formedness
+    /// judgment (generic-argument bounds).
+    AnnotWf {
+        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        error: crate::diagnostics::TirTypeError,
+    },
+    /// A tagged-template tag failing BEP-049 SS10's contract.
+    TaggedTagInvalid {
+        at: ExprId,
+        name: baml_type::Name,
+        func: Option<baml_compiler2_hir::loc::FunctionLoc<'db>>,
+        kind: TaggedTagIssue,
+    },
+    /// E0147: a written `_` in an expression-position type argument.
+    ExprPositionHole {
+        expr: ExprId,
+    },
+    /// E0150: an `int` literal outside the VM's i63 value range.
+    IntLiteralOutOfRange {
+        expr: ExprId,
+        value: i64,
     },
     /// BEP-044 method disambiguation: `member` on `base` is declared by
     /// two or more realized-distinct interfaces (rustc's E0034 shape) -
@@ -1200,7 +1238,18 @@ struct InferenceContext<'db> {
     /// S17 pending diagnostics: anchored on arena ids, interned payloads;
     /// finalized into `InferenceResult::diagnostics` (plain types) at
     /// finish - r-a's InferenceDiagnostic discipline.
-    pending_diags: Vec<PendingDiag>,
+    pending_diags: Vec<PendingDiag<'db>>,
+    /// Every `_` hole instantiated as a fresh table variable, with the
+    /// site it was written at. A hole whose class is still unsolved at
+    /// finalize reports E0147 `CannotInferType` there (rustc's E0282
+    /// discipline) instead of leaking a bare `Infer` into lowering.
+    hole_vars: Vec<(baml_type::interned::InferVar, HoleAnchor)>,
+    /// One lowering per written body annotation (rust-analyzer's
+    /// discipline): the let rule, the pattern walk, and the backfill all
+    /// read the SAME lowered type - and so the same instantiated hole
+    /// vars - for one `TypeRefId`. Without this, a `_` hole instantiates
+    /// once per consumer and only the demand-connected copy solves.
+    annotation_cache: FxHashMap<baml_compiler2_hir::type_ref::TypeRefId, Ty>,
     /// Member-lookup PROBE depth (TIR's suppress_member_lookup_errors
     /// discipline): a failed lookup reports only when no fallback tier
     /// remains - probes increment, the committed frame reports.
@@ -1272,6 +1321,10 @@ struct InferenceContext<'db> {
     /// alias map enumerates the owning package plus its dependency closure).
     owner_file: Option<baml_base::SourceFile>,
     /// The pattern-reachability oracle's pre-folded alias map, built once
+    /// The enclosing scope's PLAIN bound env for the written-type
+    /// well-formedness judgment on body annotations, built lazily like
+    /// the overlap aliases.
+    wf_scope_env: std::cell::OnceCell<rustc_hash::FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>>,
     /// per inference on first use (TIR's `normalized_overlap_aliases`).
     overlap_aliases:
         std::cell::OnceCell<std::collections::HashMap<baml_type::QualifiedTypeName, baml_type::Ty>>,
@@ -1306,6 +1359,8 @@ impl<'db> InferenceContext<'db> {
             declared_throws_open: false,
             throws_channels: vec![Vec::new()],
             pending_diags: Vec::new(),
+            hole_vars: Vec::new(),
+            annotation_cache: FxHashMap::default(),
             member_probe_depth: 0,
             or_probe_depth: 0,
             rest_reject_depth: 0,
@@ -1325,6 +1380,7 @@ impl<'db> InferenceContext<'db> {
             diverges: Diverges::Maybe,
             owner_file: None,
             overlap_aliases: std::cell::OnceCell::new(),
+            wf_scope_env: std::cell::OnceCell::new(),
             result: InferenceResult::default(),
         }
     }
@@ -1445,11 +1501,30 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Expectation) -> Ty {
         let ty = match &body.exprs[expr] {
-            Expr::Literal(lit) => Ty::intern(TyKind::Literal(
-                lit.clone(),
-                Freshness::Fresh,
-                TyAttr::default(),
-            )),
+            Expr::Literal(lit) => {
+                // An `int` literal whose value doesn't fit i63 (a valid i64
+                // like 2^62, but out of `int` range) would otherwise reach
+                // the VM and panic at engine load. Reject it here (E0150,
+                // pointing at `bigint`) and substitute an in-range
+                // placeholder so a failed compile can't carry the bad value
+                // forward - TIR's rule verbatim.
+                let lit = if let Literal::Int(v) = lit
+                    && !(INT_MIN..=INT_MAX).contains(v)
+                {
+                    self.pending_diags.push(PendingDiag::IntLiteralOutOfRange {
+                        expr,
+                        value: *v,
+                    });
+                    &Literal::Int(0)
+                } else {
+                    lit
+                };
+                Ty::intern(TyKind::Literal(
+                    lit.clone(),
+                    Freshness::Fresh,
+                    TyAttr::default(),
+                ))
+            }
             Expr::Null => Ty::null(),
             // A byte-string literal (`b"..."`) IS a `uint8array` value -
             // its own expr kind, not a `Literal` (no literal TYPE per
@@ -1651,7 +1726,10 @@ impl<'db> InferenceContext<'db> {
                     .upcast_targets
                     .get(&expr)
                     .copied()
-                    .map(|target_ref| self.lower_body_annotation(target_ref))
+                    .map(|target_ref| {
+                        let lowered = self.lower.lower_type_ref(&self.type_refs.store, target_ref);
+                        self.reject_expr_position_holes(&lowered, expr)
+                    })
                     .unwrap_or_else(Ty::error);
                 // The interface-view gate is a STRUCTURE demand: an
                 // alias naming an interface answers as the interface.
@@ -1706,24 +1784,84 @@ impl<'db> InferenceContext<'db> {
                     // `infer_lambda` discipline.
                     let tag_ty = self.infer_expr(body, *tag, &Expectation::None);
                     let resolved = self.table.resolve_completely(&tag_ty);
+                    let tag_name = match &body.exprs[*tag] {
+                        Expr::Path(segments) => segments.last().cloned(),
+                        _ => None,
+                    }
+                    .unwrap_or_else(|| baml_type::Name::new("<tag>"));
+                    // BEP-049 SS10 tag validation (TIR's rules): the tag must
+                    // be a `//baml:tagged_string`-marked function whose first
+                    // parameter is `body: (...) -> baml.TaggedString`. The
+                    // body-lambda params scope into the interpolations only
+                    // when the tag validated; an unresolved tag already
+                    // reported UnresolvedName and stays quiet here.
                     let (result, frame) = match resolved.kind() {
                         TyKind::Function { params, ret, .. } => {
-                            let mut frame = FxHashMap::default();
-                            if let Some(first) = params.first()
-                                && let TyKind::Function {
-                                    params: body_params,
-                                    ..
-                                } = first.ty.kind()
-                            {
-                                for param in body_params.iter() {
-                                    if let Some(name) = &param.name {
-                                        frame.insert(name.clone(), param.ty.clone());
+                            let func = match self.result.member_resolutions.get(tag) {
+                                Some(MemberResolution::Free { func }) => Some(*func),
+                                _ => None,
+                            };
+                            let is_tagged = func.is_some_and(|func| {
+                                baml_compiler2_ppir::item_data::function_data(self.db, func)
+                                    .is_tagged_template_tag
+                            });
+                            let body_param_ok = params.first().is_some_and(|param| {
+                                param.name.as_ref().is_some_and(|n| n.as_str() == "body")
+                                    && matches!(
+                                        param.ty.kind(),
+                                        TyKind::Function { ret: body_ret, .. }
+                                            if matches!(
+                                                body_ret.kind(),
+                                                TyKind::Class(qtn, _, _)
+                                                    if qtn.is_builtin_root_type("TaggedString")
+                                            )
+                                    )
+                            });
+                            if !is_tagged {
+                                self.pending_diags.push(PendingDiag::TaggedTagInvalid {
+                                    at: *tag,
+                                    name: tag_name,
+                                    func,
+                                    kind: TaggedTagIssue::NotMarked,
+                                });
+                                (Ty::error(), FxHashMap::default())
+                            } else if !body_param_ok {
+                                self.pending_diags.push(PendingDiag::TaggedTagInvalid {
+                                    at: *tag,
+                                    name: tag_name,
+                                    func,
+                                    kind: TaggedTagIssue::BadBodyParam,
+                                });
+                                (Ty::error(), FxHashMap::default())
+                            } else {
+                                let mut frame = FxHashMap::default();
+                                if let Some(first) = params.first()
+                                    && let TyKind::Function {
+                                        params: body_params,
+                                        ..
+                                    } = first.ty.kind()
+                                {
+                                    for param in body_params.iter() {
+                                        if let Some(name) = &param.name {
+                                            frame.insert(name.clone(), param.ty.clone());
+                                        }
                                     }
                                 }
+                                (ret.clone(), frame)
                             }
-                            (ret.clone(), frame)
                         }
-                        _ => (Ty::error(), FxHashMap::default()),
+                        // Unresolved: `UnresolvedName` already reported for a
+                        // bare-path tag - no double report.
+                        _ if resolved.has_error() => (Ty::error(), FxHashMap::default()),
+                        _ => {
+                            self.pending_diags.push(PendingDiag::TaggedTagInvalid {
+                                at: *tag,
+                                name: tag_name,
+                                func: None,
+                                kind: TaggedTagIssue::NotAFunction,
+                            });
+                            (Ty::error(), FxHashMap::default())
+                        }
                     };
                     // NO scope switch: the builder marks the template's
                     // Lambda scope `is_template_body` - a capture boundary
@@ -5189,7 +5327,7 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .map(|&type_ref| {
                 let lowered = self.lower.lower_type_ref(&self.type_refs.store, type_ref);
-                self.instantiate_holes(&lowered)
+                self.reject_expr_position_holes(&lowered, site)
             })
             .collect();
         generic_params
@@ -5795,24 +5933,96 @@ impl<'db> InferenceContext<'db> {
     /// single entry for every type written inside a body (let ascriptions,
     /// lambda signature slots, turbofish go through `instantiation_args`).
     fn lower_body_annotation(&mut self, type_ref: baml_compiler2_hir::type_ref::TypeRefId) -> Ty {
+        if let Some(cached) = self.annotation_cache.get(&type_ref) {
+            return cached.clone();
+        }
         let lowered = self.lower.lower_type_ref(&self.type_refs.store, type_ref);
-        self.instantiate_holes(&lowered)
+        // Written-type well-formedness (rustc's wfcheck at body
+        // annotations): generic arguments must satisfy their heads'
+        // declared bounds. Hole-carrying annotations skip - their holes
+        // solve first and the instantiation sites judge them.
+        if !lowered.has_infer() {
+            let env = self.wf_scope_env.get_or_init(|| {
+                match self.body_owner {
+                    Some(function) => crate::lower::function_generic_bounds(self.db, function)
+                        .into_iter()
+                        .map(|(param, refs)| {
+                            (
+                                param,
+                                refs.iter()
+                                    .map(|bound| baml_type::Interface {
+                                        name: bound.name.clone(),
+                                        generics: bound
+                                            .generics
+                                            .iter()
+                                            .map(|g| g.to_plain())
+                                            .collect(),
+                                        associated_types: bound
+                                            .associated_types
+                                            .iter()
+                                            .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                                            .collect(),
+                                    })
+                                    .collect(),
+                            )
+                        })
+                        .collect(),
+                    None => rustc_hash::FxHashMap::default(),
+                }
+            });
+            for error in crate::interfaces::type_generic_bound_errors(
+                self.db,
+                env,
+                &lowered.to_plain(),
+            ) {
+                self.pending_diags.push(PendingDiag::AnnotWf { type_ref, error });
+            }
+        }
+        let instantiated = self.instantiate_holes(&lowered, HoleAnchor::TypeRef(type_ref));
+        self.annotation_cache.insert(type_ref, instantiated.clone());
+        instantiated
     }
 
     /// The `process_user_written_ty` funnel (rust-analyzer's discipline):
     /// lowering is pure and emits var-less hole nodes for `_`; the inference
     /// side instantiates each hole as a fresh table variable, filled from
     /// context.
-    fn instantiate_holes(&mut self, ty: &Ty) -> Ty {
+    fn instantiate_holes(&mut self, ty: &Ty, at: HoleAnchor) -> Ty {
         if !ty.has_infer() {
             return ty.clone();
         }
         if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
+            let var_ty = self.table.new_var_ty();
+            if let TyKind::Infer { var: Some(var), .. } = var_ty.kind() {
+                self.hole_vars.push((*var, at));
+            }
+            return var_ty;
+        }
+        Ty::intern(
+            ty.kind()
+                .map_children(|child| self.instantiate_holes(child, at)),
+        )
+    }
+
+    /// [`Self::instantiate_holes`] for EXPRESSION-position type arguments
+    /// (turbofish, generic-apply values, upcast targets): a written `_`
+    /// there is a hard E0147 outright - TIR's rule; expression positions
+    /// have no annotation slot for inference to fill (`is Show<_>` /
+    /// `.as<Show<_>>` are ascriptions with no local source). The hole
+    /// still instantiates as a fresh var so inference proceeds for
+    /// RECOVERY, but the diagnostic is unconditional and immediate,
+    /// never dependent on whether the var happens to solve.
+    fn reject_expr_position_holes(&mut self, ty: &Ty, at: ExprId) -> Ty {
+        if !ty.has_infer() {
+            return ty.clone();
+        }
+        if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
+            self.pending_diags.push(PendingDiag::ExprPositionHole { expr: at });
             return self.table.new_var_ty();
         }
         Ty::intern(
             ty.kind()
-                .map_children(|child| self.instantiate_holes(child)),
+                .map_children(|child| self.reject_expr_position_holes(child, at)),
         )
     }
 
@@ -6467,6 +6677,39 @@ impl<'db> InferenceContext<'db> {
                     kind: lowering.kind,
                 });
             }
+            // A `_` hole that never solved reports E0147 at the hole
+            // (rustc's E0282). One WRITTEN hole may instantiate several
+            // times (the typing drive and the pattern walk both lower the
+            // same ascription), so instantiations group by their source
+            // anchor: the hole is solved iff ANY of its instantiations
+            // solved (whichever one the checking demand flowed through
+            // carries the answer), and one report covers the anchor.
+            let mut by_anchor: Vec<(HoleAnchor, bool)> = Vec::new();
+            for (var, at) in std::mem::take(&mut self.hole_vars) {
+                let solved = !self
+                    .table
+                    .resolve_completely(&Ty::infer_var(var))
+                    .has_infer();
+                match by_anchor.iter_mut().find(|(seen, _)| *seen == at) {
+                    Some((_, any_solved)) => *any_solved |= solved,
+                    None => by_anchor.push((at, solved)),
+                }
+            }
+            for (at, any_solved) in by_anchor {
+                if any_solved {
+                    continue;
+                }
+                let location = match at {
+                    HoleAnchor::Expr(expr) => DiagnosticLocation::Expr(expr),
+                    HoleAnchor::TypeRef(type_ref) => DiagnosticLocation::TypeRef(type_ref),
+                };
+                diags.push(TirDiagnostic {
+                    error: TirTypeError::CannotInferType,
+                    severity: DiagnosticSeverity::Error,
+                    primary: location,
+                    related: Vec::new(),
+                });
+            }
             for pending in std::mem::take(&mut self.pending_diags) {
                 let (error, expr) = match pending {
                     PendingDiag::NonExhaustiveMatch {
@@ -6507,6 +6750,59 @@ impl<'db> InferenceContext<'db> {
                             base_type: self.finalize_ty(&base).to_plain(),
                             member,
                         },
+                        expr,
+                    ),
+                    PendingDiag::AnnotWf { type_ref, error } => {
+                        diags.push(TirDiagnostic {
+                            error,
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::TypeRef(type_ref),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::TaggedTagInvalid {
+                        at,
+                        name,
+                        func,
+                        kind,
+                    } => {
+                        let (error, note) = match kind {
+                            TaggedTagIssue::NotAFunction => (
+                                TirTypeError::TaggedTagNotAFunction { name },
+                                None,
+                            ),
+                            TaggedTagIssue::NotMarked => (
+                                TirTypeError::TaggedTagNotMarked { name },
+                                Some("add a `//baml:tagged_string` marker comment above this function"),
+                            ),
+                            TaggedTagIssue::BadBodyParam => (
+                                TirTypeError::TaggedTagBadBodyParam { name },
+                                Some("the first parameter must be `body: (...) -> baml.TaggedString`"),
+                            ),
+                        };
+                        let related = match (func, note) {
+                            (Some(func), Some(note)) => vec![crate::diagnostics::RelatedNote::new(
+                                crate::diagnostics::RelatedLocation::Item(
+                                    baml_compiler2_hir::contributions::Definition::Function(func),
+                                ),
+                                note,
+                            )],
+                            _ => Vec::new(),
+                        };
+                        diags.push(TirDiagnostic {
+                            error,
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(at),
+                            related,
+                        });
+                        continue;
+                    }
+                    PendingDiag::ExprPositionHole { expr } => {
+                        (TirTypeError::CannotInferType, expr)
+                    }
+                    PendingDiag::IntLiteralOutOfRange { expr, value } => (
+                        TirTypeError::IntegerLiteralOutOfRange { value },
                         expr,
                     ),
                     PendingDiag::AmbiguousMember {

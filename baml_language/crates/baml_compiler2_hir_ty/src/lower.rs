@@ -436,13 +436,14 @@ impl<'db> LowerCtx<'db> {
 
     /// Map keys are strings by the language's contract: the VM's backing
     /// store assumes it, map literals cannot spell a non-string key, and
-    /// `baml.Map`'s docstring states it (B-267). A key type PROVABLY not
-    /// a subtype of `string` lowers to the Error sentinel (the lowering
-    /// discipline for invalid positions; S17 renders the diagnostic).
-    /// Symbolic keys - rigid vars (the stdlib's own `Map<K, V>` scope),
-    /// inference holes, error recovery - stay untouched, fail-safe.
+    /// `baml.Map`'s docstring states it (B-267). A key type not provably
+    /// a subtype of `string` is diagnosed (E0067) - INCLUDING a type
+    /// variable: no bound can prove one string-denoting, so `map<K, V>`
+    /// could be instantiated at a non-string key (TIR's fail-closed
+    /// rule; the stdlib's own `Map<K, V>` never writes a `map<K, V>`
+    /// annotation). Inference holes and error recovery stay untouched.
     fn checked_map_key(&self, key: Ty) -> Ty {
-        if key.has_infer() || key.has_typevar() || key.has_error() {
+        if key.has_infer() || key.has_error() {
             return key;
         }
         let facts = crate::facts::Facts::new(self.db);
@@ -1482,6 +1483,25 @@ pub fn signature_lowering_diagnostics<'db>(
         .with_self_ty(concrete_self)
         .with_impl_target(impl_target)
         .with_diagnostics();
+    // Params/ret/throws lowered from the ELABORATED store: their ids index
+    // the elaborated source map, not the written one (the two stores number
+    // independently - a raw-map lookup here is an out-of-bounds panic on any
+    // function whose elaboration allocates extra refs).
+    let elaborated_map =
+        baml_compiler2_ppir::item_data::elaborated_function_source_map(db, function);
+    // The signature's written positions, each lowered for the sink AND
+    // judged for generic-argument well-formedness (rustc's wfcheck:
+    // `Box<int>` under `class Box<T extends Named>` reports here).
+    let scope_env = plain_scope_bounds(function_generic_bounds(db, function));
+    let mut wf: Vec<(text_size::TextRange, TirTypeError)> = Vec::new();
+    let mut lower_and_judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId| {
+        let lowered = ctx.lower_type_ref(&data.type_refs, type_ref);
+        for error in
+            crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
+        {
+            wf.push((elaborated_map.type_refs.span(type_ref), error));
+        }
+    };
     for param in &data.params {
         // The unannotated-`self` slot lowers as Unknown by elaboration;
         // it is not a written reference.
@@ -1490,20 +1510,14 @@ pub fn signature_lowering_diagnostics<'db>(
         {
             continue;
         }
-        ctx.lower_type_ref(&data.type_refs, param.type_ref);
+        lower_and_judge(param.type_ref);
     }
     if let Some(ret) = data.return_type {
-        ctx.lower_type_ref(&data.type_refs, ret);
+        lower_and_judge(ret);
     }
     if let Some(throws) = data.throws {
-        ctx.lower_type_ref(&data.type_refs, throws);
+        lower_and_judge(throws);
     }
-    // Params/ret/throws lowered from the ELABORATED store: their ids index
-    // the elaborated source map, not the written one (the two stores number
-    // independently - a raw-map lookup here is an out-of-bounds panic on any
-    // function whose elaboration allocates extra refs).
-    let elaborated_map =
-        baml_compiler2_ppir::item_data::elaborated_function_source_map(db, function);
     let mut out: Vec<(text_size::TextRange, TirTypeError)> = ctx
         .take_diagnostics()
         .into_iter()
@@ -1514,6 +1528,7 @@ pub fn signature_lowering_diagnostics<'db>(
             )
         })
         .collect();
+    out.extend(wf);
     // A bound must name an interface DIRECTLY (E0145): an alias denotes
     // a type, never the interface itself. `function_generic_bounds`
     // silently skips such bounds; the diagnostic walk names them. Bounds
@@ -1561,6 +1576,32 @@ pub fn signature_lowering_diagnostics<'db>(
     out
 }
 
+/// An interned scope-bounds map as the plain constraint env the
+/// well-formedness walk judges type-variable arguments through.
+fn plain_scope_bounds(
+    interned: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
+    interned
+        .into_iter()
+        .map(|(param, refs)| {
+            (
+                param,
+                refs.iter()
+                    .map(|bound| baml_type::Interface {
+                        name: bound.name.clone(),
+                        generics: bound.generics.iter().map(|g| g.to_plain()).collect(),
+                        associated_types: bound
+                            .associated_types
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                            .collect(),
+                    })
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
 /// The check layer's CLASS-declaration diagnostic walk: generic-param
 /// bounds re-lowered with the sink under the class frame (unresolved,
 /// arity, non-interface and builtin-not-a-bound rules).
@@ -1578,9 +1619,16 @@ pub fn class_lowering_diagnostics<'db>(
     let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
     let mut out = Vec::new();
     // Field annotations: every written field type re-lowers with the sink
-    // (unresolved names, wrong arg counts - the pre-S17 structural walk).
+    // (unresolved names, wrong arg counts - the pre-S17 structural walk)
+    // and is judged for generic-argument well-formedness.
+    let scope_env = plain_scope_bounds(class_generic_bounds(db, class));
     for field in &data.fields {
-        ctx.lower_type_ref(&data.type_refs, field.type_ref);
+        let lowered = ctx.lower_type_ref(&data.type_refs, field.type_ref);
+        for error in
+            crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
+        {
+            out.push((source_map.type_refs.span(field.type_ref), error));
+        }
     }
     for bound in data.generic_params.iter().flat_map(|g| g.bounds.iter()) {
         let lowered = ctx.lower_type_ref(&data.type_refs, *bound);
@@ -1630,6 +1678,45 @@ pub fn interface_lowering_diagnostics<'db>(
         .with_diagnostics();
     let source_map = baml_compiler2_ppir::item_data::interface_source_map(db, interface);
     let mut out = Vec::new();
+    // Field and required-method annotations judge for generic-argument
+    // well-formedness in the interface's own scope.
+    let scope_env = plain_scope_bounds(interface_scope_bounds(db, interface));
+    let mut judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+                     out: &mut Vec<(text_size::TextRange, TirTypeError)>| {
+        let lowered = ctx.lower_type_ref(&data.type_refs, type_ref);
+        for error in
+            crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
+        {
+            out.push((source_map.type_refs.span(type_ref), error));
+        }
+    };
+    for field in &data.fields {
+        judge(field.type_ref, &mut out);
+    }
+    // Required-method signatures judge through their RESOLVED forms (the
+    // one declaration-site lowering, method-own generics in scope) - a
+    // re-lowering here would miss the method's own frame and false-fire
+    // E0002 on its type parameters.
+    {
+        let resolved = crate::interfaces::resolve_interface_required_methods(db, interface);
+        let scope_env = plain_scope_bounds(interface_scope_bounds(db, interface));
+        for (index, method) in resolved.iter().enumerate() {
+            let mut env = scope_env.clone();
+            for (param, bounds) in &method.generic_params {
+                env.insert(param.clone(), bounds.clone());
+            }
+            let span = source_map
+                .required_method_spans
+                .get(index)
+                .map(|sig_map| sig_map.name_span)
+                .unwrap_or(source_map.name_span);
+            for error in
+                crate::interfaces::type_generic_bound_errors(db, &env, &method.function_ty)
+            {
+                out.push((span, error));
+            }
+        }
+    }
     // Associated-type bounds (`type X extends B`): the same bound rules
     // generic params carry.
     for assoc in &data.associated_types {
@@ -1717,9 +1804,10 @@ pub fn type_alias_lowering_diagnostics<'db>(
         return Vec::new();
     };
     let ctx = lower_ctx_for_file(db, alias.file(db)).with_diagnostics();
-    ctx.lower_type_ref(&data.type_refs, value);
+    let lowered = ctx.lower_type_ref(&data.type_refs, value);
     let source_map = baml_compiler2_ppir::item_data::type_alias_source_map(db, alias);
-    ctx.take_diagnostics()
+    let mut out: Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> = ctx
+        .take_diagnostics()
         .into_iter()
         .map(|diag| {
             (
@@ -1727,7 +1815,19 @@ pub fn type_alias_lowering_diagnostics<'db>(
                 lowering_diag_error(&diag.kind),
             )
         })
-        .collect()
+        .collect();
+    // The RHS judges for generic-argument well-formedness (aliases are
+    // non-generic, so the scope env is empty). The walk expands nested
+    // aliases itself; judging the WRITTEN body here keeps one report at
+    // the declaration instead of one per use.
+    for error in crate::interfaces::type_generic_bound_errors(
+        db,
+        &FxHashMap::default(),
+        &lowered.to_plain(),
+    ) {
+        out.push((source_map.type_refs.span(value), error));
+    }
+    out
 }
 
 #[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]

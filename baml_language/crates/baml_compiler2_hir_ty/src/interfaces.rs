@@ -1685,3 +1685,174 @@ mod tests {
         assert_eq!(bindings.get(&param("T")), Some(&int()));
     }
 }
+
+// ── Written-type well-formedness: generic-argument bounds ──────────────────
+//
+// rustc's wfcheck for ADT instantiations in signatures, adapted to the
+// declaration walks: every `Class`/`Interface` head inside a WRITTEN type
+// must supply arguments satisfying the head's declared bounds. Judged with
+// the *implements* relation (never subset `is_subtype`) via
+// [`normalized_arg_implements_bound`]; a bounded type variable in the
+// enclosing scope discharges through its own carried bounds.
+
+/// Every generic-argument bound violation inside the written type `ty`.
+/// `scope_bounds` is the enclosing scope's param env (a `Box<T>` argument
+/// that is itself a bounded var judges through it). Aliases expand
+/// cycle-guarded; a cyclic alias is its own diagnostic elsewhere.
+pub fn type_generic_bound_errors<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
+    ty: &Ty,
+) -> Vec<TirTypeError> {
+    let facts = crate::facts::Facts::with_bounds(db, scope_bounds.clone());
+    let mut errors = Vec::new();
+    let mut seen_aliases = FxHashSet::default();
+    collect_type_generic_bound_errors(db, &facts, ty, &mut seen_aliases, &mut errors);
+    errors
+}
+
+fn collect_type_generic_bound_errors<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &crate::facts::Facts<'db>,
+    ty: &Ty,
+    seen_aliases: &mut FxHashSet<QualifiedTypeName>,
+    errors: &mut Vec<TirTypeError>,
+) {
+    use baml_type::normalize::TypeContext as _;
+    match ty {
+        Ty::Class(qtn, args, _) => {
+            for arg in args {
+                collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
+            }
+            if let Some(Definition::Class(class)) = facts.definition_of(qtn) {
+                let params = crate::lower::class_generic_frame(db, class);
+                let declared = crate::lower::class_generic_bounds(db, class);
+                check_head_args(facts, &params, &declared, args, errors);
+            }
+        }
+        Ty::Interface(qtn, args, pins, _) => {
+            for arg in args {
+                collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
+            }
+            for (_, pin) in pins {
+                collect_type_generic_bound_errors(db, facts, pin, seen_aliases, errors);
+            }
+            if let Some(Definition::Interface(iface)) = facts.definition_of(qtn) {
+                let params = crate::lower::interface_declared_params(db, iface);
+                let plain = interface_declared_param_bounds(db, iface);
+                let declared: rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> =
+                    plain
+                        .iter()
+                        .map(|(param, bounds)| {
+                            (
+                                param.clone(),
+                                bounds
+                                    .iter()
+                                    .map(baml_type::interned::InterfaceRef::from_constraint)
+                                    .collect(),
+                            )
+                        })
+                        .collect();
+                check_head_args(facts, &params, &declared, args, errors);
+            }
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+            collect_type_generic_bound_errors(db, facts, inner, seen_aliases, errors);
+        }
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+            collect_type_generic_bound_errors(db, facts, key, seen_aliases, errors);
+            collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
+        }
+        Ty::Union(members, _) => {
+            for member in members {
+                collect_type_generic_bound_errors(db, facts, member, seen_aliases, errors);
+            }
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for param in params {
+                collect_type_generic_bound_errors(db, facts, &param.ty, seen_aliases, errors);
+            }
+            collect_type_generic_bound_errors(db, facts, ret, seen_aliases, errors);
+            collect_type_generic_bound_errors(db, facts, throws, seen_aliases, errors);
+        }
+        Ty::Future(value, error, _) => {
+            collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
+            collect_type_generic_bound_errors(db, facts, error, seen_aliases, errors);
+        }
+        Ty::TypeAlias(qtn, _) => {
+            if !seen_aliases.insert(qtn.clone()) {
+                return;
+            }
+            if let Some(expanded) = facts.alias_def(qtn) {
+                collect_type_generic_bound_errors(db, facts, &expanded, seen_aliases, errors);
+            }
+            seen_aliases.remove(qtn);
+        }
+        _ => {}
+    }
+}
+
+/// One head's arguments against its declared bounds: each conjunct is a
+/// separate requirement, reported independently. Bounds may reference
+/// sibling params (`class Pair<A, B extends Container<A>>`), so the
+/// head's own bindings substitute through them first.
+fn check_head_args<'db>(
+    facts: &crate::facts::Facts<'db>,
+    params: &[ParamTy],
+    declared: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    args: &[Ty],
+    errors: &mut Vec<TirTypeError>,
+) {
+    use baml_type::normalize::TypeContext as _;
+    if params.is_empty() || args.is_empty() {
+        return;
+    }
+    let bindings = baml_type::unify::bind_type_vars(params, args);
+    for (index, param) in params.iter().enumerate() {
+        let Some(actual) = args.get(index) else {
+            continue;
+        };
+        for bound in declared.get(param).into_iter().flatten() {
+            let bound_ty = Ty::Interface(
+                bound.name.clone(),
+                bound.generics.iter().map(|g| g.to_plain()).collect(),
+                bound
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                    .collect(),
+                TyAttr::default(),
+            );
+            let Some(bound) =
+                baml_type::unify::substitute_ty(&bound_ty, &bindings).as_interface()
+            else {
+                continue;
+            };
+            let arg = facts.normalize(actual);
+            let admissible = arg.is_concrete()
+                || matches!(
+                    arg,
+                    Ty::TypeVar(..)
+                        | Ty::AssociatedTypeProjection { .. }
+                        | Ty::Unknown { .. }
+                        | Ty::Error { .. }
+                );
+            if !admissible {
+                errors.push(TirTypeError::BoundedTypeArgNotConcrete {
+                    arg: actual.clone(),
+                    bound: Box::new([bound.clone()]),
+                });
+            } else if !normalized_arg_implements_bound(facts, &arg, &bound) {
+                errors.push(TirTypeError::TypeMismatch {
+                    expected: bound.to_ty(),
+                    got: actual.clone(),
+                });
+            }
+        }
+    }
+}
