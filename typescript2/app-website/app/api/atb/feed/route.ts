@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { Feed, FeedItem } from '@/app/atb/_lib/feed';
 import { feedStatus } from '@/app/atb/_lib/feed';
-import type { Build, Issue, Task, Trophy } from '@/app/atb/_lib/types';
+import {
+  ATB_TROPHIES_QUERY_LIMIT,
+  type Build,
+  type Issue,
+  type Task,
+  type Trophy,
+} from '@/app/atb/_lib/types';
 
 // Builds the front-page feed: every whatWentWell observation from run
 // self-reports becomes a win card, every tracked issue becomes a bug card
@@ -45,9 +51,7 @@ const trunc = (s: string | undefined | null, n: number) =>
 
 async function buildFeed(): Promise<Feed> {
   const [trophies, tasks, issues, builds] = await Promise.all([
-    // see app/api/atb/state/route.ts: trophies embed turnLog/filesCreated
-    // inline, so a limit of 500 exceeds Convex's per-query byte ceiling.
-    convexQuery<Trophy[]>('trophies:list', { limit: 100 }),
+    convexQuery<Trophy[]>('trophies:list', { limit: ATB_TROPHIES_QUERY_LIMIT }),
     convexQuery<Task[]>('tasks:list', { limit: 500 }),
     convexQuery<Issue[]>('issues:list', { limit: 500 }),
     convexQuery<Build[]>('bamlBuilds:list', { limit: 50 }),

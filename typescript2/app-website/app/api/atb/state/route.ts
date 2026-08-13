@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
-import type {
-  AtbState,
-  Build,
-  Cohort,
-  Issue,
-  SlimIssue,
-  SlimTask,
-  SlimTrophy,
-  Task,
-  Trophy,
-  Worker,
+import {
+  ATB_TROPHIES_QUERY_LIMIT,
+  type AtbState,
+  type Build,
+  type Cohort,
+  type Issue,
+  type SlimIssue,
+  type SlimTask,
+  type SlimTrophy,
+  type Task,
+  type Trophy,
+  type Worker,
 } from '@/app/atb/_lib/types';
 
 // The Convex deployment's generic list queries return full documents. A
@@ -103,10 +104,9 @@ async function buildState(): Promise<AtbState> {
   const [tasks, trophies, issues, cohorts, builds, workers] = await Promise.all(
     [
       convexQuery<Task[]>('tasks:list', { limit: 500 }),
-      // trophies embed heavy fields inline (turnLog, filesCreated) unlike the
-      // other queue tables, so a limit of 500 blows Convex's per-query byte
-      // ceiling once recent runs get long enough. Keep this well under that.
-      convexQuery<Trophy[]>('trophies:list', { limit: 100 }),
+      convexQuery<Trophy[]>('trophies:list', {
+        limit: ATB_TROPHIES_QUERY_LIMIT,
+      }),
       convexQuery<Issue[]>('issues:list', { limit: 500 }),
       convexQuery<Cohort[]>('cohorts:list', { limit: 100 }),
       convexQuery<Build[]>('bamlBuilds:list', { limit: 50 }),
