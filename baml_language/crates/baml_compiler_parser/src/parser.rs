@@ -9042,6 +9042,45 @@ function nested() -> string {
     }
 
     #[test]
+    fn header_comments_are_structural_inside_expression_contexts() {
+        let source = r#"
+function sound() -> string {
+  //# statement position
+  "woof"
+}
+
+function classify(n: int) -> string {
+  match (n) {
+    //# leading header before the first arm
+    0 => "zero",
+    //# header between arms
+    _ => "other",
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::HEADER_COMMENT)
+                .count(),
+            3,
+            "all expression-context headers should become structural nodes"
+        );
+        assert!(
+            root.descendants_with_tokens().all(|elem| !matches!(
+                elem,
+                rowan::NodeOrToken::Token(token)
+                    if token.kind() == SyntaxKind::LINE_COMMENT
+                        && token.text().starts_with("//#")
+            )),
+            "expression-context headers must not be reduced to line-comment trivia"
+        );
+    }
+
+    #[test]
     fn parses_interface_default_method_body_after_comments() {
         let source = r#"
 interface Response {
