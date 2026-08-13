@@ -1018,6 +1018,9 @@ function baml.io.read_to_string(self: ?) -> string  [expr] {
 --- <builtin>/baml/ns_io/write.baml ---
 function baml.io.flush(self: ?) -> void  [missing]
 function baml.io.write(self: ?, data: uint8array) -> int  [missing]
+function baml.io.write_all(self: ?, data: uint8array) -> void  [expr] {
+  { while data.length() Gt 0 { let written = self.write(data); data = data.slice(written, data.length()) } }
+}
 
 --- <builtin>/baml/ns_iter/iter.baml ---
 class baml.iter.ArrayIterator {
@@ -1406,13 +1409,11 @@ class baml.net.UdpSocket$stream {
   _handle: $rust_type
 }
 function baml.net._connect(addr: string, timeout_nanos: bigint) -> baml.net.TcpStream  [builtin]
-function baml.net._read(self: ?, timeout_nanos: bigint) -> uint8array  [builtin]
 function baml.net._recv_from(self: ?, timeout_nanos: bigint) -> baml.net.Datagram  [builtin]
 function baml.net._send_to(self: ?, data: uint8array, addr: string, timeout_nanos: bigint) -> int  [builtin]
 function baml.net._timeout_nanos(timeout: root.time.Duration?) -> bigint  [expr] {
   {  } match (timeout) { null => 0n, t: root.time.Duration => t.to_nanoseconds() }
 }
-function baml.net._write(self: ?, data: uint8array, timeout_nanos: bigint) -> null  [builtin]
 function baml.net.accept(self: ?) -> baml.net.TcpStream  [builtin]
 function baml.net.bind(addr: string) -> baml.net.TcpListener  [builtin]
 function baml.net.bind(addr: string) -> baml.net.UdpSocket  [builtin]
@@ -1422,18 +1423,17 @@ function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.connect(addr: string, timeout: root.time.Duration? = null) -> baml.net.TcpStream  [expr] {
   {  } TcpStream._connect(addr, _timeout_nanos(timeout))
 }
-function baml.net.read(self: ?, timeout: root.time.Duration? = null) -> uint8array  [expr] {
-  {  } self._read(_timeout_nanos(timeout))
+function baml.net.flush(self: ?) -> void  [expr] {
+  {  }
 }
+function baml.net.read(self: ?, n: int) -> uint8array?  [builtin]
 function baml.net.recv_from(self: ?, timeout: root.time.Duration? = null) -> baml.net.Datagram  [expr] {
   {  } self._recv_from(_timeout_nanos(timeout))
 }
 function baml.net.send_to(self: ?, data: uint8array, addr: string, timeout: root.time.Duration? = null) -> int  [expr] {
   {  } self._send_to(data, addr, _timeout_nanos(timeout))
 }
-function baml.net.write(self: ?, data: uint8array, timeout: root.time.Duration? = null) -> null  [expr] {
-  {  } self._write(data, _timeout_nanos(timeout))
-}
+function baml.net.write(self: ?, data: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_ops/bitwise.baml ---
 function baml.ops.bit_and(self: ?, rhs: Rhs) -> Self.Output  [missing]

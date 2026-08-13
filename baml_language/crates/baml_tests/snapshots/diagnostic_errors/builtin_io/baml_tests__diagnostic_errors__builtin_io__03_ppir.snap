@@ -68,20 +68,23 @@ function user.AskName() -> string  [expr] {
 function user.AskNoPrompt() -> string  [expr] {
   {  } baml.io.input(null)
 }
-function user.ConnectAndRead() -> uint8array  [expr] {
-  { let sock = baml.net.TcpStream.connect("127.0.0.1:8080") } sock.read()
+function user.ConnectAndRead() -> uint8array?  [expr] {
+  { let sock = baml.net.TcpStream.connect("127.0.0.1:8080") } sock.read(4096)
 }
-function user.ConnectAndReadInline() -> uint8array  [expr] {
-  {  } baml.net.TcpStream.connect("localhost:3000").read()
+function user.ConnectAndReadInline() -> uint8array?  [expr] {
+  {  } baml.net.TcpStream.connect("localhost:3000").read(4096)
 }
-function user.ConnectReadAndClose() -> uint8array  [expr] {
-  { let sock = baml.net.TcpStream.connect("127.0.0.1:8080"); let data = sock.read(); sock.close() } data
+function user.ConnectAndWrite() -> int  [expr] {
+  { let sock = baml.net.TcpStream.connect("127.0.0.1:8080"); let n = sock.write("ping".to_utf8()); sock.flush() } n
 }
-function user.ListenAndAccept() -> uint8array  [expr] {
-  { let listener = baml.net.TcpListener.bind("127.0.0.1:0"); let sock = listener.accept() } sock.read()
+function user.ConnectReadAndClose() -> uint8array?  [expr] {
+  { let sock = baml.net.TcpStream.connect("127.0.0.1:8080"); let data = sock.read(4096); sock.close() } data
+}
+function user.ListenAndAccept() -> uint8array?  [expr] {
+  { let listener = baml.net.TcpListener.bind("127.0.0.1:0"); let sock = listener.accept() } sock.read(4096)
 }
 function user.MultipleConnections() -> uint8array  [expr] {
-  { let s1 = baml.net.TcpStream.connect("server1:80"); let s2 = baml.net.TcpStream.connect("server2:80"); let data1 = s1.read(); let data2 = s2.read() } data1.concat(data2)
+  { let s1 = baml.net.TcpStream.connect("server1:80"); let s2 = baml.net.TcpStream.connect("server2:80"); let data1 = s1.read(4096) NullCoalesce b"<0 bytes>"; let data2 = s2.read(4096) NullCoalesce b"<0 bytes>" } data1.concat(data2)
 }
 function user.UdpRoundtrip() -> uint8array  [expr] {
   { let sock = baml.net.UdpSocket.bind("0.0.0.0:0"); sock.send_to("ping".to_utf8(), "127.0.0.1:9"); let dgram = sock.recv_from() } dgram.data

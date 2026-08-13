@@ -1,8 +1,8 @@
 // Test hover on TcpStream type and methods
 
-function TestSocketRead() -> uint8array {
+function TestSocketRead() -> uint8array? {
     let s<[CURSOR] = baml.net.TcpStream.connect("127.0.0.1:8080");
-    s.read()
+    s.read(4096)
 }
 
 //----

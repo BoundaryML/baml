@@ -1355,27 +1355,26 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn _read(
+    fn read(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::TcpStream,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _amount: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn _write(
+    fn write(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::TcpStream,
         _data: Vec<u8>,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    ) -> SysOpOutput<i64> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -2324,16 +2323,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcpstream__read = {
+        self.inner.baml_net_tcpstream_root_io_read_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream__read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_root_io_read_read(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcpstream__write = {
+        self.inner.baml_net_tcpstream_root_io_write_write = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream__write(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_root_io_write_write(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_tcpstream_close = {

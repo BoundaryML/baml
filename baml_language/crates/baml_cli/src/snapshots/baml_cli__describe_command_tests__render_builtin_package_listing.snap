@@ -205,9 +205,9 @@ class            baml.media.Video                 <builtin>/baml/ns_media/media.
 class            baml.media.Image                 <builtin>/baml/ns_media/media.baml:134
 function         baml.net._timeout_nanos          <builtin>/baml/ns_net/net.baml:5
 class            baml.net.TcpStream               <builtin>/baml/ns_net/net.baml:14
-class            baml.net.TcpListener             <builtin>/baml/ns_net/net.baml:88
-class            baml.net.UdpSocket               <builtin>/baml/ns_net/net.baml:110
-class            baml.net.Datagram                <builtin>/baml/ns_net/net.baml:168
+class            baml.net.TcpListener             <builtin>/baml/ns_net/net.baml:69
+class            baml.net.UdpSocket               <builtin>/baml/ns_net/net.baml:91
+class            baml.net.Datagram                <builtin>/baml/ns_net/net.baml:149
 interface        baml.ops.BitAnd                  <builtin>/baml/ns_ops/bitwise.baml:28
 interface        baml.ops.BitOr                   <builtin>/baml/ns_ops/bitwise.baml:34
 interface        baml.ops.BitXor                  <builtin>/baml/ns_ops/bitwise.baml:40

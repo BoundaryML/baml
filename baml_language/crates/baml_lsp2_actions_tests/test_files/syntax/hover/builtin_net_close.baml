@@ -1,8 +1,8 @@
 // Test hover on TcpStream.close method
 
-function TestSocketClose() -> uint8array {
+function TestSocketClose() -> uint8array? {
     let s = baml.net.TcpStream.connect("127.0.0.1:8080");
-    let data = s.read();
+    let data = s.read(4096);
     s.close<[CURSOR]();
     data
 }

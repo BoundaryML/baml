@@ -1935,88 +1935,86 @@ impl io::IoClassNetTcpStream for NativeSysOps {
         })
     }
 
-    fn _read(
+    fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         stream: owned::net::TcpStream,
-        timeout_nanos: Arc<num_bigint::BigInt>,
+        amount: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         use tokio::io::AsyncReadExt;
 
-        let timeout = timeout_from_nanos(&timeout_nanos);
+        let amount = match u64::try_from(amount) {
+            Err(_) | Ok(0) => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            Ok(amount) => amount,
+        };
+        let amount = usize::try_from(amount).unwrap_or(usize::MAX); // does nothing on 64bit+
+
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
             let mut guard = handle.lock().await;
             let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
                 message: "TcpStream is closed".to_string(),
             })?;
-            let mut buffer = vec![0u8; 4096];
-            let read = stream.read(&mut buffer);
-            let n = match timeout {
-                Some(dur) => match tokio::time::timeout(dur, read).await {
-                    Ok(result) => result,
-                    Err(_elapsed) => {
-                        return Err(VmBamlError::Timeout {
-                            message: "Reading from socket timed out".to_string(),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
-                        }
-                        .into());
-                    }
-                },
-                None => read.await,
+
+            let mut buffer = Vec::new();
+            buffer
+                .try_reserve(amount)
+                .map_err(|err| VmPanic::AllocFailure {
+                    message: format!("Failed to reserve buffer: {err}"),
+                })?;
+            buffer.resize(amount, 0);
+
+            let read = stream
+                .read(&mut buffer)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read from socket: {e}"),
+                })?;
+            // The peer's half-close is sticky at the socket level — further
+            // reads keep returning 0 — so EOF needs no bookkeeping here. The
+            // handle stays live so a later read still reports EOF rather than
+            // the "closed" error that dropping it would produce.
+            if read == 0 {
+                return Ok(None);
             }
-            .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to read from socket: {e}"),
-            })?;
-            buffer.truncate(n);
-            Ok(buffer)
+            buffer.truncate(read);
+            Ok(Some(buffer))
         })
     }
 
-    fn _write(
+    fn write(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         stream: owned::net::TcpStream,
         data: Vec<u8>,
-        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    ) -> SysOpOutput<i64> {
         use tokio::io::AsyncWriteExt;
 
-        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
             let mut guard = handle.lock().await;
             let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
                 message: "TcpStream is closed".to_string(),
             })?;
-            // The whole write (every byte flushed) shares one deadline.
-            let write = async {
-                stream.write_all(&data).await.map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write to socket: {e}"),
-                })?;
-                stream.flush().await.map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to flush socket: {e}"),
-                })?;
-                Ok::<(), VmBamlError>(())
-            };
-            match timeout {
-                Some(dur) => match tokio::time::timeout(dur, write).await {
-                    Ok(result) => result?,
-                    Err(_elapsed) => {
-                        return Err(VmBamlError::Timeout {
-                            message: "Writing to socket timed out".to_string(),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
-                        }
-                        .into());
+
+            // TCP streams don't need to be flushed
+            stream
+                .write(&data)
+                .await
+                .map(|written| {
+                    i64::try_from(written)
+                        .unwrap_or_else(|_| unreachable!("a single write cannot exceed i64::MAX"))
+                })
+                .map_err(|e| {
+                    VmBamlError::Io {
+                        message: format!("Failed to write to socket: {e}"),
                     }
-                },
-                None => write.await?,
-            }
-            Ok(())
+                    .into()
+                })
         })
     }
 

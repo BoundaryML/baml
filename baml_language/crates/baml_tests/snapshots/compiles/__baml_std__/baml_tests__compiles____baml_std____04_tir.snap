@@ -1172,6 +1172,15 @@ function baml.io.Read.read_to_string(self: baml.io.Read) -> string throws baml.e
 }
 
 --- <builtin>/baml/ns_io/write.baml ---
+function baml.io.Write.write_all(self: baml.io.Write, data: uint8array) -> void throws baml.errors.Io {
+  { : void
+    while data.length() > 0
+      { : void
+        let written = self.write(data) : int
+        data = data.slice(written, data.length()) : uint8array
+      }
+  }
+}
 
 --- <builtin>/baml/ns_iter/iter.baml ---
 class baml.iter.Done {
@@ -1995,14 +2004,8 @@ function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | 
     TcpStream._connect(addr, _timeout_nanos(timeout)) : baml.net.TcpStream
   }
 }
-function baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: baml.time.Duration | null = null) -> uint8array throws baml.errors.Io | baml.errors.Timeout {
-  { : uint8array
-    self._read(_timeout_nanos(timeout)) : uint8array
-  }
-}
-function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout: baml.time.Duration | null = null) -> null throws baml.errors.Io | baml.errors.Timeout {
-  { : null
-    self._write(data, _timeout_nanos(timeout)) : null
+function baml.net.TcpStream.flush(self: baml.net.TcpStream) -> void throws never {
+  { : void
   }
 }
 class baml.net.TcpListener {

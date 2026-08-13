@@ -222,7 +222,7 @@ namespace baml.media:
 namespace baml.net:
   class Datagram { methods: [] }
   class TcpListener { methods: [bind, accept, close] }
-  class TcpStream { methods: [connect, _connect, read, _read, write, _write, close] }
+  class TcpStream { methods: [connect, _connect, close, read, write, flush] }
   class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close] }
   function _timeout_nanos
 namespace baml.ops:

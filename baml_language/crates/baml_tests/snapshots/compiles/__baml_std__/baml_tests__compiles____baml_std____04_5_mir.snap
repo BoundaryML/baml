@@ -4317,6 +4317,55 @@ fn baml.io.Write.flush(_1: void) -> void {
     }
 }
 
+fn baml.io.Write.write_all(self: baml.io.Write, data: uint8array) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: baml.io.Write // self // param
+    let _2: uint8array // data // param
+    let _3: bool
+    let _4: int
+    let _5: int // written
+    let _6: int
+    let _7: int
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = len(_2);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = copy _4 > const 0_i64;
+        branch copy _3 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        _5 = virtual_call write as baml.io.Write(copy _1, copy _2) -> [bb6];
+    }
+
+    bb6: {
+        _6 = copy _5;
+        _7 = len(_2);
+        goto -> bb7;
+    }
+
+    bb7: {
+        _2 = call const fn baml.Uint8Array.slice(copy _2, copy _6, copy _7) -> [bb1];
+    }
+}
+
 fn baml.iter.Iterable.iter(_1: void) -> void {
     // Locals:
     let _0: void // return
@@ -6717,72 +6766,24 @@ fn baml.net.TcpStream.connect(addr: string, timeout: null | baml.time.Duration) 
 
 fn baml.net.TcpStream._connect = builtin(io)
 
-fn baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: null | baml.time.Duration) -> uint8array {
+fn baml.net.TcpStream.root.io.Read.read = builtin(io)
+
+fn baml.net.TcpStream.root.io.Write.write = builtin(io)
+
+fn baml.net.TcpStream.root.io.Write.flush(self: baml.net.TcpStream) -> void {
     // Locals:
-    let _0: uint8array // _0 // return
+    let _0: void // _0 // return
     let _1: baml.net.TcpStream // self // param
-    let _2: null | baml.time.Duration // timeout // param
-    let _3: bool
-    let _4: bigint
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _0 = const null;
+        goto -> bb1;
     }
 
     bb1: {
-        _2 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = call const fn baml.net._timeout_nanos(copy _2) -> [bb3];
-    }
-
-    bb3: {
-        _0 = sys_op const fn baml.net.TcpStream._read(copy _1, copy _4) -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
-
-fn baml.net.TcpStream._read = builtin(io)
-
-fn baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout: null | baml.time.Duration) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: baml.net.TcpStream // self // param
-    let _2: uint8array // data // param
-    let _3: null | baml.time.Duration // timeout // param
-    let _4: bool
-    let _5: bigint
-
-    bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = call const fn baml.net._timeout_nanos(copy _3) -> [bb3];
-    }
-
-    bb3: {
-        _0 = sys_op const fn baml.net.TcpStream._write(copy _1, copy _2, copy _5) -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn baml.net.TcpStream._write = builtin(io)
 
 fn baml.net.TcpStream.close = builtin(io)
 

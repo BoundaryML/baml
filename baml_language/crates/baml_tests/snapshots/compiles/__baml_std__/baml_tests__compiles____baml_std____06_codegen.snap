@@ -2906,6 +2906,37 @@ function baml.io.Read.read_to_string(self: baml.io.Read) -> string {
     return
 }
 
+function baml.io.Write.write_all(self: baml.io.Write, data: uint8array) -> void {
+  L0:
+    load_var data
+    container_len
+    store_var _4
+    load_var _4
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    return
+
+  L2:
+    load_var2 1 2
+    load_type baml.io.Write
+    load_const "write"
+    virtual_call nargs=2 ntypeargs=0
+    store_var written
+    load_var data
+    container_len
+    store_var _7
+    load_var2 2 4
+    load_var _7
+    call baml.Uint8Array.slice
+    store_var data
+    jump L0
+}
+
 function baml.io.eprint(s: string) -> null {
 }
 
@@ -4600,12 +4631,6 @@ function baml.net.TcpListener.close(self: baml.net.TcpListener) -> null {
 function baml.net.TcpStream._connect(addr: string, timeout_nanos: bigint) -> baml.net.TcpStream {
 }
 
-function baml.net.TcpStream._read(self: baml.net.TcpStream, timeout_nanos: bigint) -> uint8array {
-}
-
-function baml.net.TcpStream._write(self: baml.net.TcpStream, data: uint8array, timeout_nanos: bigint) -> null {
-}
-
 function baml.net.TcpStream.close(self: baml.net.TcpStream) -> null {
 }
 
@@ -4626,39 +4651,15 @@ function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | 
     return
 }
 
-function baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: baml.time.Duration | null) -> uint8array {
-    load_var timeout
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var timeout
+function baml.net.TcpStream.root.io.Read.read(self: baml.net.TcpStream, n: int) -> uint8array | null {
+}
 
-  L0:
-    load_var timeout
-    call baml.net._timeout_nanos
-    store_var _4
-    load_var2 1 3
-    sys_op baml.net.TcpStream._read
+function baml.net.TcpStream.root.io.Write.flush(self: baml.net.TcpStream) -> void {
+    load_const null
     return
 }
 
-function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout: baml.time.Duration | null) -> null {
-    load_var timeout
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var timeout
-
-  L0:
-    load_var timeout
-    call baml.net._timeout_nanos
-    store_var _5
-    load_var2 1 2
-    load_var _5
-    sys_op baml.net.TcpStream._write
-    return
+function baml.net.TcpStream.root.io.Write.write(self: baml.net.TcpStream, data: uint8array) -> int {
 }
 
 function baml.net.UdpSocket._recv_from(self: baml.net.UdpSocket, timeout_nanos: bigint) -> baml.net.Datagram {
