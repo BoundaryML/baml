@@ -99,6 +99,7 @@ function caller() -> int {
       { : int
         no_generics(42) : int
       }
+      !! 74..94: function `no_generics` expects 0 type argument(s), got 1
     }
     ");
 }
@@ -130,6 +131,7 @@ function caller() -> int {
       { : int
         identity(42) : int
       }
+      !! 70..95: function `identity` expects 1 type argument(s), got 2
     }
     ");
 }
@@ -252,6 +254,7 @@ function caller() -> string {
         let f = identity<...> : (x: int) -> int throws never
         "ok" : "ok"
       }
+      !! 81..102: function `identity` expects 1 type argument(s), got 2
     }
     "#);
 }

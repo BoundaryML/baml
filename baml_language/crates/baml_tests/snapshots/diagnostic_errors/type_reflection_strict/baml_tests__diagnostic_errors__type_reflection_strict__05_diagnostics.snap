@@ -19,6 +19,14 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                     ───────────
     ╰────
 
+  [type] E0005
+
+  × function `type_of` expects 1 type argument(s), got 2
+    ╭─[reflect_intrinsic_errors.baml:25:5]
+ 25 │     reflect.type_of<int, string>()
+    ·     ──────────────────────────────
+    ╰────
+
   [type] E0001
 
   × mismatched types

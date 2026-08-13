@@ -130,9 +130,6 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 None if matches!(owner, BodyOwnerId::ParameterDefaults(_)) => false,
                 None => continue,
             };
-            if owner_tainted {
-                continue;
-            }
             let result = baml_compiler2_hir_ty::infer::infer_body(db, owner);
             if result.diagnostics.is_empty() {
                 continue;
@@ -146,6 +143,22 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                     source_map.as_ref(),
                     type_ref_spans.as_ref(),
                 );
+                // Inside a parse-tainted scope's span, inference findings
+                // are cascades of the syntax error and stay suppressed -
+                // but an UNRESOLVED TYPE still surfaces (a broken lambda's
+                // mis-parsed annotation names its unknown type rather than
+                // vanishing with the whole body). Unresolved NAMES stay
+                // suppressed with the rest: recovery routinely rereads
+                // stray tokens as value paths, and reporting those reads
+                // as missing names is noise, not signal.
+                if owner_tainted
+                    && !matches!(
+                        rendered.error,
+                        baml_compiler2_hir_ty::diagnostics::TirTypeError::UnresolvedType { .. }
+                    )
+                {
+                    continue;
+                }
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }

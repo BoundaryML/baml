@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 34331
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0062
@@ -14,7 +13,7 @@ assertion_line: 34331
 
   [type] E0063
 
-  ⚠ unreachable arm
+  × unreachable arm
     ╭─[main.baml:22:14]
  22 │         _ => "other",
     ·              ───────

@@ -29,6 +29,14 @@ source: crates/baml_tests/src/generated_tests.rs
     ·              ╰── expected `',' or ']' after array pattern element`, found `let`
     ╰────
 
+  [type] E0002
+
+  × unresolved type: r
+    ╭─[patterns_array_rest_parser_recovery.baml:16:17]
+ 16 │         [...let r] => r.length(),
+    ·                 ─
+    ╰────
+
   [parse] E0010
 
   × unexpected token

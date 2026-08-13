@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 38469
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -13,7 +12,7 @@ assertion_line: 38469
 
   [type] E0063
 
-  ⚠ unreachable arm
+  × unreachable arm
     ╭─[patterns_array_rest_binding.baml:38:14]
  38 │         _ => 0
     ·              ─
@@ -29,7 +28,7 @@ assertion_line: 38469
 
   [type] E0063
 
-  ⚠ unreachable arm
+  × unreachable arm
     ╭─[patterns_array_rest_binding.baml:46:14]
  46 │         _ => 0
     ·              ─
@@ -69,7 +68,7 @@ assertion_line: 38469
 
   [type] E0063
 
-  ⚠ unreachable arm
+  × unreachable arm
     ╭─[patterns_array_rest_binding.baml:85:14]
  85 │         _ => 0
     ·              ─

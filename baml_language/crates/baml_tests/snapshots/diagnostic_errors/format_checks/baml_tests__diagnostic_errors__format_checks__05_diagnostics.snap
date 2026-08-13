@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33868
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0007
@@ -1224,7 +1223,7 @@ assertion_line: 33868
 
   [type] E0063
 
-  ⚠ unreachable arm
+  × unreachable arm
      ╭─[match_exprs.baml:161:18]
  161 │         "bye" => "farewell",
      ·                  ──────────
@@ -1232,7 +1231,7 @@ assertion_line: 33868
 
   [type] E0063
 
-  ⚠ unreachable arm
+  × unreachable arm
      ╭─[match_exprs.baml:162:14]
  162 │         _ => "other"
      ·              ───────
@@ -1321,6 +1320,15 @@ assertion_line: 33868
  419 │ ╭─▶     match (x) {
  420 │ │           (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
  421 │ ╰─▶     }
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exprs.baml:420:68]
+ 420 │         (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
+     ·                                                                    ┬
+     ·                                                                    ╰── expected `string`, found `0`
      ╰────
 
   [validation] E0011

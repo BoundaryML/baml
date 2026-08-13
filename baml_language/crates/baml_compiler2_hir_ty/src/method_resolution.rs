@@ -48,19 +48,16 @@ pub fn lookup_method<'db>(
     name: &Name,
 ) -> Option<MethodCandidate<'db>> {
     let (class, class_args) = receiver_class(facts, receiver, 8)?;
-    // Class-INHERENT methods only: a method declared inside an
-    // `implements I { .. }` block belongs to impl space and resolves
-    // through the trait-impl tier - resolving it here would silently
-    // pick one interface's method when several implemented interfaces
-    // declare the same name (E0121's case).
+    // Implements-block methods resolve here too (static dispatch to the
+    // override, builtin-backed receivers included); the AMBIGUITY rule -
+    // several implemented interfaces declaring the name need `as<I>`
+    // qualification even when a candidate exists - is the callers'
+    // `concrete_member_ambiguity` pre-check, not an exclusion here.
     let method = baml_compiler2_ppir::item_data::class_data(db, class)
         .methods
         .iter()
         .copied()
-        .find(|&method| {
-            baml_compiler2_ppir::item_data::function_data(db, method).name == *name
-                && baml_compiler2_ppir::item_data::method_interface_target(db, method).is_none()
-        })?;
+        .find(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)?;
     Some(MethodCandidate {
         method,
         class,
@@ -793,6 +790,12 @@ pub enum UnionMemberLookup<'db> {
         interface: InterfaceRef,
         position: crate::diagnostics::SelfCallPosition,
     },
+    /// Every arm is a concrete class carrying an OWN field of this name
+    /// at the SAME type - the spec's TS-style member-wise read (one
+    /// agreed declaration, no interface view to record). Methods never
+    /// take this road, and disagreeing field types fall through to
+    /// `NoCommonInterface`.
+    ClassFieldJoin(Ty),
     /// No interface shared by every arm declares the member.
     NoCommonInterface,
 }
@@ -827,7 +830,10 @@ pub fn lookup_union_member<'db>(
         }
     }
     match declarers.len() {
-        0 => UnionMemberLookup::NoCommonInterface,
+        0 => match union_class_field_join(db, facts, members, name) {
+            Some(ty) => UnionMemberLookup::ClassFieldJoin(ty),
+            None => UnionMemberLookup::NoCommonInterface,
+        },
         1 => {
             let (iface, _) = declarers.pop().expect("len checked");
             // The virtual dispatch goes through the shared interface, but
@@ -932,4 +938,36 @@ fn interface_declares_member<'db>(
         return Some(false);
     }
     None
+}
+
+/// The spec's TS-style union field read: every arm is a concrete class
+/// whose OWN declared field `name` (realized at the arm's args) has the
+/// SAME type - that one agreed declaration types the access. `None`
+/// whenever an arm is symbolic, lacks the field, or the types disagree.
+fn union_class_field_join<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    members: &[Ty],
+    name: &Name,
+) -> Option<Ty> {
+    let mut agreed: Option<Ty> = None;
+    for arm in members {
+        if matches!(
+            arm.kind(),
+            TyKind::Interface(..) | TyKind::TypeVar(..) | TyKind::AssociatedTypeProjection { .. }
+        ) {
+            return None;
+        }
+        let (class, class_args) = receiver_class(facts, arm, 8)?;
+        let field_ty = crate::lower::class_field_types(db, class)
+            .iter()
+            .find(|(field, _)| field == name)
+            .map(|(_, ty)| crate::lower::substitute_params(ty, &class_args))?;
+        match &agreed {
+            None => agreed = Some(field_ty),
+            Some(seen) if *seen == field_ty => {}
+            Some(_) => return None,
+        }
+    }
+    agreed
 }

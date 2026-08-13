@@ -99,7 +99,10 @@ function f(
         assert_eq!(
             param_renders(&signature),
             [
-                "user.Show<int>",
+                // An existential denotes one complete instantiation: the
+                // unpinned, defaultless `Out` is diagnosed (E0191-analog)
+                // and its slot recovers as the error sentinel.
+                "user.Show<int, Out = !error>",
                 "user.Show<int, Out = string>",
                 // Ruling 4: `_` never infers in declaration signatures - the
                 // hole node is rejected by the signature-side policy fold.

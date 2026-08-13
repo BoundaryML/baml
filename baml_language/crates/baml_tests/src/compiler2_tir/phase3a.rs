@@ -1511,7 +1511,7 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       { : never
         return x.whiskers : !error
       }
-      !! 116..126: type `Cat | Dog` has no member `whiskers`
+      !! 116..126: type `Cat | Dog` has no member `whiskers`: its members implement no common interface that declares `whiskers`
     }
     class user.Cat$stream {
       name: string | null
@@ -1549,7 +1549,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       { : never
         return x.name : !error
       }
-      !! 112..118: type `A | B | C` has no member `name`
+      !! 112..118: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.A$stream {
       name: string | null
@@ -1588,7 +1588,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       { : never
         return x.name : !error
       }
-      !! 111..117: type `A | B | C` has no member `name`
+      !! 111..117: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.A$stream {
       name: string | null
@@ -1621,9 +1621,9 @@ function f(x: A | B) -> string { return x.value; }"#,
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
-        return x.value : int | string
+        return x.value : !error
       }
-      !! 87..94: type mismatch: expected string, got int | string
+      !! 87..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
     }
     class user.A$stream {
       value: int | null
@@ -1655,7 +1655,7 @@ function f(x: A | B | null) -> string { return x.name; }"#,
       { : never
         return x.name : !error
       }
-      !! 95..101: type `A | B | null` has no member `name`
+      !! 95..101: type `A | B | null` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.A$stream {
       name: string | null

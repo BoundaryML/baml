@@ -1,11 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37360
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0007
 
-  × type `Profile | null` has no member `name`
+  × type `Profile | null` has no member `name`: its members implement no common interface that declares `name`
     ╭─[null_handling.baml:50:14]
  50 │     let a4 = user?.profile.name;
     ·              ──────────────────
@@ -13,7 +12,7 @@ assertion_line: 37360
 
   [type] E0007
 
-  × type `Profile | null` has no member `address`
+  × type `Profile | null` has no member `address`: its members implement no common interface that declares `address`
     ╭─[null_handling.baml:53:14]
  53 │     let a5 = user?.profile.address.street;
     ·              ─────────────────────
@@ -21,7 +20,7 @@ assertion_line: 37360
 
   [type] E0007
 
-  × type `Address | null` has no member `street`
+  × type `Address | null` has no member `street`: its members implement no common interface that declares `street`
     ╭─[null_handling.baml:57:14]
  57 │     let a6 = user?.profile?.address.street;
     ·              ─────────────────────────────
@@ -29,7 +28,7 @@ assertion_line: 37360
 
   [type] E0007
 
-  × type `Profile | null` has no member `name`
+  × type `Profile | null` has no member `name`: its members implement no common interface that declares `name`
     ╭─[null_handling.baml:60:14]
  60 │     let a7 = (user?.profile).name;
     ·              ────────────────────
@@ -45,7 +44,7 @@ assertion_line: 37360
 
   [type] E0007
 
-  × type `Profile | null` has no member `name`
+  × type `Profile | null` has no member `name`: its members implement no common interface that declares `name`
     ╭─[null_handling.baml:80:5]
  80 │     user?.profile.name = "updated2";
     ·     ──────────────────
@@ -87,7 +86,7 @@ assertion_line: 37360
 
   [type] E0007
 
-  × type `string | null` has no member `length`
+  × type `string | null` has no member `length`: its members implement no common interface that declares `length`
      ╭─[null_handling.baml:167:14]
  167 │     let c2 = callback?.(42).length;
      ·              ─────────────────────
@@ -95,7 +94,7 @@ assertion_line: 37360
 
   [type] E0007
 
-  × type `string | null` has no member `length`
+  × type `string | null` has no member `length`: its members implement no common interface that declares `length`
      ╭─[null_handling.baml:173:14]
  173 │     let c3 = (callback?.(42)).length;
      ·              ───────────────────────

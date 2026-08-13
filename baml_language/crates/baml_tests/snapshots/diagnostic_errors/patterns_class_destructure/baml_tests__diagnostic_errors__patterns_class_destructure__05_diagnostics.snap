@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 38669
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0007
@@ -225,22 +224,19 @@ assertion_line: 38669
 
   [type] E0001
 
-  × mismatched types
-     ╭─[patterns_class_destructure.baml:247:105]
- 247 │ ╭─▶ function class_destructure_or_pattern_same_binding_conflicting_types_reversed(v: Person | Admin) -> int {
- 248 │ │       match (v) {
- 249 │ │           Admin { age } | Person { age } => age
- 250 │ │       }
- 251 │ ├─▶ }
-     · ╰──── expected `int`, found `string`
-     ╰────
-
-  [type] E0001
-
   × or-pattern binding `age` has conflicting types: string and int
      ╭─[patterns_class_destructure.baml:249:9]
  249 │         Admin { age } | Person { age } => age
      ·         ──────────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:249:43]
+ 249 │         Admin { age } | Person { age } => age
+     ·                                           ─┬─
+     ·                                            ╰── expected `int`, found `string`
      ╰────
 
   [type] E0001

@@ -41,6 +41,14 @@ pub(super) enum Obligation {
         ty: Ty,
         interface: InterfaceRef,
         at: ExprId,
+        /// True for a GENERIC-PARAM bound obligation: only a concrete
+        /// type can instantiate an interface-bounded parameter (an
+        /// abstract arg - union or interface existential - has no single
+        /// runtime type to dispatch on), so those reject with
+        /// `BoundedTypeArgNotConcrete` even when the implements relation
+        /// would hold. False for coercion/iterability goals, where an
+        /// existential legitimately satisfies the interface.
+        not_concrete_rejects: bool,
     },
     /// `lhs <op-interface> rhs` deferred: discharge re-runs the SAME
     /// ground operator dispatch (union distribution, literal widening,
@@ -83,13 +91,29 @@ impl<'db> InferenceContext<'db> {
 
     fn attempt(&mut self, obligation: &Obligation) -> Attempt {
         match obligation {
-            Obligation::Implements { ty, interface, at } => {
+            Obligation::Implements {
+                ty,
+                interface,
+                at,
+                not_concrete_rejects,
+            } => {
                 let ty = self.table.resolve_completely(ty);
                 let interface = self.resolve_interface_ref(interface);
                 if ty.has_error() {
                     return Attempt::Done;
                 }
                 if !ty.has_infer() && !interface_has_infer(&interface) {
+                    if *not_concrete_rejects
+                        && matches!(ty.kind(), TyKind::Interface(..) | TyKind::Union(..))
+                    {
+                        self.pending_diags
+                            .push(super::PendingDiag::BoundedArgNotConcrete {
+                                expr: *at,
+                                arg: ty.clone(),
+                                bound: interface.clone(),
+                            });
+                        return Attempt::Done;
+                    }
                     if !self.implements_holds(&ty, &interface) {
                         let expected = interface.existential();
                         self.result
@@ -280,6 +304,10 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface,
                     at,
+                    // Impl-header confirmation replays the impl's own
+                    // bounds; selection already admitted the receiver, so
+                    // keep the plain implements judgement.
+                    not_concrete_rejects: false,
                 });
             }
         }

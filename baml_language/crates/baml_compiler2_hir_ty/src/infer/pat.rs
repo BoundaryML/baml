@@ -107,7 +107,24 @@ impl<'db> InferenceContext<'db> {
                 let guard_facts = self.condition_facts(body, guard);
                 self.apply_facts(&guard_facts.when_true);
             }
-            let arm_ty = self.infer_expr(body, arm.body, &branch_expectation);
+            // A hard branch expectation CHECKS each arm (rustc coerces
+            // every arm to the expectation): a failing arm reports at
+            // ITSELF - and recovers as the expectation, so the join does
+            // not re-report the same mismatch on the whole match. A
+            // passing arm keeps its ACTUAL type (literal grain survives
+            // the join).
+            let arm_ty = match branch_expectation.only_has_type() {
+                Some(expected_ty) => {
+                    let expected_ty = expected_ty.clone();
+                    let actual = self.check_expr(body, arm.body, &expected_ty);
+                    if self.result.type_mismatches.contains_key(&arm.body) {
+                        expected_ty
+                    } else {
+                        actual
+                    }
+                }
+                None => self.infer_expr(body, arm.body, &branch_expectation),
+            };
             all_diverge = all_diverge.and(self.diverges);
             self.flow = saved_flow;
             arm_tys.push(arm_ty);
@@ -140,8 +157,10 @@ impl<'db> InferenceContext<'db> {
                 break;
             }
             if let Some(&arm_body) = matrix_arm_bodies.get(arm.0) {
-                self.pending_diags
-                    .push(super::PendingDiag::UnreachableArm { expr: arm_body });
+                self.pending_diags.push(super::PendingDiag::UnreachableArm {
+                    expr: arm_body,
+                    warning: false,
+                });
             }
         }
         if !report.missing.is_empty() {
@@ -722,29 +741,27 @@ impl<'db> InferenceContext<'db> {
         }
         let pat_plain = pat_ty.to_plain();
         let scrut_plain = scrut.to_plain();
-        let mismatch = if pat_ty.has_typevar()
-            || scrut.has_typevar()
-            || pat_ty.has_projection()
-            || scrut.has_projection()
-        {
-            // Rigid-carrying sides: subtype/equality cannot decide
-            // reachability, so ask the overlap oracle; its `No` is trusted
-            // only when it can see every variable.
-            let vars = self.lower.generic_params();
-            baml_type::unify::all_typevars_within(&pat_plain, vars)
-                && baml_type::unify::all_typevars_within(&scrut_plain, vars)
-                && self.pattern_overlap_verdict(&pat_plain, &scrut_plain)
-                    == baml_type::unify::Overlap::No
-        } else {
-            // Ground pairs: bidirectional subtyping decides (TIR's
-            // `pattern_matchable`), against the whole scrutinee or any
-            // union member. The overlap oracle alone is too lax here -
-            // it answers Yes for any existential pair, but two
-            // same-interface existentials with differing pins share no
-            // value (pins are invariant), which this branch rejects.
-            !self.pattern_matchable(&pat_plain, &scrut_plain)
-                && !self.pattern_overlaps_scrut_member(&pat_plain, &scrut_plain)
-        };
+        // The overlap oracle's `No` rejects on every shape (invariant
+        // container elements, disjoint concretes), trusted only when it
+        // can see every variable.
+        let vars = self.lower.generic_params();
+        let oracle_no = baml_type::unify::all_typevars_within(&pat_plain, vars)
+            && baml_type::unify::all_typevars_within(&scrut_plain, vars)
+            && self.pattern_overlap_verdict(&pat_plain, &scrut_plain)
+                == baml_type::unify::Overlap::No;
+        // Ground pairs ADDITIONALLY take TIR's bidirectional-subtyping
+        // strictness, against the whole scrutinee or any union member:
+        // the oracle alone answers Yes for any existential pair, but two
+        // same-interface existentials with differing pins share no value
+        // (pins are invariant).
+        let ground = !pat_ty.has_typevar()
+            && !scrut.has_typevar()
+            && !pat_ty.has_projection()
+            && !scrut.has_projection();
+        let mismatch = oracle_no
+            || (ground
+                && !self.pattern_matchable(&pat_plain, &scrut_plain)
+                && !self.pattern_overlaps_scrut_member(&pat_plain, &scrut_plain));
         if mismatch {
             self.pending_diags
                 .push(super::PendingDiag::PatternScrutMismatch {
@@ -1479,6 +1496,60 @@ struct HirPatCtx<'a, 'db> {
 }
 
 impl PatCtx for HirPatCtx<'_, '_> {
+    fn interface_field_projection_for_class(
+        &self,
+        iface_ty: &baml_type::Ty,
+        class_qtn: &baml_type::QualifiedTypeName,
+        _class_type_args: &[baml_type::Ty],
+    ) -> Option<Vec<usize>> {
+        use baml_compiler2_hir::contributions::Definition;
+        let baml_type::Ty::Interface(iface_qtn, ..) = iface_ty else {
+            return None;
+        };
+        let db = self.infer.db;
+        let facts = &self.infer.facts;
+        let Some(Definition::Class(class)) = facts.definition_of(class_qtn) else {
+            return None;
+        };
+        let Some(Definition::Interface(iface_loc)) = facts.definition_of(iface_qtn) else {
+            return None;
+        };
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
+        let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
+        let pkg_items = baml_compiler2_ppir::package_items(
+            db,
+            baml_compiler2_hir::package::PackageId::new(db, pkg.package.clone()),
+        );
+        // The class's implements block for THIS interface supplies the
+        // `field as class_field` links (default: the same name).
+        let block = class_data.implements.iter().find(|block| {
+            crate::interfaces::resolve_ref_to_interface(
+                db,
+                &class_data.type_refs,
+                block.target,
+                pkg_items,
+                &pkg.namespace_path,
+            ) == Some(iface_loc)
+        })?;
+        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+        iface_data
+            .fields
+            .iter()
+            .map(|field| {
+                let class_field = block
+                    .field_links
+                    .iter()
+                    .find(|link| link.interface_field == field.name)
+                    .map(|link| link.class_field.clone())
+                    .unwrap_or_else(|| field.name.clone());
+                class_data
+                    .fields
+                    .iter()
+                    .position(|candidate| candidate.name == class_field)
+            })
+            .collect()
+    }
+
     fn enumerate_ctors(&self, ty: &baml_type::Ty) -> Vec<Ctor> {
         use baml_type::Ty as P;
         let ty = self.peel_aliases(ty.clone(), 8);

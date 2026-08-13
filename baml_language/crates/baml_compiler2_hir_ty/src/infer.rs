@@ -530,6 +530,9 @@ enum PendingDiag<'db> {
     },
     UnreachableArm {
         expr: ExprId,
+        /// Catch-road unreachability is advisory (a warning); a match
+        /// matrix's unreachable arm is an error (canary's split).
+        warning: bool,
     },
     UnresolvedName {
         expr: ExprId,
@@ -596,6 +599,40 @@ enum PendingDiag<'db> {
         expr: ExprId,
         base: Ty,
         member: baml_type::Name,
+    },
+    /// An abstract type (union or interface existential) instantiating an
+    /// interface-bounded generic parameter - no single runtime type to
+    /// dispatch on (E0001).
+    BoundedArgNotConcrete {
+        expr: ExprId,
+        arg: Ty,
+        bound: baml_type::interned::InterfaceRef,
+    },
+    /// A constructor entry naming an implemented interface's FIELD; the
+    /// backing class field is the constructor's key.
+    InterfaceFieldInConstruction {
+        object: ExprId,
+        name: baml_type::Name,
+        class_field: baml_type::Name,
+    },
+    /// `.as<T>` with a non-interface target.
+    UpcastTargetNotInterface {
+        expr: ExprId,
+        target: Ty,
+    },
+    /// `.as<I>` where the value's type does not implement `I`.
+    UpcastNotImplemented {
+        expr: ExprId,
+        value: Ty,
+        interface: Ty,
+    },
+    /// Explicit turbofish count disagrees with the callee's declared
+    /// (writable) generic params.
+    WrongTypeArgArity {
+        expr: ExprId,
+        callee: baml_type::Name,
+        expected: usize,
+        got: usize,
     },
     NotCallable {
         expr: ExprId,
@@ -1757,16 +1794,28 @@ impl<'db> InferenceContext<'db> {
                 // The interface-view gate is a STRUCTURE demand: an
                 // alias naming an interface answers as the interface.
                 let target = self.expand_alias_ty(&target);
-                if target.has_error() || !matches!(target.kind(), TyKind::Interface(..)) {
+                if target.has_error() {
+                    Ty::error()
+                } else if !matches!(target.kind(), TyKind::Interface(..)) {
+                    self.pending_diags
+                        .push(PendingDiag::UpcastTargetNotInterface {
+                            expr,
+                            target: target.clone(),
+                        });
                     Ty::error()
                 } else {
                     let saved_anchor = self.obligation_anchor.replace(expr);
                     let fits = self.sub(&base_ty, &target);
                     self.obligation_anchor = saved_anchor;
                     if !fits {
-                        self.result
-                            .type_mismatches
-                            .insert(expr, (target.clone(), base_ty));
+                        // BEP-044's dedicated form: the value's type does
+                        // not implement the requested interface - clearer
+                        // than the generic mismatch.
+                        self.pending_diags.push(PendingDiag::UpcastNotImplemented {
+                            expr,
+                            value: base_ty,
+                            interface: target.clone(),
+                        });
                     }
                     target
                 }
@@ -2866,6 +2915,7 @@ impl<'db> InferenceContext<'db> {
                                 ty: goal,
                                 interface: interface.clone(),
                                 at: anchor,
+                                not_concrete_rejects: false,
                             });
                         }
                         return true;
@@ -3724,6 +3774,19 @@ impl<'db> InferenceContext<'db> {
             {
                 return Some(Ty::from_plain(pinned));
             }
+            // No `Output` pin: a bound whose args are still SYMBOLIC keeps
+            // the canonical projection (the spec's `T extends Add<O>`
+            // example - `T.Output` is the signature's own name for it). A
+            // fully GROUND bound (`T extends Add<int>`) leaves the result
+            // genuinely underdetermined - each implementor picks its own
+            // `Output` - so the operand must pin it (the fixture rule).
+            if !bound
+                .generics
+                .iter()
+                .any(baml_type_runtime::contains_typevar)
+            {
+                return None;
+            }
             return Some(Ty::intern(TyKind::AssociatedTypeProjection {
                 base: lhs.clone(),
                 interface: baml_type::interned::InterfaceRef::new(
@@ -3738,6 +3801,38 @@ impl<'db> InferenceContext<'db> {
                 member: baml_type::Name::new("Output"),
                 attr: TyAttr::default(),
             }));
+        }
+        // An interface-EXISTENTIAL operand dispatches through its own
+        // interface (or one it `requires`): `x: baml.ops.Add<int, Output =
+        // int>` adds like the virtual `x.add(rhs)` call it desugars to.
+        // The pin is the result; a recovered error pin surfaces as the
+        // operator failure (the completeness check already named it).
+        if let TyKind::Interface(qtn, args, pins, _) = lhs.kind() {
+            let root = baml_type::interned::InterfaceRef::new(
+                qtn.clone(),
+                (args.to_vec()).into(),
+                pins.to_vec(),
+            );
+            let mut heads = vec![root.clone()];
+            heads.extend(crate::impls::direct_requires_closure(
+                self.db, &root, lhs, 8,
+            ));
+            let head = heads.into_iter().find(|head| {
+                !head.name.is_local()
+                    && head.name.package().as_str() == "baml"
+                    && head.name.namespace().len() == 1
+                    && head.name.namespace()[0].as_str() == "ops"
+                    && head.name.name().as_str() == interface
+                    && match rhs {
+                        Some(rhs) => head.generics.len() == 1 && head.generics[0] == *rhs,
+                        None => head.generics.is_empty(),
+                    }
+            })?;
+            let (_, pinned) = head
+                .associated_types
+                .iter()
+                .find(|(name, _)| name.as_str() == "Output")?;
+            return Some(pinned.clone());
         }
         crate::ops::operator_output(self.db, interface, lhs, rhs)
     }
@@ -3845,7 +3940,29 @@ impl<'db> InferenceContext<'db> {
         else {
             // Not callable (or not yet typed): visit the args, sentinel out.
             // A callee already carrying error/vars is a cascade, not a
-            // second finding.
+            // second finding - EXCEPT a union whose error members are mere
+            // recovery arms: the concrete remainder (`int` of `int |
+            // <unresolved>`) is still provably not callable, and that
+            // finding stands on its own (E0006).
+            let concrete_uncallable_union = || match callee_fn_ty.kind() {
+                TyKind::Union(members, _) => {
+                    let clean: Vec<Ty> = members
+                        .iter()
+                        .filter(|member| !member.has_error())
+                        .cloned()
+                        .collect();
+                    (!clean.is_empty()
+                        && clean.iter().all(|member| {
+                            !member.has_infer()
+                                && !matches!(
+                                    member.kind(),
+                                    TyKind::Function { .. } | TyKind::Unknown { .. }
+                                )
+                        }))
+                    .then(|| syntactic_union(&clean))
+                }
+                _ => None,
+            };
             if !callee_fn_ty.has_error()
                 && !callee_fn_ty.has_infer()
                 && !matches!(callee_fn_ty.kind(), TyKind::Unknown { .. })
@@ -3853,6 +3970,11 @@ impl<'db> InferenceContext<'db> {
                 self.pending_diags.push(PendingDiag::NotCallable {
                     expr: callee,
                     ty: callee_fn_ty.clone(),
+                });
+            } else if let Some(clean) = concrete_uncallable_union() {
+                self.pending_diags.push(PendingDiag::NotCallable {
+                    expr: callee,
+                    ty: clean,
                 });
             }
             for arg in args {
@@ -4161,7 +4283,11 @@ impl<'db> InferenceContext<'db> {
                 self.lower.resolve_value(segments)
             {
                 let signature = function_signature(self.db, function);
-                let instantiation = self.instantiation_args(call, &signature.generic_params);
+                let callee_name = baml_compiler2_ppir::item_data::function_data(self.db, function)
+                    .name
+                    .clone();
+                let instantiation =
+                    self.instantiation_args(call, &signature.generic_params, Some(&callee_name));
                 self.register_call_bounds(function, &instantiation, call);
                 self.write_call_type_args(call, &instantiation, 0);
                 let fn_ty = function_value_ty(signature, &instantiation);
@@ -4355,6 +4481,11 @@ impl<'db> InferenceContext<'db> {
                     }
                     return (Ty::error(), false, None, false);
                 }
+                crate::method_resolution::UnionMemberLookup::ClassFieldJoin(field_ty) => {
+                    // The agreed class field types the callee; boundness
+                    // is a plain value read (no receiver binding).
+                    return (field_ty, false, None, false);
+                }
                 crate::method_resolution::UnionMemberLookup::NoCommonInterface => {}
             }
         }
@@ -4519,8 +4650,11 @@ impl<'db> InferenceContext<'db> {
         let signature = function_signature(self.db, candidate.method);
         let class_count = candidate.class_args.len();
         let own_params = signature.generic_params[class_count..].to_vec();
+        let method_name = baml_compiler2_ppir::item_data::function_data(self.db, candidate.method)
+            .name
+            .clone();
         let mut instantiation = candidate.class_args;
-        instantiation.extend(self.instantiation_args(call, &own_params));
+        instantiation.extend(self.instantiation_args(call, &own_params, Some(&method_name)));
         self.register_call_bounds(candidate.method, &instantiation, call);
         self.write_call_type_args(call, &instantiation, class_count);
         let fn_ty = function_value_ty(signature, &instantiation);
@@ -4693,8 +4827,12 @@ impl<'db> InferenceContext<'db> {
             let signature = function_signature(self.db, pending.method);
             let own_offset = pending.prefix.len();
             let own_params = signature.generic_params[own_offset..].to_vec();
+            let method_name =
+                baml_compiler2_ppir::item_data::function_data(self.db, pending.method)
+                    .name
+                    .clone();
             let mut instantiation = pending.prefix;
-            instantiation.extend(self.instantiation_args(call, &own_params));
+            instantiation.extend(self.instantiation_args(call, &own_params, Some(&method_name)));
             self.register_call_bounds(pending.method, &instantiation, call);
             self.write_call_type_args(call, &instantiation, own_offset);
             let fn_ty = function_value_ty(signature, &instantiation);
@@ -4891,7 +5029,7 @@ impl<'db> InferenceContext<'db> {
 
     fn own_instantiation(&mut self, own: OwnArgs, params: &[baml_type::ParamTy]) -> Vec<Ty> {
         match own {
-            OwnArgs::Call(call) => self.instantiation_args(call, params),
+            OwnArgs::Call(call) => self.instantiation_args(call, params, None),
             OwnArgs::Fresh => params
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
@@ -5029,7 +5167,7 @@ impl<'db> InferenceContext<'db> {
         } else if let (OwnArgs::Call(call), Some((class, _))) = (own, self.static_class_for(prefix))
         {
             let frame = crate::lower::class_generic_frame(self.db, class);
-            let args = self.instantiation_args(call, &frame);
+            let args = self.instantiation_args(call, &frame, None);
             crate::lower::class_ty(crate::lower::class_qualified_name(self.db, class), args)
         } else {
             return None;
@@ -5374,6 +5512,18 @@ impl<'db> InferenceContext<'db> {
         at: ExprId,
     ) {
         let bounds = crate::lower::function_generic_bounds(self.db, function);
+        // The concreteness rule covers the function's OWN declared params
+        // (turbofish or inferred - the user's type arguments). The frame
+        // PREFIX is the receiver's business: `Self` legitimately binds an
+        // existential for virtual dispatch, and class/interface args were
+        // judged at the receiver's own annotation.
+        let own_start = {
+            let frame = crate::lower::function_generic_frame(self.db, function);
+            let own = baml_compiler2_ppir::item_data::function_data(self.db, function)
+                .generic_params
+                .len();
+            frame.len().saturating_sub(own)
+        };
         for (param, param_bounds) in bounds {
             let Some(arg) = instantiation.get(param.index() as usize) else {
                 continue;
@@ -5396,6 +5546,7 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface,
                     at,
+                    not_concrete_rejects: (param.index() as usize) >= own_start,
                 });
             }
         }
@@ -5435,6 +5586,7 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface,
                     at,
+                    not_concrete_rejects: true,
                 });
             }
         }
@@ -5447,6 +5599,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         site: ExprId,
         generic_params: &[baml_type::ParamTy],
+        callee: Option<&baml_type::Name>,
     ) -> Vec<Ty> {
         let explicit: Vec<Ty> = self
             .type_refs
@@ -5460,6 +5613,24 @@ impl<'db> InferenceContext<'db> {
                 self.reject_expr_position_holes(&lowered, site)
             })
             .collect();
+        // Explicit turbofish counts against the WRITABLE params (synthetic
+        // effect params are elaboration's, never spelled).
+        if let Some(callee) = callee
+            && !explicit.is_empty()
+        {
+            let expected = generic_params
+                .iter()
+                .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
+                .count();
+            if explicit.len() != expected {
+                self.pending_diags.push(PendingDiag::WrongTypeArgArity {
+                    expr: site,
+                    callee: callee.clone(),
+                    expected,
+                    got: explicit.len(),
+                });
+            }
+        }
         generic_params
             .iter()
             .enumerate()
@@ -5531,7 +5702,7 @@ impl<'db> InferenceContext<'db> {
             .generic_params
             .len();
         let generic_names: Vec<baml_type::ParamTy> = crate::lower::class_generic_frame(db, class);
-        let instantiation = self.instantiation_args(object, &generic_names);
+        let instantiation = self.instantiation_args(object, &generic_names, None);
         let mut instantiation = instantiation;
         instantiation.truncate(generic_count);
         while instantiation.len() < generic_count {
@@ -5579,6 +5750,30 @@ impl<'db> InferenceContext<'db> {
                     self.check_expr(body, *value, &field_ty);
                 }
                 None => {
+                    // An INTERFACE field of an implemented interface is not
+                    // a constructor key - interface fields are satisfied by
+                    // class-owned fields (or explicit `field as class_field`
+                    // links). Name the backing class field, and still type
+                    // the value against it so a wrong value ALSO reports
+                    // (both diagnostics carry signal).
+                    if let Some(class_field) = self.constructor_interface_field_link(class, name) {
+                        self.pending_diags
+                            .push(PendingDiag::InterfaceFieldInConstruction {
+                                object,
+                                name: name.clone(),
+                                class_field: class_field.clone(),
+                            });
+                        match field_types.iter().find(|(field, _)| *field == class_field) {
+                            Some((_, field_ty)) => {
+                                let field_ty = substitute_params(field_ty, &instantiation);
+                                self.check_expr(body, *value, &field_ty);
+                            }
+                            None => {
+                                self.infer_expr(body, *value, &Expectation::None);
+                            }
+                        }
+                        continue;
+                    }
                     self.infer_expr(body, *value, &Expectation::None);
                     let shorthand = matches!(
                         &body.exprs[*value],
@@ -5845,6 +6040,9 @@ impl<'db> InferenceContext<'db> {
                 }
                 (Ty::error(), None)
             }
+            crate::method_resolution::UnionMemberLookup::ClassFieldJoin(field_ty) => {
+                (field_ty, None)
+            }
             crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
                 if self.member_probe_depth == 0 && !union_ty.has_error() && !union_ty.has_infer() {
                     self.pending_diags
@@ -5934,6 +6132,50 @@ impl<'db> InferenceContext<'db> {
             }
             MemberDeclarer::ImplField { .. } => None,
         }
+    }
+
+    /// If `name` is a FIELD declared by an interface this class
+    /// implements, the class field backing it (`field as class_field`
+    /// link, else the same name). `None` when no implemented interface
+    /// declares it.
+    fn constructor_interface_field_link(
+        &self,
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        name: &baml_type::Name,
+    ) -> Option<baml_type::Name> {
+        let db = self.db;
+        let data = baml_compiler2_ppir::item_data::class_data(db, class);
+        let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
+        let pkg_items = baml_compiler2_ppir::package_items(
+            db,
+            baml_compiler2_hir::package::PackageId::new(db, pkg.package.clone()),
+        );
+        for block in &data.implements {
+            let Some(interface) = crate::interfaces::resolve_ref_to_interface(
+                db,
+                &data.type_refs,
+                block.target,
+                pkg_items,
+                &pkg.namespace_path,
+            ) else {
+                continue;
+            };
+            let declares = baml_compiler2_ppir::item_data::interface_data(db, interface)
+                .fields
+                .iter()
+                .any(|field| field.name == *name);
+            if !declares {
+                continue;
+            }
+            let link = block
+                .field_links
+                .iter()
+                .find(|link| link.interface_field == *name)
+                .map(|link| link.class_field.clone())
+                .unwrap_or_else(|| name.clone());
+            return Some(link);
+        }
+        None
     }
 
     /// A realized interface rendered for a diagnostic's `as<I>` hint: a
@@ -6371,8 +6613,10 @@ impl<'db> InferenceContext<'db> {
                     // receive (and it claims no panic): unreachable. An
                     // ERRORED claim (unresolved class pattern) judges
                     // nothing - its own report stands alone.
-                    self.pending_diags
-                        .push(PendingDiag::UnreachableArm { expr: arm.body });
+                    self.pending_diags.push(PendingDiag::UnreachableArm {
+                        expr: arm.body,
+                        warning: true,
+                    });
                 }
                 // The arm's scrutinee: its may-set; else the WRITTEN
                 // claim (ruling 3's fallback - an arm no fact reaches
@@ -6933,6 +7177,7 @@ impl<'db> InferenceContext<'db> {
                 });
             }
             for pending in std::mem::take(&mut self.pending_diags) {
+                let mut unreachable_is_warning = false;
                 let (error, expr) = match pending {
                     PendingDiag::NonExhaustiveMatch {
                         expr,
@@ -6945,7 +7190,10 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
-                    PendingDiag::UnreachableArm { expr } => (TirTypeError::UnreachableArm, expr),
+                    PendingDiag::UnreachableArm { expr, warning } => {
+                        unreachable_is_warning = warning;
+                        (TirTypeError::UnreachableArm, expr)
+                    }
                     PendingDiag::MissingNamedArg { expr, name } => {
                         (TirTypeError::MissingRequiredArgument { name }, expr)
                     }
@@ -7092,6 +7340,62 @@ impl<'db> InferenceContext<'db> {
                         TirTypeError::UnionMemberNoCommonInterface {
                             union: self.finalize_ty(&base).to_plain(),
                             member,
+                        },
+                        expr,
+                    ),
+                    PendingDiag::BoundedArgNotConcrete { expr, arg, bound } => (
+                        TirTypeError::BoundedTypeArgNotConcrete {
+                            arg: self.finalize_ty(&arg).to_plain(),
+                            bound: Box::new([baml_type::Interface::new(
+                                bound.name.clone(),
+                                bound.generics.iter().map(Ty::to_plain).collect(),
+                                bound
+                                    .associated_types
+                                    .iter()
+                                    .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                                    .collect(),
+                            )]),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::InterfaceFieldInConstruction {
+                        object,
+                        name,
+                        class_field,
+                    } => (
+                        TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
+                            field_name: name,
+                            qualified_name: class_field,
+                        },
+                        object,
+                    ),
+                    PendingDiag::UpcastTargetNotInterface { expr, target } => (
+                        TirTypeError::InvalidInterfaceUpcastTarget {
+                            target: self.finalize_ty(&target).to_plain(),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::UpcastNotImplemented {
+                        expr,
+                        value,
+                        interface,
+                    } => (
+                        TirTypeError::TypeDoesNotImplementInterface {
+                            value_type: self.finalize_ty(&value).to_plain(),
+                            interface: self.finalize_ty(&interface).to_plain(),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::WrongTypeArgArity {
+                        expr,
+                        callee,
+                        expected,
+                        got,
+                    } => (
+                        TirTypeError::WrongTypeArgArity {
+                            callee_name: callee,
+                            expected,
+                            got,
                         },
                         expr,
                     ),
@@ -7531,11 +7835,12 @@ impl<'db> InferenceContext<'db> {
                         continue;
                     }
                 };
-                let severity = if matches!(error, TirTypeError::UnreachableArm) {
-                    DiagnosticSeverity::Warning
-                } else {
-                    DiagnosticSeverity::Error
-                };
+                let severity =
+                    if matches!(error, TirTypeError::UnreachableArm) && unreachable_is_warning {
+                        DiagnosticSeverity::Warning
+                    } else {
+                        DiagnosticSeverity::Error
+                    };
                 diags.push(TirDiagnostic {
                     error,
                     severity,
@@ -7692,6 +7997,7 @@ impl<'db> InferenceContext<'db> {
             ty: collection.clone(),
             interface: iterable.clone(),
             at,
+            not_concrete_rejects: false,
         });
         let projection = Ty::intern(TyKind::AssociatedTypeProjection {
             base: collection.clone(),
