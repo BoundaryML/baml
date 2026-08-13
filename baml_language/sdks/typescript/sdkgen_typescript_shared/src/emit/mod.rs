@@ -22,6 +22,7 @@ use crate::{
         method::{MethodKind, OptionalArg, RequiredArg, TypeScriptMethodBinding},
         type_alias::TypeScriptTypeAlias,
     },
+    leaf::safe_decl_name,
     routing::{LeafPath, route},
 };
 
@@ -55,6 +56,12 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
         // identifier char, so a `$stream` companion class is emitted as
         // e.g. `Resume$stream` (not stripped to `Resume`). Non-stream
         // symbols are unaffected (their name carries no `$stream`).
+        //
+        // `bare` stays raw. The class / enum / type-alias arms below wrap it in
+        // `safe_decl_name` because those three names bind a module-scope
+        // identifier, where a reserved word is a parse error. Every wire-facing
+        // field on the emitted symbol (`source`, `baml_fqn`, enum member
+        // `value`) keeps the raw spelling.
         let bare = key.name().as_str().to_string();
 
         match symbol {
@@ -82,7 +89,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                 out.push((
                     leaf,
                     EmittedSymbol::Class(TypeScriptClass {
-                        name: bare,
+                        name: safe_decl_name(&bare),
                         source: key.clone(),
                         generic_params,
                         docstring: c.docstring.clone(),
@@ -107,7 +114,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                 out.push((
                     leaf,
                     EmittedSymbol::Enum(TypeScriptEnum {
-                        name: bare,
+                        name: safe_decl_name(&bare),
                         source: key.clone(),
                         variants,
                         docstring: e.docstring.clone(),
@@ -120,7 +127,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                 out.push((
                     leaf,
                     EmittedSymbol::TypeAlias(TypeScriptTypeAlias {
-                        name: bare,
+                        name: safe_decl_name(&bare),
                         source: key.clone(),
                         resolves_to: t.resolves_to.clone(),
                         recursive: t.recursive,
