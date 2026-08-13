@@ -1,8 +1,11 @@
 """Smoke tests for plain (non-LLM) expression functions."""
 
+import time
+
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk import (
     hello_world,
+    sdk_bridge_detached_log,
     sdk_bridge_logs,
     single_required_arg,
 )
@@ -36,3 +39,16 @@ def test_baml_logs_reach_sdk_stderr_and_respect_level(monkeypatch, capfd):
     assert "sdk bridge info" not in stderr
     assert "sdk bridge warning" not in stderr
     assert "[BAML ERROR] sdk bridge error" in stderr
+
+
+def test_baml_logs_from_detached_tasks_reach_sdk_stderr(monkeypatch, capfd):
+    monkeypatch.setenv("BAML_LOG", "INFO")
+    assert sdk_bridge_detached_log() == 42
+
+    deadline = time.monotonic() + 2
+    stderr = ""
+    while "sdk bridge detached info" not in stderr and time.monotonic() < deadline:
+        time.sleep(0.05)
+        stderr += capfd.readouterr().err
+
+    assert "[BAML INFO] sdk bridge detached info" in stderr
