@@ -780,6 +780,34 @@ mod linear_formatter_regression_tests {
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
+
+    /// B-1509: `spawn` lexes as `KW_SPAWN`, including when it is the middle
+    /// segment of a type path. Every type position accepted by the parser must
+    /// also be accepted by the formatter's strong AST.
+    #[test]
+    fn spawn_namespace_formats_in_type_positions() {
+        let cases = [
+            "function f(tok:baml.spawn.CancelToken)->bool { true }\n",
+            "function f()->baml.spawn.CancelToken { baml.spawn.CancelToken.new() }\n",
+            "class Holder { tok:baml.spawn.CancelToken }\n",
+            "type Tokens=map<string,baml.spawn.CancelToken>\n",
+        ];
+
+        for source in cases {
+            let formatted = format(source, &FormatOptions::default())
+                .unwrap_or_else(|error| panic!("failed to format `{source}`: {error}"));
+            assert!(
+                formatted.contains("baml.spawn.CancelToken"),
+                "type path was not preserved: {formatted}"
+            );
+            assert_eq!(
+                formatted,
+                format(&formatted, &FormatOptions::default())
+                    .expect("formatted type path should remain valid"),
+                "formatter should be idempotent for `{source}`"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
