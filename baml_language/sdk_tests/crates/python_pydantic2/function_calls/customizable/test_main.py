@@ -1,10 +1,14 @@
 """Smoke tests for plain (non-LLM) expression functions."""
 
+import asyncio
 import time
+
+import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk import (
     hello_world,
+    sdk_bridge_cancelled_log_async,
     sdk_bridge_detached_log,
     sdk_bridge_logs,
     single_required_arg,
@@ -52,3 +56,22 @@ def test_baml_logs_from_detached_tasks_reach_sdk_stderr(monkeypatch, capfd):
         stderr += capfd.readouterr().err
 
     assert "[BAML INFO] sdk bridge detached info" in stderr
+
+
+async def test_baml_logs_survive_async_call_cancellation(monkeypatch, capfd):
+    monkeypatch.setenv("BAML_LOG", "INFO")
+    task = asyncio.create_task(sdk_bridge_cancelled_log_async())
+    await asyncio.sleep(0.02)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    deadline = time.monotonic() + 2
+    stderr = ""
+    while "sdk bridge detached after cancel" not in stderr and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+        stderr += capfd.readouterr().err
+
+    assert "[BAML INFO] sdk bridge before cancel" in stderr
+    assert "[BAML INFO] sdk bridge detached after cancel" in stderr
