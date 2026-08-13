@@ -987,22 +987,36 @@ impl RunArgs {
             });
         let output_format = self.output_format;
         let (call_context, logs) = self.call_context(CallId::next());
+        let capture = baml_exec::CallContextCapture::from_call_context(&call_context);
         let call_result = self.block_on_with_logs(
             &rt,
             engine.call_function("baml_run_expr_main__", vec![], call_context, true),
             logs.as_ref(),
         );
-        let result: std::result::Result<(), bex_engine::EngineError> = rt.block_on(async {
-            let value = call_result?;
-            if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
-                if let Err(e) =
-                    baml_exec::write_output(&engine, value, &return_type, output_format).await
-                {
-                    crate::reporter::print_error(format_args!("failed to serialize output: {e}"));
+        let result: std::result::Result<(), bex_engine::EngineError> = self.block_on_with_logs(
+            &rt,
+            async {
+                let value = call_result?;
+                if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
+                    if let Err(e) = baml_exec::write_output_with_context(
+                        &engine,
+                        value,
+                        &return_type,
+                        output_format,
+                        &capture,
+                        || self.print_logs(logs.as_ref()),
+                    )
+                    .await
+                    {
+                        crate::reporter::print_error(format_args!(
+                            "failed to serialize output: {e}"
+                        ));
+                    }
                 }
-            }
-            Ok(())
-        });
+                Ok(())
+            },
+            logs.as_ref(),
+        );
         self.block_on_with_logs(&rt, engine.shutdown(), logs.as_ref());
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 

@@ -11,7 +11,10 @@ use bex_engine::{
     FunctionCallContextBuilder, RuntimeTy,
 };
 
-use crate::output::{OutputFormat, write_output};
+use crate::{
+    CallContextCapture,
+    output::{OutputFormat, write_output_with_context},
+};
 
 /// Result of dispatching a target.
 pub enum DispatchResult {
@@ -75,10 +78,10 @@ pub async fn dispatch_target(
 
 /// Invoke a target with a caller-provided function context.
 ///
-/// The callback runs after the target call completes and before its return
-/// value or error is written. CLI callers use this boundary to flush captured
-/// `log.*` events without changing the default dispatch behavior used by
-/// packaged binaries.
+/// The callback runs after the target call completes and again after any output
+/// conversion hook, immediately before its return value is written. CLI callers
+/// use these boundaries to flush captured `log.*` events without changing the
+/// default dispatch behavior used by packaged binaries.
 pub async fn dispatch_target_with_context(
     engine: Arc<BexEngine>,
     target_name: &str,
@@ -86,7 +89,7 @@ pub async fn dispatch_target_with_context(
     json_args: Option<serde_json::Value>,
     output_format: OutputFormat,
     call_context: FunctionCallContext,
-    after_call: impl FnOnce(),
+    after_call: impl Fn(),
 ) -> Result<DispatchResult> {
     let func_info = engine
         .find_user_function(target_name)
@@ -100,13 +103,15 @@ pub async fn dispatch_target_with_context(
     // `find_user_function` matched, not the raw user input.
     validate_help_param(&engine, &func_info.qualified_name)?;
 
-    let args = build_args_from_signature(
+    let capture = CallContextCapture::from_call_context(&call_context);
+    let args = build_args_from_signature_with_context(
         &engine,
         cli_values,
         json_args.as_ref(),
         &func_info.param_names,
         &func_info.param_types,
         &func_info.param_has_default,
+        &capture,
     )
     .await?;
 
@@ -120,7 +125,15 @@ pub async fn dispatch_target_with_context(
             // No stdout for `void` return; value-carrying types like `int?`
             // still emit their serialization even when null.
             if !matches!(func_info.return_type, RuntimeTy::Void { .. }) {
-                write_output(&engine, value, &func_info.return_type, output_format).await?;
+                write_output_with_context(
+                    &engine,
+                    value,
+                    &func_info.return_type,
+                    output_format,
+                    &capture,
+                    after_call,
+                )
+                .await?;
             }
             Ok(DispatchResult::Ok)
         }
@@ -166,6 +179,27 @@ pub async fn build_args_from_signature(
     param_types: &[RuntimeTy],
     param_has_default: &[bool],
 ) -> Result<Vec<BexCallArg>> {
+    build_args_from_signature_with_context(
+        engine,
+        cli_values,
+        json_args,
+        param_names,
+        param_types,
+        param_has_default,
+        &CallContextCapture::disabled(),
+    )
+    .await
+}
+
+async fn build_args_from_signature_with_context(
+    engine: &Arc<BexEngine>,
+    cli_values: HashMap<String, BexExternalValue>,
+    json_args: Option<&serde_json::Value>,
+    param_names: &[String],
+    param_types: &[RuntimeTy],
+    param_has_default: &[bool],
+    capture: &CallContextCapture,
+) -> Result<Vec<BexCallArg>> {
     let _ = param_types;
     let mut merged: HashMap<String, RawArg> = HashMap::new();
 
@@ -198,7 +232,7 @@ pub async fn build_args_from_signature(
         match merged.remove(name.as_str()) {
             Some(RawArg::Primitive(v)) => ordered.push(BexCallArg::Provided(Box::new(*v))),
             Some(RawArg::JsonText(s)) => {
-                let value = deserialize_via_baml_json(engine, &s, ty)
+                let value = deserialize_via_baml_json(engine, &s, ty, capture)
                     .await
                     .with_context(|| format!("parameter `--{name}`"))?;
                 ordered.push(BexCallArg::Provided(Box::new(value)));
@@ -246,14 +280,13 @@ async fn deserialize_via_baml_json(
     engine: &Arc<BexEngine>,
     json_text: &str,
     ty: &RuntimeTy,
+    capture: &CallContextCapture,
 ) -> Result<BexExternalValue> {
     let result = engine
         .call_function(
             "baml.json.deserialize",
             vec![BexExternalValue::String(json_text.into())],
-            FunctionCallContextBuilder::new(CallId::next())
-                .with_type_args(indexmap::IndexMap::from([("T".to_string(), ty.clone())]))
-                .build(),
+            capture.call_context(indexmap::IndexMap::from([("T".to_string(), ty.clone())])),
             true,
         )
         .await

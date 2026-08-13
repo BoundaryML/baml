@@ -470,6 +470,31 @@ function logged() -> string {
     log.error("error-detail");
     "target-result"
 }
+
+class LoggedConversion {
+    value string
+
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            log.warn("from-json-detail");
+            LoggedConversion {
+                value: baml.json.from_json<string>(baml.json.field(j, "value"))
+            }
+        }
+    }
+
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            log.error("to-json-detail");
+            self.value
+        }
+    }
+}
+
+function logged_conversion(input: LoggedConversion) -> LoggedConversion {
+    log.info("conversion-target-detail");
+    input
+}
 "#,
     );
 
@@ -539,6 +564,43 @@ function logged() -> string {
     assert!(
         stdout.find("[INFO] expression-detail") < stdout.find('7'),
         "expression logs must be flushed before the return value: {stdout}"
+    );
+
+    let conversion = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "run",
+            "logged_conversion",
+            "--from",
+            ".",
+            "--logs",
+            "INFO",
+            "--output-format",
+            "json",
+            "--",
+            "--json-args",
+            r#"{"input":{"value":"hook-result"}}"#,
+        ],
+    );
+    assert!(
+        conversion.status.success(),
+        "logged conversion failed; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&conversion.stdout),
+        String::from_utf8_lossy(&conversion.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&conversion.stdout);
+    for expected in [
+        "[WARN] from-json-detail",
+        "[INFO] conversion-target-detail",
+        "[ERROR] to-json-detail",
+    ] {
+        assert!(stdout.contains(expected), "stdout: {stdout}");
+    }
+    let result_pos = stdout.find(r#""hook-result""#).expect("serialized result");
+    assert!(
+        stdout.find("[ERROR] to-json-detail") < Some(result_pos),
+        "conversion logs must be flushed before the serialized result: {stdout}"
     );
 }
 
