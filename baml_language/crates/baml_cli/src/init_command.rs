@@ -191,7 +191,7 @@ name = "{name}"
 # dev = "-f main"
 
 # Add a client generator, then generate its SDK:
-#   baml generate add python/pydantic2
+#   baml generate add python
 #   baml generate
 #
 # Run `baml generate add --help` to see every supported output type.
@@ -220,7 +220,7 @@ mod tests {
         let toml = std::fs::read_to_string(tmp.path().join("baml.toml")).unwrap();
         assert!(toml.contains("[package]"));
         assert!(toml.contains("name = "));
-        assert!(toml.contains("baml generate add python/pydantic2"));
+        assert!(toml.contains("baml generate add python"));
         assert!(tmp.path().join("baml_src/main.baml").exists());
     }
 

@@ -16,7 +16,7 @@ use baml_db::{
 };
 use clap::{
     Args, Subcommand,
-    builder::{PossibleValuesParser, TypedValueParser},
+    builder::{PossibleValue, PossibleValuesParser, TypedValueParser},
 };
 use text_size::{TextRange, TextSize};
 use toml::Spanned;
@@ -63,7 +63,11 @@ pub enum GenerateCommand {
 
 #[derive(Args, Clone, Debug)]
 pub struct AddGeneratorArgs {
-    #[arg(value_name = "OUTPUT_TYPE", value_parser = add_output_type_parser())]
+    #[arg(
+        value_name = "OUTPUT_TYPE",
+        value_parser = add_output_type_parser(),
+        help = "Generator target to add. `python` and `typescript` are accepted as aliases for `python/pydantic` and `typescript/node`"
+    )]
     pub output_type: OutputType,
 
     /// Go module import path for the generated baml_sdk package.
@@ -88,7 +92,7 @@ struct GeneratorDef {
 }
 
 impl AddGeneratorArgs {
-    pub(crate) fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
+    fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         let root = crate::project_load::find_project_root_from(project)?.ok_or_else(|| {
             anyhow!("no BAML project found; run `baml init` before adding a generator")
         })?;
@@ -137,25 +141,31 @@ impl AddGeneratorArgs {
 }
 
 fn parse_add_output_type(value: &str) -> Result<OutputType, String> {
-    OutputType::all()
-        .iter()
-        .copied()
-        .find(|output_type| value == output_type.add_name())
-        .ok_or_else(|| {
-            let expected = OutputType::all()
-                .iter()
-                .copied()
-                .map(OutputType::add_name)
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("unknown generator output type `{value}`; expected one of: {expected}")
-        })
+    value.parse::<OutputType>().map_err(|_| {
+        let expected = OutputType::all()
+            .iter()
+            .copied()
+            .map(OutputType::canonical)
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("unknown generator output type `{value}`; expected one of: {expected}")
+    })
 }
 
+/// Canonical spellings are listed in help; aliases parse but stay hidden so
+/// the possible-values line names exactly what gets written to `baml.toml`.
 fn add_output_type_parser() -> impl TypedValueParser<Value = OutputType> {
-    PossibleValuesParser::new(OutputType::all().iter().copied().map(OutputType::add_name)).map(
-        |value| parse_add_output_type(&value).expect("possible generator output type must parse"),
-    )
+    let values = OutputType::all().iter().copied().flat_map(|output_type| {
+        std::iter::once(PossibleValue::new(output_type.canonical())).chain(
+            output_type
+                .aliases()
+                .iter()
+                .map(|alias| PossibleValue::new(*alias).hide(true)),
+        )
+    });
+    PossibleValuesParser::new(values).map(|value| {
+        parse_add_output_type(&value).expect("possible generator output type must parse")
+    })
 }
 
 fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(String, String)> {
@@ -358,7 +368,7 @@ impl GenerateArgs {
             // only; the rust generator also ships the embedded bytecode as
             // a binary file.
             let generated: Vec<(PathBuf, Vec<u8>)> = match generator.output_type {
-                OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
+                OutputType::PythonPydantic => {
                     sdkgen_python_pydantic2::to_source_code_with_bytecode_and_metadata(
                         &pool,
                         &baml_bytecode,
@@ -576,7 +586,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "swift", "go", "rust", "java", "cpp", "csharp""#,
+            r#"one of: "python/pydantic", "typescript/node", "typescript/web", "swift", "go", "rust", "java", "cpp", "csharp""#,
             table_range,
             &mut diags,
         );
@@ -890,13 +900,36 @@ mod tests {
     }
 
     #[test]
-    fn add_parser_accepts_every_output_type_name() {
+    fn add_parser_accepts_every_canonical_name_and_alias() {
         for &output_type in OutputType::all() {
             assert_eq!(
-                parse_add_output_type(output_type.add_name()),
+                parse_add_output_type(output_type.canonical()),
                 Ok(output_type)
             );
+            for alias in output_type.aliases() {
+                assert_eq!(parse_add_output_type(alias), Ok(output_type));
+            }
         }
+    }
+
+    /// The name `add` writes must be the name `discover_generators` reads.
+    #[test]
+    fn added_alias_writes_the_canonical_spelling_to_the_manifest() {
+        let generator = Generator::from(parse_add_output_type("python").unwrap());
+
+        let (updated, _) =
+            add_generator_to_manifest("[package]\nname = \"test\"\n", &generator).unwrap();
+
+        let manifest = crate::manifest::parse(&updated).unwrap();
+        assert_eq!(
+            manifest.generator["client1"]
+                .get_ref()
+                .output_type
+                .as_ref()
+                .unwrap()
+                .get_ref(),
+            "python/pydantic"
+        );
     }
 
     #[test]

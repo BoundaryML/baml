@@ -533,10 +533,22 @@ mod tests {
         let help = help_for(&["baml-cli", "generate", "add", "--help"]);
         for &output_type in baml_codegen_types::OutputType::all() {
             assert!(
-                help.contains(output_type.add_name()),
+                help.contains(output_type.canonical()),
                 "missing {output_type:?} in:\n{help}"
             );
         }
+        // Aliases parse but are hidden, so the possible-values line names
+        // exactly what lands in baml.toml. The help text names them instead.
+        // Collapse wrapping before matching: clap rewraps at terminal width.
+        let unwrapped = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(!unwrapped.contains("possible values: python,"), "{help}");
+        assert!(
+            unwrapped.contains(
+                "`python` and `typescript` are accepted as aliases for \
+                 `python/pydantic` and `typescript/node`"
+            ),
+            "{help}"
+        );
     }
 
     #[test]
@@ -557,7 +569,7 @@ mod tests {
             "baml-cli".into(),
             "generate".into(),
             "add".into(),
-            "python/pydantic2".into(),
+            "python".into(),
             "--project".into(),
             "workspace".into(),
         ]);
