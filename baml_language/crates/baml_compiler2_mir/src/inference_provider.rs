@@ -15,14 +15,14 @@
 //! owner's arena and parameter defaults as their own body owner, so the
 //! per-scope dispatch reduces to body-vs-defaults.
 
-use baml_compiler2_hir::body::BodyOwnerId;
-use baml_compiler2_hir::loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc};
+use baml_compiler2_ast::{ExprId as AstExprId, PatId as AstPatId};
+use baml_compiler2_hir::{
+    body::BodyOwnerId,
+    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
+};
 use baml_compiler2_hir_ty::infer as hir_infer;
 use baml_type::{Name, Ty as Tir2Ty};
 use rustc_hash::{FxHashMap, FxHashSet};
-
-use baml_compiler2_ast::ExprId as AstExprId;
-use baml_compiler2_ast::PatId as AstPatId;
 
 // --- MIR's consumption vocabulary -------------------------------------------
 //

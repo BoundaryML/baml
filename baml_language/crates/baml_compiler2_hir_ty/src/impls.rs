@@ -31,8 +31,7 @@
 //! here), and `get_method`'s silent `BuiltinUnknown` fill for unbound
 //! params (resolution here leaves methods to I3).
 
-use baml_compiler2_hir::loc::ImplLoc;
-use baml_compiler2_hir::package::PackageId;
+use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
 use baml_type::{
     Name, ParamTy, TypeName,
     interned::{InterfaceRef, Ty, TyKind},

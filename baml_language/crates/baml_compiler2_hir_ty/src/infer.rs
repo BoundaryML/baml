@@ -1324,7 +1324,8 @@ struct InferenceContext<'db> {
     /// The enclosing scope's PLAIN bound env for the written-type
     /// well-formedness judgment on body annotations, built lazily like
     /// the overlap aliases.
-    wf_scope_env: std::cell::OnceCell<rustc_hash::FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>>,
+    wf_scope_env:
+        std::cell::OnceCell<rustc_hash::FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>>,
     /// per inference on first use (TIR's `normalized_overlap_aliases`).
     overlap_aliases:
         std::cell::OnceCell<std::collections::HashMap<baml_type::QualifiedTypeName, baml_type::Ty>>,
@@ -1511,10 +1512,8 @@ impl<'db> InferenceContext<'db> {
                 let lit = if let Literal::Int(v) = lit
                     && !(INT_MIN..=INT_MAX).contains(v)
                 {
-                    self.pending_diags.push(PendingDiag::IntLiteralOutOfRange {
-                        expr,
-                        value: *v,
-                    });
+                    self.pending_diags
+                        .push(PendingDiag::IntLiteralOutOfRange { expr, value: *v });
                     &Literal::Int(0)
                 } else {
                     lit
@@ -5942,40 +5941,33 @@ impl<'db> InferenceContext<'db> {
         // declared bounds. Hole-carrying annotations skip - their holes
         // solve first and the instantiation sites judge them.
         if !lowered.has_infer() {
-            let env = self.wf_scope_env.get_or_init(|| {
-                match self.body_owner {
-                    Some(function) => crate::lower::function_generic_bounds(self.db, function)
-                        .into_iter()
-                        .map(|(param, refs)| {
-                            (
-                                param,
-                                refs.iter()
-                                    .map(|bound| baml_type::Interface {
-                                        name: bound.name.clone(),
-                                        generics: bound
-                                            .generics
-                                            .iter()
-                                            .map(|g| g.to_plain())
-                                            .collect(),
-                                        associated_types: bound
-                                            .associated_types
-                                            .iter()
-                                            .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                                            .collect(),
-                                    })
-                                    .collect(),
-                            )
-                        })
-                        .collect(),
-                    None => rustc_hash::FxHashMap::default(),
-                }
+            let env = self.wf_scope_env.get_or_init(|| match self.body_owner {
+                Some(function) => crate::lower::function_generic_bounds(self.db, function)
+                    .into_iter()
+                    .map(|(param, refs)| {
+                        (
+                            param,
+                            refs.iter()
+                                .map(|bound| baml_type::Interface {
+                                    name: bound.name.clone(),
+                                    generics: bound.generics.iter().map(|g| g.to_plain()).collect(),
+                                    associated_types: bound
+                                        .associated_types
+                                        .iter()
+                                        .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                                        .collect(),
+                                })
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+                None => rustc_hash::FxHashMap::default(),
             });
-            for error in crate::interfaces::type_generic_bound_errors(
-                self.db,
-                env,
-                &lowered.to_plain(),
-            ) {
-                self.pending_diags.push(PendingDiag::AnnotWf { type_ref, error });
+            for error in
+                crate::interfaces::type_generic_bound_errors(self.db, env, &lowered.to_plain())
+            {
+                self.pending_diags
+                    .push(PendingDiag::AnnotWf { type_ref, error });
             }
         }
         let instantiated = self.instantiate_holes(&lowered, HoleAnchor::TypeRef(type_ref));
@@ -6017,7 +6009,8 @@ impl<'db> InferenceContext<'db> {
             return ty.clone();
         }
         if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
-            self.pending_diags.push(PendingDiag::ExprPositionHole { expr: at });
+            self.pending_diags
+                .push(PendingDiag::ExprPositionHole { expr: at });
             return self.table.new_var_ty();
         }
         Ty::intern(
@@ -6768,17 +6761,20 @@ impl<'db> InferenceContext<'db> {
                         kind,
                     } => {
                         let (error, note) = match kind {
-                            TaggedTagIssue::NotAFunction => (
-                                TirTypeError::TaggedTagNotAFunction { name },
-                                None,
-                            ),
+                            TaggedTagIssue::NotAFunction => {
+                                (TirTypeError::TaggedTagNotAFunction { name }, None)
+                            }
                             TaggedTagIssue::NotMarked => (
                                 TirTypeError::TaggedTagNotMarked { name },
-                                Some("add a `//baml:tagged_string` marker comment above this function"),
+                                Some(
+                                    "add a `//baml:tagged_string` marker comment above this function",
+                                ),
                             ),
                             TaggedTagIssue::BadBodyParam => (
                                 TirTypeError::TaggedTagBadBodyParam { name },
-                                Some("the first parameter must be `body: (...) -> baml.TaggedString`"),
+                                Some(
+                                    "the first parameter must be `body: (...) -> baml.TaggedString`",
+                                ),
                             ),
                         };
                         let related = match (func, note) {
@@ -6798,13 +6794,10 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::ExprPositionHole { expr } => {
-                        (TirTypeError::CannotInferType, expr)
+                    PendingDiag::ExprPositionHole { expr } => (TirTypeError::CannotInferType, expr),
+                    PendingDiag::IntLiteralOutOfRange { expr, value } => {
+                        (TirTypeError::IntegerLiteralOutOfRange { value }, expr)
                     }
-                    PendingDiag::IntLiteralOutOfRange { expr, value } => (
-                        TirTypeError::IntegerLiteralOutOfRange { value },
-                        expr,
-                    ),
                     PendingDiag::AmbiguousMember {
                         expr,
                         base,

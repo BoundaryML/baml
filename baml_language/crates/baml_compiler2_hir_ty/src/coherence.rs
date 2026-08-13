@@ -35,11 +35,9 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     FunctionParamTy, Interface, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr, TypeName,
-    normalize::TypeContext,
+    interned::InterfaceRef, normalize::TypeContext,
 };
 use rustc_hash::FxHashMap;
-
-use baml_type::interned::InterfaceRef;
 
 use crate::impls::{ImplFacts, impl_facts, package_impl_locs};
 
@@ -1461,8 +1459,9 @@ fn orphan_check(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_type::Freshness;
+
+    use super::*;
 
     fn param(name: &str) -> ParamTy {
         ParamTy::new(0, Name::new(name))

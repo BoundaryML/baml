@@ -1161,8 +1161,10 @@ use baml_compiler2_hir::{
         PathResolution,
     },
 };
-use baml_compiler2_ppir::file_semantic_index;
-use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
+use baml_compiler2_ppir::{
+    file_semantic_index,
+    resolve::{ResolvedName, resolve_name_at_in_scope},
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;

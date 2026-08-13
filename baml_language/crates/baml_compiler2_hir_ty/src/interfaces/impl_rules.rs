@@ -2,8 +2,12 @@ use std::collections::HashMap;
 
 use baml_base::{Name, Span, TyAttr};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
-use baml_type::unify::{TypeBindings, substitute_ty};
-use baml_type::{ParamTy, QualifiedTypeName, Ty, normalize::TypeContext};
+use baml_type::{
+    ParamTy, QualifiedTypeName, Ty,
+    normalize::TypeContext,
+    pattern_overlap::TypeVarBoundsMap,
+    unify::{TypeBindings, substitute_ty},
+};
 use baml_type_runtime::contains_typevar;
 
 use super::{
@@ -11,9 +15,7 @@ use super::{
     lower_interface_associated_bindings, lower_ref_in, match_ty_patterns,
     normalized_arg_implements_bound, resolve_ref_to_interface,
 };
-use crate::diagnostics::TirTypeError;
-use crate::lower::qualify_def;
-use baml_type::pattern_overlap::TypeVarBoundsMap;
+use crate::{diagnostics::TirTypeError, lower::qualify_def};
 
 /// Fully-resolved data for one `implements` block, keyed by its stable
 /// [`ImplLoc`](baml_compiler2_hir::loc::ImplLoc).

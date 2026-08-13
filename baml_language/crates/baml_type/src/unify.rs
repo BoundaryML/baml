@@ -15,12 +15,14 @@
 //! canonical form) and the pre-normalized package alias map
 //! (`normalized_alias_map`) — and the shared [`TypeBindings`] substitution map.
 
-use crate::normalize::TypeContext as _;
-use crate::{FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TypeName};
+use std::collections::HashMap;
+
 use baml_base::{Literal, Name, TyAttr};
 use rustc_hash::FxHashMap;
 
-use std::collections::HashMap;
+use crate::{
+    FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TypeName, normalize::TypeContext as _,
+};
 
 /// A [`TypeContext`](crate::normalize::TypeContext) for structural type
 /// **equivalence** that expands aliases but

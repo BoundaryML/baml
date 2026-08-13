@@ -16,12 +16,14 @@
 //!    contract, whereas a wrong `No` rejects valid code and a wrong "definite"
 //!    would skip a needed test.
 
-use crate::{Interface, ParamTy, Ty, TypeName};
 use baml_base::TyAttr;
 
-use crate::unify::{
-    EnumVariants, MAX_UNIFY_DEPTH, Overlap, TypeBindings, chase_var, contains_bound_typevar,
-    expand_alias_head, is_literal_subtype, nf, unify_into, var_under_union,
+use crate::{
+    Interface, ParamTy, Ty, TypeName,
+    unify::{
+        EnumVariants, MAX_UNIFY_DEPTH, Overlap, TypeBindings, chase_var, contains_bound_typevar,
+        expand_alias_head, is_literal_subtype, nf, unify_into, var_under_union,
+    },
 };
 
 /// In-scope rigid type parameters mapped to their declared interface bounds

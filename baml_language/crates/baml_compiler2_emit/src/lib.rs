@@ -3564,8 +3564,7 @@ fn compute_function_metadata<'db>(
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
     use baml_compiler2_ppir::item_data::{ImplSubjectData, MethodOwner, method_owner};
-    use baml_type::Ty;
-    use baml_type::unify::substitute_ty;
+    use baml_type::{Ty, unify::substitute_ty};
 
     /// One in-scope type variable's declared bound conjunction, as `(store, id)`
     /// refs into whichever arena declared it — enclosing (class/interface/impl)

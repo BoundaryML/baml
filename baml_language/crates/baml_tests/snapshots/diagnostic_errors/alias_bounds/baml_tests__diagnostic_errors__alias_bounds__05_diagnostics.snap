@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 28139
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0145
@@ -12,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0002
 
-  × unresolved type: T.Label
+  × unknown associated type `Label` for type variable `T` (no interface bound)
     ╭─[alias_bounds.baml:19:10]
  19 │     v is T.Label
     ·          ───────

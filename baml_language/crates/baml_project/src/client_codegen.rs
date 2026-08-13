@@ -11,8 +11,7 @@ use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::{self as ast, FunctionOrigin};
 use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, package::PackageId};
 use baml_db::Name;
-use baml_type::{Freshness, ParamTy, TyAttr};
-use baml_type::{QualifiedTypeName, Ty as TirTy};
+use baml_type::{Freshness, ParamTy, QualifiedTypeName, Ty as TirTy, TyAttr};
 
 use crate::ProjectDatabase;
 

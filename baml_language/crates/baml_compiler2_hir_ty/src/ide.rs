@@ -6,8 +6,10 @@
 //! the scope alone would hold.
 
 use baml_compiler2_ast::{AstSourceMap, Expr as AstExpr, ExprBody, ExprId, LambdaDef};
-use baml_compiler2_hir::body::BodyOwnerId;
-use baml_compiler2_hir::scope::{FileScopeId, ScopeId, ScopeKind};
+use baml_compiler2_hir::{
+    body::BodyOwnerId,
+    scope::{FileScopeId, ScopeId, ScopeKind},
+};
 use text_size::TextRange;
 
 use crate::infer::InferenceResult;

@@ -12,8 +12,7 @@
 //! it reports the honest non-exhaustive verdict; both engines reject the
 //! function either way. S17 decides the suppression policy.
 
-use std::fmt::Write as _;
-use std::path::Path;
+use std::{fmt::Write as _, path::Path};
 
 use baml_compiler2_hir::body::BodyOwnerId;
 

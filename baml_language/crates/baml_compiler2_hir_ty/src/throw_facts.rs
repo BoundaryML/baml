@@ -17,11 +17,12 @@ use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
 };
-use baml_type::throw_facts::FunctionThrowFacts;
-use baml_type::{Ty, TyAttr};
+use baml_type::{Ty, TyAttr, throw_facts::FunctionThrowFacts};
 
-use crate::lower::qualify_def;
-use crate::package_interface::{ThrowFact, throw_set_key};
+use crate::{
+    lower::qualify_def,
+    package_interface::{ThrowFact, throw_set_key},
+};
 
 /// Per-file extraction output, wrapped so the tracked query can return by
 /// reference (comparison-based salsa `Update`).

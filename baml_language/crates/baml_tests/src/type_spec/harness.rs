@@ -67,7 +67,6 @@ use baml_compiler2_hir::{
     semantic_index::FileSemanticIndex,
 };
 use baml_compiler2_hir_ty::infer::{InferenceResult, infer_body};
-
 use baml_project::ProjectDatabase;
 use text_size::{TextRange, TextSize};
 

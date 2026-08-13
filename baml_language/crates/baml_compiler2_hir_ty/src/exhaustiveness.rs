@@ -28,9 +28,8 @@
 use std::fmt;
 
 use baml_base::Literal;
-use rustc_hash::FxHashSet;
-
 use baml_type::{PrimitiveType, QualifiedTypeName, Ty, TyAttr};
+use rustc_hash::FxHashSet;
 
 /// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
 /// anywhere in its structure? Inlined from TIR's `generics.rs` - the one
@@ -1689,9 +1688,9 @@ mod tests {
     )]
 
     use baml_base::Name;
+    use baml_type::Freshness;
 
     use super::*;
-    use baml_type::Freshness;
 
     /// A trivial `PatCtx` for unit tests. No real class/list lookup; tests
     /// either avoid those types or stub them.

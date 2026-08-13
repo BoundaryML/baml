@@ -9,11 +9,13 @@ use std::cell::OnceCell;
 
 use baml_base::{Name, Span, TyAttr};
 use baml_compiler2_hir::package::PackageId;
-use baml_type::unify::{
-    EnumVariants, Overlap, TypeBindings, chase_var, contains_bound_typevar, nf, substitute_ty,
-    unify_into, var_under_union,
+use baml_type::{
+    ParamTy, Ty, TypeName,
+    unify::{
+        EnumVariants, Overlap, TypeBindings, chase_var, contains_bound_typevar, nf, substitute_ty,
+        unify_into, var_under_union,
+    },
 };
-use baml_type::{ParamTy, Ty, TypeName};
 
 use super::{
     ImplData, enum_variant_names, impl_data, impl_data_source_map, interface_loc_qtn,

@@ -58,6 +58,9 @@ pub enum LoweringDiagKind {
     /// A map key type provably outside the string domain (B-267's
     /// contract; `checked_map_key` lowers it to the Error sentinel).
     InvalidMapKey { key: baml_type::Ty },
+    /// A projection-determination error (already in the shared
+    /// vocabulary), carried through the sink verbatim.
+    Projection(Box<crate::diagnostics::TirTypeError>),
     /// Written type-argument count disagrees with the declaration
     /// (E0001's type-arity spelling).
     WrongArgCount {
@@ -313,28 +316,31 @@ impl<'db> LowerCtx<'db> {
                 member,
             } => {
                 let base_ty = self.lower_type_ref(store, *base);
-                let qualifier = match interface {
-                    Some(interface) => match self.lower_type_ref(store, *interface).kind() {
-                        TyKind::Interface(name, args, pins, _) => {
-                            Some(baml_type::interned::InterfaceRef::new(
-                                name.clone(),
-                                args.to_vec().into_boxed_slice(),
-                                pins.to_vec(),
-                            ))
-                        }
-                        _ => None,
-                    },
-                    None => self.projection_interface_for(&base_ty, member),
-                };
-                match qualifier {
-                    Some(interface) => Ty::intern(TyKind::AssociatedTypeProjection {
+                // The `Self`-rooted fast path keeps the impl-target
+                // qualifier road (an implements-block method's
+                // `Self.Member` projects through the block's WRITTEN
+                // interface target).
+                if interface.is_none()
+                    && let Some(head) = self.projection_interface_for(&base_ty, member)
+                {
+                    return Ty::intern(TyKind::AssociatedTypeProjection {
                         base: base_ty,
-                        interface,
+                        interface: head,
                         member: member.clone(),
                         attr: attr(),
-                    }),
-                    None => Ty::error(),
+                    });
                 }
+                let explicit =
+                    interface.map(|interface| self.lower_type_ref(store, interface).to_plain());
+                let lowered = crate::interfaces::lower_projection(
+                    self.db,
+                    &self.plain_bounds_env(),
+                    base_ty.to_plain(),
+                    explicit,
+                    member.clone(),
+                );
+                self.record_projection_diags(lowered.diagnostics);
+                Ty::from_plain(&lowered.ty)
             }
             // `_` lowers to the var-less hole node; consumers apply policy
             // (signatures reject holes, inference instantiates them) - the
@@ -347,6 +353,63 @@ impl<'db> LowerCtx<'db> {
             // explicit; the diagnostic arrives with S17), `Error` was
             // already diagnosed at parse time.
             TypeRefKind::Error | TypeRefKind::Unknown => Ty::error(),
+        }
+    }
+
+    /// Resolve a projection's PREFIX as a written type path, with the
+    /// sink muted (an unresolvable prefix is not a diagnostic here - the
+    /// caller falls through to the ordinary unresolved-path report).
+    /// `None` for prefixes that do not name a type, and for enum heads
+    /// (an enum's dotted member is a variant, already given first
+    /// refusal).
+    fn probe_projection_prefix(&self, prefix: &[Name]) -> Option<Ty> {
+        match self.resolve_type(prefix)? {
+            Definition::Enum(_) => None,
+            _ => {
+                let saved = self.diags.as_ref().map(|d| d.borrow().len());
+                let ty = self.lower_path(prefix, Vec::new(), Vec::new());
+                if let (Some(diags), Some(saved)) = (&self.diags, saved) {
+                    diags.borrow_mut().truncate(saved);
+                }
+                (!ty.has_error()).then_some(ty)
+            }
+        }
+    }
+
+    /// The frame's bound env as the PLAIN constraint map the projection
+    /// determination judges through.
+    fn plain_bounds_env(&self) -> rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>> {
+        self.bounds
+            .iter()
+            .map(|(param, refs)| {
+                (
+                    param.clone(),
+                    refs.iter()
+                        .map(|bound| baml_type::Interface {
+                            name: bound.name.clone(),
+                            generics: bound.generics.iter().map(|g| g.to_plain()).collect(),
+                            associated_types: bound
+                                .associated_types
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                                .collect(),
+                        })
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// Record projection-determination diagnostics through the sink at the
+    /// current ref.
+    fn record_projection_diags(&self, errors: Vec<crate::diagnostics::TirTypeError>) {
+        if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
+            for error in errors {
+                diags.borrow_mut().push(LoweringDiag {
+                    type_ref,
+                    kind: LoweringDiagKind::Projection(Box::new(error)),
+                });
+            }
         }
     }
 
@@ -546,39 +609,70 @@ impl<'db> LowerCtx<'db> {
             }
             None
         };
-        if segments.len() > 1
-            && args.is_empty()
-            && bindings.is_empty()
-            && let Some(head) = projection_head()
-        {
-            let mut ty = head;
-            for member in &segments[1..] {
-                let Some(interface) = self.projection_interface_for(&ty, member) else {
-                    if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
-                        diags.borrow_mut().push(LoweringDiag {
-                            type_ref,
-                            kind: LoweringDiagKind::Unresolved {
-                                name: Name::new(
-                                    segments
-                                        .iter()
-                                        .map(Name::as_str)
-                                        .collect::<Vec<_>>()
-                                        .join("."),
-                                ),
-                                suggestions: Box::new([]),
-                            },
+        if segments.len() > 1 && args.is_empty() && bindings.is_empty() {
+            if let Some(head) = projection_head() {
+                let mut ty = head;
+                for member in &segments[1..] {
+                    // The impl-target qualifier road first (`Self.Member`
+                    // inside an implements block), then the full
+                    // determination (bound conjunctions, requires
+                    // closures, chained declared bounds).
+                    if let Some(interface) = self.projection_interface_for(&ty, member) {
+                        ty = Ty::intern(TyKind::AssociatedTypeProjection {
+                            base: ty,
+                            interface,
+                            member: member.clone(),
+                            attr: attr(),
                         });
+                        continue;
                     }
-                    return Ty::error();
-                };
-                ty = Ty::intern(TyKind::AssociatedTypeProjection {
-                    base: ty,
-                    interface,
-                    member: member.clone(),
-                    attr: attr(),
-                });
+                    let lowered = crate::interfaces::lower_projection(
+                        self.db,
+                        &self.plain_bounds_env(),
+                        ty.to_plain(),
+                        None,
+                        member.clone(),
+                    );
+                    self.record_projection_diags(lowered.diagnostics);
+                    ty = Ty::from_plain(&lowered.ty);
+                    if ty.has_error() {
+                        return ty;
+                    }
+                }
+                return ty;
             }
-            return ty;
+            // Type-headed prefix (`ArrayIterator.Element`, and the
+            // rejected interface-as-base `Iterator.Element` - Rust's
+            // E0223): the prefix resolves as an ordinary type path after
+            // enum variants had first refusal. Probed with the sink
+            // muted so an unresolvable prefix falls through to the
+            // ordinary unresolved-path report below.
+            if let Some(head) = self.probe_projection_prefix(&segments[..segments.len() - 1]) {
+                let member = segments.last().expect("checked len > 1");
+                let head_plain = head.to_plain();
+                if let Some(iface_qtn) = crate::interfaces::interface_base_without_member_pin(
+                    self.db,
+                    &head_plain,
+                    member,
+                ) {
+                    self.record_projection_diags(vec![
+                        crate::diagnostics::TirTypeError::InterfaceProjectionBase {
+                            interface: iface_qtn,
+                            member: member.clone(),
+                        },
+                    ]);
+                    return Ty::error();
+                }
+                let lowered = crate::interfaces::lower_projection(
+                    self.db,
+                    &self.plain_bounds_env(),
+                    head_plain,
+                    None,
+                    member.clone(),
+                );
+                self.record_projection_diags(lowered.diagnostics);
+                return Ty::from_plain(&lowered.ty);
+            }
         }
 
         if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
@@ -1456,6 +1550,7 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
         LoweringDiagKind::InvalidMapKey { key } => {
             TirTypeError::InvalidMapKeyType { key: key.clone() }
         }
+        LoweringDiagKind::Projection(error) => (**error).clone(),
         LoweringDiagKind::FnTypeMissingThrows => TirTypeError::FunctionTypeMissingThrows,
     }
 }
@@ -1681,8 +1776,8 @@ pub fn interface_lowering_diagnostics<'db>(
     // Field and required-method annotations judge for generic-argument
     // well-formedness in the interface's own scope.
     let scope_env = plain_scope_bounds(interface_scope_bounds(db, interface));
-    let mut judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId,
-                     out: &mut Vec<(text_size::TextRange, TirTypeError)>| {
+    let judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+                 out: &mut Vec<(text_size::TextRange, TirTypeError)>| {
         let lowered = ctx.lower_type_ref(&data.type_refs, type_ref);
         for error in
             crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
@@ -1710,8 +1805,7 @@ pub fn interface_lowering_diagnostics<'db>(
                 .get(index)
                 .map(|sig_map| sig_map.name_span)
                 .unwrap_or(source_map.name_span);
-            for error in
-                crate::interfaces::type_generic_bound_errors(db, &env, &method.function_ty)
+            for error in crate::interfaces::type_generic_bound_errors(db, &env, &method.function_ty)
             {
                 out.push((span, error));
             }
@@ -1820,11 +1914,9 @@ pub fn type_alias_lowering_diagnostics<'db>(
     // non-generic, so the scope env is empty). The walk expands nested
     // aliases itself; judging the WRITTEN body here keeps one report at
     // the declaration instead of one per use.
-    for error in crate::interfaces::type_generic_bound_errors(
-        db,
-        &FxHashMap::default(),
-        &lowered.to_plain(),
-    ) {
+    for error in
+        crate::interfaces::type_generic_bound_errors(db, &FxHashMap::default(), &lowered.to_plain())
+    {
         out.push((source_map.type_refs.span(value), error));
     }
     out

@@ -13,16 +13,17 @@ mod impl_rules;
 
 use baml_base::{Literal, Name};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
-use baml_type::normalize::TypeContext as _;
-use baml_type::pattern_overlap::TypeVarBoundsMap;
-use baml_type::unify::{AliasEquivCtx, TypeBindings, contains_bound_typevar};
-use baml_type::{ParamTy, QualifiedTypeName, Ty, TyAttr};
+use baml_type::{
+    ParamTy, QualifiedTypeName, Ty, TyAttr,
+    normalize::TypeContext as _,
+    pattern_overlap::TypeVarBoundsMap,
+    unify::{AliasEquivCtx, TypeBindings, contains_bound_typevar},
+};
 pub use coherence::*;
 pub use impl_rules::*;
 use rustc_hash::FxHashSet;
 
-use crate::diagnostics::TirTypeError;
-use crate::lower::qualify_def;
+use crate::{diagnostics::TirTypeError, lower::qualify_def};
 
 pub type AssociatedBindings = Vec<(Name, Ty)>;
 pub type InterfaceClosureEntry<'db> = (
@@ -1740,19 +1741,21 @@ fn collect_type_generic_bound_errors<'db>(
             if let Some(Definition::Interface(iface)) = facts.definition_of(qtn) {
                 let params = crate::lower::interface_declared_params(db, iface);
                 let plain = interface_declared_param_bounds(db, iface);
-                let declared: rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> =
-                    plain
-                        .iter()
-                        .map(|(param, bounds)| {
-                            (
-                                param.clone(),
-                                bounds
-                                    .iter()
-                                    .map(baml_type::interned::InterfaceRef::from_constraint)
-                                    .collect(),
-                            )
-                        })
-                        .collect();
+                let declared: rustc_hash::FxHashMap<
+                    ParamTy,
+                    Vec<baml_type::interned::InterfaceRef>,
+                > = plain
+                    .iter()
+                    .map(|(param, bounds)| {
+                        (
+                            param.clone(),
+                            bounds
+                                .iter()
+                                .map(baml_type::interned::InterfaceRef::from_constraint)
+                                .collect(),
+                        )
+                    })
+                    .collect();
                 check_head_args(facts, &params, &declared, args, errors);
             }
         }
@@ -1828,8 +1831,7 @@ fn check_head_args<'db>(
                     .collect(),
                 TyAttr::default(),
             );
-            let Some(bound) =
-                baml_type::unify::substitute_ty(&bound_ty, &bindings).as_interface()
+            let Some(bound) = baml_type::unify::substitute_ty(&bound_ty, &bindings).as_interface()
             else {
                 continue;
             };
@@ -1853,6 +1855,602 @@ fn check_head_args<'db>(
                     got: actual.clone(),
                 });
             }
+        }
+    }
+}
+
+// ── Associated-type projection determination (lowering) ────────────────────
+//
+// TIR's `builder::associated_projection`, on hir_ty's substrate: lowering a
+// written `base.member` / `(base as I).member` determines the declaring
+// interface so the canonical triple is self-describing. The mechanism is
+// fixed by the base's KIND - a type variable searches its bound
+// conjunction's `requires`-closures, an interface existential its own, a
+// concrete type its visible impls, a chained projection the inner member's
+// declared bound. An explicit qualifier narrows the search to its QTN and
+// must be proven; when the determined interface already pins `member`, the
+// projection collapses to the pin (opportunistic - realization is the
+// oracle's job).
+
+/// The result of lowering a projection: the resolved plain [`Ty`] - the
+/// canonical triple when the interface is determined, otherwise `Ty::Error`
+/// - plus the diagnostics the caller surfaces.
+pub struct ProjectionLowering {
+    pub ty: Ty,
+    pub diagnostics: Vec<TirTypeError>,
+}
+
+/// The outcome of resolving which interface declares a projection's member.
+enum Determination {
+    Determined(baml_type::Interface),
+    Undeclared {
+        container: crate::diagnostics::AssocContainer,
+    },
+    Ambiguous(Vec<baml_type::Interface>),
+    SubjectDoesNotImplementQualifier {
+        subject: Ty,
+        qualifier: baml_type::Interface,
+    },
+    InvalidBase,
+    Poisoned,
+}
+
+/// Whether `ty` already carries an upstream error, so a projection over it
+/// must not emit a fresh diagnostic.
+fn projection_poisoned(ty: &Ty) -> bool {
+    matches!(
+        ty,
+        Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. }
+    )
+}
+
+/// Lower `base.member` or `(base as explicit).member` to its canonical
+/// projection, determining the declaring interface. `scope_bounds` is the
+/// enclosing scope's PLAIN param env (a type variable base resolves through
+/// it); `pkg` scopes equivalence and alias expansion.
+pub fn lower_projection<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
+    base: Ty,
+    explicit_interface: Option<Ty>,
+    member: Name,
+) -> ProjectionLowering {
+    let facts = crate::facts::Facts::with_bounds(db, scope_bounds.clone());
+    let mut diagnostics = Vec::new();
+    let explicit = match explicit_interface {
+        None => None,
+        Some(iface_ty) => {
+            let iface_ty = projection_expand_aliases(&facts, iface_ty);
+            match iface_ty.as_interface() {
+                Some(interface) => Some(interface),
+                None if projection_poisoned(&iface_ty) => {
+                    return ProjectionLowering {
+                        ty: Ty::Error {
+                            attr: TyAttr::default(),
+                        },
+                        diagnostics,
+                    };
+                }
+                None => {
+                    diagnostics.push(TirTypeError::NonInterfaceProjectionQualifier);
+                    return ProjectionLowering {
+                        ty: Ty::Error {
+                            attr: TyAttr::default(),
+                        },
+                        diagnostics,
+                    };
+                }
+            }
+        }
+    };
+    let ty = match determine_interface(db, &facts, &base, explicit, &member) {
+        Determination::Determined(interface) => {
+            if let Some((_, pinned)) = interface
+                .associated_types
+                .iter()
+                .find(|(name, _)| *name == member)
+            {
+                pinned.clone()
+            } else {
+                Ty::AssociatedTypeProjection {
+                    base: Box::new(base),
+                    interface: Box::new(interface),
+                    member,
+                    attr: TyAttr::default(),
+                }
+            }
+        }
+        Determination::Undeclared { container } => {
+            diagnostics.push(TirTypeError::UnknownAssociatedType { member, container });
+            Ty::Error {
+                attr: TyAttr::default(),
+            }
+        }
+        Determination::Ambiguous(candidates) => {
+            diagnostics.push(TirTypeError::AmbiguousAssociatedTypeProjection {
+                member,
+                candidates: candidates.into_iter().map(|iface| iface.name).collect(),
+            });
+            Ty::Error {
+                attr: TyAttr::default(),
+            }
+        }
+        Determination::SubjectDoesNotImplementQualifier { subject, qualifier } => {
+            diagnostics.push(TirTypeError::TypeDoesNotImplementInterface {
+                value_type: subject,
+                interface: qualifier.to_ty(),
+            });
+            Ty::Error {
+                attr: TyAttr::default(),
+            }
+        }
+        Determination::InvalidBase | Determination::Poisoned => Ty::Error {
+            attr: TyAttr::default(),
+        },
+    };
+    ProjectionLowering { ty, diagnostics }
+}
+
+fn determine_interface<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &crate::facts::Facts<'db>,
+    base: &Ty,
+    explicit: Option<baml_type::Interface>,
+    member: &Name,
+) -> Determination {
+    use crate::diagnostics::AssocContainer;
+    // An explicit qualifier must declare `member` DIRECTLY: `requires` is a
+    // bound, not inheritance.
+    if let Some(qualifier) = &explicit
+        && !interface_declares_member(db, &qualifier.name, member)
+    {
+        return Determination::Undeclared {
+            container: AssocContainer::Interface(qualifier.name.clone()),
+        };
+    }
+    let base = projection_expand_aliases(facts, base.clone());
+    match &base {
+        Ty::Interface(qtn, args, assoc, _) => {
+            let root = baml_type::Interface::new(qtn.clone(), args.clone(), assoc.clone());
+            let undeclared = AssocContainer::Interface(root.name.clone());
+            resolve_via_roots(
+                db,
+                facts,
+                vec![root],
+                explicit,
+                member,
+                undeclared,
+                &base,
+                true,
+            )
+        }
+        Ty::TypeVar(param, _) => {
+            use baml_type::normalize::TypeContext as _;
+            let bounds = facts.type_var_bound(param);
+            if bounds.is_empty() {
+                match explicit {
+                    Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
+                        subject: base.clone(),
+                        qualifier,
+                    },
+                    None => Determination::Undeclared {
+                        container: AssocContainer::TypeVar(param.name().clone()),
+                    },
+                }
+            } else {
+                let undeclared = AssocContainer::Interface(bounds[0].name.clone());
+                resolve_via_roots(
+                    db, facts, bounds, explicit, member, undeclared, &base, false,
+                )
+            }
+        }
+        Ty::Class(..)
+        | Ty::Enum(..)
+        | Ty::List(..)
+        | Ty::Map { .. }
+        | Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::EnumVariant(..) => match explicit {
+            None => determine_concrete(db, facts, &base, member),
+            Some(qualifier) => match concrete_realized_interface(db, facts, &base, &qualifier) {
+                Some(realized) => Determination::Determined(realized),
+                None => Determination::SubjectDoesNotImplementQualifier {
+                    subject: base.clone(),
+                    qualifier,
+                },
+            },
+        },
+        Ty::AssociatedTypeProjection {
+            base: inner_base,
+            interface: inner_interface,
+            member: inner_member,
+            ..
+        } => {
+            let inner_ref = baml_type::interned::InterfaceRef::from_constraint(inner_interface);
+            let inner_base_interned = baml_type::interned::Ty::from_plain(inner_base);
+            let root = crate::impls::realized_assoc_bound(
+                db,
+                &inner_ref,
+                &inner_base_interned,
+                inner_member,
+            )
+            .and_then(|bound| bound.to_plain().as_interface());
+            match root {
+                Some(root) => {
+                    let container = AssocContainer::Interface(root.name.clone());
+                    resolve_via_roots(
+                        db,
+                        facts,
+                        vec![root],
+                        explicit,
+                        member,
+                        container,
+                        &base,
+                        false,
+                    )
+                }
+                None => match explicit {
+                    Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
+                        subject: base.clone(),
+                        qualifier,
+                    },
+                    None => Determination::Undeclared {
+                        container: AssocContainer::Ty(base.clone()),
+                    },
+                },
+            }
+        }
+        Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => {
+            Determination::Poisoned
+        }
+        Ty::TypeAlias(..) => Determination::Poisoned,
+        _ => match explicit {
+            Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
+                subject: base.clone(),
+                qualifier,
+            },
+            None => Determination::InvalidBase,
+        },
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_via_roots<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &crate::facts::Facts<'db>,
+    roots: Vec<baml_type::Interface>,
+    explicit: Option<baml_type::Interface>,
+    member: &Name,
+    undeclared: crate::diagnostics::AssocContainer,
+    subject: &Ty,
+    // An existential root denotes one complete instantiation, so its
+    // closure view fills defaulted members; a RIGID root (a bound, a
+    // chained projection's declared bound) leaves them unpinned - the
+    // implementor may override.
+    fill_defaults: bool,
+) -> Determination {
+    match explicit {
+        None => resolve_through_roots(db, roots, member, undeclared, fill_defaults),
+        Some(qualifier) => {
+            match realize_qualifier_through_roots(db, facts, &roots, &qualifier, fill_defaults) {
+                Some(realized) => Determination::Determined(realized),
+                None => Determination::SubjectDoesNotImplementQualifier {
+                    subject: subject.clone(),
+                    qualifier,
+                },
+            }
+        }
+    }
+}
+
+fn realize_qualifier_through_roots<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &crate::facts::Facts<'db>,
+    roots: &[baml_type::Interface],
+    qualifier: &baml_type::Interface,
+    fill_defaults: bool,
+) -> Option<baml_type::Interface> {
+    for root in roots {
+        let Some(root_loc) = projection_interface_loc(db, &root.name) else {
+            continue;
+        };
+        for entry in interface_closure_locs_with_args_and_assoc(
+            db,
+            root_loc,
+            &root.generics,
+            &root.associated_types,
+            fill_defaults,
+        ) {
+            let (loc, args, assoc) = entry;
+            if let Some(qtn) = interface_loc_qtn(db, loc)
+                && qtn == qualifier.name
+            {
+                let realized = baml_type::Interface::new(qtn, args, assoc);
+                if qualifier_compatible_with_realization(facts, qualifier, &realized) {
+                    return Some(realized);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Every written qualifier constraint must be consistent with the
+/// realization the roots prove; symbolic positions fail open.
+fn qualifier_compatible_with_realization(
+    facts: &crate::facts::Facts<'_>,
+    qualifier: &baml_type::Interface,
+    realized: &baml_type::Interface,
+) -> bool {
+    let equivalent = |a: &Ty, b: &Ty| baml_type::normalize::equivalent(a, b, facts);
+    let symbolic = |ty: &Ty| baml_type_runtime::contains_typevar(ty);
+    if !qualifier.generics.is_empty() {
+        if qualifier.generics.len() != realized.generics.len() {
+            return false;
+        }
+        for (written, real) in qualifier.generics.iter().zip(realized.generics.iter()) {
+            if symbolic(written) || symbolic(real) {
+                continue;
+            }
+            if !equivalent(written, real) {
+                return false;
+            }
+        }
+    }
+    for (name, written) in &qualifier.associated_types {
+        let Some((_, real)) = realized
+            .associated_types
+            .iter()
+            .find(|(real_name, _)| real_name == name)
+        else {
+            return false;
+        };
+        if symbolic(written) || symbolic(real) {
+            continue;
+        }
+        if !equivalent(written, real) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Unqualified: search every root - a root that declares `member` directly
+/// shadows its own closure (the stdlib's `Iterator requires
+/// Iterable<Item = Self.Item>` pinning idiom depends on it); declarers
+/// dedupe by realized identity across the pool.
+fn resolve_through_roots<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    roots: Vec<baml_type::Interface>,
+    member: &Name,
+    undeclared: crate::diagnostics::AssocContainer,
+    fill_defaults: bool,
+) -> Determination {
+    let mut declarers: Vec<baml_type::Interface> = Vec::new();
+    let push = |declarers: &mut Vec<baml_type::Interface>, interface: baml_type::Interface| {
+        if !declarers.contains(&interface) {
+            declarers.push(interface);
+        }
+    };
+    for root in roots {
+        if interface_declares_member(db, &root.name, member) {
+            push(&mut declarers, root);
+            continue;
+        }
+        let Some(root_loc) = projection_interface_loc(db, &root.name) else {
+            continue;
+        };
+        for (loc, args, assoc) in interface_closure_locs_with_args_and_assoc(
+            db,
+            root_loc,
+            &root.generics,
+            &root.associated_types,
+            fill_defaults,
+        ) {
+            if !interface_declares_member_at(db, loc, member) {
+                continue;
+            }
+            let Some(qtn) = interface_loc_qtn(db, loc) else {
+                continue;
+            };
+            push(&mut declarers, baml_type::Interface::new(qtn, args, assoc));
+        }
+    }
+    match declarers.len() {
+        0 => Determination::Undeclared {
+            container: undeclared,
+        },
+        1 => Determination::Determined(declarers.pop().expect("length checked")),
+        _ => Determination::Ambiguous(declarers),
+    }
+}
+
+/// A concrete base's projection through its visible impls, requires-aware
+/// root-wins across declarers (the most-derived interface shadows one it
+/// transitively requires, mirroring the symbolic road).
+fn determine_concrete<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &crate::facts::Facts<'db>,
+    base: &Ty,
+    member: &Name,
+) -> Determination {
+    use crate::diagnostics::AssocContainer;
+    let interned = match crate::impls::try_interned_ty(base) {
+        Some(interned) => interned,
+        None => return Determination::Poisoned,
+    };
+    let mut declarers: Vec<baml_type::Interface> = Vec::new();
+    for resolved in crate::impls::impls_for_type(db, &interned) {
+        let view = resolved.implemented_view(db, &interned);
+        let interface = baml_type::Interface {
+            name: view.name.clone(),
+            generics: view.generics.iter().map(|g| g.to_plain()).collect(),
+            associated_types: view
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                .collect(),
+        };
+        if interface_declares_member(db, &interface.name, member) && !declarers.contains(&interface)
+        {
+            declarers.push(interface);
+        }
+    }
+    if declarers.len() > 1 {
+        let heads: Vec<baml_type::interned::InterfaceRef> = declarers
+            .iter()
+            .map(|iface| {
+                baml_type::interned::InterfaceRef::new(
+                    iface.name.clone(),
+                    iface
+                        .generics
+                        .iter()
+                        .map(baml_type::interned::Ty::from_plain)
+                        .collect(),
+                    Vec::new(),
+                )
+            })
+            .collect();
+        let keep: Vec<bool> = heads
+            .iter()
+            .map(|head| {
+                !heads.iter().any(|other| {
+                    other.name != head.name
+                        && crate::impls::interface_requires(db, other, head, &interned, 8)
+                })
+            })
+            .collect();
+        declarers = declarers
+            .into_iter()
+            .zip(keep)
+            .filter_map(|(declarer, keep)| keep.then_some(declarer))
+            .collect();
+    }
+    let _ = facts;
+    match declarers.len() {
+        0 => Determination::Undeclared {
+            container: match base {
+                Ty::Class(qtn, ..) => AssocContainer::Class(qtn.clone()),
+                Ty::Enum(qtn, ..) => AssocContainer::Enum(qtn.clone()),
+                _ => AssocContainer::Ty(base.clone()),
+            },
+        },
+        1 => Determination::Determined(declarers.pop().expect("length checked")),
+        _ => Determination::Ambiguous(declarers),
+    }
+}
+
+/// A concrete base's realized view of the WRITTEN qualifier - the impl of
+/// that interface, when the base has one.
+fn concrete_realized_interface<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &crate::facts::Facts<'db>,
+    base: &Ty,
+    qualifier: &baml_type::Interface,
+) -> Option<baml_type::Interface> {
+    let interned = crate::impls::try_interned_ty(base)?;
+    for resolved in crate::impls::impls_for_type(db, &interned) {
+        let view = resolved.implemented_view(db, &interned);
+        if view.name != qualifier.name {
+            continue;
+        }
+        let realized = baml_type::Interface {
+            name: view.name.clone(),
+            generics: view.generics.iter().map(|g| g.to_plain()).collect(),
+            associated_types: view
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                .collect(),
+        };
+        if qualifier_compatible_with_realization(facts, qualifier, &realized) {
+            return Some(realized);
+        }
+    }
+    None
+}
+
+/// Expand a top-level alias chain, bounded against cycles.
+fn projection_expand_aliases(facts: &crate::facts::Facts<'_>, mut ty: Ty) -> Ty {
+    use baml_type::normalize::TypeContext as _;
+    for _ in 0..64 {
+        let Ty::TypeAlias(qtn, _) = &ty else {
+            return ty;
+        };
+        match facts.alias_def(qtn) {
+            Some(expanded) => ty = expanded,
+            None => return ty,
+        }
+    }
+    ty
+}
+
+fn interface_declares_member(
+    db: &dyn baml_compiler2_ppir::Db,
+    qtn: &QualifiedTypeName,
+    member: &Name,
+) -> bool {
+    projection_interface_loc(db, qtn)
+        .is_some_and(|loc| interface_declares_member_at(db, loc, member))
+}
+
+fn interface_declares_member_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
+    member: &Name,
+) -> bool {
+    baml_compiler2_ppir::item_data::interface_data(db, loc)
+        .associated_types
+        .iter()
+        .any(|assoc| &assoc.name == member)
+}
+
+fn projection_interface_loc<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    qtn: &QualifiedTypeName,
+) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    match pkg_items.lookup_type(qtn.namespace(), qtn.name())? {
+        Definition::Interface(loc) => Some(loc),
+        _ => None,
+    }
+}
+
+/// The interface a WRITTEN projection-base names without determining
+/// `member` - the invalid interface-as-base spelling (Rust's E0223). The
+/// one interface-headed base that CAN resolve is an alias of a fully-pinned
+/// existential whose spelling pins `member`; that shape passes (`None`).
+pub fn interface_base_without_member_pin(
+    db: &dyn baml_compiler2_ppir::Db,
+    base_ty: &Ty,
+    member: &Name,
+) -> Option<QualifiedTypeName> {
+    let facts = crate::facts::Facts::new(db);
+    use baml_type::normalize::TypeContext as _;
+    let mut seen: FxHashSet<QualifiedTypeName> = FxHashSet::default();
+    let mut current = base_ty.clone();
+    loop {
+        match current {
+            Ty::Interface(qtn, _, pins, _) => {
+                return (!pins.iter().any(|(name, _)| name == member)).then_some(qtn);
+            }
+            Ty::TypeAlias(qtn, _) => {
+                if !seen.insert(qtn.clone()) {
+                    return None;
+                }
+                match facts.alias_def(&qtn) {
+                    Some(expanded) => current = expanded,
+                    None => return None,
+                }
+            }
+            _ => return None,
         }
     }
 }

@@ -405,9 +405,11 @@ fn load_callable_throws(
 #[cfg(test)]
 mod tests {
     use baml_db::{
-        Name, baml_compiler2_hir, baml_compiler2_hir_ty::callable::callable_throws,
-        baml_compiler2_hir_ty::package_interface,
-        baml_compiler2_hir_ty::throw_facts::file_throw_facts, baml_compiler2_ppir,
+        Name, baml_compiler2_hir,
+        baml_compiler2_hir_ty::{
+            callable::callable_throws, package_interface, throw_facts::file_throw_facts,
+        },
+        baml_compiler2_ppir,
     };
     use baml_project::ProjectDatabase;
 

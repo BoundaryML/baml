@@ -8,7 +8,7 @@
 //! `PackageResolutionContext` bundles a package's own `PackageItems` with its
 //! dependencies' `PackageInterface`s, providing unified lookup methods.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::BuiltinKind;
@@ -18,11 +18,8 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, TypeAliasLoc},
     package::{PackageId, PackageItems, package_dependencies},
 };
-use rustc_hash::{FxHashMap, FxHashSet};
-
-use std::collections::BTreeSet;
-
 use baml_type::{FunctionParamMode, FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::lower::qualify_def;
 

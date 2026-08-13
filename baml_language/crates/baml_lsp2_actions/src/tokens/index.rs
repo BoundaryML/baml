@@ -21,8 +21,7 @@ use std::{collections::HashMap, sync::Arc};
 use baml_base::SourceFile;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId};
 use baml_compiler2_hir::scope::{ScopeId, ScopeKind};
-use baml_compiler2_hir_ty::ide::scope_body;
-use baml_compiler2_hir_ty::infer::InferenceResult;
+use baml_compiler2_hir_ty::{ide::scope_body, infer::InferenceResult};
 use baml_compiler2_ppir::resolve::{
     ResolvedName, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
 };
