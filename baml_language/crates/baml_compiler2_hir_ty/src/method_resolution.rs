@@ -48,11 +48,19 @@ pub fn lookup_method<'db>(
     name: &Name,
 ) -> Option<MethodCandidate<'db>> {
     let (class, class_args) = receiver_class(facts, receiver, 8)?;
+    // Class-INHERENT methods only: a method declared inside an
+    // `implements I { .. }` block belongs to impl space and resolves
+    // through the trait-impl tier - resolving it here would silently
+    // pick one interface's method when several implemented interfaces
+    // declare the same name (E0121's case).
     let method = baml_compiler2_ppir::item_data::class_data(db, class)
         .methods
         .iter()
         .copied()
-        .find(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)?;
+        .find(|&method| {
+            baml_compiler2_ppir::item_data::function_data(db, method).name == *name
+                && baml_compiler2_ppir::item_data::method_interface_target(db, method).is_none()
+        })?;
     Some(MethodCandidate {
         method,
         class,
@@ -199,11 +207,25 @@ pub struct PendingOwnGenerics<'db> {
 pub enum InterfaceMemberLookup<'db> {
     Found(InterfaceMember<'db>),
     /// Two or more realized-distinct interfaces declare the member.
-    /// `sources` are their qualified display names, for the `as<I>`
-    /// disambiguation hint.
+    /// `sources` are the realized declaring interfaces, rendered
+    /// qualified at report time for the `as<I>` disambiguation hint.
     Ambiguous {
-        sources: Vec<String>,
+        sources: Vec<InterfaceRef>,
         is_field: bool,
+    },
+    /// A concrete receiver reached an interface FIELD: reachable only
+    /// through an explicit `obj.as<I>.field` projection (TIR's rule -
+    /// a class-owned field of the same name resolves earlier in the
+    /// caller's ladder, so this is the interface-only case).
+    FieldRequiresProjection {
+        interface: InterfaceRef,
+    },
+    /// The member exists on the interface but uses `Self` outside the
+    /// receiver position, so it is uncallable through an existential
+    /// (or union) receiver - Rust's `dyn Trait` object-safety split.
+    SelfRestricted {
+        interface: InterfaceRef,
+        position: crate::diagnostics::SelfCallPosition,
     },
     NotFound,
 }
@@ -253,12 +275,7 @@ pub fn lookup_interface_member<'db>(
         } => (assoc_bound_roots(db, facts, base, interface, member), false),
         // Concrete receivers resolve through the impls they match - the
         // trait-impl candidate tier (I6).
-        _ => {
-            return match lookup_impl_member(db, facts, receiver, name) {
-                Some(member) => InterfaceMemberLookup::Found(member),
-                None => InterfaceMemberLookup::NotFound,
-            };
-        }
+        _ => return lookup_impl_member(db, facts, receiver, name),
     };
     let mut declarers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
     let push = |declarers: &mut Vec<(InterfaceRef, InterfaceMember<'db>)>,
@@ -283,7 +300,23 @@ pub fn lookup_interface_member<'db>(
         }
     }
     match declarers.len() {
-        0 => InterfaceMemberLookup::NotFound,
+        0 => {
+            // No resolvable declarer - but an existential receiver may
+            // have SKIPPED a declared method for using `Self` outside
+            // the receiver position. Say that, not "no member".
+            if existential {
+                for root in &roots {
+                    if let Some(position) = declared_method_self_restriction(db, facts, root, name)
+                    {
+                        return InterfaceMemberLookup::SelfRestricted {
+                            interface: root.clone(),
+                            position,
+                        };
+                    }
+                }
+            }
+            InterfaceMemberLookup::NotFound
+        }
         1 => {
             let (_, member) = declarers.pop().expect("len checked");
             InterfaceMemberLookup::Found(member)
@@ -292,9 +325,57 @@ pub fn lookup_interface_member<'db>(
             is_field: !declarers[0].1.is_method,
             sources: declarers
                 .iter()
-                .map(|(realized, _)| realized.name.render_user_facing())
+                .map(|(realized, _)| realized.clone())
                 .collect(),
         },
+    }
+}
+
+/// Whether `target` declares method `name` with a `Self` use that makes it
+/// uncallable through an existential receiver, and where that use sits.
+fn declared_method_self_restriction<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    target: &InterfaceRef,
+    name: &Name,
+) -> Option<crate::diagnostics::SelfCallPosition> {
+    let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
+        return None;
+    };
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let method =
+        data.methods.iter().copied().find(|&method| {
+            baml_compiler2_ppir::item_data::function_data(db, method).name == *name
+        })?;
+    let signature = crate::lower::function_signature(db, method);
+    signature_breaks_one_self(signature).then(|| {
+        if signature
+            .params
+            .iter()
+            .skip(1)
+            .any(|param| self_occurs(&param.ty, false))
+        {
+            crate::diagnostics::SelfCallPosition::Parameter
+        } else {
+            crate::diagnostics::SelfCallPosition::NestedInReturn
+        }
+    })
+}
+
+/// The concrete-receiver impl tier's AMBIGUITY verdict alone - consulted
+/// even when the class-inherent tier found a method, because an own
+/// method does not arbitrate an interface clash: two implemented
+/// interfaces declaring the name still need `as<I>` qualification
+/// (E0121, TIR's rule).
+pub fn concrete_member_ambiguity<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    receiver: &Ty,
+    name: &Name,
+) -> Option<(Vec<InterfaceRef>, bool)> {
+    match lookup_impl_member(db, facts, receiver, name) {
+        InterfaceMemberLookup::Ambiguous { sources, is_field } => Some((sources, is_field)),
+        _ => None,
     }
 }
 
@@ -315,7 +396,7 @@ fn lookup_impl_member<'db>(
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
-) -> Option<InterfaceMember<'db>> {
+) -> InterfaceMemberLookup<'db> {
     let mut providers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
     for resolved in crate::impls::impls_for_type(db, receiver) {
         if !env_discharges_rigid_bounds(db, facts, &resolved) {
@@ -355,6 +436,27 @@ fn lookup_impl_member<'db>(
             providers.push((implemented, member));
         }
     }
+    // Interface FIELDS on a concrete receiver are projection-only (TIR's
+    // rule): a class-owned field of the same name resolved earlier in the
+    // caller's ladder, so a field reached here needs `obj.as<I>.field` -
+    // and two distinct declaring interfaces make even that ambiguous.
+    let field_sources: Vec<InterfaceRef> = providers
+        .iter()
+        .filter(|(_, member)| !member.is_method)
+        .map(|(target, _)| target.clone())
+        .collect();
+    if field_sources.len() >= 2 {
+        return InterfaceMemberLookup::Ambiguous {
+            sources: field_sources,
+            is_field: true,
+        };
+    }
+    if let Some(interface) = field_sources.into_iter().next() {
+        return InterfaceMemberLookup::FieldRequiresProjection { interface };
+    }
+
+    // Interface methods: the most-derived provider shadows the ones it
+    // `requires` (root-wins); distinct survivors are ambiguous (E0121).
     if providers.len() > 1 {
         let heads: Vec<InterfaceRef> = providers.iter().map(|(target, _)| target.clone()).collect();
         providers.retain(|(target, _)| {
@@ -365,8 +467,15 @@ fn lookup_impl_member<'db>(
         });
     }
     match providers.len() {
-        1 => providers.pop().map(|(_, member)| member),
-        _ => None,
+        0 => InterfaceMemberLookup::NotFound,
+        1 => {
+            let (_, member) = providers.pop().expect("len checked");
+            InterfaceMemberLookup::Found(member)
+        }
+        _ => InterfaceMemberLookup::Ambiguous {
+            sources: providers.into_iter().map(|(target, _)| target).collect(),
+            is_field: false,
+        },
     }
 }
 
@@ -661,4 +770,166 @@ fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
             found
         }
     }
+}
+
+// ── Union member resolution (TIR's `resolve_union_member`) ─────────────
+
+/// The outcome of resolving a member on a UNION receiver. A union behaves
+/// as the intersection existential over the interfaces every arm
+/// provides: the member resolves through the SINGLE shared interface that
+/// declares it - inference sugar for `union.as<I>.member`. Class-owned
+/// fields/methods of the arms are never reachable (they need not agree
+/// across arms).
+pub enum UnionMemberLookup<'db> {
+    Found(InterfaceMember<'db>),
+    /// Two or more shared interfaces declare the member.
+    Ambiguous {
+        sources: Vec<InterfaceRef>,
+        is_field: bool,
+    },
+    /// The single shared declarer's method uses `Self` outside the
+    /// receiver position - uncallable through the union view.
+    SelfRestricted {
+        interface: InterfaceRef,
+        position: crate::diagnostics::SelfCallPosition,
+    },
+    /// No interface shared by every arm declares the member.
+    NoCommonInterface,
+}
+
+pub fn lookup_union_member<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    union_ty: &Ty,
+    members: &[Ty],
+    name: &Name,
+) -> UnionMemberLookup<'db> {
+    let mut shared: Option<Vec<InterfaceRef>> = None;
+    for arm in members {
+        let arm_ifaces = union_arm_interfaces(db, facts, arm, 4);
+        shared = Some(match shared {
+            None => arm_ifaces,
+            Some(mut current) => {
+                current.retain(|iface| arm_ifaces.iter().any(|other| other == iface));
+                current
+            }
+        });
+        if shared.as_ref().is_some_and(Vec::is_empty) {
+            break;
+        }
+    }
+    let mut declarers: Vec<(InterfaceRef, bool)> = Vec::new();
+    for iface in shared.unwrap_or_default() {
+        if let Some(is_field) = interface_declares_member(db, facts, &iface, name)
+            && !declarers.iter().any(|(seen, _)| *seen == iface)
+        {
+            declarers.push((iface, is_field));
+        }
+    }
+    match declarers.len() {
+        0 => UnionMemberLookup::NoCommonInterface,
+        1 => {
+            let (iface, _) = declarers.pop().expect("len checked");
+            // The virtual dispatch goes through the shared interface, but
+            // `Self` binds to the union itself (the subtype of the
+            // interface existential), so a `Self`-returning method yields
+            // the union rather than the erased interface. One-`Self`
+            // object safety applies exactly as for an existential.
+            match member_on_interface(db, facts, &iface, union_ty, name, true) {
+                Some(member) => UnionMemberLookup::Found(member),
+                None => match declared_method_self_restriction(db, facts, &iface, name) {
+                    Some(position) => UnionMemberLookup::SelfRestricted {
+                        interface: iface,
+                        position,
+                    },
+                    None => UnionMemberLookup::NoCommonInterface,
+                },
+            }
+        }
+        _ => UnionMemberLookup::Ambiguous {
+            is_field: declarers[0].1,
+            sources: declarers.into_iter().map(|(iface, _)| iface).collect(),
+        },
+    }
+}
+
+/// The realized interfaces one union arm provides: an interface
+/// existential contributes itself plus its `requires` closure; a bounded
+/// type variable contributes each conjunct's contribution; a concrete arm
+/// contributes its matched impls' realized interfaces.
+fn union_arm_interfaces<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    arm: &Ty,
+    fuel: u32,
+) -> Vec<InterfaceRef> {
+    if fuel == 0 {
+        return Vec::new();
+    }
+    match arm.kind() {
+        TyKind::Interface(qtn, args, pins, _) => {
+            let root = InterfaceRef::new(qtn.clone(), (args.to_vec()).into(), pins.to_vec());
+            let mut out = vec![root.clone()];
+            for required in crate::impls::direct_requires_closure(db, &root, arm, 8) {
+                if !out.contains(&required) {
+                    out.push(required);
+                }
+            }
+            out
+        }
+        TyKind::TypeVar(param, _) => {
+            let mut out = Vec::new();
+            for bound in baml_type::normalize::TypeContext::type_var_bound(facts, param) {
+                let root = InterfaceRef::from_constraint(&bound);
+                if !out.contains(&root) {
+                    out.push(root.clone());
+                }
+                for required in crate::impls::direct_requires_closure(db, &root, arm, 8) {
+                    if !out.contains(&required) {
+                        out.push(required);
+                    }
+                }
+            }
+            out
+        }
+        _ => {
+            let mut out = Vec::new();
+            for resolved in crate::impls::impls_for_type(db, arm) {
+                if !env_discharges_rigid_bounds(db, facts, &resolved) {
+                    continue;
+                }
+                let implemented = resolved.implemented();
+                if !out.contains(&implemented) {
+                    out.push(implemented);
+                }
+            }
+            out
+        }
+    }
+}
+
+/// Whether the interface declares `name`, and as which kind
+/// (`Some(true)` = field). Side-effect-free - used to count shared
+/// declarers before committing to a virtual resolution.
+fn interface_declares_member<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    target: &InterfaceRef,
+    name: &Name,
+) -> Option<bool> {
+    let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
+        return None;
+    };
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    if data.fields.iter().any(|field| field.name == *name) {
+        return Some(true);
+    }
+    if data
+        .methods
+        .iter()
+        .any(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)
+    {
+        return Some(false);
+    }
+    None
 }

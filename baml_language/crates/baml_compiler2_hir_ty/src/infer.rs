@@ -570,8 +570,32 @@ enum PendingDiag<'db> {
         expr: ExprId,
         base: Ty,
         member: baml_type::Name,
-        sources: Vec<String>,
+        sources: Vec<baml_type::interned::InterfaceRef>,
         is_field: bool,
+    },
+    /// An interface FIELD reached on a concrete receiver: reachable only
+    /// through an explicit `obj.as<I>.field` projection.
+    FieldRequiresProjection {
+        expr: ExprId,
+        base: Ty,
+        member: baml_type::Name,
+        interface: baml_type::interned::InterfaceRef,
+    },
+    /// A method declared with `Self` outside the receiver position,
+    /// called through an existential/union receiver (Rust's `dyn`
+    /// object-safety split).
+    SelfRestrictedMember {
+        expr: ExprId,
+        interface: baml_type::interned::InterfaceRef,
+        member: baml_type::Name,
+        position: crate::diagnostics::SelfCallPosition,
+    },
+    /// A member on a union receiver with no interface shared by every
+    /// arm declaring it.
+    UnionNoCommonInterface {
+        expr: ExprId,
+        base: Ty,
+        member: baml_type::Name,
     },
     NotCallable {
         expr: ExprId,
@@ -4283,28 +4307,81 @@ impl<'db> InferenceContext<'db> {
         member: &baml_type::Name,
     ) -> (Ty, bool, Option<MemberResolution<'db>>, bool) {
         let resolved = self.structurally_resolve(receiver);
-        // Callee position on a UNION: every member must yield the
-        // member as a callable with IDENTICAL parameters and boundness
-        // (the forced case; differing signatures are S17's ambiguity) -
-        // returns JOIN, throws union. `structurally_resolve` already
-        // expanded weak aliases.
+        // Callee position on a UNION: the member resolves through the
+        // single interface every arm shares (TIR's rule - the union as
+        // the intersection existential), `Self` bound to the union. No
+        // shared declarer FALLS THROUGH - the operator-style sugars at
+        // the bottom of the ladder are TOTAL and apply to the WHOLE
+        // union (`(int | null).to_string()` is `string.from<int | null>`);
+        // a full miss then reports "no common interface" instead of the
+        // bare "no member".
         if let TyKind::Union(union_members, _) = resolved.kind() {
             let union_members = union_members.to_vec();
-            if let Some((ty, bound)) =
-                self.union_member_callee(call, member_expr, &union_members, member)
-            {
-                // One expression, one recorded entry: the union access
-                // has no single declaration (its virtual view is an S16
-                // follow-up).
-                return (ty, bound, None, false);
+            match crate::method_resolution::lookup_union_member(
+                self.db,
+                &self.facts,
+                &resolved,
+                &union_members,
+                member,
+            ) {
+                crate::method_resolution::UnionMemberLookup::Found(interface_member) => {
+                    let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                    let (ty, bound) = self.interface_member_callee(interface_member, call);
+                    return (ty, bound, resolution, false);
+                }
+                crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
+                    if self.member_probe_depth == 0 {
+                        self.pending_diags.push(PendingDiag::AmbiguousMember {
+                            expr: member_expr,
+                            base: resolved.clone(),
+                            member: member.clone(),
+                            sources,
+                            is_field,
+                        });
+                    }
+                    return (Ty::error(), false, None, false);
+                }
+                crate::method_resolution::UnionMemberLookup::SelfRestricted {
+                    interface,
+                    position,
+                } => {
+                    if self.member_probe_depth == 0 {
+                        self.pending_diags.push(PendingDiag::SelfRestrictedMember {
+                            expr: member_expr,
+                            interface,
+                            member: member.clone(),
+                            position,
+                        });
+                    }
+                    return (Ty::error(), false, None, false);
+                }
+                crate::method_resolution::UnionMemberLookup::NoCommonInterface => {}
             }
-            // No per-member resolution: FALL THROUGH - the
-            // operator-style sugars at the bottom of the ladder are
-            // TOTAL and apply to the WHOLE union
-            // (`(int | null).to_string()` is `string.from<int | null>`).
         }
         let candidate =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
+        // An own method does not arbitrate an interface clash: two
+        // implemented interfaces declaring `member` still make the
+        // unqualified access ambiguous (E0121), own method or not.
+        if candidate.is_some()
+            && let Some((sources, is_field)) = crate::method_resolution::concrete_member_ambiguity(
+                self.db,
+                &self.facts,
+                &resolved,
+                member,
+            )
+        {
+            if self.member_probe_depth == 0 {
+                self.pending_diags.push(PendingDiag::AmbiguousMember {
+                    expr: member_expr,
+                    base: resolved.clone(),
+                    member: member.clone(),
+                    sources,
+                    is_field,
+                });
+            }
+            return (Ty::error(), false, None, false);
+        }
         let Some(candidate) = candidate else {
             // Interface members (I3): existential and bounded-var
             // receivers dispatch virtually; methods bind their receiver.
@@ -4333,6 +4410,41 @@ impl<'db> InferenceContext<'db> {
                             member: member.clone(),
                             sources,
                             is_field,
+                        });
+                    }
+                    return (Ty::error(), false, None, false);
+                }
+                crate::method_resolution::InterfaceMemberLookup::FieldRequiresProjection {
+                    interface,
+                } => {
+                    if self.member_probe_depth == 0 {
+                        self.pending_diags
+                            .push(PendingDiag::FieldRequiresProjection {
+                                expr: member_expr,
+                                base: resolved.clone(),
+                                member: member.clone(),
+                                interface,
+                            });
+                    }
+                    return (
+                        Ty::intern(TyKind::Unknown {
+                            attr: TyAttr::default(),
+                        }),
+                        false,
+                        None,
+                        false,
+                    );
+                }
+                crate::method_resolution::InterfaceMemberLookup::SelfRestricted {
+                    interface,
+                    position,
+                } => {
+                    if self.member_probe_depth == 0 {
+                        self.pending_diags.push(PendingDiag::SelfRestrictedMember {
+                            expr: member_expr,
+                            interface,
+                            member: member.clone(),
+                            position,
                         });
                     }
                     return (Ty::error(), false, None, false);
@@ -4378,18 +4490,29 @@ impl<'db> InferenceContext<'db> {
                 return (fn_ty, true, None, true);
             }
             // Every tier exhausted: the COMMITTED member failure reports
-            // here (probes above stayed silent).
+            // here (probes above stayed silent). A union base says "no
+            // common interface" - each arm may well declare `member` via
+            // different interfaces, so the bare "no member" would mislead.
             if field.has_error()
                 && self.member_probe_depth == 0
                 && !resolved.has_error()
                 && !resolved.has_infer()
                 && !matches!(resolved.kind(), TyKind::Unknown { .. })
             {
-                self.pending_diags.push(PendingDiag::UnresolvedMember {
-                    expr: call,
-                    base: resolved.clone(),
-                    member: member.clone(),
-                });
+                if matches!(resolved.kind(), TyKind::Union(..)) {
+                    self.pending_diags
+                        .push(PendingDiag::UnionNoCommonInterface {
+                            expr: call,
+                            base: resolved.clone(),
+                            member: member.clone(),
+                        });
+                } else {
+                    self.pending_diags.push(PendingDiag::UnresolvedMember {
+                        expr: call,
+                        base: resolved.clone(),
+                        member: member.clone(),
+                    });
+                }
             }
             return (field, false, field_resolution, false);
         };
@@ -5525,40 +5648,17 @@ impl<'db> InferenceContext<'db> {
         // answers as its union and an alias-of-class answers as the
         // class - every arm below sees the target.
         let resolved = self.structurally_resolve(base_ty);
-        // TS's union-member rule (TIR follows): a member on a UNION
-        // resolves on EVERY member type and the results JOIN; a member
-        // type lacking it - null included: handle null first - fails
-        // the whole access. When every member reaches the field through
-        // ONE shared realized declaring-interface view, the access
-        // records that view (proper dyn, ruled 2026-08-11): the virtual
-        // read is the union's single declaration - TIR's rule, and the
-        // only resolution that answers a union receiver.
+        // A union behaves as the intersection existential over the
+        // interfaces every arm provides (TIR's rule): `member` resolves
+        // through the SINGLE shared interface that declares it -
+        // inference sugar for `union.as<I>.member`, `Self` bound to the
+        // union itself. An arm's own class fields/methods are never
+        // reachable (they need not agree across arms); zero shared
+        // declarers report "no common interface", two or more are
+        // ambiguous.
         if let TyKind::Union(members, _) = resolved.kind() {
             let members = members.to_vec();
-            let mut tys = Vec::new();
-            for member_ty in &members {
-                // Per-member recursion is a PROBE: the union frame owns
-                // the report (one diagnostic, union-typed base).
-                self.member_probe_depth += 1;
-                let (ty, _) = self.field_access_resolved(at, member_ty, member);
-                self.member_probe_depth -= 1;
-                if ty.has_error() {
-                    if self.member_probe_depth == 0
-                        && !resolved.has_error()
-                        && !resolved.has_infer()
-                    {
-                        self.pending_diags.push(PendingDiag::UnresolvedMember {
-                            expr: at,
-                            base: resolved.clone(),
-                            member: member.clone(),
-                        });
-                    }
-                    return (Ty::error(), None);
-                }
-                tys.push(ty);
-            }
-            let view = self.union_virtual_field_view(&members, member);
-            return (self.join(&tys), view);
+            return self.union_member_access(at, &resolved, &members, member);
         }
         if let TyKind::Class(qtn, args, _) = resolved.kind()
             && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
@@ -5578,6 +5678,25 @@ impl<'db> InferenceContext<'db> {
         if let Some(candidate) =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member)
         {
+            // An own method does not arbitrate an interface clash (E0121)
+            // - see the callee road's twin check.
+            if let Some((sources, is_field)) = crate::method_resolution::concrete_member_ambiguity(
+                self.db,
+                &self.facts,
+                &resolved,
+                member,
+            ) {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags.push(PendingDiag::AmbiguousMember {
+                        expr: at,
+                        base: resolved.clone(),
+                        member: member.clone(),
+                        sources,
+                        is_field,
+                    });
+                }
+                return (Ty::error(), None);
+            }
             let signature = function_signature(self.db, candidate.method);
             let mut instantiation = candidate.class_args;
             let own: Vec<Ty> = signature.generic_params[instantiation.len()..]
@@ -5620,6 +5739,39 @@ impl<'db> InferenceContext<'db> {
                 }
                 return (Ty::error(), None);
             }
+            crate::method_resolution::InterfaceMemberLookup::FieldRequiresProjection {
+                interface,
+            } => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags
+                        .push(PendingDiag::FieldRequiresProjection {
+                            expr: at,
+                            base: resolved.clone(),
+                            member: member.clone(),
+                            interface,
+                        });
+                }
+                return (
+                    Ty::intern(TyKind::Unknown {
+                        attr: TyAttr::default(),
+                    }),
+                    None,
+                );
+            }
+            crate::method_resolution::InterfaceMemberLookup::SelfRestricted {
+                interface,
+                position,
+            } => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags.push(PendingDiag::SelfRestrictedMember {
+                        expr: at,
+                        interface,
+                        member: member.clone(),
+                        position,
+                    });
+                }
+                return (Ty::error(), None);
+            }
             crate::method_resolution::InterfaceMemberLookup::NotFound => {}
         }
         // A definitely-missing member on a KNOWN base reports; an
@@ -5645,32 +5797,66 @@ impl<'db> InferenceContext<'db> {
     /// union-receiver rule). Any member without a unique matching view,
     /// or two members with different realized views, resolves nothing:
     /// absent, so MIR falls back, never a wrong view.
-    fn union_virtual_field_view(
+    /// Member access on a UNION receiver in value position: resolve
+    /// through the single interface every arm shares, or report which of
+    /// the three failure shapes applies (no common declarer, ambiguous
+    /// declarers, `Self`-restricted method).
+    fn union_member_access(
         &mut self,
+        at: ExprId,
+        union_ty: &Ty,
         members: &[Ty],
-        field: &baml_type::Name,
-    ) -> Option<MemberResolution<'db>> {
-        let mut shared: Option<(
-            baml_compiler2_hir::loc::InterfaceLoc<'db>,
-            baml_type::interned::InterfaceRef,
-            u32,
-        )> = None;
-        for member_ty in members {
-            let view = self.member_field_view(member_ty, field)?;
-            match &shared {
-                None => shared = Some(view),
-                Some(existing) if existing.1 == view.1 => {}
-                Some(_) => return None,
+        member: &baml_type::Name,
+    ) -> (Ty, Option<MemberResolution<'db>>) {
+        match crate::method_resolution::lookup_union_member(
+            self.db,
+            &self.facts,
+            union_ty,
+            members,
+            member,
+        ) {
+            crate::method_resolution::UnionMemberLookup::Found(interface_member) => {
+                let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                (self.interface_member_value(interface_member), resolution)
+            }
+            crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags.push(PendingDiag::AmbiguousMember {
+                        expr: at,
+                        base: union_ty.clone(),
+                        member: member.clone(),
+                        sources,
+                        is_field,
+                    });
+                }
+                (Ty::error(), None)
+            }
+            crate::method_resolution::UnionMemberLookup::SelfRestricted {
+                interface,
+                position,
+            } => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags.push(PendingDiag::SelfRestrictedMember {
+                        expr: at,
+                        interface,
+                        member: member.clone(),
+                        position,
+                    });
+                }
+                (Ty::error(), None)
+            }
+            crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
+                if self.member_probe_depth == 0 && !union_ty.has_error() && !union_ty.has_infer() {
+                    self.pending_diags
+                        .push(PendingDiag::UnionNoCommonInterface {
+                            expr: at,
+                            base: union_ty.clone(),
+                            member: member.clone(),
+                        });
+                }
+                (Ty::error(), None)
             }
         }
-        shared.map(
-            |(interface, realized, field_index)| MemberResolution::InterfaceVirtualField {
-                interface,
-                view: realized.existential(),
-                field_index,
-                field: field.clone(),
-            },
-        )
     }
 
     /// The unique impl-provided interface view declaring `field` for one
@@ -5747,6 +5933,41 @@ impl<'db> InferenceContext<'db> {
                 })
             }
             MemberDeclarer::ImplField { .. } => None,
+        }
+    }
+
+    /// A realized interface rendered for a diagnostic's `as<I>` hint: a
+    /// local name inside a namespaced body spells its full `root...` path
+    /// (the unqualified spelling may not resolve there), and generic args
+    /// ride along so same-interface-different-args sources stay distinct
+    /// (TIR's `qualified_interface_display`).
+    fn qualified_interface_display(&self, iface: &baml_type::interned::InterfaceRef) -> String {
+        let qtn = &iface.name;
+        let base = if qtn.is_local() && !self.lower.namespace_context().is_empty() {
+            match qtn.namespace().as_slice() {
+                [] => format!("root.{}", qtn.name()),
+                ns => format!(
+                    "root.{}.{}",
+                    ns.iter()
+                        .map(baml_type::Name::as_str)
+                        .collect::<Vec<_>>()
+                        .join("."),
+                    qtn.name()
+                ),
+            }
+        } else {
+            qtn.render_user_facing()
+        };
+        if iface.generics.is_empty() {
+            base
+        } else {
+            let args = iface
+                .generics
+                .iter()
+                .map(|arg| arg.to_plain().render_user_facing())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{base}<{args}>")
         }
     }
 
@@ -6816,11 +7037,15 @@ impl<'db> InferenceContext<'db> {
                         let receiver = baml_type::Name::new(
                             self.finalize_ty(&base).to_plain().render_user_facing(),
                         );
+                        let sources: Vec<String> = sources
+                            .iter()
+                            .map(|iface| self.qualified_interface_display(iface))
+                            .collect();
                         let err = if is_field {
                             TirTypeError::AmbiguousInterfaceField {
                                 class_name: receiver,
                                 field_name: member,
-                                sources: sources.into_iter().map(baml_type::Name::new).collect(),
+                                sources: sources.iter().map(baml_type::Name::new).collect(),
                             }
                         } else {
                             TirTypeError::AmbiguousInterfaceMethod {
@@ -6831,6 +7056,45 @@ impl<'db> InferenceContext<'db> {
                         };
                         (err, expr)
                     }
+                    PendingDiag::FieldRequiresProjection {
+                        expr,
+                        base,
+                        member,
+                        interface,
+                    } => (
+                        TirTypeError::InterfaceFieldRequiresProjection {
+                            class_name: baml_type::Name::new(
+                                self.finalize_ty(&base).to_plain().render_user_facing(),
+                            ),
+                            field_name: member,
+                            interface_name: baml_type::Name::new(
+                                self.qualified_interface_display(&interface),
+                            ),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::SelfRestrictedMember {
+                        expr,
+                        interface,
+                        member,
+                        position,
+                    } => (
+                        TirTypeError::InvalidSelfCallThroughInterface {
+                            interface_name: baml_type::Name::new(
+                                self.qualified_interface_display(&interface),
+                            ),
+                            method_name: member,
+                            position,
+                        },
+                        expr,
+                    ),
+                    PendingDiag::UnionNoCommonInterface { expr, base, member } => (
+                        TirTypeError::UnionMemberNoCommonInterface {
+                            union: self.finalize_ty(&base).to_plain(),
+                            member,
+                        },
+                        expr,
+                    ),
                     PendingDiag::NotCallable { expr, ty } => (
                         TirTypeError::NotCallable {
                             ty: self.finalize_ty(&ty).to_plain(),

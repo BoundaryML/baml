@@ -171,6 +171,11 @@ impl<'db> LowerCtx<'db> {
         self
     }
 
+    /// The namespace path this context resolves relative names in.
+    pub fn namespace_context(&self) -> &[Name] {
+        &self.ns_context
+    }
+
     /// Record a written-vs-declared type-argument count disagreement
     /// (`enforce_arity` silently pads/truncates; the sink names it).
     fn record_arity(&self, name: &Name, got: usize, expected: usize) {
