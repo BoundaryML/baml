@@ -560,9 +560,17 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
         stdout.contains("[INFO] expression-detail"),
         "stdout: {stdout}"
     );
-    assert!(stdout.contains('7'), "stdout: {stdout}");
+    let lines: Vec<_> = stdout.lines().collect();
+    let log_line = lines
+        .iter()
+        .position(|line| line.contains("[INFO] expression-detail"))
+        .expect("expression log");
+    let result_line = lines
+        .iter()
+        .position(|line| line.trim() == "7")
+        .expect("expression return value");
     assert!(
-        stdout.find("[INFO] expression-detail") < stdout.find('7'),
+        log_line < result_line,
         "expression logs must be flushed before the return value: {stdout}"
     );
 

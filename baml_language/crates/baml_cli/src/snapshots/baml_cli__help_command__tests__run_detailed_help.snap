@@ -72,7 +72,9 @@ Run output options:
           Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]
 
       --log-file <LOG_FILE>
-          Write run logs to a file
+          Write CLI diagnostic logs to a file.
+
+          Unrelated to `--logs`, which prints BAML `log.*` events to stdout.
 
       --include-generated
           Include compiler-synthesized functions in `--list` output

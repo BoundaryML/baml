@@ -121,7 +121,9 @@ impl LogOutput {
 
 #[cfg(test)]
 mod tests {
-    use super::LogLevel;
+    use bex_engine::{CallId, FunctionCallContextBuilder};
+
+    use super::{LogLevel, LogOutput};
 
     #[test]
     fn filters_at_or_above_threshold() {
@@ -134,5 +136,16 @@ mod tests {
         assert!(LogLevel::Info.allows(None));
         assert!(!LogLevel::Info.allows(Some("debug")));
         assert!(LogLevel::Debug.allows(Some("debug")));
+    }
+
+    #[test]
+    fn call_context_creates_producer_only_when_enabled() {
+        let (_, producer) = LogOutput::new(LogLevel::Off, "test")
+            .call_context(FunctionCallContextBuilder::new(CallId::next()));
+        assert!(producer.is_none());
+
+        let (_, producer) = LogOutput::new(LogLevel::Info, "test")
+            .call_context(FunctionCallContextBuilder::new(CallId::next()));
+        assert!(producer.is_some());
     }
 }
