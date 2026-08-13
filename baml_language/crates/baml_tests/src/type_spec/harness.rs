@@ -660,15 +660,3 @@ fn enclosing_owner_scope(
         }
     }
 }
-
-/// Walks to the innermost scope (self included) that owns a TIR inference
-/// run (function, top-level let, or lambda).
-fn tir_inference_owner(index: &FileSemanticIndex<'_>, mut fsi: FileScopeId) -> Option<FileScopeId> {
-    loop {
-        let scope = &index.scopes[fsi.index() as usize];
-        match scope.kind {
-            ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda => return Some(fsi),
-            _ => fsi = scope.parent?,
-        }
-    }
-}

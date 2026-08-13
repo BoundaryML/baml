@@ -277,9 +277,7 @@ impl<'db> LowerCtx<'db> {
             TypeRefKind::BuiltinUnknown => Ty::intern(TyKind::Unknown { attr: attr() }),
             TypeRefKind::Type => Ty::intern(TyKind::Type { attr: attr() }),
             TypeRefKind::Rust => Ty::intern(TyKind::RustType { attr: attr() }),
-            TypeRefKind::Optional { inner } => {
-                Ty::union([self.lower_type_ref(store, *inner), Ty::null()])
-            }
+            TypeRefKind::Optional { inner } => Ty::optional(self.lower_type_ref(store, *inner)),
             TypeRefKind::List { inner } => Ty::list(self.lower_type_ref(store, *inner)),
             TypeRefKind::Map { key, value } => Ty::intern(TyKind::Map {
                 key: self.checked_map_key(self.lower_type_ref(store, *key)),

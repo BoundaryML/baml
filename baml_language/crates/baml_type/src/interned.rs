@@ -903,6 +903,26 @@ impl Ty {
             TyAttr::default(),
         ))
     }
+
+    /// `T?` is a flat `T | null` union.
+    pub fn optional(inner: Ty) -> Ty {
+        match inner.kind() {
+            TyKind::Union(members, attr) => {
+                if members
+                    .iter()
+                    .any(|member| matches!(member.kind(), TyKind::Null { .. }))
+                {
+                    inner
+                } else {
+                    let mut members = members.to_vec();
+                    members.push(Ty::null());
+                    Ty::intern(TyKind::Union(members.into(), attr.clone()))
+                }
+            }
+            TyKind::Null { .. } => inner,
+            _ => Ty::union([inner, Ty::null()]),
+        }
+    }
 }
 
 // -- Tests --------------------------------------------------------------------
@@ -993,6 +1013,28 @@ mod tests {
             let roundtripped = Ty::from_plain(&plain).to_plain();
             assert_eq!(plain, roundtripped);
         }
+    }
+
+    #[test]
+    fn optional_flattens_union_and_is_idempotent() {
+        let optional = Ty::optional(Ty::union([Ty::int(), Ty::string()]));
+        let TyKind::Union(members, _) = optional.kind() else {
+            panic!("expected union");
+        };
+        assert_eq!(members.len(), 3);
+        assert!(members.iter().any(|member| member == &Ty::int()));
+        assert!(members.iter().any(|member| member == &Ty::string()));
+        assert!(
+            members
+                .iter()
+                .any(|member| matches!(member.kind(), TyKind::Null { .. }))
+        );
+        assert!(
+            !members
+                .iter()
+                .any(|member| matches!(member.kind(), TyKind::Union(..)))
+        );
+        assert!(Ty::optional(optional.clone()) == optional);
     }
 
     #[test]

@@ -684,16 +684,3 @@ fn array_rest_wildcard_skips_slice_projection() {
         "wildcard rest must not pay for a slice copy:\n{output}"
     );
 }
-
-fn walkdir_baml(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
-    let mut out = Vec::new();
-    for entry in std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()) {
-        let p = entry.path();
-        if p.is_dir() {
-            out.extend(walkdir_baml(&p));
-        } else if p.extension().and_then(|e| e.to_str()) == Some("baml") {
-            out.push(p);
-        }
-    }
-    out
-}

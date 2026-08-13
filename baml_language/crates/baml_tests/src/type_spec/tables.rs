@@ -560,10 +560,10 @@ function pa_probe() -> int {
         };
         for (pat_id, _) in arena.patterns.iter() {
             let snippet = &source[source_map.pattern_span(pat_id)];
-            if snippet.starts_with("let arr") {
-                if let Some(ty) = result.type_of_pat.get(&pat_id) {
-                    renders.push(ty.to_plain().render_canonical());
-                }
+            if snippet.starts_with("let arr")
+                && let Some(ty) = result.type_of_pat.get(&pat_id)
+            {
+                renders.push(ty.to_plain().render_canonical());
             }
         }
     }
