@@ -50,8 +50,8 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --directory, --from, --features, or --help. With no default profile,
-  all tests are selected.
+  --project, --file, --directory, --from, --features, or --help.
+  With no default profile, all tests are selected.
 
 Examples:
   List available tests:
@@ -61,10 +61,19 @@ Examples:
     baml test -i "root.payments::*"
 
   Run integration tests except slow tests:
-    baml test -i "*::integration::*" -x "slow""#)]
+    baml test -i "*::integration::*" -x "slow"
+
+  Test a standalone file:
+    baml test --file script.baml"#)]
 pub struct TestArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
+
+    /// Test one standalone source file instead of discovering a project.
+    ///
+    /// Mutually exclusive with `--project`.
+    #[arg(long, value_name = "PATH", help_heading = "Project options")]
+    pub file: Option<PathBuf>,
 
     #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
@@ -413,8 +422,9 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let mut session = crate::project_session::ProjectSession::open(
+        let mut session = crate::project_session::ProjectSession::open_project_or_file(
             self.from.as_deref(),
+            self.file.as_deref(),
             crate::project_session::CacheUse::ReadWriteTests,
         )?;
         let invocation =
@@ -855,6 +865,7 @@ impl TestArgs {
                 "--profile"
                     | "--no-profile"
                     | "--project"
+                    | "--file"
                     | "--directory"
                     | "--from"
                     | "--features"
@@ -862,12 +873,13 @@ impl TestArgs {
                     | "-h"
             ) || token.starts_with("--profile=")
                 || token.starts_with("--project=")
+                || token.starts_with("--file=")
                 || token.starts_with("--directory=")
                 || token.starts_with("--from=")
                 || token.starts_with("--features=");
             if bootstrap {
                 anyhow::bail!(
-                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, --from, --features, or --help"
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --file, --directory, --from, --features, or --help"
                 );
             }
         }
@@ -1641,6 +1653,14 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("cannot contain --profile"), "{error}");
+
+        let error = TestArgs::parse_profile_args("bad_file", &["--file=one.baml".to_string()])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("cannot contain") && error.contains("--file"),
+            "{error}"
+        );
     }
 
     #[test]

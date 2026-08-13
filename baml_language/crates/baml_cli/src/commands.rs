@@ -586,6 +586,7 @@ mod tests {
     fn check_help_includes_global_project_option() {
         let help = help_for(&["baml-cli", "check", "--help"]);
         assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
+        assert!(help.contains("--file <PATH>"), "{help}");
         assert!(help.contains("--project <PATH>"), "{help}");
     }
 
@@ -742,6 +743,7 @@ mod tests {
     #[test]
     fn test_help_is_a_complete_selector_and_profile_reference() {
         let help = crate::help_command::render_for_test(&["test"]);
+        assert!(help.contains("--file <PATH>"), "{help}");
         for required in [
             "Plain selectors match anywhere in the full ID",
             "Repeated includes are OR",
@@ -799,6 +801,7 @@ mod tests {
         let examples: &[&[&str]] = &[
             &["baml", "check"],
             &["baml", "check", "--project", "./my-project"],
+            &["baml", "check", "--file", "script.baml"],
             &["baml", "auth", "whoami"],
             &["baml", "auth", "logout"],
             &["baml", "auth", "login"],
@@ -810,6 +813,7 @@ mod tests {
             &["baml", "describe", "String.split"],
             &["baml", "describe", "match"],
             &["baml", "test", "--list"],
+            &["baml", "test", "--file", "script.baml"],
             &["baml", "test", "-i", "root.payments::*"],
             &["baml", "test", "-i", "*::integration::*", "-x", "slow"],
             &["baml", "run", "main", "--", "--name", "Ada"],

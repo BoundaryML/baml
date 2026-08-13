@@ -141,6 +141,28 @@ fn check_defaults_from_to_current_directory() {
     );
 }
 
+/// `baml check --file` validates a standalone source without project markers.
+#[test]
+fn check_accepts_standalone_file() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("standalone.baml"),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["check", "--file", "standalone.baml"]);
+
+    assert!(
+        output.status.success(),
+        "Expected standalone file check to succeed, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
 /// Compilation errors must result in a non-zero exit code for `baml check`.
 #[test]
 fn check_compilation_error_returns_nonzero_exit_code() {
@@ -529,6 +551,64 @@ fn test_no_tests_returns_specific_exit_code() {
         "Expected exit code 5 for no tests found, got: {:?}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// `baml test --file` discovers and runs tests without project markers.
+#[test]
+fn test_accepts_standalone_file() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("standalone.baml"),
+        r#"
+function add(a: int, b: int) -> int { a + b }
+
+test "adds" {
+  assert.equal(add(2, 3), 5)
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--file", "standalone.baml"]);
+
+    assert!(
+        output.status.success(),
+        "Expected standalone file test to succeed, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("1 passed, 0 failed, 1 total"),
+        "Expected passing test report, got stderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// A standalone file and an explicit project are competing source locations.
+#[test]
+fn test_rejects_standalone_file_with_project() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("standalone.baml"),
+        "function main() -> int { 1 }\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--file", "standalone.baml", "--project", "."],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success(), "unexpected success: {stderr}");
+    assert!(
+        stderr.contains("`--file` and `--project` are mutually exclusive"),
+        "unexpected error: {stderr}"
     );
 }
 

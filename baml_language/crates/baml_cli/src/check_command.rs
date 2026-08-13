@@ -18,10 +18,19 @@ Examples:
     baml check
 
   Check a specific project:
-    baml check --project ./my-project")]
+    baml check --project ./my-project
+
+  Check a standalone file:
+    baml check --file script.baml")]
 pub struct CheckArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
+
+    /// Check one standalone source file instead of discovering a project.
+    ///
+    /// Mutually exclusive with `--project`.
+    #[arg(long, value_name = "PATH", help_heading = "Project options")]
+    pub file: Option<PathBuf>,
 
     /// Deprecated alias for `--project`.
     #[arg(long, value_name = "PATH", hide = true)]
@@ -31,8 +40,9 @@ pub struct CheckArgs {
 impl CheckArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        let mut session = crate::project_session::ProjectSession::open(
+        let mut session = crate::project_session::ProjectSession::open_project_or_file(
             self.from.as_deref(),
+            self.file.as_deref(),
             crate::project_session::CacheUse::ReadWrite,
         )?;
         if session.is_empty() {
