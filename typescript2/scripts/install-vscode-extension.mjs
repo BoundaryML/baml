@@ -63,9 +63,14 @@ export async function installLocalVscodeExtension({
 } = {}) {
   const codeCommand = platform === 'win32' ? 'code.cmd' : 'code';
   const pnpmCommand = platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+  const commandOptions =
+    platform === 'win32' ? { cwd: root, shell: true } : { cwd: root };
 
   try {
-    await run(codeCommand, ['--version'], { cwd: root, stdio: 'ignore' });
+    await run(codeCommand, ['--version'], {
+      ...commandOptions,
+      stdio: 'ignore',
+    });
   } catch (error) {
     if (error?.code === 'ENOENT') {
       throw new Error(
@@ -75,11 +80,13 @@ export async function installLocalVscodeExtension({
     throw error;
   }
 
-  await run(pnpmCommand, ['run', 'vscode:package'], { cwd: root });
+  await run(pnpmCommand, ['run', 'vscode:package'], commandOptions);
   const vsix = await findPackagedVsix(path.join(root, 'app-vscode-ext'));
-  await run(codeCommand, ['--install-extension', vsix, '--force'], {
-    cwd: root,
-  });
+  await run(
+    codeCommand,
+    ['--install-extension', vsix, '--force'],
+    commandOptions,
+  );
   return vsix;
 }
 

@@ -67,6 +67,37 @@ test('installLocalVscodeExtension packages and force-installs the generated VSIX
   });
 });
 
+test('installLocalVscodeExtension launches Windows command shims through a shell', async () => {
+  await withTemporaryWorkspace(async (root) => {
+    const extensionDirectory = path.join(root, 'app-vscode-ext');
+    const vsix = path.join(extensionDirectory, 'baml-language-0.16.0.vsix');
+    await mkdir(extensionDirectory);
+    await writeFile(vsix, 'extension');
+    const calls = [];
+    const run = async (command, args, options) =>
+      calls.push({ args, command, options });
+
+    await installLocalVscodeExtension({ platform: 'win32', root, run });
+    assert.deepEqual(calls, [
+      {
+        args: ['--version'],
+        command: 'code.cmd',
+        options: { cwd: root, shell: true, stdio: 'ignore' },
+      },
+      {
+        args: ['run', 'vscode:package'],
+        command: 'pnpm.cmd',
+        options: { cwd: root, shell: true },
+      },
+      {
+        args: ['--install-extension', vsix, '--force'],
+        command: 'code.cmd',
+        options: { cwd: root, shell: true },
+      },
+    ]);
+  });
+});
+
 test('installLocalVscodeExtension fails before packaging when the code CLI is missing', async () => {
   const calls = [];
   const run = async (command, args) => {
