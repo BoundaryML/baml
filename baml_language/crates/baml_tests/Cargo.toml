@@ -29,8 +29,8 @@ sys_ops = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true }
-similar = { workspace = true }
 salsa = { workspace = true }
+similar = { workspace = true }
 text-size = { workspace = true }
 
 [build-dependencies]

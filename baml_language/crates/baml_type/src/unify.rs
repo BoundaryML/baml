@@ -5,7 +5,7 @@
 //! (associative/commutative/idempotent) via a bounded covering search. Two consumers
 //! build different top-level questions on it:
 //!
-//! - interface coherence (`impls_conflict` in [`crate::interfaces`]): do two impl
+//! - interface coherence (the type provider's `impls_conflict`): do two impl
 //!   subjects share a common instance?
 //! - pattern reachability ([`crate::pattern_overlap`]): can a `match`/`is` pattern's
 //!   value set intersect a scrutinee member's under some realization of the
@@ -529,7 +529,7 @@ pub fn expand_alias_head(ty: &Ty, aliases: &std::collections::HashMap<TypeName, 
 /// rest are disjoint — conservative, losing precision only for var-bearing
 /// function-typed args (never impl subjects today), treated as disjoint.
 /// Public entry: unify two types starting at depth 0. Delegates to the recursive
-/// worker [`unify_into_at`]; this wrapper keeps the (many) call sites and tests
+/// worker `unify_into_at`; this wrapper keeps the (many) call sites and tests
 /// depth-agnostic.
 pub fn unify_into(
     x: &Ty,
@@ -895,7 +895,7 @@ fn unify_union_members_at(
     cover_search(&obligations, vars, aliases, bindings, &mut budget, depth)
 }
 
-/// Test-only entry to [`unify_union_members_at`] starting at depth 0.
+/// Test-only entry to `unify_union_members_at` starting at depth 0.
 // -- Pure `Ty` walks shared with the runtime engine (baml_type_runtime
 // re-exports these; they live here, beside `TypeBindings`, because the
 // unifier and the reachability oracle substitute through the same maps). --

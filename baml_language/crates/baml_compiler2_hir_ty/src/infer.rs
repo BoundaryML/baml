@@ -1,8 +1,8 @@
 //! Body type inference: `infer_body` walks one body owner's expression tree
-//! with an [`InferenceContext`] over an [`unify::InferenceTable`].
+//! with an `InferenceContext` over an [`unify::InferenceTable`].
 //!
 //! S9 state: bidirectional checking. `infer_expr` synthesizes with an
-//! [`Expectation`] flowing down (informing shape: container elements,
+//! `Expectation` flowing down (informing shape: container elements,
 //! if-branch pass-through, lambda signature deduction); `check_expr`
 //! additionally emits a `Sub` constraint, discharged eagerly per the settled
 //! design - invariant heads decay to `Eq`, ground pairs ask the canonical

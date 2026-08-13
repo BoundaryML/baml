@@ -14,10 +14,10 @@
 //! - Coherence guarantees at most one impl per realized pair, so
 //!   resolution returns an `Option`, never a candidate set.
 //! - Blanket bounds re-enter the resolver with a depth budget
-//!   ([`BLANKET_IMPL_BOUND_DEPTH`]); a bound still carrying variables
+//!   (`BLANKET_IMPL_BOUND_DEPTH`); a bound still carrying variables
 //!   after substitution is vacuously satisfied (its discharge is the
 //!   call site's obligation - I4 records it properly).
-//! - Matching uses a deliberately FACT-POOR equality ([`AliasOnlyFacts`],
+//! - Matching uses a deliberately FACT-POOR equality (`AliasOnlyFacts`,
 //!   TIR's `AliasEquivCtx`): aliases and enum variants only, no
 //!   implements/projection/bounds facts. Termination depends on it - the
 //!   matcher is a link in the `implements_interface -> resolver ->

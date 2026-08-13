@@ -59,7 +59,7 @@ pub struct PatternOverlapEnv<'a> {
     /// upgrade a possible overlap to a definite one.
     pub bounds: &'a TypeVarBoundsMap,
     /// Type-alias bodies, pre-folded to `nf`'s canonical union form — build with
-    /// [`crate::unify::normalized_alias_map`]. Raw bodies mis-decide alias-obscured
+    /// the caller's normalized alias map. Raw bodies mis-decide alias-obscured
     /// unions at invariant positions (`Bar<TF>` vs `Bar<bool>` with
     /// `type TF = true | false` would be a wrong `No`).
     pub aliases: &'a std::collections::HashMap<TypeName, Ty>,

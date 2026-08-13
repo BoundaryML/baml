@@ -669,7 +669,8 @@ fn build_packages(
             );
             let for_ty_pattern =
                 baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params);
-            let Some(generic_param_bounds) = bound_sets(store, generics, &impl_params, &impl_bounds)
+            let Some(generic_param_bounds) =
+                bound_sets(store, generics, &impl_params, &impl_bounds)
             else {
                 continue;
             };

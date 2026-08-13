@@ -673,7 +673,12 @@ pub fn resolve_interface_fields<'db>(
     let mut diagnostics = Vec::new();
     for field in &iface.fields {
         let mut field_diags = Vec::new();
-        let ty = lower_ref_in(&scope.ctx(), &iface.type_refs, field.type_ref, &mut field_diags);
+        let ty = lower_ref_in(
+            &scope.ctx(),
+            &iface.type_refs,
+            field.type_ref,
+            &mut field_diags,
+        );
         let span = iface_spans.type_refs.span(field.type_ref);
         diagnostics.extend(field_diags.into_iter().map(|d| (d, span)));
         fields.push((field.name.clone(), ty, field.attributes.clone()));

@@ -391,8 +391,7 @@ fn exported_function<'db>(
         return_type: reduce_ground_projections(db, &sig.ret.to_plain(), 8),
         declared_throws,
         callable_throws,
-        generic_params: sig.generic_params
-            [enclosing_param_count.min(sig.generic_params.len())..]
+        generic_params: sig.generic_params[enclosing_param_count.min(sig.generic_params.len())..]
             .to_vec(),
         builtin_kind,
     }

@@ -3,7 +3,7 @@ use crate::SYNTHETIC_EFFECT_PARAM_PREFIX;
 /// String-path humanizer: rewrites synthetic effect-param names
 /// (`__effect_param_N` → `callback`) in an already-rendered type string. Used
 /// only by the LSP display path, which renders via its own (context-aware)
-/// formatter; the structural [`crate::ty::Ty::render_user_facing`] handles this case
+/// formatter; the structural [`crate::Ty::render_user_facing`] handles this case
 /// directly for TIR diagnostics. (Step 2 folds the LSP path in and retires this.)
 pub fn humanize_type_string(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());

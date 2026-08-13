@@ -201,7 +201,10 @@ pub enum InterfaceMemberLookup<'db> {
     /// Two or more realized-distinct interfaces declare the member.
     /// `sources` are their qualified display names, for the `as<I>`
     /// disambiguation hint.
-    Ambiguous { sources: Vec<String>, is_field: bool },
+    Ambiguous {
+        sources: Vec<String>,
+        is_field: bool,
+    },
     NotFound,
 }
 
@@ -259,8 +262,8 @@ pub fn lookup_interface_member<'db>(
     };
     let mut declarers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
     let push = |declarers: &mut Vec<(InterfaceRef, InterfaceMember<'db>)>,
-                    realized: &InterfaceRef,
-                    member: InterfaceMember<'db>| {
+                realized: &InterfaceRef,
+                member: InterfaceMember<'db>| {
         if !declarers.iter().any(|(seen, _)| seen == realized) {
             declarers.push((realized.clone(), member));
         }

@@ -189,7 +189,7 @@ impl<'db> LowerCtx<'db> {
         self.generic_params = frame;
         self
     }
-    /// See [`LowerCtx::self_ty`].
+    /// See `LowerCtx::self_ty`.
     pub fn with_impl_target(mut self, target: Option<baml_type::interned::InterfaceRef>) -> Self {
         self.self_impl_target = target;
         self
@@ -731,7 +731,7 @@ impl<'db> LowerCtx<'db> {
         None
     }
 
-    /// Value-namespace resolution, mirroring [`LowerCtx::resolve_type`]'s
+    /// Value-namespace resolution, mirroring `LowerCtx::resolve_type`'s
     /// algorithm over `lookup_value` (functions, clients, lets). No
     /// `$stream` fallback: companions are functions with their own names.
     pub fn resolve_value(&self, segments: &[Name]) -> Option<Definition<'db>> {
@@ -776,7 +776,7 @@ impl<'db> LowerCtx<'db> {
         self.lower_path(segments, Vec::new(), Vec::new())
     }
 
-    /// [`LowerCtx::qualify`], exposed for constructor typing.
+    /// `LowerCtx::qualify`, exposed for constructor typing.
     pub fn qualify_definition(&self, def: Definition<'db>, short: &Name) -> TypeName {
         self.qualify(def, short)
     }
@@ -1114,8 +1114,8 @@ pub fn class_generic_bounds<'db>(
         let refs: Vec<_> = declared
             .bounds
             .iter()
-            .filter_map(|&type_ref| {
-                match ctx.lower_type_ref(&data.type_refs, type_ref).kind() {
+            .filter_map(
+                |&type_ref| match ctx.lower_type_ref(&data.type_refs, type_ref).kind() {
                     TyKind::Interface(name, args, pins, _) => {
                         Some(baml_type::interned::InterfaceRef::new(
                             name.clone(),
@@ -1124,8 +1124,8 @@ pub fn class_generic_bounds<'db>(
                         ))
                     }
                     _ => None,
-                }
-            })
+                },
+            )
             .collect();
         if !refs.is_empty() {
             out.insert(param.clone(), refs);
@@ -1521,7 +1521,11 @@ pub fn signature_lowering_diagnostics<'db>(
     // records, taken separately below) use the written source map.
     let source_map = baml_compiler2_ppir::item_data::function_source_map(db, function);
     let func_data = baml_compiler2_ppir::item_data::function_data(db, function);
-    for bound in func_data.generic_params.iter().flat_map(|g| g.bounds.iter()) {
+    for bound in func_data
+        .generic_params
+        .iter()
+        .flat_map(|g| g.bounds.iter())
+    {
         let lowered = ctx.lower_type_ref(&func_data.type_refs, *bound);
         match lowered.kind() {
             // The compiler-derived builtin interface is a VALUE type,

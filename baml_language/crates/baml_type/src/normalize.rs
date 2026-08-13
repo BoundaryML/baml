@@ -1579,7 +1579,9 @@ impl NormalTy {
                     bindings,
                 )
             }
-            NormalTy::List(inner) => NormalTy::List(Box::new(inner.canonicalize(ctx, saw_mu, assumptions))),
+            NormalTy::List(inner) => {
+                NormalTy::List(Box::new(inner.canonicalize(ctx, saw_mu, assumptions)))
+            }
             NormalTy::Map { key, value } => NormalTy::Map {
                 key: Box::new(key.canonicalize(ctx, saw_mu, assumptions)),
                 value: Box::new(value.canonicalize(ctx, saw_mu, assumptions)),
@@ -2631,7 +2633,10 @@ impl NormalTy {
             NormalTy::from_interned(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL);
         let mut saw_mu = false;
         let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
-        (resolved.canonicalize(ctx, saw_mu, &mut HashSet::new()), saw_mu)
+        (
+            resolved.canonicalize(ctx, saw_mu, &mut HashSet::new()),
+            saw_mu,
+        )
     }
 
     /// [`NormalTy::canonical`] for the interned representation.
@@ -2840,7 +2845,7 @@ pub fn equivalent_interned<C: TypeContext>(a: &interned::Ty, b: &interned::Ty, c
 
 /// [`TypeContext::normalize`] for interned types. Materializes once on the
 /// way out (attrs erased, like the plain form), with the mu root rendered
-/// exactly as [`NormalTy::canonical_render`] renders it (root-unfold-once).
+/// exactly as `NormalTy::canonical_render` renders it (root-unfold-once).
 pub fn normalize_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> interned::Ty {
     let (t, saw_mu) = NormalTy::canonical_bottom_up_interned(ty, ctx);
     let plain = if saw_mu && t.contains_mu() {

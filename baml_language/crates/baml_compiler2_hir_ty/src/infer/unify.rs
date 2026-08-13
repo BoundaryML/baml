@@ -6,7 +6,7 @@
 //! S5 scope: equality only. The settled `VarData` bounds
 //! (lowers/uppers/obligations for `Sub` constraints and the obligation
 //! worklist) join with the first `Sub` constraints; until then a variable's
-//! class is solved or not ([`VarValue`]). Kind/policy metadata for variables
+//! class is solved or not (`VarValue`). Kind/policy metadata for variables
 //! (effect vars, diverging vars) also lives here when it arrives - the
 //! representation carries identity only.
 //!
@@ -162,7 +162,6 @@ impl InferenceTable {
             }
         }
     }
-
 
     /// The fixpoint-tier slice of the effect default (rustc runs
     /// fallback at quiescence and fulfillment RE-RUNS after it): only
