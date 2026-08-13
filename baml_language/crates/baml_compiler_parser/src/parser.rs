@@ -3511,9 +3511,17 @@ impl<'a> Parser<'a> {
                 TokenKind::RParen => paren_depth -= 1,
                 TokenKind::LBracket => bracket_depth += 1,
                 TokenKind::RBracket => bracket_depth -= 1,
-                TokenKind::Less => angle_depth += 1,
-                TokenKind::Greater => angle_depth -= 1,
-                TokenKind::GreaterGreater => angle_depth -= 2,
+                // Generic delimiters matter in declaration-level generic parameters and return
+                // types. Inside parameter parentheses these tokens may instead be comparison or
+                // shift operators in default expressions; paren depth already prevents an inner
+                // brace from being mistaken for the function body.
+                TokenKind::Less if paren_depth == 0 => angle_depth += 1,
+                TokenKind::Greater if paren_depth == 0 => {
+                    angle_depth = angle_depth.saturating_sub(1);
+                }
+                TokenKind::GreaterGreater if paren_depth == 0 => {
+                    angle_depth = angle_depth.saturating_sub(2);
+                }
                 TokenKind::LBrace if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
                     return Some(i);
                 }
@@ -9096,8 +9104,8 @@ function executable() -> int {
     #[test]
     fn function_headers_are_allowed_only_before_expression_functions() {
         let source = r#"
-//# top-level expression function
-function top_level() -> int {
+//# top-level expression function with a shift default
+function top_level(x: int = 8 >> 1) -> int {
   1
 }
 
@@ -9121,8 +9129,8 @@ class Methods {
 }
 
 interface DefaultMethods {
-  //# expression default method
-  function implements(self) -> int {
+  //# expression default method with a shift default
+  function implements(self, x: int = 8 >> 1) -> int {
     1
   }
 
