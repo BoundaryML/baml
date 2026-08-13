@@ -549,7 +549,10 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
                             pattern_from_owner_body(db, func_loc, stmt_id)
                                 .and_then(|pattern| {
-                                    inference?.type_of_pat.get(&pattern).map(|ty| ty.to_plain())
+                                    inference?
+                                        .type_of_pat
+                                        .get(&pattern)
+                                        .map(baml_type::interned::Ty::to_plain)
                                 })
                                 .map(|ty| crate::utils::display_ty(&ty))
                                 .unwrap_or_else(|| "unknown".to_string())
@@ -561,7 +564,10 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                             pat_id,
                         ) => inference
                             .and_then(|inference| {
-                                inference.type_of_pat.get(&pat_id).map(|ty| ty.to_plain())
+                                inference
+                                    .type_of_pat
+                                    .get(&pat_id)
+                                    .map(baml_type::interned::Ty::to_plain)
                             })
                             .map(|ty| crate::utils::display_ty(&ty))
                             .unwrap_or_else(|| "unknown".to_string()),

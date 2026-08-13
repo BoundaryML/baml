@@ -1,6 +1,6 @@
 //! The inference provider seam (S16): MIR consumes inference through the
 //! ten `tir_*` accessors on `LoweringContext`, and this module supplies
-//! their second backend - hir_ty's `InferenceResult` materialized into
+//! their second backend - `hir_ty`'s `InferenceResult` materialized into
 //! the same TIR-shaped views the accessors already serve. The dual
 //! provider is rustc's migration playbook (`-Z borrowck=compare` ran the
 //! AST and MIR borrow checkers side by side until the diff was clean,
@@ -11,7 +11,7 @@
 //! tables are engine-native interned types; the consumer boundary
 //! materializes to the plain family), and the accessors then borrow from
 //! the converted tables exactly as they borrow from `ScopeInference`.
-//! Keying collapses by construction: hir_ty types lambdas in their
+//! Keying collapses by construction: `hir_ty` types lambdas in their
 //! owner's arena and parameter defaults as their own body owner, so the
 //! per-scope dispatch reduces to body-vs-defaults.
 
@@ -126,7 +126,7 @@ pub(crate) struct FunctionCoercion {
 /// The one table store behind the `tir_*` accessors: converted ONCE at
 /// context construction, whichever engine produced them.
 pub(crate) struct ProviderTables<'db> {
-    /// hir_ty keys lambdas in the owner arena and defaults as their own
+    /// `hir_ty` keys lambdas in the owner arena and defaults as their own
     /// body owner, so every `Body` scope reads the one body table.
     body: ConvertedTables<'db>,
     defaults: ConvertedTables<'db>,
@@ -136,20 +136,20 @@ impl<'db> ProviderTables<'db> {
     pub(crate) fn for_scope(
         &self,
         scope: baml_compiler2_hir::semantic_index::ExprMetadataScope,
-    ) -> Option<&ConvertedTables<'db>> {
+    ) -> &ConvertedTables<'db> {
         use baml_compiler2_hir::semantic_index::ExprMetadataScope;
-        Some(match scope {
+        match scope {
             ExprMetadataScope::Body(_) => &self.body,
             ExprMetadataScope::ParameterDefault(_) => &self.defaults,
-        })
+        }
     }
 }
 
 /// The two engines record match exhaustiveness with opposite polarity:
-/// hir_ty the NON-exhaustive set (absence = proved exhaustive), TIR the
+/// `hir_ty` the NON-exhaustive set (absence = proved exhaustive), TIR the
 /// exhaustive set. Only match expressions are ever queried
 /// (`lower_match`), so both answers are total there. Dies to the
-/// hir_ty arm at TIR deletion.
+/// `hir_ty` arm at TIR deletion.
 #[derive(Default)]
 enum MatchExhaustiveness {
     #[default]
@@ -254,11 +254,10 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         if result.desugared_callees.contains(&expr) {
             continue;
         }
-        out.expr_types
-            .insert(expr, widen_fresh_throws(ty).to_plain());
+        out.expr_types.insert(expr, ty.to_plain());
     }
     for (&pat, ty) in &result.type_of_pat {
-        out.pat_types.insert(pat, widen_fresh_throws(ty).to_plain());
+        out.pat_types.insert(pat, ty.to_plain());
     }
     for (&expr, resolution) in &result.member_resolutions {
         out.resolutions.insert(expr, convert_resolution(resolution));
@@ -328,7 +327,7 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         );
     }
     for (&expr, adjustments) in &result.expr_adjustments {
-        for adjustment in adjustments.iter() {
+        for adjustment in adjustments {
             let hir_infer::Adjust::FunctionAdapter = adjustment.kind;
             let (
                 Some(Tir2Ty::Function {
@@ -341,7 +340,10 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                     ..
                 },
             ) = (
-                result.type_of_expr.get(&expr).map(|ty| ty.to_plain()),
+                result
+                    .type_of_expr
+                    .get(&expr)
+                    .map(baml_type::interned::Ty::to_plain),
                 adjustment.target.to_plain(),
             )
             else {
@@ -361,53 +363,6 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         result.non_exhaustive_matches.iter().copied().collect(),
     );
     out
-}
-
-/// Literals in `throws` position widen to their bases at the runtime
-/// boundary (the same boundary rule `type_args` follows below): hir_ty
-/// keeps literal-grain effect surfaces engine-side (the S13 fixtures'
-/// catch-fact subtraction), but the runtime's error contract is
-/// base-typed - TIR widens every thrown-literal contribution, ratified
-/// by `reflect.signature` reconstructing `string` from a
-/// `throw "negative"` lambda.
-fn widen_fresh_throws(ty: &baml_type::interned::Ty) -> baml_type::interned::Ty {
-    use baml_type::interned::{Ty as HirTy, TyKind};
-    fn widen_member(ty: &HirTy) -> HirTy {
-        let TyKind::Literal(literal, _, attr) = ty.kind() else {
-            return ty.clone();
-        };
-        let attr = attr.clone();
-        HirTy::intern(match literal {
-            baml_type::Literal::Int(_) => TyKind::Int { attr },
-            baml_type::Literal::Bigint(_) => TyKind::Bigint { attr },
-            baml_type::Literal::Float(_) => TyKind::Float { attr },
-            baml_type::Literal::String(_) => TyKind::String { attr },
-            baml_type::Literal::Bool(_) => TyKind::Bool { attr },
-        })
-    }
-    let rebuilt = ty.kind().map_children(|child| widen_fresh_throws(child));
-    let TyKind::Function {
-        params,
-        ret,
-        throws,
-        attr,
-    } = rebuilt
-    else {
-        return HirTy::intern(rebuilt);
-    };
-    let throws = match throws.kind() {
-        TyKind::Union(members, union_attr) => HirTy::intern(TyKind::Union(
-            members.iter().map(widen_member).collect(),
-            union_attr.clone(),
-        )),
-        _ => widen_member(&throws),
-    };
-    HirTy::intern(TyKind::Function {
-        params,
-        ret,
-        throws,
-        attr,
-    })
 }
 
 fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> MemberResolution<'db> {

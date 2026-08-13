@@ -59,16 +59,21 @@ pub struct UnionMetadata {
 impl UnionMetadata {
     /// Create metadata for a union type.
     pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
-        let (is_optional, is_single_pattern) = match &union_type {
-            RuntimeTy::Union(members, _) => {
-                let has_null = members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }));
-                let non_null_count = members
-                    .iter()
-                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
-                    .count();
-                (has_null, non_null_count == 1)
+        let (union_type, is_optional, is_single_pattern) = match union_type {
+            RuntimeTy::Union(members, attr) => {
+                let is_optional = members.iter().any(RuntimeTy::is_null);
+                let members: Vec<_> = members
+                    .into_iter()
+                    .filter(|member| !member.is_null())
+                    .collect();
+                let is_single_pattern = members.len() == 1;
+                (
+                    RuntimeTy::Union(members, attr),
+                    is_optional,
+                    is_single_pattern,
+                )
             }
-            _ => (false, false),
+            union_type => (union_type, false, false),
         };
 
         Self {

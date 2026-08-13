@@ -535,7 +535,6 @@ fn build_packages(
         let pkg_info = file_package(db, *file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let _ns = &pkg_info.namespace_path;
         let resolved = &alias_caches[&pkg_info.package];
         // Lower a type ref (in the owner's `TypeRefStore`) in this file's
         // namespace, discarding diagnostics (these targets were already validated
@@ -3926,13 +3925,6 @@ fn compute_function_metadata<'db>(
         // (`(T as BoxLike).Item`), rendered as written.
         let tir_ty =
             &baml_compiler2_hir_ty::package_interface::reduce_ground_projections(db, tir_ty, 8);
-        if baml_type_runtime::contains_error_recovery(tir_ty) {
-            eprintln!(
-                "METADATA_ERROR fn={} ty={}",
-                func.name.as_str(),
-                tir_ty.render_canonical()
-            );
-        }
         baml_compiler2_mir::tir2_to_template(tir_ty, cache, &frame_params)
     };
     let null_template = || baml_type::TyTemplate::Null {

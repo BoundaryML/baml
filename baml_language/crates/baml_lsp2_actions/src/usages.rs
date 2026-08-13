@@ -438,7 +438,7 @@ fn find_field_definition_usages(
             };
 
             // MemberAccess sites: scan resolutions for matching Field
-            for (expr_id, resolution) in inference.member_resolutions.iter() {
+            for (expr_id, resolution) in &inference.member_resolutions {
                 use baml_compiler2_hir_ty::infer::MemberResolution;
                 if let MemberResolution::Field {
                     class: res_class_loc,
@@ -474,7 +474,7 @@ fn find_field_definition_usages(
             // Multi-segment Path sites: scan path_member_resolutions for matching Field.
             // For `obj.field` which is Path(["obj", "field"]), the field resolution is
             // in path_member_resolutions[expr_id][0] (index into segments[1..]).
-            for (expr_id, resolved_path) in inference.path_resolutions.iter() {
+            for (expr_id, resolved_path) in &inference.path_resolutions {
                 use baml_compiler2_hir_ty::infer::MemberResolution;
                 // Look up the Path's segments to find which segment index matched.
                 let Some((_, path_expr)) = expr_body.exprs.iter().find(|(id, _)| id == expr_id)
@@ -517,7 +517,10 @@ fn find_field_definition_usages(
                     }
 
                     // Check if the Object type matches our target class
-                    let Some(obj_ty) = inference.type_of_expr.get(&expr_id).map(|ty| ty.to_plain())
+                    let Some(obj_ty) = inference
+                        .type_of_expr
+                        .get(&expr_id)
+                        .map(baml_type::interned::Ty::to_plain)
                     else {
                         continue;
                     };

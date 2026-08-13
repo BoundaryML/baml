@@ -1061,7 +1061,12 @@ fn member_type_info_at(
                 .and_then(|path| path.segments.get(segment_idx))
                 .map(|step| step.ty.to_plain())
         })
-        .or_else(|| inference.type_of_expr.get(&expr_id).map(|ty| ty.to_plain()))?;
+        .or_else(|| {
+            inference
+                .type_of_expr
+                .get(&expr_id)
+                .map(baml_type::interned::Ty::to_plain)
+        })?;
     Some(TypeInfo::LocalVar {
         name: token_text.to_string(),
         ty: utils::display_ty_for_file(db, file, &ty),

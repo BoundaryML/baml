@@ -587,17 +587,23 @@ mod tests {
     }
 
     #[test]
-    fn outbound_optional_null_preserves_declared_member_index() {
+    fn outbound_optional_union_indexes_only_non_null_members() {
         let value = BexExternalValue::union(
-            BexExternalValue::Null,
-            [RuntimeTy::string(), RuntimeTy::null()],
-            RuntimeTy::null(),
+            BexExternalValue::Int(1),
+            [RuntimeTy::string(), RuntimeTy::int(), RuntimeTy::null()],
+            RuntimeTy::int(),
         );
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = extract_union(external_to_outbound(&value, &options).unwrap());
 
-        // RuntimeTy::optional preserves [inner, null] order.
         assert_eq!(encoded.selected_option_index, Some(1));
+        assert!(encoded.is_optional);
+        let Some(crate::baml_bridge::cffi::baml_ty::Ty::Union(union)) =
+            encoded.self_type.unwrap().ty
+        else {
+            panic!("expected union self type")
+        };
+        assert_eq!(union.options.len(), 2);
     }
 
     #[test]

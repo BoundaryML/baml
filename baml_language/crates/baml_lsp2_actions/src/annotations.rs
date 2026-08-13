@@ -277,7 +277,10 @@ fn process_body(
                 let Some(inference) = infer_for_scope(db, scope_id) else {
                     continue;
                 };
-                let Some(callee_ty) = inference.type_of_expr.get(callee).map(|ty| ty.to_plain())
+                let Some(callee_ty) = inference
+                    .type_of_expr
+                    .get(callee)
+                    .map(baml_type::interned::Ty::to_plain)
                 else {
                     continue;
                 };

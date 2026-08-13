@@ -37,6 +37,7 @@ use quote::quote;
 mod analyze;
 mod effect_rename;
 mod emit;
+mod host_types;
 mod idents;
 mod routing;
 mod translate_ty;
@@ -171,7 +172,8 @@ fn to_source_code_with_optional_metadata(
     // Give each callback's synthetic effect param a readable Rust name before
     // anything else looks at the pool, so the generic, its error union, and
     // that union's variant all read `CbError` rather than `__effect_param_0`.
-    let pool = &effect_rename::rename_effect_params(pool);
+    let pool = effect_rename::rename_effect_params(pool);
+    let pool = &host_types::lower_unrepresentable_literals(&pool);
 
     let (analysis, mut warnings) = analyze::analyze(pool);
     let union_registry = unions::collect(pool, &analysis);

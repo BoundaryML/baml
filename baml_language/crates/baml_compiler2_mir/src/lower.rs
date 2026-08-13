@@ -82,7 +82,7 @@ pub fn resolved_aliases_for_package(
 }
 
 /// Every type alias a package declares, resolved to its (one-level) value
-/// through hir_ty's lowering, keyed by qualified name.
+/// through `hir_ty`'s lowering, keyed by qualified name.
 fn collect_type_aliases<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
@@ -128,10 +128,6 @@ fn lower_ty_with_bindings<'db>(
 /// The `TypeRef`-arena twin of [`lower_ty_with_bindings`], for callers holding
 /// firewall data (`*_data(…).type_refs` + a `TypeRefId`) rather than an AST node.
 /// Identical behavior — lowers through `lower_type_ref` instead of `lower_type_expr`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "mirrors the 7-arg lower_ty_with_bindings; the (store, id) pair replaces its one &TypeExpr"
-)]
 fn lower_ref_with_bindings<'db>(
     db: &'db dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
@@ -151,7 +147,7 @@ fn lower_ref_with_bindings<'db>(
 }
 
 /// The IN-SCOPE twins of the binding wrappers above: explicit frame, no
-/// substitution - the same hir_ty road for sites that keep their type
+/// substitution - the same `hir_ty` road for sites that keep their type
 /// variables rigid (turbofish args, annotations, dispatch targets).
 #[allow(clippy::too_many_arguments)]
 fn lower_ref_in_scope<'db>(
@@ -263,7 +259,7 @@ fn interface_requires_closure_locs<'db>(
 }
 
 /// Literals widened to their bases REGARDLESS of freshness - impl
-/// dispatch is by base type (hir_ty's operand-dispatch discipline; a
+/// dispatch is by base type (`hir_ty`'s operand-dispatch discipline; a
 /// `"x"`-typed receiver IS a string at runtime).
 fn widen_literal_bases(ty: &Tir2Ty) -> Tir2Ty {
     match ty {
@@ -296,7 +292,7 @@ fn is_sugar_callee(expr: &baml_compiler2_ast::Expr, name: &str) -> bool {
     }
 }
 
-/// Resolve a written interface reference to its declaration: the hir_ty
+/// Resolve a written interface reference to its declaration: the `hir_ty`
 /// lowering road (written pins only) plus the facts definition lookup.
 fn resolve_ref_to_interface_loc<'db>(
     db: &'db dyn crate::Db,
@@ -1219,10 +1215,6 @@ struct VirtualFieldTarget {
 /// Lower the generic arguments of an interface target held as a `TypeRefId` in
 /// `store` (e.g. the `<int>` in `implements Slot<int>`). Non-`Path` targets
 /// contribute no arguments.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the (store, target) pair plus the name-resolution context sum to 8"
-)]
 fn lower_ref_interface_target_args<'db>(
     db: &'db dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
@@ -2055,7 +2047,7 @@ impl<'db> LoweringContext<'db> {
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let pkg_id = PackageId::new(db, pkg_info.package);
         // The per-param bound CONJUNCTIONS (the dispatch view), from hir_ty's
         // function_generic_bounds - the ONE declaration-bounds road (class
         // prefix, interface Self env with frame-pinned associated slots and
@@ -2494,22 +2486,20 @@ impl<'db> LoweringContext<'db> {
     // consumption vocabulary, built at construction from whichever engine
     // backs this run). `MetadataScope::Body` reads a scope's body tables;
     // `MetadataScope::ParameterDefault` its default-parameter tables.
-    // Scopes outside this function answer `None`, and some callers key
-    // behavior on that absence.
 
     fn tir_expr_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.scope)?.expr_type(key.expr)
+        self.tables.for_scope(key.scope).expr_type(key.expr)
     }
 
     fn tir_pat_type(&self, key: PatMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.0)?.pat_type(key.1)
+        self.tables.for_scope(key.0).pat_type(key.1)
     }
 
     fn tir_resolution(
         &self,
         key: ExprMetadataKey,
     ) -> Option<&crate::inference_provider::MemberResolution<'db>> {
-        self.tables.for_scope(key.scope)?.resolution(key.expr)
+        self.tables.for_scope(key.scope).resolution(key.expr)
     }
 
     /// The recorded resolution for a virtual interface-field access: the realized
@@ -2538,17 +2528,15 @@ impl<'db> LoweringContext<'db> {
     fn tir_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
         self.tables
             .for_scope(key.scope)
-            .is_some_and(|tables| tables.is_exhaustive_match(key.expr))
+            .is_exhaustive_match(key.expr)
     }
 
     fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.scope)?.path_root_type(key.expr)
+        self.tables.for_scope(key.scope).path_root_type(key.expr)
     }
 
     fn tir_path_segment_type(&self, key: (MetadataScope, AstExprId, usize)) -> Option<&Tir2Ty> {
-        self.tables
-            .for_scope(key.0)?
-            .path_segment_type(key.1, key.2)
+        self.tables.for_scope(key.0).path_segment_type(key.1, key.2)
     }
 
     fn tir_path_member_resolutions(
@@ -2556,21 +2544,19 @@ impl<'db> LoweringContext<'db> {
         key: ExprMetadataKey,
     ) -> Option<&[crate::inference_provider::MemberResolution<'db>]> {
         self.tables
-            .for_scope(key.scope)?
+            .for_scope(key.scope)
             .path_member_resolutions(key.expr)
     }
 
     fn tir_call_plan(&self, key: ExprMetadataKey) -> Option<&crate::inference_provider::CallPlan> {
-        self.tables.for_scope(key.scope)?.call_plan(key.expr)
+        self.tables.for_scope(key.scope).call_plan(key.expr)
     }
 
     fn tir_function_coercion(
         &self,
         key: ExprMetadataKey,
     ) -> Option<&crate::inference_provider::FunctionCoercion> {
-        self.tables
-            .for_scope(key.scope)?
-            .function_coercion(key.expr)
+        self.tables.for_scope(key.scope).function_coercion(key.expr)
     }
 
     fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
@@ -9161,7 +9147,7 @@ impl<'db> LoweringContext<'db> {
     /// owns its typing and rejects the invalid shapes (compound assignment,
     /// member access, call-site labels, `$id` bindings) — see
     /// `infer_path` / `Stmt::Assign` / `Stmt::AssignOp` in
-    /// hir_ty's inference. Keep the two layers in sync.
+    /// `hir_ty`'s inference. Keep the two layers in sync.
     fn is_runtime_id_path(expr: &AstExpr) -> bool {
         matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
     }
@@ -10601,7 +10587,7 @@ impl<'db> LoweringContext<'db> {
         baml_type::normalize::normalize(ty, &self.hir_facts())
     }
 
-    /// The hir_ty facts oracle over this context's carried bounds - the
+    /// The `hir_ty` facts oracle over this context's carried bounds - the
     /// ONE alias/projection/subtype authority (aliases resolve through
     /// definitions directly; no precomputed map).
     fn hir_facts(&self) -> baml_compiler2_hir_ty::facts::Facts<'db> {

@@ -1338,9 +1338,7 @@ impl ProjectDatabase {
         iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
         method_name: &baml_db::Name,
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
-        let Some(interned) = baml_compiler2_hir_ty::impls::try_interned_ty(concrete) else {
-            return None;
-        };
+        let interned = baml_compiler2_hir_ty::impls::try_interned_ty(concrete)?;
         let method_of = |func_loc: &baml_compiler2_hir::loc::FunctionLoc<'db>| {
             baml_compiler2_ppir::item_data::function_data(self, *func_loc).name == *method_name
         };

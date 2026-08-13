@@ -20,10 +20,10 @@ function bad(a: Equatable, b: Equatable) -> bool {
 
 //----
 //- diagnostics
-// E0007
+// E0001
 //
-//   × type `Equatable` has no member `same`
+//   × method `same` on interface `Equatable` uses `Self` in a parameter, so it requires a concrete receiver, not an interface-existential one
 //     ╭─[interface_error_multi_self_call_on_interface_receiver.baml:18:10]
 //  18 │   return a.same(b)
-//     ·          ─────────
+//     ·          ──────
 //     ╰────

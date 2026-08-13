@@ -1621,9 +1621,9 @@ function f(x: A | B) -> string { return x.value; }"#,
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
-        return x.value : !error
+        return x.value : int | string
       }
-      !! 87..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
+      !! 87..94: type mismatch: expected string, got int | string
     }
     class user.A$stream {
       value: int | null

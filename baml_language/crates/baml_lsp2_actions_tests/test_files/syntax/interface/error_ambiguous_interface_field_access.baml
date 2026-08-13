@@ -27,9 +27,9 @@ function bad(i: Item) -> string {
 
 //----
 //- diagnostics
-// E0007
+// E0131
 //
-//   × type `Item` has no member `name`
+//   × field `name` on class `Item` is ambiguous because it is declared by multiple interfaces: `Named`, `Labeled`; use obj.as<Named>.name or obj.as<Labeled>.name
 //     ╭─[interface_error_ambiguous_interface_field_access.baml:25:10]
 //  25 │   return i.name
 //     ·          ──────

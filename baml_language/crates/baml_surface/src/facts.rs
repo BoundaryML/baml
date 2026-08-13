@@ -128,7 +128,11 @@ fn plain_bounds(
                 refs.iter()
                     .map(|bound| baml_type::Interface {
                         name: bound.name.clone(),
-                        generics: bound.generics.iter().map(|t| t.to_plain()).collect(),
+                        generics: bound
+                            .generics
+                            .iter()
+                            .map(baml_type::interned::Ty::to_plain)
+                            .collect(),
                         associated_types: bound
                             .associated_types
                             .iter()
