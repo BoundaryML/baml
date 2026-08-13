@@ -728,17 +728,6 @@ impl<'a> Parser<'a> {
         i
     }
 
-    fn skip_header_comment_at(&self, mut i: usize) -> usize {
-        if !self.is_header_comment_at(i) {
-            return i;
-        }
-
-        while i < self.tokens.len() && self.tokens[i].kind != TokenKind::Newline {
-            i += 1;
-        }
-        i
-    }
-
     fn previous_non_trivia_span(&self) -> Option<Span> {
         let mut i = self.current;
         while i > 0 {
@@ -870,16 +859,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Check if position i starts a line comment (//) but NOT a header comment (//#)
+    /// Check if position i starts a line comment (`//`), including `//#`.
+    ///
+    /// Header comments are ordinary trivia by default. Expression-context loops inspect the raw
+    /// token stream with `at_header_comment_start` before normal trivia consumption when they need
+    /// to preserve one as a `HEADER_COMMENT` node.
     fn is_line_comment_at(&self, i: usize) -> bool {
         if i + 1 < self.tokens.len()
             && self.tokens[i].kind == TokenKind::Slash
             && self.tokens[i + 1].kind == TokenKind::Slash
         {
-            // Check if it's a header comment (//# ) - those are NOT regular comments
-            if i + 2 < self.tokens.len() && self.tokens[i + 2].kind == TokenKind::Hash {
-                return false; // It's a header, not a comment to skip
-            }
             return true;
         }
         // A `#!` shebang is treated just like `//`, so .baml files can be shebang'd
@@ -922,8 +911,10 @@ impl<'a> Parser<'a> {
             let kind = self.tokens[i].kind;
             if kind == TokenKind::Whitespace || kind == TokenKind::Newline {
                 i += 1;
+            } else if self.is_header_comment_at(i) {
+                return true;
             } else if self.is_line_comment_at(i) {
-                // Skip regular line comment (but not header comments)
+                // Skip an ordinary line comment.
                 i += 2; // Skip //
                 while i < self.tokens.len() && self.tokens[i].kind != TokenKind::Newline {
                     i += 1;
@@ -945,46 +936,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        self.is_header_comment_at(i)
-    }
-
-    /// Get the span of a header comment (from first / to end of line).
-    /// Call this before `consume_header_comment` to get the full span.
-    fn header_comment_span(&self) -> baml_base::Span {
-        let mut i = self.current;
-        // Skip trivia to find the start of the header comment
-        while i < self.tokens.len() {
-            let kind = self.tokens[i].kind;
-            if kind == TokenKind::Whitespace || kind == TokenKind::Newline {
-                i += 1;
-            } else {
-                break;
-            }
-        }
-
-        let start = self
-            .tokens
-            .get(i)
-            .map(|t| t.span.range.start())
-            .unwrap_or_default();
-        let file_id = self
-            .tokens
-            .get(i)
-            .map(|t| t.span.file_id)
-            .unwrap_or(baml_base::FileId::new(0));
-
-        // Find the end (newline or EOF)
-        let mut end = start;
-        while i < self.tokens.len() {
-            let token = &self.tokens[i];
-            if token.kind == TokenKind::Newline {
-                break;
-            }
-            end = token.span.range.end();
-            i += 1;
-        }
-
-        baml_base::Span::new(file_id, TextRange::new(start, end))
+        false
     }
 
     /// Check if we're at the start of a block comment (/*)
@@ -1070,6 +1022,8 @@ impl<'a> Parser<'a> {
                     text: self.tokens[self.current].text.clone(),
                 });
                 self.current += 1;
+            } else if self.is_header_comment_at(self.current) {
+                break;
             } else if self.is_line_comment_at(self.current) {
                 // Consume regular line comment as trivia
                 self.consume_line_comment();
@@ -1185,11 +1139,6 @@ impl<'a> Parser<'a> {
         let mut i = name + 1;
         while i < self.tokens.len() {
             let new_i = self.skip_comment_at(i);
-            if new_i != i {
-                i = new_i;
-                continue;
-            }
-            let new_i = self.skip_header_comment_at(i);
             if new_i != i {
                 i = new_i;
                 continue;
@@ -3094,14 +3043,9 @@ impl<'a> Parser<'a> {
                 return; // Error recovery: stop here
             }
 
-            // Parse enum variants and attributes
+            // Parse enum variants and attributes. Header comments are ordinary trivia here and
+            // are emitted by the next `bump`, just like other line comments.
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Header comments (`//#`) are legal between enum members.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
-
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace
                 if p.at_top_level_keyword() {
                     break;
@@ -3235,15 +3179,9 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Parse fields, methods, implements blocks, and attributes
+            // Parse fields, methods, implements blocks, and attributes. Header comments are
+            // ordinary trivia in declaration bodies.
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Header comments (`//#`) are legal between class members,
-                // same as at statement boundaries in a block.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
-
                 // Error recovery: if we see a top-level keyword (except class-local members),
                 // assume we missed a closing brace
                 let recover_top_level_item = if p.at(TokenKind::Interface) {
@@ -3340,12 +3278,6 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Header comments (`//#`) are legal between interface members.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
-
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3507,11 +3439,6 @@ impl<'a> Parser<'a> {
                 i = new_i;
                 continue;
             }
-            let new_i = self.skip_header_comment_at(i);
-            if new_i != i {
-                i = new_i;
-                continue;
-            }
             let token = &self.tokens[i];
             if self.is_basic_trivia(token.kind) {
                 i += 1;
@@ -3574,11 +3501,6 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Header comments (`//#`) are legal between implements members.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3677,11 +3599,6 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Header comments (`//#`) are legal between implements members.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -4054,12 +3971,6 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            let new_i = self.skip_header_comment_at(i);
-            if new_i != i {
-                i = new_i;
-                continue;
-            }
-
             let token = &self.tokens[i];
             if self.is_basic_trivia(token.kind) {
                 i += 1;
@@ -4160,15 +4071,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                // Check for header comments - not allowed in LLM functions
-                if p.at_header_comment_start() {
-                    let span = p.header_comment_span();
-                    p.error(
-                        "header comments (`//#`) are not allowed inside LLM functions".to_string(),
-                        span,
-                    );
-                    p.consume_header_comment();
-                } else if p.at(TokenKind::Client) {
+                if p.at(TokenKind::Client) {
                     if has_client {
                         p.error_unexpected_token("Duplicate 'client' field".to_string());
                     }
@@ -4391,17 +4294,22 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::BLOCK_EXPR, |p| {
             p.expect(TokenKind::LBrace);
 
-            // Parse statements until closing brace
-            while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword_except_client() {
-                    break;
-                }
-
-                // Handle MDX-style header comments (//#...)
+            // Parse statements until closing brace. Inspect raw headers before `at(RBrace)`,
+            // because ordinary lookahead treats headers as invisible line-comment trivia.
+            loop {
+                // Handle MDX-style header comments (//#...) as structural statements only in
+                // executable block expressions.
                 if p.at_header_comment_start() {
                     p.consume_header_comment();
                     continue;
+                }
+                if p.at_end() || p.at(TokenKind::RBrace) {
+                    break;
+                }
+
+                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                if p.at_top_level_keyword_except_client() {
+                    break;
                 }
 
                 p.parse_stmt();
@@ -4759,16 +4667,19 @@ impl<'a> Parser<'a> {
                 p.bump(); // {
 
                 let mut parsed_any_arm = false;
-                while !p.at(TokenKind::RBrace) && !p.at_end() {
-                    // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                    if p.at_top_level_keyword_except_client() {
-                        break;
-                    }
-                    // Handle MDX-style header comments (//#...) between arms,
-                    // mirroring the statement-block loop.
+                loop {
+                    // Inspect raw headers before `at(RBrace)`, whose normal lookahead skips them.
                     if p.at_header_comment_start() {
                         p.consume_header_comment();
                         continue;
+                    }
+                    if p.at_end() || p.at(TokenKind::RBrace) {
+                        break;
+                    }
+
+                    // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                    if p.at_top_level_keyword_except_client() {
+                        break;
                     }
                     let before = p.current;
                     p.parse_match_arm();
@@ -5423,15 +5334,18 @@ impl<'a> Parser<'a> {
             p.bump(); // {
 
             let mut parsed_any_arm = false;
-            while !p.at(TokenKind::RBrace) && !p.at_end() {
-                if p.at_top_level_keyword_except_client() {
-                    break;
-                }
-                // Handle MDX-style header comments (//#...) between arms,
-                // mirroring the statement-block loop.
+            loop {
+                // Inspect raw headers before `at(RBrace)`, whose normal lookahead skips them.
                 if p.at_header_comment_start() {
                     p.consume_header_comment();
                     continue;
+                }
+                if p.at_end() || p.at(TokenKind::RBrace) {
+                    break;
+                }
+
+                if p.at_top_level_keyword_except_client() {
+                    break;
                 }
                 let before = p.current;
                 p.parse_catch_arm();
@@ -5872,18 +5786,18 @@ impl<'a> Parser<'a> {
         self.parse_prefix();
 
         // Parse infix operators and postfix operations
-        while let Some(token) = self.current() {
-            let op = token.kind;
-
-            // If we see a / that might be the start of a header comment, check and stop
-            // Headers should only appear at statement boundaries, not in expressions
-            if op == TokenKind::Slash {
-                // Check if this is the start of a header comment (//#)
-                // We need to check the raw token stream, not current() which skips comments
-                if self.at_header_comment_start() {
-                    break;
-                }
+        loop {
+            // `current()` skips all line comments, including headers. Stop on a raw header before
+            // looking up the next operator so the surrounding block or arm loop can emit it as a
+            // structural `HEADER_COMMENT` node rather than `bump()` consuming it as trivia.
+            if self.at_header_comment_start() {
+                break;
             }
+
+            let Some(token) = self.current() else {
+                break;
+            };
+            let op = token.kind;
 
             // Check for special cases first
             if self.suppress_catch_depth == 0 && self.at_catch_clause_start() {
@@ -6905,6 +6819,31 @@ impl<'a> Parser<'a> {
             return false;
         }
 
+        // A structural header immediately inside braces makes this an executable block. Normal
+        // lookahead skips `//#` as line-comment trivia, so inspect the raw stream before peeking at
+        // the first expression; otherwise `{ //# section\n "value" }` is mistaken for a map.
+        let mut raw = self.skip_trivia_and_comments_from(self.current);
+        if self.tokens.get(raw).map(|token| token.kind) == Some(TokenKind::LBrace) {
+            raw += 1;
+            loop {
+                while self
+                    .tokens
+                    .get(raw)
+                    .is_some_and(|token| self.is_basic_trivia(token.kind))
+                {
+                    raw += 1;
+                }
+                if self.is_header_comment_at(raw) {
+                    return false;
+                }
+                let after_comment = self.skip_comment_at(raw);
+                if after_comment == raw {
+                    break;
+                }
+                raw = after_comment;
+            }
+        }
+
         // Look at the token after {
         if let Some(token_after_brace) = self.peek(1) {
             // Empty braces - treat as empty map
@@ -7467,12 +7406,6 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::LBrace);
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Header comments (`//#`) are legal between config items.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
-
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace.
                 // Exceptions - these keywords can appear as config keys:
                 // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
@@ -7585,12 +7518,6 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Header comments (`//#`) are legal between type-builder items.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
-
                 // Error recovery: if we see a top-level keyword that's not valid in type_builder
                 if p.at_top_level_keyword()
                     && !p.at(TokenKind::Class)
@@ -7854,39 +7781,27 @@ impl<'a> Parser<'a> {
     /// We detect the old style and default to new style otherwise, so that
     /// any expression (string concat, function calls, etc.) works as a test name.
     fn looks_like_test_expr_body(&self) -> bool {
-        let mut i = self.skip_trivia_and_comments_from(self.current);
-        if self.tokens.get(i).map(|token| token.kind) != Some(TokenKind::Test) {
+        let Some(next) = self.peek(1) else {
             return true;
-        }
-        i = self.skip_trivia_and_comments_from(i + 1);
-
+        };
         // Old-style is only: `test Name { functions ...}` or `test Name { type_builder ...}`
         // There is no old-style form with parens — `test Name(...)` was never valid old-style
         // syntax (the old parser just emits a "remove parentheses" error).
-        if self.tokens.get(i).map(|token| token.kind) != Some(TokenKind::Word) {
-            return true;
-        }
-        i = self.skip_trivia_and_comments_from(i + 1);
-        if self.tokens.get(i).map(|token| token.kind) != Some(TokenKind::LBrace) {
-            return true;
-        }
-        i += 1;
-
-        // Header comments are syntax nodes rather than trivia, but they may appear before the
-        // first config item just like ordinary comments.
-        loop {
-            i = self.skip_trivia_and_comments_from(i);
-            let after_header = self.skip_header_comment_at(i);
-            if after_header == i {
-                break;
+        if next.kind == TokenKind::Word {
+            if let Some(after_word) = self.peek(2) {
+                if after_word.kind == TokenKind::LBrace {
+                    // Peek inside the brace: `test Name { functions` or `test Name { type_builder`
+                    if let Some(inside) = self.peek(3) {
+                        if inside.kind == TokenKind::Word
+                            && (inside.text == "functions" || inside.text == "type_builder")
+                        {
+                            return false; // old-style config block
+                        }
+                    }
+                }
             }
-            i = after_header;
         }
-
-        !self.tokens.get(i).is_some_and(|inside| {
-            inside.kind == TokenKind::Word
-                && (inside.text == "functions" || inside.text == "type_builder")
-        })
+        true
     }
 
     /// Parse an expression-body test: `test <name_expr> [with expr] { body }`
@@ -8162,8 +8077,6 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             parser.parse_type_alias();
         } else if parser.at_binding_intro_stmt() {
             parser.parse_let_stmt();
-        } else if parser.at_header_comment_start() {
-            parser.consume_header_comment();
         } else if parser.try_recover_invalid_block() {
             // Successfully recovered from invalid block like "classs Foo { ... }"
             // Continue parsing
@@ -8177,9 +8090,7 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
     }
 
     while parser.current < parser.tokens.len() {
-        if parser.at_header_comment_start() {
-            parser.consume_header_comment();
-        } else if parser.at_line_comment_start() {
+        if parser.at_line_comment_start() {
             parser.consume_line_comment();
         } else if parser.at_block_comment_start() {
             parser.consume_block_comment();
@@ -9012,7 +8923,7 @@ interface Response {
     }
 
     #[test]
-    fn parses_header_comments_in_all_declaration_block_kinds() {
+    fn header_comments_are_trivia_outside_expression_blocks() {
         let source = r#"
 interface Response {
   //# interface members
@@ -9044,35 +8955,42 @@ test Legacy {
     }
   }
 }
+
+function llm_body() -> string {
+  client TestClient
+  //# llm fields
+  prompt `hello`
+}
+
+function executable() -> int {
+  //# executable section
+  1
+}
 "#;
 
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
 
-        for parent_kind in [
-            SyntaxKind::INTERFACE_DEF,
-            SyntaxKind::ENUM_DEF,
-            SyntaxKind::CONFIG_BLOCK,
-            SyntaxKind::TYPE_BUILDER_BLOCK,
-            SyntaxKind::CLASS_DEF,
-        ] {
-            assert!(
-                root.descendants().any(|node| {
-                    node.kind() == parent_kind
-                        && node
-                            .children()
-                            .any(|child| child.kind() == SyntaxKind::HEADER_COMMENT)
-                }),
-                "expected a HEADER_COMMENT child in {parent_kind:?}"
-            );
-        }
-
         assert_eq!(
             root.descendants()
                 .filter(|node| node.kind() == SyntaxKind::HEADER_COMMENT)
                 .count(),
-            7,
-            "every header comment should remain a distinct syntax node"
+            1,
+            "only the executable-block header should become a syntax node"
+        );
+        assert_eq!(
+            root.descendants_with_tokens()
+                .filter(|elem| {
+                    matches!(
+                        elem,
+                        rowan::NodeOrToken::Token(token)
+                            if token.kind() == SyntaxKind::LINE_COMMENT
+                                && token.text().starts_with("//#")
+                    )
+                })
+                .count(),
+            8,
+            "non-expression headers should be ordinary line-comment trivia"
         );
     }
 

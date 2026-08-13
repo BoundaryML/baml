@@ -20,11 +20,4 @@ function FetchDatax(user_id: string) -> Hi {
 
 //----
 //- diagnostics
-// E0010
-//
-//   × invalid syntax
-//     ╭─[headers_header_in_llm_function.baml:10:5]
-//  10 │     //# collect source material
-//     ·     ─────────────┬─────────────
-//     ·                  ╰── header comments (`//#`) are not allowed inside LLM functions
-//     ╰────
+// <no-diagnostics-expected>

@@ -1173,9 +1173,6 @@ impl FromCST for ClassDecl {
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
                 }
-                SyntaxKind::HEADER_COMMENT => {
-                    items.push(ClassItem::HeaderComment(t::HeaderComment::from_cst(elem)?));
-                }
                 SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {
                     // Stray delimiter not following a field - skip silently
                 }
@@ -1614,7 +1611,6 @@ pub enum ImplementsItem {
     FieldLink(InterfaceFieldLink, Option<ClassFieldDelimiter>),
     Field(ClassField, Option<ClassFieldDelimiter>),
     Function(FunctionDecl),
-    HeaderComment(t::HeaderComment),
 }
 
 impl ImplementsItem {
@@ -1644,10 +1640,6 @@ impl Printable for ImplementsItem {
                 info
             }
             ImplementsItem::Function(function) => function.print(shape, printer),
-            ImplementsItem::HeaderComment(header) => {
-                printer.print_raw_token(header);
-                PrintInfo::default_single_line()
-            }
         }
     }
 
@@ -1657,7 +1649,6 @@ impl Printable for ImplementsItem {
             ImplementsItem::FieldLink(link, _) => link.leftmost_token(),
             ImplementsItem::Field(field, _) => field.leftmost_token(),
             ImplementsItem::Function(function) => function.leftmost_token(),
-            ImplementsItem::HeaderComment(header) => header.span(),
         }
     }
 
@@ -1673,7 +1664,6 @@ impl Printable for ImplementsItem {
                 Self::delimiter_rightmost(delimiter.as_ref(), || field.rightmost_token())
             }
             ImplementsItem::Function(function) => function.rightmost_token(),
-            ImplementsItem::HeaderComment(header) => header.span(),
         }
     }
 }
@@ -1755,11 +1745,6 @@ impl FromCST for ImplementsBlock {
                 }
                 SyntaxKind::FUNCTION_DEF => {
                     items.push(ImplementsItem::Function(FunctionDecl::from_cst(elem)?));
-                }
-                SyntaxKind::HEADER_COMMENT => {
-                    items.push(ImplementsItem::HeaderComment(t::HeaderComment::from_cst(
-                        elem,
-                    )?));
                 }
                 SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {}
                 SyntaxKind::R_BRACE => {
@@ -1850,7 +1835,6 @@ pub enum ClassItem {
     Function(FunctionDecl),
     Implements(ImplementsBlock),
     BlockAttribute(BlockAttribute),
-    HeaderComment(t::HeaderComment),
     Unknown(TextRange),
 }
 
@@ -1862,9 +1846,6 @@ impl FromCST for ClassItem {
             SyntaxKind::IMPLEMENTS_BLOCK => ClassItem::Implements(ImplementsBlock::from_cst(elem)?),
             SyntaxKind::BLOCK_ATTRIBUTE => {
                 ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?)
-            }
-            SyntaxKind::HEADER_COMMENT => {
-                ClassItem::HeaderComment(t::HeaderComment::from_cst(elem)?)
             }
             found => {
                 return Err(StrongAstError::UnexpectedKindDesc {
@@ -1902,10 +1883,6 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.print(shape, printer),
             ClassItem::Implements(block) => block.print(shape, printer),
             ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
-            ClassItem::HeaderComment(header) => {
-                printer.print_raw_token(header);
-                PrintInfo::default_single_line()
-            }
             ClassItem::Unknown(range) => {
                 printer.print_input_range(*range);
                 PrintInfo::default_multi_lined()
@@ -1918,7 +1895,6 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.leftmost_token(),
             ClassItem::Implements(block) => block.leftmost_token(),
             ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
-            ClassItem::HeaderComment(header) => header.span(),
             ClassItem::Unknown(range) => *range,
         }
     }
@@ -1932,7 +1908,6 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.rightmost_token(),
             ClassItem::Implements(block) => block.rightmost_token(),
             ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
-            ClassItem::HeaderComment(header) => header.span(),
             ClassItem::Unknown(range) => *range,
         }
     }
@@ -1994,16 +1969,12 @@ impl FromCST for EnumDecl {
                     let attr = BlockAttribute::from_cst(elem)?;
                     items.push(EnumItem::BlockAttribute(attr));
                 }
-                SyntaxKind::HEADER_COMMENT => {
-                    items.push(EnumItem::HeaderComment(t::HeaderComment::from_cst(elem)?));
-                }
                 SyntaxKind::R_BRACE => {
                     break t::RBrace::from_cst(elem)?;
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc:
-                            "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, HEADER_COMMENT, or R_BRACE".into(),
+                        expected_desc: "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -2078,7 +2049,6 @@ impl Printable for EnumDecl {
 pub enum EnumItem {
     Variant(EnumVariant, Option<EnumVariantDelimiter>),
     BlockAttribute(BlockAttribute),
-    HeaderComment(t::HeaderComment),
 }
 
 #[derive(Debug)]
@@ -2109,17 +2079,12 @@ impl Printable for EnumItem {
                 info
             }
             EnumItem::BlockAttribute(attr) => attr.print(shape, printer),
-            EnumItem::HeaderComment(header) => {
-                printer.print_raw_token(header);
-                PrintInfo::default_single_line()
-            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             EnumItem::Variant(variant, _) => variant.leftmost_token(),
             EnumItem::BlockAttribute(attr) => attr.leftmost_token(),
-            EnumItem::HeaderComment(header) => header.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -2132,7 +2097,6 @@ impl Printable for EnumItem {
                 }
             }
             EnumItem::BlockAttribute(attr) => attr.rightmost_token(),
-            EnumItem::HeaderComment(header) => header.span(),
         }
     }
 }
@@ -2397,14 +2361,10 @@ impl FromCST for ConfigBlock {
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     ConfigBlockMember::BlockAttribute(BlockAttribute::from_cst(elem)?)
                 }
-                SyntaxKind::HEADER_COMMENT => {
-                    ConfigBlockMember::HeaderComment(t::HeaderComment::from_cst(elem)?)
-                }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
                         expected_desc:
-                            "CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, HEADER_COMMENT, or R_BRACE"
-                                .into(),
+                            "CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -2468,44 +2428,29 @@ impl Printable for ConfigBlock {
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
 
-        let ordered_items: Vec<(&ConfigBlockMember, Option<&t::Comma>)> = if self
+        let mut block_attrs: Vec<(&BlockAttribute, &ConfigBlockMember, Option<&t::Comma>)> = self
             .items
             .iter()
-            .any(|(item, _)| matches!(item, ConfigBlockMember::HeaderComment(_)))
-        {
-            // A header labels the member after it, so reordering attributes across headers can
-            // change the meaning of the formatted source. Preserve source order in that case.
-            self.items
-                .iter()
-                .map(|(item, comma)| (item, comma.as_ref()))
-                .collect()
-        } else {
-            let mut block_attrs: Vec<(&BlockAttribute, &ConfigBlockMember, Option<&t::Comma>)> =
-                self.items
-                    .iter()
-                    .filter_map(|(item, comma)| match item {
-                        ConfigBlockMember::BlockAttribute(attr) => {
-                            Some((attr, item, comma.as_ref()))
-                        }
-                        _ => None,
-                    })
-                    .collect();
-            block_attrs.sort_by_cached_key(|(attr, _, _)| {
-                attr.name_parts_str(printer.input).collect::<Vec<&str>>()
-            });
-            block_attrs
-                .into_iter()
-                .map(|(_, member, comma)| (member, comma))
-                .chain(
-                    self.items
-                        .iter()
-                        .filter(|(item, _)| !matches!(item, ConfigBlockMember::BlockAttribute(_)))
-                        .map(|(item, comma)| (item, comma.as_ref())),
-                )
-                .collect()
-        };
+            .filter_map(|(item, comma)| match item {
+                ConfigBlockMember::BlockAttribute(attr) => Some((attr, item, comma.as_ref())),
+                _ => None,
+            })
+            .collect();
+        block_attrs.sort_by_cached_key(|(attr, _, _)| {
+            attr.name_parts_str(printer.input).collect::<Vec<&str>>()
+        });
+        let other_items = self
+            .items
+            .iter()
+            .filter(|(item, _)| !matches!(item, ConfigBlockMember::BlockAttribute(_)))
+            .map(|(item, comma)| (item, comma.as_ref()));
 
-        for (i, (item, comma)) in ordered_items.into_iter().enumerate() {
+        let ordered_items = block_attrs
+            .into_iter()
+            .map(|(_, member, comma)| (member, comma))
+            .chain(other_items);
+
+        for (i, (item, comma)) in ordered_items.enumerate() {
             let (item_leading, item_trailing) = printer.trivia.get_for_element(item);
             let item_leading = if i == 0 {
                 item_leading.trim_leading_blanks() // this is first item
@@ -2528,9 +2473,6 @@ impl Printable for ConfigBlock {
                 }
                 (ConfigBlockMember::BlockAttribute(_), None) => {
                     // keep no comma, print trivia nicely
-                    printer.print_trivia_trailing(item_trailing);
-                }
-                (ConfigBlockMember::HeaderComment(_), _) => {
                     printer.print_trivia_trailing(item_trailing);
                 }
                 (_, Some(comma)) => {
@@ -2571,7 +2513,6 @@ pub enum ConfigBlockMember {
     Item(ConfigItem),
     TypeBuilder(TypeBuilderBlock),
     BlockAttribute(BlockAttribute),
-    HeaderComment(t::HeaderComment),
 }
 
 impl Printable for ConfigBlockMember {
@@ -2580,10 +2521,6 @@ impl Printable for ConfigBlockMember {
             ConfigBlockMember::Item(item) => item.print(shape, printer),
             ConfigBlockMember::TypeBuilder(block) => block.print(shape, printer),
             ConfigBlockMember::BlockAttribute(attr) => attr.print(shape, printer),
-            ConfigBlockMember::HeaderComment(header) => {
-                printer.print_raw_token(header);
-                PrintInfo::default_single_line()
-            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2591,7 +2528,6 @@ impl Printable for ConfigBlockMember {
             ConfigBlockMember::Item(item) => item.leftmost_token(),
             ConfigBlockMember::TypeBuilder(block) => block.leftmost_token(),
             ConfigBlockMember::BlockAttribute(attr) => attr.leftmost_token(),
-            ConfigBlockMember::HeaderComment(header) => header.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -2599,7 +2535,6 @@ impl Printable for ConfigBlockMember {
             ConfigBlockMember::Item(item) => item.rightmost_token(),
             ConfigBlockMember::TypeBuilder(block) => block.rightmost_token(),
             ConfigBlockMember::BlockAttribute(attr) => attr.rightmost_token(),
-            ConfigBlockMember::HeaderComment(header) => header.span(),
         }
     }
 }
@@ -3006,8 +2941,7 @@ impl FromCST for TypeBuilderBlock {
 
         let mut items = Vec::new();
         let close_brace = loop {
-            let elem =
-                it.expect_next("DYNAMIC_TYPE_DEF, CLASS_DEF, ENUM_DEF, or HEADER_COMMENT")?;
+            let elem = it.expect_next("DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF")?;
             if elem.kind() == SyntaxKind::R_BRACE {
                 break t::RBrace::from_cst(elem)?;
             }
@@ -3081,7 +3015,6 @@ pub enum TypeBuilderItem {
     Class(ClassDecl),
     Enum(EnumDecl),
     TypeAlias(TypeAliasDecl),
-    HeaderComment(t::HeaderComment),
 }
 
 impl FromCST for TypeBuilderItem {
@@ -3122,13 +3055,8 @@ impl FromCST for TypeBuilderItem {
                 let alias = TypeAliasDecl::from_cst(elem)?;
                 Ok(TypeBuilderItem::TypeAlias(alias))
             }
-            SyntaxKind::HEADER_COMMENT => Ok(TypeBuilderItem::HeaderComment(
-                t::HeaderComment::from_cst(elem)?,
-            )),
             _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc:
-                    "DYNAMIC_TYPE_DEF, CLASS_DEF, ENUM_DEF, TYPE_ALIAS_DEF, or HEADER_COMMENT"
-                        .into(),
+                expected_desc: "DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF".into(),
                 found: elem.kind(),
                 at: elem.text_range(),
             }),
@@ -3152,10 +3080,6 @@ impl Printable for TypeBuilderItem {
             TypeBuilderItem::Class(class) => printer.print(class, shape),
             TypeBuilderItem::Enum(enum_def) => printer.print(enum_def, shape),
             TypeBuilderItem::TypeAlias(alias) => printer.print(alias, shape),
-            TypeBuilderItem::HeaderComment(header) => {
-                printer.print_raw_token(header);
-                PrintInfo::default_single_line()
-            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -3165,7 +3089,6 @@ impl Printable for TypeBuilderItem {
             TypeBuilderItem::Class(class) => class.leftmost_token(),
             TypeBuilderItem::Enum(enum_def) => enum_def.leftmost_token(),
             TypeBuilderItem::TypeAlias(alias) => alias.leftmost_token(),
-            TypeBuilderItem::HeaderComment(header) => header.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -3175,7 +3098,6 @@ impl Printable for TypeBuilderItem {
             TypeBuilderItem::Class(class) => class.rightmost_token(),
             TypeBuilderItem::Enum(enum_def) => enum_def.rightmost_token(),
             TypeBuilderItem::TypeAlias(alias) => alias.rightmost_token(),
-            TypeBuilderItem::HeaderComment(header) => header.span(),
         }
     }
 }
