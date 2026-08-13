@@ -331,8 +331,7 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
             "`{}` doesn't look like it belongs to a BAML project — no `baml.toml` \
              and no `baml_src/` directory found in it or its ancestors.\n\
              add a `baml_src/` directory with your `.baml` files, run `baml init`, \
-             pass `--from <DIR>` to load an explicit source root, or for a one-off \
-             script use `--file <PATH>`.",
+             or pass `--project <PATH>` to load an explicit source path.",
             search_start.display()
         );
     };

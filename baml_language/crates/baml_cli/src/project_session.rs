@@ -25,15 +25,12 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_project::ProjectDatabase;
 
 use crate::{
     bytecode_cache::{CacheContext, ReusePlan},
-    project_load::{
-        ResolvedProject, build_db_from_sources, resolve_project_sources, resolve_standalone_file,
-        validate_file_project_flags,
-    },
+    project_load::{ResolvedProject, build_db_from_sources, resolve_project_sources},
 };
 
 /// How a command participates in the bytecode cache.
@@ -80,39 +77,6 @@ impl ProjectSession {
     pub(crate) fn open(from: Option<&Path>, cache_use: CacheUse) -> Result<Self> {
         let resolved = resolve_project_sources(from)?;
         Ok(Self::from_resolved(resolved, cache_use))
-    }
-
-    /// Open either a discovered project or one hermetic standalone source.
-    ///
-    /// Standalone files deliberately skip the bytecode cache: they have no
-    /// project manifest or stable project root to own cache state. The file's
-    /// parent is still installed as the database root so relative paths resolve
-    /// consistently with `baml run --file` and `baml pack --file`.
-    pub(crate) fn open_project_or_file(
-        from: Option<&Path>,
-        file: Option<&Path>,
-        cache_use: CacheUse,
-    ) -> Result<Self> {
-        validate_file_project_flags(file, from)?;
-        let Some(file) = file else {
-            return Self::open(from, cache_use);
-        };
-
-        let canonical = resolve_standalone_file(file)?;
-        let content = std::fs::read_to_string(&canonical)
-            .with_context(|| format!("failed to read {}", canonical.display()))?;
-        let root = canonical
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .to_path_buf();
-        Ok(Self::from_resolved(
-            ResolvedProject {
-                root,
-                manifest: None,
-                files: vec![(canonical, content)],
-            },
-            CacheUse::Off,
-        ))
     }
 
     /// Lenient open for introspection commands (`describe`): never
@@ -246,32 +210,5 @@ impl ProjectSession {
             .files
             .iter()
             .any(|(_, source)| crate::run_command::source_needs_format_hint(source))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn standalone_file_session_is_manifestless_and_uncached() {
-        let directory = tempfile::tempdir().unwrap();
-        let file = directory.path().join("standalone.baml");
-        let source = "function main() -> int { 1 }\n";
-        std::fs::write(&file, source).unwrap();
-
-        let canonical_file = file.canonicalize().unwrap();
-        let canonical_root = canonical_file.parent().unwrap().to_path_buf();
-        let session =
-            ProjectSession::open_project_or_file(None, Some(&file), CacheUse::ReadWriteTests)
-                .unwrap();
-
-        assert_eq!(session.resolved.root, canonical_root);
-        assert_eq!(
-            session.resolved.files,
-            vec![(canonical_file, source.to_string())]
-        );
-        assert!(session.resolved.manifest.is_none());
-        assert!(session.cache.is_none());
     }
 }
