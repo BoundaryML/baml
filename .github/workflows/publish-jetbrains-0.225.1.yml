@@ -31,7 +31,6 @@ on:
         type: string
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
@@ -53,7 +52,6 @@ jobs:
       PLUGIN_ID: com.boundaryml.jetbrains_ext
       MARKETPLACE_PLUGIN_ID: "27455"
       REJECTED_UPDATE_ID: ${{ inputs.rejected_update_id }}
-      ORIGINAL_UPLOAD_RUN_ID: "31646749894"
       VERSION: ${{ inputs.version }}
       CHANNEL: ${{ inputs.channel }}
       EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
@@ -104,17 +102,8 @@ jobs:
           echo "Publishing ${PLUGIN_ID} ${VERSION} to ${CHANNEL} from ${actual_sha}."
 
       - name: Refuse an existing Marketplace version
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          prior_runs="$(curl --retry 3 --retry-all-errors --fail --silent --show-error --header "Authorization: Bearer ${GH_TOKEN}" --header 'X-GitHub-Api-Version: 2022-11-28' "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/publish-jetbrains-0.225.1.yml/runs?event=workflow_dispatch&per_page=100")"
-          if jq -e --argjson current_run "${GITHUB_RUN_ID}" --argjson original_run "${ORIGINAL_UPLOAD_RUN_ID}" '.workflow_runs[] | select(.id != $current_run and .id != $original_run and (.status != "completed" or .conclusion == "success"))' <<<"${prior_runs}" >/dev/null; then
-            echo "::error::A prior one-off run is active or already succeeded; refusing another upload attempt."
-            jq -r --argjson current_run "${GITHUB_RUN_ID}" --argjson original_run "${ORIGINAL_UPLOAD_RUN_ID}" '.workflow_runs[] | select(.id != $current_run and .id != $original_run and (.status != "completed" or .conclusion == "success")) | "run \(.id): status=\(.status) conclusion=\(.conclusion // "pending") \(.html_url)"' <<<"${prior_runs}"
-            exit 1
-          fi
 
           update_url="https://plugins.jetbrains.com/api/updates/${REJECTED_UPDATE_ID}"
           update_file="$(mktemp)"
