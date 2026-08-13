@@ -103,7 +103,11 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            recommended()
+            if (providers.gradleProperty("verifyDeclaredPlatformOnly").map(String::toBoolean).getOrElse(false)) {
+                ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+            } else {
+                recommended()
+            }
         }
     }
 }

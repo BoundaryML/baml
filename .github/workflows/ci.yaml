@@ -455,14 +455,14 @@ jobs:
       # prek hooks invoke cargo (from rustup), mise tasks that shell out
       # to cargo, and python scripts that begin with `#!/usr/bin/env -S
       # uv run --script` (e.g. validate-markdown). We don't
-      # need go/ruby/node/etc here, just the prek binary itself + a
-      # python/uv pair for the hook scripts.
+      # need go/ruby/etc here, just the prek binary, a python/uv pair
+      # for hook scripts, node for the grammar check, and clang-format.
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
           # Temporarily omit Hawk while its CI check is disabled.
-          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv"
-          install_args: "cargo:prek python uv"
+          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
+          install_args: "cargo:prek python uv node clang-format"
 
       - name: "Cache prek"
         uses: actions/cache@v5
