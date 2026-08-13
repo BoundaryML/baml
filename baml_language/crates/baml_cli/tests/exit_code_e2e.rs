@@ -649,6 +649,61 @@ test "passes" {
     common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
 }
 
+/// A slash inside a user-provided test name is data, not a hierarchy separator.
+/// Regression for B-360.
+#[test]
+fn test_slash_in_name_is_rendered_verbatim() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+function f() -> int { 1 }
+
+test "alpha/beta gamma" {
+  assert.equal(f(), 1)
+}
+"#,
+    );
+
+    let listed = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "--list"]);
+    assert!(
+        listed.status.success(),
+        "Expected list to succeed, got: {:?}\nstdout: {}\nstderr: {}",
+        listed.status.code(),
+        String::from_utf8_lossy(&listed.stdout),
+        String::from_utf8_lossy(&listed.stderr),
+    );
+    let listed_stdout = String::from_utf8_lossy(&listed.stdout);
+    assert!(
+        listed_stdout.contains("root::alpha/beta gamma"),
+        "Expected the slash to be preserved in list output, got:\n{listed_stdout}",
+    );
+    assert!(
+        !listed_stdout.contains("root::alpha::beta gamma"),
+        "The slash was rendered as a hierarchy separator:\n{listed_stdout}",
+    );
+
+    let executed = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    assert!(
+        executed.status.success(),
+        "Expected test to pass, got: {:?}\nstdout: {}\nstderr: {}",
+        executed.status.code(),
+        String::from_utf8_lossy(&executed.stdout),
+        String::from_utf8_lossy(&executed.stderr),
+    );
+    let executed_stdout = String::from_utf8_lossy(&executed.stdout);
+    assert!(
+        executed_stdout.contains("PASS root::alpha/beta gamma"),
+        "Expected the slash to be preserved in test output, got:\n{executed_stdout}",
+    );
+    assert!(
+        !executed_stdout.contains("PASS root::alpha::beta gamma"),
+        "The slash was rendered as a hierarchy separator:\n{executed_stdout}",
+    );
+}
+
 /// BAML log events stay silent by default and become stdout lines only when
 /// the caller opts into a level threshold with `--logs`.
 #[test]
