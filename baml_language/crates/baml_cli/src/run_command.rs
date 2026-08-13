@@ -640,7 +640,7 @@ impl RunArgs {
             json_args,
             output_format,
         ));
-        rt.block_on(engine.shutdown());
+        crate::shutdown::shutdown_engine(&rt, &engine, reporter);
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
@@ -962,7 +962,7 @@ impl RunArgs {
             }
             Ok(())
         });
-        rt.block_on(engine.shutdown());
+        crate::shutdown::shutdown_engine(&rt, &engine, reporter);
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         match result {
