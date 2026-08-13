@@ -166,10 +166,28 @@ fn check_from_below_manifest_requires_explicit_project() {
         String::from_utf8_lossy(&implicit.stderr),
     );
     let stderr = String::from_utf8_lossy(&implicit.stderr);
-    assert!(stderr.contains("baml.toml"), "got stderr:\n{stderr}");
-    assert!(
-        stderr.contains("Change to `"),
-        "expected change-directory guidance in stderr:\n{stderr}",
+    let path_after = |marker: &str| {
+        let remainder = stderr
+            .split_once(marker)
+            .unwrap_or_else(|| panic!("expected {marker:?} in stderr:\n{stderr}"))
+            .1;
+        let path = remainder
+            .split_once('`')
+            .unwrap_or_else(|| panic!("expected a quoted path after {marker:?}:\n{stderr}"))
+            .0;
+        std::path::PathBuf::from(path)
+    };
+    let reported_manifest = path_after("`baml.toml` was found at `");
+    let reported_directory = path_after("Change to `");
+    assert_eq!(
+        reported_manifest.canonicalize().unwrap(),
+        tmp.path().join("baml.toml").canonicalize().unwrap(),
+        "expected the discovered manifest path in stderr:\n{stderr}",
+    );
+    assert_eq!(
+        reported_directory.canonicalize().unwrap(),
+        tmp.path().canonicalize().unwrap(),
+        "expected the required working directory in stderr:\n{stderr}",
     );
     assert!(
         stderr.contains("must be run from the directory containing it"),
