@@ -70,6 +70,7 @@ jobs:
           set -euo pipefail
 
           expected_confirmation="publish ${PLUGIN_ID} 0.225.1 to default"
+          # Keep this dotless so it cannot match release.yml's *.* version-tag trigger.
           expected_ref="jetbrains-republish-02251"
           actual_sha="$(git rev-parse HEAD)"
 
