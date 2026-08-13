@@ -61,17 +61,22 @@ def test_baml_logs_from_detached_tasks_reach_sdk_stderr(monkeypatch, capfd):
 async def test_baml_logs_survive_async_call_cancellation(monkeypatch, capfd):
     monkeypatch.setenv("BAML_LOG", "INFO")
     task = asyncio.create_task(sdk_bridge_cancelled_log_async())
-    await asyncio.sleep(0.02)
+
+    deadline = time.monotonic() + 2
+    stderr = ""
+    while "sdk bridge before cancel" not in stderr and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+        stderr += capfd.readouterr().err
+    assert "[BAML INFO] sdk bridge before cancel" in stderr
+
     task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
         await task
 
     deadline = time.monotonic() + 2
-    stderr = ""
     while "sdk bridge detached after cancel" not in stderr and time.monotonic() < deadline:
         await asyncio.sleep(0.05)
         stderr += capfd.readouterr().err
 
-    assert "[BAML INFO] sdk bridge before cancel" in stderr
     assert "[BAML INFO] sdk bridge detached after cancel" in stderr
