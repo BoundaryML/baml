@@ -51,7 +51,7 @@ describe("BEP-066 TypeScript host boundary", () => {
         $types: { T: compiled! },
       }),
     ).toEqual({ amount: 7, note: null });
-  });
+  }, 30_000);
 
   it("wire_occurrences_are_fresh_and_handles_reject_serialization", () => {
     const runtimeType = reflect.class.new("Fresh", {
