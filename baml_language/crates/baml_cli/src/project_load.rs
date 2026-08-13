@@ -183,15 +183,17 @@ pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
 ///    while a disjoint explicit source tree is loaded directly. Manifest
 ///    validation is intentionally skipped: introspection doesn't need a valid
 ///    `[package].name`, and a malformed manifest shouldn't block it.
-/// 2. With no explicit `from`, walk ancestors for `baml.toml` or `baml_src/`.
-///    If no marker exists, return a **default state** holding only the BAML
-///    stdlib (`baml.*`) and zero user files. This makes `baml describe
-///    baml.String` work in any directory without recursively loading it.
+/// 2. With no explicit `from`, use a `baml.toml` in the current directory or
+///    walk ancestors for a manifest-less `baml_src/` marker. An ancestor
+///    `baml.toml` is rejected with guidance to run from its directory. If no
+///    marker exists, return a **default state** holding only the BAML stdlib
+///    (`baml.*`) and zero user files. This makes `baml describe baml.String`
+///    work in any directory without recursively loading it.
 ///
 /// Note the two branches differ in what they load:
 /// - The **default-state** branch (2) loads zero user files, so omitted
 ///   `--from` can never trigger the workspace-slurp hang.
-/// - The **walk-up** branch (1) loads the ancestor project exactly as
+/// - The **explicit walk-up** branch (1) loads the ancestor project exactly as
 ///   [`load_project_from`] would — including the "no `baml_src/` → walk the
 ///   whole root" path. So if an ancestor
 ///   `baml.toml` sits at a workspace root with hundreds of loose `.baml`
@@ -261,6 +263,11 @@ pub(crate) fn resolve_project_layout(from: Option<&Path>) -> Result<Option<Proje
 
     match find_baml_project_root(&canonical) {
         Some(discovered_root) => {
+            require_manifest_directory_for_implicit_discovery(
+                from,
+                &explicit_root,
+                &discovered_root,
+            )?;
             let discovered_source_root = project_source_root(&discovered_root);
             if from.is_none() || paths_overlap(&explicit_root, &discovered_source_root) {
                 return Ok(Some(ProjectLayout {
@@ -288,6 +295,26 @@ pub(crate) fn resolve_project_layout(from: Option<&Path>) -> Result<Option<Proje
         })),
         None => Ok(None),
     }
+}
+
+/// Keep implicit project resolution independent of the caller's depth within a
+/// repository. A manifest owns relative paths, so commands that rely on it must
+/// start in its directory unless the caller explicitly selects a project root.
+fn require_manifest_directory_for_implicit_discovery(
+    from: Option<&Path>,
+    search_dir: &Path,
+    discovered_root: &Path,
+) -> Result<()> {
+    if from.is_some() || search_dir == discovered_root || !discovered_root.join(BAML_TOML).is_file()
+    {
+        return Ok(());
+    }
+
+    anyhow::bail!(
+        "`baml.toml` was found at `{}`, but BAML commands without `--project` or `--from` must be run from the directory containing it.\nChange to `{}` and try again.",
+        discovered_root.join(BAML_TOML).display(),
+        discovered_root.display(),
+    );
 }
 
 pub(crate) fn find_project_root_from(from: Option<&Path>) -> Result<Option<PathBuf>> {

@@ -141,6 +141,56 @@ fn check_defaults_from_to_current_directory() {
     );
 }
 
+/// Implicit project discovery must not make relative paths depend on how deep
+/// the command is run within a project. The manifest directory is required
+/// unless the project is selected explicitly.
+#[test]
+fn check_from_below_manifest_requires_explicit_project() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+    let nested = tmp.path().join("baml_src/nested");
+    std::fs::create_dir_all(&nested).unwrap();
+
+    let implicit = run_baml_cli(built, &nested, &["check"]);
+    assert_eq!(
+        implicit.status.code(),
+        Some(4),
+        "Expected exit 4 below the manifest directory, got: {:?}\nstdout: {}\nstderr: {}",
+        implicit.status.code(),
+        String::from_utf8_lossy(&implicit.stdout),
+        String::from_utf8_lossy(&implicit.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&implicit.stderr);
+    let project_root = tmp.path().canonicalize().unwrap();
+    assert!(stderr.contains("baml.toml"), "got stderr:\n{stderr}");
+    assert!(
+        stderr.contains(&project_root.display().to_string()),
+        "expected project directory in stderr:\n{stderr}",
+    );
+    assert!(
+        stderr.contains("must be run from the directory containing it"),
+        "got stderr:\n{stderr}",
+    );
+
+    let explicit = run_baml_cli(
+        built,
+        &nested,
+        &["check", "--from", tmp.path().to_str().unwrap()],
+    );
+    assert!(
+        explicit.status.success(),
+        "Expected explicit --from to work below the manifest directory, got: {:?}\nstdout: {}\nstderr: {}",
+        explicit.status.code(),
+        String::from_utf8_lossy(&explicit.stdout),
+        String::from_utf8_lossy(&explicit.stderr),
+    );
+}
+
 /// Compilation errors must result in a non-zero exit code for `baml check`.
 #[test]
 fn check_compilation_error_returns_nonzero_exit_code() {
@@ -1329,10 +1379,10 @@ fn describe_stdlib_without_baml_toml_succeeds() {
     );
 }
 
-/// `baml describe` walks up to an ancestor `baml.toml`, so introspection
-/// from a project subdirectory resolves a user-defined symbol.
+/// `baml describe` follows the same manifest-directory rule as build-shaped
+/// commands; an explicit project still enables introspection from a subdir.
 #[test]
-fn describe_walks_up_to_ancestor_project() {
+fn describe_from_below_manifest_requires_explicit_project() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
@@ -1342,8 +1392,22 @@ fn describe_walks_up_to_ancestor_project() {
     let nested = tmp.path().join("baml_src").join("nested");
     std::fs::create_dir_all(&nested).unwrap();
 
-    // Invoke from the nested subdir (default --from is ".").
-    let output = run_baml_cli(built, &nested, &["describe", "greet"]);
+    let implicit = run_baml_cli(built, &nested, &["describe", "greet"]);
+
+    assert_eq!(
+        implicit.status.code(),
+        Some(4),
+        "Expected exit 4 resolving implicitly from a subdir, got: {:?}\nstdout: {}\nstderr: {}",
+        implicit.status.code(),
+        String::from_utf8_lossy(&implicit.stdout),
+        String::from_utf8_lossy(&implicit.stderr),
+    );
+
+    let output = run_baml_cli(
+        built,
+        &nested,
+        &["describe", "greet", "--from", tmp.path().to_str().unwrap()],
+    );
 
     assert!(
         output.status.success(),
@@ -1376,11 +1440,10 @@ fn fmt_without_from_or_project_is_noop_success() {
     );
 }
 
-/// `baml describe` walks up to an ancestor with a **malformed** `baml.toml`
-/// (no `[package].name`) and still succeeds — introspection tolerates a bad
-/// manifest, unlike the strict build/execute path.
+/// With an explicit project, `baml describe` tolerates a **malformed**
+/// `baml.toml` (no `[package].name`), unlike the strict build/execute path.
 #[test]
-fn describe_walks_up_to_ancestor_with_invalid_manifest() {
+fn describe_tolerates_explicit_invalid_manifest() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     // Malformed manifest: no [package] table.
@@ -1388,7 +1451,16 @@ fn describe_walks_up_to_ancestor_with_invalid_manifest() {
     let nested = tmp.path().join("sub");
     std::fs::create_dir_all(&nested).unwrap();
 
-    let output = run_baml_cli(built, &nested, &["describe", "baml.String"]);
+    let output = run_baml_cli(
+        built,
+        &nested,
+        &[
+            "describe",
+            "baml.String",
+            "--from",
+            tmp.path().to_str().unwrap(),
+        ],
+    );
 
     assert!(
         output.status.success(),
