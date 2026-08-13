@@ -12,6 +12,8 @@ pub struct FunctionInfo {
     pub name: String,
     pub kind: FunctionKind,
     pub origin: FunctionOrigin,
+    pub signature: String,
+    pub source_position: FunctionSourcePosition,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
     /// `None` = no schema available (UI degrades to raw JSON); `Some(vec![])`
@@ -19,6 +21,15 @@ pub struct FunctionInfo {
     /// `bex_project::FunctionInfo` exactly.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<Vec<ParamSchema>>,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct FunctionSourcePosition {
+    pub file: String,
+    pub line: u32,
+    pub column: u32,
 }
 
 #[derive(Tsify, Serialize)]
@@ -248,6 +259,8 @@ pub enum PlaygroundNotification {
     ControlFlowGraphResult {
         function_name: String,
         graph: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<u32>,
     },
     #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
@@ -345,6 +358,12 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                             .into_iter()
                             .map(|f| FunctionInfo {
                                 name: f.name,
+                                signature: f.signature,
+                                source_position: FunctionSourcePosition {
+                                    file: f.source_position.file,
+                                    line: f.source_position.line,
+                                    column: f.source_position.column,
+                                },
                                 kind: match f.kind {
                                     bex_project::FunctionKind::Llm => FunctionKind::Llm,
                                     bex_project::FunctionKind::Expr => FunctionKind::Expr,
@@ -411,9 +430,11 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
             bex_project::PlaygroundNotification::ControlFlowGraphResult {
                 function_name,
                 graph,
+                request_id,
             } => PlaygroundNotification::ControlFlowGraphResult {
                 function_name,
                 graph,
+                request_id,
             },
             bex_project::PlaygroundNotification::CursorContext { context } => {
                 PlaygroundNotification::CursorContext { context }

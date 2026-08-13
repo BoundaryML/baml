@@ -10,6 +10,15 @@ use text_size::TextRange;
 
 use crate::ParseError;
 
+/// The `if let` form quoted by the postfix-`!` diagnostic, with `T` and `opt`
+/// standing in for the user's own type and optional value.
+///
+/// Kept as a constant so the `optional_unwrap_hint_suggests_real_syntax` test
+/// can instantiate those metavariables and assert the suggested form actually
+/// parses. A hint that doesn't parse drives users into a second error cascade
+/// instead of fixing the first.
+const IF_LET_UNWRAP_SHAPE: &str = "if let x: T = opt { ... }";
+
 pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
     parse_impl(tokens, None)
 }
@@ -1982,14 +1991,14 @@ impl<'a> Parser<'a> {
             }
             p.bump(); // Opening "
 
-            // Parse raw string content with Jinja template support
+            // Parse raw string content as literal text.
             p.parse_raw_string_content(opening_hashes);
         });
 
         true
     }
 
-    /// Parse the content inside a raw string, recognizing Jinja template constructs
+    /// Parse the content inside a raw string.
     fn parse_raw_string_content(&mut self, opening_hashes: usize) {
         let mut loop_counter = 0;
 
@@ -2023,157 +2032,8 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // Check for Jinja constructs
-            if self.at_jinja_expression() {
-                self.parse_jinja_expression(opening_hashes);
-            } else if self.at_jinja_statement() {
-                self.parse_jinja_statement(opening_hashes);
-            } else if self.at_jinja_comment() {
-                self.parse_jinja_comment(opening_hashes);
-            } else {
-                // Plain text content - collect tokens until we hit a Jinja construct or closing delimiter
-                self.parse_prompt_text(opening_hashes);
-            }
+            self.bump_raw();
         }
-    }
-
-    /// Check if we're at the start of a Jinja expression: {{
-    fn at_jinja_expression(&self) -> bool {
-        self.at_raw(TokenKind::LBrace)
-            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::LBrace)
-    }
-
-    /// Check if we're at the start of a Jinja statement: {%
-    fn at_jinja_statement(&self) -> bool {
-        self.at_raw(TokenKind::LBrace)
-            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::Percent)
-    }
-
-    /// Check if we're at the start of a Jinja comment: {#
-    fn at_jinja_comment(&self) -> bool {
-        self.at_raw(TokenKind::LBrace)
-            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::Hash)
-    }
-
-    /// Parse a Jinja expression: {{ ... }}
-    fn parse_jinja_expression(&mut self, opening_hashes: usize) {
-        self.with_node(SyntaxKind::TEMPLATE_INTERPOLATION, |p| {
-            p.bump_raw(); // {
-            p.bump_raw(); // {
-
-            // Collect tokens until we find }}
-            let mut depth = 1;
-            while !p.at_end_raw() && depth > 0 {
-                if p.at_raw(TokenKind::Quote)
-                    && p.count_consecutive_hashes_after_quote() == opening_hashes
-                {
-                    p.error_unexpected_token("Unclosed Jinja expression (expected }})".to_string());
-                    return;
-                }
-                if p.at_raw(TokenKind::LBrace)
-                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::LBrace)
-                {
-                    depth += 1;
-                    p.bump_raw();
-                    p.bump_raw();
-                } else if p.at_raw(TokenKind::RBrace)
-                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
-                {
-                    depth -= 1;
-                    if depth == 0 {
-                        p.bump_raw(); // }
-                        p.bump_raw(); // }
-                        break;
-                    }
-                    p.bump_raw();
-                    p.bump_raw();
-                } else {
-                    p.bump_raw();
-                }
-            }
-
-            if depth > 0 {
-                p.error_unexpected_token("Unclosed Jinja expression (expected }})".to_string());
-            }
-        });
-    }
-
-    /// Parse a Jinja statement: {% ... %}
-    fn parse_jinja_statement(&mut self, opening_hashes: usize) {
-        self.with_node(SyntaxKind::TEMPLATE_CONTROL, |p| {
-            p.bump_raw(); // {
-            p.bump_raw(); // %
-
-            // Collect tokens until we find %}
-            while !p.at_end_raw() {
-                if p.at_raw(TokenKind::Quote)
-                    && p.count_consecutive_hashes_after_quote() == opening_hashes
-                {
-                    p.error_unexpected_token("Unclosed Jinja statement (expected %})".to_string());
-                    return;
-                }
-                if p.at_raw(TokenKind::Percent)
-                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
-                {
-                    p.bump_raw(); // %
-                    p.bump_raw(); // }
-                    break;
-                }
-                p.bump_raw();
-            }
-        });
-    }
-
-    /// Parse a Jinja comment: {# ... #}
-    fn parse_jinja_comment(&mut self, opening_hashes: usize) {
-        self.with_node(SyntaxKind::TEMPLATE_COMMENT, |p| {
-            p.bump_raw(); // {
-            p.bump_raw(); // #
-
-            // Collect tokens until we find #}
-            while !p.at_end_raw() {
-                if p.at_raw(TokenKind::Quote)
-                    && p.count_consecutive_hashes_after_quote() == opening_hashes
-                {
-                    p.error_unexpected_token("Unclosed Jinja comment (expected #})".to_string());
-                    return;
-                }
-                if p.at_raw(TokenKind::Hash)
-                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
-                {
-                    p.bump_raw(); // #
-                    p.bump_raw(); // }
-                    break;
-                }
-                p.bump_raw();
-            }
-        });
-    }
-
-    /// Parse plain text content between Jinja constructs
-    ///
-    /// Will consume trailing whitespace as well.
-    fn parse_prompt_text(&mut self, opening_hashes: usize) {
-        self.with_node(SyntaxKind::PROMPT_TEXT, |p| {
-            // Collect tokens until we hit a Jinja construct or closing delimiter
-            while !p.at_end_raw() {
-                // Check for closing delimiter
-                if p.at_raw(TokenKind::Quote) {
-                    let closing_hashes = p.count_consecutive_hashes_after_quote();
-                    if closing_hashes == opening_hashes {
-                        break;
-                    }
-                }
-
-                // Check for Jinja constructs
-                if p.at_jinja_expression() || p.at_jinja_statement() || p.at_jinja_comment() {
-                    while p.eat_basic_trivia() {} // make it part of the PROMPT_TEXT
-                    break;
-                }
-
-                p.bump_raw();
-            }
-        });
     }
 
     /// Parse a string or raw string (dispatches to correct method)
@@ -3371,6 +3231,13 @@ impl<'a> Parser<'a> {
 
             // Parse fields, methods, implements blocks, and attributes
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between class members,
+                // same as at statement boundaries in a block.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+
                 // Error recovery: if we see a top-level keyword (except class-local members),
                 // assume we missed a closing brace
                 let recover_top_level_item = if p.at(TokenKind::Interface) {
@@ -3467,6 +3334,12 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between interface members.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3695,6 +3568,11 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between implements members.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3793,6 +3671,11 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between implements members.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -4186,22 +4069,36 @@ impl<'a> Parser<'a> {
                     if text == "const" {
                         return false;
                     }
+                    // `tools` is deliberately NOT a trigger: every LLM function
+                    // must also declare `client` and `prompt`, and raw string
+                    // contents lex as ordinary tokens in this scan, so a body
+                    // containing e.g. "tools/list" would misclassify.
                     if text == "client" || text == "prompt" {
                         // An LLM field is `client <value>` / `prompt <template>`.
-                        // A following `=`, `,`, or `)` means a named call arg
-                        // or plain identifier use, so this is an expression body.
+                        // A following `=`, `,`, `)`, or `.` means a named call
+                        // arg, plain identifier use, or a member access, and a
+                        // following `(` is a call (e.g. `spec.prompt()`), so
+                        // those are expression bodies — a field value never
+                        // starts with any of them.
                         let j = self.skip_trivia_and_comments_from(i + 1);
                         let next = self.tokens.get(j).map(|t| t.kind);
                         if !matches!(
                             next,
-                            Some(TokenKind::Equals | TokenKind::Comma | TokenKind::RParen)
+                            Some(
+                                TokenKind::Equals
+                                    | TokenKind::Comma
+                                    | TokenKind::RParen
+                                    | TokenKind::Dot
+                                    | TokenKind::LParen
+                            )
                         ) {
                             return true;
                         }
                     }
                 }
-                // `client` as KW_CLIENT: LLM directive is `client Model`, not
-                // `client.method(...)` or the named call arg `client = ...`.
+                // `client` as KW_CLIENT: the LLM directive is `client Model`,
+                // not `client.method(...)`, the named call arg `client = ...`,
+                // or a call THROUGH a parameter named `client` — `client(...)`.
                 TokenKind::Client if brace_depth == 1 => {
                     let j = self.skip_trivia_and_comments_from(i + 1);
                     let next = self.tokens.get(j).map(|t| t.kind);
@@ -4212,6 +4109,7 @@ impl<'a> Parser<'a> {
                                 | TokenKind::Equals
                                 | TokenKind::Comma
                                 | TokenKind::RParen
+                                | TokenKind::LParen
                         )
                     ) {
                         return true;
@@ -4243,6 +4141,8 @@ impl<'a> Parser<'a> {
 
             let mut has_client = false;
             let mut has_prompt = false;
+            let mut has_tools = false;
+            let mut has_type_builder = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword (except Client and TypeBuilder)
@@ -4276,7 +4176,19 @@ impl<'a> Parser<'a> {
                     }
                     has_prompt = true;
                     p.parse_prompt_field();
+                } else if p.at(TokenKind::Word)
+                    && p.current().map(|t| t.text == "tools").unwrap_or(false)
+                {
+                    if has_tools {
+                        p.error_unexpected_token("Duplicate 'tools' field".to_string());
+                    }
+                    has_tools = true;
+                    p.parse_tools_field();
                 } else if p.at(TokenKind::TypeBuilder) {
+                    if has_type_builder {
+                        p.error_unexpected_token("Duplicate 'type_builder' block".to_string());
+                    }
+                    has_type_builder = true;
                     // Parse type_builder block - HIR will emit proper error for non-test context
                     p.parse_type_builder_block();
                 } else if p.at(TokenKind::Comma) || p.at(TokenKind::Semicolon) {
@@ -4292,7 +4204,7 @@ impl<'a> Parser<'a> {
                 } else {
                     // Unexpected token in LLM function
                     p.error_unexpected_token(format!(
-                        "Only 'client' and 'prompt' allowed in LLM function, found '{}'",
+                        "Only 'client', 'tools' and 'prompt' allowed in LLM function, found '{}'",
                         p.current().map(|t| t.text.as_str()).unwrap_or("EOF")
                     ));
                     p.bump();
@@ -4323,56 +4235,45 @@ impl<'a> Parser<'a> {
             // Optional colon
             p.eat(TokenKind::Colon);
 
-            // Client name can be:
-            // - A simple identifier: MyClient
-            // - A quoted string: "openai/gpt-4o"
-            // - An unquoted shorthand: openai/gpt-4o-mini (contains slashes)
+            // The client value is either:
+            // - A quoted "provider/model" string: client "openai/gpt-4o"
+            // - An expression evaluating to an ai.Client: a declared client
+            //   name (`client Fast`), a constructor call
+            //   (`client openai.OpenAiClient.new(...)`), a wrapper
+            //   (`client ai.Retry.new(Fast)`), etc.
+            //
+            // The unquoted `client openai/gpt-4o` shorthand of the legacy
+            // world is no longer special-cased: as an expression it would be
+            // a division of two unresolved names, so lowering rejects a
+            // division-shaped client value with a "quote the model string"
+            // migration error rather than letting E0003 cascade.
             if p.at(TokenKind::Quote) {
                 p.parse_string();
-            } else if p.at(TokenKind::Word) {
-                // Parse unquoted client value - consume tokens until newline, brace,
-                // a field separator, or the start of the next LLM-block field. This
-                // handles multi-token shorthands like `openai/gpt-4o-mini` while still
-                // terminating the scan on a single-line body such as
-                // `{ client: Fast prompt: `...` }`, where the value must not swallow
-                // `prompt` and then misreport it as missing (B-621). Stopping at `,`/`;`
-                // keeps them out of the client value so they surface an accurate
-                // block-level diagnostic instead.
-                //
-                // The field-start boundary only applies once a value token has been
-                // consumed: a bare `client` whose value is absent (with the next field
-                // on the following line) must stop immediately via the newline check
-                // rather than absorbing that field, and a client whose name happens to
-                // be `prompt` is still read as the value.
-                let mut consumed_value = false;
-                while !p.at_end() {
-                    if p.at(TokenKind::RBrace)
-                        || p.at(TokenKind::LBrace)
-                        || p.at(TokenKind::Comma)
-                        || p.at(TokenKind::Semicolon)
-                        || p.has_newline_ahead()
-                        || (consumed_value && p.at_llm_field_start())
-                    {
-                        break;
-                    }
-                    p.bump();
-                    consumed_value = true;
-                }
+            } else if p.at(TokenKind::RBrace) || p.has_newline_ahead() || p.at_end() {
+                p.error_unexpected_token("client value".to_string());
             } else {
-                p.error_unexpected_token("client name".to_string());
+                p.parse_expr();
             }
         });
     }
 
-    /// True when the parser is positioned at the start of an LLM-block field
-    /// (`client`, `prompt`, or `type_builder`). The unquoted client-value scan
-    /// uses this to stop at the next field so that fields written on a single
-    /// line (with no separating newline) are not merged into the client value.
-    fn at_llm_field_start(&self) -> bool {
-        self.at(TokenKind::Client)
-            || self.at(TokenKind::TypeBuilder)
-            || (self.at(TokenKind::Word)
-                && self.current().map(|t| t.text == "prompt").unwrap_or(false))
+    /// Parse the `tools` field of an LLM function body: `tools [a, b]` or
+    /// `tools: [a, b]`. The value is an arbitrary expression producing the
+    /// tool list (usually an array literal of function references).
+    fn parse_tools_field(&mut self) {
+        self.with_node(SyntaxKind::TOOLS_FIELD, |p| {
+            // 'tools' keyword (as Word token)
+            if p.at(TokenKind::Word) && p.current().map(|t| t.text == "tools").unwrap_or(false) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("'tools' keyword".to_string());
+            }
+
+            // Optional colon
+            p.eat(TokenKind::Colon);
+
+            p.parse_expr();
+        });
     }
 
     fn parse_prompt_field(&mut self) {
@@ -4851,19 +4752,28 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::LBrace) {
                 p.bump(); // {
 
-                // Parse at least one arm
-                if !p.at(TokenKind::RBrace) {
-                    p.parse_match_arm();
-
-                    // Parse additional arms
-                    while !p.at(TokenKind::RBrace) && !p.at_end() {
-                        // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                        if p.at_top_level_keyword_except_client() {
-                            break;
-                        }
-                        p.parse_match_arm();
+                let mut parsed_any_arm = false;
+                while !p.at(TokenKind::RBrace) && !p.at_end() {
+                    // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                    if p.at_top_level_keyword_except_client() {
+                        break;
                     }
-                } else {
+                    // Handle MDX-style header comments (//#...) between arms,
+                    // mirroring the statement-block loop.
+                    if p.at_header_comment_start() {
+                        p.consume_header_comment();
+                        continue;
+                    }
+                    let before = p.current;
+                    p.parse_match_arm();
+                    parsed_any_arm = true;
+                    // An arm that consumed nothing already emitted an error;
+                    // force progress so the loop cannot spin forever.
+                    if p.current == before {
+                        p.bump();
+                    }
+                }
+                if !parsed_any_arm {
                     p.error_unexpected_token("at least one match arm".to_string());
                 }
 
@@ -5506,16 +5416,29 @@ impl<'a> Parser<'a> {
 
             p.bump(); // {
 
-            if p.at(TokenKind::RBrace) {
-                p.error_unexpected_token("at least one catch arm".to_string());
-            } else {
-                p.parse_catch_arm();
-                while !p.at(TokenKind::RBrace) && !p.at_end() {
-                    if p.at_top_level_keyword_except_client() {
-                        break;
-                    }
-                    p.parse_catch_arm();
+            let mut parsed_any_arm = false;
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at_top_level_keyword_except_client() {
+                    break;
                 }
+                // Handle MDX-style header comments (//#...) between arms,
+                // mirroring the statement-block loop.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+                let before = p.current;
+                p.parse_catch_arm();
+                parsed_any_arm = true;
+                // An arm that consumed nothing already emitted an error (e.g.
+                // recovery bailed before advancing); force progress so the
+                // loop cannot spin forever.
+                if p.current == before {
+                    p.bump();
+                }
+            }
+            if !parsed_any_arm {
+                p.error_unexpected_token("at least one catch arm".to_string());
             }
 
             p.expect(TokenKind::RBrace);
@@ -6061,6 +5984,22 @@ impl<'a> Parser<'a> {
                     }
                     self.finish_node();
                 }
+            } else if op == TokenKind::At
+                && !self.has_newline_ahead()
+                && self
+                    .peek(1)
+                    .is_some_and(|t| t.kind == TokenKind::Word && t.text == "spec")
+            {
+                // Postfix `@spec` on an LLM function reference: `MyFunc@spec(...)`.
+                // Wraps the base expression in a SPEC_EXPR; AST lowering renames
+                // the path's last segment to the `<name>$spec` companion. The
+                // no-newline guard mirrors the tagged-template rule so an
+                // attribute at the start of the next line is never absorbed.
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::SPEC_EXPR);
+                self.bump(); // @
+                self.bump(); // spec
+                self.finish_node();
             } else if op == TokenKind::Dot && self.looks_like_as_projection() {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
@@ -6161,9 +6100,10 @@ impl<'a> Parser<'a> {
                 // restriction the tagged-template (`Backtick`) branch uses.
                 let bang_span = token.span;
                 self.error(
-                    "unexpected '!'; BAML has no non-null assertion operator — \
-                     unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'"
-                        .to_string(),
+                    format!(
+                        "unexpected '!'; BAML has no non-null assertion operator — \
+                         unwrap optionals with '?? <default>' or '{IF_LET_UNWRAP_SHAPE}'"
+                    ),
                     bang_span,
                 );
                 self.bump(); // consume the stray '!'
@@ -7444,8 +7384,25 @@ impl<'a> Parser<'a> {
 
     // ============ Client Parsing ============
 
-    /// Parse a client declaration
+    /// Parse a client declaration.
+    ///
+    /// Two forms: `client Name = <expr>;` (a named client value — the
+    /// single-path world) and the legacy `client<llm> Name { ... }` config
+    /// block, which still parses so lowering can emit a targeted migration
+    /// error instead of a parse cascade.
     pub(crate) fn parse_client(&mut self) {
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Word)
+            && self.peek(2).map(|t| t.kind) == Some(TokenKind::Equals)
+        {
+            self.with_node(SyntaxKind::CLIENT_VALUE_DEF, |p| {
+                p.expect(TokenKind::Client);
+                p.bump(); // name
+                p.bump(); // =
+                p.parse_expr();
+                p.eat(TokenKind::Semicolon);
+            });
+            return;
+        }
         self.with_node(SyntaxKind::CLIENT_DEF, |p| {
             // 'client' keyword
             p.expect(TokenKind::Client);
@@ -7912,6 +7869,22 @@ impl<'a> Parser<'a> {
             // 'test' keyword
             p.expect(TokenKind::Test);
 
+            // Same rule as `parse_testset`: a bare identifier as a
+            // top-level test name can never resolve — report the syntax
+            // fix instead of a downstream "unresolved name".
+            if p.testset_body_depth == 0
+                && p.at(TokenKind::Word)
+                && (p.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace)
+                    || Self::token_is_contextual_kw(p.peek(1), "with"))
+            {
+                let span = p.current().map(|t| t.span).unwrap();
+                let name = p.current().map(|t| t.text.clone()).unwrap_or_default();
+                p.error(
+                    format!("test names must be quoted strings: `test \"{name}\"`"),
+                    span,
+                );
+            }
+
             // Test name — an expression (stops before `{` and `with`)
             p.parse_expr();
 
@@ -7936,6 +7909,25 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TESTSET_DEF, |p| {
             // 'testset' keyword
             p.expect(TokenKind::TestSet);
+
+            // A bare identifier as a top-level testset name can never
+            // resolve (there are no local bindings at top level), and the
+            // downstream "unresolved name" error is misleading. Catch the
+            // syntax mistake here with the actual fix. Inside a testset
+            // body (depth > 0) identifiers stay legal: names may be
+            // computed from loop variables.
+            if p.testset_body_depth == 0
+                && p.at(TokenKind::Word)
+                && (p.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace)
+                    || Self::token_is_contextual_kw(p.peek(1), "with"))
+            {
+                let span = p.current().map(|t| t.span).unwrap();
+                let name = p.current().map(|t| t.text.clone()).unwrap_or_default();
+                p.error(
+                    format!("testset names must be quoted strings: `testset \"{name}\"`"),
+                    span,
+                );
+            }
 
             // Testset name — an expression (stops before `{` and `with`)
             p.parse_expr();
@@ -8035,7 +8027,6 @@ impl<'a> Parser<'a> {
     /// Parse a template string declaration
     pub(crate) fn parse_template_string(&mut self) {
         self.with_node(SyntaxKind::TEMPLATE_STRING_DEF, |p| {
-            // 'template_string' keyword
             p.expect(TokenKind::TemplateString);
 
             // Template name
@@ -8185,7 +8176,7 @@ mod tests {
     use baml_compiler_syntax::{Item, SourceFile, SyntaxKind, SyntaxNode};
     use rowan::ast::AstNode;
 
-    use super::{ParseError, parse_file};
+    use super::{IF_LET_UNWRAP_SHAPE, ParseError, parse_file};
 
     fn parse_source(source: &str) -> (SyntaxNode, Vec<ParseError>) {
         let tokens = lex_lossless(source, FileId::new(0));
@@ -8532,6 +8523,27 @@ function f(xs: int[]) -> int {
         assert_eq!(
             array_count, 1,
             "expected exactly one ARRAY_PATTERN in the if-let"
+        );
+    }
+
+    /// The postfix-`!` diagnostic points users at two ways to unwrap an
+    /// optional. Instantiate the metavariables in the `if let` form it quotes
+    /// and parse the result, so the hint cannot drift back to a shape the
+    /// grammar doesn't have — B-1129 quoted `if (let x) = opt`, which yielded
+    /// four fresh errors the moment anyone pasted it.
+    #[test]
+    fn optional_unwrap_hint_suggests_real_syntax() {
+        let concrete = IF_LET_UNWRAP_SHAPE
+            .replace(": T ", ": int ")
+            .replace("{ ... }", "{ x }");
+        let source = format!("function f(opt: int?) -> int {{\n  {concrete} else {{ 0 }}\n}}\n");
+        let (root, errors) = parse_source(&source);
+        assert_no_errors(&errors);
+        // A shape that parses but isn't an `if let` would be just as wrong.
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::IF_LET_EXPR),
+            "hint should describe an `if let`, got: {concrete}"
         );
     }
 
@@ -9146,8 +9158,8 @@ client<llm> Foo {
     }
 
     #[test]
-    fn raw_string_keeps_comment_markers_as_text() {
-        for marker in ["//", "*/"] {
+    fn raw_string_keeps_template_markers_as_text() {
+        for marker in ["//", "*/", "{{ name }}", "{% if true %}", "{# note #}"] {
             let source = format!(
                 r##"
 function Demo() -> string {{
@@ -9168,6 +9180,19 @@ function Demo() -> string {{
                 "raw string should retain marker {marker:?}: {raw_string:?}"
             );
         }
+    }
+
+    #[test]
+    fn parses_template_string_for_lowering_diagnostic() {
+        let source = "template_string Greeting(name: string) `Hello ${name}`";
+        let (root, errors) = parse_source(source);
+
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::TEMPLATE_STRING_DEF),
+            "unsupported declaration should remain in the tree for lowering"
+        );
     }
 
     #[test]
@@ -9209,6 +9234,31 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
         let source = r#"
 function f() -> int {
   client.execute()
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_calling_a_client_param_is_not_llm_body() {
+        // `client` lexes as KW_CLIENT, so a call THROUGH a parameter named
+        // `client` looks like the start of an LLM directive unless `(` is
+        // excluded — the body would then be parsed as an LLM block and fail.
+        let source = r#"
+function f(client: (int) -> int) -> int {
+  client(1)
 }
 "#;
 
@@ -11794,8 +11844,9 @@ function Demo() -> string {
         )
         .unwrap();
         let segs = lit.segments();
-        // After dedent: leading "Hello, ", interp, "!\nWelcome." (trailing
-        // whitespace stripped by preprocess_template's .trim()).
+        // After dedent: leading "Hello, ", interp, "!\nWelcome." (the line
+        // delimiter-related line break and indentation before the closing
+        // delimiter are removed).
         let text_parts: Vec<&str> = segs
             .iter()
             .filter_map(|s| match s {

@@ -191,19 +191,37 @@ pub struct PendingOwnGenerics<'db> {
     pub prefix: Vec<Ty>,
 }
 
+/// The outcome of an interface-member lookup. Ambiguity is a DISTINCT
+/// verdict from not-found (rustc's `MethodError::Ambiguity` next to
+/// `NoMatch`): a member two realized-distinct interfaces declare must
+/// report E0121/E0122 with its sources, never silently pick one or fall
+/// through to an unrelated "no such member" report.
+pub enum InterfaceMemberLookup<'db> {
+    Found(InterfaceMember<'db>),
+    /// Two or more realized-distinct interfaces declare the member.
+    /// `sources` are their qualified display names, for the `as<I>`
+    /// disambiguation hint.
+    Ambiguous { sources: Vec<String>, is_field: bool },
+    NotFound,
+}
+
 /// Resolves `name` as an interface member of `receiver` - an interface
 /// existential (`Self` = the existential, one-`Self` gated) or a rigid
 /// bounded var (`Self` = the variable; `Self`-typed params are sound).
-/// Root-wins tiering over the `requires` closure; distinct realized
-/// declarers are ambiguous (Error, S17's diagnostic). Concrete
-/// receivers' impl-provided members join with the impls-for-receiver
-/// step (pinned pending).
+/// A bounded var's bound list is a CONJUNCTION: every conjunct
+/// contributes candidates. Within one conjunct the root shadows its
+/// `requires` closure (root-wins); ACROSS the pool, declarers dedupe by
+/// realized identity - a declarer two conjuncts both reach through
+/// `requires` is one declarer, not an ambiguity (the associated-type
+/// dedup discipline) - and two or more surviving declarers are
+/// ambiguous. Concrete receivers' impl-provided members join with the
+/// impls-for-receiver step (pinned pending).
 pub fn lookup_interface_member<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
-) -> Option<InterfaceMember<'db>> {
+) -> InterfaceMemberLookup<'db> {
     let (roots, existential): (Vec<InterfaceRef>, bool) = match receiver.kind() {
         TyKind::Interface(qtn, args, pins, _) => (
             vec![InterfaceRef::new(
@@ -232,32 +250,49 @@ pub fn lookup_interface_member<'db>(
         } => (assoc_bound_roots(db, facts, base, interface, member), false),
         // Concrete receivers resolve through the impls they match - the
         // trait-impl candidate tier (I6).
-        _ => return lookup_impl_member(db, facts, receiver, name),
+        _ => {
+            return match lookup_impl_member(db, facts, receiver, name) {
+                Some(member) => InterfaceMemberLookup::Found(member),
+                None => InterfaceMemberLookup::NotFound,
+            };
+        }
+    };
+    let mut declarers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
+    let push = |declarers: &mut Vec<(InterfaceRef, InterfaceMember<'db>)>,
+                    realized: &InterfaceRef,
+                    member: InterfaceMember<'db>| {
+        if !declarers.iter().any(|(seen, _)| seen == realized) {
+            declarers.push((realized.clone(), member));
+        }
     };
     for root in &roots {
-        // Root-wins: the directly-named interface shadows its closure.
+        // Root-wins: the directly-named interface shadows its own closure.
         if let Some(member) = member_on_interface(db, facts, root, receiver, name, existential) {
-            return Some(member);
+            push(&mut declarers, root, member);
+            continue;
         }
-        // Then the requires closure, deduped by realized identity;
-        // distinct declarers are ambiguous.
-        let mut found: Option<(InterfaceRef, InterfaceMember<'db>)> = None;
         for required in crate::impls::direct_requires_closure(db, root, receiver, 8) {
             if let Some(member) =
                 member_on_interface(db, facts, &required, receiver, name, existential)
             {
-                match &found {
-                    Some((seen, _)) if *seen != required => return None,
-                    Some(_) => {}
-                    None => found = Some((required.clone(), member)),
-                }
+                push(&mut declarers, &required, member);
             }
         }
-        if let Some((_, member)) = found {
-            return Some(member);
-        }
     }
-    None
+    match declarers.len() {
+        0 => InterfaceMemberLookup::NotFound,
+        1 => {
+            let (_, member) = declarers.pop().expect("len checked");
+            InterfaceMemberLookup::Found(member)
+        }
+        _ => InterfaceMemberLookup::Ambiguous {
+            is_field: !declarers[0].1.is_method,
+            sources: declarers
+                .iter()
+                .map(|(realized, _)| realized.name.render_user_facing())
+                .collect(),
+        },
+    }
 }
 
 /// Concrete receivers: the rust-analyzer trait-impl candidate tier of

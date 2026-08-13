@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11483
+assertion_line: 11976
 ---
 === MIR2 ===
 fn user.parse_and_roundtrip(s: string) -> string {
@@ -52,10 +52,10 @@ fn user.match_parsed(s: string) -> string {
     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
     let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _4: baml.json.json[] // arr
-    let _5: (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[]
+    let _5: baml.json.json[]
     let _6: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _7: map<string, baml.json.json> // m
-    let _8: map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _8: map<string, baml.json.json>
     let _9: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _10: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _11: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>

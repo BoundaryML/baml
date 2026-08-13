@@ -1356,9 +1356,12 @@ fn package_lowering_data<'db>(
     db: &'db dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> PackageLoweringData {
-    use baml_compiler2_hir::package::{
-        package_dependencies, package_dependency_closure, package_items,
-    };
+    use baml_compiler2_hir::package::{package_dependencies, package_dependency_closure};
+    // The canonical (PPIR) item view: includes synthesized `*$stream` classes,
+    // whose fields must be projectable like any other class's. TIR already
+    // resolves types against this view; using HIR's pre-expansion view here
+    // made MIR ICE on field access against a `$stream` partial.
+    use baml_compiler2_ppir::package_items;
 
     let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
 
@@ -1469,8 +1472,13 @@ struct LoweringContext<'db> {
     tables: crate::inference_provider::ProviderTables<'db>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
     // bounded type variables ABI-erased while still lowering bound-member
-    // access through the interface dispatch machinery.
-    generic_param_bounds: FxHashMap<ParamTy, Tir2Ty>,
+    // access through the interface dispatch machinery. A bound *is* an interface
+    // constraint, never a type (`TYPE_SYSTEM.md` "Interfaces"), so it is held as
+    // `baml_type::Interface` — a non-interface bound is rejected at its
+    // declaration and never reaches here. One entry per parameter holding its
+    // full `extends A & B` conjunction: a member may be provided by any
+    // conjunct, so dispatch searches them in declaration order.
+    generic_param_bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 
     // Package-shared memo for interface-dispatch candidate resolution. Shared
     // across every function the emit driver lowers in one package (fresh and
@@ -1620,6 +1628,11 @@ impl<'db> LoweringContext<'db> {
         Self::baml_iter_qtn(name)
     }
 
+    /// A `baml.ops.<name>` interface name (`Equals`, `Compare`, …).
+    fn baml_ops_qtn(name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(Name::new("baml"), vec![Name::new("ops")], Name::new(name))
+    }
+
     fn baml_iter_done_ty() -> RuntimeTy {
         RuntimeTy::Class(Self::baml_iter_type_name("Done"), vec![], TyAttr::default())
     }
@@ -1746,14 +1759,17 @@ impl<'db> LoweringContext<'db> {
             Tir2Ty::TypeVar(name, _) => self
                 .generic_param_bounds
                 .get(name)
-                .and_then(|bound| self.interface_view_for_tir_ty(bound, target_tn)),
+                .into_iter()
+                .flatten()
+                .find_map(|bound| self.interface_view_for_tir_ty(&bound.to_ty(), target_tn)),
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
                     return self.interface_view_for_tir_ty(&resolved, target_tn);
                 }
-                self.resolve_projection_bound(ty)
-                    .and_then(|bound| self.interface_view_for_tir_ty(&bound, target_tn))
+                self.resolve_projection_bounds(ty)
+                    .iter()
+                    .find_map(|bound| self.interface_view_for_tir_ty(bound, target_tn))
             }
             _ => self.realized_interface_view_for(ty, target_tn),
         }
@@ -2009,21 +2025,22 @@ impl<'db> LoweringContext<'db> {
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        // The per-param bound TYPES (the dispatch view), from hir_ty's
-        // function_generic_bounds - the ONE declaration-bounds road
-        // (class prefix, interface Self env with frame-pinned associated
-        // slots, free-impl generics, own params). This map keeps one
-        // bound per param; a conjunction collapses to its head, matching
-        // the singular builder it replaces (bounds are written singular
-        // today; the multi-bound dispatch view is the conjunction road's
-        // future work, not this map's).
-        let generic_param_bounds: FxHashMap<ParamTy, Tir2Ty> =
+        // The per-param bound CONJUNCTIONS (the dispatch view), from hir_ty's
+        // function_generic_bounds - the ONE declaration-bounds road (class
+        // prefix, interface Self env with frame-pinned associated slots and
+        // the Self bound, free-impl generics, own params). `T extends A & B`
+        // keeps both conjuncts.
+        let generic_param_bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>> =
             baml_compiler2_hir_ty::lower::function_generic_bounds(db, func_loc)
                 .into_iter()
-                .filter_map(|(param, conjunction)| {
-                    conjunction
-                        .first()
-                        .map(|bound| (param, plain_interface_ty(bound)))
+                .map(|(param, conjunction)| {
+                    (
+                        param,
+                        conjunction
+                            .iter()
+                            .filter_map(|bound| plain_interface_ty(bound).as_interface())
+                            .collect(),
+                    )
                 })
                 .collect();
 
@@ -2668,47 +2685,118 @@ impl<'db> LoweringContext<'db> {
         self.convert_tir_ty_for_runtime(&tir_ty)
     }
 
-    /// The interface *view* a receiver of this static type dispatches through — its
-    /// own for an existential, its bound's for a type variable, its resolved bound's
-    /// for a projection. `None` for concrete receivers: their providing interface is
-    /// method-specific, resolved by [`Self::dispatch_target_for_concrete`].
-    fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<InterfaceTypeView> {
+    /// The interface *view* a receiver of this static type dispatches through, for
+    /// the `member` being accessed — its own for an existential, its bound's for a
+    /// type variable, its resolved bound's for a projection. `None` for concrete
+    /// receivers: their providing interface is resolved by
+    /// [`Self::dispatch_target_for_concrete`].
+    ///
+    /// `member` is not optional: a dispatch view exists only to key a member access,
+    /// and which view is correct depends on the member. A bound list is a
+    /// *conjunction*, so under `T extends A & B` a member may be declared by either
+    /// conjunct while the emitted `virtual_call` names just one interface. Choosing
+    /// without the member — as this did while a bound could only be a single
+    /// interface — keys the call on an interface that need not declare it, which the
+    /// VM then cannot resolve.
+    fn interface_dispatch_target_for_member(
+        &self,
+        ty: &Tir2Ty,
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
         match ty {
             Tir2Ty::Interface(qtn, type_args, associated_bindings, _) => {
                 Some((qtn.clone(), type_args.clone(), associated_bindings.clone()))
             }
-            Tir2Ty::TypeVar(name, _) => self
-                .generic_param_bounds
-                .get(name)
-                .and_then(|bound| self.interface_dispatch_target_for_tir_ty(bound)),
+            // `T extends A & B` — the generic-parameter axis.
+            Tir2Ty::TypeVar(name, _) => {
+                let conjuncts: Vec<Tir2Ty> = self
+                    .generic_param_bounds
+                    .get(name)
+                    .into_iter()
+                    .flatten()
+                    .map(baml_type::Interface::to_ty)
+                    .collect();
+                self.dispatch_view_over_conjunction(&conjuncts, member)
+            }
+            // `type Item extends A & B` — the associated-type axis, same rule.
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
-                    return self.interface_dispatch_target_for_tir_ty(&resolved);
+                    return self.interface_dispatch_target_for_member(&resolved, member);
                 }
-                self.resolve_projection_bound(ty)
-                    .and_then(|bound| self.interface_dispatch_target_for_tir_ty(&bound))
+                self.dispatch_view_over_conjunction(&self.resolve_projection_bounds(ty), member)
             }
             _ => None,
         }
     }
 
-    fn interface_dispatch_target_for_expr(&self, expr_id: AstExprId) -> Option<InterfaceTypeView> {
-        self.source_param_interface_view_for_expr(expr_id)
+    /// Pick which conjunct of a bound list a `member` access dispatches through: the
+    /// first whose `requires` closure declares it.
+    ///
+    /// Falls back to the first conjunct that yields a view at all when none declares
+    /// `member` — an access TIR has already rejected, so the choice only shapes the
+    /// code emitted for a program that will not run.
+    ///
+    /// Shared by both places a bound list is a conjunction — a generic parameter's
+    /// `T extends A & B` and an associated type's `type Item extends A & B` — so the
+    /// two cannot drift.
+    fn dispatch_view_over_conjunction(
+        &self,
+        bounds: &[Tir2Ty],
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
+        bounds
+            .iter()
+            .find_map(|bound| {
+                let view = self.interface_dispatch_target_for_member(bound, member)?;
+                self.interface_closure_declares_member(&view.0, member)
+                    .then_some(view)
+            })
+            .or_else(|| {
+                bounds
+                    .iter()
+                    .find_map(|bound| self.interface_dispatch_target_for_member(bound, member))
+            })
+    }
+
+    /// Whether `iface_tn`'s `requires` closure declares `member`, as either a method
+    /// or a field. Selects which conjunct of a bound list a member access dispatches
+    /// through.
+    fn interface_closure_declares_member(&self, iface_tn: &TypeName, member: &Name) -> bool {
+        if self.mir_interface_declares_method(iface_tn, member) {
+            return true;
+        }
+        self.interface_closure_type_name_views(iface_tn, &[], &[])
+            .is_some_and(|views| {
+                views
+                    .iter()
+                    .any(|(tn, _, _)| self.interface_field_index_directly(tn, member).is_some())
+            })
+    }
+
+    /// The interface view an *expression* receiver dispatches through for `member`
+    /// — see [`Self::interface_dispatch_target_for_member`].
+    fn interface_dispatch_target_for_expr_member(
+        &self,
+        expr_id: AstExprId,
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
+        self.source_param_interface_view_for_expr(expr_id, member)
             .or_else(|| {
                 self.tir_expr_type(self.expr_metadata_key(expr_id))
-                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                    .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
             })
             .or_else(|| {
                 self.self_typevar_for_expr(expr_id)
-                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(&ty))
+                    .and_then(|ty| self.interface_dispatch_target_for_member(&ty, member))
             })
-            .or_else(|| self.upcast_target_interface_view(expr_id))
+            .or_else(|| self.upcast_target_interface_view(expr_id, member))
     }
 
     fn source_param_interface_view_for_expr(
         &self,
         expr_id: AstExprId,
+        member: &Name,
     ) -> Option<InterfaceTypeView> {
         let AstExpr::Path(segments) = &self.body.exprs[expr_id] else {
             return None;
@@ -2716,25 +2804,27 @@ impl<'db> LoweringContext<'db> {
         if segments.len() != 1 {
             return None;
         }
-        self.source_param_interface_view_for_name_at(expr_id, &segments[0])
+        self.source_param_interface_view_for_name_at(expr_id, &segments[0], member)
     }
 
     fn source_param_interface_view_for_name_at(
         &self,
         expr_id: AstExprId,
         name: &Name,
+        member: &Name,
     ) -> Option<InterfaceTypeView> {
         let binding_id = self.binding_id_for_path(expr_id, name)?;
-        self.source_param_interface_view_for_binding(name, binding_id)
+        self.source_param_interface_view_for_binding(name, binding_id, member)
     }
 
     fn source_param_interface_view_for_binding(
         &self,
         name: &Name,
         binding_id: BindingId,
+        member: &Name,
     ) -> Option<InterfaceTypeView> {
         let ty = self.source_param_tir_ty_for_binding(name, binding_id)?;
-        self.interface_dispatch_target_for_tir_ty(&ty)
+        self.interface_dispatch_target_for_member(&ty, member)
     }
 
     fn source_param_tir_ty_for_binding(
@@ -2796,7 +2886,11 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn upcast_target_interface_view(&self, expr_id: AstExprId) -> Option<InterfaceTypeView> {
+    fn upcast_target_interface_view(
+        &self,
+        expr_id: AstExprId,
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
         let AstExpr::Upcast { target, .. } = &self.body.exprs[expr_id] else {
             return None;
         };
@@ -2814,7 +2908,7 @@ impl<'db> LoweringContext<'db> {
             &generic_param_bounds,
             None,
         );
-        self.interface_dispatch_target_for_tir_ty(&target_ty)
+        self.interface_dispatch_target_for_member(&target_ty, member)
     }
 
     fn class_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<RuntimeTy>)> {
@@ -2826,18 +2920,19 @@ impl<'db> LoweringContext<'db> {
                     .map(|arg| self.convert_tir_ty_for_runtime(arg))
                     .collect(),
             )),
-            Tir2Ty::TypeVar(name, _) => self
-                .generic_param_bounds
-                .get(name)
-                .and_then(|bound| self.class_dispatch_target_for_tir_ty(bound)),
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
                     return self.class_dispatch_target_for_tir_ty(&resolved);
                 }
-                self.resolve_projection_bound(ty)
-                    .and_then(|bound| self.class_dispatch_target_for_tir_ty(&bound))
+                // An unreduced projection's bounds are interface constraints, and
+                // an interface is never a class, so only the reduction above can
+                // name one.
+                None
             }
+            // A type variable has no class dispatch target: its bounds are
+            // interface constraints, and an interface is never a class.
+            Tir2Ty::TypeVar(..) => None,
             _ => None,
         }
     }
@@ -3781,18 +3876,19 @@ impl<'db> LoweringContext<'db> {
         let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
             let lambda_span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
-            // Find the Lambda scope containing this span by searching for it.
-            // We look for a Lambda-kind scope whose range matches the lambda span.
-            let mut found = None;
-            for (i, scope) in index.scopes.iter().enumerate() {
-                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Lambda
-                    && scope.range == lambda_span
-                {
-                    found = Some(FileScopeId::new(i as u32));
-                    break;
-                }
-            }
-            found.unwrap_or(self.current_scope)
+            // Two functions can carry a lambda at the *same* source span — an
+            // LLM function and its synthesized companions all share the parent's
+            // ranges (e.g. the `$spec` companion's prompt closure vs the
+            // parent's prompt-tag closure). A bare range match would pick
+            // whichever lambda scope appears first in the file, binding this
+            // lambda to the *other* function's captures. Disambiguate by
+            // preferring the lambda scope nested within the function currently
+            // being lowered; fall back to the first range match (mirrors
+            // `build_tagged_body_closure`).
+            index
+                .lambda_scope_for_within(self.current_scope, lambda_span)
+                .or_else(|| index.lambda_scope_for(lambda_span))
+                .unwrap_or(self.current_scope)
         } else {
             self.current_scope
         };
@@ -4231,7 +4327,7 @@ impl LoweringContext<'_> {
             .map(|sm| sm.expr_span(tag).start())
             .unwrap_or_default();
         // Prefer the resolution TIR recorded for the tag expression. A qualified
-        // tag like `baml.llm.prompt` is a multi-segment path whose `func_loc`
+        // tag like `ai.prompt` is a multi-segment path whose `func_loc`
         // lives in `resolutions` (`infer_multi_segment_path`); resolving only
         // the bare last segment (`prompt`) in the user's scope would miss it.
         // Fall back to bare-name resolution for unqualified, in-file tags.
@@ -5318,7 +5414,7 @@ impl LoweringContext<'_> {
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
-        // Multi-segment paths (e.g. baml.llm.render_prompt, self.field, obj.method) — check TIR resolution first
+        // Multi-segment paths (e.g. baml.http.fetch, self.field, obj.method) — check TIR resolution first
         if segments.len() > 1 {
             // Check path_member_resolutions first (set by infer_local_rooted_path for local-rooted paths).
             // This takes priority over the flat resolutions map since infer_local_rooted_path
@@ -5503,7 +5599,7 @@ impl<'db> LoweringContext<'db> {
                     .cloned();
                 if let Some(view) = recv_tir_ty
                     .as_ref()
-                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                    .and_then(|ty| self.interface_dispatch_target_for_member(ty, &method_name))
                     .or_else(|| {
                         recv_tir_ty
                             .as_ref()
@@ -5688,7 +5784,7 @@ impl<'db> LoweringContext<'db> {
             let seg_idx = offset + 1;
             let is_last = seg_idx + 1 == segments.len();
             let interface_prefix =
-                self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty);
+                self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, seg, &current_ty);
             if let Some((tn, class_type_args)) =
                 self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
             {
@@ -5994,6 +6090,19 @@ impl LoweringContext<'_> {
             return;
         }
 
+        // Ordering over operands the comparison opcodes cannot order (`bool`, an
+        // enum or class implementing `Compare`, or a type variable / `Self` /
+        // projection that realizes to one) dispatches through `baml.ops.Compare`,
+        // resolved at runtime from the receiver's concrete type. Unlike the
+        // arithmetic operators this needs no `__union_*` driver: `Compare` is
+        // *single* dispatch (`other: Self`), so the receiver alone picks the impl.
+        if let Some(method) = Self::ordering_method(op)
+            && !self.ordering_uses_primitive_opcode(lhs, rhs)
+        {
+            self.lower_ordering_via_virtual_call(method, lhs, rhs, dest);
+            return;
+        }
+
         // Mixed `int OP bigint` (or `bigint OP int`) operators resolve the
         // `int` operand to a small local `BigInt` in the VM (the specialized
         // `*Bigint`/`CmpBigint` opcodes accept a lone `int` operand), without
@@ -6044,6 +6153,14 @@ impl LoweringContext<'_> {
     /// case (concrete-type comparison + custom `Equals` dispatch). The driver may
     /// yield (it can call a user `eq`), so the call splits the block. `!=` negates
     /// the `==` result.
+    //
+    // BUG: `!=` never dispatches `Equals.neq`, so a type that overrides `neq`
+    // inconsistently with `eq` sees the override ignored by the operator (it is
+    // only reachable as `a.neq(b)`). Unlike ordering — which is gated on a single
+    // concrete `Compare` type and so can dispatch the interface method directly —
+    // `==`/`!=` accept arbitrary operand pairs, which have no shared `Equals` to
+    // dispatch through. Fixing it therefore means deciding what `!=` should mean
+    // across type boundaries, not just changing the lowering.
     fn lower_equality_via_driver(
         &mut self,
         op: AstBinaryOp,
@@ -6114,17 +6231,25 @@ impl LoweringContext<'_> {
         }
     }
 
-    /// Whether `ty` is a primitive the specialized arithmetic opcodes /
-    /// `exec_binop` handle directly — int/bigint/float, plus `string` when
-    /// `include_string` (binary `+` concatenates; unary `-` has no string form).
+    /// Whether `ty` is a primitive the specialized opcodes handle directly —
+    /// int/bigint/float, plus `string` when `include_string` (binary `+`
+    /// concatenates; unary `-` has no string form).
     /// A literal counts as its base; a union counts only when every member is
     /// the SAME primitive kind (`int | 3`): a mixed-kind union (`int | float`)
     /// would let emit pick a single-kind opcode for a value of the other kind —
-    /// UB in the specialized handlers — so it goes through the `__union_*`
-    /// interface driver, as does anything else (a user type, or a union /
-    /// existential / type variable involving one). TIR has already validated
-    /// the operation through the interface registry; this only chooses the
-    /// lowering route.
+    /// UB in the specialized handlers — so it takes the interface route instead,
+    /// as does anything else (a user type, or a union / existential / type
+    /// variable involving one). TIR has already validated the operation through
+    /// the interface registry; this only chooses the lowering route.
+    ///
+    /// Shared by three operator families, which reach different interface routes
+    /// when it says no: arithmetic and unary negation go to the `baml.ops`
+    /// `__union_*` drivers ([`Self::arithmetic_uses_primitive_opcode`],
+    /// [`Self::negate_uses_primitive_opcode`]), while ordering dispatches
+    /// `baml.ops.Compare` directly ([`Self::ordering_uses_primitive_opcode`],
+    /// which additionally rejects `null`). `exec_binop` and `exec_cmpop` are the
+    /// runtime counterparts; ordering is the narrower of the two, so a change to
+    /// either handler's supported set has to be reflected here.
     fn arith_primitive(ty: &RuntimeTy, include_string: bool) -> bool {
         /// The primitive kind of a non-union member, literal widened to base.
         /// The builtin wrapper classes (`baml.Float`, etc.) count as their
@@ -6201,6 +6326,129 @@ impl LoweringContext<'_> {
         let rhs_op = self.lower_to_operand(rhs);
         let result_ty = self.expr_ty(expr_id);
         self.lower_via_ops_driver(driver, vec![lhs_op, rhs_op], result_ty, dest);
+    }
+
+    /// Whether both ordering operands are primitives the comparison opcodes can
+    /// *order*: int, bigint, float, string. That reduces to
+    /// [`Self::arith_primitive`] with `include_string` — which also admits the
+    /// spellings of those four (a literal, a same-kind union like `int | 3`, and
+    /// the builtin companion classes) — so the predicate is shared rather than
+    /// duplicated. `exec_cmpop` orders exactly those four and treats every other
+    /// pair (`bool`, `uint8array`, enum variants, class instances, …) as
+    /// equality-only. `bool` falls out on its own — `PrimitiveType::Bool` is not
+    /// one of the arithmetic kinds — which is what routes it to the `Compare`
+    /// impl the stdlib declares for it.
+    ///
+    /// Preconditions, both owed by TIR's ordering check and *not* re-derived
+    /// here: the two operands have the same type, and that type implements
+    /// `baml.ops.Compare`. The second is what makes the interface route correct
+    /// for everything this predicate rejects. Note the predicate tests each
+    /// operand independently, so it leans on the first precondition — a mixed
+    /// pair such as `int < string` would take the opcode path and fault, but TIR
+    /// rejects it before lowering.
+    ///
+    /// The `null` guard is defense in depth rather than a fix: `null` has no
+    /// `Compare` impl, so neither route can order it and TIR rejects it outright.
+    /// It is here because [`Self::arith_primitive`] deliberately treats a `null`
+    /// union member as *transparent* — a carve-out for chain-narrowed
+    /// compound-assign targets, which ordering has no form of — and inheriting
+    /// that silently would make `int | null` look opcode-orderable.
+    ///
+    /// Reads `expr_ty` (TIR types), where a `Self`-annotated parameter in a
+    /// concrete `implements` block has already been resolved to the block's
+    /// subject — the *MIR local* type keeps the unresolved `Self` (see
+    /// `lower_signature_runtime_ty`), and reading that instead would deoptimize
+    /// `baml.Comparable$for$int.compare` and friends off the opcode path.
+    fn ordering_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
+        /// `arith_primitive`, minus the `null`-transparency carve-out.
+        fn orderable(ty: &RuntimeTy) -> bool {
+            let has_null = match ty {
+                RuntimeTy::Union(members, _) => {
+                    members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }))
+                }
+                RuntimeTy::Null { .. } => true,
+                _ => false,
+            };
+            !has_null && LoweringContext::arith_primitive(ty, true)
+        }
+        orderable(&self.expr_ty(lhs)) && orderable(&self.expr_ty(rhs))
+    }
+
+    /// The `baml.ops.Compare` method an ordering operator dispatches, or `None`
+    /// for any other operator. Single source for both the route test in
+    /// [`Self::lower_binary`] and the dispatched method name, so the two cannot
+    /// disagree about which operators are orderings.
+    fn ordering_method(op: AstBinaryOp) -> Option<&'static str> {
+        match op {
+            AstBinaryOp::Lt => Some("lt"),
+            AstBinaryOp::Le => Some("le"),
+            AstBinaryOp::Gt => Some("gt"),
+            AstBinaryOp::Ge => Some("ge"),
+            _ => None,
+        }
+    }
+
+    /// Lower `a OP b` for `<`/`<=`/`>`/`>=` through `baml.ops.Compare`, resolving
+    /// the impl at runtime from the receiver's concrete type. Mirrors
+    /// [`Self::lower_arithmetic_via_driver`], but dispatches directly instead of
+    /// through a `baml.ops` driver function.
+    ///
+    /// A driver earns its keep when the compiler cannot *name* the interface to
+    /// dispatch on: `equals_equals` because `==` spans operand pairs that share
+    /// no interface at all, and `__union_add` and friends because `Add<Rhs>` is
+    /// generic in an `Rhs` that may be statically erased. `Compare` is neither —
+    /// it is single dispatch (`other: Self`), non-generic, and its methods return
+    /// plain `bool` rather than an associated type — so the interface, the
+    /// method, and the result type are all statically known and the receiver
+    /// alone picks the impl. (Single dispatch is necessary but not sufficient:
+    /// `Negate` is single dispatch too, yet returns `Self.Output`, which is why
+    /// it still goes through `__union_neg`.)
+    ///
+    /// Each operator dispatches its *own* method rather than deriving the other
+    /// three from `lt`. `implement Compare for float` overrides all four
+    /// natively so that NaN is unordered in every direction, which `ge = !lt`
+    /// would break; and rewriting `a > b` as `b.lt(a)` would ignore a user's
+    /// `gt` override. The interface's defaults still supply whichever methods an
+    /// impl leaves out — they are merged into the impl's method table when the
+    /// program is baked.
+    fn lower_ordering_via_virtual_call(
+        &mut self,
+        method: &str,
+        lhs: AstExprId,
+        rhs: AstExprId,
+        dest: Place,
+    ) {
+        let lhs_op = self.lower_to_operand(lhs);
+        let rhs_op = self.lower_to_operand(rhs);
+        // `Compare` is non-generic and declares no associated types, so the
+        // template carries neither; the receiver supplies `Self` at runtime.
+        // With no args or associated types to map onto frame slots, the
+        // enclosing generic params would never be consulted — pass none.
+        let iface = tir2_interface_to_template(
+            &Self::baml_ops_qtn("Compare"),
+            &[],
+            &[],
+            self.resolved_aliases,
+            &[],
+        );
+        // Ordering always produces `bool`: TIR's ordering arm types it that way,
+        // and the literal pairs `try_fold_binary` would fold instead are all
+        // opcode-orderable, so they never reach here. Name it directly rather
+        // than reading it back out of `expr_ty`.
+        let bool_ty = RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        };
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.emit_virtual_call_with_operands(
+            iface,
+            method,
+            vec![lhs_op, rhs_op],
+            /* ntypeargs */ 0,
+            /* runtime_id */ None,
+            bool_ty,
+            unwind,
+            dest,
+        );
     }
 
     /// Whether the negation operand is [`Self::arith_primitive`] (the `Neg`
@@ -7409,16 +7657,16 @@ impl<'db> LoweringContext<'db> {
                         }
                     });
                 let iface_dispatch_opt: Option<InterfaceTypeView> = if segments.len() == 2 {
-                    self.source_param_interface_view_for_name_at(callee, &segments[0])
+                    self.source_param_interface_view_for_name_at(callee, &segments[0], &method_name)
                         .or_else(|| {
-                            recv_tir_ty
-                                .as_ref()
-                                .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                            recv_tir_ty.as_ref().and_then(|ty| {
+                                self.interface_dispatch_target_for_member(ty, &method_name)
+                            })
                         })
                 } else {
                     recv_tir_ty
                         .as_ref()
-                        .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                        .and_then(|ty| self.interface_dispatch_target_for_member(ty, &method_name))
                 }
                 // Concrete receiver whose method comes from an impl (blanket,
                 // out-of-body, or in-body) — the providing interface, resolved
@@ -7570,7 +7818,7 @@ impl<'db> LoweringContext<'db> {
                         .unwrap_or(false),
                 };
                 // Check if the resolved method expects a `self` receiver.
-                // Static methods (e.g. StreamCache.new) have no `self` param
+                // Static methods (e.g. ParseCache.new) have no `self` param
                 // and must not get the class reference prepended as an argument.
                 let method_takes_self = {
                     use crate::inference_provider::MemberResolution;
@@ -8452,7 +8700,7 @@ impl LoweringContext<'_> {
         // args synthesized by PPIR companions reference `*$stream` classes
         // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
         // the PPIR-expanded item universe. Resolving against HIR's original
-        // items lowered them to `Unknown` → `Void` and broke `StreamCache.new`
+        // items lowered them to `Unknown` → `Void` and broke `ParseCache.new`
         // at runtime.
         let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
         lower_expr_in_scope(
@@ -8556,6 +8804,7 @@ impl LoweringContext<'_> {
         if tys.is_empty() {
             return Vec::new();
         }
+
         let generic_params = self.enclosing_generic_params();
         tys.iter()
             .map(|ty| {
@@ -9000,7 +9249,7 @@ impl<'db> LoweringContext<'db> {
         // prefix — so the source-verbatim form would miss the lookup. Falling
         // back to the parser name only when TIR has no type info handles
         // synthetic Object exprs from `lower_cst.rs` that already use registry-
-        // matching dotted forms like "baml.llm.Client".
+        // matching dotted forms like "ai.Prompt".
         let class_name = if let Some(tn) = &type_name_key {
             tn.render_dotted(false)
         } else {
@@ -9245,10 +9494,13 @@ impl<'db> LoweringContext<'db> {
         // declaring interface is resolved *before* lowering the receiver so a
         // field access (no such method) falls through to the field path below
         // without evaluating the receiver expression twice.
-        if let Some(view) = self.interface_dispatch_target_for_expr(base).or_else(|| {
-            self.tir_expr_type(self.expr_metadata_key(base))
-                .and_then(|ty| self.dispatch_target_for_concrete(ty, field))
-        }) && self.mir_interface_declares_method(&view.0, field)
+        if let Some(view) = self
+            .interface_dispatch_target_for_expr_member(base, field)
+            .or_else(|| {
+                self.tir_expr_type(self.expr_metadata_key(base))
+                    .and_then(|ty| self.dispatch_target_for_concrete(ty, field))
+            })
+            && self.mir_interface_declares_method(&view.0, field)
         {
             let recv_op = self.lower_to_operand(base);
             let recv_local = self.builder.temp(self.expr_ty(base));
@@ -9337,7 +9589,10 @@ impl<'db> LoweringContext<'db> {
             {
                 self.try_lower_interface_field_access(base_local, &tn, &args, &assoc, field, &dest)
             } else {
-                self.interface_receiver_for_field_access(base, &unwrapped_ty)
+                // Fallback for receivers TIR recorded no virtual-field resolution
+                // for. `field` selects among a bounded type variable's bound
+                // conjunction, where the field may come from any conjunct.
+                self.interface_receiver_for_field_access(base, field, &unwrapped_ty)
                     .is_some_and(|(iface_tn, iface_type_args, iface_assoc)| {
                         self.try_lower_interface_field_access(
                             base_local,
@@ -9396,9 +9651,10 @@ impl<'db> LoweringContext<'db> {
     fn interface_receiver_for_field_access(
         &self,
         base: AstExprId,
+        field: &Name,
         unwrapped_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
-        if let Some(target) = self.interface_dispatch_target_for_expr(base) {
+        if let Some(target) = self.interface_dispatch_target_for_expr_member(base, field) {
             return Some(target);
         }
 
@@ -9417,18 +9673,19 @@ impl<'db> LoweringContext<'db> {
         &self,
         expr_id: AstExprId,
         prefix_idx: usize,
+        member: &Name,
         current_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
         if let Some(target) = self
             .tir_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
-            .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+            .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
         {
             return Some(target);
         }
         if prefix_idx == 0
             && let Some(target) = self
                 .tir_path_root_type(self.expr_metadata_key(expr_id))
-                .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
         {
             return Some(target);
         }
@@ -9653,10 +9910,12 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
-        let dispatch_target = self.interface_dispatch_target_for_expr(base).or_else(|| {
-            self.tir_expr_type(self.expr_metadata_key(base))
-                .and_then(|ty| self.dispatch_target_for_concrete(ty, method))
-        });
+        let dispatch_target = self
+            .interface_dispatch_target_for_expr_member(base, method)
+            .or_else(|| {
+                self.tir_expr_type(self.expr_metadata_key(base))
+                    .and_then(|ty| self.dispatch_target_for_concrete(ty, method))
+            });
         let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
             return false;
         };
@@ -9745,25 +10004,65 @@ impl<'db> LoweringContext<'db> {
         );
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
-        let resume = self.builder.create_block();
-        // `VirtualCall`'s destination must be a `Place::Local`. If the caller
-        // handed us a projection (field/index) or capture, dispatch into a temp
-        // local and assign through to the projection in the resume block —
-        // mirrors how `lower_call`/`lower_await` normalize their destinations.
-        let (call_dest, projection_dest) = match dest {
-            Place::Local(_) => (dest.clone(), None),
-            projection => {
-                let call_ty = self.expr_ty(expr_id);
-                let tmp = self.builder.temp(call_ty);
-                (Place::local(tmp), Some(projection.clone()))
-            }
-        };
-        self.builder.virtual_call_with_runtime_id(
+        let result_ty = self.expr_ty(expr_id);
+        self.emit_virtual_call_with_operands(
             iface_template,
-            method.to_string(),
+            method.as_str(),
             all_args,
             ntypeargs,
             runtime_id_operand,
+            result_ty,
+            unwind,
+            dest.clone(),
+        );
+        true
+    }
+
+    /// Emit the `VirtualCall` terminator itself, given operands that are already
+    /// lowered. Shared by the method-call funnel ([`Self::emit_virtual_call`],
+    /// which builds its operands from an AST call) and by operator lowering,
+    /// which has no call expression to read arguments from.
+    ///
+    /// `args` must be laid out as `[method_type_args… ++ receiver ++ value_args…]`
+    /// with exactly `ntypeargs` leading type args, mirroring `Call`. **The
+    /// receiver is `args[ntypeargs]`** — the VM reads its runtime concrete type
+    /// as `Self` and resolves the impl off that, so passing the operands in the
+    /// wrong order silently dispatches on the wrong value. `Self` is taken from
+    /// the value, not the operand form, so a receiver may be any `Operand`
+    /// (`emit_virtual_call` always passes a local; operator lowering may pass a
+    /// constant, as in `true < false`).
+    ///
+    /// The call splits the block — the resolved impl may be user bytecode — so
+    /// lowering resumes in a fresh one. `VirtualCall`'s destination must be a
+    /// `Place::Local`; a projection (field/index) or capture is dispatched into
+    /// a `result_ty`-typed temp and assigned through in the resume block,
+    /// mirroring how `lower_call`/`lower_await` normalize their destinations.
+    #[expect(clippy::too_many_arguments)]
+    fn emit_virtual_call_with_operands(
+        &mut self,
+        iface: TyTemplateInterface,
+        method: &str,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        result_ty: RuntimeTy,
+        unwind: Option<BlockId>,
+        dest: Place,
+    ) {
+        let resume = self.builder.create_block();
+        let (call_dest, projection_dest) = match dest {
+            Place::Local(_) => (dest, None),
+            projection => {
+                let tmp = self.builder.temp(result_ty);
+                (Place::local(tmp), Some(projection))
+            }
+        };
+        self.builder.virtual_call_with_runtime_id(
+            iface,
+            method.to_string(),
+            args,
+            ntypeargs,
+            runtime_id,
             call_dest.clone(),
             resume,
             unwind,
@@ -9773,7 +10072,6 @@ impl<'db> LoweringContext<'db> {
             self.builder
                 .assign(projection, Rvalue::Use(Operand::Copy(call_dest)));
         }
-        true
     }
 
     /// Emit an [`Rvalue::MakeVirtualBoundMethod`] binding `method` of the interface
@@ -9947,7 +10245,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Option<InterfaceTypeView> {
         let first = members.first()?;
         let view = self
-            .interface_dispatch_target_for_tir_ty(first)
+            .interface_dispatch_target_for_member(first, method)
             .or_else(|| self.dispatch_target_for_concrete(first, method))?;
         Some(self.interface_view_declaring_method(&view, method))
     }
@@ -10134,12 +10432,15 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         target: AstExprId,
         base: AstExprId,
+        field: &Name,
     ) -> Option<InterfaceTypeView> {
         if let Some((view, _index)) = self.tir_virtual_field_view(self.expr_metadata_key(target)) {
             return Some(view);
         }
         let base_ty = self.expr_ty(base).strip_null();
-        self.interface_receiver_for_field_access(base, &base_ty)
+        // `field` selects among a bounded type variable's bound conjunction, where
+        // the field may be declared by any conjunct.
+        self.interface_receiver_for_field_access(base, field, &base_ty)
     }
 
     /// The [`VirtualFieldTarget`] an assignment target denotes when it is an
@@ -10156,7 +10457,7 @@ impl<'db> LoweringContext<'db> {
         match &self.body.exprs[target] {
             AstExpr::MemberAccess { base, member } => {
                 let (base, field) = (*base, member.clone());
-                let view = self.virtual_field_assign_view(target, base)?;
+                let view = self.virtual_field_assign_view(target, base, &field)?;
                 let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
                 let recv_op = self.lower_to_operand(base);
                 let receiver = self.operand_to_local(recv_op, self.expr_ty(base));
@@ -10175,8 +10476,8 @@ impl<'db> LoweringContext<'db> {
                     .tir_path_segment_type((self.current_metadata_scope, target, prefix_idx))
                     .cloned()
                     .map(|t| self.convert_tir_ty_for_runtime(&t))?;
-                let view =
-                    self.interface_receiver_for_path_prefix(target, prefix_idx, &prefix_ty)?;
+                let view = self
+                    .interface_receiver_for_path_prefix(target, prefix_idx, &field, &prefix_ty)?;
                 let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
                 let root_local = self.local_for_path(target, &segments[0])?;
                 let receiver = self.lower_path_receiver_to_local(
@@ -10272,18 +10573,15 @@ impl<'db> LoweringContext<'db> {
     /// ONE alias/projection/subtype authority (aliases resolve through
     /// definitions directly; no precomputed map).
     fn hir_facts(&self) -> baml_compiler2_hir_ty::facts::Facts<'db> {
-        let bounds = self
-            .generic_param_bounds
-            .iter()
-            .filter_map(|(param, ty)| ty.as_interface().map(|iface| (param.clone(), vec![iface])))
-            .collect();
-        baml_compiler2_hir_ty::facts::Facts::with_bounds(self.db, bounds)
+        baml_compiler2_hir_ty::facts::Facts::with_bounds(self.db, self.generic_param_bounds.clone())
     }
 
-    /// The declared bound of an *unreduced* (symbolic-base) projection `(base as I).member` —
-    /// interface `I`'s `type member extends J`, realized. `None` for a non-projection, an
+    /// The declared bounds of an *unreduced* (symbolic-base) projection
+    /// `(base as I).member` — interface `I`'s `type member extends J & K`, realized.
+    ///
+    /// A conjunction, like a generic parameter's: empty for a non-projection, an
     /// unqualified projection, or an unbounded associated type.
-    fn resolve_projection_bound(&self, ty: &Tir2Ty) -> Option<Tir2Ty> {
+    fn resolve_projection_bounds(&self, ty: &Tir2Ty) -> Vec<Tir2Ty> {
         use baml_type::normalize::TypeContext;
         let Tir2Ty::AssociatedTypeProjection {
             interface: iface,
@@ -10291,13 +10589,13 @@ impl<'db> LoweringContext<'db> {
             ..
         } = ty
         else {
-            return None;
+            return Vec::new();
         };
         self.hir_facts()
             .associated_type_bound(iface, member.clone())
-            .into_iter()
-            .next()
-            .map(|bound| bound.to_ty())
+            .iter()
+            .map(baml_type::Interface::to_ty)
+            .collect()
     }
 
     fn interface_closure_type_name_views(
@@ -12450,7 +12748,7 @@ impl LoweringContext<'_> {
             .tir_pat_type(self.pat_metadata_key(class_pat_id))?
             .clone();
         let (iface_tn, iface_args, iface_assoc) =
-            self.interface_dispatch_target_for_tir_ty(&tir_ty)?;
+            self.interface_dispatch_target_for_member(&tir_ty, field)?;
         let field_local = self.builder.temp(self.pat_ty(field_pat_id));
         self.try_lower_interface_field_access(
             scrutinee,

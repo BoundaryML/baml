@@ -1,11 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "bash scripts/vercel-build.sh",
   "git": {
     "deploymentEnabled": {
       "**": false,
-      "canary": true
+      "dhilan/website-v1": true
     }
   },
-  "installCommand": "bash scripts/vercel-install.sh",
-  "buildCommand": "bash scripts/vercel-build.sh"
+  "installCommand": "bash scripts/vercel-install.sh"
 }

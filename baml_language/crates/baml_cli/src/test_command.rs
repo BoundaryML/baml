@@ -994,6 +994,14 @@ fn cached_legacy_test(t: &LegacyTest) -> crate::bytecode_cache::CachedLegacyTest
 // ---------------------------------------------------------------------------
 
 #[allow(unused_variables)]
+// BUG: test discovery is duplicated with different semantics in
+// `baml_project::symbols::list_tests_with_metadata`. This copy iterates files
+// (sees duplicate-named tests) and qualifies function refs unconditionally
+// with the *test's* namespace; the playground copy iterates resolved
+// namespace items (keep-first winner) and qualifies only when the ref
+// resolves in the same namespace. Neither handles a cross-namespace ref by
+// the *resolved function's* namespace, which is the correct rule. Unify on
+// one `baml_surface`-side derivation once that rule is ratified.
 fn discover_legacy_tests(
     db: &ProjectDatabase,
     project: baml_workspace::Project,

@@ -653,7 +653,7 @@ fn phase_for_query(name: &str) -> &'static str {
         "infer_function_body"
         | "infer_let_body"
         | "infer_parameter_defaults"
-        | "function_signature"
+        | "function_signature_ty"
         | "resolve_class_fields"
         | "resolve_type_alias"
         | "resolve_name_at"

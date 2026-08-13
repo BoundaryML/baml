@@ -1,0 +1,63 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 36119
+---
+=== PPIR ===
+class user.Holder {
+  item: T
+}
+class user.Holder$stream {
+  item: T | null
+}
+class user.OnlyNamed {
+  name: string
+}
+class user.OnlyNamed$stream {
+  name: string | null
+}
+class user.OnlySized {
+}
+class user.OnlySized$stream {
+}
+class user.WideningReader {
+}
+class user.WideningReader$stream {
+}
+function user.ambiguous_across_conjuncts(item: T) -> int  [expr] {
+  {  } item.size()
+}
+function user.blanket_impl_needs_every_conjunct() -> string  [expr] {
+  { let p: Printable = user.OnlyNamed { name: "n" } } p.display()
+}
+function user.describe(item: T) -> string  [expr] {
+  {  } item.name
+}
+function user.display(self: ?) -> string  [missing]
+function user.display(self: ?) -> string  [expr] {
+  {  } self.name
+}
+function user.extra(self: ?) -> int  [missing]
+function user.missing_conjunct_in_class_type_arg() -> string  [expr] {
+  { let h = user.Holder { item: user.OnlyNamed { name: "n" } } } h.item.name
+}
+function user.missing_conjunct_in_instantiation_expr() -> string  [expr] {
+  { let f = describe<...> } "ok"
+}
+function user.missing_leading_conjunct() -> string  [expr] {
+  {  } describe(user.OnlySized {  })
+}
+function user.missing_trailing_conjunct() -> string  [expr] {
+  {  } describe(user.OnlyNamed { name: "n" })
+}
+function user.overlap_through_requires(item: T) -> string  [expr] {
+  {  } item.name
+}
+function user.read(self: ?, value: T) -> string  [missing]
+function user.read(self: ?, value: T) -> string  [expr] {
+  {  } value.name
+}
+function user.size(self: ?) -> int  [missing]
+function user.size(self: ?) -> int  [expr] {
+  {  } 1
+}
+function user.size(self: ?) -> int  [missing]

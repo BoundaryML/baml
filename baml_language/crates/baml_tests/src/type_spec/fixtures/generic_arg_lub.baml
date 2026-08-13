@@ -16,6 +16,6 @@ function gal_union_join(flag: bool) -> int[] | string throws never {
      // ^ "x" | int[]
     w
 }
-test "gal_deep_equals" {
-    assert.is_true(baml.deep_equals(gal_ret_three(), 3))
+test "gal_equals" {
+    assert.is_true(gal_ret_three() == 3)
 }

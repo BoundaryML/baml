@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 152
 ---
 function ops_bitwise.$init_test_ns_ops_bitwise_ops_bitwise(registry: testing.TestCollector) -> null {
     load_var registry
@@ -45,50 +46,45 @@ function ops_bitwise.band(x: #0, y: int) -> (#0 as baml.ops.BitAnd<int>).Output 
 }
 
 function ops_bitwise.bigint_ops() -> bool {
-    load_type bigint
     load_const 6n
     load_const 3n
     bit_and_bigint
     load_const 2n
-    call baml.deep_equals
+    cmp_bigint_op ==
     jump_if_false L0
     pop 1
-    load_type bigint
     load_const 6n
     load_const 3n
     bit_or_bigint
     load_const 7n
-    call baml.deep_equals
+    cmp_bigint_op ==
 
   L0:
     jump_if_false L1
     pop 1
-    load_type bigint
     load_const 6n
     load_const 3n
     bit_xor_bigint
     load_const 5n
-    call baml.deep_equals
+    cmp_bigint_op ==
 
   L1:
     jump_if_false L2
     pop 1
-    load_type bigint
     load_const 1n
     load_const 70n
     shl_bigint
     load_const 1180591620717411303424n
-    call baml.deep_equals
+    cmp_bigint_op ==
 
   L2:
     jump_if_false L3
     pop 1
-    load_type bigint
     load_const 1180591620717411303424n
     load_const 70n
     shr_bigint
     load_const 1n
-    call baml.deep_equals
+    cmp_bigint_op ==
 
   L3:
     return
@@ -152,20 +148,18 @@ function ops_bitwise.int_ops() -> bool {
 }
 
 function ops_bitwise.mixed_widens() -> bool {
-    load_type bigint
     load_const 6
     load_const 3n
     bit_and_bigint
     load_const 2n
-    call baml.deep_equals
+    cmp_bigint_op ==
     jump_if_false L0
     pop 1
-    load_type bigint
     load_const 6n
     load_const 3
     bit_and_bigint
     load_const 2n
-    call baml.deep_equals
+    cmp_bigint_op ==
 
   L0:
     return

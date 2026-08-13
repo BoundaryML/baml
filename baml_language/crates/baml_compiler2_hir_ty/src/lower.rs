@@ -832,12 +832,12 @@ pub fn function_generic_frame<'db>(
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class_loc)) => {
             let data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-            extend_frame(&mut frame, &data.generic_params);
+            extend_frame(&mut frame, data.generic_params.iter().map(|g| &g.name));
         }
         Some(MethodOwner::Interface(interface_loc)) => {
             let data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
             extend_frame(&mut frame, &[Name::new("Self")]);
-            extend_frame(&mut frame, &data.generic_params);
+            extend_frame(&mut frame, data.generic_params.iter().map(|g| &g.name));
             let associated: Vec<Name> = data
                 .associated_types
                 .iter()
@@ -950,7 +950,7 @@ pub fn interface_frame<'db>(
 ) -> Vec<ParamTy> {
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
     let mut names = vec![Name::new("Self")];
-    names.extend(data.generic_params.iter().cloned());
+    names.extend(data.generic_params.iter().map(|g| g.name.clone()));
     names.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
     interface_generic_frame_params(&names)
 }
@@ -1046,12 +1046,15 @@ pub fn class_generic_frame<'db>(
     let mut frame = Vec::new();
     extend_frame(
         &mut frame,
-        &baml_compiler2_ppir::item_data::class_data(db, class).generic_params,
+        baml_compiler2_ppir::item_data::class_data(db, class)
+            .generic_params
+            .iter()
+            .map(|g| &g.name),
     );
     frame
 }
 
-fn extend_frame(frame: &mut Vec<ParamTy>, names: &[Name]) {
+fn extend_frame<'a>(frame: &mut Vec<ParamTy>, names: impl IntoIterator<Item = &'a Name>) {
     for name in names {
         let index = u32::try_from(frame.len()).expect("generic frame index overflow");
         frame.push(ParamTy::new(index, name.clone()));
@@ -1107,19 +1110,25 @@ pub fn class_generic_bounds<'db>(
     let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(frame.clone());
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
     let mut out = FxHashMap::default();
-    for (param, bound) in frame.iter().zip(&data.generic_param_bounds) {
-        let Some(type_ref) = bound else { continue };
-        if let TyKind::Interface(name, args, pins, _) =
-            ctx.lower_type_ref(&data.type_refs, *type_ref).kind()
-        {
-            out.insert(
-                param.clone(),
-                vec![baml_type::interned::InterfaceRef::new(
-                    name.clone(),
-                    args.to_vec().into_boxed_slice(),
-                    pins.to_vec(),
-                )],
-            );
+    for (param, declared) in frame.iter().zip(&data.generic_params) {
+        let refs: Vec<_> = declared
+            .bounds
+            .iter()
+            .filter_map(|&type_ref| {
+                match ctx.lower_type_ref(&data.type_refs, type_ref).kind() {
+                    TyKind::Interface(name, args, pins, _) => {
+                        Some(baml_type::interned::InterfaceRef::new(
+                            name.clone(),
+                            args.to_vec().into_boxed_slice(),
+                            pins.to_vec(),
+                        ))
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+        if !refs.is_empty() {
+            out.insert(param.clone(), refs);
         }
     }
     out
@@ -1147,13 +1156,19 @@ pub fn function_generic_bounds<'db>(
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => {
             let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
-            for bound in &class_data.generic_param_bounds {
-                let param = frame_iter.next();
-                if let (Some(param), Some(type_ref)) = (param, bound)
-                    && let Some(bound) =
-                        as_ref(&ctx.lower_type_ref(&class_data.type_refs, *type_ref))
-                {
-                    out.insert(param.clone(), vec![bound]);
+            for declared in &class_data.generic_params {
+                let Some(param) = frame_iter.next() else {
+                    break;
+                };
+                let refs: Vec<_> = declared
+                    .bounds
+                    .iter()
+                    .filter_map(|&type_ref| {
+                        as_ref(&ctx.lower_type_ref(&class_data.type_refs, type_ref))
+                    })
+                    .collect();
+                if !refs.is_empty() {
+                    out.insert(param.clone(), refs);
                 }
             }
         }
@@ -1195,12 +1210,17 @@ pub fn function_generic_bounds<'db>(
         None => {}
     }
     let data = baml_compiler2_ppir::item_data::function_data(db, function);
-    for bound in &data.generic_param_bounds {
-        let param = frame_iter.next();
-        if let (Some(param), Some(type_ref)) = (param, bound)
-            && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, *type_ref))
-        {
-            out.insert(param.clone(), vec![bound]);
+    for declared in &data.generic_params {
+        let Some(param) = frame_iter.next() else {
+            break;
+        };
+        let refs: Vec<_> = declared
+            .bounds
+            .iter()
+            .filter_map(|&type_ref| as_ref(&ctx.lower_type_ref(&data.type_refs, type_ref)))
+            .collect();
+        if !refs.is_empty() {
+            out.insert(param.clone(), refs);
         }
     }
     out
@@ -1263,12 +1283,17 @@ pub fn interface_scope_bounds<'db>(
             )],
         );
     }
-    for bound in &data.generic_param_bounds {
-        let param = frame_iter.next();
-        if let (Some(param), Some(type_ref)) = (param, bound)
-            && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, *type_ref))
-        {
-            out.insert(param.clone(), vec![bound]);
+    for declared in &data.generic_params {
+        let Some(param) = frame_iter.next() else {
+            break;
+        };
+        let refs: Vec<_> = declared
+            .bounds
+            .iter()
+            .filter_map(|&type_ref| as_ref(&ctx.lower_type_ref(&data.type_refs, type_ref)))
+            .collect();
+        if !refs.is_empty() {
+            out.insert(param.clone(), refs);
         }
     }
     for assoc in &data.associated_types {
@@ -1496,7 +1521,7 @@ pub fn signature_lowering_diagnostics<'db>(
     // records, taken separately below) use the written source map.
     let source_map = baml_compiler2_ppir::item_data::function_source_map(db, function);
     let func_data = baml_compiler2_ppir::item_data::function_data(db, function);
-    for bound in func_data.generic_param_bounds.iter().flatten() {
+    for bound in func_data.generic_params.iter().flat_map(|g| g.bounds.iter()) {
         let lowered = ctx.lower_type_ref(&func_data.type_refs, *bound);
         match lowered.kind() {
             // The compiler-derived builtin interface is a VALUE type,
@@ -1553,7 +1578,7 @@ pub fn class_lowering_diagnostics<'db>(
     for field in &data.fields {
         ctx.lower_type_ref(&data.type_refs, field.type_ref);
     }
-    for bound in data.generic_param_bounds.iter().flatten() {
+    for bound in data.generic_params.iter().flat_map(|g| g.bounds.iter()) {
         let lowered = ctx.lower_type_ref(&data.type_refs, *bound);
         match lowered.kind() {
             TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {

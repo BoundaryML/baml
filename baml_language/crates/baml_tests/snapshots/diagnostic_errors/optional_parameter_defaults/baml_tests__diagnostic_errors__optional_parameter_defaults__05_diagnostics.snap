@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37763
+assertion_line: 40002
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0005
@@ -59,37 +59,28 @@ assertion_line: 37763
     ·                                              ──────
     ╰────
 
-  [hir] E0010
-
-  × parameter defaults are not supported in template_string `Greeting`
-   ╭─[unsupported_contexts.baml:1:41]
- 1 │ template_string Greeting(name: string = "world") #"hello {{ name }}"#
-   ·                                         ───┬───
-   ·                                            ╰── default value is not allowed here
-   ╰────
-
   [type] E0001
 
   × `self` cannot have a default value
-   ╭─[unsupported_contexts.baml:9:27]
- 9 │   function Current(self = null) -> int {
-   ·                           ────
-   ╰────
+    ╭─[unsupported_contexts.baml:11:27]
+ 11 │   function Current(self = null) -> int {
+    ·                           ────
+    ╰────
 
   [type] E0001
 
   × mismatched types
-   ╭─[unsupported_contexts.baml:9:27]
- 9 │   function Current(self = null) -> int {
-   ·                           ──┬─
-   ·                             ╰── expected `Counter`, found `null`
-   ╰────
+    ╭─[unsupported_contexts.baml:11:27]
+ 11 │   function Current(self = null) -> int {
+    ·                           ──┬─
+    ·                             ╰── expected `Counter`, found `null`
+    ╰────
 
   [hir] E0010
 
   × parameter defaults are not supported in lambda parameters
-    ╭─[unsupported_contexts.baml:15:21]
- 15 │   let f = (x: int = 1) -> int { x }
+    ╭─[unsupported_contexts.baml:17:21]
+ 17 │   let f = (x: int = 1) -> int { x }
     ·                     ┬
     ·                     ╰── default value is not allowed here
     ╰────
@@ -97,16 +88,16 @@ assertion_line: 37763
   [type] E0005
 
   × defaulted parameter `x` must be passed by name
-    ╭─[unsupported_contexts.baml:16:5]
- 16 │   f(2)
+    ╭─[unsupported_contexts.baml:18:5]
+ 18 │   f(2)
     ·     ─
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[unsupported_contexts.baml:24:23]
- 24 │   let f: NamedLimit = Filtered
+    ╭─[unsupported_contexts.baml:26:23]
+ 26 │   let f: NamedLimit = Filtered
     ·                       ────┬───
     ·                           ╰── expected `NamedLimit`, found `(query: string, filter?: string | null) -> int throws never`
     ╰────

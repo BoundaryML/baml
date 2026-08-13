@@ -16,7 +16,7 @@ pub struct BamlHandle {
 ///    - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 ///    - baml.llm.PromptAst                     -> ADT_PROMPT_AST
 ///    - baml.llm.Collector                     -> ADT_COLLECTOR
-///    - baml.llm.Stream                        -> ADT_TAGGED_HEAP_HANDLE
+///    - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
@@ -26,7 +26,7 @@ pub struct BamlHandle {
 ///
 /// Stdlib symbols TODO (decode to bare BamlPyHandle today):
 ///    - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
-///    - baml.glob.Glob, baml.llm.{StreamAccumulator,StreamCache}
+///    - baml.glob.Glob, baml.sap.ParseCache
 ///
 /// To enumerate all candidates: `rg '\$rust_type' baml_language/crates/baml_builtins2/`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

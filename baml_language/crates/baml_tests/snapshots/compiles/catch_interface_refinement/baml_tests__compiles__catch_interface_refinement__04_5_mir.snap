@@ -1,0 +1,191 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6779
+---
+=== MIR2 ===
+fn user.Failure.is_transient(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.QuotaExceeded.Failure.is_transient(self: QuotaExceeded) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: QuotaExceeded // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Throttled.Failure.is_transient(self: Throttled) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: Throttled // self // param
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.provider_call(mode: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // mode // param
+    let _2: bool
+    let _3: Throttled
+    let _4: bool
+    let _5: QuotaExceeded
+    let _6: baml.errors.UnknownError
+    let _7: string[]
+
+    bb0: {
+        _2 = copy _1 == const 0_i64;
+        branch copy _2 -> [bb4, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1 == const 1_i64;
+        branch copy _4 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _7 = [const "transport"]: string[];
+        _6 = baml.errors.UnknownError { const "socket reset", copy _7 };
+        throw copy _6;
+    }
+
+    bb3: {
+        _5 = user.QuotaExceeded { const "daily" };
+        throw copy _5;
+    }
+
+    bb4: {
+        _3 = user.Throttled { const 250_i64 };
+        throw copy _3;
+    }
+}
+
+fn user.app(mode: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // mode // param
+    let _2: unknown // e
+    let _3: unknown
+    let _4: unknown
+    let _5: unknown
+    let _6: QuotaExceeded // q
+    let _7: string
+    let _8: Failure // f
+    let _9: bool
+
+    bb0: {
+        _0 = call const fn user.provider_call(copy _1) -> [bb11, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Local, namespace: [], name: "QuotaExceeded" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb10, bb2];
+    }
+
+    bb2: {
+        _4 = copy _2;
+        _4 = narrow_bind copy _4 as Interface(QualifiedTypeName { pkg: Local, namespace: [], name: "Failure" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb6, bb3];
+    }
+
+    bb3: {
+        _5 = copy _2;
+        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["errors"], name: "UnknownError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb4];
+    }
+
+    bb4: {
+        rethrow copy _2;
+    }
+
+    bb5: {
+        _0 = const "unknown";
+        goto -> bb11;
+    }
+
+    bb6: {
+        _8 = copy _4;
+        _9 = virtual_call is_transient as Failure(copy _8) -> [bb7];
+    }
+
+    bb7: {
+        branch copy _9 -> [bb9, bb8];
+    }
+
+    bb8: {
+        _0 = const "fail";
+        goto -> bb11;
+    }
+
+    bb9: {
+        _0 = const "retry";
+        goto -> bb11;
+    }
+
+    bb10: {
+        _6 = copy _3;
+        _7 = copy _6.0;
+        _0 = const "quota: " + copy _7;
+        goto -> bb11;
+    }
+
+    bb11: {
+        return;
+    }
+}
+
+fn user.local_throw() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // r
+    let _2: unknown // e
+    let _3: Throttled
+    let _4: unknown
+
+    bb0: {
+        _3 = user.Throttled { const 1_i64 };
+        throw copy _3;
+    }
+
+    bb1: {
+        _4 = copy _2;
+        _4 = narrow_bind copy _4 as Interface(QualifiedTypeName { pkg: Local, namespace: [], name: "Failure" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+    }
+
+    bb2: {
+        rethrow copy _2;
+    }
+
+    bb3: {
+        _1 = const "classified";
+        goto -> bb4;
+    }
+
+    bb4: {
+        _0 = copy _1;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}

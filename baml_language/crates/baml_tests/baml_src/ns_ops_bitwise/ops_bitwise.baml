@@ -14,11 +14,11 @@ test "bitwise_int_operators" {
 }
 
 function bigint_ops() -> bool {
-    baml.deep_equals(6n & 3n, 2n)
-        && baml.deep_equals(6n | 3n, 7n)
-        && baml.deep_equals(6n ^ 3n, 5n)
-        && baml.deep_equals(1n << 70n, 1180591620717411303424n)
-        && baml.deep_equals(1180591620717411303424n >> 70n, 1n)
+    (6n & 3n) == 2n
+        && (6n | 3n) == 7n
+        && (6n ^ 3n) == 5n
+        && (1n << 70n) == 1180591620717411303424n
+        && (1180591620717411303424n >> 70n) == 1n
 }
 
 test "bitwise_bigint_operators" {
@@ -28,7 +28,7 @@ test "bitwise_bigint_operators" {
 function mixed_widens() -> bool {
     // Any int/bigint mix widens the int operand to bigint, matching the
     // bytecode's operand widening and the impls' Output types.
-    baml.deep_equals(6 & 3n, 2n) && baml.deep_equals(6n & 3, 2n)
+    (6 & 3n) == 2n && (6n & 3) == 2n
 }
 
 test "bitwise_mixed_widens_to_bigint" {
@@ -49,7 +49,7 @@ test "bitwise_generic_bound_dispatch" {
     // Turbofish: TIR's concreteness gate does not widen a fresh literal
     // argument before judging the bound.
     assert.equal(band<int>(6, 3), 2);
-    assert.is_true(baml.deep_equals(band<bigint>(6n, 3), 2n));
+    assert.is_true(band<bigint>(6n, 3) == 2n);
     assert.equal(bshl<int>(1, 4), 16);
-    assert.is_true(baml.deep_equals(bshl<bigint>(1n, 70), 1180591620717411303424n))
+    assert.is_true(bshl<bigint>(1n, 70) == 1180591620717411303424n)
 }

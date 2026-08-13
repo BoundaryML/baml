@@ -151,8 +151,10 @@ pub enum ImplDataError {
 
 /// Lower one generic param's bounds to its interface constraints, pushing both
 /// the lowering diagnostics and the non-interface-bound (E0142) diagnostics
-/// into `diags`.
-fn lower_generic_param_interface_bounds<'db>(
+/// into `diags`. `store` is the arena the bound ids index (the declaring item's
+/// `type_refs`); `generic_param_names` are the in-scope type-var names so a
+/// bound naming a sibling param doesn't read as an unresolved type.
+pub(crate) fn lower_generic_param_interface_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
     bounds: &[baml_compiler2_hir::type_ref::TypeRefId],
@@ -250,14 +252,12 @@ pub fn impl_data<'db>(
             let mut class_bound_diags = Vec::new();
             let generic_params: Vec<(ParamTy, Vec<baml_type::Interface>)> = generic_param_names
                 .iter()
-                .zip(class_data.generic_param_bounds.iter())
-                .map(|(name, bound)| {
-                    let bounds: Vec<baml_compiler2_hir::type_ref::TypeRefId> =
-                        bound.iter().copied().collect();
+                .zip(class_data.generic_params.iter())
+                .map(|(name, declared)| {
                     let ifaces = lower_generic_param_interface_bounds(
                         db,
                         &class_data.type_refs,
-                        &bounds,
+                        &declared.bounds,
                         pkg_items,
                         ns,
                         &generic_param_names,
@@ -800,7 +800,7 @@ struct InterfaceMethodParam {
 
 /// A normalized interface-method signature: default and required methods both
 /// reduce to this so one builder produces the `Ty::Function`.
-struct InterfaceMethodSpec<'db> {
+pub(crate) struct InterfaceMethodSpec<'db> {
     /// The arena every signature slot indexes: the elaborated store for a
     /// default method, the interface's own store for a required one.
     sig_refs: &'db baml_compiler2_hir::type_ref::TypeRefStore,
@@ -811,11 +811,11 @@ struct InterfaceMethodSpec<'db> {
     return_type: SigTypeRef,
     throws: SigTypeRef,
     /// Method generic params with their interface-bound *conjunction*.
-    generics: Vec<(Name, Vec<baml_compiler2_hir::type_ref::TypeRefId>)>,
+    generics: Vec<baml_compiler2_ppir::item_data::GenericParamData>,
 }
 
 impl<'db> InterfaceMethodSpec<'db> {
-    fn from_default(
+    pub(crate) fn from_default(
         db: &'db dyn baml_compiler2_ppir::Db,
         func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) -> Self {
@@ -836,17 +836,9 @@ impl<'db> InterfaceMethodSpec<'db> {
                 SigTypeRef::Id(p.type_ref),
             )
         }));
-        let generics = sig
-            .user_generic_params
-            .iter()
-            .cloned()
-            .zip(
-                func_data
-                    .generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.iter().copied().collect()),
-            )
-            .collect();
+        // `user_generic_params` is the elaborated view of the same declaration
+        // order `generic_params` lowers, so the two stay parallel.
+        let generics = func_data.generic_params.clone();
         Self {
             sig_refs: &sig.type_refs,
             bound_refs: &func_data.type_refs,
@@ -858,7 +850,7 @@ impl<'db> InterfaceMethodSpec<'db> {
         }
     }
 
-    fn from_required(
+    pub(crate) fn from_required(
         iface_data: &'db baml_compiler2_ppir::item_data::InterfaceData<'db>,
         sig: &baml_compiler2_ppir::item_data::InterfaceMethodSigData,
     ) -> Self {
@@ -867,16 +859,7 @@ impl<'db> InterfaceMethodSpec<'db> {
             let ty = p.type_ref.map_or(SigTypeRef::Missing, SigTypeRef::Id);
             (is_self, p.has_default, p.name.clone(), ty)
         }));
-        let generics = sig
-            .generic_params
-            .iter()
-            .cloned()
-            .zip(
-                sig.generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.iter().copied().collect()),
-            )
-            .collect();
+        let generics = sig.generic_params.clone();
         Self {
             sig_refs: &iface_data.type_refs,
             bound_refs: &iface_data.type_refs,
@@ -888,22 +871,26 @@ impl<'db> InterfaceMethodSpec<'db> {
         }
     }
 
-    fn generic_param_names(&self) -> Vec<Name> {
-        self.generics.iter().map(|(name, _)| name.clone()).collect()
+    pub(crate) fn generic_param_names(&self) -> Vec<Name> {
+        self.generics.iter().map(|g| g.name.clone()).collect()
     }
 
-    fn generic_bounds(&self) -> &[(Name, Vec<baml_compiler2_hir::type_ref::TypeRefId>)] {
+    pub(crate) fn generic_bounds(&self) -> &[baml_compiler2_ppir::item_data::GenericParamData] {
         &self.generics
     }
 
-    fn bound_store(&self) -> &'db baml_compiler2_hir::type_ref::TypeRefStore {
+    pub(crate) fn bound_store(&self) -> &'db baml_compiler2_hir::type_ref::TypeRefStore {
         self.bound_refs
     }
 
     /// Lower this normalized signature to a `Ty::Function` through `scope`
     /// (which resolves `Self`, `Self.Assoc`, and the in-scope generics). Still
     /// a template over its free type variables.
-    fn to_function_ty(&self, scope: &LowerScope<'_, '_>, diags: &mut Vec<TirTypeError>) -> Ty {
+    pub(crate) fn to_function_ty(
+        &self,
+        scope: &LowerScope<'_, '_>,
+        diags: &mut Vec<TirTypeError>,
+    ) -> Ty {
         // The two implicit slots, synthesized into a scratch arena so they
         // lower through the same road as written types.
         let mut scratch = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
@@ -982,8 +969,9 @@ fn method_generic_bound_interfaces<'db>(
     let empty = TypeVarBoundsMap::default();
     spec.generic_bounds()
         .iter()
-        .map(|(name, bound_ids)| {
-            let conjunction = bound_ids
+        .map(|declared| {
+            let conjunction = declared
+                .bounds
                 .iter()
                 .filter_map(|&id| {
                     let mut d = Vec::new();
@@ -998,7 +986,7 @@ fn method_generic_bound_interfaces<'db>(
                     lower_ref_in(&scope, spec.bound_store(), id, &mut d).as_interface()
                 })
                 .collect();
-            (name.clone(), conjunction)
+            (declared.name.clone(), conjunction)
         })
         .collect()
 }

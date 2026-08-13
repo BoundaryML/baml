@@ -30,9 +30,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.71.2
         version: 0.71.2(zod@4.4.3)
-      '@boundaryml/baml':
-        specifier: ^0.217.0
-        version: 0.217.0
+      '@boundaryml/baml-bridge':
+        specifier: 0.15.1-nightly.20260729.a
+        version: 0.15.1-nightly.20260729.a
       '@lexical/code':
         specifier: ^0.39.0
         version: 0.39.0
@@ -412,6 +412,25 @@ importers:
       vite:
         specifier: ^8.0.12
         version: 8.0.14(@types/node@24.12.4)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.3)
+
+  app-stdlib-matrix:
+    dependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.18
+        version: 4.1.18(vite@7.3.6(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))
+      lit:
+        specifier: ^3.3.1
+        version: 3.3.3
+      tailwindcss:
+        specifier: ^4.1.18
+        version: 4.1.18
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vite:
+        specifier: ^7.1.14
+        version: 7.3.6(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3)
 
   app-vscode-ext:
     dependencies:
@@ -1523,26 +1542,61 @@ packages:
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
 
+  '@boundaryml/baml-bridge-darwin-arm64@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-nFw5AzAlNeRaNp00NCpOobiuj1RxLaHbg46tcOTTp6O2igPscL/O9bc/bZm1TRUChBe/90N1VETp7GKqHgjBZA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@boundaryml/baml-bridge-darwin-x64@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-PKW4A4DirCeQEzQ+kDH9SzxkuGQsCVUlQAuipvfCSNUwNsCjCrWEDV/ICRyYA2/A/AaVpNEobxSDXlP0+KcHRA==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@boundaryml/baml-bridge-linux-arm64-gnu@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-o2NR9dmt8qgo/id6GEJiNyQnl5FrpgDbYtuo0Vy3ImXa3eQsrnOlt+5pAVLV4vx1Yrgz9t5EJO0V/ttWcS00bQ==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@boundaryml/baml-bridge-linux-arm64-musl@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-gBa2u4+Y5MuFvXMapGSBmM6MWnHYhmDjUJrsvk2CTFwNaLyeT7SGnZ8YgHypsOViSxXVNaLEcSB/4KFPFG93Yg==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@boundaryml/baml-bridge-linux-x64-gnu@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-8r1DzgYN16wQuHLvkGyqs0gKZNnxooCTOTkEZGm/vzqpl10rTTLxrNjR/XeCx8sgxGDyd8EH46rqIqqrr/2qCw==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@boundaryml/baml-bridge-linux-x64-musl@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-TtemQxklry5d4sdgsz3tsgAzOzYJAz5Jom3kHOmGWvK6R11Qnq1Nx8D3WNM5y9uX6LOr0KUXby58XpCPqkz3GA==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@boundaryml/baml-bridge-win32-arm64-msvc@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-q1ftcoRc7Uu6/0Y0f7QcO3MGJAxfeMsNNo4Qv6PJOBQsQETNJIw8G+Pt0DSEFWExXHB9nJsuaDNHh+aMD372hw==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@boundaryml/baml-bridge-win32-x64-msvc@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-hC/+mOQfdIB3ALZPhETeohKMnDlBIlvOQJnuRTYlJT+toyfor3pLfV3DHN6nByZwiSSNKS4nOEjp1ommr2A3eQ==}
+    cpu: [x64]
+    os: [win32]
+
+  '@boundaryml/baml-bridge@0.15.1-nightly.20260729.a':
+    resolution: {integrity: sha512-4SRHZ8gZ6nghuQIgpdV9oIm6+FVRbMTcDqVfGDiW2UEirkHbkFh8XryAQt/3SJ8VY2bSIHmhGJtx1AUbdaTDyQ==}
+
   '@boundaryml/baml-darwin-arm64@0.202.1':
     resolution: {integrity: sha512-mYQPAs/r2x0f9+c2XM0wD1LJzpnQ/J79GSMqiVlCTorSyQcdW6xxbmqC0WFtkDKCblLPvRXJl0zotdC48S9c2A==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
 
-  '@boundaryml/baml-darwin-arm64@0.217.0':
-    resolution: {integrity: sha512-26yhOd83pzHvO/EN0x/aRqy0OejY2A7+grfAAN+b/I9iPdZ8LgHErXVn2r0sBm//vmmEEu8TI75rGwS1uyD87A==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [darwin]
-
   '@boundaryml/baml-darwin-x64@0.202.1':
     resolution: {integrity: sha512-pADE6IBUTZZ9afrk3LsGSH3sJZQ5w8VMGfXt7T7Ny+bCVRGbofH1LdLbG0mnMMnolSIqOOB1LZEn1QLyJa9HRg==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@boundaryml/baml-darwin-x64@0.217.0':
-    resolution: {integrity: sha512-n6COBW92K3AA24YIh70M0tiN/vvq8UcIpwsuTTZVISw1aBP56GPUDmYNoNFKuBTlEbRVzeKrEuwRV5/7azztUQ==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
@@ -1557,22 +1611,8 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@boundaryml/baml-linux-arm64-gnu@0.217.0':
-    resolution: {integrity: sha512-a+ourSRXXDU9dRVZnTtyz245tzXIVMrHzLt5/YimdjuYdw4qBwmLV9nyMTRME/9AOrSclMcVpaR1N6adHgQdLQ==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
   '@boundaryml/baml-linux-arm64-musl@0.202.1':
     resolution: {integrity: sha512-l/viaUA3bCGkfq9DUjTEcCDnCkLoK+r9tVM1GNe9V4ySQ8vQI7YuvXxgOn73CmjkavxrTbL3qQSnasSvHW04zA==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@boundaryml/baml-linux-arm64-musl@0.217.0':
-    resolution: {integrity: sha512-VmahCX8bYwRPGhsTe7bbs6vTOG1PzR1Z7qflD3rmUA0JrcKv3s8wj66pWuWr+194QSkbtXUYgEn5mzug9QLpBw==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -1585,22 +1625,8 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@boundaryml/baml-linux-x64-gnu@0.217.0':
-    resolution: {integrity: sha512-7Pn3nvyla+lX1lrRirLFJFddmG1gP9+7Bm+XeqV1Cm0xQNqoHtt8nBGZ0aRRm6enZsVr3DOK3af2xErydlr04Q==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
   '@boundaryml/baml-linux-x64-musl@0.202.1':
     resolution: {integrity: sha512-syTQO3A7zDsYLK2bhs4ecFPq9Xi1uQ/JdiKf8LDJkMWiHezjuJ97ObCazqlHYrrD7rSiiWcUUTTkkSK93hdH+Q==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@boundaryml/baml-linux-x64-musl@0.217.0':
-    resolution: {integrity: sha512-Zt60V2QUmvwSg1bG0J3MSxtTMQtOibFsd9A1LsqazuBH3srnHqcmtgw7GK6kCZtcEAFi5B5csTvMEL1Qy26EgQ==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -1613,31 +1639,14 @@ packages:
       next: '*'
       react: '*'
 
-  '@boundaryml/baml-win32-arm64-msvc@0.217.0':
-    resolution: {integrity: sha512-Lr+6dK0DA/IEZe1GwkdWCu8R7jiY60puVTsWBjZxCzCv/vOA6DZde9+eXvZK+veZp4zD5Oxh4KAOgl8Ie5mYLA==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [win32]
-
   '@boundaryml/baml-win32-x64-msvc@0.202.1':
     resolution: {integrity: sha512-JIsw2VWaAuvDi5gD67QIPzzmVXYLXxy+7w4G0F1wnKMxVzf64/+ItwirrC0z/woLJTHoqFrxKJEW3PGIoJ0uDg==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
 
-  '@boundaryml/baml-win32-x64-msvc@0.217.0':
-    resolution: {integrity: sha512-0MhYErNFrV4VX7/i8Cx9ZwWlwIOt9OofwcpiVx3h8QTR26ZtPDYAiht6DIh4P/X6baVwGkzE7jmb7Ao/jp3Fvg==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [win32]
-
   '@boundaryml/baml@0.202.1':
     resolution: {integrity: sha512-C1VY5XERJJpOcBfx0lu+Dru9UaVdG9/O69yXkAbPu0ZbAu99Rod5InDreTigeDxCddj+mn1TvOry7NylDDW+xQ==}
-    engines: {node: '>= 10'}
-    hasBin: true
-
-  '@boundaryml/baml@0.217.0':
-    resolution: {integrity: sha512-PDPm/EkbR5ClbP2qorxMnUqgiDcI68u0ED667NAKgjBu+u2BeWb/mRW26ebX5BvY0Ce9pDtlmRD/vHH+rXRAtg==}
     engines: {node: '>= 10'}
     hasBin: true
 
@@ -3262,6 +3271,12 @@ packages:
   '@lezer/yaml@1.0.4':
     resolution: {integrity: sha512-2lrrHqxalACEbxIbsjhqGpSW8kWpUKuY6RHgnSAFZa6qK62wvnPxA8hGOwOoDbwHcOFs5M4o27mjGu+P7TvBmw==}
 
+  '@lit-labs/ssr-dom-shim@1.6.0':
+    resolution: {integrity: sha512-VHb0ALPMTlgKjM6yIxxoQNnpKyUKLD04VzeQdsiXkMqkvYlAHxq9glGLmgbb889/1GsohSOAjvQYoiBppXFqrQ==}
+
+  '@lit/reactive-element@2.1.2':
+    resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
+
   '@mantine/code-highlight@7.17.8':
     resolution: {integrity: sha512-KfdLi8MhpoeHiXkLMfuPQz1IDTUjvP2w3hbdx8Oz/hL0o+mbPYfgrU/w/D3ONjVQMoEbPpEL5vSA2eTYCmwVKg==}
     peerDependencies:
@@ -3549,6 +3564,33 @@ packages:
 
   '@preact/signals-core@1.14.4':
     resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
+
+  '@protobufjs/aspromise@1.1.2':
+    resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
+
+  '@protobufjs/base64@1.1.2':
+    resolution: {integrity: sha512-AZkcAA5vnN/v4PDqKyMR5lx7hZttPDgClv83E//FMNhR2TMcLUhfRUBHCmSl0oi9zMgDDqRUJkSxO3wm85+XLg==}
+
+  '@protobufjs/codegen@2.0.5':
+    resolution: {integrity: sha512-zgXFLzW3Ap33e6d0Wlj4MGIm6Ce8O89n/apUaGNB/jx+hw+ruWEp7EwGUshdLKVRCxZW12fp9r40E1mQrf/34g==}
+
+  '@protobufjs/eventemitter@1.1.1':
+    resolution: {integrity: sha512-vW1GmwMZNnL+gMRaovlh9yZX74kc+TTU3FObkkurpMaRtBfLP3ldjS9KQWlwZgraRE0+dheEEoAxdzcJQ8eXZg==}
+
+  '@protobufjs/fetch@1.1.1':
+    resolution: {integrity: sha512-GpptLrs57adMSuHi3VNj0mAF8dwh36LMaYF6XyJ6JMWlVsc+t42tm1HSEDmOs3A8fC9yyeisgLhsTVQokOZ0zw==}
+
+  '@protobufjs/float@1.0.2':
+    resolution: {integrity: sha512-Ddb+kVXlXst9d+R9PfTIxh1EdNkgoRe5tOX6t01f1lYWOvJnSPDBlG241QLzcyPdoNTsblLUdujGSE4RzrTZGQ==}
+
+  '@protobufjs/path@1.1.2':
+    resolution: {integrity: sha512-6JOcJ5Tm08dOHAbdR3GrvP+yUUfkjG5ePsHYczMFLq3ZmMkAD98cDgcT2iA1lJ9NVwFd4tH/iSSoe44YWkltEA==}
+
+  '@protobufjs/pool@1.1.0':
+    resolution: {integrity: sha512-0kELaGSIDBKvcgS4zkjz1PeddatrjYcmMWOlAuAPwAeccUrPHdUqo/J6LiymHHEiJT5NrF1UVwxY14f+fy4WQw==}
+
+  '@protobufjs/utf8@1.1.2':
+    resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
   '@radix-ui/colors@3.0.0':
     resolution: {integrity: sha512-FUOsGBkHrYJwCSEtWRCIfQbZG7q1e6DgxCIOe1SUQzDe/7rXXeA47s8yCn6fuTNQAj1Zq4oTFi9Yjp3wzElcxg==}
@@ -8463,6 +8505,15 @@ packages:
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
+  lit-element@4.2.2:
+    resolution: {integrity: sha512-aFKhNToWxoyhkNDmWZwEva2SlQia+jfG0fjIWV//YeTaWrVnOxD89dPKfigCUspXFmjzOEUQpOkejH5Ly6sG0w==}
+
+  lit-html@3.3.3:
+    resolution: {integrity: sha512-el8M6jK2o3RXBnrSHX3ZKrsN8zEV63pSExTO1wYJz7QndGYZ8353e2a5PPX+qHe2aGayfnchQmkAojaWAREOIA==}
+
+  lit@3.3.3:
+    resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
+
   load-json-file@4.0.0:
     resolution: {integrity: sha512-Kx8hMakjX03tiGTLAIdJ+lL0htKnXjEZN6hk/tozf/WOuYGdZBJrZ+rCJRbVCugsjB3jMLn9746NsQIf5VjBMw==}
     engines: {node: '>=4'}
@@ -8493,6 +8544,9 @@ packages:
   log-symbols@6.0.0:
     resolution: {integrity: sha512-i24m8rpwhmPIS4zscNzK6MSEhk0DUWa/8iYQWxhffV8jkI4Phvs3F+quL5xvS0gdQR0FyTCMMH33Y78dDTzzIw==}
     engines: {node: '>=18'}
+
+  long@5.3.2:
+    resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
 
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
@@ -9413,6 +9467,10 @@ packages:
 
   property-information@7.2.0:
     resolution: {integrity: sha512-IAtzIB6sUiWaJYrX9smp3V46pBGbBeLFRGdh25kg1334VcBlD8HzhPeNIWQH9zhGmo2itIe25EHt9dQP7G5hmg==}
+
+  protobufjs@7.6.5:
+    resolution: {integrity: sha512-/FPD0nUc9jH6rfFjji9IBqOz4pcSE3CsT1m7Ep6Mdb0LxSUMj8hgl6GomOvZzpNpAqqGaXA0P3VSrZLFzIhQrw==}
+    engines: {node: '>=12.0.0'}
 
   proxy-addr@2.0.7:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
@@ -10779,6 +10837,46 @@ packages:
       yaml:
         optional: true
 
+  vite@7.3.6:
+    resolution: {integrity: sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^20.19.0 || >=22.12.0
+      jiti: '>=1.21.0'
+      less: ^4.0.0
+      lightningcss: ^1.21.0
+      sass: ^1.70.0
+      sass-embedded: ^1.70.0
+      stylus: '>=0.54.8'
+      sugarss: ^5.0.0
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      lightningcss:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
+        optional: true
+
   vite@8.0.14:
     resolution: {integrity: sha512-s4BJJ+5y1pYL6Otw51FHhVJQhPnuRinKig64g/1+EUNaJsd3gCKdD31IPFvswUgW9/60QT9oFHbZHbQK5imcxw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -11489,16 +11587,47 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
+  '@boundaryml/baml-bridge-darwin-arm64@0.15.1-nightly.20260729.a':
+    optional: true
+
+  '@boundaryml/baml-bridge-darwin-x64@0.15.1-nightly.20260729.a':
+    optional: true
+
+  '@boundaryml/baml-bridge-linux-arm64-gnu@0.15.1-nightly.20260729.a':
+    optional: true
+
+  '@boundaryml/baml-bridge-linux-arm64-musl@0.15.1-nightly.20260729.a':
+    optional: true
+
+  '@boundaryml/baml-bridge-linux-x64-gnu@0.15.1-nightly.20260729.a':
+    optional: true
+
+  '@boundaryml/baml-bridge-linux-x64-musl@0.15.1-nightly.20260729.a':
+    optional: true
+
+  '@boundaryml/baml-bridge-win32-arm64-msvc@0.15.1-nightly.20260729.a':
+    optional: true
+
+  '@boundaryml/baml-bridge-win32-x64-msvc@0.15.1-nightly.20260729.a':
+    optional: true
+
+  '@boundaryml/baml-bridge@0.15.1-nightly.20260729.a':
+    dependencies:
+      protobufjs: 7.6.5
+    optionalDependencies:
+      '@boundaryml/baml-bridge-darwin-arm64': 0.15.1-nightly.20260729.a
+      '@boundaryml/baml-bridge-darwin-x64': 0.15.1-nightly.20260729.a
+      '@boundaryml/baml-bridge-linux-arm64-gnu': 0.15.1-nightly.20260729.a
+      '@boundaryml/baml-bridge-linux-arm64-musl': 0.15.1-nightly.20260729.a
+      '@boundaryml/baml-bridge-linux-x64-gnu': 0.15.1-nightly.20260729.a
+      '@boundaryml/baml-bridge-linux-x64-musl': 0.15.1-nightly.20260729.a
+      '@boundaryml/baml-bridge-win32-arm64-msvc': 0.15.1-nightly.20260729.a
+      '@boundaryml/baml-bridge-win32-x64-msvc': 0.15.1-nightly.20260729.a
+
   '@boundaryml/baml-darwin-arm64@0.202.1':
     optional: true
 
-  '@boundaryml/baml-darwin-arm64@0.217.0':
-    optional: true
-
   '@boundaryml/baml-darwin-x64@0.202.1':
-    optional: true
-
-  '@boundaryml/baml-darwin-x64@0.217.0':
     optional: true
 
   '@boundaryml/baml-lezer@0.1.3(@codemirror/state@6.5.2)(@codemirror/view@6.38.1)':
@@ -11517,25 +11646,13 @@ snapshots:
   '@boundaryml/baml-linux-arm64-gnu@0.202.1':
     optional: true
 
-  '@boundaryml/baml-linux-arm64-gnu@0.217.0':
-    optional: true
-
   '@boundaryml/baml-linux-arm64-musl@0.202.1':
-    optional: true
-
-  '@boundaryml/baml-linux-arm64-musl@0.217.0':
     optional: true
 
   '@boundaryml/baml-linux-x64-gnu@0.202.1':
     optional: true
 
-  '@boundaryml/baml-linux-x64-gnu@0.217.0':
-    optional: true
-
   '@boundaryml/baml-linux-x64-musl@0.202.1':
-    optional: true
-
-  '@boundaryml/baml-linux-x64-musl@0.217.0':
     optional: true
 
   '@boundaryml/baml-nextjs-plugin@0.1.0(next@15.5.9(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)':
@@ -11543,13 +11660,7 @@ snapshots:
       next: 15.5.9(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react: 19.2.3
 
-  '@boundaryml/baml-win32-arm64-msvc@0.217.0':
-    optional: true
-
   '@boundaryml/baml-win32-x64-msvc@0.202.1':
-    optional: true
-
-  '@boundaryml/baml-win32-x64-msvc@0.217.0':
     optional: true
 
   '@boundaryml/baml@0.202.1':
@@ -11563,19 +11674,6 @@ snapshots:
       '@boundaryml/baml-linux-x64-gnu': 0.202.1
       '@boundaryml/baml-linux-x64-musl': 0.202.1
       '@boundaryml/baml-win32-x64-msvc': 0.202.1
-
-  '@boundaryml/baml@0.217.0':
-    dependencies:
-      '@scarf/scarf': 1.4.0
-    optionalDependencies:
-      '@boundaryml/baml-darwin-arm64': 0.217.0
-      '@boundaryml/baml-darwin-x64': 0.217.0
-      '@boundaryml/baml-linux-arm64-gnu': 0.217.0
-      '@boundaryml/baml-linux-arm64-musl': 0.217.0
-      '@boundaryml/baml-linux-x64-gnu': 0.217.0
-      '@boundaryml/baml-linux-x64-musl': 0.217.0
-      '@boundaryml/baml-win32-arm64-msvc': 0.217.0
-      '@boundaryml/baml-win32-x64-msvc': 0.217.0
 
   '@braintree/sanitize-url@7.1.2': {}
 
@@ -13383,6 +13481,12 @@ snapshots:
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.10
 
+  '@lit-labs/ssr-dom-shim@1.6.0': {}
+
+  '@lit/reactive-element@2.1.2':
+    dependencies:
+      '@lit-labs/ssr-dom-shim': 1.6.0
+
   '@mantine/code-highlight@7.17.8(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.26)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mantine/hooks@7.17.8(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@mantine/core': 7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.26)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -13725,6 +13829,26 @@ snapshots:
       - supports-color
 
   '@preact/signals-core@1.14.4': {}
+
+  '@protobufjs/aspromise@1.1.2': {}
+
+  '@protobufjs/base64@1.1.2': {}
+
+  '@protobufjs/codegen@2.0.5': {}
+
+  '@protobufjs/eventemitter@1.1.1': {}
+
+  '@protobufjs/fetch@1.1.1':
+    dependencies:
+      '@protobufjs/aspromise': 1.1.2
+
+  '@protobufjs/float@1.0.2': {}
+
+  '@protobufjs/path@1.1.2': {}
+
+  '@protobufjs/pool@1.1.0': {}
+
+  '@protobufjs/utf8@1.1.2': {}
 
   '@radix-ui/colors@3.0.0': {}
 
@@ -16062,6 +16186,13 @@ snapshots:
       tailwindcss: 4.1.18
       vite: 6.4.1(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3)
 
+  '@tailwindcss/vite@4.1.18(vite@7.3.6(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))':
+    dependencies:
+      '@tailwindcss/node': 4.1.18
+      '@tailwindcss/oxide': 4.1.18
+      tailwindcss: 4.1.18
+      vite: 7.3.6(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3)
+
   '@tailwindcss/vite@4.1.18(vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.3))':
     dependencies:
       '@tailwindcss/node': 4.1.18
@@ -16351,8 +16482,7 @@ snapshots:
 
   '@types/statuses@2.0.6': {}
 
-  '@types/trusted-types@2.0.7':
-    optional: true
+  '@types/trusted-types@2.0.7': {}
 
   '@types/ungap__structured-clone@1.2.0': {}
 
@@ -16628,7 +16758,7 @@ snapshots:
       debug: 4.4.3(supports-color@5.5.0)
       minimatch: 10.2.5
       semver: 7.7.3
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.16
       ts-api-utils: 2.5.0(typescript@5.8.3)
       typescript: 5.8.3
     transitivePeerDependencies:
@@ -16643,7 +16773,7 @@ snapshots:
       debug: 4.4.3(supports-color@5.5.0)
       minimatch: 10.2.5
       semver: 7.7.3
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.16
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
@@ -16658,7 +16788,7 @@ snapshots:
       debug: 4.4.3(supports-color@5.5.0)
       minimatch: 10.2.5
       semver: 7.7.3
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.16
       ts-api-utils: 2.5.0(typescript@6.0.3)
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -16910,10 +17040,10 @@ snapshots:
       '@rolldown/pluginutils': 1.0.1
       vite: 8.0.14(@types/node@24.12.4)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.3)
 
-  '@vitest/browser-playwright@4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(playwright@1.57.0)(vite@6.4.1(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))(vitest@4.0.16)':
+  '@vitest/browser-playwright@4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(playwright@1.57.0)(vite@7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))(vitest@4.0.16)':
     dependencies:
-      '@vitest/browser': 4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@6.4.1(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))(vitest@4.0.16)
-      '@vitest/mocker': 4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@6.4.1(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))
+      '@vitest/browser': 4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))(vitest@4.0.16)
+      '@vitest/mocker': 4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))
       playwright: 1.57.0
       tinyrainbow: 3.0.3
       vitest: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(@vitest/browser-playwright@4.0.16)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.8.3)
@@ -16951,9 +17081,9 @@ snapshots:
       - vite
     optional: true
 
-  '@vitest/browser@4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@6.4.1(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))(vitest@4.0.16)':
+  '@vitest/browser@4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))(vitest@4.0.16)':
     dependencies:
-      '@vitest/mocker': 4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@6.4.1(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))
+      '@vitest/mocker': 4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))
       '@vitest/utils': 4.0.16
       magic-string: 0.30.21
       pixelmatch: 7.1.0
@@ -17021,6 +17151,16 @@ snapshots:
     optionalDependencies:
       msw: 2.14.6(@types/node@22.19.3)(typescript@5.9.3)
       vite: 6.4.1(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3)
+
+  '@vitest/mocker@4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))':
+    dependencies:
+      '@vitest/spy': 4.0.16
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      msw: 2.14.6(@types/node@22.19.3)(typescript@5.9.3)
+      vite: 7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3)
+    optional: true
 
   '@vitest/mocker@4.0.16(msw@2.14.6(@types/node@24.12.4)(typescript@5.9.3))(vite@6.4.1(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))':
     dependencies:
@@ -20230,6 +20370,22 @@ snapshots:
 
   lines-and-columns@1.2.4: {}
 
+  lit-element@4.2.2:
+    dependencies:
+      '@lit-labs/ssr-dom-shim': 1.6.0
+      '@lit/reactive-element': 2.1.2
+      lit-html: 3.3.3
+
+  lit-html@3.3.3:
+    dependencies:
+      '@types/trusted-types': 2.0.7
+
+  lit@3.3.3:
+    dependencies:
+      '@lit/reactive-element': 2.1.2
+      lit-element: 4.2.2
+      lit-html: 3.3.3
+
   load-json-file@4.0.0:
     dependencies:
       graceful-fs: 4.2.11
@@ -20257,6 +20413,8 @@ snapshots:
     dependencies:
       chalk: 5.6.2
       is-unicode-supported: 1.3.0
+
+  long@5.3.2: {}
 
   longest-streak@3.1.0: {}
 
@@ -21618,6 +21776,20 @@ snapshots:
 
   property-information@7.2.0: {}
 
+  protobufjs@7.6.5:
+    dependencies:
+      '@protobufjs/aspromise': 1.1.2
+      '@protobufjs/base64': 1.1.2
+      '@protobufjs/codegen': 2.0.5
+      '@protobufjs/eventemitter': 1.1.1
+      '@protobufjs/fetch': 1.1.1
+      '@protobufjs/float': 1.0.2
+      '@protobufjs/path': 1.1.2
+      '@protobufjs/pool': 1.1.0
+      '@protobufjs/utf8': 1.1.2
+      '@types/node': 20.19.27
+      long: 5.3.2
+
   proxy-addr@2.0.7:
     dependencies:
       forwarded: 0.2.0
@@ -22820,7 +22992,7 @@ snapshots:
       lines-and-columns: 1.2.4
       mz: 2.7.0
       pirates: 4.0.7
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.16
       ts-interface-checker: 0.1.13
 
   supports-color@5.5.0:
@@ -22906,8 +23078,8 @@ snapshots:
 
   tinyglobby@0.2.15:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.3)
-      picomatch: 4.0.3
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
 
   tinyglobby@0.2.16:
     dependencies:
@@ -23449,6 +23621,39 @@ snapshots:
       tsx: 4.22.4
       yaml: 2.8.3
 
+  vite@7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3):
+    dependencies:
+      esbuild: 0.28.1
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+      postcss: 8.5.6
+      rollup: 4.54.0
+      tinyglobby: 0.2.16
+    optionalDependencies:
+      '@types/node': 22.19.3
+      fsevents: 2.3.3
+      jiti: 2.6.1
+      lightningcss: 1.32.0
+      tsx: 4.22.4
+      yaml: 2.8.3
+    optional: true
+
+  vite@7.3.6(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3):
+    dependencies:
+      esbuild: 0.28.1
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+      postcss: 8.5.6
+      rollup: 4.54.0
+      tinyglobby: 0.2.16
+    optionalDependencies:
+      '@types/node': 24.12.4
+      fsevents: 2.3.3
+      jiti: 2.6.1
+      lightningcss: 1.32.0
+      tsx: 4.22.4
+      yaml: 2.8.3
+
   vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.22.4)(yaml@2.8.3):
     dependencies:
       lightningcss: 1.32.0
@@ -23489,7 +23694,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/node': 22.19.3
-      '@vitest/browser-playwright': 4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(playwright@1.57.0)(vite@6.4.1(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))(vitest@4.0.16)
+      '@vitest/browser-playwright': 4.0.16(msw@2.14.6(@types/node@22.19.3)(typescript@5.9.3))(playwright@1.57.0)(vite@7.3.6(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.8.3))(vitest@4.0.16)
       jsdom: 25.0.1
     transitivePeerDependencies:
       - jiti

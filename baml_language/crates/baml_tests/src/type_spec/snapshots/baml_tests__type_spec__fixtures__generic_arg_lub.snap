@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/type_spec/fixtures.rs
+assertion_line: 71
 expression: outcome.dump
 ---
 80..88 'gal_pair': throws never
@@ -36,13 +37,12 @@ expression: outcome.dump
 440..441 'v': "x" | int[]
 443..446 '"x"': "x"
 474..475 'w': "x" | int[]
-483..500 '"gal_d...quals"': "gal_deep_equals"
-501..561 '{\n   ...3))\n}': () -> void throws never
-501..561 '{\n   ...3))\n}': null
-507..521 'assert.is_true': (condition: bool) -> null throws never
-507..559 'assert...), 3))': null
-522..538 'baml.d...equals': (a: 3, b: 3) -> bool throws never
-522..558 'baml.d...(), 3)': bool
-539..552 'gal_ret_three': () -> 3 throws never
-539..554 'gal_ret_three()': 3
-556..557 '3': 3
+483..495 '"gal_equals"': "gal_equals"
+496..540 '{\n   ... 3)\n}': () -> void throws never
+496..540 '{\n   ... 3)\n}': null
+502..516 'assert.is_true': (condition: bool) -> null throws never
+502..538 'assert... == 3)': null
+517..530 'gal_ret_three': () -> 3 throws never
+517..532 'gal_ret_three()': 3
+517..537 'gal_re...) == 3': true
+536..537 '3': 3

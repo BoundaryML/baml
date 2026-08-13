@@ -163,6 +163,7 @@ impl InferenceTable {
         }
     }
 
+
     /// The fixpoint-tier slice of the effect default (rustc runs
     /// fallback at quiescence and fulfillment RE-RUNS after it): only
     /// effect classes with NO accumulated bounds default here - a
@@ -318,6 +319,24 @@ impl InferenceTable {
     pub fn var_bounds(&mut self, var: InferVar) -> VarBounds {
         let root = self.vars.find(VarKey(var)).0.index();
         self.bounds.get(&root).cloned().unwrap_or_default()
+    }
+
+    /// Bounds accumulated on classes that DIRECT unification has since
+    /// solved, as `(solution, bounds)` pairs; the ledger entries are
+    /// removed. Binding a variable must discharge its pending evidence by
+    /// replay (the engine re-drives each bound against the solution),
+    /// never by dropping it.
+    pub fn take_solved_class_bounds(&mut self) -> Vec<(Ty, VarBounds)> {
+        let roots: Vec<u32> = self.bounds.keys().copied().collect();
+        let mut out = Vec::new();
+        for root in roots {
+            let key = VarKey(InferVar::new(root));
+            if let VarValue::Known(ty) = self.vars.probe_value(key) {
+                let bounds = self.bounds.remove(&root).unwrap_or_default();
+                out.push((ty, bounds));
+            }
+        }
+        out
     }
 
     /// Every still-unsolved class that has accumulated bounds, as

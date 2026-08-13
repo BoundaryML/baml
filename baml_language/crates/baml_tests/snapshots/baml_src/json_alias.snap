@@ -51,7 +51,19 @@ function json_alias.$init_test_ns_json_alias_json_alias(registry: testing.TestCo
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.json_alias"
+    load_const "impl_on_recursive_alias_generic_arg_dispatches"
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 7)>, 0
     load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function json_alias.JsonTagged$for$JsonWrap<baml.json.json>.tag(self: json_alias.JsonWrap<baml.json.json>) -> string {
+    load_const "json-wrap"
     return
 }
 
@@ -112,6 +124,18 @@ function json_alias.json_map_has_key() -> bool {
     cmp_int_op ==
 
   L2:
+    return
+}
+
+function json_alias.json_wrap_tag() -> string {
+    load_const null
+    load_type baml.json.json
+    init_instance<1> user.json_alias.JsonWrap .data
+    load_type json_alias.JsonTagged
+    load_const "tag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

@@ -1,0 +1,61 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 9731
+---
+=== PPIR ===
+class user.Both {
+  name: string
+}
+class user.Both$stream {
+  name: string | null
+}
+class user.Holder {
+  item: T
+}
+class user.Holder$stream {
+  item: T | null
+}
+class user.Registered {
+  items: user.Both[]
+}
+class user.Registered$stream {
+  items: user.Both$stream[]
+}
+function user.describe(item: T) -> string  [expr] {
+  {  } item.name Add ":" Add item.size().to_string()
+}
+function user.display(self: ?) -> string  [missing]
+function user.display(self: ?) -> string  [expr] {
+  {  } describe(self)
+}
+function user.field_into_call_arg(item: T) -> string  [expr] {
+  { let out = shout(item.name) } out
+}
+function user.field_into_switch(item: T) -> int  [expr] {
+  {  } match (item.name) { "a" => 1, _ => 0 }
+}
+function user.label_of(item: T) -> string  [expr] {
+  {  } item.tag()
+}
+function user.main() -> string  [expr] {
+  { let both = user.Both { name: "b" }; let holder = user.Holder { item: both }; let printable: Printable = both; let registry = user.Registered { items: [both] } } describe(both) Add "/" Add field_into_call_arg(both) Add "/" Add field_into_switch(both).to_string() Add "/" Add label_of(both) Add "/" Add holder.item.name Add "/" Add printable.display() Add "/" Add registry.summarize(both)
+}
+function user.put(self: ?, item: T) -> void  [missing]
+function user.put(self: ?, item: user.Both) -> void  [expr] {
+  {  }
+}
+function user.shout(text: string) -> string  [expr] {
+  {  } text Add "!"
+}
+function user.size(self: ?) -> int  [missing]
+function user.size(self: ?) -> int  [expr] {
+  {  } 7
+}
+function user.summarize(self: ?, other: U) -> string  [missing]
+function user.summarize(self: ?, other: U) -> string  [expr] {
+  {  } describe(other)
+}
+function user.tag(self: ?) -> Self.Label  [missing]
+function user.tag(self: ?) -> string  [expr] {
+  {  } self.name
+}

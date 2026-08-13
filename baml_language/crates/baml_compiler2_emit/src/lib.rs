@@ -29,10 +29,9 @@ use baml_compiler2_mir::{
 use baml_compiler2_ppir::{
     function_body,
     item_data::{
-        class_data, enum_data, file_classes, file_enums, file_free_impls, file_functions,
-        file_interfaces, file_lets, file_template_strings, file_tests, function_data,
-        function_llm_meta, function_llm_prompt, impl_block_data, interface_data,
-        method_interface_target, template_string_data, test_data,
+        GenericParamData, class_data, enum_data, file_classes, file_enums, file_free_impls,
+        file_functions, file_interfaces, file_lets, file_tests, function_data, function_llm_meta,
+        impl_block_data, interface_data, method_interface_target, test_data,
     },
 };
 use baml_type::{ParamTy, RuntimeTy, TyAttr};
@@ -178,18 +177,18 @@ fn build_interface_def(
         }
     };
 
-    // A generic param carries at most one bound today; lower it (or none).
+    // `T extends A & B` is a conjunction; every conjunct that resolves to an
+    // interface is emitted so the runtime enforces all of them.
     let store = &interface.type_refs;
     let args = generics
         .iter()
-        .enumerate()
-        .map(|(i, param)| {
-            let bound = interface
-                .generic_param_bounds
-                .get(i)
-                .and_then(|o| *o)
-                .and_then(|id| lower_iface(&decl_ctx, store, id));
-            (param.clone(), bound.into_iter().collect())
+        .map(|declared| {
+            let bounds = declared
+                .bounds
+                .iter()
+                .filter_map(|&id| lower_iface(&decl_ctx, store, id))
+                .collect();
+            (declared.name.clone(), bounds)
         })
         .collect();
     let requires = interface
@@ -222,7 +221,8 @@ fn build_interface_def(
         .iter()
         .map(|m| {
             let mut scope = interface_frame_params.clone();
-            ParamTy::extend_frame(&mut scope, &m.generic_params);
+            let own_names: Vec<Name> = m.generic_params.iter().map(|p| p.name.clone()).collect();
+            ParamTy::extend_frame(&mut scope, &own_names);
             let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
                 .with_frame(scope)
                 .with_bounds(baml_compiler2_hir_ty::lower::interface_scope_bounds(
@@ -566,34 +566,35 @@ fn build_packages(
                                      generics: &[ParamTy],
                                      bounds: &BoundsMap|
          -> ty::Ty { lower(store, id, generics, bounds) };
-        // Each generic param's interface bound set (`T extends A & B` → {A, B};
-        // a param has at most one bound today). A bound is an interface, possibly
-        // generic or carrying associated bindings — `split_interface` captures its
-        // args/assoc as templates over the impl's params. A non-interface bound,
-        // rejected upstream, has no interface to record, so skip the whole rule
-        // (`None`); dropping a rule only ever loses a dispatch, never adds a wrong
-        // one.
+        // Each generic param's interface bound set (`T extends A & B` → {A, B}).
+        // A bound is an interface, possibly generic or carrying associated
+        // bindings — `split_interface` captures its args/assoc as templates over
+        // the impl's params. A non-interface bound, rejected upstream, has no
+        // interface to record, so skip the whole rule (`None`); dropping a rule
+        // only ever loses a dispatch, never adds a wrong one. Every conjunct is
+        // emitted: a rule narrowed by two bounds must stay narrowed by both.
         let bound_sets = |store: &TypeRefStore,
-                          param_bounds: &[Option<TypeRefId>],
+                          declared: &[GenericParamData],
                           generics: &[ParamTy],
                           bounds: &BoundsMap|
          -> Option<Vec<Vec<InterfaceBound>>> {
-            param_bounds
+            declared
                 .iter()
-                .map(|b| match b {
-                    None => Some(Vec::new()),
-                    Some(id) => {
-                        let bound_ty = lower_constraint_head(store, *id, generics, bounds);
-                        split_interface(&bound_ty, resolved, generics).map(
-                            |(interface, args, assoc)| {
-                                vec![InterfaceBound {
+                .map(|param| {
+                    param
+                        .bounds
+                        .iter()
+                        .map(|&id| {
+                            let bound_ty = lower_constraint_head(store, id, generics, bounds);
+                            split_interface(&bound_ty, resolved, generics).map(
+                                |(interface, args, assoc)| InterfaceBound {
                                     interface,
                                     args,
                                     assoc,
-                                }]
-                            },
-                        )
-                    }
+                                },
+                            )
+                        })
+                        .collect()
                 })
                 .collect()
         };
@@ -636,9 +637,6 @@ fn build_packages(
             };
             let store = &block.type_refs;
             let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
-            // Legacy flat single-bound form (first `&`-bound per param).
-            let impl_param_bounds: Vec<Option<TypeRefId>> =
-                generics.iter().map(|g| g.bounds.first().copied()).collect();
             let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
             // The target is a constraint, not an existential: it carries only
             // its written inline pins (block-level pins append below; unpinned
@@ -671,8 +669,7 @@ fn build_packages(
             );
             let for_ty_pattern =
                 baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params);
-            let Some(generic_param_bounds) =
-                bound_sets(store, &impl_param_bounds, &impl_params, &impl_bounds)
+            let Some(generic_param_bounds) = bound_sets(store, generics, &impl_params, &impl_bounds)
             else {
                 continue;
             };
@@ -805,7 +802,7 @@ fn build_packages(
                 )
             };
             let Some(generic_param_bounds) =
-                bound_sets(store, &class.generic_param_bounds, &generics, &class_bounds)
+                bound_sets(store, &class.generic_params, &generics, &class_bounds)
             else {
                 continue;
             };
@@ -963,7 +960,20 @@ pub(crate) use emit::compile_mir_function;
 fn is_builtin_function_name(name: &str) -> bool {
     matches!(
         name.split('.').next(),
-        Some("baml" | "boundary" | "reflect" | "assert" | "testing" | "log" | "env")
+        Some(
+            "baml"
+                | "boundary"
+                | "reflect"
+                | "assert"
+                | "testing"
+                | "log"
+                | "env"
+                | "ai"
+                | "openai"
+                | "anthropic"
+                | "google"
+                | "claude_code"
+        )
     )
 }
 
@@ -1149,7 +1159,11 @@ fn collect_class_fields_with_implements(
             name,
             field.type_ref,
             field.attributes.clone(),
-            class.generic_params.clone(),
+            class
+                .generic_params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect(),
             pkg_ns.to_vec(),
         ));
     }
@@ -1883,15 +1897,6 @@ pub fn decompose_units(
         units[carrier].package_fragment = frag;
     }
 
-    // ---- Template-string macros (Pass 5 fragment, per file) -----------------
-    for (fi, file) in all_files.iter().enumerate() {
-        for &ts_loc in file_template_strings(db, *file) {
-            if let Some(macro_def) = render_template_macro(template_string_data(db, ts_loc)) {
-                units[fi].template_macros.push(macro_def);
-            }
-        }
-    }
-
     // ---- Test cases (Pass 8 fragment, per file by source path) --------------
     if options.emit_test_cases {
         for test in &program.test_cases {
@@ -1937,24 +1942,6 @@ fn local_ref_sort_key(r: LocalRef) -> (u8, u32) {
         LocalRef::Interface(k) => (2, k),
         LocalRef::Code(k) => (3, k),
     }
-}
-
-/// Render one template-string definition as a Jinja `{% macro %}` block, or
-/// `None` for a body-less (declaration-only) template string.
-fn render_template_macro(
-    ts: &baml_compiler2_ppir::item_data::TemplateStringData,
-) -> Option<String> {
-    let body = ts.body.as_ref()?;
-    let args = ts
-        .params
-        .iter()
-        .map(|param| param.name.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    Some(format!(
-        "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
-        name = ts.name,
-    ))
 }
 
 /// Fully-qualified name of a class/enum/interface definition object.
@@ -2518,17 +2505,6 @@ fn generate_impl(
         opt,
         skip_clean,
     )?;
-
-    // --- Pass 5: Template string macros ---
-    let mut template_macros = Vec::new();
-    for file in &all_files {
-        for &ts_loc in file_template_strings(db, *file) {
-            if let Some(macro_def) = render_template_macro(template_string_data(db, ts_loc)) {
-                template_macros.push(macro_def);
-            }
-        }
-    }
-    program.template_strings_macros = template_macros.join("\n");
 
     // --- Pass 6: Retry policies ---
     // Retry policies are now synthesized as Item::Let bindings during CST lowering.
@@ -3552,13 +3528,18 @@ fn type_expr_for_name(name: Name) -> TypeExpr {
     .at(baml_compiler2_ast::TextRange::default())
 }
 
-fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> TypeExpr {
+/// `Name<P0, P1, …>` — the declaring item applied to its own parameters as type
+/// variables. Only the parameter *names* matter; bounds are irrelevant to the
+/// synthesized path.
+fn type_expr_for_name_with_generic_args(
+    name: Name,
+    generic_params: &[GenericParamData],
+) -> TypeExpr {
     baml_compiler2_ast::TypeExprKind::Path {
         segments: vec![name],
         generic_args: generic_params
             .iter()
-            .cloned()
-            .map(type_expr_for_name)
+            .map(|param| type_expr_for_name(param.name.clone()))
             .collect(),
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
@@ -3585,9 +3566,27 @@ fn compute_function_metadata<'db>(
     use baml_type::Ty;
     use baml_type::unify::substitute_ty;
 
-    // A generic param's single optional `extends` bound as `(store, id)` — enclosing
-    // (class/interface/impl) and function bounds live in different arenas.
-    type BoundRef<'a> = Option<(&'a TypeRefStore, TypeRefId)>;
+    /// One in-scope type variable's declared bound conjunction, as `(store, id)`
+    /// refs into whichever arena declared it — enclosing (class/interface/impl)
+    /// and function bounds live in different arenas. Empty when unbounded.
+    type BoundRef<'a> = Vec<(&'a TypeRefStore, TypeRefId)>;
+
+    /// A declaration's parameters split into parallel name and bound-ref lists,
+    /// keeping every `&`-separated conjunct.
+    fn split_declared<'a>(
+        params: &'a [GenericParamData],
+        store: &'a TypeRefStore,
+    ) -> (Vec<Name>, Vec<BoundRef<'a>>) {
+        params
+            .iter()
+            .map(|param| {
+                (
+                    param.name.clone(),
+                    param.bounds.iter().map(|&id| (store, id)).collect(),
+                )
+            })
+            .unzip()
+    }
 
     let file = func_loc.file(db);
     let func = function_data(db, func_loc);
@@ -3627,56 +3626,26 @@ fn compute_function_metadata<'db>(
     // params are in scope inside the method signature. Mirror
     // `MirLowerer::enclosing_generic_params`: enclosing params come first, then
     // function-level params.
-    let func_bounds = || {
-        func.generic_param_bounds
-            .iter()
-            .map(move |o| o.map(|id| (func_store, id)))
-    };
-    let (scoped_generic_param_names, scoped_generic_bound_refs): (Vec<Name>, Vec<BoundRef>) =
-        if let Some(block) = enclosing_free_impl {
-            // The impl block's declared generics as `(names, each's single optional
-            // bound)` — the flat form the removed `implements_for` exposed directly
-            // (mirrors MIR's `free_impl_generics`). Only the first `&`-bound per
-            // param is kept, matching the legacy shape.
-            let (mut names, mut bounds): (Vec<Name>, Vec<BoundRef>) = match &block.subject {
-                ImplSubjectData::Free { generics, .. } => (
-                    generics.iter().map(|g| g.name.clone()).collect(),
-                    generics
-                        .iter()
-                        .map(|g| g.bounds.first().copied().map(|id| (&block.type_refs, id)))
-                        .collect(),
-                ),
+    let (scoped_generic_param_names, scoped_generic_bound_refs): (Vec<Name>, Vec<BoundRef>) = {
+        let (mut names, mut bounds) = if let Some(block) = enclosing_free_impl {
+            match &block.subject {
+                ImplSubjectData::Free { generics, .. } => {
+                    split_declared(generics, &block.type_refs)
+                }
                 ImplSubjectData::InClass { .. } => (Vec::new(), Vec::new()),
-            };
-            names.extend(func.generic_params.iter().cloned());
-            bounds.extend(func_bounds());
-            (names, bounds)
+            }
         } else if let Some(iface) = enclosing_interface {
-            let mut names = iface.generic_params.clone();
-            names.extend(func.generic_params.iter().cloned());
-            let mut bounds: Vec<BoundRef> = iface
-                .generic_param_bounds
-                .iter()
-                .map(|o| o.map(|id| (&iface.type_refs, id)))
-                .collect();
-            bounds.extend(func_bounds());
-            (names, bounds)
+            split_declared(&iface.generic_params, &iface.type_refs)
         } else {
-            let mut names = enclosing_class
-                .map(|c| c.generic_params.clone())
-                .unwrap_or_default();
-            names.extend(func.generic_params.iter().cloned());
-            let mut bounds: Vec<BoundRef> = enclosing_class
-                .map(|c| {
-                    c.generic_param_bounds
-                        .iter()
-                        .map(|o| o.map(|id| (&c.type_refs, id)))
-                        .collect()
-                })
-                .unwrap_or_default();
-            bounds.extend(func_bounds());
-            (names, bounds)
+            enclosing_class
+                .map(|c| split_declared(&c.generic_params, &c.type_refs))
+                .unwrap_or_default()
         };
+        let (own_names, own_bounds) = split_declared(&func.generic_params, func_store);
+        names.extend(own_names);
+        bounds.extend(own_bounds);
+        (names, bounds)
+    };
     let enclosing_generics = baml_compiler2_hir_ty::lower::function_generic_frame(db, func_loc);
 
     // Every type variable in scope for this signature, with its interface
@@ -3723,10 +3692,10 @@ fn compute_function_metadata<'db>(
             let args = iface
                 .generic_params
                 .iter()
-                .map(|name| {
+                .map(|declared| {
                     let param = enclosing_generics
                         .iter()
-                        .find(|param| param.name() == name)
+                        .find(|param| param.name() == &declared.name)
                         .expect("interface generic parameter is in the function environment");
                     Ty::TypeVar(param.clone(), baml_type::TyAttr::default())
                 })
@@ -3839,27 +3808,37 @@ fn compute_function_metadata<'db>(
     // members it writes, so lowering it existentially would mint completeness
     // diagnostics for members the bound legitimately leaves free (and drop the
     // bound from display). Rendered into `display_type_params` below.
-    let generic_param_bounds: HashMap<Name, Ty> = scoped_generic_param_names
+    let generic_param_bounds: HashMap<Name, Vec<Ty>> = scoped_generic_param_names
         .iter()
         .enumerate()
         .filter_map(|(idx, name)| {
-            let (store, id) = scoped_generic_bound_refs.get(idx).copied().flatten()?;
-            let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
-                .with_bounds(scope_bounds.clone())
-                .with_frame(if enclosing_interface.is_some() {
-                    interface_binding_params.clone()
-                } else {
-                    enclosing_generics.clone()
-                })
-                .with_diagnostics();
-            let lowered = ctx.lower_type_ref(store, id).to_plain();
-            let clean = ctx.take_diagnostics().is_empty();
-            let bound_ty = if enclosing_interface.is_some() {
-                substitute_ty(&lowered, &interface_signature_bindings)
+            let refs = scoped_generic_bound_refs.get(idx)?;
+            let frame = if enclosing_interface.is_some() {
+                &interface_binding_params
             } else {
-                lowered
+                &enclosing_generics
             };
-            clean.then(|| (name.clone(), bound_ty))
+            // Each conjunct lowers independently; one that fails to lower is
+            // dropped (its declaration reported the error) without hiding the
+            // rest of the conjunction.
+            let bound_tys: Vec<Ty> = refs
+                .iter()
+                .filter_map(|&(store, id)| {
+                    let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
+                        .with_bounds(scope_bounds.clone())
+                        .with_frame(frame.clone())
+                        .with_diagnostics();
+                    let lowered = ctx.lower_type_ref(store, id).to_plain();
+                    let clean = ctx.take_diagnostics().is_empty();
+                    let bound_ty = if enclosing_interface.is_some() {
+                        substitute_ty(&lowered, &interface_signature_bindings)
+                    } else {
+                        lowered
+                    };
+                    clean.then_some(bound_ty)
+                })
+                .collect();
+            (!bound_tys.is_empty()).then(|| (name.clone(), bound_tys))
         })
         .collect();
 
@@ -3873,12 +3852,16 @@ fn compute_function_metadata<'db>(
 
     let display_type_params: Vec<String> = scoped_generic_param_names
         .iter()
-        .map(|name| {
-            if let Some(bound) = generic_param_bounds.get(name) {
-                format!("{} extends {}", name.as_str(), bound.render_user_facing())
-            } else {
-                name.to_string()
+        .map(|name| match generic_param_bounds.get(name) {
+            Some(bounds) => {
+                let rendered = bounds
+                    .iter()
+                    .map(Ty::render_user_facing)
+                    .collect::<Vec<_>>()
+                    .join(" & ");
+                format!("{} extends {rendered}", name.as_str())
             }
+            None => name.to_string(),
         })
         .collect();
 
@@ -4967,19 +4950,7 @@ fn attach_function_metadata<'db>(
     if let Some(llm_meta) = function_llm_meta(db, func_loc)
         && let Some(client) = &llm_meta.client_name
     {
-        // New-mode (BEP-049 M5) functions have no Jinja `prompt` text — the compiled
-        // closure renders it — but they still need a registry entry so
-        // `get_return_type` / `get_stream_return_type` (used by `__make_stream` and
-        // the streaming `Context`) resolve by name. The empty template is never read
-        // for them (their `prompt_closure` is non-null, so the Jinja
-        // `get_jinja_template` branch is skipped). The prompt text is fetched from
-        // the span-carrying `function_llm_prompt` sibling of `function_llm_meta`.
-        let prompt_template = function_llm_prompt(db, func_loc)
-            .as_ref()
-            .map(|p| p.text.clone())
-            .unwrap_or_default();
         compiled_fn.body_meta = Some(FunctionMeta::Llm {
-            prompt_template,
             client: client.to_string(),
         });
         compiled_fn.capture = FunctionCaptureProps::disabled()
@@ -5439,7 +5410,6 @@ mod tests {
 
     #[test]
     fn parse_raw_string_single_hash() {
-        // Input: #"raw\ntext"#  — raw strings don't unescape
         let input = "#\"raw\\ntext\"#";
         assert_eq!(
             parse_string_attr_value(input),
@@ -5449,7 +5419,6 @@ mod tests {
 
     #[test]
     fn parse_raw_string_double_hash() {
-        // Input: ##"has "# inside"##
         let input = "##\"has \"# inside\"##";
         assert_eq!(
             parse_string_attr_value(input),
@@ -5459,7 +5428,6 @@ mod tests {
 
     #[test]
     fn parse_empty_raw_string() {
-        // Input: #""#
         let input = "#\"\"#";
         assert_eq!(parse_string_attr_value(input), Some(String::new()));
     }
@@ -5700,7 +5668,6 @@ mod tests {
 
     #[test]
     fn extract_raw_string_attr() {
-        // Simulates @description(#"raw desc"#)
         let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
         let (desc, _, _) = extract_schema_attrs(&attrs);
         assert_eq!(desc, Some("raw desc".to_string()));

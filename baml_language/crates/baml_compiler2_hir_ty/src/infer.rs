@@ -524,6 +524,17 @@ enum PendingDiag {
         base: Ty,
         member: baml_type::Name,
     },
+    /// BEP-044 method disambiguation: `member` on `base` is declared by
+    /// two or more realized-distinct interfaces (rustc's E0034 shape) -
+    /// resolving would silently pick one, so the access must qualify
+    /// with `as<I>`.
+    AmbiguousMember {
+        expr: ExprId,
+        base: Ty,
+        member: baml_type::Name,
+        sources: Vec<String>,
+        is_field: bool,
+    },
     NotCallable {
         expr: ExprId,
         ty: Ty,
@@ -2419,6 +2430,25 @@ impl<'db> InferenceContext<'db> {
         if actual == expected || actual.has_error() || expected.has_error() {
             return true;
         }
+        // A GROUND top expectation is trivially satisfied - but it IS a
+        // consuming use, so an empty container literal flowing into
+        // `unknown` commits its establishment slots to the top type
+        // (`{}` in a `map<string, unknown>` value slot is
+        // `map<unknown, unknown>` - TIR's frozen-Evolving behavior at
+        // exactly the demanded case). ONLY establishment vars commit:
+        // solving an ordinary inference var to `unknown` here would
+        // poison its real solution. A literal with NO demand at all
+        // keeps the strict uninferrable-container error (ruling 2's
+        // fixture `unconstrained_empty_list_strict`).
+        // A bare inference variable still records its upper bound through
+        // the Infer arm below (an `unknown` upper participates in bounds
+        // resolution); only STRUCTURED actuals take the fast path.
+        if matches!(expected.kind(), TyKind::Unknown { .. })
+            && !matches!(actual.kind(), TyKind::Infer { .. })
+        {
+            self.commit_establishments_to_unknown(&actual);
+            return true;
+        }
         // RULING (interim until tuple types): `void` and `null` are the
         // same UNIT type - a void-returning body evaluates to null, and
         // both spellings are mutually assignable (TIR's behavior).
@@ -2614,19 +2644,29 @@ impl<'db> InferenceContext<'db> {
                     ) = (actual.kind(), expected.kind())
                         && a_name == b_name
                         && a_args.len() == b_args.len()
-                        && b_pins
-                            .iter()
-                            .all(|(pin, _)| a_pins.iter().any(|(a_pin, _)| a_pin == pin))
+                        && (a_name.is_builtin_root_type("AnyFunction")
+                            || b_pins
+                                .iter()
+                                .all(|(pin, _)| a_pins.iter().any(|(a_pin, _)| a_pin == pin)))
                     {
                         let arg_pairs: Vec<(Ty, Ty)> =
                             a_args.iter().cloned().zip(b_args.iter().cloned()).collect();
+                        // An `AnyFunction` pin the actual side leaves unwritten
+                        // reads as its declared `unknown` default (BEP-062), so
+                        // a bare value binds the expectation's pin variables to
+                        // `unknown` instead of stranding them.
                         let pin_pairs: Vec<(Ty, Ty)> = b_pins
                             .iter()
                             .filter_map(|(pin, b_ty)| {
-                                a_pins
-                                    .iter()
-                                    .find(|(a_pin, _)| a_pin == pin)
-                                    .map(|(_, a_ty)| (a_ty.clone(), b_ty.clone()))
+                                match a_pins.iter().find(|(a_pin, _)| a_pin == pin) {
+                                    Some((_, a_ty)) => Some((a_ty.clone(), b_ty.clone())),
+                                    None => Some((
+                                        Ty::intern(TyKind::Unknown {
+                                            attr: TyAttr::default(),
+                                        }),
+                                        b_ty.clone(),
+                                    )),
+                                }
                             })
                             .collect();
                         let mut ok = true;
@@ -2674,6 +2714,32 @@ impl<'db> InferenceContext<'db> {
                     true
                 }
             }
+        }
+    }
+
+    /// Solves every ESTABLISHMENT variable inside `ty` to the top type -
+    /// the commitment a ground `unknown` demand makes on an empty
+    /// container literal's slots. Ordinary inference vars are untouched.
+    fn commit_establishments_to_unknown(&mut self, ty: &Ty) {
+        if !ty.has_infer() {
+            return;
+        }
+        let resolved = self.table.shallow_resolve(ty);
+        if let TyKind::Infer { var: Some(var), .. } = resolved.kind() {
+            if self.table.is_establishment_var(*var) {
+                self.table.solve(
+                    *var,
+                    Ty::intern(TyKind::Unknown {
+                        attr: TyAttr::default(),
+                    }),
+                );
+            }
+            return;
+        }
+        let mut children = Vec::new();
+        baml_type::interned::for_each_child(resolved.kind(), |child| children.push(child.clone()));
+        for child in children {
+            self.commit_establishments_to_unknown(&child);
         }
     }
 
@@ -3988,7 +4054,8 @@ impl<'db> InferenceContext<'db> {
                     return (Ty::error(), false);
                 }
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
-                let (ty, bound, resolution, desugar) = self.member_callee(call, &receiver, &member);
+                let (ty, bound, resolution, desugar) =
+                    self.member_callee(call, callee, &receiver, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
                 if desugar {
                     self.result.desugared_callees.insert(callee);
@@ -4008,7 +4075,8 @@ impl<'db> InferenceContext<'db> {
                 }
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let nonnull = self.peel_chain_null(&receiver);
-                let (ty, bound, resolution, desugar) = self.member_callee(call, &nonnull, &member);
+                let (ty, bound, resolution, desugar) =
+                    self.member_callee(call, callee, &nonnull, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
                 if desugar {
                     self.result.desugared_callees.insert(callee);
@@ -4041,7 +4109,8 @@ impl<'db> InferenceContext<'db> {
                 let (receiver, mut steps) =
                     self.walk_path_members(callee, root, &segments[1..segments.len() - 1]);
                 let member = segments.last().expect("checked len");
-                let (ty, bound, resolution, desugar) = self.member_callee(call, &receiver, member);
+                let (ty, bound, resolution, desugar) =
+                    self.member_callee(call, callee, &receiver, member);
                 self.result.type_of_expr.insert(callee, ty.clone());
                 if desugar {
                     self.result.desugared_callees.insert(callee);
@@ -4065,6 +4134,10 @@ impl<'db> InferenceContext<'db> {
     fn member_callee(
         &mut self,
         call: ExprId,
+        // The member-access expression itself - the E0121/E0122 anchor
+        // (rustc anchors ambiguity at the method segment, not the whole
+        // call with its arguments).
+        member_expr: ExprId,
         receiver: &Ty,
         member: &baml_type::Name,
     ) -> (Ty, bool, Option<MemberResolution<'db>>, bool) {
@@ -4076,7 +4149,9 @@ impl<'db> InferenceContext<'db> {
         // expanded weak aliases.
         if let TyKind::Union(union_members, _) = resolved.kind() {
             let union_members = union_members.to_vec();
-            if let Some((ty, bound)) = self.union_member_callee(call, &union_members, member) {
+            if let Some((ty, bound)) =
+                self.union_member_callee(call, member_expr, &union_members, member)
+            {
                 // One expression, one recorded entry: the union access
                 // has no single declaration (its virtual view is an S16
                 // follow-up).
@@ -4095,16 +4170,33 @@ impl<'db> InferenceContext<'db> {
             // A receiver still CARRYING inference variables probes the
             // impls by unification instead (r-a's snapshot probe; the
             // ground registry fails safe on such types).
-            let interface_member = crate::method_resolution::lookup_interface_member(
+            match crate::method_resolution::lookup_interface_member(
                 self.db,
                 &self.facts,
                 &resolved,
                 member,
-            );
-            if let Some(interface_member) = interface_member {
-                let resolution = self.declarer_resolution(&interface_member.declarer, member);
-                let (ty, bound) = self.interface_member_callee(interface_member, call);
-                return (ty, bound, resolution, false);
+            ) {
+                crate::method_resolution::InterfaceMemberLookup::Found(interface_member) => {
+                    let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                    let (ty, bound) = self.interface_member_callee(interface_member, call);
+                    return (ty, bound, resolution, false);
+                }
+                crate::method_resolution::InterfaceMemberLookup::Ambiguous {
+                    sources,
+                    is_field,
+                } => {
+                    if self.member_probe_depth == 0 {
+                        self.pending_diags.push(PendingDiag::AmbiguousMember {
+                            expr: member_expr,
+                            base: resolved.clone(),
+                            member: member.clone(),
+                            sources,
+                            is_field,
+                        });
+                    }
+                    return (Ty::error(), false, None, false);
+                }
+                crate::method_resolution::InterfaceMemberLookup::NotFound => {}
             }
             // The var-carrying probe resolves through an impl candidate
             // whose block loc `ImplFacts` does not carry yet, so its
@@ -4194,12 +4286,13 @@ impl<'db> InferenceContext<'db> {
     fn union_member_callee(
         &mut self,
         call: ExprId,
+        member_expr: ExprId,
         union_members: &[Ty],
         member: &baml_type::Name,
     ) -> Option<(Ty, bool)> {
         let mut resolved_fns = Vec::new();
         for member_ty in union_members {
-            let (ty, bound, _, _) = self.member_callee(call, member_ty, member);
+            let (ty, bound, _, _) = self.member_callee(call, member_expr, member_ty, member);
             if ty.has_error() {
                 return None;
             }
@@ -5040,6 +5133,45 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// [`Self::register_call_bounds`] for a class instantiation: one
+    /// Implements obligation per declared bound of the class's generic
+    /// frame (`class Holder<T extends Named & Sized>` registers BOTH
+    /// conjuncts for `Holder<X> { .. }`) - rustc's ADT well-formedness
+    /// obligations at the constructor site.
+    fn register_class_bounds(
+        &mut self,
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        instantiation: &[Ty],
+        at: ExprId,
+    ) {
+        let bounds = crate::lower::class_generic_bounds(self.db, class);
+        for (param, param_bounds) in bounds {
+            let Some(arg) = instantiation.get(param.index() as usize) else {
+                continue;
+            };
+            for bound in param_bounds {
+                let interface = baml_type::interned::InterfaceRef::new(
+                    bound.name.clone(),
+                    bound
+                        .generics
+                        .iter()
+                        .map(|generic| substitute_params(generic, instantiation))
+                        .collect(),
+                    bound
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), substitute_params(ty, instantiation)))
+                        .collect(),
+                );
+                self.register_obligation(obligations::Obligation::Implements {
+                    ty: arg.clone(),
+                    interface,
+                    at,
+                });
+            }
+        }
+    }
+
     /// The instantiation vector for a generic item at a use site: explicit
     /// turbofish args (with `_` holes as fresh vars) where written, fresh
     /// variables everywhere else.
@@ -5137,6 +5269,7 @@ impl<'db> InferenceContext<'db> {
         while instantiation.len() < generic_count {
             instantiation.push(self.table.new_var_ty());
         }
+        self.register_class_bounds(class, &instantiation, object);
         let field_types = crate::lower::class_field_types(db, class);
         // Fresh (unwritten) instantiation slots that survive to finalize
         // unsolved are uninferrable - report instead of letting the bare
@@ -5320,14 +5453,29 @@ impl<'db> InferenceContext<'db> {
                 }),
             );
         }
-        if let Some(interface_member) = crate::method_resolution::lookup_interface_member(
+        match crate::method_resolution::lookup_interface_member(
             self.db,
             &self.facts,
             &resolved,
             member,
         ) {
-            let resolution = self.declarer_resolution(&interface_member.declarer, member);
-            return (self.interface_member_value(interface_member), resolution);
+            crate::method_resolution::InterfaceMemberLookup::Found(interface_member) => {
+                let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                return (self.interface_member_value(interface_member), resolution);
+            }
+            crate::method_resolution::InterfaceMemberLookup::Ambiguous { sources, is_field } => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags.push(PendingDiag::AmbiguousMember {
+                        expr: at,
+                        base: resolved.clone(),
+                        member: member.clone(),
+                        sources,
+                        is_field,
+                    });
+                }
+                return (Ty::error(), None);
+            }
+            crate::method_resolution::InterfaceMemberLookup::NotFound => {}
         }
         // A definitely-missing member on a KNOWN base reports; an
         // error/var-carrying base is a cascade of an earlier failure
@@ -6093,9 +6241,10 @@ impl<'db> InferenceContext<'db> {
         // deferred lowers mention a sibling that was still solvable.
         loop {
             let solved = self.resolve_bounded_vars(SolveTier::Ground);
+            let replayed = self.replay_solved_class_bounds();
             let obligations = self.discharge_obligations_once();
             let subs = self.drain_deferred_subs();
-            if solved || obligations || subs {
+            if solved || replayed || obligations || subs {
                 continue;
             }
             if !self.resolve_bounded_vars(SolveTier::GroundSubset) {
@@ -6280,6 +6429,24 @@ impl<'db> InferenceContext<'db> {
                             ty: actual.to_plain(),
                         }
                     }
+                    // BEP-044 wf3 #G18: a value that ALMOST implements an
+                    // expected interface through a blanket `implements`
+                    // rule - the implementor shape matches but a generic
+                    // bound fails - names the unsatisfied bound (rustc's
+                    // obligation-cause refinement of a fulfillment error)
+                    // rather than a bare mismatch.
+                    TyKind::Interface(..) => {
+                        match self.first_failing_blanket_bound(actual, expected) {
+                            Some(bound) => TirTypeError::BlanketBoundNotSatisfied {
+                                value_type: actual.to_plain(),
+                                bound,
+                            },
+                            None => TirTypeError::TypeMismatch {
+                                expected: expected.to_plain(),
+                                got: actual.to_plain(),
+                            },
+                        }
+                    }
                     _ => TirTypeError::TypeMismatch {
                         expected: expected.to_plain(),
                         got: actual.to_plain(),
@@ -6342,6 +6509,31 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::AmbiguousMember {
+                        expr,
+                        base,
+                        member,
+                        sources,
+                        is_field,
+                    } => {
+                        let receiver = baml_type::Name::new(
+                            self.finalize_ty(&base).to_plain().render_user_facing(),
+                        );
+                        let err = if is_field {
+                            TirTypeError::AmbiguousInterfaceField {
+                                class_name: receiver,
+                                field_name: member,
+                                sources: sources.into_iter().map(baml_type::Name::new).collect(),
+                            }
+                        } else {
+                            TirTypeError::AmbiguousInterfaceMethod {
+                                class_name: receiver,
+                                method_name: member,
+                                sources,
+                            }
+                        };
+                        (err, expr)
+                    }
                     PendingDiag::NotCallable { expr, ty } => (
                         TirTypeError::NotCallable {
                             ty: self.finalize_ty(&ty).to_plain(),
@@ -7369,6 +7561,30 @@ impl<'db> InferenceContext<'db> {
     /// in-scope rigid params? `Yes`/`Unknown` = possible, `No` = provably
     /// dead. Trust a `No` only when both inputs pass
     /// `baml_type::unify::all_typevars_within` for this scope's frame.
+    /// The failing bound of an ALMOST-matching blanket impl for an
+    /// interface expectation - `None` when no impl's implementor shape
+    /// matches the value, or every matching impl's bounds hold (the
+    /// mismatch then has some other cause). Diagnostic refinement only;
+    /// never consulted on a passing check.
+    fn first_failing_blanket_bound(&self, actual: &Ty, expected: &Ty) -> Option<baml_type::Ty> {
+        if actual.has_infer() || expected.has_infer() {
+            return None;
+        }
+        let file = self.owner_file?;
+        let info = baml_compiler2_hir::file_package::file_package(self.db, file);
+        let pkg = baml_compiler2_hir::package::PackageId::new(self.db, info.package.clone());
+        let aliases = self.overlap_alias_map();
+        crate::interfaces::first_failing_impl_bound(
+            self.db,
+            pkg,
+            &actual.to_plain(),
+            &expected.to_plain(),
+            aliases,
+            |a, b| baml_type::normalize::is_subtype(a, b, &self.facts),
+        )
+        .map(|(_param, bound, _actual_arg)| bound)
+    }
+
     fn pattern_overlap_verdict(
         &self,
         pat: &baml_type::Ty,
@@ -7441,6 +7657,29 @@ impl<'db> InferenceContext<'db> {
             }
             aliases
         })
+    }
+
+    /// Re-drives bounds accumulated on classes DIRECT unification has since
+    /// solved (`?U := Future<?T, ?E>` while `Future<null, never>` still sat
+    /// in `?U`'s lower bounds - the map-lambda/`future.all` shape): binding
+    /// a variable discharges its pending evidence by replaying each bound
+    /// against the solution - rustc's fulfillment re-drive on inference
+    /// progress - never by dropping it. Replay failures follow the
+    /// anchorless-drop rule (the depositing site already checked itself).
+    fn replay_solved_class_bounds(&mut self) -> bool {
+        let solved = self.table.take_solved_class_bounds();
+        let mut progressed = false;
+        for (solution, bounds) in solved {
+            for lower in bounds.lowers {
+                let _ = self.sub(&lower, &solution);
+                progressed = true;
+            }
+            for upper in bounds.uppers {
+                let _ = self.sub(&solution, &upper);
+                progressed = true;
+            }
+        }
+        progressed
     }
 
     /// Re-drives the deferred `Sub` residue inside the finish fixpoint:

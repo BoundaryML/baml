@@ -376,9 +376,66 @@ function comparable_sort.check(xs: #0[], ys: #0[]) -> bool {
     make_closure .<lambda(check, 0)>, captures=0, ntypeargs=1
     call baml.Array.sort_by
     pop 1
-    load_type #0[]
-    load_var2 1 2
-    call baml.deep_equals
+    load_var xs
+    container_len
+    store_var _9
+    load_var ys
+    container_len
+    store_var _10
+    load_var2 3 4
+    cmp_int_op !=
+    pop_jump_if_false L0
+    jump L6
+
+  L0:
+    load_const 0
+    store_var i
+
+  L1:
+    load_var i
+    store_var _13
+    load_var xs
+    container_len
+    store_var _14
+    load_var2 6 7
+    cmp_int_op <
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const true
+    jump L7
+
+  L3:
+    load_var2 1 5
+    load_array_element
+    load_var2 2 5
+    load_array_element
+    load_type baml.Comparable
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _16
+    load_var _16
+    load_const 0
+    cmp_int_op !=
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L1
+
+  L5:
+    load_const false
+    jump L7
+
+  L6:
+    load_const false
+
+  L7:
     return
 }
 
@@ -592,15 +649,13 @@ function comparable_sort.is_primitive_probe_main() -> int {
     load_type int
     load_const 42
     call user.comparable_sort.probe
-    store_var _3
+    load_const 10
+    mul_int
+    store_var _2
     load_type string
     load_const "s"
     call user.comparable_sort.probe
-    store_var _6
-    load_var _3
-    load_const 10
-    mul_int
-    load_var _6
+    load_var _2
     add_int
     return
 }

@@ -388,11 +388,14 @@ fn call_plan_waits_for_sibling_vars() {
     // for ?T_gen = int, giving string | int[] - not commit to string
     // from the ground subset and silently fail the deferred bound.
     let source = r#"
+function de_eq<T>(a: T, b: T) -> bool throws never {
+    true
+}
 function de_gen<T>(x: T) -> T[] throws string {
     [x]
 }
 function de_probe() -> bool throws never {
-    baml.deep_equals(de_gen(1) catch (e) {
+    de_eq(de_gen(1) catch (e) {
         string => "caught"
     }, "caught")
 }
@@ -422,7 +425,7 @@ function de_probe() -> bool throws never {
     assert_eq!(
         plans,
         vec![
-            "baml.deep_equals -> [\"string | int[]\"]".to_string(),
+            "de_eq -> [\"string | int[]\"]".to_string(),
             "de_gen -> [\"int\"]".to_string(),
         ],
         "solver committed a var while a sibling in its deferred lowers was still solvable"

@@ -71,6 +71,42 @@ test TestMakePoem() {
 
 //----
 //- diagnostics
+// E0010
+//
+//   × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
+//    ╭─[expr_expr_full.baml:3:12]
+//  3 │     prompt #"Write a poem {{ length }} lines long."#
+//    ·            ────────────────────┬────────────────────
+//    ·                                ╰── use a backtick prompt instead
+//    ╰────
+// E0010
+//
+//   × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
+//     ╭─[expr_expr_full.baml:8:12]
+//   8 │ ╭─▶     prompt #"Combine the following two poems into one poem.
+//   9 │ │
+//  10 │ │       Poem 1:
+//  11 │ │       {{ poem1 }}
+//  12 │ │
+//  13 │ │       Poem 2:
+//  14 │ │       {{ poem2 }}
+//  15 │ ├─▶     "#
+//     · ╰──── use a backtick prompt instead
+//     ╰────
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client GPT4o = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//     ╭─[expr_expr_full.baml:59:1]
+//  59 │ ╭─▶ client<llm> GPT4o {
+//  60 │ │     provider openai
+//  61 │ │     options {
+//  62 │ │       model gpt-4o
+//  63 │ │       api_key env.OPENAI_API_KEY
+//  64 │ │     }
+//  65 │ ├─▶ }
+//     · ╰──── replace with `client Name = <expr>;`
+//     ╰────
 // E0003
 //
 //   × unresolved name: `functions`

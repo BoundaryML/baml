@@ -111,33 +111,33 @@ function get_len(data: uint8array) -> int {
 // ─── B1. Byte string literal construction ─────────────────────────────────────
 
 test "literal_basic" {
-    assert.is_true(baml.deep_equals(byte_strings_literal_basic(), b"hello"))
+    assert.equal(byte_strings_literal_basic(), b"hello")
 }
 
 test "literal_empty" {
-    assert.is_true(baml.deep_equals(byte_strings_literal_empty(), b""))
+    assert.equal(byte_strings_literal_empty(), b"")
 }
 
 test "literal_hex_escapes" {
-    assert.is_true(baml.deep_equals(byte_strings_literal_hex_escapes(), b"\x00\x7f\xff"))
+    assert.equal(byte_strings_literal_hex_escapes(), b"\x00\x7f\xff")
 }
 
 test "literal_standard_escapes" {
-    assert.is_true(baml.deep_equals(byte_strings_literal_standard_escapes(), b"\n\t\r\0\\\""))
+    assert.equal(byte_strings_literal_standard_escapes(), b"\n\t\r\0\\\"")
 }
 
 test "literal_mixed_ascii_and_hex" {
-    assert.is_true(baml.deep_equals(byte_strings_literal_mixed(), b"A\x42C"))
+    assert.equal(byte_strings_literal_mixed(), b"A\x42C")
 }
 
 // ─── B2. Uint8Array methods ───────────────────────────────────────────────────
 
 test "length_basic" {
-    assert.is_true(baml.deep_equals(b"hello".length(), 5))
+    assert.equal(b"hello".length(), 5)
 }
 
 test "length_empty" {
-    assert.is_true(baml.deep_equals(b"".length(), 0))
+    assert.equal(b"".length(), 0)
 }
 
 // at() returns int?; 0x42 = 66 decimal.
@@ -162,14 +162,14 @@ test "at_negative_out_of_bounds" {
 // ─── B3. Uint8Array.zeroes (literal only) ─────────────────────────────────────
 
 test "zeroes_basic" {
-    assert.is_true(baml.deep_equals(byte_strings_zeroes_basic(), b"\x00\x00\x00"))
+    assert.equal(byte_strings_zeroes_basic(), b"\x00\x00\x00")
 }
 
 // ─── B4. Index read/write via [] ──────────────────────────────────────────────
 
 // 0x41 = 65 decimal ('A')
 test "index_read" {
-    assert.is_true(baml.deep_equals(byte_strings_index_read(), 65))
+    assert.equal(byte_strings_index_read(), 65)
 }
 
 test "index_write" {
@@ -178,7 +178,7 @@ test "index_write" {
 
 // Writing 256 wraps/clamps to 0.
 test "index_write_out_of_range" {
-    assert.is_true(baml.deep_equals(byte_strings_index_write_out_of_range(), 0))
+    assert.equal(byte_strings_index_write_out_of_range(), 0)
 }
 
 test "index_out_of_bounds" {
@@ -210,54 +210,54 @@ test "index_before_start" {
 // pass_as_argument: SKIPPED — requires host-provided external args.
 
 test "return_uint8array" {
-    assert.is_true(baml.deep_equals(byte_strings_return_uint8array(), b"abc"))
+    assert.equal(byte_strings_return_uint8array(), b"abc")
 }
 
 // ─── B6. Deep equality ────────────────────────────────────────────────────────
 
 test "equality_same_content" {
-    assert.is_true(baml.deep_equals(b"abc" == b"abc", true))
+    assert.is_true(b"abc" == b"abc")
 }
 
 test "equality_different_content" {
-    assert.is_true(baml.deep_equals(b"abc" == b"xyz", false))
+    assert.is_true(b"abc" != b"xyz")
 }
 
 test "equality_empty" {
-    assert.is_true(baml.deep_equals(b"" == b"", true))
+    assert.is_true(b"" == b"")
 }
 
 test "equality_different_lengths" {
-    assert.is_true(baml.deep_equals(b"ab" == b"abc", false))
+    assert.is_true(b"ab" != b"abc")
 }
 
 test "equality_different_lengths_reversed" {
-    assert.is_true(baml.deep_equals(b"abc" == b"ab", false))
+    assert.is_true(b"abc" != b"ab")
 }
 
 test "inequality_same" {
-    assert.is_true(baml.deep_equals(b"abc" != b"abc", false))
+    assert.is_true(!(b"abc" != b"abc"))
 }
 
 test "inequality_different" {
-    assert.is_true(baml.deep_equals(b"abc" != b"xyz", true))
+    assert.is_true(b"abc" != b"xyz")
 }
 
 // ─── B7. Disambiguation: `b` as identifier vs byte-string prefix ───────────────
 
 test "b_as_identifier" {
-    assert.is_true(baml.deep_equals(byte_strings_b_as_identifier(), 42))
+    assert.equal(byte_strings_b_as_identifier(), 42)
 }
 
 // ─── B8. Byte string as call argument ─────────────────────────────────────────
 
 test "literal_as_call_argument" {
-    assert.is_true(baml.deep_equals(get_len(b"hello"), 5))
+    assert.equal(get_len(b"hello"), 5)
 }
 
 // ─── B9. Direct index read (data[0] not .at(0)) ───────────────────────────────
 
 // 0x41 = 65 decimal ('A')
 test "index_read_direct" {
-    assert.is_true(baml.deep_equals(byte_strings_index_read_direct(), 65))
+    assert.equal(byte_strings_index_read_direct(), 65)
 }

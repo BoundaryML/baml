@@ -1061,14 +1061,21 @@ fn serialize_media(
     Ok(serde_json::Value::Object(obj))
 }
 
-fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<baml_builtins2::MediaValue>> {
+pub(crate) fn read_media_value(
+    vm: &BexVm,
+    value: Value,
+) -> Option<Arc<baml_builtins2::MediaValue>> {
     let ptr = value.as_object_ptr()?;
-    let inst = match vm.get_object(ptr) {
-        Object::Instance(inst) => inst,
+    let (class, data_value) = match vm.get_object(ptr) {
+        Object::Instance(inst) => (inst.class, inst.fields.first()?.load()),
         _ => return None,
     };
-    // Media classes have a single `_data: $rust_type` field.
-    let data_value = inst.fields.first()?.load();
+    let class_name = match vm.get_object(class) {
+        Object::Class(class) => class.name.render_dotted(false),
+        _ => return None,
+    };
+    media_kind_from_fqn(class_name.as_str())?;
+
     let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
         Object::RustData(arc) => arc.clone().downcast::<baml_builtins2::MediaValue>().ok(),

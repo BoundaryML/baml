@@ -96,6 +96,8 @@ pub type BamlUnhandledSpawnErrorCallback =
 pub type BamlVersionFn = extern "C" fn() -> Buffer;
 pub type BamlInitializeRuntimeFromBytecodeFn =
     extern "C" fn(bytecode: *const u8, length: usize) -> Buffer;
+pub type BamlInitializeRuntimeFromBytecodeWithMetadataFn =
+    extern "C" fn(bytecode: *const u8, length: usize, baml_toml: *const libc::c_char) -> Buffer;
 pub type BamlFreeBufferFn = extern "C" fn(buffer: Buffer);
 pub type BamlRegisterCallbackFn = extern "C" fn(callback: BamlResultCallback);
 pub type BamlCallFunctionFn =
@@ -238,7 +240,7 @@ pub struct BamlApiV1 {
     pub media_base64: BamlMediaAccessorFn,
     /// Read a media MIME type. Ownership rules match `media_url`.
     pub media_mime_type: BamlMediaAccessorFn,
-    /// Register the calling bridge and require an exact product-version match.
+    /// Register the calling bridge and require an exact toolchain-version match.
     ///
     /// `info` and its version bytes are borrowed only for this call. The
     /// returned owned buffer is empty on success or a UTF-8 diagnostic on
@@ -250,6 +252,9 @@ pub struct BamlApiV1 {
     pub register_unhandled_spawn_error_callback: BamlRegisterUnhandledSpawnErrorCallbackFn,
     /// Wait for spawned work, report unreachable errors, and release the runtime.
     pub shutdown_runtime: BamlShutdownRuntimeFn,
+    /// Replace the runtime from bytecode after validating embedded generation metadata.
+    pub initialize_runtime_from_bytecode_with_metadata:
+        BamlInitializeRuntimeFromBytecodeWithMetadataFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -277,6 +282,8 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     register_bridge: crate::register_bridge_ffi,
     register_unhandled_spawn_error_callback: crate::register_unhandled_spawn_error_callback,
     shutdown_runtime: crate::shutdown_runtime_ffi,
+    initialize_runtime_from_bytecode_with_metadata:
+        crate::initialize_runtime_from_bytecode_with_metadata,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -348,6 +355,10 @@ mod tests {
             crate::register_unhandled_spawn_error_callback
         );
         assert_same_function!(api.shutdown_runtime, crate::shutdown_runtime_ffi);
+        assert_same_function!(
+            api.initialize_runtime_from_bytecode_with_metadata,
+            crate::initialize_runtime_from_bytecode_with_metadata
+        );
     }
 
     #[test]
@@ -376,6 +387,8 @@ mod tests {
         let _: BamlRegisterUnhandledSpawnErrorCallbackFn =
             api.register_unhandled_spawn_error_callback;
         let _: BamlShutdownRuntimeFn = api.shutdown_runtime;
+        let _: BamlInitializeRuntimeFromBytecodeWithMetadataFn =
+            api.initialize_runtime_from_bytecode_with_metadata;
         let _: BamlGetApiV1Fn = baml_get_api_v1;
     }
 

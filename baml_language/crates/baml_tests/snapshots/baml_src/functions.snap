@@ -105,8 +105,7 @@ function functions.call_twice(f: (int, int) -> int throws never, x: int, y: int)
     load_var2 2 3
     load_var f
     call_indirect
-    store_var _5
-    load_var2 4 5
+    load_var _4
     add_int
     return
 }

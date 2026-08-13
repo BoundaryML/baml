@@ -54,7 +54,7 @@ homebrew/AUR). npm uses OIDC trusted publishing with channel→dist-tag
   unreasonable download.
 - **Channels:** Maven has no dist-tags; canary = plain version
   (`0.15.0`), nightly = suffixed version
-  (`0.15.0-nightly.YYYYMMDD`). Publish job slots into
+  (`0.15.0-nightly.YYYYMMDD.a`). Publish job slots into
   `release-baml-language.yml` as `build-java-sdk` / `publish-maven`.
 - **CLI:** covered by the wrapper/toolchain tier; nothing to ship via
   Maven. What Java *does* need is a `"java"` `OutputType` variant in
@@ -173,7 +173,7 @@ adds idiomatic **runtime-type** ergonomics (per-generated-function sugar is
 explicitly out of scope):
 
 - `stream.asFlow(): Flow<P>` — a cold flow of partials, draining `next_async()`
-  until the `StreamFinished` sentinel (never emitted); `stream.awaitFinal(): F`.
+  until the `ai.stream.Done` sentinel (never emitted); `stream.awaitFinal(): F`.
 - `fold` over the `UnionN` arity family (`Union2`…`Union10`) — one lambda per arm,
   exhaustive by signature — plus `armIOrNull()` narrowing accessors.
 - `withBamlContext { ctx -> … }` — runs the block with a fresh `BamlCallContext`

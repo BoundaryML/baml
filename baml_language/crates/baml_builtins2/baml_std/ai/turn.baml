@@ -1,0 +1,46 @@
+// The client boundary: one operation. A client renders the input into its
+// wire format, makes one call, and returns canonical content. It never
+// writes the journal, executes a tool, or parses the output type.
+// Mirrors _planv2/pages/02_guides/03_clients/02_the_client_interface.md.
+
+class ModelTurnInput {
+    // The bound prompt template. The client supplies the output-format text
+    // appropriate for its own wire format and receives one structural prompt.
+    prompt: (string) -> Prompt throws never,
+    journal: Journal,
+    toolbox: root.tools.Toolbox,
+    output_type: type,
+}
+
+class ModelTurn {
+    content: root.content.Block[],
+    stop_reason: root.content.StopReason,
+    usage: root.events.Usage?,
+
+    // The terminal Text block — the final candidate the runner parses.
+    function terminal_text(self) -> string? {
+        let out: string? = null;
+        for (let b in self.content) {
+            if let t: root.content.Text = b {
+                out = t.text;
+            }
+        }
+        out
+    }
+
+    // The ToolUse blocks of the turn, in order.
+    function tool_uses(self) -> root.content.ToolUse[] {
+        let out: root.content.ToolUse[] = [];
+        for (let b in self.content) {
+            if let u: root.content.ToolUse = b {
+                out.push(u);
+            }
+        }
+        out
+    }
+}
+
+interface Client {
+    function id(self) -> string throws never
+    function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.Failure | baml.errors.UnknownError
+}

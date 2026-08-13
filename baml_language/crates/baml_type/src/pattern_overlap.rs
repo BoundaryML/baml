@@ -407,7 +407,7 @@ mod tests {
     fn int_literal(n: i64) -> Ty {
         Ty::Literal(
             Literal::Int(n),
-            crate::ty::Freshness::Regular,
+            crate::Freshness::Regular,
             TyAttr::default(),
         )
     }
@@ -415,7 +415,7 @@ mod tests {
     fn bool_literal(b: bool) -> Ty {
         Ty::Literal(
             Literal::Bool(b),
-            crate::ty::Freshness::Regular,
+            crate::Freshness::Regular,
             TyAttr::default(),
         )
     }

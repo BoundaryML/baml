@@ -7,16 +7,15 @@ import (
 	"testing"
 
 	baml_sdk "baml.local/sdk/baml_sdk"
-	baml "baml.local/sdk/baml_sdk/baml"
 )
 
 // `$parse` is a compiler-synthesized ordinary callable: JSON replaces the
-// parent's prompt arguments, the parent return type is preserved, and the
-// client override remains an optional named argument.
+// parent's prompt arguments and the parent return type is preserved. It takes
+// no client — parsing is local and network-free, so the single-path companion
+// dropped the client override the legacy one carried.
 var (
-	_ func(context.Context, string, ...baml_sdk.LoremExtractResumeParseOption) (baml_sdk.LoremResume, error)        = baml_sdk.LoremExtractResumeParse
-	_ func(baml.LlmClient) baml_sdk.LoremExtractResumeParseOption                                                   = baml_sdk.WithLoremExtractResumeParseClient
-	_ func(context.Context, string, ...baml_sdk.IpsumClassifySentimentParseOption) (baml_sdk.IpsumSentiment, error) = baml_sdk.IpsumClassifySentimentParse
+	_ func(context.Context, string) (baml_sdk.LoremResume, error)        = baml_sdk.LoremExtractResumeParse
+	_ func(context.Context, string) (baml_sdk.IpsumSentiment, error)     = baml_sdk.IpsumClassifySentimentParse
 )
 
 func Test_parse_companion_returns_typed_class_and_fills_missing_nullable_field(t *testing.T) {
@@ -40,27 +39,6 @@ func Test_parse_companion_returns_closed_enum(t *testing.T) {
 	}
 	if got != baml_sdk.IpsumSentimentPOSITIVE {
 		t.Fatalf("parsed sentiment = %q, want POSITIVE", got)
-	}
-}
-
-func Test_parse_companion_accepts_explicit_client_option(t *testing.T) {
-	withoutProviderCredentials(t)
-	client := baml.LlmClient{
-		Name:       "anthropic/claude-3-5-sonnet-latest",
-		ClientType: baml.LlmClientTypePrimitive,
-		SubClients: []baml.LlmClient{},
-	}
-
-	got, err := baml_sdk.LoremExtractResumeParse(
-		context.Background(),
-		`{"name":"Grace","email":"grace@example.com"}`,
-		baml_sdk.WithLoremExtractResumeParseClient(client),
-	)
-	if err != nil {
-		t.Fatalf("parse resume with client override: %v", err)
-	}
-	if got.Name != "Grace" || got.Email == nil || *got.Email != "grace@example.com" {
-		t.Fatalf("parsed resume with client override = %#v", got)
 	}
 }
 

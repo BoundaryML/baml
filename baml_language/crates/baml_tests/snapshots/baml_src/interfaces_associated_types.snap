@@ -103,43 +103,36 @@ function interfaces_associated_types.$init_test_ns_interfaces_associated_types_i
     pop 1
     load_var registry
     load_const "root.interfaces_associated_types"
-    load_const "reflection_implementors_respects_associated_type_bindings"
+    load_const "reflection_resolves_generic_class_associated_type_binding"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 14)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces_associated_types"
-    load_const "reflection_resolves_generic_class_associated_type_binding"
+    load_const "reflection_respects_generic_interface_impl_bound"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 15)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces_associated_types"
-    load_const "reflection_respects_generic_interface_impl_bound"
+    load_const "reflection_respects_generic_interface_impl_bound_plain_args"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 16)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces_associated_types"
-    load_const "reflection_respects_generic_interface_impl_bound_plain_args"
+    load_const "reflection_literal_type_uses_concrete_base_impls"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 17)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces_associated_types"
-    load_const "reflection_literal_type_uses_concrete_base_impls"
-    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 18)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.interfaces_associated_types"
     load_const "reflection_enum_variant_type_uses_concrete_base_impls"
-    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 19)>, 0
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 18)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -615,8 +608,7 @@ function interfaces_associated_types.rdf_main() -> int {
     load_const 9
     init_instance user.interfaces_associated_types.RdfIntSource .value
     call user.interfaces_associated_types.rdf_score
-    store_var _3
-    load_var2 1 2
+    load_var _1
     add_int
     return
 }
@@ -745,20 +737,6 @@ function interfaces_associated_types.rfg_main() -> int {
     store_var score
 
   L2:
-    load_var string_source
-    call baml.TypeValue.implementors
-    container_len
-    store_var _17
-    load_var _17
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L3
-    load_var score
-    load_const 1000
-    add_int
-    store_var score
-
-  L3:
     load_var score
     return
 }
@@ -799,85 +777,6 @@ function interfaces_associated_types.rfi_main() -> int {
     load_type interfaces_associated_types.RfiStringSource
     load_type interfaces_associated_types.RfiSource<Item = int>
     call baml.TypeValue.implements
-    pop_jump_if_false L3
-    load_var score
-    load_const 1000
-    add_int
-    store_var score
-
-  L3:
-    load_var score
-    return
-}
-
-function interfaces_associated_types.rfm_main() -> int {
-    load_type interfaces_associated_types.RfmSource<Item = int>
-    call baml.TypeValue.implementors
-    store_var int_impls
-    load_type interfaces_associated_types.RfmSource<Item = string>
-    call baml.TypeValue.implementors
-    store_var string_impls
-    load_const 0
-    store_var score
-    load_var score
-    store_var _6
-    load_var int_impls
-    container_len
-    store_var _7
-    load_var2 4 5
-    add_int
-    store_var score
-    load_var int_impls
-    container_len
-    store_var _10
-    load_var _10
-    load_const 0
-    cmp_int_op >
-    jump_if_false L0
-    pop 1
-    load_var int_impls
-    load_const 0
-    load_array_element
-    store_var _11
-    load_var _11
-    load_type interfaces_associated_types.RfmIntSource
-    call baml.ops.equals_equals
-
-  L0:
-    pop_jump_if_false L1
-    load_var score
-    load_const 10
-    add_int
-    store_var score
-
-  L1:
-    load_var score
-    store_var _16
-    load_var string_impls
-    container_len
-    store_var _18
-    load_var2 8 9
-    load_const 100
-    mul_int
-    add_int
-    store_var score
-    load_var string_impls
-    container_len
-    store_var _21
-    load_var _21
-    load_const 0
-    cmp_int_op >
-    jump_if_false L2
-    pop 1
-    load_var string_impls
-    load_const 0
-    load_array_element
-    store_var _22
-    load_var _22
-    load_type interfaces_associated_types.RfmStringSource
-    call baml.ops.equals_equals
-
-  L2:
     pop_jump_if_false L3
     load_var score
     load_const 1000
@@ -951,8 +850,7 @@ function interfaces_associated_types.rmf_main() -> int {
     load_const 7
     init_instance user.interfaces_associated_types.RmfIntSource .value
     call user.interfaces_associated_types.rmf_score
-    store_var _3
-    load_var2 1 2
+    load_var _1
     add_int
     return
 }

@@ -425,10 +425,11 @@ class Container {
 
 #[test]
 fn stream_companion_preserves_generic_args_for_llm_return_type() {
-    // Reviewer's exact scenario: an LLM function returning `Box<int>` builds
-    // a synthesized `$stream`/`$parse_stream` companion whose return type is
-    // `baml.llm.Stream<Box<int>, null | Box$stream<int>>`. With generic-arg
-    // threading, the second type arg matches `Box$stream<T>`'s arity.
+    // Reviewer's exact scenario: an LLM function returning `Box<int>` pulls
+    // the stream-expanded `Box$stream<int>` type companion into play. With
+    // generic-arg threading, the reference matches `Box$stream<T>`'s arity.
+    // (The legacy LLM `$stream`/`$parse_stream` function companions are gone;
+    // the class-level `$stream` type expansion is what this pins now.)
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -437,16 +438,11 @@ class Box<T> {
     value T
 }
 
-client<llm> Dummy {
-    provider openai
-    options {
-        model "gpt-4"
-    }
-}
+client Dummy = openai.OpenAiClient.new(model = "gpt-4");
 
 function GetBoxedInt() -> Box<int> {
     client Dummy
-    prompt "Give me a box"
+    prompt `Give me a box`
 }
 "#,
     );

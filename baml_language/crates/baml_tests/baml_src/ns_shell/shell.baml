@@ -24,7 +24,7 @@ function shell_failing_command_fn() -> int {
 }
 
 test "shell_failing_command" {
-    assert.is_true(baml.deep_equals(shell_failing_command_fn(), 1))
+    assert.equal(shell_failing_command_fn(), 1)
 }
 
 // Dynamic command string: the variable assignment happens inside BAML, then
@@ -53,7 +53,7 @@ function shell_ok_failure_fn() -> bool {
 }
 
 test "shell_ok_method_failure" {
-    assert.is_true(baml.deep_equals(shell_ok_failure_fn(), false))
+    assert.is_true(!shell_ok_failure_fn())
 }
 
 // stdout field is a uint8array; to_string() decodes it.

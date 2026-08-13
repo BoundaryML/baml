@@ -32,6 +32,7 @@ use std::{
     path::PathBuf,
 };
 
+use baml_base::qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM};
 use baml_codegen_types::{Function, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 
@@ -56,7 +57,7 @@ const JAVA_BANNER: &str = "\
 
 ";
 
-/// The five runtime-owned stdlib types. Their bodies live in the
+/// Runtime-owned stdlib types. Their bodies live in the
 /// `baml-bridge` runtime library (callers need the runtime's
 /// constructors and handle identity — a generated structural class
 /// would not round-trip), so codegen must not emit a class for them.
@@ -67,12 +68,12 @@ const RUNTIME_OWNED_FQNS: &[&str] = &[
     "baml.media.Audio",
     "baml.media.Video",
     "baml.media.Pdf",
-    "baml.llm.Stream",
-    // The stream-finished sentinel is runtime-owned (OWNER, 2026-07-18): its
-    // body ships in `baml-bridge` as `baml_sdk.baml.stream.StreamFinished` and
+    AI_STREAM_STREAM,
+    // The stream-done sentinel is runtime-owned: its body ships in
+    // `baml-bridge` as `baml_sdk.ai.stream.Done` and
     // is registered in the typemap by the runtime (TypeRegistry static block),
-    // so the emitter must not also generate a split-package `StreamFinished.java`.
-    "baml.stream.StreamFinished",
+    // so the emitter must not also generate a split-package `Done.java`.
+    AI_STREAM_DONE,
 ];
 
 /// One enum typemap entry: (BAML FQN, Java binary name, per-variant
@@ -96,6 +97,15 @@ struct UnionReg {
 pub fn to_source_code(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    to_source_code_internal(pool, baml_bytecode, None, naming_convention)
+}
+
+fn to_source_code_internal(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     // Only `PreserveCase` is wired up so far.
@@ -384,6 +394,16 @@ pub fn to_source_code(
     let anchor_body = format!(
         "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class {anchor_ident} {{\n    private {anchor_ident}() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
     );
+    let anchor_body = if embedded_baml_toml.is_some() {
+        anchor_body.replace(
+            "            baml_bridge.BamlFfi.initFromBytecode(bytecode);",
+            &format!(
+                "            try (java.io.InputStream manifestIn = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.toml\")) {{\n                if (manifestIn == null) {{\n                    throw new IllegalStateException(\"baml_sdk/inlinedbaml.toml not found on the classpath\");\n                }}\n                String embeddedBamlToml = new String(manifestIn.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);\n                baml_bridge.BamlFfi.initFromBytecode(bytecode, embeddedBamlToml);\n            }}"
+            ),
+        )
+    } else {
+        anchor_body
+    };
     out.insert(
         java_file_path(&root, anchor_ident),
         with_package(&root, &anchor_body),
@@ -397,6 +417,12 @@ pub fn to_source_code(
         PathBuf::from("inlinedbaml.b64"),
         base64_encode(baml_bytecode),
     );
+    if let Some(embedded_baml_toml) = embedded_baml_toml {
+        out.insert(
+            PathBuf::from("inlinedbaml.toml"),
+            embedded_baml_toml.to_string(),
+        );
+    }
 
     // Prepend the do-not-edit banner to every `.java` file.
     for (path, content) in &mut out {
@@ -418,6 +444,20 @@ pub fn to_source_code_with_bytecode(
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     to_source_code(pool, baml_bytecode, naming_convention)
+}
+
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    to_source_code_internal(
+        pool,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        naming_convention,
+    )
 }
 
 /// A structural string token for a type, used ONLY as the emitter-internal
@@ -795,6 +835,48 @@ mod tests {
         assert!(anchor.starts_with("// ---"));
         assert!(anchor.contains("package baml_sdk;"));
         assert!(anchor.contains("public final class Baml {"));
+    }
+
+    #[test]
+    fn class_accessor_escapes_object_final_method_names() {
+        // A field may legally be called `wait`, but its accessor may not:
+        // `wait()` cannot override `java.lang.Object`'s final `wait()`, so the
+        // generated class would not compile. The field keeps its name and the
+        // accessor takes the `$` escape.
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["collide"], "Collide");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(
+                &n,
+                &[],
+                vec![("wait", t_int()), ("notify", t_string()), ("ok", t_int())],
+                0,
+            ),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("collide/Collide.java")];
+
+        // Fields keep the BAML names.
+        assert!(file.contains("private final long wait;"), "{file}");
+        assert!(
+            file.contains("private final java.lang.String notify;"),
+            "{file}"
+        );
+
+        // Accessors are escaped, and read the unescaped field.
+        assert!(file.contains("public long wait$() {"), "{file}");
+        assert!(file.contains("return this.wait;"), "{file}");
+        assert!(
+            file.contains("public java.lang.String notify$() {"),
+            "{file}"
+        );
+
+        // A non-colliding field is untouched.
+        assert!(file.contains("public long ok() {"), "{file}");
+
+        // The un-escaped forms must not be declared as methods.
+        assert!(!file.contains("public long wait() {"), "{file}");
     }
 
     #[test]
@@ -1519,10 +1601,16 @@ mod tests {
         let mut pool = SymbolPool::new();
         let img = name("baml", &["media"], "Image");
         pool.insert(img.clone(), class_sym(&img, &[], 0));
+        let stream = name("ai", &["stream"], "Stream");
+        pool.insert(stream.clone(), class_sym(&stream, &[], 1));
+        let done = name("ai", &["stream"], "Done");
+        pool.insert(done.clone(), class_sym(&done, &[], 2));
         let resp = name("baml", &["http"], "Response");
-        pool.insert(resp.clone(), class_sym(&resp, &[], 1));
+        pool.insert(resp.clone(), class_sym(&resp, &[], 3));
         let out = emit_sdk(&pool);
         assert!(!out.contains_key(&PathBuf::from("baml/media/Image.java")));
+        assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Stream.java")));
+        assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Done.java")));
         assert!(out.contains_key(&PathBuf::from("baml/http/Response.java")));
     }
 

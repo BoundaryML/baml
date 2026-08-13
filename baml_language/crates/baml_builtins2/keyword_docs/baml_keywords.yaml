@@ -320,13 +320,6 @@ testset:
 
     Every leaf gets a canonical ID beginning with `root` (or `root.<namespace>`) and using `::` for testset nesting. For example, the first test above is `root::math suite::adds`. Run `baml test --list` to discover IDs and `baml test --help` for selectors and profiles.
 
-template_string:
-  summary: "Defines a reusable prompt template with Jinja2 syntax."
-  syntax: |
-    template_string Greeting(name: string) #"
-      Hello, {{ name }}! How can I help you?
-    "#
-
 retry_policy:
   summary: "Configures automatic retry behavior for LLM calls."
   syntax: |

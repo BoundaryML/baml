@@ -206,8 +206,6 @@ pub struct CompilationUnit {
     // --- side-table fragments the whole-program passes consume at link ---
     /// This unit's symbolic contribution to its package's structure.
     pub package_fragment: ProgramPackageFrag,
-    /// Pass-5 template-string `{% macro %}` fragments defined in this file.
-    pub template_macros: Vec<String>,
     /// Pass-8 compiled test cases defined in this file.
     pub test_cases: Vec<TestCase>,
     /// `borsh(CallableThrowsFragment)` for this file. Opaque bytes

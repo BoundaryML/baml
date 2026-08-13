@@ -24,7 +24,7 @@ function parse_array_len() -> int {
 }
 
 test "parse_array_of_ints" {
-    assert.is_true(baml.deep_equals(parse_array_len(), 3))
+    assert.equal(parse_array_len(), 3)
 }
 
 // ─── 2.2 Parse then match: array arm ─────────────────────────────────────────
@@ -38,13 +38,13 @@ function parse_then_match_array_len() -> int {
 }
 
 test "parse_then_match_array" {
-    assert.is_true(baml.deep_equals(parse_then_match_array_len(), 3))
+    assert.equal(parse_then_match_array_len(), 3)
 }
 
 // ─── 2.3 Roundtrip: stringify(parse(s)) ──────────────────────────────────────
 
 test "roundtrip_stringify_parse" {
-    assert.is_true(baml.deep_equals(baml.json.stringify(baml.json.parse("[1,2,3]")), "[1,2,3]"))
+    assert.equal(baml.json.stringify(baml.json.parse("[1,2,3]")), "[1,2,3]")
 }
 
 // ─── 2.4 Int/float disambiguation ────────────────────────────────────────────
@@ -57,7 +57,7 @@ function parse_is_int() -> bool {
 }
 
 test "parse_int_disambiguation" {
-    assert.is_true(baml.deep_equals(parse_is_int(), true))
+    assert.is_true(parse_is_int())
 }
 
 function parse_is_float() -> bool {
@@ -68,7 +68,7 @@ function parse_is_float() -> bool {
 }
 
 test "parse_float_disambiguation" {
-    assert.is_true(baml.deep_equals(parse_is_float(), true))
+    assert.is_true(parse_is_float())
 }
 
 // ─── 2.5 Parse throws on garbage input ───────────────────────────────────────
@@ -99,5 +99,5 @@ function roundtrip_nested() -> string {
 }
 
 test "roundtrip_nested_object" {
-    assert.is_true(baml.deep_equals(roundtrip_nested(), "{\"x\":1,\"y\":[2,3]}"))
+    assert.equal(roundtrip_nested(), "{\"x\":1,\"y\":[2,3]}")
 }

@@ -10,8 +10,8 @@
 class Server {
     /// The resolved local address the listener is bound to, e.g.
     /// `"127.0.0.1:54321"`. Use it to discover the port after binding `":0"`.
-    addr: string
-    _state: $rust_type
+    addr: string,
+    _state: $rust_type,
 
     /// Binds a TCP listener on `addr` and returns a `Server` ready to `serve`.
     /// `":0"` (e.g. `"127.0.0.1:0"`) asks the OS for an ephemeral port; the chosen

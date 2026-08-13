@@ -1706,9 +1706,10 @@ mod tests {
 
     #[test]
     fn distinct_recursive_alias_subjects_terminate_not_overflow() {
-        // `type R = Box<R>` vs `type S = Box<S>` grows head-first forever
-        // without repeating a goal; the depth backstop fails closed to
-        // `Unknown` instead of overflowing the stack.
+        // `type R = Box<R>` and `type S = Box<S>` are equirecursively the
+        // SAME type (the mu-automaton's canonical forms coincide), so the
+        // pair is a proven overlap - and the walk terminates instead of
+        // growing head-first forever.
         let r = TypeName::local(Name::new("R"));
         let s = TypeName::local(Name::new("S"));
         let mut aliases = FxHashMap::default();
@@ -1729,7 +1730,7 @@ mod tests {
                 &aliases,
                 &mut bindings,
             ),
-            Overlap::Unknown,
+            Overlap::Yes,
         );
     }
 

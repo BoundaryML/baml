@@ -179,6 +179,65 @@ func Test_canonical_json_class_union_uses_declared_field_codecs(t *testing.T) {
 	}
 }
 
+func Test_host_supplied_json_supports_typed_narrowing(t *testing.T) {
+	// Host-supplied json objects must materialize with `json` container
+	// typing: a `match (j) { let m: map<string, json> => ... }` inside BAML
+	// (and therefore `baml.json.path` / `path_or`) must treat them exactly
+	// like BAML-born `baml.json.parse` values.
+	ctx := context.Background()
+	object := map[string]any{
+		"type": "ok",
+		"nested": map[string]any{
+			"list": []any{int64(1), map[string]any{"deep": "found"}},
+		},
+	}
+
+	kinds := map[string]any{
+		"object": object,
+		"array":  []any{int64(1)},
+		"string": "text",
+		"other":  int64(3),
+	}
+	for want, value := range kinds {
+		got, err := baml_sdk.GoJsonTestsJsonKind(ctx, value)
+		if err != nil || got != want {
+			t.Fatalf("json_kind(%#v) = %q, %v; want %q", value, got, err, want)
+		}
+	}
+
+	got, err := baml_sdk.GoJsonTestsJsonPathString(ctx, object, ".type")
+	if err != nil || got != "ok" {
+		t.Fatalf("json_path_string(.type) = %q, %v; want %q", got, err, "ok")
+	}
+
+	got, err = baml_sdk.GoJsonTestsJsonPathString(ctx, object, ".nested.list[1].deep")
+	if err != nil || got != "found" {
+		t.Fatalf("json_path_string(.nested.list[1].deep) = %q, %v; want %q", got, err, "found")
+	}
+
+	got, err = baml_sdk.GoJsonTestsJsonPathStringOr(ctx, object, ".missing", "fallback")
+	if err != nil || got != "fallback" {
+		t.Fatalf("json_path_string_or(.missing) = %q, %v; want %q", got, err, "fallback")
+	}
+
+	_, err = baml_sdk.GoJsonTestsJsonPathString(ctx, object, ".absent")
+	if err == nil || !strings.Contains(err.Error(), "missing field") {
+		t.Fatalf("json_path_string(.absent) error = %v; want missing-field JsonPathError", err)
+	}
+}
+
+func Test_json_returned_from_host_callback_supports_typed_narrowing(t *testing.T) {
+	// json returned from a host callback converts on the host-return path
+	// (no argument coercion pass); it must narrow identically.
+	ctx := context.Background()
+	got, err := baml_sdk.GoJsonTestsJsonCallbackKind(ctx, func(value any) any {
+		return map[string]any{"wrapped": value}
+	}, "payload")
+	if err != nil || got != "object" {
+		t.Fatalf("json_callback_kind = %q, %v; want %q", got, err, "object")
+	}
+}
+
 func Test_canonical_json_rejects_extensions_before_dispatch(t *testing.T) {
 	ctx := context.Background()
 	invalid := []struct {

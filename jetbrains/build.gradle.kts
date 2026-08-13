@@ -65,8 +65,8 @@ intellijPlatform {
         name = providers.gradleProperty("pluginName")
         version = providers.gradleProperty("pluginVersion")
 
-        // Extract the <!-- Plugin description --> section from README.md and provide for the plugin's manifest
-        description = providers.fileContents(layout.projectDirectory.file("../README.md")).asText.map(::markdownToHTML)
+        // Use the BAML v0 README as the plugin's Marketplace description.
+        description = providers.fileContents(layout.projectDirectory.file("../README.v0.md")).asText.map(::markdownToHTML)
 
         val changelog = project.changelog // local variable for configuration cache compatibility
         // Get the latest available change notes from the changelog file
@@ -103,7 +103,11 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            recommended()
+            if (providers.gradleProperty("verifyDeclaredPlatformOnly").map(String::toBoolean).getOrElse(false)) {
+                ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+            } else {
+                recommended()
+            }
         }
     }
 }

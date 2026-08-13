@@ -14,7 +14,7 @@ pub struct TemplateStringData {
     /// Type references in this template's parameter list. Scoped to the item.
     pub type_refs: TypeRefStore,
     pub params: Vec<FunctionParamData>,
-    /// Template body text (Jinja).
+    /// Legacy template body text retained for parser recovery.
     pub body: Option<String>,
 }
 
@@ -23,6 +23,8 @@ pub struct TemplateStringData {
 pub struct TemplateStringSourceMap {
     /// Full source span of the declaration.
     pub span: TextRange,
+    /// Span of the template string's name token.
+    pub name_span: TextRange,
     /// Spans for every node in [`TemplateStringData::type_refs`].
     pub type_refs: TypeRefSourceMap,
     /// One span per parameter, parallel to [`TemplateStringData::params`].
@@ -52,7 +54,9 @@ fn lower<'db>(
     db: &'db dyn crate::Db,
     template: TemplateStringLoc<'db>,
 ) -> (TemplateStringData, TemplateStringSourceMap) {
-    let item_tree = crate::file_item_tree(db, template.file(db));
+    let file = template.file(db);
+    let item_tree = crate::file_item_tree(db, file);
+    let item_source_map = crate::file_item_tree_source_map(db, file);
     let data = &item_tree[template.id(db)];
 
     let mut type_refs = TypeRefBuilder::new();
@@ -76,6 +80,11 @@ fn lower<'db>(
         },
         TemplateStringSourceMap {
             span: data.span,
+            name_span: item_source_map
+                .template_string_name_spans
+                .get(&template.id(db))
+                .copied()
+                .unwrap_or_else(|| unreachable!("name span recorded at allocation")),
             type_refs: spans,
             param_spans: data.params.iter().map(|param| param.span).collect(),
         },

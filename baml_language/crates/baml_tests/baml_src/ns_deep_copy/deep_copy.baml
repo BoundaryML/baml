@@ -1,4 +1,4 @@
-// Unified tests for deep_copy and deep_equals.
+// Unified tests for `baml.deep_copy` and structural equality (`==`).
 //
 // Converted from crates/baml_tests/tests/deep_copy.rs.
 //
@@ -19,7 +19,7 @@ class Tree {
     children Tree[]
 }
 
-// deep_copy_object: result is structural, compare with deep_equals.
+// deep_copy_object: result is structural, compare with `assert.equal`.
 function deep_copy_object_helper() -> Tree {
     let t = Tree { value: "1", children: [
         Tree { value: "2", children: [] },
@@ -30,13 +30,10 @@ function deep_copy_object_helper() -> Tree {
 }
 
 test "deep_copy_object" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         deep_copy_object_helper(),
-        Tree { value: "1", children: [
-            Tree { value: "2", children: [] },
-            Tree { value: "3", children: [] },
-        ] }
-    ))
+        Tree { value: "1", children: [ Tree { value: "2", children: [] }, Tree { value: "3", children: [] }] },
+    )
 }
 
 // ── deep_copy_independence ────────────────────────────────────────────────────
@@ -58,7 +55,7 @@ function deep_copy_independence_helper() -> int {
 }
 
 test "deep_copy_independence" {
-    assert.is_true(baml.deep_equals(deep_copy_independence_helper(), 2))
+    assert.equal(deep_copy_independence_helper(), 2)
 }
 
 // ── deep_copy_nested_arrays_in_class ─────────────────────────────────────────
@@ -75,7 +72,7 @@ function deep_copy_nested_arrays_helper() -> int {
 }
 
 test "deep_copy_nested_arrays_in_class" {
-    assert.is_true(baml.deep_equals(deep_copy_nested_arrays_helper(), 1))
+    assert.equal(deep_copy_nested_arrays_helper(), 1)
 }
 
 // ── deep_copy_map_in_class ───────────────────────────────────────────────────
@@ -94,7 +91,7 @@ function deep_copy_map_helper() -> int {
 }
 
 test "deep_copy_map_in_class" {
-    assert.is_true(baml.deep_equals(deep_copy_map_helper(), 1))
+    assert.equal(deep_copy_map_helper(), 1)
 }
 
 // ── deep_copy_complex_nested_structure ───────────────────────────────────────
@@ -134,7 +131,7 @@ function deep_copy_complex_helper() -> int {
 }
 
 test "deep_copy_complex_nested_structure" {
-    assert.is_true(baml.deep_equals(deep_copy_complex_helper(), 7))
+    assert.equal(deep_copy_complex_helper(), 7)
 }
 
 // ── deep_copy_circular_reference ─────────────────────────────────────────────
@@ -151,33 +148,33 @@ function deep_copy_circular_helper() -> int {
 }
 
 test "deep_copy_circular_reference" {
-    assert.is_true(baml.deep_equals(deep_copy_circular_helper(), 1))
+    assert.equal(deep_copy_circular_helper(), 1)
 }
 
 // ============================================================================
-// deep_equals tests
+// structural equality (`==`) tests
 // ============================================================================
 
-// Primitives — both locals alias the same constant; deep_equals is true.
-function deep_equals_primitives_helper() -> bool {
+// Primitives — both locals alias the same constant, so they compare equal.
+function eq_primitives_helper() -> bool {
     let a = 42;
     let b = 42;
-    baml.deep_equals(a, b)
+    a == b
 }
 
-test "deep_equals_primitives" {
-    assert.is_true(deep_equals_primitives_helper())
+test "eq_primitives" {
+    assert.is_true(eq_primitives_helper())
 }
 
-// Different primitives — deep_equals returns false.
-function deep_equals_different_primitives_helper() -> bool {
+// Different primitives — they compare unequal.
+function eq_different_primitives_helper() -> bool {
     let a = 42;
     let b = 43;
-    baml.deep_equals(a, b)
+    a == b
 }
 
-test "deep_equals_different_primitives" {
-    assert.is_true(baml.deep_equals(deep_equals_different_primitives_helper(), false))
+test "eq_different_primitives" {
+    assert.is_true(!eq_different_primitives_helper())
 }
 
 // ── simple objects ────────────────────────────────────────────────────────────
@@ -187,49 +184,25 @@ class Point {
     y int
 }
 
-test "deep_equals_simple_objects" {
-    assert.is_true(baml.deep_equals(
-        Point { x: 10, y: 20 },
-        Point { x: 10, y: 20 }
-    ))
+test "eq_simple_objects" {
+    assert.equal(Point { x: 10, y: 20 }, Point { x: 10, y: 20 })
 }
 
-test "deep_equals_different_objects" {
-    assert.is_true(baml.deep_equals(
-        baml.deep_equals(Point { x: 10, y: 20 }, Point { x: 10, y: 21 }),
-        false
-    ))
+test "eq_different_objects" {
+    assert.is_true(Point { x: 10, y: 20 } != Point { x: 10, y: 21 })
 }
 
 // ── nested objects ────────────────────────────────────────────────────────────
 
-test "deep_equals_nested_objects" {
-    assert.is_true(baml.deep_equals(
-        Node { value: 1, children: [
-            Node { value: 2, children: [] },
-            Node { value: 3, children: [] }
-        ] },
-        Node { value: 1, children: [
-            Node { value: 2, children: [] },
-            Node { value: 3, children: [] }
-        ] }
-    ))
+test "eq_nested_objects" {
+    assert.equal(
+        Node { value: 1, children: [ Node { value: 2, children: [] }, Node { value: 3, children: [] } ] },
+        Node { value: 1, children: [ Node { value: 2, children: [] }, Node { value: 3, children: [] } ] },
+    )
 }
 
-test "deep_equals_nested_objects_different" {
-    assert.is_true(baml.deep_equals(
-        baml.deep_equals(
-            Node { value: 1, children: [
-                Node { value: 2, children: [] },
-                Node { value: 3, children: [] }
-            ] },
-            Node { value: 1, children: [
-                Node { value: 2, children: [] },
-                Node { value: 4, children: [] }
-            ] }
-        ),
-        false
-    ))
+test "eq_nested_objects_different" {
+    assert.is_true(Node { value: 1, children: [ Node { value: 2, children: [] }, Node { value: 3, children: [] } ] } != Node { value: 1, children: [ Node { value: 2, children: [] }, Node { value: 4, children: [] } ] })
 }
 
 // ── container with arrays ─────────────────────────────────────────────────────
@@ -238,11 +211,8 @@ class ArrayContainer {
     data int[]
 }
 
-test "deep_equals_with_arrays" {
-    assert.is_true(baml.deep_equals(
-        ArrayContainer { data: [1, 2, 3, 4] },
-        ArrayContainer { data: [1, 2, 3, 4] }
-    ))
+test "eq_with_arrays" {
+    assert.equal(ArrayContainer { data: [1, 2, 3, 4] }, ArrayContainer { data: [1, 2, 3, 4] })
 }
 
 // ── container with maps ───────────────────────────────────────────────────────
@@ -251,27 +221,27 @@ class MapContainer {
     values map<string, int>
 }
 
-test "deep_equals_with_maps" {
-    assert.is_true(baml.deep_equals(
+test "eq_with_maps" {
+    assert.equal(
         MapContainer { values: {"a": 1, "b": 2} },
-        MapContainer { values: {"a": 1, "b": 2} }
-    ))
+        MapContainer { values: {"a": 1, "b": 2} },
+    )
 }
 
 // ── same reference ────────────────────────────────────────────────────────────
 
-function deep_equals_same_reference_helper() -> bool {
+function eq_same_reference_helper() -> bool {
     let n = Node { value: 1, children: [] };
-    baml.deep_equals(n, n)
+    n == n
 }
 
-test "deep_equals_same_reference" {
-    assert.is_true(deep_equals_same_reference_helper())
+test "eq_same_reference" {
+    assert.is_true(eq_same_reference_helper())
 }
 
 // ── circular structures ───────────────────────────────────────────────────────
 
-function deep_equals_circular_helper() -> bool {
+function eq_circular_helper() -> bool {
     let a1 = Node { value: 1, children: [] };
     let b1 = Node { value: 2, children: [a1] };
     a1.children = [b1];
@@ -280,9 +250,9 @@ function deep_equals_circular_helper() -> bool {
     let b2 = Node { value: 2, children: [a2] };
     a2.children = [b2];
 
-    baml.deep_equals(a1, a2)
+    a1 == a2
 }
 
-test "deep_equals_circular_structure" {
-    assert.is_true(deep_equals_circular_helper())
+test "eq_circular_structure" {
+    assert.is_true(eq_circular_helper())
 }

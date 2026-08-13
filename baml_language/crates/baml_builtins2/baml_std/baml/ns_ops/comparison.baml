@@ -47,6 +47,7 @@ implement Equals for int {
         $rust_function
     }
 }
+
 implement Compare for int {
     function lt(self, other: Self) -> bool throws never {
         $rust_function
@@ -58,6 +59,7 @@ implement Equals for bigint {
         $rust_function
     }
 }
+
 implement Compare for bigint {
     function lt(self, other: Self) -> bool throws never {
         $rust_function
@@ -69,6 +71,7 @@ implement Equals for float {
         $rust_function
     }
 }
+
 implement Compare for float {
     function lt(self, other: Self) -> bool throws never {
         $rust_function
@@ -89,6 +92,7 @@ implement Equals for bool {
         $rust_function
     }
 }
+
 implement Compare for bool {
     function lt(self, other: Self) -> bool throws never {
         !self && other
@@ -114,6 +118,7 @@ implement Equals for string {
         $rust_function
     }
 }
+
 implement Compare for string {
     /// In lexicographic order.
     function lt(self, other: Self) -> bool throws never {

@@ -37,6 +37,7 @@ import {
   hasContent,
 } from "@/lib/import-utils";
 import { isReservedPageSlug } from "@/lib/bep-routes";
+import { pageExportPath } from "@/lib/export-utils";
 import type { VersionMode } from "@/lib/types";
 
 interface BepImportDialogProps {
@@ -113,21 +114,22 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
 
         // Determine file type based on path
         const isReadme = innerPath.toLowerCase() === "readme.md";
-        // Direct children of pages/ (pages/foo.md) or one level of nesting
-        // (pages/design/api.md → parentSlug "design")
+        // Any .md under pages/, at arbitrary depth: pages/foo.md,
+        // pages/design/api.md, pages/design/api/v2.md, ...
         const inPagesDir = innerPath.toLowerCase().startsWith("pages/");
-        const isPage = inPagesDir && pathParts.length === 3;
-        const isNestedPage = inPagesDir && pathParts.length === 4;
+        const isPage = inPagesDir && pathParts.length >= 3;
 
-        // Skip files that aren't README or in pages/ (deeper nesting is unsupported)
-        if (!isReadme && !isPage && !isNestedPage) {
+        // Skip files that aren't README or in pages/
+        if (!isReadme && !isPage) {
           continue;
         }
 
-        // Parent slug comes from the subdirectory name
-        const parentSlug = isNestedPage
-          ? sanitizeSlug(pathParts[2])
-          : undefined;
+        // Parent slug comes from the immediate containing directory
+        // (pages/design/api.md → "design"; pages/a/b/c.md → "b")
+        const parentSlug =
+          isPage && pathParts.length > 3
+            ? sanitizeSlug(pathParts[pathParts.length - 2])
+            : undefined;
 
         try {
           const text = await file.text();
@@ -452,8 +454,8 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Select the exported BEP folder (e.g., BEP-001). Will import
-              README.md and files from pages/, including one level of
-              subfolders (e.g., pages/design/api.md).
+              README.md and files from pages/, including nested subfolders
+              at any depth (e.g., pages/design/api/v2.md).
             </p>
           </div>
 
@@ -533,7 +535,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-destructive/70" />
                       <span className="font-medium text-destructive">
-                        pages/{page.parentSlug ? `${page.parentSlug}/` : ""}{page.slug}.md
+                        {pageExportPath(page, bepData?.pages ?? [])}
                       </span>
                       <Badge variant="outline" className="font-mono text-xs text-destructive border-destructive/50">
                         {page.slug}

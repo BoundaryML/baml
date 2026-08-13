@@ -1,45 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4144
 ---
 === MIR2 ===
-fn user.Fast$new(lenient: bool) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: bool // lenient // param
-    let _2: baml.llm.PrimitiveClientOptions
-    let _3: string
-    let _4: map<string, string>
-    let _5: map<string, string>
-    let _6: map<string, unknown>
-
-    bb0: {
-        _3 = call const fn baml.env.get_or_panic_lenient(const "OPENAI_API_KEY", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _4 = {  }: map<string, string>;
-        _5 = {  }: map<string, string>;
-        _6 = {  }: map<string, unknown>;
-        _2 = baml.llm.PrimitiveClientOptions { const "gpt-4o-mini", const null, const null, const null, const null, const null, const null, const null, const null, copy _3, const null, const null, copy _4, copy _5, copy _6 };
-        _0 = baml.llm.PrimitiveClient { const "Fast", const "openai", copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.Greet(name: string, client: baml.llm.Client) -> string {
+fn user.Greet(name: string, client: null | ai.Client) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
+    let _1: string // name // param
+    let _2: null | ai.Client // client // param
     let _3: bool
-    let _4: map<string, unknown>
-    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
-    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
-    let _7: type
+    let _4: ai.RunResult<string>
+    let _5: ai.Agent<string>
+    let _6: type
+    let _7: ai.FunctionSpec<string>
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -47,253 +20,74 @@ fn user.Greet(name: string, client: baml.llm.Client) -> string {
     }
 
     bb1: {
-        _2 = const item user.Fast;
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "name": copy _1 }: map<string, unknown>;
-        _6 = make_closure lambda[0](copy _1);
-        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
+        _6 = load_type(string);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _7 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _7>(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
+        _7 = call const fn user.Greet$spec(copy _1) -> [bb4];
     }
 
     bb4: {
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
 
-// lambda[0]
-fn .<tagged(Greet, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: (string) -> baml.llm.Role throws never // role // param
-    let _2: baml.llm.Context // ctx // param
-    let _3: string[] // __tt_parts
-    let _4: string
-    let _5: unknown[] // __tt_values
-
-    bb0: {
-        _3 = [const "Say hello to ", const "."]: string[];
-        _4 = copy capture[0];
-        _5 = [copy _4]: unknown[];
-        _0 = baml.TaggedString { copy _3, copy _5 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Greet$build_request(name: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
-    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const item user.Fast;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "name": copy _1 }: map<string, unknown>;
-        _6 = make_closure lambda[0](copy _1);
-        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
-    }
-
-    bb3: {
-        _0 = call const fn baml.llm.build_request(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<tagged(Greet$build_request, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: (string) -> baml.llm.Role throws never // role // param
-    let _2: baml.llm.Context // ctx // param
-    let _3: string[] // __tt_parts
-    let _4: string
-    let _5: unknown[] // __tt_values
-
-    bb0: {
-        _3 = [const "Say hello to ", const "."]: string[];
-        _4 = copy capture[0];
-        _5 = [copy _4]: unknown[];
-        _0 = baml.TaggedString { copy _3, copy _5 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Greet$build_request_stream(name: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
-    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const item user.Fast;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "name": copy _1 }: map<string, unknown>;
-        _6 = make_closure lambda[0](copy _1);
-        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
-    }
-
-    bb3: {
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<tagged(Greet$build_request_stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: (string) -> baml.llm.Role throws never // role // param
-    let _2: baml.llm.Context // ctx // param
-    let _3: string[] // __tt_parts
-    let _4: string
-    let _5: unknown[] // __tt_values
-
-    bb0: {
-        _3 = [const "Say hello to ", const "."]: string[];
-        _4 = copy capture[0];
-        _5 = [copy _4]: unknown[];
-        _0 = baml.TaggedString { copy _3, copy _5 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Greet$parse(json: string, client: baml.llm.Client) -> string {
+fn user.Greet$parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: type
-    let _5: type
+    let _2: type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _2 = const item user.Fast;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = load_type(string | null);
-        _5 = load_type(string);
-        _0 = call const fn baml.llm.parse<copy _4, copy _5>(copy _1) -> [bb3];
-    }
-
-    bb3: {
         return;
     }
 }
 
-fn user.Greet$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+fn user.Greet$render_prompt(name: string) -> ai.Prompt {
     // Locals:
-    let _0: baml.llm.Stream<string | null, string> // _0 // return
-    let _1: baml.http.SseStream // sse // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
+    let _0: ai.Prompt // _0 // return
+    let _1: string // name // param
+    let _2: ai.FunctionSpec<string>
+    let _3: string
     let _4: type
     let _5: type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = call const fn user.Greet$spec(copy _1) -> [bb1];
     }
 
     bb1: {
-        _2 = const item user.Fast;
+        _4 = load_type(string);
         goto -> bb2;
     }
 
     bb2: {
-        _4 = load_type(string | null);
+        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
+    }
+
+    bb3: {
         _5 = load_type(string);
-        _0 = call const fn baml.llm.Client.__make_stream<copy _4, copy _5>(copy _2, copy _1) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
-    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const item user.Fast;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "name": copy _1 }: map<string, unknown>;
-        _6 = make_closure lambda[0](copy _1);
-        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
-    }
-
-    bb3: {
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
+        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
     }
 
     bb4: {
@@ -301,61 +95,98 @@ fn user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml.llm.P
     }
 }
 
-// lambda[0]
-fn .<tagged(Greet$render_prompt, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+fn user.Greet$spec(name: string) -> ai.FunctionSpec<string> {
     // Locals:
-    let _0: null // _0 // return
-    let _1: (string) -> baml.llm.Role throws never // role // param
-    let _2: baml.llm.Context // ctx // param
-    let _3: string[] // __tt_parts
-    let _4: string
-    let _5: unknown[] // __tt_values
-
-    bb0: {
-        _3 = [const "Say hello to ", const "."]: string[];
-        _4 = copy capture[0];
-        _5 = [copy _4]: unknown[];
-        _0 = baml.TaggedString { copy _3, copy _5 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Greet$stream(name: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
-    // Locals:
-    let _0: baml.llm.Stream<string | null, string> // _0 // return
+    let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
-    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
-    let _7: type
-    let _8: type
+    let _2: map<string, unknown>
+    let _3: (string) -> ai.Prompt throws never
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = { const "name": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
     bb1: {
-        _2 = const item user.Fast;
+        _0 = ai.FunctionSpec<string> { const "Greet", copy _2, copy _3, copy _4, const item user.Fast };
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "name": copy _1 }: map<string, unknown>;
-        _6 = make_closure lambda[0](copy _1);
-        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(Greet$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: string
+    let _7: int
+    let _8: string[]
+    let _9: string
+    let _10: type
+    let _11: int
+    let _12: unknown[]
+    let _13: string
+    let _14: type
+    let _15: int
+    let _16: string[]
+    let _17: "."
+    let _18: type
+    let _19: string[]
+    let _20: unknown[]
+    let _21: string[]
+    let _22: baml.TaggedString
+    let _23: unknown[]
+    let _24: baml.TaggedString
+
+    bb0: {
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _6 = copy _5;
+        _5 = copy _6 + const "Say hello to ";
+        _8 = copy _3;
+        _9 = copy _5;
+        _10 = load_type(string);
+        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
+    }
+
+    bb1: {
+        _5 = const "";
+        _12 = copy _4;
+        _13 = copy capture[0];
+        _14 = load_type(unknown);
+        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
+    }
+
+    bb2: {
+        _5 = const ".";
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
     }
 
     bb3: {
-        _7 = load_type(string | null);
-        _8 = load_type(string);
-        _0 = call const fn baml.llm.stream_llm_function<copy _7, copy _8>(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
+        _19 = copy _3;
+        _20 = copy _4;
+        _2 = baml.TaggedString { copy _19, copy _20 };
+        _22 = copy _2;
+        _21 = copy _22.0;
+        _24 = copy _2;
+        _23 = copy _24.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
     }
 
     bb4: {
@@ -363,25 +194,59 @@ fn user.Greet$stream(name: string, client: baml.llm.Client) -> baml.llm.Stream<s
     }
 }
 
-// lambda[0]
-fn .<tagged(Greet$stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+fn user.Greet$stream(name: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string | null, string> {
     // Locals:
-    let _0: null // _0 // return
-    let _1: (string) -> baml.llm.Role throws never // role // param
-    let _2: baml.llm.Context // ctx // param
-    let _3: string[] // __tt_parts
-    let _4: string
-    let _5: unknown[] // __tt_values
+    let _0: ai.stream.Stream<string | null, string> // _0 // return
+    let _1: string // name // param
+    let _2: null | ai.stream.StreamingClient // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+    let _6: type
 
     bb0: {
-        _3 = [const "Say hello to ", const "."]: string[];
-        _4 = copy capture[0];
-        _5 = [copy _4]: unknown[];
-        _0 = baml.TaggedString { copy _3, copy _5 };
-        goto -> bb1;
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.Greet$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string | null);
+        _6 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.Header(title: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // title // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(string);
+        _2 = call const fn baml.String.from<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const "# " + copy _2;
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }

@@ -134,16 +134,17 @@ pub fn impl_facts<'db>(
                 let class_data = baml_compiler2_ppir::item_data::class_data(db, *class);
                 let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(frame.clone());
                 let bounds = class_data
-                    .generic_param_bounds
+                    .generic_params
                     .iter()
-                    .map(|bound| {
-                        bound
-                            .and_then(|type_ref| {
+                    .map(|declared| {
+                        declared
+                            .bounds
+                            .iter()
+                            .filter_map(|&type_ref| {
                                 InterfaceRef::of_ty(
                                     &ctx.lower_type_ref(&class_data.type_refs, type_ref),
                                 )
                             })
-                            .into_iter()
                             .collect()
                     })
                     .collect();

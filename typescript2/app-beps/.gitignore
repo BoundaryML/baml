@@ -20,6 +20,9 @@
 # production
 /build
 
+# generated BAML SDK
+/baml_sdk/
+
 # misc
 .DS_Store
 *.pem

@@ -88,6 +88,25 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 
 //----
 //- diagnostics
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[class_map_types.baml:3:1]
+//  3 │ ╭─▶ client<llm> MyClient {
+//  4 │ │     provider openai
+//  5 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────
+// E0010
+//
+//   × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
+//     ╭─[class_map_types.baml:29:10]
+//  29 │ ╭─▶   prompt #"
+//  30 │ │       Merge these: {{i1}} {{i2}}
+//  31 │ ├─▶   "#
+//     · ╰──── use a backtick prompt instead
+//     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `MapDummy`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`

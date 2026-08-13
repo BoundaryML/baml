@@ -1650,14 +1650,15 @@ mod tests {
     }
 
     #[test]
-    fn distinct_recursive_alias_subjects_terminate_not_overflow() {
+    fn distinct_recursive_alias_subjects_overlap() {
         // Two *distinct* recursive aliases as impl subjects — `type R = Box<R>` and
-        // `type S = Box<S>` — expand head-first forever: `Box<R>` and `Box<S>` never
-        // normalize equal (their Mu binders carry the distinct alias names), so the
-        // structural `Class` arm keeps descending on the args. The depth backstop must
-        // catch this and fail closed to `Overlap::Unknown` ("too complex to prove
-        // disjoint"), rather than overflowing the stack — which is sound: the pair is
-        // rejected, and these aliases in fact denote the same type.
+        // `type S = Box<S>` — denote the same type: recursive aliases are
+        // equirecursive, and the canonical algebra's de Bruijn μ-binders make
+        // `equivalent` α-invariant, so the alias-equality check inside `unify_into`
+        // answers before the structural `Class` arm would descend head-first into
+        // the expansions. Coherence therefore reports the overlap precisely
+        // (`Overlap::Yes`) instead of failing closed on a depth backstop — the same
+        // rejection, now for the right reason.
         let r = TypeName::local(Name::new("R"));
         let s = TypeName::local(Name::new("S"));
         let mut aliases = std::collections::HashMap::default();
@@ -1678,7 +1679,68 @@ mod tests {
                 &aliases,
                 &mut bindings,
             ),
-            Overlap::Unknown,
+            Overlap::Yes,
+        );
+    }
+
+    #[test]
+    fn complete_bool_literal_union_subject_overlaps_bool() {
+        // `implements I for true | false` and `implements I for bool` name the
+        // same subject: `nf` folds the complete literal pair, so unification
+        // reports the overlap that the (normalize-aligned) coherence gate now
+        // forwards here instead of dropping on the raw union head.
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(
+                &Ty::bool(),
+                &Ty::Union(
+                    vec![bool_literal(true), bool_literal(false)],
+                    TyAttr::default(),
+                ),
+                &[],
+                &aliases,
+                &mut bindings,
+            ),
+            Overlap::Yes,
+        );
+    }
+
+    #[test]
+    fn distinct_recursive_alias_subjects_are_disjoint() {
+        // Genuinely different recursive trees (`type R = Box<R>` vs
+        // `type S = Box<Pair<S, int>>`) differ at a finite depth, so the
+        // structural descent expands through the aliases and proves
+        // disjointness without needing the depth backstop — the α-equivalent
+        // same-tree case is answered by `equivalent` before any descent (see
+        // `distinct_recursive_alias_subjects_overlap`).
+        let r = TypeName::local(Name::new("R"));
+        let s = TypeName::local(Name::new("S"));
+        let mut aliases = std::collections::HashMap::default();
+        aliases.insert(
+            r.clone(),
+            Ty::user_class_with_args("Box", vec![Ty::TypeAlias(r.clone(), TyAttr::default())]),
+        );
+        aliases.insert(
+            s.clone(),
+            Ty::user_class_with_args(
+                "Box",
+                vec![Ty::user_class_with_args(
+                    "Pair",
+                    vec![Ty::TypeAlias(s.clone(), TyAttr::default()), Ty::int()],
+                )],
+            ),
+        );
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(
+                &Ty::TypeAlias(r, TyAttr::default()),
+                &Ty::TypeAlias(s, TyAttr::default()),
+                &[],
+                &aliases,
+                &mut bindings,
+            ),
+            Overlap::No,
         );
     }
 

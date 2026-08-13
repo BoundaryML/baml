@@ -150,10 +150,9 @@ function instantiation_expr.identity_deep_copy_equal() -> bool {
     load_const user.instantiation_expr.identity<...>
     call baml.deep_copy
     store_var _3
-    load_type (int) -> int throws never
     load_const user.instantiation_expr.identity<...>
     load_var _3
-    call baml.deep_equals
+    call baml.ops.equals_equals
     return
 }
 
@@ -165,10 +164,9 @@ function instantiation_expr.identity_int_value_fn() -> int {
 }
 
 function instantiation_expr.identity_same_specialization() -> bool {
-    load_type (int) -> int throws never
     load_const user.instantiation_expr.identity<...>
     load_const user.instantiation_expr.identity<...>
-    call baml.deep_equals
+    call baml.ops.equals_equals
     return
 }
 

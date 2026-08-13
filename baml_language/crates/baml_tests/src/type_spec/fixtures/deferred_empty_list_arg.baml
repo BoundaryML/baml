@@ -7,9 +7,12 @@ function del_empty_arg() -> int[] throws never {
      // ^^^^^^ int[]
     joined
 }
+function del_eq<T>(a: T, b: T) -> bool throws never {
+    true
+}
 function del_empty_deep() -> bool throws never {
     let xs = [1, 2]
-    let same = baml.deep_equals(xs, [])
+    let same = del_eq(xs, [])
      // ^^^^ bool
     same
 }

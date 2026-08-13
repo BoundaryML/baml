@@ -694,38 +694,78 @@ impl Continuation for FlatMapContinuation {
 
 // ─── Array.sort_by continuation ─────────────────────────────────────────────
 
-/// CPS insertion sort: builds `sorted` one element at a time, yielding to the
-/// BAML comparator for each `(current, sorted[insert_idx])` pair. The receiver
-/// is only written back once the whole sort completes, so a throwing
-/// comparator leaves the array in its pre-sort state.
+/// CPS bottom-up merge sort. A native Rust `slice::sort_by` cannot be used here
+/// because a BAML comparator may yield back into the VM. Each merge comparison
+/// therefore crosses the VM trampoline, while the merge passes retain stable
+/// O(n log n) behavior.
+///
+/// `source` is the immutable input for the current pass and `merged` receives
+/// complete runs. The two vectors are swapped only after a pass completes. The
+/// buffers are reused for every pass, keeping auxiliary storage at O(n). The
+/// receiver is written back only once the entire sort succeeds, so a throwing
+/// comparator leaves it in its pre-sort state.
 struct SortByContinuation {
     receiver: Value,
     f_ptr: HeapPtr,
-    items: Vec<Value>,
-    next_idx: usize,
-    sorted: Vec<Value>,
-    insert_idx: usize,
-    current: Value,
+    source: Vec<Value>,
+    merged: Vec<Value>,
+    width: usize,
+    run_start: usize,
+    left: usize,
+    middle: usize,
+    right: usize,
+    run_end: usize,
 }
 
 impl SortByContinuation {
-    fn advance_or_finish(mut self: Box<Self>, vm: &mut BexVm) -> NativeCallResult {
-        if self.next_idx >= self.items.len() {
-            return write_back_array_result(vm, self.receiver, self.sorted);
+    /// Advance through already-exhausted runs and yield the next comparison.
+    /// Equal elements are taken from the left run by `call`, preserving the
+    /// original relative order.
+    fn advance(mut self: Box<Self>, vm: &mut BexVm) -> NativeCallResult {
+        loop {
+            if self.left < self.middle && self.right < self.run_end {
+                return NativeCallResult::YieldToCall {
+                    callee: self.f_ptr,
+                    args: vec![self.source[self.left], self.source[self.right]],
+                    type_args: vec![],
+                    continuation: self,
+                };
+            }
+
+            self.merged
+                .extend_from_slice(&self.source[self.left..self.middle]);
+            self.merged
+                .extend_from_slice(&self.source[self.right..self.run_end]);
+
+            self.run_start = self.run_end;
+            if self.run_start < self.source.len() {
+                self.set_current_run();
+                continue;
+            }
+
+            std::mem::swap(&mut self.source, &mut self.merged);
+            self.merged.clear();
+            self.width = self.width.saturating_mul(2);
+            if self.width >= self.source.len() {
+                return write_back_array_result(vm, self.receiver, self.source);
+            }
+
+            self.run_start = 0;
+            self.set_current_run();
         }
-        self.current = self.items[self.next_idx];
-        self.next_idx += 1;
-        self.insert_idx = 0;
-        self.yield_compare()
     }
 
-    fn yield_compare(self: Box<Self>) -> NativeCallResult {
-        NativeCallResult::YieldToCall {
-            callee: self.f_ptr,
-            args: vec![self.current, self.sorted[self.insert_idx]],
-            type_args: vec![],
-            continuation: self,
-        }
+    fn set_current_run(&mut self) {
+        self.left = self.run_start;
+        self.middle = self
+            .run_start
+            .saturating_add(self.width)
+            .min(self.source.len());
+        self.right = self.middle;
+        self.run_end = self
+            .middle
+            .saturating_add(self.width)
+            .min(self.source.len());
     }
 }
 
@@ -735,32 +775,29 @@ impl Continuation for SortByContinuation {
             Ok(i) => i,
             Err(e) => return e,
         };
-        if cmp < 0 {
-            self.sorted.insert(self.insert_idx, self.current);
-            return self.advance_or_finish(vm);
+        if cmp <= 0 {
+            self.merged.push(self.source[self.left]);
+            self.left += 1;
+        } else {
+            self.merged.push(self.source[self.right]);
+            self.right += 1;
         }
-        self.insert_idx += 1;
-        if self.insert_idx >= self.sorted.len() {
-            self.sorted.push(self.current);
-            return self.advance_or_finish(vm);
-        }
-        self.yield_compare()
+        self.advance(vm)
     }
 
     fn gc_roots(&self) -> Vec<HeapPtr> {
         let mut roots = vec![self.f_ptr];
-        collect_value_roots(&[self.receiver, self.current], &mut roots);
-        collect_value_roots(&self.items, &mut roots);
-        collect_value_roots(&self.sorted, &mut roots);
+        collect_value_roots(std::slice::from_ref(&self.receiver), &mut roots);
+        collect_value_roots(&self.source, &mut roots);
+        collect_value_roots(&self.merged, &mut roots);
         roots
     }
 
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         forward_ptr(&mut self.f_ptr, forwarding);
         forward_values(std::slice::from_mut(&mut self.receiver), forwarding);
-        forward_values(std::slice::from_mut(&mut self.current), forwarding);
-        forward_values(&mut self.items, forwarding);
-        forward_values(&mut self.sorted, forwarding);
+        forward_values(&mut self.source, forwarding);
+        forward_values(&mut self.merged, forwarding);
     }
 }
 
@@ -913,22 +950,20 @@ impl BamlClassArray for PackageBamlImpl {
         if items.len() <= 1 {
             return write_back_array_result(vm, *array, items);
         }
-        let first_sorted = items[0];
-        let first_current = items[1];
-        NativeCallResult::YieldToCall {
-            callee: f_ptr,
-            args: vec![first_current, first_sorted],
-            type_args: vec![],
-            continuation: Box::new(SortByContinuation {
-                receiver: *array,
-                f_ptr,
-                items,
-                next_idx: 2,
-                sorted: vec![first_sorted],
-                insert_idx: 0,
-                current: first_current,
-            }),
-        }
+        let capacity = items.len();
+        Box::new(SortByContinuation {
+            receiver: *array,
+            f_ptr,
+            source: items,
+            merged: Vec::with_capacity(capacity),
+            width: 1,
+            run_start: 0,
+            left: 0,
+            middle: 1,
+            right: 1,
+            run_end: 2,
+        })
+        .advance(vm)
     }
 
     fn map(vm: &mut BexVm, array: ArrayView<'_>, f: &Value) -> NativeCallResult {

@@ -89,3 +89,99 @@ pub fn callable_throws<'db>(
     );
     CallableThrows(result.throws.to_plain())
 }
+
+/// Declaration-site resolved signature of a function or method, as the
+/// tooling surface consumes it: plain types, OWN generic parameters only,
+/// the declared throws kept separate from the inferred effect.
+///
+/// A view over [`crate::lower::function_signature`] (the one signature
+/// road), so `Self`, projections, and bounds resolve exactly as the type
+/// provider sees them - for class methods, interface default methods, and
+/// free-impl methods alike (`owner_self_ty` / `owner_impl_target` bind
+/// `Self` in every owner position).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionSignatureTy {
+    /// Every parameter, `self` included; a defaulted parameter is
+    /// [`baml_type::FunctionParamMode::Optional`].
+    pub params: Vec<baml_type::FunctionParamTy>,
+    /// The declared return type; `Ty::Error` when unwritten.
+    pub return_type: baml_type::Ty,
+    /// The written `throws` clause; `None` when omitted (the effective
+    /// contract is then [`callable_throws`]' inferred one).
+    pub declared_throws: Option<baml_type::Ty>,
+    /// The function's OWN generic parameters: its frame minus the enclosing
+    /// type's prefix (class frame, interface frame incl. `Self` and the
+    /// associated slots, or free-impl frame).
+    pub generic_params: Vec<baml_type::ParamTy>,
+    /// `Some` for builtin-bodied functions.
+    pub builtin_kind: Option<baml_compiler2_ast::BuiltinKind>,
+}
+
+// SAFETY: `maybe_update` transfers ownership of `new_value` into
+// `old_pointer` and reports change via `PartialEq` for early cutoff -
+// the `CallableThrows` precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FunctionSignatureTy {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid and initialized, per the trait
+        // contract.
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+/// The enclosing type's generic-frame prefix length for a method's frame;
+/// 0 for a free function.
+fn enclosing_param_count<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> usize {
+    use baml_compiler2_ppir::item_data::MethodOwner;
+    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+        Some(MethodOwner::Class(class)) => crate::lower::class_generic_frame(db, class).len(),
+        Some(MethodOwner::Interface(iface)) => crate::lower::interface_frame(db, iface).len(),
+        Some(MethodOwner::FreeImpl(imp)) => crate::lower::impl_frame(db, imp).len(),
+        None => 0,
+    }
+}
+
+#[salsa::tracked(returns(ref))]
+pub fn function_signature_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FunctionSignatureTy {
+    let sig = crate::lower::function_signature(db, function);
+    let enclosing = enclosing_param_count(db, function);
+    let params = sig
+        .params
+        .iter()
+        .map(|param| baml_type::FunctionParamTy {
+            name: Some(param.name.clone()),
+            ty: param.ty.to_plain(),
+            mode: if param.has_default {
+                baml_type::FunctionParamMode::Optional
+            } else {
+                baml_type::FunctionParamMode::Required
+            },
+        })
+        .collect();
+    let builtin_kind = match baml_compiler2_ppir::function_body(db, function).as_ref() {
+        baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
+        _ => None,
+    };
+    FunctionSignatureTy {
+        params,
+        return_type: sig.ret.to_plain(),
+        declared_throws: sig.throws_declared.then(|| sig.throws.to_plain()),
+        generic_params: sig.generic_params[enclosing.min(sig.generic_params.len())..].to_vec(),
+        builtin_kind,
+    }
+}

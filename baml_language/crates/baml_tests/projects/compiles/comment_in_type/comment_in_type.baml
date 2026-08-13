@@ -1,8 +1,6 @@
 // Test case for comments in type positions
 
-client<llm> TestClient {
-  provider openai
-}
+client TestClient = openai.OpenAiClient.new();
 
 // This function has comments around the return type
 function FunctionWithComments(
@@ -16,12 +14,12 @@ string
 // Comment after return type
 {
   client TestClient
-  prompt #"test"#
+  prompt `test`
 }
 
 // Another test - comment immediately after arrow
 function CommentAfterArrow() -> // inline comment
 string {
   client TestClient
-  prompt #"test"#
+  prompt `test`
 }

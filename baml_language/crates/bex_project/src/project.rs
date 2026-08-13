@@ -1071,6 +1071,22 @@ impl BexProject {
             .unwrap_or(0)
     }
 
+    /// Runtime status for a source revision already captured under a caller's
+    /// source lease. This avoids re-locking the source gate while that lease
+    /// is held.
+    pub(crate) fn runtime_status_for_source(&self, source_revision: SourceRevision) -> (bool, u64) {
+        let Ok(runtime) = self.lock_runtime() else {
+            return (false, 0);
+        };
+        let Some(installed) = runtime.installed.as_ref() else {
+            return (false, 0);
+        };
+        (
+            installed.source_revision == source_revision,
+            installed.generation,
+        )
+    }
+
     /// Latest installed engine regardless of currentness (playground render
     /// paths that tolerate a stale engine; run launch uses
     /// [`Self::prepare_function_run`] instead).

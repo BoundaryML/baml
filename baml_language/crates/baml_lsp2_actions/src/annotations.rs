@@ -402,7 +402,7 @@ mod tests {
             r##"
 function Summarize(input: string) -> string {
     client GPT4
-    prompt #"Summarize {{ input }}"#
+    prompt `Summarize ${input}`
 }
 
 function Echo(x: string) -> string {

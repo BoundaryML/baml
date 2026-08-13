@@ -756,8 +756,12 @@ function csv.csv_bom_stripped_by_default() -> string {
 }
 
 function csv.csv_caller_owned_handles_stay_open() -> string {
-    call baml.sys.now_ms
-    call baml.json.stringify
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
     store_var _3
     load_const "/tmp/baml_csv_caller_owned_"
     load_var _3
@@ -862,8 +866,12 @@ function csv.csv_comment_lines() -> string {
 }
 
 function csv.csv_create_then_fs_read() -> string {
-    call baml.sys.now_ms
-    call baml.json.stringify
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
     store_var _3
     load_const "/tmp/baml_csv_create_read_"
     load_var _3
@@ -1854,8 +1862,12 @@ function csv.csv_excel_profile() -> string {
 }
 
 function csv.csv_file_roundtrip() -> string {
-    call baml.sys.now_ms
-    call baml.json.stringify
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
     store_var _3
     load_const "/tmp/baml_csv_file_roundtrip_"
     load_var _3
@@ -1885,20 +1897,20 @@ function csv.csv_file_roundtrip() -> string {
     load_var back
     load_const 0
     call baml.Array.at
-    store_var _15
-    load_var _15
+    store_var _17
+    load_var _17
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
   L0:
-    load_var _15
+    load_var _17
     load_field .note
-    store_var _19
-    load_var _19
+    store_var _21
+    load_var _21
     store_var first_note
-    load_var _19
+    load_var _21
     load_const null
     cmp_op ==
     pop_jump_if_false L2
@@ -1918,17 +1930,17 @@ function csv.csv_file_roundtrip() -> string {
     load_const 0
     cmp_int_op >
     call baml.json.stringify
-    store_var _26
+    store_var _28
     load_var back
     container_len
-    store_var _30
-    load_var _30
+    store_var _32
+    load_var _32
     call baml.json.stringify
-    store_var _29
-    load_var _26
+    store_var _31
+    load_var _28
     load_const ":"
     bin_op +
-    load_var _29
+    load_var _31
     bin_op +
     load_const ":"
     bin_op +
@@ -2780,8 +2792,12 @@ function csv.csv_on_skip_observer() -> string {
 }
 
 function csv.csv_open_streams_file() -> string {
-    call baml.sys.now_ms
-    call baml.json.stringify
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
     store_var _3
     load_const "/tmp/baml_csv_open_streams_"
     load_var _3
@@ -2804,21 +2820,21 @@ function csv.csv_open_streams_file() -> string {
     load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _12
+    store_var _14
 
   L0:
-    load_var _12
+    load_var _14
     load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _13
-    load_var _13
+    store_var _15
+    load_var _15
     is_type baml.iter.Done
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_var2 4 6
+    load_var2 5 7
     load_field .n
     add_int
     store_var total
@@ -5994,8 +6010,12 @@ function csv.csv_writer_state_survives_encode_error() -> string {
 }
 
 function csv.csv_writer_text_on_file_writer_throws() -> string {
-    call baml.sys.now_ms
-    call baml.json.stringify
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
     store_var _3
     load_const "/tmp/baml_csv_text_on_file_"
     load_var _3

@@ -2468,6 +2468,7 @@ async fn handle_ws_in_message(
         WsInMessage::RequestControlFlowGraph {
             project: _,
             function_name,
+            request_id,
         } => {
             let graph = state.bex.ast_control_flow_graph(&function_name);
             let graph = graph.map(|g| {
@@ -2477,6 +2478,7 @@ async fn handle_ws_in_message(
             let msg = WsOutMessage::ControlFlowGraphResult {
                 function_name,
                 graph: graph_json,
+                request_id,
             };
             if let Some(ws_msg) = to_ws_text(&msg)
                 && sink.send(ws_msg).await.is_err()

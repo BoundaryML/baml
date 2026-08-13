@@ -432,6 +432,24 @@ pub struct AssociatedTypeBinding {
     pub ty: Box<TypeExpr>,
 }
 
+/// A generic type parameter declaration, paired with the `&`-separated bounds
+/// it was declared with (`<T>` → `bounds = []`; `<T extends A & B>` → `bounds =
+/// [A, B]`).
+///
+/// The bound set is a **conjunction**: an argument for this parameter must
+/// satisfy every entry. Holding the name and its bounds together makes a length
+/// mismatch between the two unrepresentable.
+///
+/// Bounds are `TypeExpr`s so generic parents like `Container<int>` round-trip;
+/// that each must denote an *interface* — never an interface-existential type,
+/// see `TYPE_SYSTEM.md` "Generics on Functions" — is enforced where they are
+/// lowered to constraints.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericParam {
+    pub name: Name,
+    pub bounds: Vec<TypeExpr>,
+}
+
 // ── Expression Bodies ───────────────────────────────────────────
 //
 // Full expression/statement arena — modeled after the existing
@@ -1482,8 +1500,9 @@ pub enum Item {
 pub enum DeclarativeMeta {
     /// LLM function metadata (client name, prompt template).
     /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
-    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
-    /// while this field preserves the original metadata for Jinja type-checking.
+    /// The body is desugared to a synthetic `Expr` that constructs an
+    /// `ai.FunctionSpec` and runs it through `ai.Agent`, while this field
+    /// preserves the original declaration metadata.
     Llm(LlmBodyDef),
 }
 
@@ -1491,11 +1510,7 @@ pub enum DeclarativeMeta {
 pub struct FunctionDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T", "U"]`). Empty for non-generic functions.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds: parallel to `generic_params`. Each entry
-    /// is the `TypeExpr` after `extends` (e.g. `T extends Named` stores
-    /// `Some(Path(["Named"]))`); `None` for unbounded parameters.
-    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
     pub return_type: Option<TypeExpr>,
@@ -1608,41 +1623,27 @@ pub enum BuiltinKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
-    pub prompt: Option<RawPrompt>,
-    /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
-    /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th
-    /// argument is the synthesized prompt closure. Built in `lower_cst` while
-    /// the CST backtick literal is still in hand (the AST must stay CST-free for
-    /// Salsa: a rowan node is `!Send`), and consumed by PPIR when it
-    /// materializes the `$stream` companion. The closure must capture the
-    /// companion's params, so it can't be shared with the oneshot body by
-    /// `ExprId` — it's a fully independent arena. `None` for legacy Jinja
-    /// `#"..."#` prompts (their `$stream` companion uses the 3-arg Jinja path).
-    pub stream_body: Option<(ExprBody, AstSourceMap)>,
-    /// BEP-049 M5: for a new-mode (backtick) prompt, the pre-lowered bodies of
-    /// the `render_prompt` / `build_request` / `build_request_stream` companions,
-    /// keyed by target name. Each is a `<target>(client, fn, args,
-    /// prompt_closure=…)` call carrying the same synthesized prompt closure, so
-    /// the static preview/cURL render through the closure exactly like execution.
-    /// Built in `lower_cst` while the CST backtick is in hand (same reason as
-    /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
-    /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
+    /// Pre-lowered companion bodies keyed by target name. The single-path
+    /// world stashes exactly one: `"spec"` — the `<Fn>$spec` body, built in
+    /// `lower_cst` while the CST backtick is still in hand (the AST must stay
+    /// CST-free for Salsa: a rowan node is `!Send`), and read back by
+    /// `companions::llm_spec`. Absent when the prompt or client is unusable
+    /// (a migration diagnostic was emitted instead).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
+    /// True when the function's `tools` field can hold tools at runtime:
+    /// any value other than an absent field or a literal empty list (`tools
+    /// []`). A non-literal expression (`tools shared()`) counts as `true`
+    /// even if it evaluates empty — the compile-time signal is conservative.
+    /// PPIR skips `$stream` synthesis when set (streaming does not run the
+    /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
+    /// dynamic cases.
+    pub has_tools: bool,
     pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawPrompt {
     pub text: std::string::String,
-    /// Interpolation locations within the template.
-    pub interpolations: Vec<Interpolation>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Interpolation {
-    pub content: std::string::String,
-    /// Span of the full interpolation, including delimiters.
     pub span: TextRange,
 }
 
@@ -1672,11 +1673,7 @@ impl DefaultExprId {
 pub struct ClassDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Array<T>`). Empty for non-generic classes.
-    pub generic_params: Vec<Name>,
-    /// Generic bounds parallel to `generic_params`. `Some(te)` means the
-    /// parameter at the matching index was declared with `T extends <te>`;
-    /// `None` means unbounded.
-    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
     /// `implements I { ... }` blocks declared inside the class body (BEP-044).
@@ -1696,11 +1693,7 @@ pub struct ClassDef {
 pub struct InterfaceDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Container<T>`). Empty for non-generic interfaces.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`. `Some(te)`
-    /// means the parameter at the matching index was declared with
-    /// `T extends <te>`; `None` means unbounded.
-    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     /// Required interfaces from `requires I1, I2, ...`. Each is parsed as a
     /// `TypeExpr` so we can accept generic requirements like `Container<int>`.
     pub requires: Vec<TypeExpr>,
@@ -1724,9 +1717,7 @@ pub struct InterfaceDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MethodSigDef {
     pub name: Name,
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`.
-    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
     pub return_type: Option<TypeExpr>,
@@ -1771,7 +1762,7 @@ pub struct ImplementsForDef {
     /// Generic type parameters on the implements block, each with its set of
     /// `&`-separated interface bounds (`<T>` → `(T, [])`; `<T extends A & B>` →
     /// `(T, [A, B])`). Empty bound list = unbounded.
-    pub generic_params: Vec<(Name, Vec<TypeExpr>)>,
+    pub generic_params: Vec<GenericParam>,
     /// The interface being implemented.
     pub interface_target: TypeExpr,
     /// The type the interface is being implemented for.
@@ -1783,6 +1774,7 @@ pub struct ImplementsForDef {
     /// Method definitions inside the block.
     pub methods: Vec<FunctionDef>,
     pub span: TextRange,
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1843,6 +1835,7 @@ pub struct TypeAliasDef {
     pub type_expr: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

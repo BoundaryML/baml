@@ -4,7 +4,7 @@
 // pure expressions are asserted inline; tests that use locals (let bindings,
 // compound assignment, lambdas, generics with receivers) go through a top-level
 // helper function to avoid the test-block local-boxing VM bug. Value results
-// are compared with `baml.deep_equals`; boolean results are asserted directly.
+// are compared with `assert.equal`; boolean results are asserted directly.
 //
 // Throw tests use the `{ <body>; baml.sys.panic("…") } catch (e) { <Type> => null }`
 // pattern. For throws raised by a *pure operator* (`/`, `%`, `<<`, `>>`, `*`),
@@ -15,7 +15,8 @@
 //
 // Throw types (from crates/bex_vm/src/package_baml/bigint.rs):
 //   parse invalid/empty                  -> baml.errors.ParseError
-//   isqrt negative, ilog domain, random  -> baml.errors.InvalidArgument
+//   isqrt negative, ilog domain, random,
+//   to_int out of range                  -> baml.errors.InvalidArgument
 //   div/mod by zero                      -> baml.panics.DivisionByZero
 //   negative bit shift                   -> baml.panics.NegativeBitShift
 //   pow/shl/mul oversize                 -> baml.panics.AllocFailure
@@ -47,7 +48,7 @@ function bigint_compound_assign_add_fn() -> bigint {
 }
 
 test "test_bigint_compound_assign_int_add" {
-    assert.is_true(baml.deep_equals(bigint_compound_assign_add_fn(), 1n))
+    assert.equal(bigint_compound_assign_add_fn(), 1n)
 }
 
 function bigint_compound_assign_mul_fn() -> bigint {
@@ -57,7 +58,7 @@ function bigint_compound_assign_mul_fn() -> bigint {
 }
 
 test "test_bigint_compound_assign_int_mul" {
-    assert.is_true(baml.deep_equals(bigint_compound_assign_mul_fn(), 10n))
+    assert.equal(bigint_compound_assign_mul_fn(), 10n)
 }
 
 function bigint_nonliteral_inc() -> int { 5 }
@@ -72,7 +73,7 @@ function bigint_compound_assign_nonliteral_fn() -> bigint {
 }
 
 test "test_bigint_compound_assign_int_nonliteral_rhs" {
-    assert.is_true(baml.deep_equals(bigint_compound_assign_nonliteral_fn(), 102n))
+    assert.equal(bigint_compound_assign_nonliteral_fn(), 102n)
 }
 
 function bigint_identity<T>(x: T) -> T { x }
@@ -80,7 +81,7 @@ function bigint_identity<T>(x: T) -> T { x }
 function bigint_identity_caller() -> bigint { bigint_identity<bigint>(1n) }
 
 test "test_bigint_generic_fn_explicit_type_arg" {
-    assert.is_true(baml.deep_equals(bigint_identity_caller(), 1n))
+    assert.equal(bigint_identity_caller(), 1n)
 }
 
 class BigintBox<T> {
@@ -94,7 +95,7 @@ function bigint_box_caller() -> bigint {
 }
 
 test "test_bigint_generic_method_class_type_arg" {
-    assert.is_true(baml.deep_equals(bigint_box_caller(), 7n))
+    assert.equal(bigint_box_caller(), 7n)
 }
 
 // ─── generic-path bigint comparison (union operand → generic CmpOp) ──────────
@@ -123,13 +124,13 @@ test "test_bigint_generic_cmp_bigint_bigint" {
 function bigint_fold_get_three() -> 3n { 1n + 2n }
 
 test "test_bigint_constant_fold_add_narrows_to_literal_type" {
-    assert.is_true(baml.deep_equals(bigint_fold_get_three(), 3n))
+    assert.equal(bigint_fold_get_three(), 3n)
 }
 
 function bigint_fold_get_twelve() -> 12n { 3n * 4n }
 
 test "test_bigint_constant_fold_mul_narrows" {
-    assert.is_true(baml.deep_equals(bigint_fold_get_twelve(), 12n))
+    assert.equal(bigint_fold_get_twelve(), 12n)
 }
 
 function bigint_fold_is_less() -> true { 1n < 2n }
@@ -162,25 +163,25 @@ function bigint_compound_assign_lambda_fn() -> bigint {
 }
 
 test "test_bigint_compound_assign_int_in_lambda" {
-    assert.is_true(baml.deep_equals(bigint_compound_assign_lambda_fn(), 5n))
+    assert.equal(bigint_compound_assign_lambda_fn(), 5n)
 }
 
 // ─── literal syntax ─────────────────────────────────────────────────────────
 
 test "bigint_literal_small" {
-    assert.is_true(baml.deep_equals(42n, 42n))
+    assert.equal(42n, 42n)
 }
 
 test "bigint_literal_large" {
-    assert.is_true(baml.deep_equals(99999999999999999999n, 99999999999999999999n))
+    assert.equal(99999999999999999999n, 99999999999999999999n)
 }
 
 test "bigint_literal_negative" {
-    assert.is_true(baml.deep_equals(-7n, -7n))
+    assert.equal(-7n, -7n)
 }
 
 test "bigint_literal_zero" {
-    assert.is_true(baml.deep_equals(0n, 0n))
+    assert.equal(0n, 0n)
 }
 
 function bigint_literal_let_binding_fn() -> bigint {
@@ -189,25 +190,25 @@ function bigint_literal_let_binding_fn() -> bigint {
 }
 
 test "bigint_literal_let_binding" {
-    assert.is_true(baml.deep_equals(bigint_literal_let_binding_fn(), 42n))
+    assert.equal(bigint_literal_let_binding_fn(), 42n)
 }
 
 // ─── parse ────────────────────────────────────────────────────────────────────
 
 test "bigint_parse_small" {
-    assert.is_true(baml.deep_equals(bigint.parse("12345"), 12345n))
+    assert.equal(bigint.parse("12345"), 12345n)
 }
 
 test "bigint_parse_large" {
-    assert.is_true(baml.deep_equals(bigint.parse("99999999999999999999"), 99999999999999999999n))
+    assert.equal(bigint.parse("99999999999999999999"), 99999999999999999999n)
 }
 
 test "bigint_parse_negative" {
-    assert.is_true(baml.deep_equals(bigint.parse("-7"), -7n))
+    assert.equal(bigint.parse("-7"), -7n)
 }
 
 test "bigint_parse_zero" {
-    assert.is_true(baml.deep_equals(bigint.parse("0"), 0n))
+    assert.equal(bigint.parse("0"), 0n)
 }
 
 test "bigint_parse_invalid_throws" {
@@ -231,89 +232,89 @@ test "bigint_parse_empty_throws" {
 // ─── abs ──────────────────────────────────────────────────────────────────────
 
 test "bigint_abs_positive" {
-    assert.is_true(baml.deep_equals((3n).abs(), 3n))
+    assert.equal((3n).abs(), 3n)
 }
 
 test "bigint_abs_negative" {
-    assert.is_true(baml.deep_equals((-7n).abs(), 7n))
+    assert.equal((-7n).abs(), 7n)
 }
 
 test "bigint_abs_zero" {
-    assert.is_true(baml.deep_equals((0n).abs(), 0n))
+    assert.equal((0n).abs(), 0n)
 }
 
 test "bigint_abs_large_negative" {
-    assert.is_true(baml.deep_equals((-99999999999999999999n).abs(), 99999999999999999999n))
+    assert.equal((-99999999999999999999n).abs(), 99999999999999999999n)
 }
 
 // ─── min / max ────────────────────────────────────────────────────────────────
 
 test "bigint_min_self_smaller" {
-    assert.is_true(baml.deep_equals((3n).min(5n), 3n))
+    assert.equal((3n).min(5n), 3n)
 }
 
 test "bigint_min_other_smaller" {
-    assert.is_true(baml.deep_equals((5n).min(3n), 3n))
+    assert.equal((5n).min(3n), 3n)
 }
 
 test "bigint_min_equal" {
-    assert.is_true(baml.deep_equals((3n).min(3n), 3n))
+    assert.equal((3n).min(3n), 3n)
 }
 
 test "bigint_min_negative" {
-    assert.is_true(baml.deep_equals((-2n).min(0n), -2n))
+    assert.equal((-2n).min(0n), -2n)
 }
 
 test "bigint_max_self_larger" {
-    assert.is_true(baml.deep_equals((5n).max(3n), 5n))
+    assert.equal((5n).max(3n), 5n)
 }
 
 test "bigint_max_other_larger" {
-    assert.is_true(baml.deep_equals((3n).max(5n), 5n))
+    assert.equal((3n).max(5n), 5n)
 }
 
 test "bigint_max_equal" {
-    assert.is_true(baml.deep_equals((3n).max(3n), 3n))
+    assert.equal((3n).max(3n), 3n)
 }
 
 // ─── clamp ────────────────────────────────────────────────────────────────────
 
 test "bigint_clamp_in_range" {
-    assert.is_true(baml.deep_equals((5n).clamp(0n, 10n), 5n))
+    assert.equal((5n).clamp(0n, 10n), 5n)
 }
 
 test "bigint_clamp_below_min" {
-    assert.is_true(baml.deep_equals((-3n).clamp(0n, 10n), 0n))
+    assert.equal((-3n).clamp(0n, 10n), 0n)
 }
 
 test "bigint_clamp_above_max" {
-    assert.is_true(baml.deep_equals((15n).clamp(0n, 10n), 10n))
+    assert.equal((15n).clamp(0n, 10n), 10n)
 }
 
 test "bigint_clamp_at_min" {
-    assert.is_true(baml.deep_equals((0n).clamp(0n, 10n), 0n))
+    assert.equal((0n).clamp(0n, 10n), 0n)
 }
 
 test "bigint_clamp_at_max" {
-    assert.is_true(baml.deep_equals((10n).clamp(0n, 10n), 10n))
+    assert.equal((10n).clamp(0n, 10n), 10n)
 }
 
 // ─── isqrt ────────────────────────────────────────────────────────────────────
 
 test "bigint_isqrt_perfect_square" {
-    assert.is_true(baml.deep_equals((16n).isqrt(), 4n))
+    assert.equal((16n).isqrt(), 4n)
 }
 
 test "bigint_isqrt_non_perfect_square" {
-    assert.is_true(baml.deep_equals((10n).isqrt(), 3n))
+    assert.equal((10n).isqrt(), 3n)
 }
 
 test "bigint_isqrt_zero" {
-    assert.is_true(baml.deep_equals((0n).isqrt(), 0n))
+    assert.equal((0n).isqrt(), 0n)
 }
 
 test "bigint_isqrt_one" {
-    assert.is_true(baml.deep_equals((1n).isqrt(), 1n))
+    assert.equal((1n).isqrt(), 1n)
 }
 
 test "bigint_isqrt_negative_throws" {
@@ -328,45 +329,45 @@ test "bigint_isqrt_negative_throws" {
 // ─── pow ──────────────────────────────────────────────────────────────────────
 
 test "bigint_pow_basic" {
-    assert.is_true(baml.deep_equals((2n).pow(10n), 1024n))
+    assert.equal((2n).pow(10n), 1024n)
 }
 
 test "bigint_pow_zero_exp" {
-    assert.is_true(baml.deep_equals((2n).pow(0n), 1n))
+    assert.equal((2n).pow(0n), 1n)
 }
 
 test "bigint_pow_zero_base_zero_exp" {
-    assert.is_true(baml.deep_equals((0n).pow(0n), 1n))
+    assert.equal((0n).pow(0n), 1n)
 }
 
 test "bigint_pow_negative_base" {
-    assert.is_true(baml.deep_equals((-2n).pow(3n), -8n))
+    assert.equal((-2n).pow(3n), -8n)
 }
 
 test "bigint_pow_negative_exp_returns_zero" {
-    assert.is_true(baml.deep_equals((2n).pow(-1n), 0n))
+    assert.equal((2n).pow(-1n), 0n)
 }
 
 // 2^256 — exact 78-digit value.
 test "bigint_pow_large" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         (2n).pow(256n),
-        115792089237316195423570985008687907853269984665640564039457584007913129639936n
-    ))
+        115792089237316195423570985008687907853269984665640564039457584007913129639936n,
+    )
 }
 
 // ─── ilog ─────────────────────────────────────────────────────────────────────
 
 test "bigint_ilog_base10" {
-    assert.is_true(baml.deep_equals((1000n).ilog(10n), 3n))
+    assert.equal((1000n).ilog(10n), 3n)
 }
 
 test "bigint_ilog_base2" {
-    assert.is_true(baml.deep_equals((1024n).ilog(2n), 10n))
+    assert.equal((1024n).ilog(2n), 10n)
 }
 
 test "bigint_ilog_one_returns_zero" {
-    assert.is_true(baml.deep_equals((1n).ilog(10n), 0n))
+    assert.equal((1n).ilog(10n), 0n)
 }
 
 test "bigint_ilog_zero_throws" {
@@ -396,11 +397,65 @@ test "bigint_ilog_base_one_throws" {
     }
 }
 
+// ─── to_int ───────────────────────────────────────────────────────────────────
+
+test "bigint_to_int_positive" {
+    assert.equal((42n).to_int(), 42)
+}
+
+test "bigint_to_int_negative" {
+    assert.equal((-7n).to_int(), -7)
+}
+
+test "bigint_to_int_zero" {
+    assert.equal((0n).to_int(), 0)
+}
+
+// int is 63-bit signed, so the boundaries are ±2^62 — narrower than a machine
+// 64-bit integer's. Both ends must round-trip exactly.
+test "bigint_to_int_at_max_value" {
+    assert.equal((4611686018427387903n).to_int(), int.max_value())
+}
+
+test "bigint_to_int_at_min_value" {
+    assert.equal((-4611686018427387904n).to_int(), int.min_value())
+}
+
+// One past each boundary: these still fit an i64, so they exercise the i63
+// range check rather than the i64 conversion.
+test "bigint_to_int_above_max_throws" {
+    {
+        (4611686018427387904n).to_int();
+        baml.sys.panic("expected (4611686018427387904n).to_int() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "bigint_to_int_below_min_throws" {
+    {
+        (-4611686018427387905n).to_int();
+        baml.sys.panic("expected (-4611686018427387905n).to_int() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+// Far past i64 as well, exercising the conversion failure itself.
+test "bigint_to_int_far_out_of_range_throws" {
+    {
+        (10n).pow(30n).to_int();
+        baml.sys.panic("expected (10n).pow(30n).to_int() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
 // ─── random ───────────────────────────────────────────────────────────────────
 
 // [0, 1) contains exactly one value: 0.
 test "bigint_random_single_element_range" {
-    assert.is_true(baml.deep_equals(bigint.random(0n, 1n), 0n))
+    assert.equal(bigint.random(0n, 1n), 0n)
 }
 
 // Sample from [10, 20); result must be in that range.
@@ -535,7 +590,7 @@ test "test_bigint_mod_by_zero" {
 
 // (2n).pow(64n) + 1n = 18446744073709551617, which does not fit in an i64.
 test "test_bigint_arithmetic_huge" {
-    assert.is_true(baml.deep_equals((2n).pow(64n) + 1n, 18446744073709551617n))
+    assert.equal((2n).pow(64n) + 1n, 18446744073709551617n)
 }
 
 // ─── mixed `int OP bigint` arithmetic ─────────────────────────────────────────
@@ -647,65 +702,65 @@ test "test_bigint_mul_pre_flight_alloc_failure" {
 
 // (2n).pow(256n) is a 78-digit number — well within MAX_BIGINT_BITS.
 test "test_bigint_pow_normal_works" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         (2n).pow(256n),
-        115792089237316195423570985008687907853269984665640564039457584007913129639936n
-    ))
+        115792089237316195423570985008687907853269984665640564039457584007913129639936n,
+    )
 }
 
 // ─── pow edge cases (negative exp + small bases) ──────────────────────────────
 
 test "test_bigint_pow_neg_exp_one" {
-    assert.is_true(baml.deep_equals((1n).pow(-1n), 0n))
+    assert.equal((1n).pow(-1n), 0n)
 }
 
 test "test_bigint_pow_neg_exp_neg_one" {
-    assert.is_true(baml.deep_equals((-1n).pow(-2n), 0n))
+    assert.equal((-1n).pow(-2n), 0n)
 }
 
 test "test_bigint_pow_neg_exp_zero_base" {
-    assert.is_true(baml.deep_equals((0n).pow(-1n), 0n))
+    assert.equal((0n).pow(-1n), 0n)
 }
 
 // 0^0 == 1 by convention.
 test "test_bigint_pow_zero_zero" {
-    assert.is_true(baml.deep_equals((0n).pow(0n), 1n))
+    assert.equal((0n).pow(0n), 1n)
 }
 
 test "test_bigint_pow_one_huge_exponent" {
-    assert.is_true(baml.deep_equals((1n).pow(1000000000n), 1n))
+    assert.equal((1n).pow(1000000000n), 1n)
 }
 
 test "test_bigint_pow_neg_one_huge_even" {
-    assert.is_true(baml.deep_equals((-1n).pow(1000000000n), 1n))
+    assert.equal((-1n).pow(1000000000n), 1n)
 }
 
 test "test_bigint_pow_neg_one_huge_odd" {
-    assert.is_true(baml.deep_equals((-1n).pow(1000000001n), -1n))
+    assert.equal((-1n).pow(1000000001n), -1n)
 }
 
 test "test_bigint_pow_zero_huge_exponent" {
-    assert.is_true(baml.deep_equals((0n).pow(1000000000n), 0n))
+    assert.equal((0n).pow(1000000000n), 0n)
 }
 
 // ─── ilog efficiency regression (large input, base 2 and general) ─────────────
 
 test "test_bigint_ilog_base_two" {
-    assert.is_true(baml.deep_equals((1024n).ilog(2n), 10n))
+    assert.equal((1024n).ilog(2n), 10n)
 }
 
 test "test_bigint_ilog_base_ten" {
-    assert.is_true(baml.deep_equals((1000n).ilog(10n), 3n))
+    assert.equal((1000n).ilog(10n), 3n)
 }
 
 // Binary-search path on a value where the linear approach would take ~1M iters.
 test "test_bigint_ilog_large_input" {
-    assert.is_true(baml.deep_equals(((2n).pow(1000n)).ilog(2n), 1000n))
+    assert.equal(((2n).pow(1000n)).ilog(2n), 1000n)
 }
 
 // ilog floors (rounds down).
 test "test_bigint_ilog_floor" {
-    assert.is_true(baml.deep_equals((1023n).ilog(2n), 9n))
+    assert.equal((1023n).ilog(2n), 9n)
 }
 
 // ─── to_json ──────────────────────────────────────────────────────────────────
@@ -727,7 +782,7 @@ test "test_bigint_to_json_large" {
 // Missing expr and panic at runtime. Appended at the end so the test registry
 // stays append-only.
 test "bigint_to_string_bare_literal" {
-    assert.is_true(baml.deep_equals(42n.to_string(), "42"))
+    assert.equal(42n.to_string(), "42")
 }
 
 // ─── literal bases and underscore separators ─────────────────────────────────
@@ -735,31 +790,31 @@ test "bigint_to_string_bare_literal" {
 // int literals, with the trailing `n` suffix.
 
 test "bigint_hex_literal" {
-    assert.is_true(baml.deep_equals(0xFFn, 255n))
+    assert.equal(0xFFn, 255n)
 }
 
 test "bigint_octal_literal" {
-    assert.is_true(baml.deep_equals(0o755n, 493n))
+    assert.equal(0o755n, 493n)
 }
 
 test "bigint_binary_literal" {
-    assert.is_true(baml.deep_equals(0b1010n, 10n))
+    assert.equal(0b1010n, 10n)
 }
 
 test "bigint_underscore_separators" {
-    assert.is_true(baml.deep_equals(1_000n, 1000n))
+    assert.equal(1_000n, 1000n)
 }
 
 test "bigint_hex_underscores" {
-    assert.is_true(baml.deep_equals(0xFF_FFn, 65535n))
+    assert.equal(0xFF_FFn, 65535n)
 }
 
 test "bigint_negative_prefixed" {
-    assert.is_true(baml.deep_equals(-0xFFn, -255n))
+    assert.equal(-0xFFn, -255n)
 }
 
 // 2^80 - 1: prefixed bigint literals are not bounded by the i64 (or i63)
 // limits that apply to int literals.
 test "bigint_hex_beyond_int_range" {
-    assert.is_true(baml.deep_equals(0xFFFF_FFFF_FFFF_FFFF_FFFFn, 1208925819614629174706175n))
+    assert.equal(0xFFFF_FFFF_FFFF_FFFF_FFFFn, 1208925819614629174706175n)
 }

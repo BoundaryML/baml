@@ -1,32 +1,25 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29739
 ---
 === PPIR ===
-function user.TestClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: "http://localhost:...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.TestFunc(input: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(TestFunc$spec(input)).value
 }
-function user.TestFunc(input: string, client: baml.llm.Client = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "TestFunc", map { "input": input })
+function user.TestFunc$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
 }
-function user.TestFunc$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "TestFunc", map { "input": input })
+function user.TestFunc$render_prompt(input: string) -> ai.Prompt  [expr] {
+  TestFunc$spec(input).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.TestFunc$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "TestFunc", map { "input": input })
+function user.TestFunc$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "TestFunc", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "hi ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
 }
-function user.TestFunc$parse(json: string, client: baml.llm.Client = TestClient) -> string  [expr] {
-  baml.llm.parse(json)
+function user.TestFunc$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(TestFunc$spec(input), client = client)
 }
-function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  client.__make_stream(sse)
+function user.call_stream_inferred() -> ai.stream.Stream<string | null, string>  [expr] {
+  {  } ai.stream.from_spec(TestFunc$spec("world"))
 }
-function user.TestFunc$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "TestFunc", map { "input": input })
-}
-function user.TestFunc$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "TestFunc", map { "input": input })
-}
-function user.call_stream_inferred() -> baml.llm.Stream<null | string, string>  [expr] {
-  {  } baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" })
-}
+
+--- captures ---
+lambda ( __spec_output_format) in TestFunc$spec: captures [input]
