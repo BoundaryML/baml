@@ -448,10 +448,6 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
         (
             "Csv/CsvReader.g.cs",
             vec![
-                " Iter(",
-                " IterAsync(",
-                " Next(",
-                " NextAsync(",
                 " Headers(",
                 " HeadersAsync(",
                 " Rows<T>(",
@@ -467,14 +463,11 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
             ],
         ),
         (
+            // `iter` / `next` come from `implements root.iter.Iterable` /
+            // `Iterator`; interface-impl methods are not generated, so the
+            // reader handle is the whole surface here.
             "Csv/CsvRows.g.cs",
-            vec![
-                " Reader { get; }",
-                " Iter(",
-                " IterAsync(",
-                " Next(",
-                " NextAsync(",
-            ],
+            vec![" Reader { get; }"],
         ),
         (
             "Csv/CsvWriter.g.cs",

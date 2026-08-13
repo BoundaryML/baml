@@ -4894,32 +4894,38 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> null
     jump L8
 
   L6:
+    load_type float
     load_var delta
-    call assert.format_operand
-    store_var _18
+    call baml.String.from
+    store_var _19
+    load_type float
     load_var eps
-    call assert.format_operand
-    store_var _20
-    load_var actual
-    call assert.format_operand
-    store_var _21
-    load_var expected
-    call assert.format_operand
+    call baml.String.from
     store_var _22
-    load_const "assertion failed: |left - right| = "
-    load_var _18
+    load_type float
+    load_var actual
+    call baml.String.from
+    store_var _24
+    load_type float
+    load_var expected
+    call baml.String.from
+    store_var _26
+    load_const "assertion failed: |left - right| = \""
+    load_var _19
     bin_op +
-    load_const ", eps = "
-    bin_op +
-    load_var _20
-    bin_op +
-    load_const ", left = "
-    bin_op +
-    load_var _21
-    bin_op +
-    load_const ", right = "
+    load_const "\", eps = \""
     bin_op +
     load_var _22
+    bin_op +
+    load_const "\", left = \""
+    bin_op +
+    load_var _24
+    bin_op +
+    load_const "\", right = \""
+    bin_op +
+    load_var _26
+    bin_op +
+    load_const "\""
     bin_op +
     call baml.sys.panic
     jump L8
@@ -4965,16 +4971,24 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
   L1:
     load_var actual
     call assert.format_operand
+    store_var _9
+    load_type string
+    load_var _9
+    call baml.String.from
     store_var _8
     load_var expected
     call assert.format_operand
-    store_var _9
+    store_var _12
+    load_type string
+    load_var _12
+    call baml.String.from
+    store_var _11
     load_const "assertion failed: left = "
     load_var _8
     bin_op +
     load_const ", right = "
     bin_op +
-    load_var _9
+    load_var _11
     bin_op +
     call baml.sys.panic
 
@@ -4983,9 +4997,31 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
 }
 
 function assert.format_operand(value: unknown) -> string {
+    load_var value
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
     load_type unknown
     load_var value
     call baml.String.from
+    jump L2
+
+  L1:
+    load_type string
+    load_var _2
+    call baml.String.from
+    store_var _5
+    load_const "\""
+    load_var _5
+    bin_op +
+    load_const "\""
+    bin_op +
+
+  L2:
     return
 }
 
@@ -5002,6 +5038,44 @@ function assert.is_true(condition: bool) -> null {
   L1:
     load_const "assertion failed: expected true"
     call baml.sys.panic
+
+  L2:
+    return
+}
+
+function assert.is_type(actual: unknown) -> #0 {
+    load_var actual
+    is_type #0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type #0
+    load_const null
+    call_indirect
+    store_var t
+    load_type type
+    load_var t
+    call baml.String.from
+    store_var _9
+    load_type unknown
+    load_var actual
+    call baml.String.from
+    store_var _12
+    load_const "assertion failed: expected type \""
+    load_var _9
+    bin_op +
+    load_const "\", got \""
+    bin_op +
+    load_var _12
+    bin_op +
+    load_const "\""
+    bin_op +
+    call baml.sys.panic
+    jump L2
+
+  L1:
+    load_var actual
 
   L2:
     return
@@ -6513,7 +6587,7 @@ function claude_code.internal.tool_protocol(tb: ai.tools.Toolbox) -> string {
     load_var _30
     call baml.String.from
     store_var _29
-    load_const "The output contract is one object with an outcome field. Set outcome\nto either the final result or a tool request. The tools in the catalog\nbelow are NOT installed in your environment — never attempt to invoke\nthem directly; any such attempt fails. The ONLY way to run one is to\nfinish your reply with outcome set to\n{\"calls\": [{\"id\": \"<unique id>\", \"name\": \"<exact tool name>\", \"args\": {...}}]};\nthe caller executes the calls and re-invokes you with their results in\nthe conversation. If the Conversation so far section shows no tool\nresults yet, your outcome MUST be a calls request — never invent data a\ntool can provide. After tool results appear in the conversation, use\nthem; the Conversation so far section is authoritative. A tool result\nwith is_error=false means that call already ran — never repeat the same\nsuccessful tool call. Request only tools that are still necessary, or\nreturn the final result.\n\nApplication tool catalog (request via outcome.calls only):\n["
+    load_const "\n\nThe output contract is one object with an outcome field. Set outcome\nto either the final result or a tool request. The tools in the catalog\nbelow are NOT installed in your environment — never attempt to invoke\nthem directly; any such attempt fails. The ONLY way to run one is to\nfinish your reply with outcome set to\n{\"calls\": [{\"id\": \"<unique id>\", \"name\": \"<exact tool name>\", \"args\": {...}}]};\nthe caller executes the calls and re-invokes you with their results in\nthe conversation. If the Conversation so far section shows no tool\nresults yet, your outcome MUST be a calls request — never invent data a\ntool can provide. After tool results appear in the conversation, use\nthem; the Conversation so far section is authoritative. A tool result\nwith is_error=false means that call already ran — never repeat the same\nsuccessful tool call. Request only tools that are still necessary, or\nreturn the final result.\n\nApplication tool catalog (request via outcome.calls only):\n["
     load_var _29
     bin_op +
     load_const "]"
@@ -6747,7 +6821,7 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
     load_var _79
     call baml.String.from
     store_var _78
-    load_const "Conversation so far:\n"
+    load_const "\n\nConversation so far:\n"
     load_var _78
     bin_op +
     jump L15

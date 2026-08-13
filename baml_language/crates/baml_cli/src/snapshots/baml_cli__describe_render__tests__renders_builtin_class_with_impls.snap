@@ -25,6 +25,14 @@ methods:
       Returns the number of minutes in `self`.
   function to_hours(self) -> bigint
       Returns the number of hours in `self`.
+  function add(self, other: baml.time.Duration) -> baml.time.Duration
+  function sub(self, other: baml.time.Duration) -> baml.time.Duration
+  function mul(self, other: int) -> baml.time.Duration
+  function mul(self, other: bigint) -> baml.time.Duration
+  function div(self, other: int) -> baml.time.Duration
+  function div(self, other: bigint) -> baml.time.Duration
+  function rem(self, other: baml.time.Duration) -> baml.time.Duration
+  function neg(self) -> baml.time.Duration
 
 static methods:
   function from_nanoseconds(ns: int | bigint) -> baml.time.Duration
@@ -39,6 +47,32 @@ static methods:
       Creates a new duration of `m` minutes.
   function from_hours(h: int | bigint) -> baml.time.Duration
       Creates a new duration of `h` hours.
+
+implements:
+  implements baml.ops.Add for baml.time.Duration   (<builtin>/baml/ns_time/duration.baml:103)
+    type Output = baml.time.Duration
+    function add(self, other: baml.time.Duration) -> baml.time.Duration
+  implements baml.ops.Divide for baml.time.Duration   (<builtin>/baml/ns_time/duration.baml:139)
+    type Output = baml.time.Duration
+    function div(self, other: int) -> baml.time.Duration
+  implements baml.ops.Divide for baml.time.Duration   (<builtin>/baml/ns_time/duration.baml:148)
+    type Output = baml.time.Duration
+    function div(self, other: bigint) -> baml.time.Duration
+  implements baml.ops.Multiply for baml.time.Duration   (<builtin>/baml/ns_time/duration.baml:121)
+    type Output = baml.time.Duration
+    function mul(self, other: int) -> baml.time.Duration
+  implements baml.ops.Multiply for baml.time.Duration   (<builtin>/baml/ns_time/duration.baml:130)
+    type Output = baml.time.Duration
+    function mul(self, other: bigint) -> baml.time.Duration
+  implements baml.ops.Negate for baml.time.Duration   (<builtin>/baml/ns_time/duration.baml:166)
+    type Output = baml.time.Duration
+    function neg(self) -> baml.time.Duration
+  implements baml.ops.Remainder for baml.time.Duration   (<builtin>/baml/ns_time/duration.baml:157)
+    type Output = baml.time.Duration
+    function rem(self, other: baml.time.Duration) -> baml.time.Duration
+  implements baml.ops.Subtract for baml.time.Duration   (<builtin>/baml/ns_time/duration.baml:112)
+    type Output = baml.time.Duration
+    function sub(self, other: baml.time.Duration) -> baml.time.Duration
 
 blanket implementations:
   baml.Concrete   (<builtin>/baml/core.baml:13)

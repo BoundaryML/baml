@@ -2871,6 +2871,46 @@ function baml.time.Duration.to_hours(self: baml.time.Duration) -> bigint throws 
     self._nanoseconds / 3600000000000 : bigint
   }
 }
+function baml.time.Duration.add(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds + other._nanoseconds } : baml.time.Duration
+  }
+}
+function baml.time.Duration.sub(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds - other._nanoseconds } : baml.time.Duration
+  }
+}
+function baml.time.Duration.mul(self: baml.time.Duration, other: int) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds * other } : baml.time.Duration
+  }
+}
+function baml.time.Duration.mul(self: baml.time.Duration, other: bigint) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds * other } : baml.time.Duration
+  }
+}
+function baml.time.Duration.div(self: baml.time.Duration, other: int) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds / other } : baml.time.Duration
+  }
+}
+function baml.time.Duration.div(self: baml.time.Duration, other: bigint) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds / other } : baml.time.Duration
+  }
+}
+function baml.time.Duration.rem(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds % other._nanoseconds } : baml.time.Duration
+  }
+}
+function baml.time.Duration.neg(self: baml.time.Duration) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: Neg self._nanoseconds } : baml.time.Duration
+  }
+}
 class baml.time.Duration$stream {
   _nanoseconds: bigint | null
 }
@@ -2994,6 +3034,21 @@ function baml.time.Instant.to_json(self: baml.time.Instant) -> baml.json.json th
           { : never
             throw baml.json.JsonSerializationError { message: message, path: "" } : baml.json.JsonSerializationError
           }
+  }
+}
+function baml.time.Instant.add(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    Instant { _nanoseconds: self._nanoseconds + other._nanoseconds } : baml.time.Instant
+  }
+}
+function baml.time.Instant.sub(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    Instant { _nanoseconds: self._nanoseconds - other._nanoseconds } : baml.time.Instant
+  }
+}
+function baml.time.Instant.sub(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds - other._nanoseconds } : baml.time.Duration
   }
 }
 class baml.time.Instant$stream {
@@ -3167,6 +3222,21 @@ function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> baml.
           }
   }
 }
+function baml.time.PlainDateTime.add(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime throws never {
+  { : baml.time.PlainDateTime
+    PlainDateTime { _nanoseconds: self._nanoseconds + other._nanoseconds } : baml.time.PlainDateTime
+  }
+}
+function baml.time.PlainDateTime.sub(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime throws never {
+  { : baml.time.PlainDateTime
+    PlainDateTime { _nanoseconds: self._nanoseconds - other._nanoseconds } : baml.time.PlainDateTime
+  }
+}
+function baml.time.PlainDateTime.sub(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds - other._nanoseconds } : baml.time.Duration
+  }
+}
 class baml.time.PlainDateTime$stream {
   _nanoseconds: bigint | null
 }
@@ -3231,6 +3301,31 @@ function baml.time.PlainTime.from_json(j: baml.json.json) -> !error throws baml.
 function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> baml.json.json throws baml.json.JsonSerializationError {
   { : baml.json.json
     baml.json.from<T>(self.to_string()) : baml.json.json
+  }
+}
+function baml.time.PlainTime.add(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime throws never {
+  { : baml.time.PlainTime
+    PlainTime { _nanoseconds: _wrap_into_day(self._nanoseconds + other._nanoseconds) } : baml.time.PlainTime
+  }
+}
+function baml.time.PlainTime.sub(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime throws never {
+  { : baml.time.PlainTime
+    PlainTime { _nanoseconds: _wrap_into_day(self._nanoseconds - other._nanoseconds) } : baml.time.PlainTime
+  }
+}
+function baml.time.PlainTime.sub(self: baml.time.PlainTime, other: baml.time.PlainTime) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: 0n + self._nanoseconds - other._nanoseconds } : baml.time.Duration
+  }
+}
+function baml.time._wrap_into_day(total_ns: bigint) -> int throws never {
+  { : int
+    let day_ns = 86400000000000n : 86400000000000n -> bigint
+    let wrapped = total_ns % day_ns + day_ns % day_ns : bigint
+    catch ({ 0 stmts + tail } : int) : int
+      catch (e)
+        root.errors.InvalidArgument =>
+          baml.sys.panic("unreachable: nano...") : never
   }
 }
 class baml.time.PlainTime$stream {
@@ -3486,6 +3581,21 @@ function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> baml.
           { : never
             throw baml.json.JsonSerializationError { message: message, path: "" } : baml.json.JsonSerializationError
           }
+  }
+}
+function baml.time.ZonedDateTime.add(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime throws never {
+  { : baml.time.ZonedDateTime
+    ZonedDateTime { _nanoseconds: self._nanoseconds + other._nanoseconds, _offset_ns: self._offset_ns, _iana: self._iana } : baml.time.ZonedDateTime
+  }
+}
+function baml.time.ZonedDateTime.sub(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime throws never {
+  { : baml.time.ZonedDateTime
+    ZonedDateTime { _nanoseconds: self._nanoseconds - other._nanoseconds, _offset_ns: self._offset_ns, _iana: self._iana } : baml.time.ZonedDateTime
+  }
+}
+function baml.time.ZonedDateTime.sub(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds - other._nanoseconds } : baml.time.Duration
   }
 }
 class baml.time.ZonedDateTime$stream {

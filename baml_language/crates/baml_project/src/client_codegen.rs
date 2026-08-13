@@ -203,6 +203,29 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     continue;
                 }
 
+                // Interface-impl methods are not part of the generated surface.
+                // Interfaces themselves are never emitted — host languages differ
+                // too much on trait/protocol/interface semantics — so a method
+                // that only exists to satisfy one has nothing to attach to.
+                //
+                // Emitting them is not merely redundant but unsound: the
+                // generated name is the bare method name, so a type implementing
+                // one interface at several instantiations (`Multiply<int>` and
+                // `Multiply<bigint>` for `baml.time.Duration`) or two interfaces
+                // sharing a method name (`Subtract<Duration>` and
+                // `Subtract<Instant>` for `baml.time.Instant`) collides with
+                // itself. The runtime path it invokes (`baml.time.Duration.mul`)
+                // is ambiguous for the same reason.
+                //
+                // `class.methods` is flat: in-body `implements I { … }` and a
+                // non-generic out-of-body `implement I for C` merged onto `C`
+                // (`lower_cst`) both land here, so the interface target — not the
+                // declaration site — is what identifies them.
+                if baml_compiler2_ppir::item_data::method_interface_target(db, method_loc).is_some()
+                {
+                    continue;
+                }
+
                 if matches!(
                     baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
                     baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)

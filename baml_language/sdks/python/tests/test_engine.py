@@ -21,6 +21,8 @@ from baml_bridge import (
     BamlRuntime,
     FunctionResult,
     HostSpanManager,
+    get_bridge_runtime_version,
+    get_toolchain_version,
     get_version,
     call_function,
     call_function_sync,
@@ -167,6 +169,38 @@ class TestBasics:
             ".", {"empty.baml": ""}
         )
         assert rt is not None
+
+    def test_generated_bytecode_version_skew_fails_before_deserialization(self):
+        """Generated SDK imports report bridge skew instead of a bytecode panic."""
+        generated_toolchain = "999.0.0"
+        embedded_baml_toml = f"""\
+[package]
+name = "version-skew-test"
+
+[__baml_codegen]
+metadata_version = 1
+
+[__baml_codegen.toolchain]
+version = "{generated_toolchain}"
+"""
+
+        with pytest.raises(RuntimeError) as exc_info:
+            BamlRuntime.initialize_runtime_from_bytecode(
+                b"\x00", embedded_baml_toml
+            )
+
+        message = str(exc_info.value)
+        assert message.startswith("BAML startup failed: version skew error.")
+        assert f"generated using BAML toolchain {generated_toolchain}" in message
+        assert f"baml-bridge is installed at {get_bridge_runtime_version()}" in message
+        assert (
+            "expects baml_sdk to be generated using BAML toolchain "
+            f"{get_toolchain_version()}" in message
+        )
+        assert f"`baml toolchain pin {get_toolchain_version()}`" in message
+        assert "install `baml-bridge` (the Python package)" in message
+        assert "then re-run `baml generate`" in message
+        assert "Failed to deserialize BAML bytecode" not in message
 
 
 # ============================================================================
