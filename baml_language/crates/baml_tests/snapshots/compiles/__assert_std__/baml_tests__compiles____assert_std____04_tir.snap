@@ -32,14 +32,18 @@ function assert.not_null(value: unknown | null) -> null throws never {
 }
 function assert.format_operand(value: unknown) -> string throws never {
   { : string
-    string.from<T>(value) : string
+    match (value : unknown) : string
+      text: string =>
+        `...` : string
+      _ =>
+        string.from<T>(value) : string
   }
 }
 function assert.equal(actual: unknown, expected: unknown) -> null throws never {
   { : null
     if (actual != expected : bool) : null
       { : never
-        baml.sys.panic("assertion failed:..." + format_operand(actual) + ", right = " + format_operand(expected)) : never
+        baml.sys.panic(`...`) : never
       }
     else
       { : null
@@ -58,7 +62,7 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> null
         let delta = actual - expected.abs() : float
         if (delta.is_nan() || delta > eps : bool) : null
           { : never
-            baml.sys.panic("assertion failed:..." + format_operand(delta) + ", eps = " + format_operand(eps) + ", left = " + format_operand(actual) + ", right = " + format_operand(expected)) : never
+            baml.sys.panic(`...`) : never
           }
         else
           { : null
@@ -77,5 +81,17 @@ function assert.contains(haystack: string, needle: string) -> null throws never 
       { : null
         null : null
       }
+  }
+}
+function assert.is_type<T>(actual: unknown) -> T throws never {
+  { : T
+    match (actual : unknown) : T
+      T =>
+        actual : T
+      _ =>
+        { : never
+          let t: type = reflect.type_of() : type
+          baml.sys.panic(`...`) : never
+        }
   }
 }
