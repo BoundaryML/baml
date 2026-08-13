@@ -248,3 +248,30 @@ impl ProjectSession {
             .any(|(_, source)| crate::run_command::source_needs_format_hint(source))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn standalone_file_session_is_manifestless_and_uncached() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("standalone.baml");
+        let source = "function main() -> int { 1 }\n";
+        std::fs::write(&file, source).unwrap();
+
+        let canonical_file = file.canonicalize().unwrap();
+        let canonical_root = canonical_file.parent().unwrap().to_path_buf();
+        let session =
+            ProjectSession::open_project_or_file(None, Some(&file), CacheUse::ReadWriteTests)
+                .unwrap();
+
+        assert_eq!(session.resolved.root, canonical_root);
+        assert_eq!(
+            session.resolved.files,
+            vec![(canonical_file, source.to_string())]
+        );
+        assert!(session.resolved.manifest.is_none());
+        assert!(session.cache.is_none());
+    }
+}
