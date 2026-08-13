@@ -40,6 +40,25 @@ pub struct RenderedTraceLog {
     pub body: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TraceLogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+}
+
+impl TraceLogLevel {
+    fn parse(raw: Option<&str>) -> Self {
+        match raw.unwrap_or("info").to_ascii_lowercase().as_str() {
+            "error" => Self::Error,
+            "warn" | "warning" => Self::Warn,
+            "debug" | "trace" => Self::Debug,
+            _ => Self::Info,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TraceLogFailureReason {
     SnapshotMissing,
@@ -82,6 +101,7 @@ pub struct TraceLogger {
 #[derive(Debug)]
 struct TraceLoggerEnabled {
     heap: TraceHeap,
+    maximum_level: Option<TraceLogLevel>,
     inner: Mutex<TraceLoggerInner>,
 }
 
@@ -117,9 +137,24 @@ impl TraceLogger {
 
     #[must_use]
     pub fn bounded(max_pending_logs: usize) -> Self {
+        Self::bounded_inner(max_pending_logs, None)
+    }
+
+    /// Create a logger that rejects suppressed levels before snapshot copying
+    /// or bounded-queue reservation.
+    #[must_use]
+    pub fn bounded_with_log_level(
+        max_pending_logs: usize,
+        maximum_level: TraceLogLevel,
+    ) -> Self {
+        Self::bounded_inner(max_pending_logs, Some(maximum_level))
+    }
+
+    fn bounded_inner(max_pending_logs: usize, maximum_level: Option<TraceLogLevel>) -> Self {
         Self {
             enabled: Some(Arc::new(TraceLoggerEnabled {
                 heap: TraceHeap::new(),
+                maximum_level,
                 inner: Mutex::new(TraceLoggerInner {
                     max_pending: max_pending_logs,
                     reserved: 0,
@@ -128,6 +163,15 @@ impl TraceLogger {
                 }),
             })),
         }
+    }
+
+    #[must_use]
+    pub fn captures_log_level(&self, level: Option<&str>) -> bool {
+        self.enabled.as_ref().is_some_and(|enabled| {
+            enabled
+                .maximum_level
+                .is_none_or(|maximum| TraceLogLevel::parse(level) <= maximum)
+        })
     }
 
     #[must_use]
