@@ -424,6 +424,7 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
     if let Some(cli) = path_selector(&selector.selector) {
         return exec_path_toolchain(cli, &selector, args);
     }
+    ensure_toolchain_for_ide_install(&selector, &args)?;
     let version = concrete_version_for_selector(&selector)?;
     let cli = toolchain_cli_path(&version);
     if !cli.exists() {
@@ -470,6 +471,101 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
         warn_if_channel_outdated(&selector, &version);
     }
     Ok(status.code().unwrap_or(1))
+}
+
+/// `baml ide install` needs a released toolchain because the matching VSIX is
+/// shipped inside the toolchain archive. Make that command usable on a fresh
+/// wrapper install by preparing its selected managed toolchain before passing
+/// control to `baml-cli`.
+///
+/// Local path selectors are deliberately left alone: replacing an explicit
+/// local override with a managed release would violate the user's selection,
+/// and the toolchain binary already explains that released IDE assets require
+/// a managed toolchain.
+fn ensure_toolchain_for_ide_install(selector: &ResolvedSelector, args: &[String]) -> Result<()> {
+    if !is_ide_install(args) || is_path_selector(&selector.selector) {
+        return Ok(());
+    }
+
+    let resolved_version = concrete_version_for_selector(selector).ok();
+    let toolchain_is_installed = resolved_version.as_deref().is_some_and(toolchain_is_usable);
+    if toolchain_is_installed {
+        return Ok(());
+    }
+
+    install_toolchain(
+        &selector.selector,
+        is_channel(&selector.selector),
+        None,
+        false,
+    )
+    .context("failed to set up the BAML toolchain required by `baml ide install`")
+}
+
+fn is_ide_install(args: &[String]) -> bool {
+    if args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "--help" | "-h"))
+    {
+        return false;
+    }
+
+    let Some((command, rest)) = next_cli_command(args) else {
+        return false;
+    };
+    if command != "ide" {
+        return false;
+    }
+    next_cli_command(rest).is_some_and(|(subcommand, _)| subcommand == "install")
+}
+
+/// Skip the toolchain CLI's global options and return its next positional
+/// command. Keeping this small parser here avoids downloading a toolchain for
+/// an unrelated invocation whose arguments happen to contain `ide install`.
+fn next_cli_command(args: &[String]) -> Option<(&str, &[String])> {
+    let mut index = 0;
+    while let Some(arg) = args.get(index).map(String::as_str) {
+        if matches!(
+            arg,
+            "--directory"
+                | "--project"
+                | "--output-preset"
+                | "--color"
+                | "--hyperlinks"
+                | "--diagnostic-format"
+        ) {
+            index += 2;
+            continue;
+        }
+        if arg.starts_with("--directory=")
+            || arg.starts_with("--project=")
+            || arg.starts_with("--output-preset=")
+            || arg.starts_with("--color=")
+            || arg.starts_with("--hyperlinks=")
+            || arg.starts_with("--diagnostic-format=")
+            || arg == "--quiet"
+            || arg == "--verbose"
+            || arg == "--no-progress"
+            || (arg.starts_with('-')
+                && arg.len() > 1
+                && arg[1..].chars().all(|flag| matches!(flag, 'q' | 'v')))
+        {
+            index += 1;
+            continue;
+        }
+        if arg.starts_with('-') {
+            return None;
+        }
+        return Some((arg, &args[index + 1..]));
+    }
+    None
+}
+
+fn toolchain_is_usable(version: &str) -> bool {
+    let root = toolchains_dir().join(version);
+    toolchain_cli_path(version).is_file()
+        && fs::read_to_string(root.join("VERSION"))
+            .is_ok_and(|installed| installed.trim() == version)
 }
 
 /// Run a path toolchain. None of the version bookkeeping applies to a binary
@@ -1681,6 +1777,32 @@ mod tests {
             missing,
             FetchPolicy::CacheAllowed
         ));
+    }
+
+    #[test]
+    fn ide_install_is_detected_with_editor_and_global_options() {
+        for args in [
+            &["ide", "install", "--code"][..],
+            &["ide", "install", "--cursor"][..],
+            &["--quiet", "ide", "install", "--output-dir", "out"][..],
+            &["ide", "install", "--output-dir", "help"][..],
+        ] {
+            let args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
+            assert!(is_ide_install(&args), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn ide_install_help_and_other_commands_do_not_trigger_setup() {
+        for args in [
+            &["ide", "install", "--help"][..],
+            &["help", "ide", "install"][..],
+            &["ide", "status"][..],
+            &["run", "ide", "install"][..],
+        ] {
+            let args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
+            assert!(!is_ide_install(&args), "{args:?}");
+        }
     }
 
     fn resolved(selector: &str, source: SelectorSource) -> ResolvedSelector {
