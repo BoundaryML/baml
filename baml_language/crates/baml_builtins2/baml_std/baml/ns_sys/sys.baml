@@ -6,13 +6,12 @@ class ProcessOptions {
     env: map<string, string>?,
     /// Maximum time in milliseconds to wait for the process to complete.
     timeout_ms: int?,
-    /// Data to write to the child process's stdin.
+    /// The child process's complete stdin. `start_process` writes it and then
+    /// closes the pipe, so a child that reads to EOF sees one. Leave it unset
+    /// to drive `Process.stdin` incrementally instead.
     stdin: string?,
-    /// Keep a writable stdin pipe on a process returned by `start_process`.
-    ///
-    /// When this is `true`, use `Process.write_stdin` to send data incrementally
-    /// and `Process.close_stdin` to deliver EOF. This option has no effect on
-    /// `exec` or `shell`.
+    /// No longer has any effect: `start_process` always hands back a writable
+    /// `Process.stdin`, and EOF is delivered by closing that pipe.
     keep_stdin_open: bool?,
 }
 
@@ -39,64 +38,95 @@ class ProcessExit {
     }
 }
 
-/// A live line-oriented child-process output stream.
+/// A line-oriented view over a `ReadPipe`.
+///
+/// A combinator, not a resource: it reads through to the pipe on demand and
+/// holds only the bytes past the last newline, so the pipe stays open and
+/// owned by whoever created it. Interleaving raw `pipe.read` calls with line
+/// reads splits a line across the two — a caller error the type does not
+/// prevent.
 ///
 /// Iteration waits for one complete UTF-8 line without blocking other BAML
-/// green threads. The final unterminated line is yielded at EOF.
-class ProcessLineStream {
-    _handle: $rust_type,
+/// green threads. The final unterminated line is yielded at EOF, and invalid
+/// UTF-8 is replaced with U+FFFD rather than throwing.
+class ReadPipeLines {
+    /// The pipe being framed.
+    pipe: ReadPipe,
+    /// Bytes read past the last newline, carried into the next `next()`.
+    _pending: uint8array,
 
     implements root.iter.Iterable {
         type Item = string
-        type Error = root.errors.Io | root.errors.Timeout
+        type Error = root.errors.Io
 
         function iter(
             self,
-        ) -> root.iter.Iterator<Item = string, Error = root.errors.Io | root.errors.Timeout> throws never {
+        ) -> root.iter.Iterator<Item = string, Error = root.errors.Io> throws never {
             self
         }
     }
 
     implements root.iter.Iterator {
         type Item = string
-        type Error = root.errors.Io | root.errors.Timeout
+        type Error = root.errors.Io
 
-        function next(self) -> string | root.iter.Done throws root.errors.Io | root.errors.Timeout {
-            match (self._next()) {
-                let line: string => line,
-                null => root.iter.Done {  },
+        /// Wait for and return the next line, or `Done` at EOF.
+        function next(self) -> string | root.iter.Done throws root.errors.Io {
+            // `line` stays `Done` until a newline is found or EOF flushes the
+            // tail; `framing` ends the loop in both cases.
+            let line: string | root.iter.Done = root.iter.Done {  };
+            let framing = true;
+            while (framing) {
+                // 10 is `\n`; 65536 is how much one framing read asks for.
+                match (self._pending.index_of(10)) {
+                    let index: int => {
+                        let bytes = self._pending.slice(0, index);
+                        self._pending = self._pending.slice(index + 1, self._pending.length());
+                        line = _strip_carriage_return(bytes).to_string();
+                        framing = false;
+                    },
+                    null => {
+                        match (self.pipe.read(65536)) {
+                            let chunk: uint8array => {
+                                self._pending = self._pending.concat(chunk);
+                            },
+                            // EOF: whatever follows the last newline is the
+                            // final, unterminated line; an empty remainder is
+                            // just the end.
+                            null => {
+                                if (self._pending.length() > 0) {
+                                    line = _strip_carriage_return(self._pending).to_string();
+                                    self._pending = b"";
+                                }
+                                framing = false;
+                            },
+                        }
+                    },
+                }
             }
+            line
         }
     }
+}
 
-    /// Wait for and return the next line, or `null` at EOF.
-    function _next(self) -> string? throws root.errors.Io | root.errors.Timeout {
-        $rust_io_function
-    }
-
-    /// Stop reading this stream. Later reads return EOF.
-    function close(self) -> null throws never {
-        $rust_io_function
+/// Drops one trailing `\r` (13) so CRLF input frames into clean lines.
+function _strip_carriage_return(line: uint8array) -> uint8array throws never {
+    match (line.at(line.length() - 1)) {
+        13 => line.slice(0, line.length() - 1),
+        _ => line,
     }
 }
 
 /// A live child process created with `start_process`.
 ///
-/// `stdout` is consumed incrementally. Stderr inherits the parent process so
-/// diagnostics remain visible without risking a blocked, unread stderr pipe.
+/// All three streams are pipes the caller owns and consumes incrementally.
+/// Stderr is no longer inherited from the parent, so a child that writes more
+/// than the pipe buffer holds blocks until `stderr` is drained.
 class Process {
-    stdout: ProcessLineStream,
     _handle: $rust_type,
-
-    /// Write data to the child process's open stdin pipe.
-    function write_stdin(self, data: string) -> null throws root.errors.Io {
-        $rust_io_function
-    }
-
-    /// Close the child process's stdin pipe, delivering EOF.
-    function close_stdin(self) -> null throws root.errors.Io {
-        $rust_io_function
-    }
+    stdin: WritePipe,
+    stdout: ReadPipe,
+    stderr: ReadPipe,
 
     /// Wait for the child to exit.
     function wait(self) -> ProcessExit throws root.errors.Io | root.errors.Timeout {
@@ -104,7 +134,7 @@ class Process {
     }
 
     /// Request that the child terminate.
-    function kill(self) -> null throws root.errors.Io {
+    function kill(self) -> void throws root.errors.Io {
         $rust_io_function
     }
 
@@ -113,6 +143,51 @@ class Process {
     /// Safe to use with `defer { process.close() }`.
     function close(self) -> null throws never {
         $rust_io_function
+    }
+}
+
+/// A system pipe for reading data, typically from another process.
+///
+/// Generally should only be used with a single reader, competing `read` calls
+/// will behave FIFO.
+class ReadPipe {
+    _pipe: $rust_type,
+
+    /// Close the read pipe, releasing any resources.
+    function close(self) -> void throws root.errors.Io {
+        $rust_io_function
+    }
+
+    /// A line-oriented view over this pipe. The pipe stays open and readable;
+    /// the stream only buffers what it has read past the last newline.
+    function lines(self) -> ReadPipeLines throws never {
+        ReadPipeLines { pipe: self, _pending: b"" }
+    }
+
+    implements root.io.Read {
+        function read(self, limit: int) -> uint8array? throws root.errors.Io {
+            $rust_io_function
+        }
+    }
+}
+
+/// A system pipe for writing data, typically to another process.
+class WritePipe {
+    _pipe: $rust_type,
+
+    /// Close the write pipe, releasing any resources.
+    function close(self) -> void throws root.errors.Io {
+        $rust_io_function
+    }
+
+    implements root.io.Write {
+        function write(self, data: uint8array) -> int throws root.errors.Io {
+            $rust_io_function
+        }
+
+        function flush(self) -> void throws root.errors.Io {
+            $rust_io_function
+        }
     }
 }
 

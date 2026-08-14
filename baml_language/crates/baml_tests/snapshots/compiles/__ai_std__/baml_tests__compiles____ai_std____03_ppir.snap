@@ -483,18 +483,20 @@ function ai.internal._wire_blocks(content: root.content.Block[], keep_reasoning:
 class ai.mcp.McpConnection {
   server_name: string
   p: baml.sys.Process
+  out: baml.sys.ReadPipeLines
   next_id: int
 }
 class ai.mcp.McpConnection$stream {
   server_name: string | null
   p: baml.sys.Process$stream | null
+  out: baml.sys.ReadPipeLines$stream | null
   next_id: int | null
 }
 function ai.mcp._request(self: ?, method: string, params: map<string, unknown>) -> baml.json.json  [expr] {
-  { let id = self.next_id; self.next_id Add= 1; self._send(rpc_line(id, method, params)); while true { let next = self.p.stdout.next() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } }; match (next) { line: string => { let trimmed = line.trim() } if (trimmed.length() Gt 0) { let msg = baml.json.parse(trimmed) catch_all (e) { _ => null } } if (baml.json.path_or(msg, ".id", Neg 1) Eq id) { let err = baml.json.path_or(msg, ".error", null); if (err Ne null) { throw root.errors.InvalidRequest { provider: `...`, status_code: baml.json.path_or(err, ".code", null), detail: baml.json.path_or(err, ".message", "MCP error"), raw_body: baml.json.stringify(err) } }; return baml.json.path_or(msg, ".result", null) }, _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } } }; throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } }
+  { let id = self.next_id; self.next_id Add= 1; self._send(rpc_line(id, method, params)); while true { let next = self.out.next() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } }; match (next) { line: string => { let trimmed = line.trim() } if (trimmed.length() Gt 0) { let msg = baml.json.parse(trimmed) catch_all (e) { _ => null } } if (baml.json.path_or(msg, ".id", Neg 1) Eq id) { let err = baml.json.path_or(msg, ".error", null); if (err Ne null) { throw root.errors.InvalidRequest { provider: `...`, status_code: baml.json.path_or(err, ".code", null), detail: baml.json.path_or(err, ".message", "MCP error"), raw_body: baml.json.stringify(err) } }; return baml.json.path_or(msg, ".result", null) }, _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } } }; throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } }
 }
 function ai.mcp._send(self: ?, line: string) -> void  [expr] {
-  { let framed = [line, "\n"].join(""); let _ = self.p.write_stdin(framed) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } } }
+  { let framed = [line, "\n"].join(""); self.p.stdin.write_all(framed.to_utf8()) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } } }
 }
 function ai.mcp.call_tool(self: ?, name: string, args: map<string, unknown>) -> string  [expr] {
   { let params: map<string, unknown> = map { "name": name, "arguments": args }; let result = self._request("tools/call", params); let texts: string[] = []; for item in baml.json.path_or(result, ".content", []) {  } if (baml.json.path_or(item, ".type", "") Eq "text") { texts.push(baml.json.path_or(item, ".text", "")) }; let joined = texts.join("\n"); if (baml.json.path_or(result, ".isError", false)) { throw baml.errors.InvalidArgument { message: `...` } } } joined
@@ -503,7 +505,7 @@ function ai.mcp.close(self: ?) -> void  [expr] {
   { self.p.close() }
 }
 function ai.mcp.connect(name: string, command: string, args: string[], timeout_ms: int = 30000) -> ai.mcp.McpConnection  [expr] {
-  { let p = baml.sys.start_process(command, args, baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: timeout_ms, stdin: null, keep_stdin_open: true }) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } }; let conn = ai.mcp.McpConnection { server_name: name, p: p, next_id: 1 }; let init: map<string, unknown> = map { "protocolVersion": "2025-06-18", "capabilities": map {  }, "clientInfo": map { "name": "baml-mcp", "version": "0.1" } }; let _ = conn._request("initialize", init); conn._send(rpc_line(null, "notifications/ini...", null)) } conn
+  { let p = baml.sys.start_process(command, args, baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: timeout_ms, stdin: null }) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } }; let out = p.stdout.lines(); let conn = ai.mcp.McpConnection { server_name: name, p: p, out: out, next_id: 1 }; let init: map<string, unknown> = map { "protocolVersion": "2025-06-18", "capabilities": map {  }, "clientInfo": map { "name": "baml-mcp", "version": "0.1" } }; let _ = conn._request("initialize", init); conn._send(rpc_line(null, "notifications/ini...", null)) } conn
 }
 function ai.mcp.rpc_line(id: int?, method: string, params: map<string, unknown>?) -> string  [expr] {
   { let m: map<string, unknown> = map { "jsonrpc": "2.0", "method": method }; if let i: int = id { let _ = m.set("id", i) }; if let p: map<string, unknown> = params { let _ = m.set("params", p) } } baml.json.stringify(baml.json.to_json(m))

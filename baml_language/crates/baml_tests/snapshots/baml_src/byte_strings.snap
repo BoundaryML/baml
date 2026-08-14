@@ -205,6 +205,34 @@ function byte_strings.$init_test_ns_byte_strings_byte_strings(registry: testing.
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_of_finds_first_match"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_of_absent_byte_is_null"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_of_non_byte_is_null"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_of_empty_is_null"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }

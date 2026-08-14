@@ -1553,32 +1553,73 @@ impl io::IoNamespaceIo for DefaultIoOps {
     }
 }
 
+impl io::IoClassSysReadPipe for DefaultIoOps {
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _readpipe: io::owned::sys::ReadPipe,
+        _limit: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _readpipe: io::owned::sys::ReadPipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassSysWritePipe for DefaultIoOps {
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn flush(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
 impl io::IoClassSysProcess for DefaultIoOps {
-    fn write_stdin(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Process,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close_stdin(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
     fn wait(
         &self,
         _h: &Arc<BexHeap>,
@@ -1608,30 +1649,6 @@ impl io::IoClassSysProcess for DefaultIoOps {
         _h: &Arc<BexHeap>,
         _c: CallId,
         _process: io::owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
-    }
-}
-
-impl io::IoClassSysProcessLineStream for DefaultIoOps {
-    fn _next(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::ok(())

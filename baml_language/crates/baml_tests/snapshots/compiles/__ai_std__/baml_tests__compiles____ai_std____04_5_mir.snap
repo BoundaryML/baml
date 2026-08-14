@@ -4329,15 +4329,18 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     let _15: string
     let _16: type
     let _17: type
-    let _18: ai.mcp.McpConnection // conn
-    let _19: baml.sys.Process
-    let _20: map<string, unknown> // init
-    let _21: map<string, unknown>
-    let _22: map<string, string>
-    let _23: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _18: baml.sys.ReadPipeLines // out
+    let _19: (baml.sys.ReadPipe) -> baml.sys.ReadPipeLines throws never
+    let _20: ai.mcp.McpConnection // conn
+    let _21: baml.sys.Process
+    let _22: baml.sys.ReadPipeLines
+    let _23: map<string, unknown> // init
     let _24: map<string, unknown>
-    let _25: void
-    let _26: string
+    let _25: map<string, string>
+    let _26: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _27: map<string, unknown>
+    let _28: void
+    let _29: string
 
     bb0: {
         _5 = copy _4 == const <omitted>;
@@ -4350,58 +4353,64 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     }
 
     bb2: {
-        _8 = baml.sys.ProcessOptions { const null, const null, copy _4, const null, const true };
-        _6 = sys_op const fn baml.sys.start_process(copy _2, copy _3, copy _8) -> bb3 unwind bb8;
+        _8 = baml.sys.ProcessOptions { const null, const null, copy _4, const null, const null };
+        _6 = sys_op const fn baml.sys.start_process(copy _2, copy _3, copy _8) -> bb3 unwind bb9;
     }
 
     bb3: {
-        _19 = copy _6;
-        _18 = ai.mcp.McpConnection { copy _1, copy _19, const 1_i64 };
-        _21 = {  }: map<string, unknown>;
-        _22 = { const "name": const "baml-mcp", const "version": const "0.1" }: map<string, string>;
-        _20 = { const "protocolVersion": const "2025-06-18", const "capabilities": copy _21, const "clientInfo": copy _22 }: map<string, unknown>;
-        _24 = copy _20;
-        _23 = call const fn ai.mcp.McpConnection._request(copy _18, const "initialize", copy _24) -> [bb4];
+        _19 = copy _6.2;
+        _18 = call const fn baml.sys.ReadPipe.lines(copy _19) -> [bb4];
     }
 
     bb4: {
-        _26 = call const fn ai.mcp.rpc_line(const null, const "notifications/initialized", const null) -> [bb5];
+        _21 = copy _6;
+        _22 = copy _18;
+        _20 = ai.mcp.McpConnection { copy _1, copy _21, copy _22, const 1_i64 };
+        _24 = {  }: map<string, unknown>;
+        _25 = { const "name": const "baml-mcp", const "version": const "0.1" }: map<string, string>;
+        _23 = { const "protocolVersion": const "2025-06-18", const "capabilities": copy _24, const "clientInfo": copy _25 }: map<string, unknown>;
+        _27 = copy _23;
+        _26 = call const fn ai.mcp.McpConnection._request(copy _20, const "initialize", copy _27) -> [bb5];
     }
 
     bb5: {
-        _25 = call const fn ai.mcp.McpConnection._send(copy _18, copy _26) -> [bb6];
+        _29 = call const fn ai.mcp.rpc_line(const null, const "notifications/initialized", const null) -> [bb6];
     }
 
     bb6: {
-        _0 = copy _18;
-        goto -> bb7;
+        _28 = call const fn ai.mcp.McpConnection._send(copy _20, copy _29) -> [bb7];
     }
 
     bb7: {
-        return;
+        _0 = copy _20;
+        goto -> bb8;
     }
 
     bb8: {
-        throw_if_panic copy _7 -> bb9;
+        return;
     }
 
     bb9: {
-        _12 = load_type(string);
-        _11 = call const fn baml.String.from<copy _12>(copy _1) -> [bb10];
+        throw_if_panic copy _7 -> bb10;
     }
 
     bb10: {
-        _10 = const "mcp/" + copy _11;
-        _16 = load_type(baml.errors.Io);
-        _15 = call const fn baml.String.from<copy _16>(copy _7) -> [bb11];
+        _12 = load_type(string);
+        _11 = call const fn baml.String.from<copy _12>(copy _1) -> [bb11];
     }
 
     bb11: {
-        _17 = load_type(string);
-        _14 = call const fn baml.String.from<copy _17>(copy _15) -> [bb12];
+        _10 = const "mcp/" + copy _11;
+        _16 = load_type(baml.errors.Io);
+        _15 = call const fn baml.String.from<copy _16>(copy _7) -> [bb12];
     }
 
     bb12: {
+        _17 = load_type(string);
+        _14 = call const fn baml.String.from<copy _17>(copy _15) -> [bb13];
+    }
+
+    bb13: {
         _13 = const "the MCP server could not start: " + copy _14;
         _9 = ai.errors.NetworkFailure { copy _10, copy _13, const null };
         throw copy _9;
@@ -4416,10 +4425,10 @@ fn ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void 
     let _3: string // framed
     let _4: string[]
     let _5: type
-    let _6: null
+    let _6: void
     let _7: unknown // e
-    let _8: (baml.sys.Process, string) -> null throws baml.errors.Io
-    let _9: string
+    let _8: baml.sys.WritePipe
+    let _9: uint8array
     let _10: ai.errors.NetworkFailure
     let _11: string
     let _12: string
@@ -4438,42 +4447,45 @@ fn ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void 
     }
 
     bb1: {
-        _8 = copy _1.1;
-        _9 = copy _3;
-        _6 = sys_op const fn baml.sys.Process.write_stdin(copy _8, copy _9) -> bb2 unwind bb4;
+        _8 = copy _1.1.1;
+        _9 = call const fn baml.String.to_utf8(copy _3) -> [bb2, unwind: bb5];
     }
 
     bb2: {
-        _0 = const null;
-        goto -> bb3;
+        _6 = virtual_call write_all as baml.io.Write(copy _8, copy _9) -> [bb3, unwind: bb5];
     }
 
     bb3: {
-        return;
+        _0 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        throw_if_panic copy _7 -> bb5;
+        return;
     }
 
     bb5: {
-        _13 = copy _1.0;
-        _14 = load_type(string);
-        _12 = call const fn baml.String.from<copy _14>(copy _13) -> [bb6];
+        throw_if_panic copy _7 -> bb6;
     }
 
     bb6: {
-        _11 = const "mcp/" + copy _12;
-        _18 = load_type(baml.errors.Io);
-        _17 = call const fn baml.String.from<copy _18>(copy _7) -> [bb7];
+        _13 = copy _1.0;
+        _14 = load_type(string);
+        _12 = call const fn baml.String.from<copy _14>(copy _13) -> [bb7];
     }
 
     bb7: {
-        _19 = load_type(string);
-        _16 = call const fn baml.String.from<copy _19>(copy _17) -> [bb8];
+        _11 = const "mcp/" + copy _12;
+        _18 = load_type(baml.errors.Io);
+        _17 = call const fn baml.String.from<copy _18>(copy _7) -> [bb8];
     }
 
     bb8: {
+        _19 = load_type(string);
+        _16 = call const fn baml.String.from<copy _19>(copy _17) -> [bb9];
+    }
+
+    bb9: {
         _15 = const "writing to the MCP server failed: " + copy _16;
         _10 = ai.errors.NetworkFailure { copy _11, copy _15, const null };
         throw copy _10;
@@ -4492,7 +4504,7 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     let _7: int
     let _8: string | baml.iter.Done // next
     let _9: unknown // e
-    let _10: baml.sys.ProcessLineStream
+    let _10: baml.sys.ReadPipeLines
     let _11: ai.errors.NetworkFailure
     let _12: string
     let _13: string
@@ -4555,8 +4567,8 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     let _70: type
 
     bb0: {
-        _4 = copy _1.2;
-        _1.2 = copy _1.2 + const 1_i64;
+        _4 = copy _1.3;
+        _1.3 = copy _1.3 + const 1_i64;
         _7 = copy _4;
         _6 = call const fn ai.mcp.rpc_line(copy _7, copy _2, copy _3) -> [bb1];
     }
@@ -4609,8 +4621,8 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     }
 
     bb10: {
-        _10 = copy _1.1.0;
-        _8 = virtual_call next as baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string>(copy _10) -> [bb16, unwind: bb11];
+        _10 = copy _1.2;
+        _8 = virtual_call next as baml.iter.Iterator<Error = baml.errors.Io, Item = string>(copy _10) -> [bb16, unwind: bb11];
     }
 
     bb11: {
@@ -4625,7 +4637,7 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
 
     bb13: {
         _12 = const "mcp/" + copy _13;
-        _19 = load_type(baml.errors.Io | baml.errors.Timeout);
+        _19 = load_type(baml.errors.Io);
         _18 = call const fn baml.String.from<copy _19>(copy _9) -> [bb14];
     }
 

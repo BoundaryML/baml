@@ -11,6 +11,9 @@ interface Write {
     function write_all(self, data: uint8array) -> void throws root.errors.Io {
         while (data.length() > 0) {
             let written = self.write(data);
+            if (written == 0) {
+                throw root.errors.Io { message: "stream closed without writing all data" };
+            }
             data = data.slice(written, data.length());
         }
     }

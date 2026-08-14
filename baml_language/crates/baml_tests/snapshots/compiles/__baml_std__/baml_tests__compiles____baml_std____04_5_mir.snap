@@ -4325,8 +4325,11 @@ fn baml.io.Write.write_all(self: baml.io.Write, data: uint8array) -> void {
     let _3: bool
     let _4: int
     let _5: int // written
-    let _6: int
+    let _6: bool
     let _7: int
+    let _8: baml.errors.Io
+    let _9: int
+    let _10: int
 
     bb0: {
         goto -> bb1;
@@ -4356,13 +4359,24 @@ fn baml.io.Write.write_all(self: baml.io.Write, data: uint8array) -> void {
     }
 
     bb6: {
-        _6 = copy _5;
-        _7 = len(_2);
-        goto -> bb7;
+        _7 = copy _5;
+        _6 = copy _7 == const 0_i64;
+        branch copy _6 -> [bb9, bb7];
     }
 
     bb7: {
-        _2 = call const fn baml.Uint8Array.slice(copy _2, copy _6, copy _7) -> [bb1];
+        _9 = copy _5;
+        _10 = len(_2);
+        goto -> bb8;
+    }
+
+    bb8: {
+        _2 = call const fn baml.Uint8Array.slice(copy _2, copy _9, copy _10) -> [bb1];
+    }
+
+    bb9: {
+        _8 = baml.errors.Io { const "stream closed without writing all data" };
+        throw copy _8;
     }
 }
 
@@ -8194,10 +8208,10 @@ fn baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool {
     }
 }
 
-fn baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: baml.sys.ProcessLineStream) -> baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> {
+fn baml.sys.ReadPipeLines.root.iter.Iterable.iter(self: baml.sys.ReadPipeLines) -> baml.iter.Iterator<Error = baml.errors.Io, Item = string> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> // _0 // return
-    let _1: baml.sys.ProcessLineStream // self // param
+    let _0: baml.iter.Iterator<Error = baml.errors.Io, Item = string> // _0 // return
+    let _1: baml.sys.ReadPipeLines // self // param
 
     bb0: {
         _0 = copy _1;
@@ -8209,52 +8223,239 @@ fn baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: baml.sys.ProcessLine
     }
 }
 
-fn baml.sys.ProcessLineStream.root.iter.Iterator.next(self: baml.sys.ProcessLineStream) -> string | baml.iter.Done {
+fn baml.sys.ReadPipeLines.root.iter.Iterator.next(self: baml.sys.ReadPipeLines) -> string | baml.iter.Done {
     // Locals:
     let _0: string | baml.iter.Done // _0 // return
-    let _1: baml.sys.ProcessLineStream // self // param
-    let _2: string | null
-    let _3: string | null
-    let _4: string // line
+    let _1: baml.sys.ReadPipeLines // self // param
+    let _2: string | baml.iter.Done // line
+    let _3: bool // framing
+    let _4: bool
+    let _5: int | null
+    let _6: (baml.Uint8Array, int) -> int | null throws never
+    let _7: int | null
+    let _8: int // index
+    let _9: uint8array // bytes
+    let _10: (baml.Uint8Array, int, int) -> uint8array throws never
+    let _11: int
+    let _12: (baml.Uint8Array, int, int) -> uint8array throws never
+    let _13: int
+    let _14: int
+    let _15: int
+    let _16: (baml.Uint8Array) -> int throws never
+    let _17: uint8array
+    let _18: uint8array
+    let _19: uint8array
+    let _20: null | uint8array
+    let _21: baml.sys.ReadPipe
+    let _22: null | uint8array
+    let _23: uint8array // chunk
+    let _24: (baml.Uint8Array, uint8array) -> uint8array throws never
+    let _25: uint8array
+    let _26: uint8array
+    let _27: bool
+    let _28: int
+    let _29: (baml.Uint8Array) -> int throws never
+    let _30: uint8array
+    let _31: uint8array
 
     bb0: {
-        _2 = sys_op const fn baml.sys.ProcessLineStream._next(copy _1) -> bb1;
+        _2 = baml.iter.Done {  };
+        _3 = const true;
+        goto -> bb1;
     }
 
     bb1: {
-        _3 = copy _2;
-        _3 = narrow_bind copy _3 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
+        _4 = copy _3;
+        branch copy _4 -> [bb4, bb2];
     }
 
     bb2: {
-        _0 = baml.iter.Done {  };
-        goto -> bb4;
+        _0 = copy _2;
+        goto -> bb3;
     }
 
     bb3: {
-        _4 = copy _3;
-        _0 = copy _4;
-        goto -> bb4;
+        return;
     }
 
     bb4: {
-        return;
+        _6 = copy _1.1;
+        _5 = call const fn baml.Uint8Array.index_of(copy _6, const 10_i64) -> [bb5];
+    }
+
+    bb5: {
+        _7 = copy _5;
+        _7 = narrow_bind copy _7 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb16, bb6];
+    }
+
+    bb6: {
+        _21 = copy _1.0;
+        _20 = virtual_call read as baml.io.Read(copy _21, const 65536_i64) -> [bb7];
+    }
+
+    bb7: {
+        _22 = copy _20;
+        _22 = narrow_bind copy _22 as Uint8Array { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb14, bb8];
+    }
+
+    bb8: {
+        _29 = copy _1.1;
+        _28 = len(_29);
+        goto -> bb9;
+    }
+
+    bb9: {
+        _27 = copy _28 > const 0_i64;
+        branch copy _27 -> [bb10, bb13];
+    }
+
+    bb10: {
+        _31 = copy _1.1;
+        _30 = call const fn baml.sys._strip_carriage_return(copy _31) -> [bb11];
+    }
+
+    bb11: {
+        _2 = call const fn baml.Uint8Array.baml.ToString.to_string(copy _30) -> [bb12];
+    }
+
+    bb12: {
+        _1.1 = b"<0 bytes>";
+        goto -> bb13;
+    }
+
+    bb13: {
+        _3 = const false;
+        goto -> bb1;
+    }
+
+    bb14: {
+        _23 = copy _22;
+        _24 = copy _1.1;
+        _25 = copy _23;
+        _26 = call const fn baml.Uint8Array.concat(copy _24, copy _25) -> [bb15];
+    }
+
+    bb15: {
+        _1.1 = copy _26;
+        goto -> bb1;
+    }
+
+    bb16: {
+        _8 = copy _7;
+        _10 = copy _1.1;
+        _11 = copy _8;
+        _9 = call const fn baml.Uint8Array.slice(copy _10, const 0_i64, copy _11) -> [bb17];
+    }
+
+    bb17: {
+        _12 = copy _1.1;
+        _14 = copy _8;
+        _13 = copy _14 + const 1_i64;
+        _16 = copy _1.1;
+        _15 = len(_16);
+        goto -> bb18;
+    }
+
+    bb18: {
+        _17 = call const fn baml.Uint8Array.slice(copy _12, copy _13, copy _15) -> [bb19];
+    }
+
+    bb19: {
+        _1.1 = copy _17;
+        goto -> bb20;
+    }
+
+    bb20: {
+        _19 = copy _9;
+        _18 = call const fn baml.sys._strip_carriage_return(copy _19) -> [bb21];
+    }
+
+    bb21: {
+        _2 = call const fn baml.Uint8Array.baml.ToString.to_string(copy _18) -> [bb22];
+    }
+
+    bb22: {
+        _3 = const false;
+        goto -> bb1;
     }
 }
 
-fn baml.sys.ProcessLineStream._next = builtin(io)
+fn baml.sys._strip_carriage_return(line: uint8array) -> uint8array {
+    // Locals:
+    let _0: uint8array // _0 // return
+    let _1: uint8array // line // param
+    let _2: int | null
+    let _3: int
+    let _4: int
+    let _5: int
+    let _6: int
 
-fn baml.sys.ProcessLineStream.close = builtin(io)
+    bb0: {
+        _4 = len(_1);
+        goto -> bb1;
+    }
 
-fn baml.sys.Process.write_stdin = builtin(io)
+    bb1: {
+        _3 = copy _4 - const 1_i64;
+        _2 = call const fn baml.Uint8Array.at(copy _1, copy _3) -> [bb2];
+    }
 
-fn baml.sys.Process.close_stdin = builtin(io)
+    bb2: {
+        switch copy _2 [13: bb4, otherwise: bb3];
+    }
+
+    bb3: {
+        _0 = copy _1;
+        goto -> bb6;
+    }
+
+    bb4: {
+        _6 = len(_1);
+        goto -> bb5;
+    }
+
+    bb5: {
+        _5 = copy _6 - const 1_i64;
+        _0 = call const fn baml.Uint8Array.slice(copy _1, const 0_i64, copy _5) -> [bb6];
+    }
+
+    bb6: {
+        return;
+    }
+}
 
 fn baml.sys.Process.wait = builtin(io)
 
 fn baml.sys.Process.kill = builtin(io)
 
 fn baml.sys.Process.close = builtin(io)
+
+fn baml.sys.ReadPipe.close = builtin(io)
+
+fn baml.sys.ReadPipe.lines(self: baml.sys.ReadPipe) -> baml.sys.ReadPipeLines {
+    // Locals:
+    let _0: baml.sys.ReadPipeLines // _0 // return
+    let _1: baml.sys.ReadPipe // self // param
+    let _2: uint8array
+
+    bb0: {
+        _2 = b"<0 bytes>";
+        _0 = baml.sys.ReadPipeLines { copy _1, copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.sys.ReadPipe.root.io.Read.read = builtin(io)
+
+fn baml.sys.WritePipe.close = builtin(io)
+
+fn baml.sys.WritePipe.root.io.Write.write = builtin(io)
+
+fn baml.sys.WritePipe.root.io.Write.flush = builtin(io)
 
 fn baml.sys.exec = builtin(io)
 
@@ -11932,6 +12133,8 @@ fn baml.Uint8Array.pop = builtin(vm)
 fn baml.Uint8Array.concat = builtin(vm)
 
 fn baml.Uint8Array.includes = builtin(vm)
+
+fn baml.Uint8Array.index_of = builtin(vm)
 
 fn baml.Uint8Array.reverse = builtin(vm)
 

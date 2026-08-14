@@ -1087,6 +1087,9 @@ function baml.Uint8Array.from_hex(hex: string) -> uint8array {
 function baml.Uint8Array.includes(self: baml.Uint8Array, item: int) -> bool {
 }
 
+function baml.Uint8Array.index_of(self: baml.Uint8Array, item: int) -> int | null {
+}
+
 function baml.Uint8Array.length(self: baml.Uint8Array) -> int {
 }
 
@@ -2927,14 +2930,26 @@ function baml.io.Write.write_all(self: baml.io.Write, data: uint8array) -> void 
     load_const "write"
     virtual_call nargs=2 ntypeargs=0
     store_var written
+    load_var written
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
     load_var data
     container_len
-    store_var _7
+    store_var _10
     load_var2 2 4
-    load_var _7
+    load_var _10
     call baml.Uint8Array.slice
     store_var data
     jump L0
+
+  L4:
+    load_const "stream closed without writing all data"
+    init_instance baml.errors.Io .message
+    throw
 }
 
 function baml.io.eprint(s: string) -> null {
@@ -5618,16 +5633,10 @@ function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spa
 function baml.sys.Process.close(self: baml.sys.Process) -> null {
 }
 
-function baml.sys.Process.close_stdin(self: baml.sys.Process) -> null {
-}
-
-function baml.sys.Process.kill(self: baml.sys.Process) -> null {
+function baml.sys.Process.kill(self: baml.sys.Process) -> void {
 }
 
 function baml.sys.Process.wait(self: baml.sys.Process) -> baml.sys.ProcessExit {
-}
-
-function baml.sys.Process.write_stdin(self: baml.sys.Process, data: string) -> null {
 }
 
 function baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool {
@@ -5638,35 +5647,133 @@ function baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool {
     return
 }
 
-function baml.sys.ProcessLineStream._next(self: baml.sys.ProcessLineStream) -> string | null {
+function baml.sys.ReadPipe.close(self: baml.sys.ReadPipe) -> void {
 }
 
-function baml.sys.ProcessLineStream.close(self: baml.sys.ProcessLineStream) -> null {
+function baml.sys.ReadPipe.lines(self: baml.sys.ReadPipe) -> baml.sys.ReadPipeLines {
+    load_var self
+    load_const b""
+    call baml.deep_copy
+    init_instance baml.sys.ReadPipeLines .pipe, ._pending
+    return
 }
 
-function baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: baml.sys.ProcessLineStream) -> baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> {
+function baml.sys.ReadPipe.root.io.Read.read(self: baml.sys.ReadPipe, limit: int) -> uint8array | null {
+}
+
+function baml.sys.ReadPipeLines.root.iter.Iterable.iter(self: baml.sys.ReadPipeLines) -> baml.iter.Iterator<Error = baml.errors.Io, Item = string> {
     load_var self
     return
 }
 
-function baml.sys.ProcessLineStream.root.iter.Iterator.next(self: baml.sys.ProcessLineStream) -> string | baml.iter.Done {
-    load_var self
-    sys_op baml.sys.ProcessLineStream._next
-    store_var _3
-    load_var _3
-    narrow_bind string, slot=2
-    pop_jump_if_false L0
-    jump L1
+function baml.sys.ReadPipeLines.root.iter.Iterator.next(self: baml.sys.ReadPipeLines) -> string | baml.iter.Done {
+    alloc_instance baml.iter.Done
+    store_var line
+    load_const true
+    store_var framing
 
   L0:
-    alloc_instance baml.iter.Done
+    load_var framing
+    pop_jump_if_false L1
     jump L2
 
   L1:
-    load_var _3
+    load_var line
+    return
 
   L2:
-    return
+    load_var self
+    load_field ._pending
+    load_const 10
+    call baml.Uint8Array.index_of
+    store_var _7
+    load_var _7
+    narrow_bind int, slot=4
+    pop_jump_if_false L3
+    jump L7
+
+  L3:
+    load_var self
+    load_field .pipe
+    load_const 65536
+    load_type baml.io.Read
+    load_const "read"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _20
+    load_var _20
+    store_var _22
+    load_var _22
+    narrow_bind uint8array, slot=12
+    pop_jump_if_false L4
+    jump L6
+
+  L4:
+    load_var self
+    load_field ._pending
+    container_len
+    store_var _28
+    load_var _28
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L5
+    load_var self
+    load_field ._pending
+    call baml.sys._strip_carriage_return
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var line
+    load_var self
+    load_const b""
+    call baml.deep_copy
+    store_field ._pending
+
+  L5:
+    load_const false
+    store_var framing
+    jump L0
+
+  L6:
+    load_var self
+    load_field ._pending
+    load_var _22
+    call baml.Uint8Array.concat
+    store_var _26
+    load_var2 1 13
+    store_field ._pending
+    jump L0
+
+  L7:
+    load_var _7
+    store_var index
+    load_var self
+    load_field ._pending
+    load_const 0
+    load_var index
+    call baml.Uint8Array.slice
+    store_var bytes
+    load_var self
+    load_field ._pending
+    store_var _12
+    load_var index
+    load_const 1
+    add_int
+    store_var _13
+    load_var self
+    load_field ._pending
+    container_len
+    store_var _15
+    load_var2 7 8
+    load_var _15
+    call baml.Uint8Array.slice
+    store_var _17
+    load_var2 1 10
+    store_field ._pending
+    load_var bytes
+    call baml.sys._strip_carriage_return
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var line
+    load_const false
+    store_var framing
+    jump L0
 }
 
 function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
@@ -5674,6 +5781,47 @@ function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
     load_field .exit_code
     load_const 0
     cmp_int_op ==
+    return
+}
+
+function baml.sys.WritePipe.close(self: baml.sys.WritePipe) -> void {
+}
+
+function baml.sys.WritePipe.root.io.Write.flush(self: baml.sys.WritePipe) -> void {
+}
+
+function baml.sys.WritePipe.root.io.Write.write(self: baml.sys.WritePipe, data: uint8array) -> int {
+}
+
+function baml.sys._strip_carriage_return(line: uint8array) -> uint8array {
+    load_var line
+    container_len
+    store_var _4
+    load_var2 1 2
+    load_const 1
+    sub_int
+    call baml.Uint8Array.at
+    load_const 13
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var line
+    jump L2
+
+  L1:
+    load_var line
+    container_len
+    store_var _6
+    load_var line
+    load_const 0
+    load_var _6
+    load_const 1
+    sub_int
+    call baml.Uint8Array.slice
+
+  L2:
     return
 }
 

@@ -264,7 +264,7 @@ async fn start_process_yields_stdout_before_exit() {
                 );
                 defer { process.close() }
 
-                let first = match (process.stdout.next()) {
+                let first = match (process.stdout.lines().next()) {
                     let line: string => line,
                     baml.iter.Done => "",
                 };
@@ -291,7 +291,7 @@ async fn start_process_iterates_lines_and_final_unterminated_line() {
                 );
                 defer { process.close() }
 
-                let lines = process.stdout.collect();
+                let lines = process.stdout.lines().collect();
                 let exit = process.wait();
                 if (!exit.ok()) {
                     return "bad exit";
@@ -313,18 +313,21 @@ async fn start_process_supports_incremental_stdin() {
     let output = baml_test!(
         r#"
             function main() -> string throws baml.errors.Io | baml.errors.Timeout {
-                let process = baml.sys.start_process(
-                    "cat",
-                    [],
-                    baml.sys.ProcessOptions { keep_stdin_open: true },
-                );
+                let process = baml.sys.start_process("cat", [], null);
                 defer { process.close() }
 
-                process.write_stdin("one\n");
-                let one = process.stdout._next() ?? "";
-                process.write_stdin("two\n");
-                let two = process.stdout._next() ?? "";
-                process.close_stdin();
+                let out = process.stdout.lines();
+                process.stdin.write_all("one\n".to_utf8());
+                let one = match (out.next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                };
+                process.stdin.write_all("two\n".to_utf8());
+                let two = match (out.next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                };
+                process.stdin.close();
                 let exit = process.wait();
                 if (!exit.ok()) {
                     return "bad exit";
@@ -340,29 +343,43 @@ async fn start_process_supports_incremental_stdin() {
     );
 }
 
+// `timeout_ms` bounds `wait()`, not the pipes: reading stdout goes through
+// `baml.io.Read`, whose only error class is `Io`, so a blocked read is bounded
+// by the cancellation system rather than a deadline baked into the read.
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_stdout_read_honors_process_timeout() {
+async fn start_process_stdout_read_is_cancellable() {
     let output = baml_test!(
         r#"
-            function main() -> bool {
+            function main() -> string {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "while :; do :; done"],
-                    baml.sys.ProcessOptions { timeout_ms: 25 },
+                    null,
                 );
                 defer { process.close() }
 
-                process.stdout.next() catch (e) {
-                    let timeout: baml.errors.Timeout => { return true; },
-                    _ => { return false; },
+                let tok = baml.spawn.CancelToken.new();
+                let read = spawn with baml.spawn.options(cancel = tok) {
+                    process.stdout.lines().next()
                 };
-                false
+                let deadline = spawn {
+                    baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
+                    tok.cancel()
+                };
+                (await read) catch (e) {
+                    baml.panics.Cancelled => "cancelled"
+                };
+                "cancelled"
             }
         "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("cancelled".into())),
+        "a line read from a silent child should be cancelled by the deadline task"
+    );
 }
 
 #[tokio::test]

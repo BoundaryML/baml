@@ -38,6 +38,12 @@ class Uint8Array {
         $rust_function
     }
 
+    /// Returns the index of the first occurrence of `item`, or `null` when it
+    /// is absent. An `item` outside the `u8` range is never present.
+    function index_of(self, item: int) -> int? throws never {
+        $rust_function
+    }
+
     /// Returns a new `uint8array` with the bytes in reverse order.
     function reverse(self) -> uint8array throws never {
         $rust_function
