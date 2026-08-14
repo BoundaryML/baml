@@ -706,6 +706,7 @@ class baml.fs.MkdirOptions$stream {
   recursive: bool | null
 }
 function baml.fs.bytes(self: ?) -> uint8array  [builtin]
+function baml.fs.chmod(path: string, mode: int) -> void  [builtin]
 function baml.fs.close(self: ?) -> null  [builtin]
 function baml.fs.exists(path: string) -> bool  [builtin]
 function baml.fs.mkdir(path: string, options: baml.fs.MkdirOptions) -> null  [builtin]
@@ -719,6 +720,7 @@ function baml.fs.remove_dir(path: string) -> null  [builtin]
 function baml.fs.remove_dir_all(path: string) -> null  [builtin]
 function baml.fs.seek_from(self: ?, whence: "start" | "current" | "end", offset: int) -> int  [builtin]
 function baml.fs.size(path: string) -> int  [builtin]
+function baml.fs.symlink(target: string, path: string) -> void  [builtin]
 function baml.fs.text(self: ?) -> string  [builtin]
 function baml.fs.write(self: ?, data: string) -> int  [builtin]
 function baml.fs.write(path: string, content: string) -> int  [builtin]
@@ -1906,6 +1908,7 @@ function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
 }
 function baml.sys.panic(message: string) -> never  [builtin]
+function baml.sys.pid() -> int  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(delay: root.time.Duration) -> null  [builtin]
 function baml.sys.start_process(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.Process  [builtin]

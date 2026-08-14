@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 417
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:30
@@ -115,6 +114,8 @@ function         baml.fs.read_dir                 <builtin>/baml/ns_fs/fs.baml:1
 function         baml.fs.mkdir                    <builtin>/baml/ns_fs/fs.baml:133
 function         baml.fs.remove_dir               <builtin>/baml/ns_fs/fs.baml:139
 function         baml.fs.remove_dir_all           <builtin>/baml/ns_fs/fs.baml:148
+function         baml.fs.chmod                    <builtin>/baml/ns_fs/fs.baml:171
+function         baml.fs.symlink                  <builtin>/baml/ns_fs/fs.baml:191
 enum             baml.future.FutureState          <builtin>/baml/ns_future/future.baml:21
 class            baml.future.Future               <builtin>/baml/ns_future/future.baml:28
 function         baml.future.all_complete         <builtin>/baml/ns_future/future.baml:80
@@ -274,6 +275,7 @@ function         baml.sys.collect_garbage         <builtin>/baml/ns_sys/sys.baml
 function         baml.sys.panic                   <builtin>/baml/ns_sys/sys.baml:162
 function         baml.sys.exit                    <builtin>/baml/ns_sys/sys.baml:168
 function         baml.sys.argv                    <builtin>/baml/ns_sys/sys.baml:174
+function         baml.sys.pid                     <builtin>/baml/ns_sys/sys.baml:183
 class            baml.time.Duration               <builtin>/baml/ns_time/duration.baml:4
 class            baml.time.Instant                <builtin>/baml/ns_time/instant.baml:2
 class            baml.time.PlainDate              <builtin>/baml/ns_time/plaindate.baml:5

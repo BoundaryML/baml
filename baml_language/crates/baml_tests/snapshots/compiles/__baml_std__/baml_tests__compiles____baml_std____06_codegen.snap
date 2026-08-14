@@ -2259,6 +2259,9 @@ function baml.fs.File.write(self: baml.fs.File, data: string) -> int {
 function baml.fs.File.write_bytes(self: baml.fs.File, data: uint8array) -> int {
 }
 
+function baml.fs.chmod(path: string, mode: int) -> void {
+}
+
 function baml.fs.exists(path: string) -> bool {
 }
 
@@ -2284,6 +2287,9 @@ function baml.fs.remove_dir_all(path: string) -> null {
 }
 
 function baml.fs.size(path: string) -> int {
+}
+
+function baml.fs.symlink(target: string, path: string) -> void {
 }
 
 function baml.fs.write(path: string, content: string) -> int {
@@ -5137,6 +5143,9 @@ function baml.sys.exit(code: int) -> never {
 }
 
 function baml.sys.panic(message: string) -> never {
+}
+
+function baml.sys.pid() -> int {
 }
 
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {
