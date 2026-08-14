@@ -1,48 +1,43 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 34944
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got null | string
-    ╭─[ main.baml:20:57 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:20:56]
  20 │ ╭─▶ function RootUsesOwnStream(c: Config$stream) -> string {
- 21 │ ├─▶     c.key
-    │ │               
-    │ ╰─────────────── type mismatch: expected string, got null | string
-    │     
-    │     Note: Error code: E0001
-────╯
+ 21 │ │       c.key
+ 22 │ ├─▶ }
+    · ╰──── expected `string`, found `string | null`
+    ╰────
 
-  [type] Error: type mismatch: expected string, got null | string
-    ╭─[ main.baml:25:68 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:25:67]
  25 │ ╭─▶ function RootUsesLlmStream(r: root.llm.Response$stream) -> string {
- 26 │ ├─▶     r.text
-    │ │                
-    │ ╰──────────────── type mismatch: expected string, got null | string
-    │     
-    │     Note: Error code: E0001
-────╯
+ 26 │ │       r.text
+ 27 │ ├─▶ }
+    · ╰──── expected `string`, found `string | null`
+    ╰────
 
-  [type] Error: type mismatch: expected string, got null | string
-    ╭─[ models.baml:12:58 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[models.baml:12:57]
  12 │ ╭─▶ function LlmUsesOwnStream(r: Response$stream) -> string {
- 13 │ ├─▶     r.text
-    │ │                
-    │ ╰──────────────── type mismatch: expected string, got null | string
-    │     
-    │     Note: Error code: E0001
-────╯
+ 13 │ │       r.text
+ 14 │ ├─▶ }
+    · ╰──── expected `string`, found `string | null`
+    ╰────
 
-  [type] Error: type mismatch: expected string, got null | string
-    ╭─[ models.baml:17:62 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[models.baml:17:61]
  17 │ ╭─▶ function LlmUsesRootStream(c: root.Config$stream) -> string {
- 18 │ ├─▶     c.key
-    │ │               
-    │ ╰─────────────── type mismatch: expected string, got null | string
-    │     
-    │     Note: Error code: E0001
-────╯
+ 18 │ │       c.key
+ 19 │ ├─▶ }
+    · ╰──── expected `string`, found `string | null`
+    ╰────

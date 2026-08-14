@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+363..364 'f': throws never
+413..447 '{\n   ...ror\n}': !error
+419..423 'a.eq': !error
+419..426 'a.eq(b)': !error
+424..425 'b': baml.ops.Equals

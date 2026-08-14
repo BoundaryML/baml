@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+891..900 'roundtrip': throws never
+954..1053 '{\n   ...e }\n}': bool
+960..965 'let v': (T as user.Sink).Item
+968..975 'io.pull': (self: T) -> (T as user.Sink).Item throws never
+968..977 'io.pull()': (T as user.Sink).Item
+1015..1051 'if (c)...alse }': bool
+1019..1020 'c': bool
+1022..1036 '{ io.push(v) }': bool
+1024..1031 'io.push': (self: T, item: (T as user.Sink).Item) -> bool throws never
+1024..1034 'io.push(v)': bool
+1032..1033 'v': (T as user.Sink).Item
+1042..1051 '{ false }': false
+1044..1049 'false': false
+1148..1152 'pull': throws never
+1179..1214 '{\n   ...     }': int
+1193..1204 'self.buffer': int
+1284..1288 'push': throws never
+1327..1355 '{\n   ...     }': true
+1341..1345 'true': true
+1374..1382 'concrete': throws never
+1412..1457 '{\n   ...  x\n}': int
+1418..1423 'let x': int
+1426..1432 'p.pull': (self: user.Pipe) -> int throws never
+1426..1434 'p.pull()': int
+1454..1455 'x': int

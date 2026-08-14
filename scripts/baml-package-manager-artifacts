@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Generate wrapper-only Homebrew and AUR release files."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+from pathlib import Path
+
+from baml_release_platforms import load_wrapper_targets
+
+
+AUR_BIN_TARGETS = {
+    "linux_arm": "aarch64-unknown-linux-gnu",
+    "linux_intel": "x86_64-unknown-linux-gnu",
+}
+
+HOMEBREW_TARGETS = {
+    "mac_arm": "aarch64-apple-darwin",
+    "mac_intel": "x86_64-apple-darwin",
+    **AUR_BIN_TARGETS,
+}
+
+WRAPPER_TARGETS = {target.triple: target for target in load_wrapper_targets()}
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def wrapper_archive(wrapper_dir: Path, version: str, target: str) -> Path:
+    target_config = WRAPPER_TARGETS.get(target)
+    if target_config is None:
+        raise SystemExit(f"unsupported wrapper target: {target}")
+    path = wrapper_dir / target_config.asset_name(version, "no-self-update")
+    if not path.exists():
+        raise SystemExit(f"missing wrapper archive: {path}")
+    return path
+
+
+def render_formula(version: str, shas: dict[str, str]) -> str:
+    return f'''class Baml < Formula
+  desc "Toolchain manager and launcher for the BAML language"
+  homepage "https://github.com/BoundaryML/baml"
+  license "Apache-2.0"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["mac_arm"]}.tar.gz"
+      sha256 "{shas[HOMEBREW_TARGETS["mac_arm"]]}"
+    end
+
+    on_intel do
+      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["mac_intel"]}.tar.gz"
+      sha256 "{shas[HOMEBREW_TARGETS["mac_intel"]]}"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["linux_arm"]}.tar.gz"
+      sha256 "{shas[HOMEBREW_TARGETS["linux_arm"]]}"
+    end
+
+    on_intel do
+      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["linux_intel"]}.tar.gz"
+      sha256 "{shas[HOMEBREW_TARGETS["linux_intel"]]}"
+    end
+  end
+
+  def install
+    if (buildpath/"bin/baml").exist?
+      bin.install "bin/baml"
+    else
+      bin.install "baml"
+    end
+  end
+
+  def caveats
+    <<~EOS
+      BAML wrapper installed.
+
+      To install and select the current canary language toolchain:
+        baml toolchain use canary
+
+      To use nightly:
+        baml toolchain use nightly
+
+      IDE extension setup is explicit:
+        baml ide install --cursor
+    EOS
+  end
+
+  test do
+    ENV["BAML_HOME"] = (testpath/"baml-home").to_s
+    ENV["HOME"] = testpath.to_s
+    ENV.delete "BAML_VERSION"
+
+    assert_match "baml wrapper {version}",
+                 shell_output("#{{bin}}/baml --version")
+    assert_match "installed toolchains: (none)",
+                 shell_output("#{{bin}}/baml toolchain list")
+    assert_match "self-update is disabled in this build",
+                 shell_output("#{{bin}}/baml self-update 2>&1", 1)
+  end
+end
+'''
+
+
+def aur_srcinfo(pkgname: str, pkgdesc: str, version: str, arch_lines: list[str]) -> str:
+    lines = [
+        f"pkgbase = {pkgname}",
+        f"\tpkgdesc = {pkgdesc}",
+        f"\tpkgver = {version}",
+        "\tpkgrel = 1",
+        "\turl = https://github.com/BoundaryML/baml",
+        "\tarch = x86_64",
+        "\tarch = aarch64",
+        "\tlicense = Apache-2.0",
+    ]
+    lines.extend(arch_lines)
+    lines.extend(
+        [
+            "\tprovides = baml",
+            f"\tconflicts = {'baml-bin' if pkgname == 'baml' else 'baml'}",
+            "",
+            f"pkgname = {pkgname}",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--wrapper-dir", required=True, type=Path)
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--source-sha256", default="SKIP")
+    args = parser.parse_args()
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    shas = {
+        target: sha256(wrapper_archive(args.wrapper_dir, args.version, target))
+        for target in HOMEBREW_TARGETS.values()
+    }
+
+    formula_dir = args.out / "homebrew" / "Formula"
+    formula_dir.mkdir(parents=True, exist_ok=True)
+    (formula_dir / "baml.rb").write_text(render_formula(args.version, shas))
+
+    pkgver = args.version.replace("-", "_")
+    aur_source = (
+        Path("packaging/aur/baml/PKGBUILD")
+        .read_text()
+        .replace("__VERSION__", pkgver)
+        .replace("__VERSION_ORIG__", args.version)
+        .replace("__SHA256__", args.source_sha256)
+    )
+    aur_bin = (
+        Path("packaging/aur/baml-bin/PKGBUILD")
+        .read_text()
+        .replace("__VERSION__", pkgver)
+        .replace("__VERSION_ORIG__", args.version)
+        .replace("__SHA256_X86_64__", shas[AUR_BIN_TARGETS["linux_intel"]])
+        .replace("__SHA256_AARCH64__", shas[AUR_BIN_TARGETS["linux_arm"]])
+    )
+
+    aur_dir = args.out / "aur"
+    for pkgname, text in (("baml", aur_source), ("baml-bin", aur_bin)):
+        pkg_dir = aur_dir / pkgname
+        pkg_dir.mkdir(parents=True, exist_ok=True)
+        (pkg_dir / "PKGBUILD").write_text(text)
+
+    (aur_dir / "baml-bin" / ".SRCINFO").write_text(
+        aur_srcinfo(
+            "baml-bin",
+            "BAML wrapper - toolchain manager and launcher (prebuilt binary)",
+            pkgver,
+            [
+                f"\tsource_x86_64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-no-self-update-{args.version}-x86_64-unknown-linux-gnu.tar.gz",
+                f"\tsha256sums_x86_64 = {shas[AUR_BIN_TARGETS['linux_intel']]}",
+                f"\tsource_aarch64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-no-self-update-{args.version}-aarch64-unknown-linux-gnu.tar.gz",
+                f"\tsha256sums_aarch64 = {shas[AUR_BIN_TARGETS['linux_arm']]}",
+            ],
+        )
+    )
+    (aur_dir / "baml" / ".SRCINFO").write_text(
+        aur_srcinfo(
+            "baml",
+            "BAML wrapper - toolchain manager and launcher (built from source)",
+            pkgver,
+            [
+                "\tmakedepends = rust",
+                "\tmakedepends = cargo",
+                "\tmakedepends = cmake",
+                "\tmakedepends = gcc",
+                f"\tsource = baml-{pkgver}.tar.gz::https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-{args.version}.tar.gz",
+                f"\tsha256sums = {args.source_sha256}",
+            ],
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

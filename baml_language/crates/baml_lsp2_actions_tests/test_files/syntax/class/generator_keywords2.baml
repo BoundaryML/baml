@@ -2,13 +2,6 @@
 // has been changed in order to not collide with the field type `ETA`, and an
 // alias is used to render that field as `ETA` in prompts.
 
-generator lang_python {
-  output_type "python/pydantic"
-  output_dir "../python"
-  version "0.68.0"
-  naming_convention "preserve-case"
-}
-
 class ETA {
     thing string
 }

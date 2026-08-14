@@ -4,7 +4,7 @@
 //! Constructed from compiler2 AST `TypeExpr` + `RawAttribute` (not from CST).
 
 use baml_base::{Name, attr::TyAttrValue};
-use baml_compiler2_ast::{RawAttribute, TypeExpr};
+use baml_compiler2_ast::{RawAttribute, TypeExpr, TypeExprKind};
 
 // ── NO-STREAMING ORIGIN ─────────────────────────────────────────────────────
 
@@ -50,9 +50,18 @@ pub enum PpirTy {
         /// Generic args passed at the use site (e.g. `Box<int>` → `[int]`).
         /// Empty for non-generic types and references that omit args.
         generic_args: Vec<PpirTy>,
+        /// Associated-type bindings written at the use site
+        /// (e.g. `Iterator<Item = int>` → `[("Item", int)]`). Carried through
+        /// the round-trip verbatim — dropping them would materialize
+        /// synthesized `$stream` fields at a *different* (under-pinned) type
+        /// than the source spelled.
+        associated_type_bindings: Vec<(Name, PpirTy)>,
         attrs: PpirTypeAttrs,
     },
     Int {
+        attrs: PpirTypeAttrs,
+    },
+    Bigint {
         attrs: PpirTypeAttrs,
     },
     Float {
@@ -105,6 +114,7 @@ impl PpirTy {
         match self {
             Self::Named { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -123,6 +133,7 @@ impl PpirTy {
         match self {
             Self::Named { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -143,13 +154,18 @@ impl PpirTy {
         let d = PpirTypeAttrs::default();
         match self {
             Self::Named {
-                path, generic_args, ..
+                path,
+                generic_args,
+                associated_type_bindings,
+                ..
             } => Self::Named {
                 path: path.clone(),
                 generic_args: generic_args.clone(),
+                associated_type_bindings: associated_type_bindings.clone(),
                 attrs: d,
             },
             Self::Int { .. } => Self::Int { attrs: d },
+            Self::Bigint { .. } => Self::Bigint { attrs: d },
             Self::Float { .. } => Self::Float { attrs: d },
             Self::String { .. } => Self::String { attrs: d },
             Self::Bool { .. } => Self::Bool { attrs: d },
@@ -185,35 +201,6 @@ impl PpirTy {
 
     // ── Constructors ─────────────────────────────────────────────────────────
 
-    pub fn named(name: impl Into<Name>) -> Self {
-        PpirTy::Named {
-            path: vec![name.into()],
-            generic_args: vec![],
-            attrs: PpirTypeAttrs::default(),
-        }
-    }
-
-    pub fn list(inner: PpirTy) -> Self {
-        PpirTy::List {
-            inner: Box::new(inner),
-            attrs: PpirTypeAttrs::default(),
-        }
-    }
-
-    pub fn optional(inner: PpirTy) -> Self {
-        PpirTy::Optional {
-            inner: Box::new(inner),
-            attrs: PpirTypeAttrs::default(),
-        }
-    }
-
-    pub fn union(types: Vec<PpirTy>) -> Self {
-        PpirTy::Union {
-            variants: types,
-            attrs: PpirTypeAttrs::default(),
-        }
-    }
-
     // ── AST Conversion ───────────────────────────────────────────────────────
 
     /// Construct a `PpirTy` from a compiler2 AST `TypeExpr`.
@@ -239,41 +226,47 @@ impl PpirTy {
 
     fn convert_type_expr(type_expr: &TypeExpr) -> PpirTy {
         let attrs = Self::extract_type_attrs(type_expr.attrs());
-        match type_expr {
-            TypeExpr::Int { .. } => PpirTy::Int { attrs },
-            TypeExpr::Float { .. } => PpirTy::Float { attrs },
-            TypeExpr::String { .. } => PpirTy::String { attrs },
-            TypeExpr::Bool { .. } => PpirTy::Bool { attrs },
-            TypeExpr::Null { .. } => PpirTy::Null { attrs },
-            TypeExpr::Never { .. } => PpirTy::Never { attrs },
-            TypeExpr::Void { .. } => PpirTy::Never { attrs },
-            TypeExpr::Path {
+        match &type_expr.kind {
+            TypeExprKind::Int { .. } => PpirTy::Int { attrs },
+            TypeExprKind::Bigint { .. } => PpirTy::Bigint { attrs },
+            TypeExprKind::Float { .. } => PpirTy::Float { attrs },
+            TypeExprKind::String { .. } => PpirTy::String { attrs },
+            TypeExprKind::Bool { .. } => PpirTy::Bool { attrs },
+            TypeExprKind::Null { .. } => PpirTy::Null { attrs },
+            TypeExprKind::Never { .. } => PpirTy::Never { attrs },
+            TypeExprKind::Void { .. } => PpirTy::Never { attrs },
+            TypeExprKind::Path {
                 segments,
                 generic_args,
+                associated_type_bindings,
                 ..
             } => PpirTy::Named {
                 path: segments.clone(),
                 generic_args: generic_args.iter().map(Self::convert_type_expr).collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|binding| (binding.name.clone(), Self::convert_type_expr(&binding.ty)))
+                    .collect(),
                 attrs,
             },
-            TypeExpr::Optional { inner, .. } => PpirTy::Optional {
+            TypeExprKind::Optional { inner, .. } => PpirTy::Optional {
                 inner: Box::new(Self::convert_type_expr(inner)),
                 attrs,
             },
-            TypeExpr::List { inner, .. } => PpirTy::List {
+            TypeExprKind::List { inner, .. } => PpirTy::List {
                 inner: Box::new(Self::convert_type_expr(inner)),
                 attrs,
             },
-            TypeExpr::Map { key, value, .. } => PpirTy::Map {
+            TypeExprKind::Map { key, value, .. } => PpirTy::Map {
                 key: Box::new(Self::convert_type_expr(key)),
                 value: Box::new(Self::convert_type_expr(value)),
                 attrs,
             },
-            TypeExpr::Union { variants, .. } => PpirTy::Union {
+            TypeExprKind::Union { variants, .. } => PpirTy::Union {
                 variants: variants.iter().map(Self::convert_type_expr).collect(),
                 attrs,
             },
-            TypeExpr::Literal { value, .. } => match value {
+            TypeExprKind::Literal { value, .. } => match value {
                 baml_base::Literal::Float(_) => PpirTy::CannotBeStreamed {
                     origin: CannotBeStreamedOrigin::Unknown,
                     attrs,
@@ -283,26 +276,29 @@ impl PpirTy {
                     attrs,
                 },
             },
-            TypeExpr::Uint8Array { .. } => PpirTy::CannotBeStreamed {
+            TypeExprKind::Uint8Array { .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::Uint8Array,
                 attrs,
             },
-            TypeExpr::Media { kind, .. } => PpirTy::CannotBeStreamed {
+            TypeExprKind::Media { kind, .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::Media(*kind),
                 attrs,
             },
-            TypeExpr::Rust { .. } => PpirTy::CannotBeStreamed {
+            TypeExprKind::Rust { .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::RustType,
                 attrs,
             },
-            TypeExpr::Error { .. } => PpirTy::CannotBeStreamed {
+            TypeExprKind::Error { .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::Error,
                 attrs,
             },
-            TypeExpr::BuiltinUnknown { .. }
-            | TypeExpr::Type { .. }
-            | TypeExpr::Function { .. }
-            | TypeExpr::Unknown { .. } => PpirTy::CannotBeStreamed {
+            TypeExprKind::BuiltinUnknown { .. }
+            | TypeExprKind::AssociatedTypeProjection { .. }
+            | TypeExprKind::Type { .. }
+            | TypeExprKind::Function { .. }
+            // A `_` inference hole is opaque to streaming analysis.
+            | TypeExprKind::Infer { .. }
+            | TypeExprKind::Unknown { .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::Unknown,
                 attrs,
             },
@@ -310,53 +306,75 @@ impl PpirTy {
     }
 
     /// Convert a `PpirTy` back to a `TypeExpr` for synthesized AST items.
+    /// `PpirTy` carries no source span, so these reconstructed nodes are
+    /// synthetic (`TextRange::default()`).
     pub fn to_type_expr(&self) -> TypeExpr {
-        match self {
+        let kind = match self {
             PpirTy::Named {
-                path, generic_args, ..
-            } => TypeExpr::Path {
+                path,
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => TypeExprKind::Path {
                 segments: path.clone(),
                 generic_args: generic_args.iter().map(PpirTy::to_type_expr).collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|(name, value)| baml_compiler2_ast::AssociatedTypeBinding {
+                        name: name.clone(),
+                        ty: Box::new(value.to_type_expr()),
+                    })
+                    .collect(),
                 attrs: vec![],
             },
-            PpirTy::Int { .. } => TypeExpr::Int { attrs: vec![] },
-            PpirTy::Float { .. } => TypeExpr::Float { attrs: vec![] },
-            PpirTy::String { .. } => TypeExpr::String { attrs: vec![] },
-            PpirTy::Bool { .. } => TypeExpr::Bool { attrs: vec![] },
-            PpirTy::Null { .. } => TypeExpr::Null { attrs: vec![] },
-            PpirTy::Never { .. } => TypeExpr::Never { attrs: vec![] },
-            PpirTy::Optional { inner, .. } => TypeExpr::Optional {
+            PpirTy::Int { .. } => TypeExprKind::Int { attrs: vec![] },
+            PpirTy::Bigint { .. } => TypeExprKind::Bigint { attrs: vec![] },
+            PpirTy::Float { .. } => TypeExprKind::Float { attrs: vec![] },
+            PpirTy::String { .. } => TypeExprKind::String { attrs: vec![] },
+            PpirTy::Bool { .. } => TypeExprKind::Bool { attrs: vec![] },
+            PpirTy::Null { .. } => TypeExprKind::Null { attrs: vec![] },
+            PpirTy::Never { .. } => TypeExprKind::Never { attrs: vec![] },
+            PpirTy::Optional { inner, .. } => TypeExprKind::Optional {
                 inner: Box::new(inner.to_type_expr()),
                 attrs: vec![],
             },
-            PpirTy::List { inner, .. } => TypeExpr::List {
+            PpirTy::List { inner, .. } => TypeExprKind::List {
                 inner: Box::new(inner.to_type_expr()),
                 attrs: vec![],
             },
-            PpirTy::Map { key, value, .. } => TypeExpr::Map {
+            PpirTy::Map { key, value, .. } => TypeExprKind::Map {
                 key: Box::new(key.to_type_expr()),
                 value: Box::new(value.to_type_expr()),
                 attrs: vec![],
             },
-            PpirTy::Union { variants, .. } => TypeExpr::Union {
+            PpirTy::Union { variants, .. } => TypeExprKind::Union {
                 variants: variants.iter().map(PpirTy::to_type_expr).collect(),
                 attrs: vec![],
             },
-            PpirTy::Literal { value, .. } => TypeExpr::Literal {
+            PpirTy::Literal { value, .. } => TypeExprKind::Literal {
                 value: value.clone(),
                 attrs: vec![],
             },
             PpirTy::CannotBeStreamed { origin, .. } => match origin {
-                CannotBeStreamedOrigin::Media(kind) => TypeExpr::Media {
+                CannotBeStreamedOrigin::Media(kind) => TypeExprKind::Media {
                     kind: *kind,
                     attrs: vec![],
                 },
-                CannotBeStreamedOrigin::Uint8Array => TypeExpr::Uint8Array { attrs: vec![] },
-                CannotBeStreamedOrigin::RustType => TypeExpr::Rust { attrs: vec![] },
-                CannotBeStreamedOrigin::Error => TypeExpr::Error { attrs: vec![] },
-                CannotBeStreamedOrigin::Unknown => TypeExpr::Unknown { attrs: vec![] },
+                CannotBeStreamedOrigin::Uint8Array => TypeExprKind::Uint8Array { attrs: vec![] },
+                CannotBeStreamedOrigin::RustType => TypeExprKind::Rust { attrs: vec![] },
+                CannotBeStreamedOrigin::Error => TypeExprKind::Error { attrs: vec![] },
+                // `Unknown` covers function-typed fields as well as genuinely
+                // unresolved ones (both map to this origin on the way in). When
+                // this materializes a synthesized `$stream` class field it must
+                // be a *valid* runtime type — a non-streamable field is just
+                // opaque during streaming — so reconstruct it as the `unknown`
+                // type rather than the error-recovery `Unknown` sentinel, which
+                // would trip the runtime lowering boundary (`Ty::Unknown` has no
+                // `RuntimeTy`).
+                CannotBeStreamedOrigin::Unknown => TypeExprKind::BuiltinUnknown { attrs: vec![] },
             },
-        }
+        };
+        kind.at(text_size::TextRange::default())
     }
 
     /// Check if this type contains null (for union pending default logic).
@@ -387,49 +405,50 @@ mod tests {
 
     #[test]
     fn ppir_reads_stream_must_exist_from_type_expr() {
-        let type_expr = TypeExpr::Int {
+        let type_expr = TypeExprKind::Int {
             attrs: vec![make_attr("stream.must_exist")],
         };
-        let ppir_ty = PpirTy::from_type_expr(&type_expr);
+        let ppir_ty = PpirTy::from_type_expr(&type_expr.at(TextRange::default()));
         assert_eq!(ppir_ty.attrs().stream_must_exist, TyAttrValue::Set);
         assert_eq!(ppir_ty.attrs().stream_done, TyAttrValue::Unset);
     }
 
     #[test]
     fn ppir_reads_stream_done_from_type_expr() {
-        let type_expr = TypeExpr::Path {
+        let type_expr = TypeExprKind::Path {
             segments: vec![Name::new("Fizz")],
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![make_attr("stream.done")],
         };
-        let ppir_ty = PpirTy::from_type_expr(&type_expr);
+        let ppir_ty = PpirTy::from_type_expr(&type_expr.at(TextRange::default()));
         assert_eq!(ppir_ty.attrs().stream_done, TyAttrValue::Set);
         assert_eq!(ppir_ty.attrs().stream_must_exist, TyAttrValue::Unset);
     }
 
     #[test]
     fn ppir_reads_stream_with_state_from_type_expr() {
-        let type_expr = TypeExpr::String {
+        let type_expr = TypeExprKind::String {
             attrs: vec![make_attr("stream.with_state")],
         };
-        let ppir_ty = PpirTy::from_type_expr(&type_expr);
+        let ppir_ty = PpirTy::from_type_expr(&type_expr.at(TextRange::default()));
         assert_eq!(ppir_ty.attrs().stream_with_state, TyAttrValue::Set);
     }
 
     #[test]
     fn ppir_multiple_attrs_on_type_expr() {
-        let type_expr = TypeExpr::Int {
+        let type_expr = TypeExprKind::Int {
             attrs: vec![make_attr("stream.must_exist"), make_attr("stream.done")],
         };
-        let ppir_ty = PpirTy::from_type_expr(&type_expr);
+        let ppir_ty = PpirTy::from_type_expr(&type_expr.at(TextRange::default()));
         assert_eq!(ppir_ty.attrs().stream_must_exist, TyAttrValue::Set);
         assert_eq!(ppir_ty.attrs().stream_done, TyAttrValue::Set);
     }
 
     #[test]
     fn ppir_no_attrs_gives_default() {
-        let type_expr = TypeExpr::Int { attrs: vec![] };
-        let ppir_ty = PpirTy::from_type_expr(&type_expr);
+        let type_expr = TypeExprKind::Int { attrs: vec![] };
+        let ppir_ty = PpirTy::from_type_expr(&type_expr.at(TextRange::default()));
         assert_eq!(ppir_ty.attrs().stream_must_exist, TyAttrValue::Unset);
         assert_eq!(ppir_ty.attrs().stream_done, TyAttrValue::Unset);
         assert_eq!(ppir_ty.attrs().stream_with_state, TyAttrValue::Unset);
@@ -438,14 +457,14 @@ mod tests {
     #[test]
     fn ppir_nested_type_inner_gets_own_attrs() {
         // Optional(Int @stream.done) — the inner Int has the attr, outer Optional does not
-        let inner = TypeExpr::Int {
+        let inner = TypeExprKind::Int {
             attrs: vec![make_attr("stream.done")],
         };
-        let outer = TypeExpr::Optional {
-            inner: Box::new(inner),
+        let outer = TypeExprKind::Optional {
+            inner: Box::new(inner.at(TextRange::default())),
             attrs: vec![make_attr("stream.must_exist")],
         };
-        let ppir_ty = PpirTy::from_type_expr(&outer);
+        let ppir_ty = PpirTy::from_type_expr(&outer.at(TextRange::default()));
 
         // Outer: stream.must_exist
         assert_eq!(ppir_ty.attrs().stream_must_exist, TyAttrValue::Set);
@@ -462,10 +481,10 @@ mod tests {
 
     #[test]
     fn ppir_unknown_attrs_are_ignored() {
-        let type_expr = TypeExpr::Int {
+        let type_expr = TypeExprKind::Int {
             attrs: vec![make_attr("alias"), make_attr("stream.done")],
         };
-        let ppir_ty = PpirTy::from_type_expr(&type_expr);
+        let ppir_ty = PpirTy::from_type_expr(&type_expr.at(TextRange::default()));
         // @alias is not a type attr — it's ignored by extract_type_attrs
         assert_eq!(ppir_ty.attrs().stream_done, TyAttrValue::Set);
         assert_eq!(ppir_ty.attrs().stream_must_exist, TyAttrValue::Unset);

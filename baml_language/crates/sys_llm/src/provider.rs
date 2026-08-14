@@ -29,6 +29,10 @@ pub enum LlmProvider {
     #[strum(serialize = "openai-responses")]
     OpenAiResponses,
 
+    /// Vercel AI Gateway image generation endpoint
+    #[strum(serialize = "ai-gateway-images")]
+    AiGatewayImages,
+
     /// Anthropic API (api.anthropic.com)
     #[strum(serialize = "anthropic")]
     Anthropic,
@@ -51,4 +55,15 @@ pub enum LlmProvider {
     BamlFallback,
     #[strum(serialize = "baml-round-robin")]
     BamlRoundRobin,
+}
+
+impl LlmProvider {
+    /// Conventional API-key environment variable for providers that define one.
+    pub(crate) fn default_api_key_env_var(self) -> Option<&'static str> {
+        match self {
+            Self::OpenAi | Self::OpenAiResponses => Some("OPENAI_API_KEY"),
+            Self::Anthropic => Some("ANTHROPIC_API_KEY"),
+            _ => None,
+        }
+    }
 }

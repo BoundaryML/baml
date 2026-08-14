@@ -1,0 +1,38 @@
+1:1-66       "// Out-of-body implements: top-level `implements I for T { ... }`" source.baml comment.line.double-slash.baml
+3:1-10       "interface"        source.baml meta.interface.baml keyword.declaration.interface.baml
+3:11-17      "ToJson"           source.baml meta.interface.baml entity.name.type.interface.baml
+3:18-19      "{"                source.baml meta.interface.baml meta.interface.body.baml punctuation.definition.block.begin.baml
+4:5-13       "function"         source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml keyword.declaration.function.baml
+4:14-21      "to_json"          source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml entity.name.function.baml
+4:21-22      "("                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+4:22-26      "self"             source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.parameters.baml meta.parameter.baml variable.language.self.baml
+4:26-27      ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+4:28-30      "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.arrow.baml
+4:31-37      "string"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml support.type.primitive.baml
+5:1-2        "}"                source.baml meta.interface.baml meta.interface.body.baml punctuation.definition.block.end.baml
+7:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+7:7-10       "Dog"              source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+7:11-12      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+8:5-10       "breed"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+8:10-11      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
+8:12-18      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+9:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+11:1-11      "implements"       source.baml meta.implements-for.baml keyword.declaration.implements.baml
+11:12-18     "ToJson"           source.baml meta.implements-for.baml meta.implements.target.baml meta.type-reference.baml entity.name.type.baml
+11:19-22     "for"              source.baml meta.implements-for.baml keyword.declaration.for.baml
+11:22-27     " Dog "            source.baml meta.implements-for.baml
+11:27-28     "{"                source.baml meta.implements-for.baml meta.implements.body.baml punctuation.definition.block.begin.baml
+12:5-13      "function"         source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml keyword.declaration.function.baml
+12:14-21     "to_json"          source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml entity.name.function.baml
+12:21-22     "("                source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+12:22-26     "self"             source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.language.self.baml
+12:26-27     ")"                source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+12:28-30     "->"               source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+12:31-37     "string"           source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+12:38-39     "{"                source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+13:9-15      "return"           source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.statement.return.baml keyword.control.flow.return.baml
+13:16-20     "self"             source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.dotted-expression.baml variable.language.self.baml
+13:20-21     "."                source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.dotted-expression.baml punctuation.accessor.baml
+13:21-26     "breed"            source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.dotted-expression.baml variable.other.readwrite.baml
+14:5-6       "}"                source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+15:1-2       "}"                source.baml meta.implements-for.baml meta.implements.body.baml punctuation.definition.block.end.baml

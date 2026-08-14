@@ -14,14 +14,14 @@ function bar() -> string {
 
 function baz() -> string {
   // lose parameter names
-  let g: (string, int) -> string = greet;
+  let g: (string, int) -> string throws never = greet;
 
   g("Charlie", 25)
 }
 
 function qux() -> string {
   // partially lose  and rename parameter
-  let g: (c: string, int) -> string = greet;
+  let g: (c: string, int) -> string throws never = greet;
 
   g("Delta", 30)
 }
@@ -96,8 +96,8 @@ function multiline_field(info: Info2) -> string {
 // call_arg_names.baml:44:9 (Parameter) "name: "
 // call_arg_names.baml:44:12 (Parameter) "age: "
 // call_arg_names.baml:54:9 (Parameter) "name: "
-// call_arg_names.baml:54:19 (Parameter) "age: "
+// call_arg_names.baml:54:20 (Parameter) "age: "
 // call_arg_names.baml:60:5 (Parameter) "name: "
 // call_arg_names.baml:61:5 (Parameter) "age: "
-// call_arg_names.baml:72:9 (Parameter) "name: "
-// call_arg_names.baml:73:12 (Parameter) "age: "
+// call_arg_names.baml:73:5 (Parameter) "name: "
+// call_arg_names.baml:74:5 (Parameter) "age: "

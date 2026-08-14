@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use baml_builtins2::PromptAst;
+use baml_builtins2::{PromptAst, PromptAstSimple};
 use serde_json::Value;
 
 use crate::{AllowedMetadata, ModelFeatures};
@@ -80,6 +80,69 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
                 Arc::new(PromptAst::Vec(final_messages))
             }
         }
+        _ => prompt,
+    }
+}
+
+/// If a prompt has media but no user message, move media-bearing messages to
+/// the user role for providers whose media inputs belong there.
+///
+/// This preserves the normal `OpenAI` default of treating unrole-tagged text as
+/// a system message while keeping unrole-tagged image prompts valid: a simple
+/// `Describe this: {{ img }}` prompt is wrapped as `system` first, then changed
+/// to `user` only because it contains media and there are no user messages.
+pub(super) fn promote_media_to_user_when_no_user_message(
+    prompt: bex_vm_types::PromptAst,
+) -> bex_vm_types::PromptAst {
+    if has_user_message(&prompt) || !has_media(&prompt) {
+        return prompt;
+    }
+
+    promote_media_messages_to_user(prompt)
+}
+
+fn has_user_message(prompt: &bex_vm_types::PromptAst) -> bool {
+    match prompt.as_ref() {
+        PromptAst::Message { role, .. } => role == "user",
+        PromptAst::Vec(items) => items.iter().any(has_user_message),
+        PromptAst::Simple(_) => false,
+    }
+}
+
+fn has_media(prompt: &bex_vm_types::PromptAst) -> bool {
+    match prompt.as_ref() {
+        PromptAst::Message { content, .. } | PromptAst::Simple(content) => {
+            simple_has_media(content.as_ref())
+        }
+        PromptAst::Vec(items) => items.iter().any(has_media),
+    }
+}
+
+fn simple_has_media(content: &PromptAstSimple) -> bool {
+    match content {
+        PromptAstSimple::String(_) => false,
+        PromptAstSimple::Media(_) => true,
+        PromptAstSimple::Multiple(items) => items.iter().any(|item| simple_has_media(item)),
+    }
+}
+
+fn promote_media_messages_to_user(prompt: bex_vm_types::PromptAst) -> bex_vm_types::PromptAst {
+    match prompt.as_ref() {
+        PromptAst::Message {
+            role,
+            content,
+            metadata,
+        } if role != "user" && simple_has_media(content.as_ref()) => Arc::new(PromptAst::Message {
+            role: "user".to_string(),
+            content: content.clone(),
+            metadata: metadata.clone(),
+        }),
+        PromptAst::Vec(items) => Arc::new(PromptAst::Vec(
+            items
+                .iter()
+                .map(|item| promote_media_messages_to_user(item.clone()))
+                .collect(),
+        )),
         _ => prompt,
     }
 }

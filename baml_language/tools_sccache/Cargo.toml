@@ -1,0 +1,18 @@
+[package]
+name = "tools_sccache"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# This is a CI/build helper, not part of the shipped product. It shells out to
+# spawn a child process, which has no meaning on wasm32-unknown-unknown, so keep
+# it out of the WASM build's package selection (see cargo-tests.reusable.yaml).
+[package.metadata.ci]
+wasm_support = false
+
+# Build the binary under the recognizable `baml-sccache` name, matching the
+# shell wrappers in tools/.
+[[bin]]
+name = "baml-sccache"
+path = "src/main.rs"

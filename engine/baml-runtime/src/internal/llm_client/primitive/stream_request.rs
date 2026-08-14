@@ -5,7 +5,6 @@ use baml_types::{
     tracing::events::{HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent, TraceEvent},
     BamlMap,
 };
-use eventsource_stream::Eventsource;
 use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
 use reqwest::Response;
@@ -80,8 +79,7 @@ pub async fn make_stream_request(
     let params = client.request_options().clone();
     let prompt = to_prompt(prompt);
     Ok(Box::pin(
-        resp.bytes_stream()
-            .eventsource()
+        crate::sse::eventsource(resp.bytes_stream())
             // Convert eventsource events to our StreamEventResult enum
             // This allows errors to propagate through instead of stopping at take_while
             .map(move |event| -> StreamEventResult {

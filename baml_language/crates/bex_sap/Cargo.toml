@@ -19,18 +19,17 @@ workspace = true
 [dependencies]
 baml_type = { workspace = true }
 bex_external_types = { workspace = true }
+bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 derive_more = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
+num-bigint = { workspace = true }
 ouroboros = { workspace = true }
 regex = { workspace = true }
-rowan = { workspace = true }
-salsa = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-strsim = { workspace = true }
 thiserror = { workspace = true }
 unicode-normalization = { workspace = true }
 

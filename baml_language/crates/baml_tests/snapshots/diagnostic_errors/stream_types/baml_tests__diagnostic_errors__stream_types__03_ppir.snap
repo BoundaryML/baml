@@ -1,0 +1,397 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.AttrFoo {
+  x: int
+}
+class user.AttrFoo$stream {
+  x: int | null
+}
+class user.Config {
+  id: int
+  name: string
+  data: user.AttrFoo
+}
+class user.Config$stream {
+  id: int
+  name: string
+  data: user.AttrFoo
+}
+class user.WithBlockAttrs {
+  a: int
+  b: string
+}
+class user.WithBlockAttrs$stream {
+  a: int | null
+  b: string | null
+}
+class user.Bar {
+  ref: user.Foo
+  items: int[]
+  nested: user.Foo[]
+  mapping: map<string, int>
+  opt: int?
+}
+class user.Bar$stream {
+  ref: user.Foo$stream | null
+  items: int[]
+  nested: user.Foo$stream[]
+  mapping: map<string, int>
+  opt: int | null
+}
+class user.Foo {
+  a: int
+  b: string
+  c: float
+  d: bool
+}
+class user.Foo$stream {
+  a: int | null
+  b: string | null
+  c: float | null
+  d: bool | null
+}
+class user.ApiCall {
+  request: baml.http.Request
+  label: string
+}
+class user.ApiCall$stream {
+  request: baml.http.Request$stream | null
+  label: string | null
+}
+class user.MixedBuiltin {
+  requests: baml.http.Request[]
+  metadata: map<string, baml.http.Request>
+  maybe_request: baml.http.Request?
+  union_request: baml.http.Request | string
+}
+class user.MixedBuiltin$stream {
+  requests: baml.http.Request$stream[]
+  metadata: map<string, baml.http.Request$stream>
+  maybe_request: baml.http.Request$stream | null
+  union_request: baml.http.Request$stream | string | null
+}
+class user.WithResponse {
+  response: baml.http.Response
+  status: string
+}
+class user.WithResponse$stream {
+  response: baml.http.Response$stream | null
+  status: string | null
+}
+class user.WithStreamRef {
+  partial: baml.http.Request$stream
+}
+class user.WithStreamRef$stream {
+  partial: baml.http.Request$stream | null
+}
+class user.Complex {
+  color: user.Color
+  literal: 5
+  str_literal: "hello"
+  union_field: int | string[]
+  alias_field: user.StringAlias
+  nested_list: user.Inner[][]
+  optional_class: user.Inner?
+  union_with_null: int | null | string
+}
+class user.Complex$stream {
+  color: user.Color | null
+  literal: 5
+  str_literal: "hello"
+  union_field: int | string[] | null
+  alias_field: string | null
+  nested_list: user.Inner$stream[][]
+  optional_class: user.Inner$stream | null
+  union_with_null: int | null | string
+}
+class user.Inner {
+  value: int
+}
+class user.Inner$stream {
+  value: int | null
+}
+enum user.Color {Red, Green, Blue}
+type user.AliasToClass = user.Inner
+type user.AliasToClass$stream = user.Inner$stream
+type user.StringAlias = string
+type user.StringAlias$stream = string
+class user.AllDone {
+  a: int
+  b: string
+  c: user.EdgeFoo
+}
+class user.AllDone$stream {
+  a: int
+  b: string
+  c: user.EdgeFoo
+}
+class user.AllMustExist {
+  a: int
+  b: string
+  c: float
+}
+class user.AllMustExist$stream {
+  a: int
+  b: string
+  c: float
+}
+class user.EdgeFoo {
+  x: int
+}
+class user.EdgeFoo$stream {
+  x: int | null
+}
+class user.MustExistClass {
+  v: int
+}
+class user.MustExistClass$stream {
+  v: int | null
+}
+class user.NeverFields {
+  lit_int: 42
+  lit_str: "fixed"
+  lit_bool: true
+}
+class user.NeverFields$stream {
+  lit_int: 42
+  lit_str: "fixed"
+  lit_bool: true
+}
+class user.SelfRef {
+  name: string
+  children: user.SelfRef[]
+}
+class user.SelfRef$stream {
+  name: string | null
+  children: user.SelfRef$stream[]
+}
+class user.UnionWithMustExist {
+  mixed: user.MustExistClass | 5
+}
+class user.UnionWithMustExist$stream {
+  mixed: user.MustExistClass$stream | 5
+}
+class user.AllDefaults {
+  name: string
+  age: int
+  score: float
+  active: bool
+  type: "resume"
+  version: 42
+  status: user.Status
+  edu: user.Education
+  scores: int[]
+  education: user.Education[]
+  nested_edu: user.Education[][]
+  edu_map: map<string, user.Education>
+  data: user.AliasedType
+  mixed: int | user.Education
+  maybe: string?
+  maybe_list: int[]?
+}
+class user.AllDefaults$stream {
+  name: string | null
+  age: int | null
+  score: float | null
+  active: bool | null
+  type: "resume"
+  version: 42
+  status: user.Status | null
+  edu: user.Education$stream | null
+  scores: int[]
+  education: user.Education$stream[]
+  nested_edu: user.Education$stream[][]
+  edu_map: map<string, user.Education$stream>
+  data: string | int | null
+  mixed: int | user.Education$stream | null
+  maybe: string | null
+  maybe_list: int[] | null
+}
+class user.Container {
+  matrix: int[][]
+  grid: user.TreeNode[][]
+  groups: map<string, user.TreeNode[]>
+}
+class user.Container$stream {
+  matrix: int[][]
+  grid: user.TreeNode$stream[][]
+  groups: map<string, user.TreeNode$stream[]>
+}
+class user.Education {
+  school: string
+  year: int
+}
+class user.Education$stream {
+  school: string | null
+  year: int | null
+}
+class user.Inner {
+  value: string
+}
+class user.Inner$stream {
+  value: string | null
+}
+class user.Outer {
+  inner: user.Inner
+}
+class user.Outer$stream {
+  inner: user.Inner$stream | null
+}
+class user.Primitives {
+  name: string
+  count: int
+  flag: bool
+  score: float
+}
+class user.Primitives$stream {
+  name: string | null
+  count: int | null
+  flag: bool | null
+  score: float | null
+}
+class user.Resume {
+  name: string
+  age: int
+  type: "resume"
+  status: user.Status
+  education: user.Education[]
+  scores: int[]
+  metadata: map<string, string>
+}
+class user.Resume$stream {
+  name: string | null
+  age: int | null
+  type: "resume"
+  status: user.Status | null
+  education: user.Education$stream[]
+  scores: int[]
+  metadata: map<string, string>
+}
+class user.TreeNode {
+  value: string
+  children: user.TreeNode[]
+}
+class user.TreeNode$stream {
+  value: string | null
+  children: user.TreeNode$stream[]
+}
+class user.WithEnum {
+  status: user.Status
+}
+class user.WithEnum$stream {
+  status: user.Status | null
+}
+class user.WithLists {
+  strings: string[]
+  ints: int[]
+  classes: user.Inner[]
+}
+class user.WithLists$stream {
+  strings: string[]
+  ints: int[]
+  classes: user.Inner$stream[]
+}
+class user.WithLiterals {
+  type: "resume"
+  version: 1
+  enabled: true
+}
+class user.WithLiterals$stream {
+  type: "resume"
+  version: 1
+  enabled: true
+}
+class user.WithMaps {
+  simple: map<string, int>
+  complex: map<string, user.Inner>
+}
+class user.WithMaps$stream {
+  simple: map<string, int>
+  complex: map<string, user.Inner$stream>
+}
+class user.WithNested {
+  matrix: int[][]
+  class_matrix: user.Inner[][]
+  nested_map: map<string, int[]>
+  class_nested_map: map<string, user.Inner[]>
+}
+class user.WithNested$stream {
+  matrix: int[][]
+  class_matrix: user.Inner$stream[][]
+  nested_map: map<string, int[]>
+  class_nested_map: map<string, user.Inner$stream[]>
+}
+class user.WithOptionals {
+  name: string?
+  inner: user.Inner?
+  items: int[]?
+}
+class user.WithOptionals$stream {
+  name: string | null
+  inner: user.Inner$stream | null
+  items: int[] | null
+}
+class user.WithUnions {
+  simple: int | string
+  with_class: user.Inner | user.Primitives
+  mixed: int | user.Inner
+}
+class user.WithUnions$stream {
+  simple: int | string | null
+  with_class: user.Inner$stream | user.Primitives$stream | null
+  mixed: int | user.Inner$stream | null
+}
+enum user.Status {Active, Inactive}
+type user.AliasedType = string | int
+type user.AliasedType$stream = string | int
+type user.Bar = user.Foo | bool
+type user.Bar$stream = user.Foo$stream | bool
+type user.ClassAlias = user.Inner
+type user.ClassAlias$stream = user.Inner$stream
+type user.Foo = int | string
+type user.Foo$stream = int | string
+type user.MixedType = int | user.Education
+type user.MixedType$stream = int | user.Education$stream
+type user.OptionalAlias = user.Inner?
+type user.OptionalAlias$stream = user.Inner$stream | null
+type user.SimpleAlias = string
+type user.SimpleAlias$stream = string
+type user.UnionAlias = int | user.Inner
+type user.UnionAlias$stream = int | user.Inner$stream
+class user.foo.NsClass {
+  value: string
+}
+class user.foo.NsClass$stream {
+  value: string | null
+}
+class user.foo.NsRefToTop {
+  inner: root.Inner
+  status: root.Status
+  items: root.Inner[]
+  alias_ref: root.ClassAlias
+}
+class user.foo.NsRefToTop$stream {
+  inner: root.Inner$stream | null
+  status: root.Status | null
+  items: root.Inner$stream[]
+  alias_ref: root.Inner$stream | null
+}
+enum user.foo.NsEnum {Alpha, Beta}
+type user.foo.NsAlias = string | int
+type user.foo.NsAlias$stream = string | int
+class user.TopRefToNs {
+  ns_class: root.foo.NsClass
+  ns_enum: root.foo.NsEnum
+  ns_items: root.foo.NsClass[]
+  ns_map: map<string, root.foo.NsClass>
+  ns_alias: root.foo.NsAlias
+}
+class user.TopRefToNs$stream {
+  ns_class: root.foo.NsClass$stream | null
+  ns_enum: root.foo.NsEnum | null
+  ns_items: root.foo.NsClass$stream[]
+  ns_map: map<string, root.foo.NsClass$stream>
+  ns_alias: string | int | null
+}

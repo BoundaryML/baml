@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 43120
+---
+=== PPIR ===
+enum user.AliasEqualsOwnName {A, B}
+enum user.AliasVsAlias {A, B}
+enum user.AllDistinct {A, B, C}
+enum user.CaseSensitive {Value, Other}
+enum user.NameVsAlias {Shared, B}
+enum user.NormalizedCollision {A, B}
+enum user.SkippedDoesNotCollide {A, B}
+enum user.TripleCollision {First, Second, Shared}

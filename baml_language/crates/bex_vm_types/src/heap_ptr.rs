@@ -31,6 +31,8 @@
 //! 3. **Thread safety:** The pointer can be copied across threads (it's just
 //!    8 bytes). Dereferencing only happens within a single VM.
 
+use borsh::{BorshDeserialize, BorshSerialize};
+
 use crate::Object;
 
 /// A pointer to an object in the heap.
@@ -139,12 +141,32 @@ impl HeapPtr {
     pub fn epoch(self) -> u32 {
         self.epoch
     }
+}
 
-    /// Get the epoch (always 0 in non-debug mode).
-    #[cfg(not(feature = "heap_debug"))]
-    #[inline]
-    pub fn epoch(self) -> u32 {
-        0
+// `HeapPtr` is a runtime-only address into the live heap. It must never
+// reach a serialized payload (e.g. a borsh-encoded `Program` in a pack
+// envelope) — the addresses are meaningless outside the originating
+// process, and a deserialized non-null `HeapPtr` would be undefined
+// behavior on first deref. The borsh impls below therefore *fail* at the
+// boundary instead of round-tripping to `null()`: every type the compiler
+// actually puts into a serialized `Program` (`Object::{Function, Class,
+// Enum, String}`) is HeapPtr-free, so any path that does encounter one
+// reflects a real bug we want to surface immediately rather than mask.
+impl BorshSerialize for HeapPtr {
+    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "HeapPtr is a runtime-only pointer and must not be serialized",
+        ))
+    }
+}
+
+impl BorshDeserialize for HeapPtr {
+    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "HeapPtr cannot be deserialized: runtime pointer leaked into serialized data",
+        ))
     }
 }
 
@@ -190,5 +212,27 @@ impl std::fmt::Debug for HeapPtr {
 impl std::fmt::Display for HeapPtr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:p}", self.ptr)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Serializing a `HeapPtr` (including null) must fail at the borsh
+    /// boundary rather than emit `unit`. A round-trip-to-null impl would
+    /// silently produce a bogus pointer on deserialization and turn the
+    /// first deref into UB instead of a clean failure.
+    #[test]
+    fn serialize_heap_ptr_errors() {
+        let ptr = HeapPtr::null();
+        let err = borsh::to_vec(&ptr).unwrap_err();
+        assert!(err.to_string().contains("runtime-only"), "got: {err}");
+    }
+
+    #[test]
+    fn deserialize_heap_ptr_errors() {
+        let err = HeapPtr::try_from_slice(&[]).unwrap_err();
+        assert!(err.to_string().contains("leaked"), "got: {err}");
     }
 }

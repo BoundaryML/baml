@@ -25,32 +25,4 @@ function CatchInLet(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//     ╭─[ catch_nested_catch.baml:12:9 ]
-//     │
-//  12 │ ╭─▶     _ => AlsoMayFail(x) catch (e2) {
-//     ┆ ┆   
-//  14 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── unreachable arm
-//     │     
-//     │     Note: Error code: E0063
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ catch_nested_catch.baml:13:12 ]
-//     │
-//  13 │       _ => "double caught"
-//     │            ───────┬───────  
-//     │                   ╰───────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ catch_nested_catch.baml:21:10 ]
-//     │
-//  21 │     _ => "fallback"
-//     │          ─────┬────  
-//     │               ╰────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
+// <no-diagnostics-expected>

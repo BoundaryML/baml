@@ -1,0 +1,91 @@
+# Publishes @boundaryml/baml-highlightjs to npm on every push to main.
+#
+# This file is generated from typescript2/pkg-grammar-hljs/mirror/publish.yml in
+# BoundaryML/baml and synced here by that repo's sync workflow. Do not edit it
+# in this repository.
+#
+# Auth is npm OIDC trusted publishing: the npm package settings must list this
+# repo (BoundaryML/baml-highlightjs) and this workflow filename (publish.yml)
+# as a trusted publisher. No token secrets are involved. The first-ever publish
+# of the package cannot use OIDC and must be done once by hand (npm publish
+# from a checkout of this repo); after that, configure the trusted publisher
+# and this workflow takes over.
+
+name: Publish to npm
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          registry-url: https://registry.npmjs.org
+
+      - name: Ensure npm CLI supports trusted publishing
+        run: |
+          set -euo pipefail
+          required_version="11.5.1"
+          current_version="$(npm --version)"
+          if [ "$(printf '%s\n' "$required_version" "$current_version" | sort -V | head -n1)" != "$required_version" ]; then
+            echo "npm $current_version is lower than required $required_version (needed for OIDC trusted publishing)" >&2
+            exit 1
+          fi
+
+      - name: Smoke-test the artifact
+        run: |
+          set -euo pipefail
+          # highlight.js is a peerDependency; pull it in just for the smoke test.
+          npm install --no-save --no-audit --no-fund highlight.js@11
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            import hljs from "highlight.js";
+            const baml = (await import("./src/baml.js")).default;
+            hljs.registerLanguage("baml", baml);
+            assert.equal(hljs.getLanguage("baml").name, "BAML");
+            const code = [
+              "function Classify(text: string) -> string {",
+              "  client GPT4",
+              "  prompt #\"Say hi to {{ text }}\"#",
+              "}",
+            ].join("\n");
+            const result = hljs.highlight(code, { language: "baml" });
+            assert.equal(result.illegal, false);
+            assert.ok(result.relevance > 0, "relevance must be positive");
+            assert.ok(result.value.includes("hljs-keyword"), "keywords must highlight");
+            assert.ok(result.value.includes("hljs-template-variable"), "Jinja must highlight");
+            const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+            assert.equal(pkg.name, "@boundaryml/baml-highlightjs");
+            assert.notEqual(pkg.version, "0.0.0-dev", "package.json version was never stamped");
+            console.log("smoke ok:", pkg.name, pkg.version);
+          '
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          name="$(jq -r '.name' package.json)"
+          version="$(jq -r '.version' package.json)"
+          # Reruns and no-op pushes must not fail on "version already exists":
+          # skip when this exact version is already on the registry. (`npm view`
+          # exits non-zero when the package has never been published; treat
+          # that as "not published yet".)
+          existing="$(npm view "${name}@${version}" version 2>/dev/null || true)"
+          if [ "$existing" = "$version" ]; then
+            echo "${name}@${version} is already published; nothing to do."
+            exit 0
+          fi
+          npm publish --access public

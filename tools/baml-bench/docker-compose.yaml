@@ -1,0 +1,160 @@
+# baml-bench - full local stack.
+#
+#   docker compose up -d --build
+#   (cd convex && npx convex dev --once)        # push functions to the local backend
+#   set ANTHROPIC_API_KEY in .env               # claude-proxy auth (API key)
+#
+# Scale workers/proxies: docker compose up --scale baml-worker=4 --scale claude-proxy=3
+
+services:
+  # ---- self-hosted Convex backend (the DB + reactivity engine) ----
+  convex:
+    image: ghcr.io/get-convex/convex-backend:latest
+    restart: unless-stopped
+    ports:
+      - "${CONVEX_PORT:-3210}:3210"
+      - "${CONVEX_SITE_PORT:-3211}:3211"
+    volumes:
+      - convex_data:/convex/data
+    environment:
+      INSTANCE_NAME: ${CONVEX_INSTANCE_NAME:-baml-bench}
+      INSTANCE_SECRET: ${CONVEX_INSTANCE_SECRET:-0000000000000000000000000000000000000000000000000000000000000000}
+
+  # ---- the central API + sole Convex gateway ----
+  api:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: baml-bench-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.api"]
+    environment:
+      PORT: 8080
+      CONVEX_URL: http://convex:3210
+      CONVEX_ADMIN_KEY: ${CONVEX_ADMIN_KEY:-}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      BLOB_DIR: /data/blobs
+      BAML_REPO_SLUG: ${BAML_REPO_SLUG:-BoundaryML/baml}
+      BAML_REF: ${BAML_REF:-canary}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    ports:
+      - "${SERVICE_PORT:-8080}:8080"
+    volumes:
+      - api_blobs:/data/blobs
+    depends_on: [convex]
+
+  # ---- claude proxy (stateless; scale to N) ----
+  claude-proxy:
+    build: { context: ., dockerfile: docker/Dockerfile.claude-proxy }
+    image: baml-bench-proxy:dev
+    restart: unless-stopped
+    environment:
+      PROXY_LISTEN_PORT: 9090
+      CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_INVOCATION_TIMEOUT_SECS: ${CLAUDE_INVOCATION_TIMEOUT_SECS:-1800}
+    ports:
+      - "${PROXY_PORT:-9090}:9090"
+    volumes:
+      - baml_cache:/var/baml-cache
+    depends_on: [api]
+
+  # ---- baml builder: downloads the latest alpha-channel release binary ----
+  baml-builder:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: baml-bench-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.baml_builder"]
+    environment:
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      BAML_REPO_SLUG: ${BAML_REPO_SLUG:-BoundaryML/baml}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    depends_on: [api]
+
+  # ---- processors (all share the python image; scale baml-worker freely) ----
+  baml-worker:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: baml-bench-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.baml_worker"]
+    environment:
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      CLAUDE_PROXY_URLS: http://claude-proxy:9090
+      CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      CLAUDE_MAX_TURNS: ${CLAUDE_MAX_TURNS:-40}
+      BAML_SKILL_DIR: /baml-skill
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+    volumes:
+      # live baml skill mounted read-only; baml-worker concatenates */SKILL.md
+      - ${BAML_SKILL_PATH_HOST:-../baml-skill/baml-skill/plugins/baml/skills}:/baml-skill:ro
+    depends_on: [api, claude-proxy]
+
+  baml-dedup:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: baml-bench-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.baml_dedup"]
+    environment:
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      CLAUDE_PROXY_URLS: http://claude-proxy:9090
+      CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
+      BAML_DEDUP_MODEL: ${BAML_DEDUP_MODEL:-claude-sonnet-4-6}
+    depends_on: [api, claude-proxy]
+
+  notion-fixer:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: baml-bench-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.notion_fixer"]
+    environment:
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      NOTION_SKILL_DB_ID: ${NOTION_SKILL_DB_ID:-}
+      NOTION_LANG_DB_ID: ${NOTION_LANG_DB_ID:-}
+      NOTION_STATUS_CONFIRMED: ${NOTION_STATUS_CONFIRMED:-confirmed issue}
+      NOTION_STATUS_APPROVED: ${NOTION_STATUS_APPROVED:-approved issue}
+      NOTION_STATUS_FIXING: ${NOTION_STATUS_FIXING:-fixing}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_FIX_CHANNEL: ${SLACK_FIX_CHANNEL:-}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      CURSOR_MODEL: ${CURSOR_MODEL:-}
+      CURSOR_BRANCH: ${CURSOR_BRANCH:-canary}
+      UI_BASE_URL: ${UI_BASE_URL:-http://localhost:3000}
+    depends_on: [api]
+
+  ingress:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: baml-bench-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.ingress"]
+    environment:
+      PORT: 8081
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      NOTION_VERIFICATION_TOKEN: ${NOTION_VERIFICATION_TOKEN:-}
+    ports:
+      - "${INGRESS_PORT:-8081}:8081"
+    depends_on: [api]
+
+  cron:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: baml-bench-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.cron"]
+    environment:
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      CRON_INTERVAL_SECS: ${CRON_INTERVAL_SECS:-86400}
+    depends_on: [api]
+
+volumes:
+  convex_data:
+  api_blobs:
+  baml_cache:

@@ -18,21 +18,4 @@ function CatchNamedWildcard(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//    ╭─[ catch_catch_wildcard_only.baml:8:10 ]
-//    │
-//  8 │     _ => "caught everything"
-//    │          ─────────┬─────────  
-//    │                   ╰─────────── unreachable arm
-//    │ 
-//    │ Note: Error code: E0063
-// ───╯
-// Warning: unreachable arm
-//     ╭─[ catch_catch_wildcard_only.baml:15:17 ]
-//     │
-//  15 │     let other => "caught: " + other
-//     │                 ─────────┬─────────  
-//     │                          ╰─────────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
+// <no-diagnostics-expected>

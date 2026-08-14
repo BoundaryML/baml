@@ -25,12 +25,6 @@ function test_multi_param() -> int {
     add(20, 22)
 }
 
-// Generic fat arrow.
-function test_generic() -> int {
-    let identity = <T>(x: T) => T { x }
-    identity(42)
-}
-
 // Fat arrow inside match arm — fat arrow of match vs fat arrow of lambda.
 function test_in_match(x: int) -> int {
     match (x) {
@@ -47,4 +41,10 @@ function test_mixed() -> int {
     let a = (x: int) -> int { x + 1 }
     let b = (x: int) => int { x + 2 }
     a(0) + b(0)
+}
+
+// The same unambiguous JS/TS spelling is accepted in a top-level signature;
+// the formatter repairs it to the canonical thin arrow.
+function test_top_level_fat_arrow(x: int) => int {
+    x + 1
 }

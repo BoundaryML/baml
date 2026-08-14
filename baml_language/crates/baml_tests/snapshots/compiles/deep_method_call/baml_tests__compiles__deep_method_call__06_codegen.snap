@@ -1,57 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 9031
 ---
-function user.A.from_json(j: baml.json.json) -> A {
-    load_var j
-    load_const "b"
-    call baml.json.field
-    store_var _3
-    load_type B
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.A
-    load_var _2
-    init_field .b
-    return
-}
-
-function user.A.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .b
-    call user.B.to_json
-    load_const "b"
-    alloc_map 1
-    return
-}
-
-function user.B.from_json(j: baml.json.json) -> B {
-    load_var j
-    load_const "label"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.B
-    load_var _2
-    init_field .label
-    return
-}
-
-function user.B.greet(self: null) -> string {
+function user.B.greet(self: B) -> string {
     load_var self
     load_field .label
-    return
-}
-
-function user.B.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .label
-    call baml.String.to_json
-    load_const "label"
-    alloc_map 1
     return
 }
 

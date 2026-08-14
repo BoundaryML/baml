@@ -9,18 +9,44 @@
     clippy::exit
 )]
 
+pub(crate) mod agent_command;
+pub(crate) mod auth;
+pub(crate) mod bytecode_cache;
+#[cfg(test)]
+mod cache_test_support;
+pub(crate) mod check_command;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
 mod describe_command_tests;
+pub(crate) mod describe_render;
+pub(crate) mod describe_search;
+pub(crate) mod diagnostics_cache;
+#[cfg(test)]
+mod diagnostics_cache_oracle;
+pub(crate) mod feedback_command;
+pub(crate) mod file_signature;
 pub(crate) mod format;
 pub(crate) mod generate;
-pub(crate) mod grep_command;
+pub(crate) mod help_command;
+pub(crate) mod ide_command;
+pub(crate) mod init_command;
 pub(crate) mod lsp;
+pub(crate) mod manifest;
+pub(crate) mod output;
+pub(crate) mod pack_command;
+pub(crate) mod paint;
+pub(crate) mod playground_command;
 pub(crate) mod project_load;
+pub(crate) mod project_session;
+pub mod reporter;
 pub(crate) mod run_command;
+pub(crate) mod skill_check;
+pub(crate) mod telemetry;
+pub(crate) mod telemetry_command;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;
+pub(crate) mod util;
 
 // TODO: These modules are disabled for now as they depend on baml_runtime
 // pub(crate) mod api_client;
@@ -30,7 +56,7 @@ pub(crate) mod test_filter;
 // pub(crate) mod propelauth;
 // pub(crate) mod tui;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone)]
 pub enum ExitCode {
@@ -41,6 +67,13 @@ pub enum ExitCode {
     TestFailure,
     TestCancelled,
     NoTestsRun,
+    // `baml run` / packed-binary target failures: unhandled user-code
+    // errors or input-shape errors (bad `--json-args`, unknown function,
+    // etc.). Mapped to `1` to match Unix CLI convention and the packed
+    // runtime (`baml_pack_host` returns `ExitCode::FAILURE = 1` for the
+    // same conditions); BEP-027 §"Exit codes" only mandates non-zero,
+    // so we pick the conventional code and keep the two runtimes aligned.
+    TargetError,
 }
 
 impl From<ExitCode> for i32 {
@@ -48,8 +81,9 @@ impl From<ExitCode> for i32 {
         match exit_code {
             // All tests passed
             ExitCode::Success => 0,
-            // All tests completed, but some required human evaluation
-            ExitCode::HumanEvalRequired => 1,
+            // All tests completed, but some required human evaluation, OR
+            // `baml run` / packed-binary target failure
+            ExitCode::HumanEvalRequired | ExitCode::TargetError => 1,
             // Some tests failed
             ExitCode::TestFailure => 2,
             // Execution was interrupted
@@ -67,8 +101,9 @@ impl From<ExitCode> for u32 {
         match exit_code {
             // All tests passed
             ExitCode::Success => 0,
-            // All tests completed, but some required human evaluation
-            ExitCode::HumanEvalRequired => 1,
+            // All tests completed, but some required human evaluation, OR
+            // `baml run` / packed-binary target failure
+            ExitCode::HumanEvalRequired | ExitCode::TargetError => 1,
             // Some tests failed
             ExitCode::TestFailure => 2,
             // Execution was interrupted
@@ -83,10 +118,17 @@ impl From<ExitCode> for u32 {
 
 /// Run the CLI with the given arguments.
 ///
-/// Dispatches to one of: `run`, `describe`, `generate`, `grep`, `test`,
+/// Dispatches to one of: `run`, `describe`, `generate`, `test`,
 /// `format`, or `language-server`. `baml run` is the top-level entry for
 /// standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
+    if argv.get(1).map(String::as_str) == Some("update") {
+        return Err(anyhow!(
+            "`baml update` is ambiguous.\n\
+             To use the latest version of BAML, run `baml toolchain update`.\n\
+             To use the latest BAML toolchain selector, run `baml self-update`."
+        ));
+    }
     let cli = commands::RuntimeCli::parse_from_smart(argv);
     cli.run()
 }
@@ -132,4 +174,30 @@ fn set_exit_handlers() {
             std::process::exit(130);
         }
     });
+}
+
+#[cfg(test)]
+mod exit_code_tests {
+    use super::*;
+
+    /// `baml run` target failures and the packed runtime
+    /// (`baml_pack_host`) must agree on the shell exit code. The packed
+    /// host returns `std::process::ExitCode::FAILURE = 1`; the
+    /// `TargetError` variant exists precisely so `baml run` lines up at
+    /// `1` for the same condition. BEP-027 §"Exit codes" only mandates
+    /// non-zero, so we pick the conventional `1` and keep both runtimes
+    /// emitting it.
+    #[test]
+    fn target_error_maps_to_one() {
+        assert_eq!(i32::from(ExitCode::TargetError), 1);
+        assert_eq!(u32::from(ExitCode::TargetError), 1);
+    }
+
+    /// `Other` continues to mean "internal error" (used by describe /
+    /// generate / format / test internal failures). It must not collide
+    /// with the new `TargetError`.
+    #[test]
+    fn other_stays_at_four() {
+        assert_eq!(i32::from(ExitCode::Other), 4);
+    }
 }

@@ -1,0 +1,18 @@
+{
+  "slug": "maximum-subarray",
+  "id": 53,
+  "title": "Maximum Subarray",
+  "difficulty": "Medium",
+  "category": "Dynamic Programming",
+  "statement": "Given an integer array `nums`, find the contiguous subarray (containing at least one number) with the largest sum, and return that sum.\n\n**Example**\n\n```\nnums = [-2, 1, -3, 4, -1, 2, 1, -5, 4]\n=> 6   // subarray [4, -1, 2, 1]\n```",
+  "signature": "function MaxSubArray(nums: int[]) -> int",
+  "starter": "function MaxSubArray(nums: int[]) -> int {\n  // Return the largest sum of any contiguous subarray.\n  return 0;\n}",
+  "solution": "function MaxSubArray(nums: int[]) -> int {\n  let n = nums.length();\n  let best = nums[0];\n  let cur = nums[0];\n  let i = 1;\n  while (i < n) {\n    let x = nums[i];\n    if (cur + x > x) {\n      cur = cur + x;\n    } else {\n      cur = x;\n    }\n    if (cur > best) {\n      best = cur;\n    }\n    i += 1;\n  }\n  return best;\n}",
+  "tests": [
+    { "call": "MaxSubArray([-2, 1, -3, 4, -1, 2, 1, -5, 4])", "expected": "6" },
+    { "call": "MaxSubArray([1])", "expected": "1" },
+    { "call": "MaxSubArray([5, 4, -1, 7, 8])", "expected": "23" },
+    { "call": "MaxSubArray([-1, -2, -3])", "expected": "-1", "hidden": true },
+    { "call": "MaxSubArray([-2, -1])", "expected": "-1", "hidden": true }
+  ]
+}

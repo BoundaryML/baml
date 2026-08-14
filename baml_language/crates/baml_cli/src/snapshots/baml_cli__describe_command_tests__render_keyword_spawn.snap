@@ -1,0 +1,11 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+spawn — Launches a concurrent task that runs in the background.
+
+Syntax:
+  let future = spawn {
+    expensive_computation()
+  }
+  let result = await future

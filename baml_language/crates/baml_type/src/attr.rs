@@ -3,4 +3,4 @@
 //! The canonical definitions live in `baml_base::attr` so that both
 //! `baml_type` and `baml_compiler_tir` can use them without a cyclic dependency.
 
-pub use baml_base::{TyAssert, TyAttr, TyAttrValue};
+pub use baml_base::{TyAttr, TyAttrValue};

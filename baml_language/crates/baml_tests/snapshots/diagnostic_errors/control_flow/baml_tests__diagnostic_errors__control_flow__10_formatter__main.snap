@@ -16,7 +16,12 @@ function Headers() -> string {
     let y = 2;
     //# Processing
     let z = x + y;
-    z.to_string()
+    // Synthetic error: this project lives in diagnostic_errors/ and must
+    // carry at least one error for tier classification. M2 added
+    // Int.to_string (BEP-049 §11), which was previously the failing call
+    // here. Renamed to a guaranteed-missing method so the project's real
+    // purpose — control-flow visualization snapshots — keeps working.
+    z.to_string_BAML_NOT_A_METHOD()
 }
 
 // If/else with headers
@@ -98,16 +103,11 @@ function NestedControlFlow(x: int) -> string {
 }
 
 // LLM function
-client<llm> TestClient {
-    provider: openai,
-    options: {
-        model: gpt-4,
-    },
-}
+client TestClient = openai.OpenAiClient.new(model = "gpt-4");
 
 function LlmFunction(input: string) -> string {
     client: TestClient
-    prompt: #"
-        Echo: {{ input }}
-    "#
+    prompt: `
+        Echo: ${input}
+    `
 }

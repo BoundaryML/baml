@@ -232,6 +232,7 @@ pub struct RenderOptions {
     always_hoist_enums: RenderSetting<bool>,
     map_style: MapStyle,
     quote_class_fields: bool,
+    render_null_as: RenderSetting<String>,
 }
 
 impl Default for RenderOptions {
@@ -245,6 +246,7 @@ impl Default for RenderOptions {
             always_hoist_enums: RenderSetting::Auto,
             map_style: MapStyle::TypeParameters,
             quote_class_fields: false,
+            render_null_as: RenderSetting::Auto,
         }
     }
 }
@@ -269,6 +271,7 @@ impl RenderOptions {
         hoisted_class_prefix: Option<Option<String>>,
         hoist_classes: Option<HoistClasses>,
         quote_class_fields: Option<bool>,
+        render_null_as: Option<Option<String>>,
     ) -> Self {
         Self {
             prefix: prefix.map_or(RenderSetting::Auto, |p| {
@@ -286,6 +289,9 @@ impl RenderOptions {
             }),
             hoist_classes: hoist_classes.unwrap_or(HoistClasses::Auto),
             quote_class_fields: quote_class_fields.unwrap_or(false),
+            render_null_as: render_null_as
+                .flatten()
+                .map_or(RenderSetting::Auto, RenderSetting::Always),
         }
     }
 
@@ -453,10 +459,14 @@ impl OutputFormatContent {
             ft: &TypeIR,
             options: &RenderOptions,
             render_state: &RenderCtx,
-            _output_format_content: &OutputFormatContent,
+            output_format_content: &OutputFormatContent,
         ) -> Option<String> {
             match ft {
                 TypeIR::Primitive(TypeValue::String, _) => None,
+                TypeIR::Primitive(TypeValue::Null, _) => Some(format!(
+                    "Answer ONLY with {}:\n",
+                    output_format_content.render_null_type(options)
+                )),
                 TypeIR::Primitive(p, _) => Some(format!(
                     "Answer as {article} ",
                     article = indefinite_article_a_or_an(&p.to_string())
@@ -490,7 +500,10 @@ impl OutputFormatContent {
                     "Answer with a JSON Array using this schema:\n",
                 )),
                 TypeIR::Union(items, _) => match items.view() {
-                    UnionTypeViewGeneric::Null => Some(String::from("Answer ONLY with null:\n")),
+                    UnionTypeViewGeneric::Null => Some(format!(
+                        "Answer ONLY with {}:\n",
+                        output_format_content.render_null_type(options)
+                    )),
                     UnionTypeViewGeneric::Optional(_) => {
                         Some(String::from("Answer in JSON using this schema:\n"))
                     }
@@ -681,7 +694,7 @@ impl OutputFormatContent {
                 TypeValue::Int => "int".to_string(),
                 TypeValue::Float => "float".to_string(),
                 TypeValue::Bool => "bool".to_string(),
-                TypeValue::Null => "null".to_string(),
+                TypeValue::Null => self.render_null_type(options).to_string(),
                 TypeValue::Media(media_type) => {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
@@ -798,6 +811,13 @@ impl OutputFormatContent {
                  This indicates a bug in the type resolution phase."
             ),
         })
+    }
+
+    fn render_null_type<'a>(&self, options: &'a RenderOptions) -> &'a str {
+        match &options.render_null_as {
+            RenderSetting::Always(value) => value.as_str(),
+            RenderSetting::Auto | RenderSetting::Never => "null",
+        }
     }
 
     pub fn render(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
@@ -1088,6 +1108,50 @@ mod tests {
         let content = OutputFormatContent::target(TypeIR::float()).build();
         let rendered = content.render(RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as a float".into()));
+    }
+
+    #[test]
+    fn render_null_as_custom_value() {
+        let content = OutputFormatContent::target(TypeIR::optional(TypeIR::string())).build();
+        let rendered = content
+            .render(RenderOptions::new(
+                Some(None),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Some("omit".to_string())),
+            ))
+            .unwrap();
+        assert_eq!(rendered, Some("string or omit".into()));
+    }
+
+    #[test]
+    fn render_null_only_prefix_uses_custom_null_value() {
+        let content = OutputFormatContent::target(TypeIR::union(vec![TypeIR::null()])).build();
+        let rendered = content
+            .render(RenderOptions::new(
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Some("omit".to_string())),
+            ))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(rendered, "Answer ONLY with omit:\nomit");
+        assert!(
+            !rendered.contains("null"),
+            "custom null rendering should apply to the null-only prefix: {rendered}"
+        );
     }
 
     #[test]
@@ -3494,6 +3558,7 @@ Answer in JSON using this schema: Ret"#
             None,       // hoisted_class_prefix
             None,       // hoist_classes
             None,       // quote_class_fields
+            None,       // render_null_as
         );
 
         let rendered = content.render(options).unwrap().unwrap();

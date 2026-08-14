@@ -14,8 +14,8 @@
 //!   fields, methods, or enum variants.
 //!
 //! - **Value position** (token inside an expression in an
-//!   `EXPR_FUNCTION_BODY`): suggest local variables in scope, then all
-//!   package-level functions and template strings.
+//!   `EXPR_FUNCTION_BODY`): suggest local variables in scope, builtin package
+//!   roots, then all package-level functions and template strings.
 //!
 //! - **Top-level** (token at the source file root): suggest declaration
 //!   keywords (`class`, `function`, `enum`, …).
@@ -28,7 +28,7 @@
 //! - `package_items(builtin_pkg_id)` — builtin definitions from the `baml`
 //!   and `env` packages.
 //! - `resolve_class_fields(class_loc)` — fields for field-access completions.
-//! - `file_item_tree(file)[enum_loc.id]` — variants for field-access on enums.
+//! - `enum_data(enum_loc)` — variants for field-access on enums.
 
 use std::collections::HashSet;
 
@@ -42,8 +42,8 @@ use baml_compiler2_hir::{
     semantic_index::ScopeBindings,
     signature::function_signature,
 };
-use baml_compiler2_tir::ty::Ty;
-use rowan::NodeOrToken;
+use baml_type::{MediaKind, PrimitiveType, Ty};
+use rowan::{NodeOrToken, ast::AstNode};
 use text_size::TextSize;
 
 use crate::{Db, utils};
@@ -54,7 +54,56 @@ fn format_function_signature(db: &dyn Db, func_loc: FunctionLoc<'_>) -> String {
     let params: Vec<String> = sig
         .params
         .iter()
-        .map(|(name, te)| format!("{}: {}", name.as_str(), utils::display_type_expr(te)))
+        .map(|param| {
+            let optional = if param.has_default { "?" } else { "" };
+            format!(
+                "{}{}: {}",
+                param.name.as_str(),
+                optional,
+                utils::display_type_expr(&param.ty)
+            )
+        })
+        .collect();
+    let ret = sig
+        .return_type
+        .as_ref()
+        .map(utils::display_type_expr)
+        .unwrap_or_else(|| "null".to_string());
+    format!("({}) -> {}", params.join(", "), ret)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BuiltinMethodMode {
+    Instance,
+    Static,
+    All,
+}
+
+/// Format a builtin class method signature for completion details.
+///
+/// Instance completions hide the synthetic `self` parameter because the receiver
+/// is already present in source (`img.base64()`, not `img.base64(img)`).
+fn format_builtin_method_signature(
+    db: &dyn Db,
+    func_loc: FunctionLoc<'_>,
+    mode: BuiltinMethodMode,
+) -> String {
+    let sig = function_signature(db, func_loc);
+    let params: Vec<String> = sig
+        .params
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, param)| {
+            if mode == BuiltinMethodMode::Instance && idx == 0 && param.name.as_str() == "self" {
+                None
+            } else {
+                Some(format!(
+                    "{}: {}",
+                    param.name.as_str(),
+                    utils::display_type_expr(&param.ty)
+                ))
+            }
+        })
         .collect();
     let ret = sig
         .return_type
@@ -103,6 +152,18 @@ pub enum CompletionKind {
     Method,
     /// A namespace (module) containing other definitions.
     Module,
+    /// A named function parameter in a call argument list.
+    Parameter,
+}
+
+/// How an editor should interpret [`Completion::insert_text`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompletionInsertTextFormat {
+    /// Insert the text literally.
+    #[default]
+    PlainText,
+    /// Interpret LSP snippet tabstops such as `$0` and `${1:Name}`.
+    Snippet,
 }
 
 // ── Completion ────────────────────────────────────────────────────────────────
@@ -120,6 +181,8 @@ pub struct Completion {
     pub detail: Option<String>,
     /// Text inserted on acceptance (defaults to `label` if `None`).
     pub insert_text: Option<String>,
+    /// Whether `insert_text` is literal text or an LSP snippet.
+    pub insert_text_format: CompletionInsertTextFormat,
     /// Sort key (lower sorts first).
     pub sort_text: Option<String>,
 }
@@ -132,6 +195,7 @@ impl Completion {
             kind,
             detail: None,
             insert_text: None,
+            insert_text_format: CompletionInsertTextFormat::PlainText,
             sort_text: None,
         }
     }
@@ -143,6 +207,17 @@ impl Completion {
 
     fn with_sort(mut self, sort: impl Into<String>) -> Self {
         self.sort_text = Some(sort.into());
+        self
+    }
+
+    fn with_insert_text(mut self, insert_text: impl Into<String>) -> Self {
+        self.insert_text = Some(insert_text.into());
+        self
+    }
+
+    fn with_snippet(mut self, snippet: impl Into<String>) -> Self {
+        self.insert_text = Some(snippet.into());
+        self.insert_text_format = CompletionInsertTextFormat::Snippet;
         self
     }
 }
@@ -158,6 +233,8 @@ enum CompletionContext {
     MemberAccess,
     /// Cursor is in a value expression inside a function body.
     ValuePosition,
+    /// Cursor is inside a function call argument list.
+    CallArguments,
     /// Cursor is at the top level (not inside any item body).
     TopLevel,
     /// Context cannot be determined (e.g., cursor in a comment or string).
@@ -183,6 +260,9 @@ pub fn completions_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Co
         CompletionContext::TypePosition => completions_for_type_position(db, file, offset),
         CompletionContext::MemberAccess => completions_for_field_access(db, file, &token, offset),
         CompletionContext::ValuePosition => completions_for_value_position(db, file, offset),
+        CompletionContext::CallArguments => {
+            completions_for_call_arguments(db, file, &token, offset)
+        }
         CompletionContext::TopLevel => completions_for_top_level(),
         CompletionContext::Unknown => Vec::new(),
     }
@@ -208,13 +288,19 @@ fn detect_context(
         return CompletionContext::MemberAccess;
     }
 
+    if find_call_args_completion_ancestor(token).is_some() {
+        return CompletionContext::CallArguments;
+    }
+
     // Walk ancestors to detect the structural context.
     let mut node = token.parent();
     while let Some(current) = node {
         let kind = current.kind();
 
         match kind {
-            // Inside a TYPE_EXPR node → type position.
+            // Inside a TYPE_EXPR node → type position. For PARAMETER /
+            // FIELD, only treat as type position if we're specifically in
+            // the type-annotation part (not the name part).
             SyntaxKind::TYPE_EXPR
             | SyntaxKind::UNION_TYPE
             | SyntaxKind::OPTIONAL_TYPE
@@ -222,12 +308,10 @@ fn detect_context(
             | SyntaxKind::MAP_TYPE
             | SyntaxKind::FUNCTION_TYPE
             | SyntaxKind::PARAMETER
-            | SyntaxKind::FIELD => {
-                // Only treat as type position if we're in the type annotation part,
-                // not the name part. Check if any ancestor is specifically TYPE_EXPR.
-                if is_in_type_annotation(&current) {
-                    return CompletionContext::TypePosition;
-                }
+            | SyntaxKind::FIELD
+                if is_in_type_annotation(&current) =>
+            {
+                return CompletionContext::TypePosition;
             }
 
             // Inside an expression function body → value position.
@@ -236,11 +320,11 @@ fn detect_context(
             | SyntaxKind::BINARY_EXPR
             | SyntaxKind::UNARY_EXPR
             | SyntaxKind::CALL_EXPR
-            | SyntaxKind::CALL_ARGS
             | SyntaxKind::PATH_EXPR
             | SyntaxKind::PAREN_EXPR
             | SyntaxKind::BLOCK_EXPR
             | SyntaxKind::IF_EXPR
+            | SyntaxKind::IF_LET_EXPR
             | SyntaxKind::FOR_EXPR
             | SyntaxKind::LET_STMT
             | SyntaxKind::RETURN_STMT => {
@@ -375,6 +459,217 @@ fn is_in_type_annotation(node: &SyntaxNode) -> bool {
     false
 }
 
+// ── Call-argument completions ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+struct CallParamCompletion {
+    name: String,
+    ty: String,
+    optional: bool,
+}
+
+fn find_call_args_completion_ancestor(
+    token: &baml_compiler_syntax::SyntaxToken,
+) -> Option<SyntaxNode> {
+    let parent = token.parent()?;
+    match parent.kind() {
+        SyntaxKind::CALL_ARGS => Some(parent),
+        SyntaxKind::CALL_ARG => parent
+            .parent()
+            .filter(|node| node.kind() == SyntaxKind::CALL_ARGS),
+        _ => None,
+    }
+}
+
+fn completions_for_call_arguments(
+    db: &dyn Db,
+    file: SourceFile,
+    token: &baml_compiler_syntax::SyntaxToken,
+    offset: TextSize,
+) -> Vec<Completion> {
+    let Some(args_node) = find_call_args_completion_ancestor(token) else {
+        return Vec::new();
+    };
+    let Some(call_node) = args_node.parent().filter(|node| {
+        matches!(
+            node.kind(),
+            SyntaxKind::CALL_EXPR | SyntaxKind::OPTIONAL_CALL_EXPR
+        )
+    }) else {
+        return Vec::new();
+    };
+
+    let provided = provided_call_args(&args_node, offset);
+    let Some(params) = call_params_for_call_node(db, file, offset, &call_node, &args_node) else {
+        return completions_for_value_position(db, file, offset);
+    };
+
+    let mut items = Vec::new();
+    for (idx, param) in params.into_iter().enumerate() {
+        if idx < provided.positional_count || provided.named.contains(&param.name) {
+            continue;
+        }
+        let detail = if param.optional {
+            format!("{} (optional)", param.ty)
+        } else {
+            param.ty.clone()
+        };
+        let sort_group = usize::from(param.optional);
+        items.push(
+            Completion::new(param.name.as_str(), CompletionKind::Parameter)
+                .with_detail(detail)
+                .with_insert_text(format!("{} = ", param.name))
+                .with_sort(format!("{sort_group}_{}", param.name)),
+        );
+    }
+
+    items
+}
+
+struct ProvidedCallArgs {
+    named: HashSet<String>,
+    positional_count: usize,
+}
+
+fn provided_call_args(args_node: &SyntaxNode, offset: TextSize) -> ProvidedCallArgs {
+    let mut named = HashSet::new();
+    let mut positional_count = 0;
+
+    for node in args_node
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::CALL_ARG)
+    {
+        let Some(arg) = baml_compiler_syntax::ast::CallArg::cast(node.clone()) else {
+            continue;
+        };
+        if let Some(label) = arg.label() {
+            named.insert(label.text().to_string());
+        } else if node.text_range().end() <= offset {
+            positional_count += 1;
+        }
+    }
+
+    ProvidedCallArgs {
+        named,
+        positional_count,
+    }
+}
+
+fn call_params_for_call_node(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    call_node: &SyntaxNode,
+    args_node: &SyntaxNode,
+) -> Option<Vec<CallParamCompletion>> {
+    let callee_name = callee_name_token(call_node, args_node)?;
+    let name = Name::new(callee_name.text());
+    let method_like = callee_has_dot_before_args(call_node, args_node);
+
+    match baml_compiler2_ppir::resolve::resolve_name_at(
+        db,
+        file,
+        callee_name.text_range().start(),
+        &name,
+    ) {
+        baml_compiler2_ppir::resolve::ResolvedName::Item(Definition::Function(func_loc))
+        | baml_compiler2_ppir::resolve::ResolvedName::Builtin(Definition::Function(func_loc)) => {
+            Some(function_params_for_completion(db, func_loc, method_like))
+        }
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
+            definition_site: Some(site),
+            ..
+        } => local_variable_ty(db, file, offset, site)
+            .and_then(|ty| params_from_function_ty(db, file, &ty)),
+        _ => None,
+    }
+}
+
+fn callee_name_token(
+    call_node: &SyntaxNode,
+    args_node: &SyntaxNode,
+) -> Option<baml_compiler_syntax::SyntaxToken> {
+    let args_start = args_node.text_range().start();
+    call_node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .filter(|token| token.text_range().end() <= args_start)
+        .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+        .last()
+}
+
+fn callee_has_dot_before_args(call_node: &SyntaxNode, args_node: &SyntaxNode) -> bool {
+    let args_start = args_node.text_range().start();
+    call_node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .any(|token| token.kind() == SyntaxKind::DOT && token.text_range().end() <= args_start)
+}
+
+fn function_params_for_completion(
+    db: &dyn Db,
+    func_loc: FunctionLoc<'_>,
+    method_like: bool,
+) -> Vec<CallParamCompletion> {
+    let file = func_loc.file(db);
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
+    let sig = function_signature(db, func_loc);
+
+    let mut params: Vec<CallParamCompletion> =
+        if let Some(exported) = iface.lookup_function(&pkg_info.namespace_path, &sig.name) {
+            exported
+                .params
+                .iter()
+                .filter_map(|param| {
+                    param.name.as_ref().map(|name| CallParamCompletion {
+                        name: name.as_str().to_string(),
+                        ty: utils::display_ty_for_file(db, file, &param.ty),
+                        optional: param.is_optional(),
+                    })
+                })
+                .collect()
+        } else {
+            sig.params
+                .iter()
+                .map(|param| CallParamCompletion {
+                    name: param.name.as_str().to_string(),
+                    ty: utils::display_type_expr(&param.ty),
+                    optional: param.has_default,
+                })
+                .collect()
+        };
+
+    if method_like && params.first().is_some_and(|param| param.name == "self") {
+        params.remove(0);
+    }
+
+    params
+}
+
+fn params_from_function_ty(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &Ty,
+) -> Option<Vec<CallParamCompletion>> {
+    let Ty::Function { params, .. } = ty else {
+        return None;
+    };
+    Some(
+        params
+            .iter()
+            .filter_map(|param| {
+                param.name.as_ref().map(|name| CallParamCompletion {
+                    name: name.as_str().to_string(),
+                    ty: utils::display_ty_for_file(db, file, &param.ty),
+                    optional: param.is_optional(),
+                })
+            })
+            .collect(),
+    )
+}
+
 // ── Type-position completions ─────────────────────────────────────────────────
 
 /// Completions for a type annotation position.
@@ -390,7 +685,16 @@ fn completions_for_type_position(
 
     // ── Builtin primitives ────────────────────────────────────────────────────
     for prim in &[
-        "int", "float", "string", "bool", "null", "image", "audio", "video", "pdf",
+        "int",
+        "float",
+        "string",
+        "bool",
+        "null",
+        "uint8array",
+        "image",
+        "audio",
+        "video",
+        "pdf",
     ] {
         items
             .push(Completion::new(*prim, CompletionKind::Primitive).with_sort(format!("0_{prim}")));
@@ -468,12 +772,12 @@ fn completions_for_field_access(
 
     // Resolve root segment type.
     let root = Name::new(&segments[0]);
-    let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &root);
+    let resolved = baml_compiler2_ppir::resolve::resolve_name_at(db, file, offset, &root);
 
     let mut ty = match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => definition_to_ty(db, def),
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+        | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => definition_to_ty(db, def),
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             definition_site: Some(site),
             ..
         } => local_variable_ty(db, file, offset, site),
@@ -486,6 +790,16 @@ fn completions_for_field_access(
         if let Some(completions) = completions_for_package_path(db, file, &segments) {
             return completions;
         }
+
+        if segments.len() == 1 {
+            if let Some(class_path) = builtin_static_class_path_for_root(&segments[0]) {
+                return completions_for_builtin_class_methods(
+                    db,
+                    class_path,
+                    BuiltinMethodMode::Static,
+                );
+            }
+        }
     }
 
     // Chain through intermediate segments to get the type at the last segment.
@@ -493,7 +807,7 @@ fn completions_for_field_access(
         ty = ty.and_then(|t| resolve_field_type(db, &t, seg));
     }
 
-    ty.map(|t| completions_for_ty_members(db, &t))
+    ty.map(|t| completions_for_ty_members(db, file, &t))
         .unwrap_or_default()
 }
 
@@ -514,7 +828,8 @@ fn completions_for_package_path(
     // Get the file's package context to access dependency packages.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let own_pkg_id = PackageId::new(db, pkg_info.package);
-    let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, own_pkg_id);
+    let res_ctx =
+        baml_compiler2_hir_ty::package_interface::package_resolution_context(db, own_pkg_id);
 
     // Check if the first segment is a known package name.
     let first_segment = Name::new(&segments[0]);
@@ -535,10 +850,6 @@ fn completions_for_package_path(
                 Definition::Function(func_loc) => (
                     CompletionKind::Function,
                     format_function_signature(db, *func_loc),
-                ),
-                Definition::TemplateString(_) => (
-                    CompletionKind::TemplateString,
-                    "template_string".to_string(),
                 ),
                 Definition::Client(_) => (CompletionKind::Client, "client".to_string()),
                 Definition::RetryPolicy(_) => {
@@ -594,7 +905,121 @@ fn completions_for_package_path(
         }
     }
 
+    if let Some(class_completions) = completions_for_package_class_path(db, pkg_items, segments) {
+        for completion in class_completions {
+            if seen.insert(completion.label.clone()) {
+                items.push(completion);
+            }
+        }
+    }
+
     if items.is_empty() { None } else { Some(items) }
+}
+
+fn completions_for_package_class_path(
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    segments: &[String],
+) -> Option<Vec<Completion>> {
+    if segments.len() < 2 {
+        return None;
+    }
+
+    let path: Vec<Name> = segments[1..].iter().map(Name::new).collect();
+    let (class_name, namespace) = path.split_last()?;
+    let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(namespace, class_name) else {
+        return None;
+    };
+
+    Some(completions_for_class_methods(
+        db,
+        class_loc,
+        BuiltinMethodMode::All,
+    ))
+}
+
+fn builtin_static_class_path_for_root(root: &str) -> Option<&'static [&'static str]> {
+    match root {
+        "image" => Some(&["media", "Image"]),
+        "audio" => Some(&["media", "Audio"]),
+        "video" => Some(&["media", "Video"]),
+        "pdf" => Some(&["media", "Pdf"]),
+        "string" => Some(&["String"]),
+        _ => None,
+    }
+}
+
+fn builtin_instance_class_path_for_primitive(ty: &Ty) -> Option<&'static [&'static str]> {
+    match ty {
+        Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), _, _) => {
+            Some(PrimitiveType::String.builtin_class_path())
+        }
+        Ty::Uint8Array { .. } => Some(PrimitiveType::Uint8Array.builtin_class_path()),
+        Ty::Media(MediaKind::Image, _) => Some(PrimitiveType::Image.builtin_class_path()),
+        Ty::Media(MediaKind::Audio, _) => Some(PrimitiveType::Audio.builtin_class_path()),
+        Ty::Media(MediaKind::Video, _) => Some(PrimitiveType::Video.builtin_class_path()),
+        Ty::Media(MediaKind::Pdf, _) => Some(PrimitiveType::Pdf.builtin_class_path()),
+        _ => None,
+    }
+}
+
+fn method_has_self_param(db: &dyn Db, func_loc: FunctionLoc<'_>) -> bool {
+    function_signature(db, func_loc)
+        .params
+        .first()
+        .is_some_and(|param| param.name.as_str() == "self")
+}
+
+fn completions_for_builtin_class_methods(
+    db: &dyn Db,
+    class_path: &[&str],
+    mode: BuiltinMethodMode,
+) -> Vec<Completion> {
+    if class_path.is_empty() {
+        return Vec::new();
+    }
+
+    let builtin_id = PackageId::new(db, Name::new("baml"));
+    let builtin = package_items(db, builtin_id);
+    let path: Vec<Name> = class_path.iter().map(Name::new).collect();
+    let Some((class_name, namespace)) = path.split_last() else {
+        return Vec::new();
+    };
+    let Some(Definition::Class(class_loc)) = builtin.lookup_type(namespace, class_name) else {
+        return Vec::new();
+    };
+
+    completions_for_class_methods(db, class_loc, mode)
+}
+
+fn completions_for_class_methods(
+    db: &dyn Db,
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+    mode: BuiltinMethodMode,
+) -> Vec<Completion> {
+    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+    let mut items = Vec::new();
+
+    for &func_loc in &class_data.methods {
+        let has_self = method_has_self_param(db, func_loc);
+        if mode != BuiltinMethodMode::All
+            && !matches!(
+                (mode, has_self),
+                (BuiltinMethodMode::Instance, true) | (BuiltinMethodMode::Static, false)
+            )
+        {
+            continue;
+        }
+
+        let method = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        items.push(
+            Completion::new(method.name.as_str(), CompletionKind::Method)
+                .with_detail(format_builtin_method_signature(db, func_loc, mode))
+                .with_sort(format!("1_{}", method.name.as_str())),
+        );
+    }
+
+    items
 }
 
 /// Resolve the type of a field/member on a given type.
@@ -602,7 +1027,7 @@ fn completions_for_package_path(
 /// For a `Ty::Class`, looks up resolved class fields and returns the field's type.
 fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
     match ty {
-        Ty::Class(qn, _, _) => {
+        Ty::Class(qn, type_args, _) => {
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
             let pkg = package_items(db, pkg_id);
@@ -612,10 +1037,13 @@ fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
                 return None;
             };
 
-            let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
-            for (name, field_ty, _) in &resolved.fields {
+            let class_generic_params =
+                baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
+            let bindings = baml_type::unify::bind_type_vars(&class_generic_params, type_args);
+            let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
+            for (name, field_ty, _) in resolved {
                 if name.as_str() == field_name {
-                    return Some(field_ty.clone());
+                    return Some(baml_type::unify::substitute_ty(field_ty, &bindings));
                 }
             }
             None
@@ -706,9 +1134,9 @@ fn find_path_segments_for_word_after_dot(token: &baml_compiler_syntax::SyntaxTok
 }
 
 /// Returns completions for the members of `ty`.
-fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
+fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Completion> {
     match ty {
-        Ty::Class(qn, _, _) => {
+        Ty::Class(qn, type_args, _) => {
             // Find the class definition and return its fields and methods.
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
@@ -721,21 +1149,26 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
 
             let mut items = Vec::new();
 
-            // Fields from resolved class fields.
-            let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
-            for (field_name, field_ty, _field_attrs) in &resolved.fields {
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+            let class_generic_params =
+                baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
+            let bindings = baml_type::unify::bind_type_vars(&class_generic_params, type_args);
+
+            // Fields from resolved class fields, specialized for the receiver's
+            // concrete type arguments.
+            let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
+            for (field_name, field_ty, _field_attrs) in resolved {
+                let field_ty = baml_type::unify::substitute_ty(field_ty, &bindings);
                 items.push(
                     Completion::new(field_name.as_str(), CompletionKind::Field)
-                        .with_detail(utils::display_ty(field_ty))
+                        .with_detail(utils::display_ty_for_file(db, file, &field_ty))
                         .with_sort(format!("0_{}", field_name.as_str())),
                 );
             }
 
-            // Methods from item tree.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let class_data = &item_tree[class_loc.id(db)];
-            for method_id in &class_data.methods {
-                let method = &item_tree[*method_id];
+            // Methods from the class's firewall data.
+            for &func_loc in &class_data.methods {
+                let method = baml_compiler2_ppir::item_data::function_data(db, func_loc);
                 items.push(
                     Completion::new(method.name.as_str(), CompletionKind::Method)
                         .with_detail("method")
@@ -756,8 +1189,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
                 return Vec::new();
             };
 
-            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
-            let enum_data = &item_tree[enum_loc.id(db)];
+            let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
 
             enum_data
                 .variants
@@ -770,61 +1202,30 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
         }
 
         Ty::List(..) | Ty::EvolvingList(..) => {
-            // Built-in list methods.
-            builtin_list_completions()
+            completions_for_builtin_class_methods(db, &["Array"], BuiltinMethodMode::Instance)
         }
 
-        Ty::Map(..) | Ty::EvolvingMap(..) => {
-            // Built-in map methods.
-            builtin_map_completions()
+        Ty::Map { .. } | Ty::EvolvingMap(..) => {
+            completions_for_builtin_class_methods(db, &["Map"], BuiltinMethodMode::Instance)
         }
 
-        Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::String, _) => {
-            // Built-in string methods.
-            builtin_string_completions()
+        Ty::String { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(_, _)
+        | Ty::Literal(baml_base::Literal::String(_), _, _) => {
+            builtin_instance_class_path_for_primitive(ty)
+                .map(|class_path| {
+                    completions_for_builtin_class_methods(
+                        db,
+                        class_path,
+                        BuiltinMethodMode::Instance,
+                    )
+                })
+                .unwrap_or_default()
         }
 
         _ => Vec::new(),
     }
-}
-
-/// Built-in methods for list types.
-fn builtin_list_completions() -> Vec<Completion> {
-    vec![
-        Completion::new("length", CompletionKind::Method).with_detail("int"),
-        Completion::new("map", CompletionKind::Method).with_detail("(f: (T) -> U) -> U[]"),
-        Completion::new("filter", CompletionKind::Method).with_detail("(f: (T) -> bool) -> T[]"),
-        Completion::new("reduce", CompletionKind::Method)
-            .with_detail("(f: (U, T) -> U, init: U) -> U"),
-        Completion::new("find", CompletionKind::Method).with_detail("(f: (T) -> bool) -> T?"),
-        Completion::new("any", CompletionKind::Method).with_detail("(f: (T) -> bool) -> bool"),
-        Completion::new("all", CompletionKind::Method).with_detail("(f: (T) -> bool) -> bool"),
-    ]
-}
-
-/// Built-in methods for map types.
-fn builtin_map_completions() -> Vec<Completion> {
-    vec![
-        Completion::new("keys", CompletionKind::Method).with_detail("K[]"),
-        Completion::new("values", CompletionKind::Method).with_detail("V[]"),
-        Completion::new("entries", CompletionKind::Method).with_detail("{ key: K, value: V }[]"),
-    ]
-}
-
-/// Built-in methods for string types.
-fn builtin_string_completions() -> Vec<Completion> {
-    vec![
-        Completion::new("length", CompletionKind::Method).with_detail("int"),
-        Completion::new("upper", CompletionKind::Method).with_detail("string"),
-        Completion::new("lower", CompletionKind::Method).with_detail("string"),
-        Completion::new("trim", CompletionKind::Method).with_detail("string"),
-        Completion::new("split", CompletionKind::Method).with_detail("(sep: string) -> string[]"),
-        Completion::new("contains", CompletionKind::Method).with_detail("(sub: string) -> bool"),
-        Completion::new("starts_with", CompletionKind::Method)
-            .with_detail("(prefix: string) -> bool"),
-        Completion::new("ends_with", CompletionKind::Method)
-            .with_detail("(suffix: string) -> bool"),
-    ]
 }
 
 /// Convert a `Definition` to its representative `Ty`.
@@ -834,11 +1235,10 @@ fn builtin_string_completions() -> Vec<Completion> {
 fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
     match def {
         Definition::Class(class_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let class = &item_tree[class_loc.id(db)];
+            let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
             Some(Ty::Class(
-                baml_compiler2_tir::ty::QualifiedTypeName::new(
+                baml_type::QualifiedTypeName::new(
                     pkg_info.package,
                     pkg_info.namespace_path,
                     class.name.clone(),
@@ -848,11 +1248,10 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             ))
         }
         Definition::Enum(enum_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
-            let enum_data = &item_tree[enum_loc.id(db)];
+            let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
             Some(Ty::Enum(
-                baml_compiler2_tir::ty::QualifiedTypeName::new(
+                baml_type::QualifiedTypeName::new(
                     pkg_info.package,
                     pkg_info.namespace_path,
                     enum_data.name.clone(),
@@ -880,7 +1279,6 @@ fn local_variable_ty(
     match site {
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(param_idx) => {
             // Get declared type from function or lambda signature.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
             let scope_id = index.scope_at_offset(at_offset, None);
             let ancestors = index.ancestor_scopes(scope_id);
 
@@ -897,46 +1295,37 @@ fn local_variable_ty(
                 ScopeKind::Function => {
                     // Function parameter — look up from function signature.
                     let func_scope_range = enclosing_scope_data.range;
-                    let (func_local_id, _) = item_tree
-                        .functions
-                        .iter()
-                        .find(|(_, f)| f.span == func_scope_range)?;
                     let func_loc =
-                        baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
-                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                    sig.params.get(param_idx).map(|(_, te)| {
-                        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                        let pkg_id = PackageId::new(db, pkg_info.package);
-                        let pkg = package_items(db, pkg_id);
-                        let mut diags = Vec::new();
-                        baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                            db,
-                            te,
-                            pkg,
-                            &[],
-                            &mut diags,
-                        )
-                    })
+                        crate::utils::function_at_scope_range(db, file, func_scope_range)?;
+                    let sig = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
+                    sig.params.get(param_idx).map(|param| param.ty.to_plain())
                 }
                 ScopeKind::Lambda => {
                     // Lambda parameter — use TIR inference for the lambda scope
                     // to get the inferred param type (handles both annotated and
                     // unannotated params like those in `.map((item) -> { ... })`).
                     let lambda_scope_id = index.scope_ids[enclosing_scope.index() as usize];
-                    let inference =
-                        baml_compiler2_tir::inference::infer_scope_types(db, lambda_scope_id);
-                    inference.param_type(param_idx).cloned()
+                    let body = baml_compiler2_hir_ty::ide::scope_body(db, lambda_scope_id)?;
+                    let lambda_expr = body.scope_expr?;
+                    let inference = baml_compiler2_hir_ty::infer::infer_body(db, body.owner);
+                    match inference.type_of_expr.get(&lambda_expr)?.to_plain() {
+                        baml_type::Ty::Function { params, .. } => {
+                            params.get(param_idx).map(|param| param.ty.clone())
+                        }
+                        _ => None,
+                    }
                 }
                 _ => None,
             }
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(_) => {
-            // Search all scopes for the binding type. This handles variables
-            // inside lambdas (test bodies, closures) where the variable's
-            // StmtId is in a nested ExprBody, not the outer function's body.
+            // Handles variables declared inside lambdas (test bodies,
+            // closures) as well as directly in the function body — both index
+            // the same arena.
             find_binding_ty_for_local(db, file, at_offset, site)
         }
-        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_) => {
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_)
+        | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(_) => {
             find_binding_ty_for_local(db, file, at_offset, site)
         }
     }
@@ -946,12 +1335,9 @@ fn local_variable_ty(
 /// (which may be a nested lambda body for test/testset code) and looking up the
 /// binding type from TIR inference.
 ///
-/// For `Statement` bindings, we walk the scope tree to build a nesting path from
-/// the cursor's innermost Lambda scope up to the enclosing Function scope, then
-/// descend through the `ExprBody` tree using each body's source map to match
-/// lambda expression spans against scope ranges. This ensures we find the correct
-/// `ExprBody` even for deeply nested testset/test lambdas, where `func_def.span`
-/// may not match the scope range set by the HIR builder.
+/// For `Statement` bindings, the `StmtId` indexes the enclosing function's
+/// `ExprBody`. Lambda bodies are lowered into that same arena, so the statement
+/// resolves against it however deeply the cursor sits inside nested lambdas.
 fn find_binding_ty_for_local(
     db: &dyn Db,
     file: SourceFile,
@@ -959,59 +1345,35 @@ fn find_binding_ty_for_local(
     site: baml_compiler2_hir::semantic_index::DefinitionSite,
 ) -> Option<Ty> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     let pat_id = match site {
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
-            // 1. Build the scope nesting path from cursor to enclosing Function.
-            //    lambda_ranges: innermost-first Lambda scope ranges.
-            //    func_range: the enclosing Function scope range.
+            // Walk out to the enclosing Function scope, which owns the arena
+            // every statement in it — lambda bodies included — lives in.
             let scope_id = index.scope_at_offset(at_offset, None);
             let ancestors = index.ancestor_scopes(scope_id);
 
-            let mut lambda_ranges_rev: Vec<text_size::TextRange> = Vec::new();
             let mut func_range: Option<text_size::TextRange> = None;
             for ancestor_id in &ancestors {
                 let s = &index.scopes[ancestor_id.index() as usize];
-                match s.kind {
-                    ScopeKind::Lambda => lambda_ranges_rev.push(s.range),
-                    ScopeKind::Function => {
-                        func_range = Some(s.range);
-                        break;
-                    }
-                    _ => {}
+                if s.kind == ScopeKind::Function {
+                    func_range = Some(s.range);
+                    break;
                 }
             }
 
             // 2. Start from the outermost Function scope → find its body.
             let func_range = func_range?;
-            let (func_local_id, _) = item_tree
-                .functions
-                .iter()
-                .find(|(_, f)| f.span == func_range)?;
-            let func_loc = FunctionLoc::new(db, file, *func_local_id);
+            let func_loc = crate::utils::function_at_scope_range(db, file, func_range)?;
             let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let baml_compiler2_hir::body::FunctionBody::Expr(ref top_body) = *body else {
                 return None;
             };
 
-            // 3. If cursor is directly in the Function (no lambda nesting), use it.
-            if lambda_ranges_rev.is_empty() {
-                extract_pat_from_stmt(top_body, stmt_id)
-            } else {
-                // Get the top-level source map and descend through nested lambdas.
-                let top_source_map =
-                    baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
-
-                // Reverse to get outermost→innermost order for descent.
-                lambda_ranges_rev.reverse();
-
-                let target_body =
-                    descend_into_lambdas(top_body, &top_source_map, &lambda_ranges_rev)?;
-                extract_pat_from_stmt(target_body, stmt_id)
-            }
+            extract_pat_from_stmt(top_body, stmt_id)
         }
-        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id) => Some(pat_id),
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id)
+        | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(pat_id) => Some(pat_id),
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => None,
     };
 
@@ -1024,9 +1386,11 @@ fn find_binding_ty_for_local(
     let cursor_scope = index.scope_at_offset(at_offset, None);
     for ancestor_id in index.ancestor_scopes(cursor_scope) {
         let scope_id = index.scope_ids[ancestor_id.index() as usize];
-        let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
-        if let Some(ty) = inference.binding_type(pat_id) {
-            return Some(ty.clone());
+        let Some(inference) = baml_compiler2_hir_ty::ide::infer_for_scope(db, scope_id) else {
+            continue;
+        };
+        if let Some(ty) = inference.type_of_pat.get(&pat_id) {
+            return Some(ty.to_plain());
         }
     }
     None
@@ -1047,39 +1411,6 @@ fn extract_pat_from_stmt(
     }
 }
 
-/// Descend through nested lambda bodies following the given scope ranges.
-///
-/// `lambda_ranges` is ordered outermost→innermost. At each level, finds the
-/// `Expr::Lambda` whose expression span (from the current body's source map)
-/// matches the target range, then recurses into that lambda's body. This uses
-/// the **same** source map the HIR builder used when creating scope ranges,
-/// guaranteeing a match even for deeply nested testset/test lambdas.
-fn descend_into_lambdas<'a>(
-    body: &'a baml_compiler2_ast::ExprBody,
-    source_map: &baml_compiler2_ast::AstSourceMap,
-    lambda_ranges: &[text_size::TextRange],
-) -> Option<&'a baml_compiler2_ast::ExprBody> {
-    if lambda_ranges.is_empty() {
-        return Some(body);
-    }
-    let target_range = lambda_ranges[0];
-    for (expr_id, expr) in body.exprs.iter() {
-        if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
-            let expr_span = source_map.expr_span(expr_id);
-            if expr_span == target_range {
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
-                    ref nested_body,
-                    ref nested_sm,
-                )) = func_def.body
-                {
-                    return descend_into_lambdas(nested_body, nested_sm, &lambda_ranges[1..]);
-                }
-            }
-        }
-    }
-    None
-}
-
 // ── Value-position completions ────────────────────────────────────────────────
 
 /// Completions for a value expression position (inside a function body).
@@ -1092,42 +1423,53 @@ fn completions_for_value_position(
     offset: TextSize,
 ) -> Vec<Completion> {
     let mut items: Vec<Completion> = Vec::new();
+    let mut sort_prefix = 0usize;
 
     // ── Locals (innermost scope first) ───────────────────────────────────────
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(offset, None);
+    {
+        let index = baml_compiler2_hir::file_semantic_index(db, file);
+        let scope_id = index.scope_at_offset(offset, None);
 
-    let mut emitted_locals: HashSet<Name> = HashSet::new();
-    let mut sort_prefix = 0usize;
-    for ancestor_id in index.ancestor_scopes(scope_id) {
-        let bindings: &ScopeBindings = &index.scope_bindings[ancestor_id.index() as usize];
+        let mut emitted_locals: HashSet<Name> = HashSet::new();
+        for ancestor_id in index.ancestor_scopes(scope_id) {
+            let bindings: &ScopeBindings = &index.scope_bindings[ancestor_id.index() as usize];
 
-        // Let bindings (reverse source order so most-recent is first).
-        for binding in bindings.bindings.iter().rev() {
-            // Only show bindings that are visible at the cursor position.
-            if index.binding_visible_at(binding, offset)
-                && emitted_locals.insert(binding.name.clone())
-            {
+            // Let bindings (reverse source order so most-recent is first).
+            for binding in bindings.bindings.iter().rev() {
+                // Only show bindings that are visible at the cursor position.
+                if index.binding_visible_at(binding, offset)
+                    && emitted_locals.insert(binding.name.clone())
+                {
+                    items.push(
+                        Completion::new(binding.name.as_str(), CompletionKind::Variable)
+                            .with_sort(format!("{:03}_{}", sort_prefix, binding.name.as_str())),
+                    );
+                    sort_prefix += 1;
+                }
+            }
+
+            // Parameters.
+            for (name, _idx) in &bindings.params {
+                if !emitted_locals.insert(name.clone()) {
+                    continue;
+                }
                 items.push(
-                    Completion::new(binding.name.as_str(), CompletionKind::Variable)
-                        .with_sort(format!("{:03}_{}", sort_prefix, binding.name.as_str())),
+                    Completion::new(name.as_str(), CompletionKind::Variable)
+                        .with_detail("parameter")
+                        .with_sort(format!("{:03}_{}", sort_prefix, name.as_str())),
                 );
                 sort_prefix += 1;
             }
         }
+    }
 
-        // Parameters.
-        for (name, _idx) in &bindings.params {
-            if !emitted_locals.insert(name.clone()) {
-                continue;
-            }
-            items.push(
-                Completion::new(name.as_str(), CompletionKind::Variable)
-                    .with_detail("parameter")
-                    .with_sort(format!("{:03}_{}", sort_prefix, name.as_str())),
-            );
-            sort_prefix += 1;
-        }
+    // ── Accessible package roots (`baml`, `reflect`, `log`, etc.) ─────────────
+    for package_name in crate::listing::non_user_package_names(db) {
+        items.push(
+            Completion::new(package_name.as_str(), CompletionKind::Module)
+                .with_detail("package")
+                .with_sort(format!("{:03}_{}", sort_prefix + 500, package_name)),
+        );
     }
 
     // ── Package-level values (functions, template strings, clients) ───────────
@@ -1144,24 +1486,19 @@ fn completions_for_value_position(
                     CompletionKind::Function,
                     format_function_signature(db, *func_loc),
                 ),
-                Definition::TemplateString(_) => (
-                    CompletionKind::TemplateString,
-                    "template_string".to_string(),
-                ),
                 Definition::Client(_) => (CompletionKind::Client, "client".to_string()),
                 Definition::RetryPolicy(_) => {
                     (CompletionKind::RetryPolicy, "retry_policy".to_string())
                 }
                 Definition::Let(loc) => {
-                    let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-                    match item_tree[loc.id(db)].origin {
+                    match baml_compiler2_ppir::item_data::let_data(db, *loc).origin {
                         baml_compiler2_ast::ast::LetOrigin::Client => {
                             (CompletionKind::Client, "client".to_string())
                         }
                         baml_compiler2_ast::ast::LetOrigin::RetryPolicy => {
                             (CompletionKind::RetryPolicy, "retry_policy".to_string())
                         }
-                        _ => continue,
+                        baml_compiler2_ast::ast::LetOrigin::Source => continue,
                     }
                 }
                 _ => continue,
@@ -1203,31 +1540,42 @@ fn completions_for_top_level() -> Vec<Completion> {
     vec![
         Completion::new("class", CompletionKind::Keyword)
             .with_detail("class declaration")
+            .with_snippet("class ${1:Name} {\n  ${2:field} ${3:string}\n  $0\n}")
             .with_sort("00_class"),
         Completion::new("enum", CompletionKind::Keyword)
             .with_detail("enum declaration")
+            .with_snippet("enum ${1:Name} {\n  ${2:Value}\n  $0\n}")
             .with_sort("01_enum"),
         Completion::new("function", CompletionKind::Keyword)
             .with_detail("function declaration")
+            .with_snippet("function ${1:Name}(${2}) -> ${3:string} {\n  $0\n}")
             .with_sort("02_function"),
         Completion::new("client", CompletionKind::Keyword)
             .with_detail("LLM client declaration")
+            .with_snippet(
+                "client<llm> ${1:Name} {\n  provider ${2:openai}\n  options {\n    model ${3:gpt-4o}\n  }\n  $0\n}",
+            )
             .with_sort("03_client"),
-        Completion::new("generator", CompletionKind::Keyword)
-            .with_detail("code generator declaration")
-            .with_sort("04_generator"),
         Completion::new("test", CompletionKind::Keyword)
             .with_detail("test case declaration")
+            .with_snippet("test \"${1:test name}\" {\n  $0\n}")
             .with_sort("05_test"),
         Completion::new("retry_policy", CompletionKind::Keyword)
             .with_detail("retry policy declaration")
+            .with_snippet("retry_policy ${1:Name} {\n  max_retries ${2:3}\n  $0\n}")
             .with_sort("06_retry_policy"),
-        Completion::new("template_string", CompletionKind::Keyword)
-            .with_detail("template string declaration")
-            .with_sort("07_template_string"),
         Completion::new("type", CompletionKind::Keyword)
             .with_detail("type alias declaration")
+            .with_snippet("type ${1:Name} = ${2:string}$0")
             .with_sort("08_type"),
+        Completion::new("interface", CompletionKind::Keyword)
+            .with_detail("interface declaration")
+            .with_snippet("interface ${1:Name} {\n  $0\n}")
+            .with_sort("09_interface"),
+        Completion::new("implements", CompletionKind::Keyword)
+            .with_detail("out-of-body interface implementation")
+            .with_snippet("implements ${1:Interface} for ${2:Class} {\n  $0\n}")
+            .with_sort("10_implements"),
     ]
 }
 

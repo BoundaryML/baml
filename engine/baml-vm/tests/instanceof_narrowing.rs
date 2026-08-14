@@ -24,15 +24,14 @@ fn test_instanceof_type_narrowing_weather() -> anyhow::Result<()> {
                 };
 
                 if (input instanceof Weather) {
-                    // Convert int to string for concatenation
-                    let temp_str = baml.unstable.string(input.temperature);
-                    return "Temperature: " + temp_str;
+                    // Access a field on the narrowed type.
+                    return "Weather: " + input.description;
                 }
                 return "Unknown";
             }
         "#,
         function: "main",
-        expected: ExecState::Complete(Value::string("Temperature: 72")),
+        expected: ExecState::Complete(Value::string("Weather: Sunny")),
     })
 }
 

@@ -1,40 +1,30 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
+assertion_line: 449
 expression: "render_tir(&db, file)"
 ---
 class user.Box {
   value: T
 }
-function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
+function user.GetBoxedInt(client: ai.Client | null = null) -> user.Box<int> throws never {
+  ai.Agent.new<Box<int>>(client = client).run(GetBoxedInt$spec()).value : user.Box<int>
 }
-function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
+function user.GetBoxedInt$spec() -> ai.FunctionSpec<user.Box<int>> throws never {
+  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: Dummy } : ai.FunctionSpec<user.Box<int>>
 }
-function user.Dummy$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "Dummy", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+lambda user.GetBoxedInt$spec {
 }
-function user.GetBoxedInt() -> user.Box<int> throws never {
-  baml.llm.call_llm_function<T>(Dummy, "GetBoxedInt", map {  }) : user.Box<int>
+block user.GetBoxedInt$spec {
 }
-function user.GetBoxedInt$render_prompt() -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(Dummy, "GetBoxedInt", map {  }) : baml.llm.PromptAst
-}
-function user.GetBoxedInt$build_request() -> baml.http.Request throws never {
-  baml.llm.build_request(Dummy, "GetBoxedInt", map {  }) : baml.http.Request
-}
-function user.GetBoxedInt$build_request_stream() -> baml.http.Request throws never {
-  baml.llm.build_request_stream(Dummy, "GetBoxedInt", map {  }) : baml.http.Request
+function user.GetBoxedInt$render_prompt() -> ai.Prompt throws never {
+  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of<Box<int>>())) : ai.Prompt
 }
 function user.GetBoxedInt$parse(json: string) -> user.Box<int> throws never {
-  baml.llm.parse<T>("GetBoxedInt", json) : user.Box<int>
+  baml.sap.parse(json) : user.Box<int>
 }
 class user.Box$stream {
-  value: null | T
+  value: T | null
 }
-function user.GetBoxedInt$stream() -> baml.llm.Stream<user.Box<int>, null | user.Box$stream<int>> throws never {
-  baml.llm.stream_llm_function(Dummy, "GetBoxedInt", map {  }) : baml.llm.Stream<user.Box<int>, null | user.Box$stream<int>>
-}
-function user.GetBoxedInt$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Box<int>, null | user.Box$stream<int>> throws never {
-  Dummy.__make_stream(sse, "GetBoxedInt") : unknown
+function user.GetBoxedInt$stream(client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>> throws never {
+  ai.stream.from_spec(GetBoxedInt$spec(), client = client) : ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>>
 }

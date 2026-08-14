@@ -6,9 +6,11 @@ use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 use internal_baml_jinja::RenderedChatMessage;
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
 
+#[cfg(feature = "bedrock")]
+use self::aws::AwsClient;
 pub(crate) use self::request::{json_body, json_headers, JsonBodyInput};
 use self::{
-    anthropic::AnthropicClient, aws::AwsClient, google::GoogleAIClient, openai::OpenAIClient,
+    anthropic::AnthropicClient, google::GoogleAIClient, openai::OpenAIClient,
     request::RequestBuilder, vertex::VertexClient,
 };
 use super::{
@@ -28,6 +30,7 @@ use crate::{
 };
 
 mod anthropic;
+#[cfg(feature = "bedrock")]
 mod aws;
 mod google;
 mod openai;
@@ -37,6 +40,9 @@ mod vertex;
 
 use enum_dispatch::enum_dispatch;
 
+// NOTE: this enum is currently unused (defined only); gated wholesale so the
+// `enum_dispatch` expansion never references the bedrock-only `AwsClient`.
+#[cfg(feature = "bedrock")]
 #[enum_dispatch(WithRetryPolicy)]
 pub enum LLMPrimitive2 {
     OpenAIClient,
@@ -54,6 +60,7 @@ pub enum LLMPrimitiveProvider {
     Anthropic(AnthropicClient),
     Google(GoogleAIClient),
     Vertex(VertexClient),
+    #[cfg(feature = "bedrock")]
     Aws(aws::AwsClient),
 }
 
@@ -64,6 +71,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::OpenAI(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*).await,
+            #[cfg(feature = "bedrock")]
             LLMPrimitiveProvider::Aws(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Vertex(client) => client.$method($($args),*).await,
         }
@@ -74,6 +82,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::OpenAI(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*),
+            #[cfg(feature = "bedrock")]
             LLMPrimitiveProvider::Aws(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Vertex(client) => client.$method($($args),*),
         }
@@ -132,7 +141,12 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
                 }
             }
             ClientProvider::Anthropic => AnthropicClient::dynamic_new(value, ctx).map(Into::into),
+            #[cfg(feature = "bedrock")]
             ClientProvider::AwsBedrock => AwsClient::dynamic_new(value, ctx).map(Into::into),
+            #[cfg(not(feature = "bedrock"))]
+            ClientProvider::AwsBedrock => anyhow::bail!(
+                "AWS Bedrock support was not compiled into this build (enable the `bedrock` feature)"
+            ),
             ClientProvider::GoogleAi => GoogleAIClient::dynamic_new(value, ctx).map(Into::into),
             ClientProvider::Vertex => VertexClient::dynamic_new(value, ctx).map(Into::into),
             ClientProvider::Strategy(strategy_client_provider) => {
@@ -196,7 +210,12 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                 }
             }
             ClientProvider::Anthropic => AnthropicClient::new(client, ctx).map(Into::into),
+            #[cfg(feature = "bedrock")]
             ClientProvider::AwsBedrock => AwsClient::new(client, ctx).map(Into::into),
+            #[cfg(not(feature = "bedrock"))]
+            ClientProvider::AwsBedrock => anyhow::bail!(
+                "AWS Bedrock support was not compiled into this build (enable the `bedrock` feature)"
+            ),
             ClientProvider::GoogleAi => GoogleAIClient::new(client, ctx).map(Into::into),
             ClientProvider::Vertex => VertexClient::new(client, ctx).map(Into::into),
             ClientProvider::Strategy(strategy_client_provider) => {
@@ -220,6 +239,7 @@ impl LLMPrimitiveProvider {
             LLMPrimitiveProvider::Anthropic(client) => client.chat_to_message(chat),
             LLMPrimitiveProvider::Google(client) => client.chat_to_message(chat),
             LLMPrimitiveProvider::Vertex(client) => client.chat_to_message(chat),
+            #[cfg(feature = "bedrock")]
             LLMPrimitiveProvider::Aws(client) => {
                 anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
@@ -235,6 +255,7 @@ impl LLMPrimitiveProvider {
             LLMPrimitiveProvider::Anthropic(client) => client.completion_to_provider_body(prompt),
             LLMPrimitiveProvider::Google(client) => client.completion_to_provider_body(prompt),
             LLMPrimitiveProvider::Vertex(client) => client.completion_to_provider_body(prompt),
+            #[cfg(feature = "bedrock")]
             LLMPrimitiveProvider::Aws(client) => {
                 anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
@@ -268,6 +289,7 @@ impl LLMPrimitiveProvider {
                     .build_request(prompt, allow_proxy, stream, true)
                     .await
             }
+            #[cfg(feature = "bedrock")]
             LLMPrimitiveProvider::Aws(client) => {
                 anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
@@ -339,6 +361,7 @@ impl std::fmt::Display for LLMPrimitiveProvider {
             LLMPrimitiveProvider::OpenAI(_) => write!(f, "OpenAI"),
             LLMPrimitiveProvider::Anthropic(_) => write!(f, "Anthropic"),
             LLMPrimitiveProvider::Google(_) => write!(f, "Google"),
+            #[cfg(feature = "bedrock")]
             LLMPrimitiveProvider::Aws(_) => write!(f, "AWS"),
             LLMPrimitiveProvider::Vertex(_) => write!(f, "Vertex"),
         }
@@ -364,6 +387,7 @@ impl LLMPrimitiveProvider {
             LLMPrimitiveProvider::Anthropic(client) => client.http_config(),
             LLMPrimitiveProvider::Google(client) => client.http_config(),
             LLMPrimitiveProvider::Vertex(client) => client.http_config(),
+            #[cfg(feature = "bedrock")]
             LLMPrimitiveProvider::Aws(client) => client.http_config(),
         }
     }

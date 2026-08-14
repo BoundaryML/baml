@@ -1,24 +1,25 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25679
 ---
 === MIR2 ===
-fn user.$init_test_32(registry: testing.TestCollector) -> null {
+fn user.$init_test_main(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: (testing.TestCollector) -> void throws unknown
+    let _3: (testing.TestCollector) -> void throws testing.InvalidTestName
     let _4: void
-    let _5: (testing.TestCollector) -> void throws unknown
+    let _5: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test_set(copy _1, const "dynamic tests", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root", const "dynamic tests", copy _3, const null) -> [bb1];
     }
 
     bb1: {
         _5 = make_closure lambda[1]();
-        _4 = call const fn testing.TestCollector.register_test_set(copy _1, const "conditional tests", copy _5, const null) -> [bb2];
+        _4 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root", const "conditional tests", copy _5, const null) -> [bb2];
     }
 
     bb2: {
@@ -32,60 +33,57 @@ fn user.$init_test_32(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_32, 0)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: string[] // cases
     let _3: string[]
-    let _4: int // __for_idx
-    let _5: int
+    let _4: baml.iter.Iterator<Error = never, Item = string>
+    let _5: unknown
     let _6: bool
     let _7: string
     let _8: string // case [captured]
     let _9: void
-    let _10: () -> void throws unknown
+    let _10: () -> void throws never
 
     bb0: {
-        _2 = [const "hello", const "world", const "foo"];
+        _2 = [const "hello", const "world", const "foo"]: string[];
         _3 = copy _2;
-        _4 = const 0_i64;
-        goto -> bb1;
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = len(_3);
-        _6 = copy _4 < copy _5;
-        branch copy _6 -> [bb4, bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
-        _0 = const null;
-        goto -> bb3;
+        _6 = is_type(copy _5, baml.iter.Done);
+        branch copy _6 -> [bb4, bb3];
     }
 
     bb3: {
-        return;
-    }
-
-    bb4: {
-        _7 = copy _3[_4];
+        _7 = copy _5;
         fresh_cell(_8);
         _8 = copy _7;
         _10 = make_closure lambda[0](copy _8);
-        _9 = call const fn testing.TestCollector.register_test(copy _1, const "check case", copy _10, const null) -> [bb5];
+        _9 = call const fn testing.TestCollector.register_test(copy _1, const "check case", copy _10, const null) -> [bb1];
+    }
+
+    bb4: {
+        _0 = const null;
+        goto -> bb5;
     }
 
     bb5: {
-        _4 = copy _4 + const 1_i64;
-        goto -> bb1;
+        return;
     }
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_32, 0)>, 1)>() -> null {
+fn .<lambda(<lambda($init_test_main, 0)>, 1)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: string
 
     bb0: {
@@ -99,16 +97,16 @@ fn .<lambda(<lambda($init_test_32, 0)>, 1)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda($init_test_32, 2)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_main, 2)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: bool // run_slow
     let _3: void
-    let _4: () -> void throws unknown
+    let _4: () -> void throws never
     let _5: bool
     let _6: void
-    let _7: () -> void throws unknown
+    let _7: () -> void throws never
 
     bb0: {
         _2 = const false;
@@ -137,9 +135,9 @@ fn .<lambda($init_test_32, 2)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_32, 2)>, 3)>() -> null {
+fn .<lambda(<lambda($init_test_main, 2)>, 3)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];
@@ -151,9 +149,9 @@ fn .<lambda(<lambda($init_test_32, 2)>, 3)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(<lambda($init_test_32, 2)>, 4)>() -> null {
+fn .<lambda(<lambda($init_test_main, 2)>, 4)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];

@@ -54,14 +54,141 @@ test_deserializer!(
     12111
 );
 
+// --- Bigint tests ---
+
+test_deserializer!(
+    test_bigint_small_number,
+    "42",
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    // BamlBigint serializes as a decimal string to preserve arbitrary precision.
+    "42"
+);
+
+test_deserializer!(
+    test_bigint_huge_number,
+    "99999999999999999999",
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "99999999999999999999"
+);
+
+test_deserializer!(
+    test_bigint_string,
+    r#""99999999999999999999""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "99999999999999999999"
+);
+
+// Document and pin SAP's string-to-bigint accepted format. The coercer:
+//   - trims surrounding whitespace and trailing commas,
+//   - accepts an optional leading `+`/`-` followed by ASCII digits,
+//   - falls back to float parsing (with rounding) if decimal parse fails.
+// Hex/octal prefixes and empty strings are rejected. Underscore separators
+// are surprisingly accepted because the float fallback's
+// `float_from_comma_separated` strips them — keeping this looser behaviour
+// to match the rest of the numeric coercers.
+test_deserializer!(
+    test_bigint_string_with_plus_sign,
+    r#""+42""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "42"
+);
+
+test_deserializer!(
+    test_bigint_string_with_minus_sign,
+    r#""-42""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "-42"
+);
+
+test_deserializer!(
+    test_bigint_string_with_whitespace,
+    r#""  42  ""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "42"
+);
+
+test_deserializer!(
+    test_bigint_string_with_trailing_comma,
+    r#""42,""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "42"
+);
+
+test_failing_deserializer!(
+    test_bigint_string_with_hex_prefix_rejected,
+    r#""0x2a""#,
+    baml_tyannotated!(bigint),
+    baml_db! {}
+);
+
+// `"1_000"` happens to be accepted via the float-fallback's separator
+// stripping. Documenting the actual behaviour so a future tightening doesn't
+// regress silently.
+test_deserializer!(
+    test_bigint_string_with_underscores_accepted,
+    r#""1_000""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "1000"
+);
+
+test_failing_deserializer!(
+    test_bigint_string_empty_rejected,
+    r#""""#,
+    baml_tyannotated!(bigint),
+    baml_db! {}
+);
+
+test_deserializer!(
+    test_bigint_float_with_rounding,
+    "42.0",
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "42"
+);
+
+test_deserializer!(
+    test_int_or_bigint_union_resolution_small,
+    "42",
+    baml_tyannotated!((int | bigint)),
+    baml_db! {},
+    // First match (int) wins for an in-range value with equal score.
+    42
+);
+
+test_deserializer!(
+    test_int_or_bigint_union_resolution_huge,
+    "99999999999999999999",
+    baml_tyannotated!((int | bigint)),
+    baml_db! {},
+    // int rejects (out of range) — bigint matches with full precision.
+    "99999999999999999999"
+);
+
+test_deserializer!(
+    test_bigint_or_int_union_resolution_small,
+    "42",
+    baml_tyannotated!((bigint | int)),
+    baml_db! {},
+    // First match (bigint) wins.
+    "42"
+);
+
 // --- String tests ---
 
 test_deserializer!(
-    test_string,
+    test_complete_json_string,
     r#""hello""#,
     baml_tyannotated!(string),
     baml_db! {},
-    "\"hello\""
+    "hello"
 );
 
 // --- Bool tests ---
@@ -1098,3 +1225,78 @@ test_deserializer!(
         ]
     }
 );
+
+#[cfg(test)]
+mod bigint_flag_checks {
+    use num_bigint::BigInt;
+
+    use crate::{
+        baml_db, baml_tyannotated,
+        baml_value::BamlValue,
+        deserializer::{coercer::ParsingContext, deserialize_flags::Flag},
+        sap_model::{AnnotatedTy, TyResolvedRef, TypeRefDb},
+    };
+
+    #[test]
+    fn string_to_bigint_sets_flag() {
+        let target_ty: AnnotatedTy<'_, &str> = baml_tyannotated!(bigint);
+        let db: TypeRefDb<'_, &str> = baml_db! {};
+        let parsed = crate::jsonish::parse(
+            r#""99999999999999999999""#,
+            crate::jsonish::ParseOptions::default(),
+            true,
+        )
+        .expect("jsonish::parse failed");
+        let ctx = ParsingContext::new(&db);
+        let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+        let value = TyResolvedRef::coerce(&ctx, target_ty, &parsed)
+            .expect("coerce failed")
+            .expect("coerce returned None");
+
+        let BamlValue::Bigint(bi) = &value.value else {
+            panic!("expected Bigint, got {value:?}");
+        };
+        assert_eq!(
+            bi.value,
+            BigInt::parse_bytes(b"99999999999999999999", 10).unwrap()
+        );
+        assert!(
+            value
+                .meta
+                .flags
+                .flags()
+                .iter()
+                .any(|f| matches!(f, Flag::StringToBigint(_))),
+            "expected StringToBigint flag, got {:?}",
+            value.meta.flags.flags()
+        );
+    }
+
+    #[test]
+    fn float_to_bigint_sets_flag() {
+        let target_ty: AnnotatedTy<'_, &str> = baml_tyannotated!(bigint);
+        let db: TypeRefDb<'_, &str> = baml_db! {};
+        let parsed = crate::jsonish::parse("42.0", crate::jsonish::ParseOptions::default(), true)
+            .expect("jsonish::parse failed");
+        let ctx = ParsingContext::new(&db);
+        let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+        let value = TyResolvedRef::coerce(&ctx, target_ty, &parsed)
+            .expect("coerce failed")
+            .expect("coerce returned None");
+
+        let BamlValue::Bigint(bi) = &value.value else {
+            panic!("expected Bigint, got {value:?}");
+        };
+        assert_eq!(bi.value, BigInt::from(42));
+        assert!(
+            value
+                .meta
+                .flags
+                .flags()
+                .iter()
+                .any(|f| matches!(f, Flag::FloatToBigint(_))),
+            "expected FloatToBigint flag, got {:?}",
+            value.meta.flags.flags()
+        );
+    }
+}

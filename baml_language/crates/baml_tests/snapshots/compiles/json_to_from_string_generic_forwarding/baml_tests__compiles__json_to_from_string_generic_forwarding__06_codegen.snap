@@ -1,7 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12947
 ---
-function user.fetch_as(s: string) -> void {
+function user.fetch_as(s: string) -> #0 {
     load_type #0
     load_var s
     call baml.json.from_string

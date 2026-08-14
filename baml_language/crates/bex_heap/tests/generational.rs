@@ -245,7 +245,7 @@ fn test_stats_minor_partial_survival() {
 
 #[test]
 fn test_stats_compile_time_not_counted() {
-    let compile_time = vec![Object::String("builtin".to_string())];
+    let compile_time = vec![Object::String("builtin".into())];
     let heap = BexHeap::new(compile_time);
     let ct_ptr = heap.compile_time_ptr(0);
 
@@ -413,7 +413,10 @@ fn test_mark_card_for_gen2_object() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     // Create an object and promote to Gen2 via major GC
-    let arr = tlab.alloc_array(vec![bex_vm_types::Value::Int(0)]);
+    let arr = tlab.alloc_array(
+        baml_type::RealizedTy::int(),
+        vec![bex_vm_types::Value::int(0)],
+    );
     let (_, roots, _) =
         unsafe { heap.collect_garbage_generational(&[arr], CollectionLevel::Major) };
     tlab.invalidate();
@@ -441,7 +444,10 @@ fn test_dirty_card_roots_keep_gen0_alive_during_minor_gc() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     // Step 1: Create an array and promote to Gen2
-    let arr = tlab.alloc_array(vec![bex_vm_types::Value::Null]);
+    let arr = tlab.alloc_array(
+        baml_type::RealizedTy::unknown(),
+        vec![bex_vm_types::Value::NULL],
+    );
     let (_, roots1, _) =
         unsafe { heap.collect_garbage_generational(&[arr], CollectionLevel::Major) };
     tlab.invalidate();
@@ -456,7 +462,7 @@ fn test_dirty_card_roots_keep_gen0_alive_during_minor_gc() {
     unsafe {
         let obj = gen2_arr.get_mut();
         if let Object::Array(arr_data) = obj {
-            arr_data[0] = bex_vm_types::Value::Object(young);
+            arr_data.data_unchecked_mut()[0] = bex_vm_types::Value::object(young);
         }
     }
     // Fire write barrier (Gen2 container, Gen0 ref)
@@ -477,7 +483,7 @@ fn test_dirty_card_roots_keep_gen0_alive_during_minor_gc() {
     let Object::Array(arr_data) = (unsafe { gen2_arr_after.get() }) else {
         panic!("Expected array")
     };
-    let bex_vm_types::Value::Object(ref_ptr) = arr_data[0] else {
+    let Some(ref_ptr) = arr_data.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("Expected Object reference in slot 0")
     };
     assert_eq!(
@@ -497,7 +503,10 @@ fn test_clean_card_does_not_root_gen0_objects() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     // Promote an array to Gen2 (no cross-gen references, no dirty cards)
-    let arr = tlab.alloc_array(vec![bex_vm_types::Value::Int(99)]);
+    let arr = tlab.alloc_array(
+        baml_type::RealizedTy::int(),
+        vec![bex_vm_types::Value::int(99)],
+    );
     let (_, roots1, _) =
         unsafe { heap.collect_garbage_generational(&[arr], CollectionLevel::Major) };
     tlab.invalidate();
@@ -528,7 +537,10 @@ fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     // Promote an array with no object references into Gen2.
-    let arr = tlab.alloc_array(vec![bex_vm_types::Value::Null]);
+    let arr = tlab.alloc_array(
+        baml_type::RealizedTy::unknown(),
+        vec![bex_vm_types::Value::NULL],
+    );
     let (_, roots1, _) =
         unsafe { heap.collect_garbage_generational(&[arr], CollectionLevel::Major) };
     tlab.invalidate();
@@ -585,7 +597,10 @@ fn test_critical_gen2_stale_pointer_after_minor_gc() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     // Step 1: Allocate a Gen0 array and promote it to Gen2 via major GC.
-    let container = tlab.alloc_array(vec![bex_vm_types::Value::Null]);
+    let container = tlab.alloc_array(
+        baml_type::RealizedTy::unknown(),
+        vec![bex_vm_types::Value::NULL],
+    );
     let (_, roots1, _) =
         unsafe { heap.collect_garbage_generational(&[container], CollectionLevel::Major) };
     tlab.invalidate();
@@ -601,7 +616,7 @@ fn test_critical_gen2_stale_pointer_after_minor_gc() {
     unsafe {
         let obj = gen2_container.get_mut();
         if let Object::Array(arr_data) = obj {
-            arr_data[0] = bex_vm_types::Value::Object(young);
+            arr_data.data_unchecked_mut()[0] = bex_vm_types::Value::object(young);
         }
     }
     heap.mark_card_for_ptr(gen2_container);
@@ -620,7 +635,7 @@ fn test_critical_gen2_stale_pointer_after_minor_gc() {
     let Object::Array(arr_data) = (unsafe { gen2_after.get() }) else {
         panic!("Expected Array in Gen2 container")
     };
-    let bex_vm_types::Value::Object(ref_ptr) = arr_data[0] else {
+    let Some(ref_ptr) = arr_data.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("Expected Object reference in slot 0")
     };
     assert_eq!(
@@ -646,7 +661,10 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     // Step 1: Promote an array container to Gen2.
-    let container = tlab.alloc_array(vec![bex_vm_types::Value::Null]);
+    let container = tlab.alloc_array(
+        baml_type::RealizedTy::unknown(),
+        vec![bex_vm_types::Value::NULL],
+    );
     let (_, roots1, _) =
         unsafe { heap.collect_garbage_generational(&[container], CollectionLevel::Major) };
     tlab.invalidate();
@@ -655,7 +673,10 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
 
     // Step 2: Build a Gen0 chain: inner_leaf <- wrapper_array
     let inner_leaf = tlab.alloc_string("inner_leaf".to_string());
-    let wrapper = tlab.alloc_array(vec![bex_vm_types::Value::Object(inner_leaf)]);
+    let wrapper = tlab.alloc_array(
+        baml_type::RealizedTy::unknown(),
+        vec![bex_vm_types::Value::object(inner_leaf)],
+    );
     assert_eq!(heap.generation_of(inner_leaf), Generation::Gen0);
     assert_eq!(heap.generation_of(wrapper), Generation::Gen0);
 
@@ -663,7 +684,7 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     unsafe {
         let obj = gen2_container.get_mut();
         if let Object::Array(arr_data) = obj {
-            arr_data[0] = bex_vm_types::Value::Object(wrapper);
+            arr_data.data_unchecked_mut()[0] = bex_vm_types::Value::object(wrapper);
         }
     }
     heap.mark_card_for_ptr(gen2_container);
@@ -681,7 +702,7 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     let Object::Array(arr_data) = (unsafe { gen2_after.get() }) else {
         panic!("Expected Array in Gen2 container")
     };
-    let bex_vm_types::Value::Object(wrapper_ptr) = arr_data[0] else {
+    let Some(wrapper_ptr) = arr_data.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("Expected Object in slot 0 of Gen2 container")
     };
     assert_eq!(
@@ -694,7 +715,7 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     let Object::Array(wrapper_arr) = (unsafe { wrapper_ptr.get() }) else {
         panic!("Expected Array for wrapper")
     };
-    let bex_vm_types::Value::Object(leaf_ptr) = wrapper_arr[0] else {
+    let Some(leaf_ptr) = wrapper_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("Expected Object in slot 0 of wrapper")
     };
     assert_eq!(
@@ -821,7 +842,10 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     // T0: Allocate container A in Gen0 with a placeholder slot.
-    let a_g0 = tlab.alloc_array(vec![bex_vm_types::Value::Null]);
+    let a_g0 = tlab.alloc_array(
+        baml_type::RealizedTy::unknown(),
+        vec![bex_vm_types::Value::NULL],
+    );
     assert_eq!(heap.generation_of(a_g0), Generation::Gen0);
 
     // GC1 Minor: A → Gen1.
@@ -841,7 +865,7 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
         let Object::Array(arr) = obj else {
             panic!("expected Array")
         };
-        arr[0] = bex_vm_types::Value::Object(b_g0);
+        arr.data_unchecked_mut()[0] = bex_vm_types::Value::object(b_g0);
     }
 
     // GC2 Minor: only A is a root. B reached via A's references.
@@ -869,7 +893,7 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
     let Object::Array(arr_after) = (unsafe { a_after.get() }) else {
         panic!("expected Array in A after GC3")
     };
-    let bex_vm_types::Value::Object(b_after) = arr_after[0] else {
+    let Some(b_after) = arr_after.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("expected Object reference in A.field after GC3")
     };
     let Object::String(s) = (unsafe { b_after.get() }) else {

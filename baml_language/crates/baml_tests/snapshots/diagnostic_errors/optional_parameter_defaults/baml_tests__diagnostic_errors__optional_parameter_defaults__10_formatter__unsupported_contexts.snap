@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function Greeting(name: string = "world") -> string {
+    `hello ${name}`
+}
+
+type NamedFilter = (query: string, filter?: string?) -> int throws never;
+
+type NamedLimit = (query: string, limit?: string?) -> int throws never;
+
+class Counter {
+    value: int,
+
+    function Current(self = null) -> int {
+        self.value
+    }
+}
+
+function LambdaDefault() -> int {
+    let f = (x: int = 1) -> int {
+        x
+    };
+    f(2)
+}
+
+function Filtered(query: string, filter: string? = null) -> int {
+    query.length()
+}
+
+function OptionalNameMismatch() -> int {
+    let f: NamedLimit = Filtered;
+    f("cats", limit = "recent")
+}

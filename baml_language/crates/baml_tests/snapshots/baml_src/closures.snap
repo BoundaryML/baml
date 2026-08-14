@@ -1,0 +1,368 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
+---
+function closures.$init_test_ns_closures_closures(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.closures"
+    load_const "bound_formatter_mapper"
+    make_closure .<lambda($init_test_ns_closures_closures, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "unbound_in_map"
+    make_closure .<lambda($init_test_ns_closures_closures, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "bound_validator_mapped"
+    make_closure .<lambda($init_test_ns_closures_closures, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "mutation_after_bind"
+    make_closure .<lambda($init_test_ns_closures_closures, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "repeated_bound_calls"
+    make_closure .<lambda($init_test_ns_closures_closures, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "field_chain_bind"
+    make_closure .<lambda($init_test_ns_closures_closures, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "strategy_swap"
+    make_closure .<lambda($init_test_ns_closures_closures, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "generic_unwrap"
+    make_closure .<lambda($init_test_ns_closures_closures, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "bound_in_lambda"
+    make_closure .<lambda($init_test_ns_closures_closures, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.closures"
+    load_const "bound_throwing_method_reference_catches_error"
+    make_closure .<lambda($init_test_ns_closures_closures, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function closures.ClsBox.unwrap(self: closures.ClsBox<#0>) -> #0 {
+    load_var self
+    load_field .value
+    return
+}
+
+function closures.ClsCalculator.compute(self: closures.ClsCalculator, a: int, b: int) -> int {
+    load_var self
+    load_field .op
+    load_const "add"
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var2 2 3
+    mul_int
+    jump L2
+
+  L1:
+    load_var2 2 3
+    add_int
+
+  L2:
+    return
+}
+
+function closures.ClsCounter.increment(self: closures.ClsCounter) -> int {
+    load_var self
+    copy 0
+    load_field .value
+    load_const 1
+    bin_op +
+    store_field .value
+    load_var self
+    load_field .value
+    return
+}
+
+function closures.ClsEmployee.full_name(self: closures.ClsEmployee) -> string {
+    load_var self
+    load_field .first
+    load_const " "
+    bin_op +
+    load_var self
+    load_field .last
+    bin_op +
+    return
+}
+
+function closures.ClsEmployee2.greet(self: closures.ClsEmployee2, greeting: string) -> string {
+    load_var greeting
+    load_const ", "
+    bin_op +
+    load_var self
+    load_field .first
+    bin_op +
+    return
+}
+
+function closures.ClsEncoder.encode(self: closures.ClsEncoder, data: string) -> string {
+    load_const "["
+    load_var self
+    load_field .charset
+    bin_op +
+    load_const "]"
+    bin_op +
+    load_var data
+    bin_op +
+    return
+}
+
+function closures.ClsFormatter.format(self: closures.ClsFormatter, text: string) -> string {
+    load_var self
+    load_field .prefix
+    load_var text
+    bin_op +
+    return
+}
+
+function closures.ClsRangeCheck.is_valid(self: closures.ClsRangeCheck, n: int) -> bool {
+    load_var2 2 1
+    load_field .min
+    cmp_int_op >=
+    jump_if_false L0
+    pop 1
+    load_var2 2 1
+    load_field .max
+    cmp_int_op <=
+
+  L0:
+    return
+}
+
+function closures.ClsWorker.risky(self: closures.ClsWorker, value: int) -> int {
+    load_var value
+    load_const 0
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_field .factor
+    load_var value
+    mul_int
+    return
+
+  L1:
+    load_const "negative"
+    throw
+}
+
+function closures.closures_apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
+    load_var2 2 3
+    load_var f
+    call_indirect
+    return
+}
+
+function closures.closures_bound_formatter_mapper() -> string[] {
+    load_type string
+    load_type string
+    load_type never
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    load_const ">> "
+    init_instance user.closures.ClsFormatter .prefix
+    make_bound_method user.closures.ClsFormatter.format
+    call baml.Array.map
+    return
+}
+
+function closures.closures_bound_in_lambda() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "Alice"
+    load_const "Smith"
+    init_instance user.closures.ClsEmployee2 .first, .last
+    store_deref ?1
+    load_var emp
+    make_closure .<lambda(closures_bound_in_lambda, 0)>, 1
+    call_indirect
+    store_var greeter
+    load_const "Hello"
+    load_var greeter
+    call_indirect
+    return
+}
+
+function closures.closures_bound_throwing_method_reference_catches_error() -> int {
+    load_const 1
+    unary_op -
+    load_const 2
+    init_instance user.closures.ClsWorker .factor
+    make_bound_method user.closures.ClsWorker.risky
+    call_indirect
+    jump L2
+    load_var e
+    load_const "negative"
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw_if_panic
+    load_const 2
+    unary_op -
+    jump L2
+
+  L1:
+    load_const 1
+    unary_op -
+
+  L2:
+    return
+}
+
+function closures.closures_bound_validator_mapped() -> bool[] {
+    load_type int
+    load_type bool
+    load_type never
+    load_const 5
+    load_const 15
+    load_const 25
+    load_const 75
+    load_type int
+    alloc_array 4
+    load_const 10
+    load_const 50
+    init_instance user.closures.ClsRangeCheck .min, .max
+    make_bound_method user.closures.ClsRangeCheck.is_valid
+    call baml.Array.map
+    return
+}
+
+function closures.closures_field_chain_bind() -> string {
+    load_const "hi"
+    load_const "utf8"
+    init_instance user.closures.ClsEncoder .charset
+    init_instance user.closures.ClsConfig .encoder
+    load_field .encoder
+    make_bound_method user.closures.ClsEncoder.encode
+    call_indirect
+    return
+}
+
+function closures.closures_generic_unwrap() -> int {
+    load_const 42
+    load_type int
+    init_instance<1> user.closures.ClsBox .value
+    make_bound_method user.closures.ClsBox.unwrap
+    call_indirect
+    return
+}
+
+function closures.closures_mutation_after_bind() -> int {
+    load_const 0
+    init_instance user.closures.ClsCounter .value
+    store_var c
+    load_var c
+    make_bound_method user.closures.ClsCounter.increment
+    store_var inc
+    load_var c
+    load_const 100
+    store_field .value
+    load_var inc
+    call_indirect
+    return
+}
+
+function closures.closures_repeated_bound_calls() -> int {
+    load_const 0
+    init_instance user.closures.ClsCounter .value
+    make_bound_method user.closures.ClsCounter.increment
+    store_var_load_var inc
+    call_indirect
+    pop 1
+    load_var inc
+    call_indirect
+    pop 1
+    load_var inc
+    call_indirect
+    return
+}
+
+function closures.closures_strategy_swap() -> int[] {
+    load_type never
+    load_const "add"
+    init_instance user.closures.ClsCalculator .op
+    make_bound_method user.closures.ClsCalculator.compute
+    load_const 3
+    load_const 4
+    call user.closures.closures_apply
+    store_var _5
+    load_type never
+    load_const "mul"
+    init_instance user.closures.ClsCalculator .op
+    make_bound_method user.closures.ClsCalculator.compute
+    load_const 3
+    load_const 4
+    call user.closures.closures_apply
+    store_var _8
+    load_var2 1 2
+    load_type int
+    alloc_array 2
+    return
+}
+
+function closures.closures_unbound_in_map() -> string[] {
+    load_type closures.ClsEmployee
+    load_type string
+    load_type never
+    load_const "Alice"
+    load_const "Smith"
+    init_instance user.closures.ClsEmployee .first, .last
+    load_const "Bob"
+    load_const "Jones"
+    init_instance user.closures.ClsEmployee .first, .last
+    load_type closures.ClsEmployee
+    alloc_array 2
+    load_const user.closures.ClsEmployee.full_name
+    call baml.Array.map
+    return
+}

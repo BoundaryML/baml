@@ -1,44 +1,38 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3298
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved type: Foo
-   ╭─[ type_malformed.baml:7:5 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[type_malformed.baml:7:6]
  7 │ type Foo
-   │     ──┬─  
-   │       ╰─── unresolved type: Foo
-   │ 
-   │ Note: Error code: E0002
-───╯
+   ·      ─┬─
+   ·       ╰── expected `'='`, found `identifier`
+   ╰────
 
-  [parse] Error: Expected '=', found identifier
-   ╭─[ type_malformed.baml:7:6 ]
-   │
+  [type] E0002
+
+  × unresolved type: Foo
+   ╭─[type_malformed.baml:7:6]
  7 │ type Foo
-   │      ─┬─  
-   │       ╰─── Expected '=', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·      ───
+   ╰────
 
-  [parse] Error: Expected type, found EOF
-    ╭─[ type_malformed.baml:10:11 ]
-    │
- 10 │ type Bar =
-    │           ┬  
-    │           ╰── Expected type, found EOF
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [hir] E0108
 
-  [hir] Error: could not parse type expression for type alias `Bar`
-    ╭─[ type_malformed.baml:10:11 ]
-    │
+  × could not parse type expression for type alias `Bar`
+    ╭─[type_malformed.baml:10:11]
  10 │ type Bar =
-    │           │ 
-    │           ╰─ unparseable type
-    │ 
-    │ Note: Error code: E0108
-────╯
+    ·           ▲
+    ·           ╰── unparseable type
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[type_malformed.baml:10:11]
+ 10 │ type Bar =
+    ·           ▲
+    ·           ╰── expected `type`, found `EOF`
+    ╰────

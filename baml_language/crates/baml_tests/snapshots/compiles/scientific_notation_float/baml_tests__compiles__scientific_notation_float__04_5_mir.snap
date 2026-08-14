@@ -1,0 +1,87 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.IntegerMantissa() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 10000000000_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.UppercaseExponent() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 1000_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.NegativeExponent() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 0.001_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.PositiveExponent() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 200000_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DecimalMantissa() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 1500_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DecimalMantissaNegativeExponent() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 0.0015_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

@@ -7,12 +7,6 @@ type user.MyList = user.IntList
 class user.WithChainedAlias {
   data: user.MyList | string
 }
-function user.WithChainedAlias.to_json(self: user.WithChainedAlias) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "data": self.data.to_json() } : map<string, baml.json.json>
-}
-function user.WithChainedAlias.from_json(j: baml.json.json) -> user.WithChainedAlias throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithChainedAlias { data: baml.json.from_json<MyList | string>(baml.json.field(j, "data")) } : user.WithChainedAlias
-}
 type user.IntList$stream = int[]
 type user.MyList$stream = user.IntList$stream
 class user.WithChainedAlias$stream {

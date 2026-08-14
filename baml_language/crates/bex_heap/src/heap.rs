@@ -21,9 +21,9 @@ use std::{
     },
 };
 
-use ::bex_vm_types::Value;
+use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object, ObjectIndex};
+use bex_vm_types::{HeapPtr, Object, WriteBarrier};
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
@@ -50,6 +50,16 @@ pub enum Generation {
     Gen1,
     /// Gen2 old generation — long-lived objects.
     Gen2,
+}
+
+/// Error payload preserved from an unreachable, never-observed spawned
+/// future. The engine drains these after the GC pause.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnhandledSpawnError {
+    pub future_id: FutureId,
+    pub value: Value,
+    pub trace: Vec<StackFrame>,
+    pub cancelled: bool,
 }
 impl Generation {
     /// Check if this generation is young (Gen0 or Gen1).
@@ -171,6 +181,33 @@ pub struct BexHeap {
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
 
+    /// BEP-042: instances whose `cleanup` finalizer must run after the current
+    /// collection. Populated during a collection (`copy_collection` /
+    /// `copy_collection_minor`) when a dead-but-not-yet-cleaned instance of a
+    /// `has_cleanup` class is discovered and kept alive; the pointers are the
+    /// **new** (post-copy) locations. Drained by the engine via
+    /// [`take_pending_finalizers`](Self::take_pending_finalizers) at the same
+    /// safepoint, before any other collection runs, so the pointers stay valid.
+    ///
+    /// Each entry pairs the instance's post-copy `HeapPtr` with its resolved
+    /// `cleanup` function name (`{class_fqn}.cleanup`), computed by the GC while
+    /// it still has the class in hand — so the engine drain needs no heap read
+    /// to dispatch.
+    pending_finalizers: Mutex<Vec<(HeapPtr, String)>>,
+
+    /// Unobserved errors discovered while collecting unreachable futures.
+    /// Entries contain post-copy values and are drained before execution
+    /// resumes or another collection runs.
+    pending_unhandled_spawn_errors: Mutex<Vec<UnhandledSpawnError>>,
+
+    /// BEP-042 fast path: `true` iff at least one compile-time `Class` opts into
+    /// a `cleanup` finalizer (`has_cleanup`). Classes are fixed at compile time,
+    /// so this is computed once at construction. When `false`, the per-collection
+    /// finalizer scan ([`scan_dead_finalizers`](Self::scan_dead_finalizers)) is
+    /// skipped entirely — programs that define no `cleanup` (the common case) pay
+    /// no per-GC scan cost.
+    pub(crate) has_finalizable_classes: bool,
+
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
 
@@ -220,6 +257,17 @@ pub struct BexHeap {
 unsafe impl Send for BexHeap {}
 unsafe impl Sync for BexHeap {}
 
+// Forward `bex_vm_types::WriteBarrier` to the inherent `BexHeap::write_barrier`
+// so heap-mutation sites in upstream crates (e.g. `Future::set_ready` in
+// `bex_vm_types`, which can't name `BexHeap` directly because of dep
+// direction) can fire the barrier through a small trait.
+impl WriteBarrier for BexHeap {
+    #[inline]
+    fn write_barrier(&self, container: HeapPtr, value: Value) {
+        BexHeap::write_barrier(self, container, value);
+    }
+}
+
 // Implement WeakHeapRef trait from bex_external_types
 impl WeakHeapRef for BexHeap {
     fn release_handle(&self, handle_key: usize) {
@@ -257,15 +305,39 @@ impl BexHeap {
 
     /// Create a new heap with explicit debug configuration.
     pub fn with_tlab_size_and_debug(
-        mut compile_time_objects: Vec<Object>,
+        compile_time_objects: Vec<Object>,
         tlab_size: usize,
         debug: HeapDebuggerConfig,
     ) -> Arc<Self> {
-        // Resolve bytecode constants for all Function objects before wrapping in Arc.
+        Self::build_unsealed(compile_time_objects, tlab_size, debug).seal()
+    }
+
+    /// Build the heap but **don't** seal it behind the shared `Arc` yet.
+    ///
+    /// The compile-time objects are laid out at their final, stable addresses, so
+    /// [`Self::compile_time_ptr`] already returns valid pointers — but they can
+    /// still be overwritten with [`Self::set_compile_time_object`]. This is how
+    /// cross-referencing compile-time objects (packages and impl rules) are built:
+    /// their `HeapPtr` fields are only knowable once the compile-time `Vec` exists,
+    /// yet the objects themselves must live inside it. The caller appends
+    /// placeholder slots, builds unsealed, fills each slot using
+    /// `compile_time_ptr`, then calls [`Self::seal`].
+    pub fn build_unsealed(
+        mut compile_time_objects: Vec<Object>,
+        tlab_size: usize,
+        debug: HeapDebuggerConfig,
+    ) -> Self {
+        // Resolve bytecode constants for all Function objects before sealing.
         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
         Self::resolve_function_constants(&mut compile_time_objects);
 
-        Arc::new(Self {
+        // BEP-042: precompute whether any class opts into a `cleanup` finalizer,
+        // so the per-collection finalizer scan can be skipped when none do.
+        let has_finalizable_classes = compile_time_objects
+            .iter()
+            .any(|o| matches!(o, Object::Class(c) if c.has_cleanup));
+
+        Self {
             compile_time: compile_time_objects,
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen1: UnsafeCell::new(ChunkedVec::new()),
@@ -275,6 +347,9 @@ impl BexHeap {
             gen2_cards: UnsafeCell::new(CardTable::new()),
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
+            pending_finalizers: Mutex::new(Vec::new()),
+            pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
+            has_finalizable_classes,
             tlab_size,
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
@@ -283,7 +358,37 @@ impl BexHeap {
             gen1_collection_threshold: AtomicUsize::new(GEN1_FLOOR),
             gen2_collection_threshold: AtomicUsize::new(GEN2_FLOOR),
             debug_state: HeapDebuggerState::new(debug),
-        })
+        }
+    }
+
+    /// [`Self::build_unsealed`] with the default TLAB size and env-derived debug
+    /// config (the same defaults [`Self::new`] uses).
+    pub fn build_unsealed_default(compile_time_objects: Vec<Object>) -> Self {
+        Self::build_unsealed(
+            compile_time_objects,
+            DEFAULT_TLAB_SIZE,
+            HeapDebuggerConfig::from_env(),
+        )
+    }
+
+    /// Freeze the heap behind the shared `Arc`. After this the compile-time
+    /// objects are immutable. See [`Self::build_unsealed`].
+    pub fn seal(self) -> Arc<Self> {
+        Arc::new(self)
+    }
+
+    /// Overwrite a compile-time object before the heap is [sealed](Self::seal).
+    ///
+    /// The compile-time `Vec` is not resized, so every pointer already handed out
+    /// by [`Self::compile_time_ptr`] stays valid — this only rewrites the slot's
+    /// contents. Used to fill placeholder package / impl-rule slots with their
+    /// resolved cross-references.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn set_compile_time_object(&mut self, index: usize, object: Object) {
+        self.compile_time[index] = object;
     }
 
     /// Resolve bytecode constants for all Function objects.
@@ -318,11 +423,11 @@ impl BexHeap {
                     .constants
                     .iter()
                     .map(|cv| match cv {
-                        bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::Null,
+                        bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::NULL,
                         // ClassWithTypeArgs is NOT pre-resolved: `IsType` reads it
                         // directly from `constants` at execution time.
                         bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => {
-                            bex_vm_types::Value::Null
+                            bex_vm_types::Value::NULL
                         }
                         other => other.to_value(resolve_idx),
                     })
@@ -342,12 +447,6 @@ impl BexHeap {
     /// this index are runtime allocations that can be garbage collected.
     pub fn compile_time_boundary(&self) -> usize {
         self.compile_time.len()
-    }
-
-    /// Check if an index refers to a compile-time object.
-    #[inline]
-    pub fn is_compile_time(&self, idx: ObjectIndex) -> bool {
-        idx.into_raw() < self.compile_time.len()
     }
 
     /// Check if a pointer refers to a compile-time object.
@@ -486,7 +585,7 @@ impl BexHeap {
     /// is in Gen0 (no card table for Gen0).
     #[inline]
     pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
-        if let Value::Object(ref_ptr) = written_value {
+        if let Some(ref_ptr) = written_value.as_object_ptr() {
             let container_gen = self.generation_of(container_ptr);
             let ref_gen = self.generation_of(ref_ptr);
             if container_gen > ref_gen {
@@ -558,10 +657,11 @@ impl BexHeap {
     /// or while holding exclusive access to the space being scanned.
     #[inline]
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
-        // SAFETY: `num_chunks` and `chunk_start_ptr` require the chunks `Vec`
-        // to not be growing concurrently; the caller of `ptr_in_chunked_vec`
-        // upholds that (only called for Gen1/Gen2, which grow at safepoints).
-        let num_chunks = unsafe { vec.num_chunks() };
+        // `num_chunks` and `chunk_start_ptr` now serialize on the
+        // ChunkedVec's internal RwLock, so the brief window is safe even
+        // under a concurrent grower. `chunk_start_ptr` is still `unsafe`
+        // for the bounds precondition.
+        let num_chunks = vec.num_chunks();
         for chunk_idx in 0..num_chunks {
             // SAFETY: `chunk_idx < num_chunks` by loop bound.
             let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
@@ -571,6 +671,22 @@ impl BexHeap {
             }
         }
         false
+    }
+
+    /// Bug H, check 3 helper (heap_debug only): is `ptr` inside the
+    /// inactive (former active) space?
+    ///
+    /// Used by the engine's post-`forward_roots` integrity sweep to detect
+    /// stale references the GC failed to forward. The inactive space's
+    /// chunks still exist (their slots have been overwritten with
+    /// `Sentinel::FromSpacePoison` in heap_debug builds), so checking
+    /// `ptr_in_chunked_vec` against `inactive` is safe even after
+    /// `finalize_inactive_space` has run.
+    #[cfg(feature = "heap_debug")]
+    pub fn debug_ptr_in_inactive(&self, ptr: HeapPtr) -> bool {
+        let raw = ptr.as_ptr() as *const Object;
+        // SAFETY: GC has parked all permits before the engine calls this.
+        unsafe { Self::ptr_in_chunked_vec(&*self.inactive.get(), raw) }
     }
 
     /// Mark the card dirty for the card containing `container_ptr` in Gen2.
@@ -612,9 +728,9 @@ impl BexHeap {
         vec: &ChunkedVec<Object>,
         raw_ptr: *const Object,
     ) -> Option<(usize, usize)> {
-        // SAFETY: Caller of `locate_in_chunked_vec` ensures the chunks `Vec`
-        // is not being grown concurrently (safepoint-only / exclusive access).
-        let num_chunks = unsafe { vec.num_chunks() };
+        // `num_chunks` and `chunk_start_ptr` now serialize on the
+        // ChunkedVec's internal RwLock; concurrent growers are excluded.
+        let num_chunks = vec.num_chunks();
         for chunk_idx in 0..num_chunks {
             // SAFETY: `chunk_idx < num_chunks` by loop bound.
             let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
@@ -626,25 +742,6 @@ impl BexHeap {
             }
         }
         None
-    }
-
-    /// Convert a runtime space index to a global ObjectIndex.
-    #[inline]
-    pub fn runtime_to_global(&self, runtime_idx: usize) -> ObjectIndex {
-        self.make_object_index(self.compile_time.len() + runtime_idx)
-    }
-
-    /// Convert a global ObjectIndex to a runtime space index.
-    /// Returns None if this is a compile-time object.
-    #[inline]
-    pub fn global_to_runtime(&self, idx: ObjectIndex) -> Option<usize> {
-        let raw = idx.into_raw();
-        let ct_len = self.compile_time.len();
-        if raw >= ct_len {
-            Some(raw - ct_len)
-        } else {
-            None
-        }
     }
 
     /// Get the TLAB chunk size.
@@ -685,31 +782,15 @@ impl BexHeap {
         }
     }
 
-    /// Get a mutable reference to a runtime object in Gen0.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure exclusive access to this object.
-    #[inline]
-    #[allow(clippy::mut_from_ref)] // Interior mutability via UnsafeCell
-    pub unsafe fn get_runtime_object_mut(&self, runtime_idx: usize) -> &mut Object {
-        // SAFETY: Caller ensures exclusive access; Gen0 holds all runtime allocations
-        unsafe { &mut *(*self.gen0.get()).get_ptr(runtime_idx) }
-    }
-
     /// Get the current number of objects in the heap (compile-time + all
     /// runtime generations).
-    pub fn len(&self) -> usize {
+    #[cfg(any(test, feature = "heap_debug"))]
+    pub(crate) fn len(&self) -> usize {
         // SAFETY: Reading len is safe on each space (AtomicUsize loads).
         let runtime_len = unsafe {
             (*self.gen0.get()).len() + (*self.gen1.get()).len() + (*self.gen2.get()).len()
         };
         self.compile_time.len() + runtime_len
-    }
-
-    /// Check if the heap is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     /// Allocate a new TLAB chunk from Gen0 (the nursery).
@@ -744,27 +825,33 @@ impl BexHeap {
         let runtime_end = runtime_start + self.tlab_size;
         let reserve_end = runtime_end + canary_slots;
 
-        // Lock only for growth (serializes chunk allocation)
+        // The chunk-allocation policy mutex still serializes the
+        // fetch_add → resize → canary-write critical section as a unit.
+        // (`ChunkedVec::resize_with` now self-synchronizes against
+        // concurrent `set` callers, so this is no longer load-bearing for
+        // memory safety — but keeping it preserves the existing "one
+        // grower at a time" policy and keeps the canary write paired with
+        // the resize that produced its slot.)
         let _guard = self.growth_lock.lock().unwrap();
 
         let ct_len = self.compile_time.len();
-        // SAFETY: We hold the growth_lock, so no other thread is resizing.
-        // ChunkedVec's resize_with never moves existing elements, and takes &self
-        // so we don't need a mutable reference - which avoids the data race.
+        // SAFETY: `&*self.gen0.get()` produces a `&ChunkedVec<Object>`.
+        // The ChunkedVec's own RwLock now gates outer-Vec mutation, so this
+        // shared reference is sound to hold concurrently with other readers
+        // and growers; per-element exclusivity is gated separately by
+        // `UnsafeCell` + caller-side TLAB regions.
         let gen0 = unsafe { &*self.gen0.get() };
         if gen0.len() < reserve_end {
-            // SAFETY: We hold the growth_lock, ensuring only one thread resizes at a time.
-            unsafe {
-                gen0.resize_with(reserve_end, || {
-                    // Placeholder object - will be overwritten by TLAB alloc
-                    self.placeholder_object()
-                });
-            }
+            gen0.resize_with(reserve_end, || {
+                // Placeholder object - will be overwritten by TLAB alloc
+                self.placeholder_object()
+            });
         }
         if use_canary {
             let chunk_start = ct_len + runtime_start;
             let chunk_end = ct_len + runtime_end;
-            // SAFETY: We hold the growth_lock, index is within bounds
+            // SAFETY: `runtime_end` is within the freshly-grown range; the
+            // canary slot is exclusive to this chunk reservation.
             unsafe {
                 gen0.set(runtime_end, self.tlab_canary_object(chunk_start, chunk_end));
             }
@@ -788,6 +875,7 @@ impl BexHeap {
     /// - The pointer must be valid (not collected by GC)
     /// - Caller must ensure no concurrent writes to this object
     pub unsafe fn get_object(&self, idx: HeapPtr) -> &Object {
+        #[cfg(feature = "heap_debug")]
         self.debug_assert_valid_index(idx);
 
         // SAFETY: HeapPtr points directly to the object
@@ -939,6 +1027,45 @@ impl BexHeap {
         }
     }
 
+    /// BEP-042: record an instance (by its post-copy `HeapPtr`) and its resolved
+    /// `cleanup` function name, to be finalized after the current collection.
+    /// Called by the GC when it discovers and keeps alive a dead, not-yet-cleaned
+    /// instance of a `has_cleanup` class.
+    pub(crate) fn push_pending_finalizer(&self, ptr: HeapPtr, cleanup_fn: String) {
+        self.pending_finalizers
+            .lock()
+            .expect("pending_finalizers lock poisoned")
+            .push((ptr, cleanup_fn));
+    }
+
+    /// BEP-042: take and clear the queue of instances awaiting `cleanup`. The
+    /// engine drains this right after a collection (still at the GC safepoint,
+    /// before resuming normal execution) and invokes each instance's `cleanup`.
+    pub fn take_pending_finalizers(&self) -> Vec<(HeapPtr, String)> {
+        std::mem::take(
+            &mut *self
+                .pending_finalizers
+                .lock()
+                .expect("pending_finalizers lock poisoned"),
+        )
+    }
+
+    pub(crate) fn push_unhandled_spawn_error(&self, error: UnhandledSpawnError) {
+        self.pending_unhandled_spawn_errors
+            .lock()
+            .expect("pending_unhandled_spawn_errors lock poisoned")
+            .push(error);
+    }
+
+    pub fn take_unhandled_spawn_errors(&self) -> Vec<UnhandledSpawnError> {
+        std::mem::take(
+            &mut *self
+                .pending_unhandled_spawn_errors
+                .lock()
+                .expect("pending_unhandled_spawn_errors lock poisoned"),
+        )
+    }
+
     /// Create a handle to an object.
     ///
     /// Handles are used at the FFI boundary to give external code safe
@@ -1028,8 +1155,8 @@ mod tests {
     #[test]
     fn test_new_heap_with_objects() {
         let objects: Vec<Object> = vec![
-            Object::String("hello".to_string()),
-            Object::String("world".to_string()),
+            Object::String("hello".into()),
+            Object::String("world".into()),
         ];
         let heap = BexHeap::new(objects);
         assert_eq!(heap.len(), 2);
@@ -1055,10 +1182,8 @@ mod tests {
 
     #[test]
     fn test_alloc_tlab_chunk_with_compile_time() {
-        let compile_time: Vec<Object> = vec![
-            Object::String("ct1".to_string()),
-            Object::String("ct2".to_string()),
-        ];
+        let compile_time: Vec<Object> =
+            vec![Object::String("ct1".into()), Object::String("ct2".into())];
         let heap = BexHeap::with_tlab_size(compile_time, 100);
 
         // With 2 compile-time objects, global indices start at 2
@@ -1073,7 +1198,7 @@ mod tests {
 
     #[test]
     fn test_heap_stats() {
-        let compile_time: Vec<Object> = vec![Object::String("builtin".to_string())];
+        let compile_time: Vec<Object> = vec![Object::String("builtin".into())];
         let heap = BexHeap::with_tlab_size(compile_time, 50);
 
         let stats = heap.stats();

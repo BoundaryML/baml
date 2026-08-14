@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × generic class destructure `Box { ... }` must specify type arguments
+    ╭─[main.baml:11:5]
+ 11 │     let Box { value } = boxed;
+    ·     ─────────────────
+    ╰────

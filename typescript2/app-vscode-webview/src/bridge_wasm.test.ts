@@ -133,12 +133,15 @@ describe('BamlWasmRuntime', () => {
         lsp_send_response: () => {},
         lsp_make_request: () => {},
         playground_send_notification: () => {},
+        host_dispatch: () => {},
       };
       const runtime = BamlWasmRuntime.create(callbacks, makeMinimalVfs());
 
       expect(runtime).toBeDefined();
       expect(typeof runtime.requestPlaygroundState).toBe('function');
-      expect(typeof runtime.callFunction).toBe('function');
+      expect(typeof runtime.startRun).toBe('function');
+      expect(typeof runtime.cancelRun).toBe('function');
+      expect(typeof runtime.snapshot).toBe('function');
       runtime.requestPlaygroundState();
     });
 
@@ -181,6 +184,7 @@ describe('BamlWasmRuntime', () => {
         lsp_send_response: () => {},
         lsp_make_request: () => {},
         playground_send_notification: () => {},
+        host_dispatch: () => {},
       };
       const runtime = BamlWasmRuntime.create(callbacks, makeMinimalVfs());
       expect(runtime).toBeDefined();

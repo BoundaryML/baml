@@ -9,24 +9,14 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
-//    ╭─[ hover_function_throws.baml:6:42 ]
-//    │
-//  6 │ function MayFail(x: int) -> string throws Errors {
-//    │                                          ───┬───  
-//    │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
-//    │ 
-//    │ Note: Error code: E0096
-// ───╯
-// Warning: extraneous throws declaration: user.Errors
-//    ╭─[ hover_function_throws.baml:6:42 ]
-//    │
-//  6 │ function MayFail(x: int) -> string throws Errors {
-//    │                                          ───┬───  
-//    │                                             ╰───── extraneous throws declaration: user.Errors
-//    │ 
-//    │ Note: Error code: E0097
-// ───╯
+// E0097
+//
+//   ⚠ extraneous throws declaration: Errors
+//    ╭─[hover_function_throws.baml:6:50]
+//  6 │ ╭─▶ function MayFail(x: int) -> string throws Errors {
+//  7 │ │     throw Errors.AuthError
+//  8 │ ╰─▶ }
+//    ╰────
 //
 //- on_hover expressions
 // hover at hover_function_throws.baml:6:17

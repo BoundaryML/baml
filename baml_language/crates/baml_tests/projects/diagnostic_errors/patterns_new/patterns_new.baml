@@ -93,6 +93,19 @@ function refutable_for_class_field_array_prefix(teams: Team[]) -> int {
 }
 
 // ============================================================================
+// while-let irrefutability: a `while let` whose pattern covers every value of
+// the scrutinee never exits via pattern failure (an unconditional infinite
+// loop), so it warns — suggest a plain `while`/`loop`.
+// ============================================================================
+
+function irrefutable_while_let(n: int) -> int {
+    while let x: int = n {
+        break;
+    }
+    1
+}
+
+// ============================================================================
 // Class destructure unreachability: bare `Class { }` covers every value of
 // `Class`, so any later arm narrowing the same class is unreachable.
 // ============================================================================

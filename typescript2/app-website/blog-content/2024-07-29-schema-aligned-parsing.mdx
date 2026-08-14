@@ -1,0 +1,514 @@
+---
+title: Prompting vs JSON Mode vs Function Calling vs Constrained Generation vs SAP
+description: A technical explanation of every way to extract structed data from an LLM
+slug: schema-aligned-parsing
+date: July 29, 2024
+tags: ['research']
+featured: true
+author:
+  name: Vaibhav Gupta
+  imageUrl: /profile-vbv.jpeg
+og:
+  image: /blog/schema-aligned-parsing/problem_definition.png
+---
+
+
+<Tip title="Pre-reading: What is structured generation?">
+Structured generation is the idea of coercing the LLM to generate some
+data that you can parse into a data model and then programatically
+use.
+</Tip>
+
+The most common way to extract structured data / do function calling out of an LLM is to somehow get the LLM to output JSON, and then call `JSON.parse`.
+
+However, there is no reason to assume that JSON, the prevalant serialization for Web APIs, should be the ideal serialization for LLMs. Given the stochastic nature of LLMs, it might even be true that all strict serialization formats are suboptimal, since a single error can cause the entire serialization to be invalid.
+
+In this article, we'll:
+
+1. Explain how every current technique of structured data extraction works
+2. Discuss the pros and cons of each technique
+3. Introduce a new technique, SAP (Schema-Aligned Parsing), that achieves state-of-the-art accuracy on the Berkeley Function Calling Leaderboard (Jump to [SAP](#sap))
+
+
+## Problem Space
+
+<SapProblemStatement />
+
+
+## All 9 Techniques
+
+<table>
+  <thead>
+    <tr>
+      <th className="text-left">Category</th>
+      <th className="text-left">Technique</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td className="text-left">Prompt</td>
+      <td className="text-left">
+        <a href="#naive-approach">Naive Approach</a><br/>
+        <a href="#prompt-engineering">Prompt Engineering</a><br/>
+        <a href="#prompt-engineering--parsing">Prompt Engineering + Parsing</a>
+      </td>
+    </tr>
+    <tr>
+      <td className="text-left">Model</td>
+      <td className="text-left">
+        <a href="#json-mode">JSON Mode</a><br/>
+        <a href="#constrained-generation">Constrained Generation</a><br/>
+        <a href="#function-calling">Function Calling</a>
+      </td>
+    </tr>
+    <tr>
+      <td className="text-left">Parser</td>
+      <td className="text-left">
+        <a href="#llm-retries">LLM Retries</a><br/>
+        <a href="#ast-parsing">AST Parsing</a><br/>
+        <a href="#sap">SAP</a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+## Technique Comparison
+We ran the most popular techniques on the [Berkeley Function Calling Leaderboard](https://gorilla.cs.berkeley.edu/leaderboard.html) dataset. Here are the results:
+<table>
+  <thead>
+    <tr>
+      <th className="align-bottom text-left">Model</th>
+      <th className="text-left">Function Calling</th>
+      <th className="text-left">Python AST Parser</th>
+      <th className="text-left">SAP</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>gpt-3.5-turbo</td>
+      <td>87.5%</td>
+      <td>75.8%</td>
+      <td><span className="text-green-500 font-bold">92%</span></td>
+    </tr>
+    <tr>
+      <td>gpt-4o</td>
+      <td>87.4%</td>
+      <td>82.1%</td>
+      <td><span className="text-green-500 font-bold">93%</span></td>
+    </tr>
+    <tr>
+      <td>claude-3-haiku</td>
+      <td>57.3%</td>
+      <td>82.6%</td>
+      <td><span className="text-green-500 font-bold">91.7%</span></td>
+    </tr>
+    <tr>
+      <td>gpt-4o-mini</td>
+      <td>19.8%</td>
+      <td>51.8%</td>
+      <td><span className="text-green-500 font-bold">92.4%</span></td>
+    </tr>
+    <tr>
+      <td>claude-3-5-sonnet</td>
+      <td>78.1%</td>
+      <td>93.8%</td>
+      <td><span className="text-green-500 font-bold">94.4%</span></td>
+    </tr>
+    <tr>
+      <td>llama-3.17b</td>
+      <td>-</td>
+      <td>60.9%</td>
+      <td><span className="text-green-500 font-bold">76.8%</span></td>
+    </tr>
+  </tbody>
+</table>
+<sup>Dataset had n=1000 per model and comes from Berkeley Function Calling Leaderboard thanks to the Gorilla Team.</sup>
+
+## Technique Breakdown
+<div id="naive-approach">
+<SapTechniqueTitle title="Naive Approach" count={0} takeaways={{score: 0, notes: `Please don't do this. As of writing this, LLMs are just bad at producing JSON when left to their own devices.`}}>
+<div>Inject the question and the schema as JSON schema to the model, call `JSON.parse(..)` on the response</div>
+</SapTechniqueTitle>
+<details>
+<summary>Complete Propmt</summary>
+
+```md
+Generate a resume in JSON format based on the SCHEMA defined below:
+
+{
+ type: "object",
+ properties: {
+    name: {
+      type: "string",
+      required: true,
+    },
+    contact: {
+      type: "object",
+      properties: {
+        email: {
+          type: "string",
+          required: true,
+        },
+        phone: {
+          type: "string",
+          required: false,
+        }
+      },
+      required: true,
+    },
+    education: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          institution: {
+            type: "string",
+            required: true,
+          },
+          degree: {
+            type: "string",
+            required: true,
+          },
+          year: {
+            type: "string",
+            required: true,
+          }
+        }
+      },
+      required: true,
+    },
+    experience: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          company: {
+            type: "string",
+            required: true,
+          },
+          role: {
+            type: "string",
+            required: true,
+          },
+          duration: {
+            type: "string",
+            required: true,
+          }
+        }
+      },
+      required: true,
+    },
+    skills: {
+      type: "array",
+      items: {
+        type: "string"
+      },
+      required: true,
+    }
+ }
+}
+```
+
+</details>
+</div>
+
+<div id="prompt-engineering">
+<SapTechniqueTitle title="Prompt Engineering" type="prompt" count={1} takeaways={{score: 0, notes: `Please don't do this either. Same reason as above.`}}>
+<div>Try and better explain the desired format the model. <b>Example:</b> Ask it to not make common JSON mistakes</div>
+</SapTechniqueTitle>
+</div>
+
+<div id="prompt-engineering--parsing">
+<SapTechniqueTitle title="Prompt Engineering + Parsing" type="prompt" count={2} takeaways={{score: 0.5, notes: `It is fast to write and though the LLM won't always listen to you verbaitum, at least you're trying. Points for effort.`}}>
+<div>Add some programatic robustness. Only parse with `JSON.parse` conditionally.</div>
+</SapTechniqueTitle>
+</div>
+
+
+<div id="json-mode">
+<SapTechniqueTitle title="JSON Mode" type="model" count={3} takeaways={{score: 2.5, notes: <>JSON mode definitely works. It will at the very least always be parsable, but it loses points because JSON mode is both too strict and not strict enough at the same time.<br /><ol><li>JSON is too rigid to use techniques which benefit from verbosity like Chain-of-Thought or Reasoning (See <a href="https://arxiv.org/pdf/2201.11903">CoT paper</a> which had +40% in accuracy in some datasets)</li><li>JSON is not sufficiently strict. <code>{'{'} "foo": 1 {'}'}</code> is valid JSON, but if you wanted <code>{'{'} "foo": int[] {'}'}</code>, it would be close, but still wrong.</li><li>The error rate is often 10%+ when compared on larger datasets (see BFCL).</li><li>And most importantly, not every model supports this</li></ol></>}}>
+<div className="flex flex-col gap-1"><div>Restrict the tokens the model is allowed to generate to only those that would be JSON parseable. Stop once the model completes the JSON object.
+</div><div><b>Example:</b> After already generating `{ "key"`, the LLM must choose a token that starts with `:` to ensure valid JSON.</div></div>
+</SapTechniqueTitle>
+</div>
+
+
+<div id="constrained-generation">
+<SapTechniqueTitle title="Constrained Generation" type="model" count={4} takeaways={{score: 2, notes: <>While more generalizable than JSON mode, this only works for open-source models that give you an interface that accepts grammars. Grammars for simple systems are easy to write, but with a larger and more diverse team, <b>grammars can be virtually impossible to maintain long term</b>. The difficulty of writing a proper grammar can be that of writing a compiler.
+<pre className="whitespace-pre-wrap">
+// Example grammar for a "simple" calculator<br /><br />
+?start: expression<br /><br />
+?expression: term (("+" | "-") term)*<br /><br />
+?term: factor (("*" | "/") factor)*<br /><br />
+?factor: NUMBER<br />
+        {'  '} | "-" factor<br />
+        {'  '} | "(" expression ")"<br /><br />
+%import common.NUMBER<br /><br />
+</pre>
+<Tip title="Question">How would you modify the grammar to allow variables?
+<details><summary>Answer</summary>I have no idea tbh...</details>
+</Tip></>}}>
+<div className="flex flex-col gap-1"><div>The more general cousin of JSON mode. Instead of only allowing tokens which would produce valid JSON, only allow very specific tokens at any given step of token generation.
+</div><div><b>Example:</b><br />Take a grammar restriction: `[0-9]{1,2}\.[0-9]{0,2}` - a regular expression that matches numbers with one or two digits before the decimal point and zero to two digits after the decimal point.<br />We first only allow the LLM to pick tokens that match numbers.<br />After say, `83`, the LLM would be forced to pick tokens that started with `.`.</div><Tip>In this scenario, due to Constrained Generation, the LLM could never generate a number larger than 99.99, since the grammar would remove any 3+ digit numbers.</Tip></div>
+</SapTechniqueTitle>
+</div>
+
+
+<div id="function-calling">
+<SapTechniqueTitle title="Tools / Function Calling" type="model" count={5} takeaways={{score: <><s>2 / 5</s>{' '}3.5</>, notes: <>This is one approach I've found where my opinion has changed over time. Since Function calling requiring training a model on the special <code>USE_TOOL</code> token, it was not previously supported by all providers. As it is more common, and the interface is becoming more standardized, I've warmed up to it. However, I still have a few reservations:<ol><li>Function calling suffers from the same schema inaccuracy JSON mode does. <code>{'{'} "foo": 1 {'}'}</code> is valid JSON, but if you wanted <code>{'{'} "foo": int[] {'}'}</code>, it would be close, but still wrong.</li><li>Most APIs rely on a JSON schema, which is incredibly wasteful in the token space.</li><li>A lot of models still don't support it</li><li>Models that do support it often have degraded accuracy with function calling when compared to just prompting based techniques.</li></ol>That said, it does overcome some of the key problems with JSON mode like supporting verbosity-based techniques. For example, you can do chain of thought prior to the trigger token.</>}}>
+<div className="flex flex-col gap-1">
+  <div>
+    The idea here is to fine-tune the model to intelligently trigger when to use JSON mode.<br /><b>Example Generation:</b>
+    <ol><li>Teach the model a new special token <code>USE_TOOL</code>.</li><li>Whenever the model generates the <code>USE_TOOL</code> token, switch to JSON mode for all subsequent tokens.</li><li>Once the JSON is complete (detect this programatically, not by the model), allow the model to pick from all tokens, including <code>USE_TOOL</code>.</li><li>Loop until the model emits the <code>END_TOKEN</code> token.</li></ol>
+  </div>
+</div>
+</SapTechniqueTitle>
+</div>
+
+<div id="llm-retries">
+<SapTechniqueTitle title="LLM Retries" type="parser" count={6} takeaways={{score: 1, notes: <>This is the only technique on here that I think has a potential to be a game changer, but is currently not used in an interesting way.<br/><br/>Today, many libraries are treating an LLM like a hammer and throwing every problem its way. <code>JSON.parse</code> failed due to including a comment? a trailing comma? Ask the LLM to fix the error and try parsing again.<br/><br/>
+
+<b>This adds unbounded latency and costs to the system.</b> LLMs are already slow and expensive (albiet getting cheaper and faster, but still significantly slower than most software).<br/><br/>
+
+
+Where I see potential, however, is in more complex systems to fix logical inconsistencies. An LLM is likely the only approach for doing this at scale. For example, fixing a scenario where age was off by 3 years.
+<pre className="whitespace-pre-wrap">{`
+// Data model
+class Person {
+  name string
+  job string
+  birth_year int
+  age int @assert(
+    this == now().year - birth_year,
+    "{this} doesn't match {birth_year} given {now().year}"
+  )
+}
+
+// To fix it, instead of giving the LLM everything (the entire data model), just give it the error and only the properties that are relevant to age.
+{
+  "error": "age=30 doesn't match birth_year=1990 given now.year=2024",
+  "birth_year": 1990,
+  "age": 30
+}
+`
+}</pre>
+
+Current approaches, would likely just retry the entire model, but a more sophisticated approach would be to only give the LLM the error and the relevant properties, reducing costs and latencies. This would be a much more efficient approach, but would require a lot of engineering (and compilers) to get right.
+
+
+</>}}>
+<div className="flex flex-col gap-1">Retry the model until it produces something that is parseable or pass parsing errors to the model and hope that when it tries again, you can get good results. This is the technique libraries like Langchain, Instructor, and Marvin use to get structured data reliably.</div>
+</SapTechniqueTitle>
+</div>
+
+<div id="ast-parsing">
+<SapTechniqueTitle title="Language-Specific AST parsers" type="parser" count={7} takeaways={{score: 3.5, notes: <>Credit here goes to the Gorilla Team @ Berkley (see <a href="https://gorilla.cs.berkeley.edu/leaderboard.html">Berkeley Function Calling Leaderboard</a>).<br/><br/>
+
+This was one of the few ideas I've seen which step away from JSON, XML, and other similar formats and tries to reframe the problem in a way the LLM may better understand. <b>The issue with generating code, is that code, like JSON, is still a very strict grammar.</b> While code has very few superfluous tokens (like <code>:</code> or <code>"</code> in JSON), you still rely on a parser you often don't own (the syntax parser of the language). If the LLM, by accident, emits the wrong amount of whitespace, it can completely change what the python parser reads the output.</>}}>
+<div className="flex flex-col gap-1"><div>Rely on the model's inherent ability to output code, and existing Abstract Syntax Tree Parsers for reading code, and then transform that into JSON.
+Example output: `[GetTriangleArea(base=5, height=10)]` (Note, that this is valid python syntax)
+After python_to_json: `{ "GetTriangleArea": {"base": 5, "base": 10} }`</div></div>
+</SapTechniqueTitle>
+</div>
+
+<div id="sap">
+<SapTechniqueTitle title="SAP" type="parser" count={8} takeaways={{score: <><s>5</s> 6</>, notes: <>
+<div>I'm obviously a bit biased 😇, but at the same time, the numbers don't lie!</div>
+<table>
+  <thead>
+    <tr>
+      <th className="align-bottom text-left">Model</th>
+      <th className="text-left">Function Calling</th>
+      <th className="text-left">Python AST Parser</th>
+      <th className="text-left">SAP</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>gpt-3.5-turbo</td>
+      <td>87.5%</td>
+      <td>75.8%</td>
+      <td><span className="text-green-500 font-bold">92%</span></td>
+    </tr>
+    <tr>
+      <td>gpt-4o</td>
+      <td>87.4%</td>
+      <td>82.1%</td>
+      <td><span className="text-green-500 font-bold">93%</span></td>
+    </tr>
+    <tr>
+      <td>claude-3-haiku</td>
+      <td>57.3%</td>
+      <td>82.6%</td>
+      <td><span className="text-green-500 font-bold">91.7%</span></td>
+    </tr>
+    <tr>
+      <td>gpt-4o-mini</td>
+      <td>19.8%</td>
+      <td>51.8%</td>
+      <td><span className="text-green-500 font-bold">92.4%</span></td>
+    </tr>
+    <tr>
+      <td>claude-3-5-sonnet</td>
+      <td>78.1%</td>
+      <td>93.8%</td>
+      <td><span className="text-green-500 font-bold">94.4%</span></td>
+    </tr>
+    <tr>
+      <td>llama-3.17b</td>
+      <td>-</td>
+      <td>60.9%</td>
+      <td><span className="text-green-500 font-bold">76.8%</span></td>
+    </tr>
+  </tbody>
+</table>
+<sup>Dataset had n=1000 per model and comes from Berkeley Function Calling Leaderboard thanks to the Gorilla Team.</sup>
+
+<Tip title="Note">We don't use json_schema for SAP, instead we use baml_schema, which is a more compressed way to define schemas. This is because we don't need to be as strict as JSON during parsing so we can omit characters like quotes. You can read more here: <a href="/blog/type-definition-prompting-baml">Your prompts are using 4x more tokens than they need.</a></Tip>
+</>}}>
+<div className="flex flex-col gap-1">Instead of relying on the model to strictly understand our desired format, write a parser that generously reads the output text and applies error correction techniques with knowledge of the original schema.</div>
+</SapTechniqueTitle>
+
+## What is SAP and why does it work so well?
+
+The key idea behind SAP is to assume that the model will make mistakes, and to build a parser that is robust enough to handle them. This would be virtually impossible for some tasks, but in the context of structured data extraction, we have a schema to guide us. A key inspiration to us was Postel's Law, coined by Jon Postel, the creator of TCP/IP:
+
+> Be conservative in what you do, be liberal in what you accept from others.
+
+We'll do a future post that outlines exactly how our SAP algorithm works. At a very high-level, you can think of the leetcode problem "Edit Distance" but instead of comparing two strings, we ask: "What is least cost edit I need to make to get from the model's output to something parseable by a schema?" The simplest cost function could be Levenshtein distance, but we use a custom cost function that takes into account the schema. (The code is open-source, so you can check it out [here](https://github.com/boundaryml/baml))
+
+Meanwhile, here are three examples to show some of the error correction techniques we use:
+<SapWhatIsSAP />
+</div>
+
+Some more error correction techniques we use in SAP include:
+
+- Unquoted strings
+- Unescaped quotes and new lines in strings
+- Missing commas
+- Missing colons
+- Missing brackets
+- Misnamed keys
+- Cast fractions to floats
+- Remove superfluous keys in objects
+- Strip yapping
+- Picking the best of many possible candidates in case LLM produces multiple outputs
+- Complete partial objects (due to streaming)
+- and more
+
+## Using SAP today
+
+We wanted to offer SAP in all languages of your choice, so we've written it in Rust and provide a native interface for Python, Typescript, and Ruby. (We're working on more languages, but we're a small team!)
+
+Since all interfaces use the same Rust code, you can expect the same performance and accuracy across all languages.
+
+You can try it on our online playground: [https://promptfiddle.com](https://promptfiddle.com) or add it to your code base already. ([Go to documentation](https://docs.boundaryml.com/docs/get-started/quickstart/python))
+
+### Code Snippet
+
+1. Write a schema in BAML
+
+```baml
+// my_app/baml_src/my_schema.baml
+class Resume {
+  name string @description("first and last name")
+  email string?
+  experience Experience[]
+}
+
+class Experience {
+  title string
+  company string
+}
+```
+
+2. Write an LLM prompt in BAML
+
+```baml
+// my_app/baml_src/my_schema.baml
+// ...
+
+function ExtractResume(text: string) -> Resume {
+  client "openai/gpt-4o"
+  prompt #"
+    Describe this resume.
+    {{ ctx.output_format }}
+
+    {{ _.role('user') }}
+    {{ text }}
+  "#
+}
+```
+
+3. Create bindings in your language of choice and use the BAML defined function as if it were a native function (with autocomplete and types!).
+
+### Python
+```bash
+$ pip install baml-py
+$ baml-cli generate --from /path/to/my_schema.baml --target "python/pydantic"
+```
+
+```python
+from baml_client import b
+
+# resume will always be a Pydantic model of type Resume
+resume = b.ExtractResume("""
+  Vaibhav Gupta
+  vbv@boundaryml.com
+  - Founder @ BoundaryML
+""")
+
+# BAML will automatically validate the response via SAP and cast it to a Pydantic model
+```
+
+
+### Typescript
+```bash
+$ npm install @boundaryml/baml
+$ ./node_modules/.bin/baml-cli generate --from /path/to/my_schema.baml --target "typescript"
+```
+
+```typescript
+import { b } from './baml_client'
+
+// resume will always be a TypeScript interface of type Resume
+const resume = await b.ExtractResume(`
+  Vaibhav Gupta
+  vbv@boundaryml.com
+  - Founder @ BoundaryML
+`);
+
+// BAML will automatically validate the response via SAP and cast it to a TypeScript interface
+```
+
+### Ruby
+```bash
+$ gem install baml
+$ baml-cli generate --from /path/to/my_schema.baml --target "ruby/sorbet"
+```
+
+```ruby
+require 'baml_client'
+
+# resume will always be a Sorbet model of type Resume
+resume = b.ExtractResume(<<~TEXT)
+  Vaibhav Gupta
+  vbv@boundaryml.com
+  - Founder @ BoundaryML
+TEXT
+
+# BAML will automatically validate the response via SAP and cast it to a Sorbet model
+```
+
+## Does this really matter since models will get better?
+
+I think one could make an arguement for no. If models get better, then JSON mode will be sufficient.<br/><br/>But I personally think performance always matters. If I had some technique that can get the same quality 50% faster or 50% cheaper, then I would obviously use it. Besides, as models get better, I would much rather they spend their training data on being better at understanding the world, rather than understanding my schema. The schema part we can solve with engineering.
+
+
+## Mandatory Blurb 🤝
+
+Our mission at Boundary is to provide the best possible developer experience for shipping AI pipelines. We started with BAML, our new programming language for providing a <i>boundary</i> between stochastic AI models, and deterministic, type-safe code.
+
+What's next? Likely we'll be showing off demos of how to combine function calling and structured generation with SAP to get the best of both worlds. Stay tuned!
+
+If you enjoyed this article, please consider giving us a star on [GitHub](https://github.com/boundaryml/baml).

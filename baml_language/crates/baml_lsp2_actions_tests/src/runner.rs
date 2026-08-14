@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::Path};
 
 use baml_compiler_diagnostics::{RenderConfig, render_diagnostic};
 use baml_lsp2_actions::{
-    annotations::{AnnotationKind, InlineAnnotation, annotations},
+    annotations::{AnnotationKind, InlineAnnotation, file_annotations},
     check::check_file,
     completions::completions_at,
     tokens::{SemanticToken, semantic_tokens},
@@ -165,9 +165,9 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     let actual_inlay_hints = if parsed.expected_inlay_hints.is_some() {
         let mut all_hints: Vec<(String, InlineAnnotation)> = Vec::new();
         for (filename, source_file) in &file_map {
-            let hints = annotations(&db, *source_file);
+            let hints = file_annotations(&db, *source_file);
             for hint in hints {
-                all_hints.push((filename.clone(), hint));
+                all_hints.push((filename.clone(), hint.clone()));
             }
         }
 
@@ -184,7 +184,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         for (filename, source_file) in &file_map {
             let tokens = semantic_tokens(&db, *source_file);
             for token in tokens {
-                all_tokens.push((filename.clone(), token));
+                all_tokens.push((filename.clone(), token.clone()));
             }
         }
 
@@ -199,11 +199,21 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     };
 
     // Compare against expectations
-    let diagnostics_passed = parsed.expected_diagnostics == actual_diagnostics;
-    let hovers_passed = parsed.expected_hovers == actual_hovers;
+    let diagnostics_passed = expectation_text_matches(
+        Some(&parsed.expected_diagnostics),
+        Some(&actual_diagnostics),
+    );
+    let hovers_passed =
+        expectation_text_matches(parsed.expected_hovers.as_deref(), actual_hovers.as_deref());
     let completions_passed = completion_result.as_ref().map(|r| r.passed).unwrap_or(true);
-    let inlay_hints_passed = parsed.expected_inlay_hints == actual_inlay_hints;
-    let semantic_tokens_passed = parsed.expected_semantic_tokens == actual_semantic_tokens;
+    let inlay_hints_passed = expectation_text_matches(
+        parsed.expected_inlay_hints.as_deref(),
+        actual_inlay_hints.as_deref(),
+    );
+    let semantic_tokens_passed = expectation_text_matches(
+        parsed.expected_semantic_tokens.as_deref(),
+        actual_semantic_tokens.as_deref(),
+    );
 
     let passed = diagnostics_passed
         && hovers_passed
@@ -254,13 +264,16 @@ fn format_cursor_hover_results(results: &[CursorHoverResult]) -> String {
         ));
 
         for line in result.actual_text.lines() {
+            // The expectation parser skips empty `//` lines (they double as
+            // section separators), so blank lines in the hover markdown — e.g.
+            // the blank line before a `Run \`baml describe …\`` hint — cannot
+            // round-trip. Drop them here so actual matches the parsed expected.
             if line.is_empty() {
-                output.push_str("//\n");
-            } else {
-                output.push_str("// ");
-                output.push_str(line);
-                output.push('\n');
+                continue;
             }
+            output.push_str("// ");
+            output.push_str(line);
+            output.push('\n');
         }
     }
 
@@ -271,12 +284,30 @@ fn format_cursor_hover_results(results: &[CursorHoverResult]) -> String {
 fn format_as_comment(text: &str) -> String {
     text.lines()
         .map(|line| {
+            let line = line.trim_end();
             if line.is_empty() {
                 "//".to_string()
             } else {
                 format!("// {line}")
             }
         })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn expectation_text_matches(expected: Option<&str>, actual: Option<&str>) -> bool {
+    match (expected, actual) {
+        (Some(expected), Some(actual)) => {
+            normalize_line_endings(expected) == normalize_line_endings(actual)
+        }
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn normalize_line_endings(text: &str) -> String {
+    text.lines()
+        .map(str::trim_end)
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -343,9 +374,15 @@ fn format_semantic_tokens_results(
         let len = end_offset - start_offset;
         let text = &file_content[start_offset..end_offset];
         let token_type_str = token.token_type.as_str();
+        let mods: Vec<&str> = token.modifiers.names().collect();
+        let mods_str = if mods.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", mods.join(","))
+        };
 
         output.push_str(&format!(
-            "// {filename}:{line}:{col} ({token_type_str}) len={len} {text:?}\n"
+            "// {filename}:{line}:{col} ({token_type_str}){mods_str} len={len} {text:?}\n"
         ));
     }
 

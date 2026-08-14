@@ -69,6 +69,31 @@ function CatchRecursiveThrow(n: int) -> string {
     }
 }
 
+class BuildError {
+    reason string
+}
+
+// catch_all must handle every inferred throw from the base expression.
+function GenerateWithBuildError(ok: bool) -> string {
+    if (!ok) {
+        throw BuildError { reason: "generate failed" };
+    };
+    if (ok) {
+        throw "string"
+    }
+    "ok"
+}
+
+function BuildWithBuildError(ok: bool) -> string {
+    GenerateWithBuildError(ok)
+}
+
+function CatchAllMissingString(ok: bool) -> string {
+    BuildWithBuildError(ok) catch_all (e) {
+        BuildError => "recovered: " + e.reason,
+    }
+}
+
 // Diverging statement before tail forces block type to never,
 // but unreachable tail is still checked for diagnostics.
 function UnreachableTailStillChecked() -> string {

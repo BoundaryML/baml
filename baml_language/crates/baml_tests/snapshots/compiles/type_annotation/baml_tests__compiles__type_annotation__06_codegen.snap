@@ -1,76 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 27299
 ---
-function user.MetaField.from_json(j: baml.json.json) -> MetaField {
-    load_var j
-    load_const "type"
-    call baml.json.field
-    store_var _3
-    load_type type
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.MetaField
-    load_var _2
-    init_field .type
-    return
-}
-
-function user.MetaField.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .type
-    call baml.TypeValue.to_json
-    load_const "type"
-    alloc_map 1
-    return
-}
-
-function user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
-    load_var j
-    load_const "type"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "severity"
-    call baml.json.field
-    store_var _6
-    load_type float
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.RiskFactor
-    load_var _2
-    init_field .type
-    load_var _5
-    init_field .severity
-    return
-}
-
-function user.RiskFactor.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .type
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .severity
-    call baml.Float.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "type"
-    load_const "severity"
-    alloc_map 2
-    return
-}
-
 function user.test_let_binding(function_name: string) -> string {
     load_var function_name
-    dispatch_future baml.llm.get_return_type
-    await
+    sys_op baml.prompt.get_return_type
     store_var t
     load_const "ok"
     return
@@ -98,15 +32,13 @@ function user.test_param(t: type) -> string {
 
 function user.test_return_type(function_name: string) -> type {
     load_var function_name
-    dispatch_future baml.llm.get_return_type
-    await
+    sys_op baml.prompt.get_return_type
     return
 }
 
 function user.test_type_annotation(function_name: string) -> string {
     load_var function_name
-    dispatch_future baml.llm.get_return_type
-    await
+    sys_op baml.prompt.get_return_type
     store_var t
     load_const "ok"
     return

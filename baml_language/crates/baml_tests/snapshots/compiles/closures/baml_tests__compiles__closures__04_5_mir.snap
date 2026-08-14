@@ -1,90 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7047
 ---
 === MIR2 ===
-fn user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: (int, int) -> int throws never // f // param
-    let _2: int // a // param
-    let _3: int // b // param
-
-    bb0: {
-        _0 = call copy _1(copy _2, copy _3) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
-    // Locals:
-    let _0: string[] // _0 // return
-    let _1: Employee[] // items // param
-    let _2: (Employee) -> string throws never // f // param
-
-    bb0: {
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Calculator.compute(self: Calculator, a: int, b: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: Calculator // self // param
-    let _2: int // a // param
-    let _3: int // b // param
-    let _4: bool
-    let _5: string
-
-    bb0: {
-        _5 = copy _1.0;
-        _4 = copy _5 == const "add";
-        branch copy _4 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _0 = copy _2 * copy _3;
-        goto -> bb3;
-    }
-
-    bb2: {
-        _0 = copy _2 + copy _3;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Encoder.encode(self: Encoder, data: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Encoder // self // param
-    let _2: string // data // param
-    let _3: string
-    let _4: string
-    let _5: string
-
-    bb0: {
-        _5 = copy _1.0;
-        _4 = const "[" + copy _5;
-        _3 = copy _4 + const "]";
-        _0 = copy _3 + copy _2;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.Formatter.format(self: Formatter, text: string) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -103,242 +21,44 @@ fn user.Formatter.format(self: Formatter, text: string) -> string {
     }
 }
 
-fn user.RangeCheck.from_json(j: baml.json.json) -> RangeCheck {
+fn user.RangeCheck.is_valid(self: RangeCheck, n: int) -> bool {
     // Locals:
-    let _0: RangeCheck // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
+    let _0: bool // _0 // return
+    let _1: RangeCheck // self // param
+    let _2: int // n // param
+    let _3: bool
+    let _4: int
     let _5: int
-    let _6: baml.json.json
-    let _7: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "min") -> [bb1];
+        _4 = copy _1.0;
+        _3 = copy _2 >= copy _4;
+        _0 = short_circuit(&&) copy _3 -> [eval: bb1, join: bb2];
     }
 
     bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+        _5 = copy _1.1;
+        _0 = copy _2 <= copy _5;
+        goto -> bb2;
     }
 
     bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "max") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(int);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.RangeCheck { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
 
-fn user.Config.from_json(j: baml.json.json) -> Config {
+fn user.Counter.increment(self: Counter) -> int {
     // Locals:
-    let _0: Config // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: Encoder
-    let _3: baml.json.json
-    let _4: type
+    let _0: int // _0 // return
+    let _1: Counter // self // param
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "encoder") -> [bb1];
+        _1.0 = copy _1.0 + const 1_i64;
+        _0 = copy _1.0;
+        goto -> bb1;
     }
 
     bb1: {
-        _4 = load_type(Encoder);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Config { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Calculator.from_json(j: baml.json.json) -> Calculator {
-    // Locals:
-    let _0: Calculator // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "op") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Calculator { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Formatter.from_json(j: baml.json.json) -> Formatter {
-    // Locals:
-    let _0: Formatter // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "prefix") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Formatter { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Employee.from_json(j: baml.json.json) -> Employee {
-    // Locals:
-    let _0: Employee // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: string
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "first") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "last") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(string);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.Employee { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.Box.from_json(j: baml.json.json) -> Box<void> {
-    // Locals:
-    let _0: Box<void> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: void
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(#0);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Box<TypeArgRef(0)> { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Counter.from_json(j: baml.json.json) -> Counter {
-    // Locals:
-    let _0: Counter // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Counter { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Encoder.from_json(j: baml.json.json) -> Encoder {
-    // Locals:
-    let _0: Encoder // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "charset") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Encoder { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -384,13 +104,34 @@ fn user.Employee.greet(self: Employee, greeting: string) -> string {
     }
 }
 
-fn user.Counter.increment(self: Counter) -> int {
+fn user.Encoder.encode(self: Encoder, data: string) -> string {
     // Locals:
-    let _0: int // _0 // return
-    let _1: Counter // self // param
+    let _0: string // _0 // return
+    let _1: Encoder // self // param
+    let _2: string // data // param
+    let _3: string
+    let _4: string
+    let _5: string
 
     bb0: {
-        _1.0 = copy _1.0 + const 1_i64;
+        _5 = copy _1.0;
+        _4 = const "[" + copy _5;
+        _3 = copy _4 + const "]";
+        _0 = copy _3 + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Box.unwrap(self: Box) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: Box // self // param
+
+    bb0: {
         _0 = copy _1.0;
         goto -> bb1;
     }
@@ -400,28 +141,268 @@ fn user.Counter.increment(self: Counter) -> int {
     }
 }
 
-fn user.RangeCheck.is_valid(self: RangeCheck, n: int) -> bool {
+fn user.Calculator.compute(self: Calculator, a: int, b: int) -> int {
     // Locals:
-    let _0: bool // _0 // return
-    let _1: RangeCheck // self // param
-    let _2: int // n // param
-    let _3: bool
-    let _4: int
-    let _5: int
+    let _0: int // _0 // return
+    let _1: Calculator // self // param
+    let _2: int // a // param
+    let _3: int // b // param
+    let _4: bool
+    let _5: string
 
     bb0: {
-        _4 = copy _1.0;
-        _3 = copy _2 >= copy _4;
-        _0 = short_circuit(&&) copy _3 -> [eval: bb1, join: bb2];
+        _5 = copy _1.0;
+        _4 = copy _5 == const "add";
+        branch copy _4 -> [bb2, bb1];
     }
 
     bb1: {
-        _5 = copy _1.1;
-        _0 = copy _2 <= copy _5;
-        goto -> bb2;
+        _0 = copy _2 * copy _3;
+        goto -> bb3;
     }
 
     bb2: {
+        _0 = copy _2 + copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.test_bound_mapper() -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: Formatter // fmt
+    let _2: (string) -> string throws never // transform
+    let _3: string[]
+    let _4: (string) -> string throws never
+    let _5: type
+    let _6: type
+    let _7: type
+
+    bb0: {
+        _1 = user.Formatter { const ">> " };
+        _2 = make_bound_method user.Formatter.format(copy _1);
+        _3 = [const "hello", const "world"]: string[];
+        _4 = copy _2;
+        _5 = load_type(string);
+        _6 = load_type(never);
+        _7 = load_type(string);
+        _0 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy _3, copy _4) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_unbound_in_map() -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: Employee[] // employees
+    let _2: Employee
+    let _3: Employee
+    let _4: type
+    let _5: type
+    let _6: type
+
+    bb0: {
+        _2 = user.Employee { const "Alice", const "Smith" };
+        _3 = user.Employee { const "Bob", const "Jones" };
+        _1 = [copy _2, copy _3]: Employee[];
+        _4 = load_type(string);
+        _5 = load_type(never);
+        _6 = load_type(Employee);
+        _0 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, const fn user.Employee.full_name) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_bound_validator() -> bool[] {
+    // Locals:
+    let _0: bool[] // _0 // return
+    let _1: RangeCheck // valid
+    let _2: (int) -> bool throws never // check
+    let _3: int[]
+    let _4: (int) -> bool throws never
+    let _5: type
+    let _6: type
+    let _7: type
+
+    bb0: {
+        _1 = user.RangeCheck { const 10_i64, const 50_i64 };
+        _2 = make_bound_method user.RangeCheck.is_valid(copy _1);
+        _3 = [const 5_i64, const 15_i64, const 25_i64, const 75_i64]: int[];
+        _4 = copy _2;
+        _5 = load_type(bool);
+        _6 = load_type(never);
+        _7 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy _3, copy _4) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_field_chain_bind(cfg: Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Config // cfg // param
+    let _2: (string) -> string throws never // enc
+    let _3: (string) -> string throws never
+    let _4: (string) -> string throws never
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = make_bound_method user.Encoder.encode(copy _3);
+        _4 = copy _2;
+        _0 = call copy _4(const "payload") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int, int) -> int throws never // f // param
+    let _2: int // a // param
+    let _3: int // b // param
+
+    bb0: {
+        _0 = call copy _1(copy _2, copy _3) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_strategy() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: Calculator // add_calc
+    let _2: Calculator // mul_calc
+    let _3: (int, int) -> int throws never // do_add
+    let _4: (int, int) -> int throws never // do_mul
+    let _5: int
+    let _6: (int, int) -> int throws never
+    let _7: type
+    let _8: int
+    let _9: (int, int) -> int throws never
+    let _10: type
+
+    bb0: {
+        _1 = user.Calculator { const "add" };
+        _2 = user.Calculator { const "mul" };
+        _3 = make_bound_method user.Calculator.compute(copy _1);
+        _4 = make_bound_method user.Calculator.compute(copy _2);
+        _6 = copy _3;
+        _7 = load_type(never);
+        _5 = call const fn user.apply<copy _7>(copy _6, const 3_i64, const 4_i64) -> [bb1];
+    }
+
+    bb1: {
+        _9 = copy _4;
+        _10 = load_type(never);
+        _8 = call const fn user.apply<copy _10>(copy _9, const 3_i64, const 4_i64) -> [bb2];
+    }
+
+    bb2: {
+        _0 = [copy _5, copy _8]: int[];
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: Employee[] // items // param
+    let _2: (Employee) -> string throws never // f // param
+    let _3: type
+    let _4: type
+    let _5: type
+
+    bb0: {
+        _3 = load_type(string);
+        _4 = load_type(unknown);
+        _5 = load_type(Employee);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_unbound_higher_order() -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: Employee[] // employees
+    let _2: Employee
+    let _3: Employee[]
+    let _4: type
+
+    bb0: {
+        _2 = user.Employee { const "Alice", const "Smith" };
+        _1 = [copy _2]: Employee[];
+        _3 = copy _1;
+        _4 = load_type(never);
+        _0 = call const fn user.apply_to_each<copy _4>(copy _3, const fn user.Employee.full_name) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_mutation_after_bind() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: Counter // c
+    let _2: () -> int throws never // inc
+    let _3: () -> int throws never
+
+    bb0: {
+        _1 = user.Counter { const 0_i64 };
+        _2 = make_bound_method user.Counter.increment(copy _1);
+        _1.0 = const 100_i64;
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_generic_bind() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: Box<int> // b
+    let _2: () -> int throws never // get
+    let _3: () -> int throws never
+
+    bb0: {
+        _1 = user.Box<int> { const 42_i64 };
+        _2 = make_bound_method user.Box.unwrap(copy _1);
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }
@@ -453,114 +434,13 @@ fn user.test_bound_in_lambda() -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_bound_in_lambda, 0)>() -> null {
+fn .<lambda(test_bound_in_lambda, 0)>() -> (string) -> string throws never {
     // Locals:
-    let _0: null // _0 // return
+    let _0: (string) -> string throws never // _0 // return
 
     bb0: {
         _0 = make_bound_method user.Employee.greet(copy capture[0]);
         goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_bound_mapper() -> string[] {
-    // Locals:
-    let _0: string[] // _0 // return
-    let _1: Formatter // fmt
-    let _2: (string) -> string throws never // transform
-    let _3: string[]
-    let _4: (string) -> string throws never
-
-    bb0: {
-        _1 = user.Formatter { const ">> " };
-        _2 = make_bound_method user.Formatter.format(copy _1);
-        _3 = [const "hello", const "world"];
-        _4 = copy _2;
-        _0 = call const fn baml.Array.map(copy _3, copy _4) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_bound_validator() -> bool[] {
-    // Locals:
-    let _0: bool[] // _0 // return
-    let _1: RangeCheck // valid
-    let _2: (int) -> bool throws never // check
-    let _3: int[]
-    let _4: (int) -> bool throws never
-
-    bb0: {
-        _1 = user.RangeCheck { const 10_i64, const 50_i64 };
-        _2 = make_bound_method user.RangeCheck.is_valid(copy _1);
-        _3 = [const 5_i64, const 15_i64, const 25_i64, const 75_i64];
-        _4 = copy _2;
-        _0 = call const fn baml.Array.map(copy _3, copy _4) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_field_chain_bind(cfg: Config) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Config // cfg // param
-    let _2: (string) -> string throws never // enc
-    let _3: (string) -> string throws never
-    let _4: (string) -> string throws never
-
-    bb0: {
-        _3 = copy _1.0;
-        _2 = make_bound_method user.Encoder.encode(copy _3);
-        _4 = copy _2;
-        _0 = call copy _4(const "payload") -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_generic_bind() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: Box // b
-    let _2: () -> void throws never // get
-    let _3: () -> void throws never
-
-    bb0: {
-        _1 = user.Box { const 42_i64 };
-        _2 = make_bound_method user.Box.unwrap(copy _1);
-        _3 = copy _2;
-        _0 = call copy _3() -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_mutation_after_bind() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: Counter // c
-    let _2: () -> int throws never // inc
-    let _3: () -> int throws never
-
-    bb0: {
-        _1 = user.Counter { const 0_i64 };
-        _2 = make_bound_method user.Counter.increment(copy _1);
-        _1.0 = const 100_i64;
-        _3 = copy _2;
-        _0 = call copy _3() -> [bb1];
     }
 
     bb1: {
@@ -597,305 +477,6 @@ fn user.test_repeated_bound_calls() -> int {
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.test_strategy() -> int[] {
-    // Locals:
-    let _0: int[] // _0 // return
-    let _1: Calculator // add_calc
-    let _2: Calculator // mul_calc
-    let _3: (int, int) -> int throws never // do_add
-    let _4: (int, int) -> int throws never // do_mul
-    let _5: int
-    let _6: (int, int) -> int throws never
-    let _7: int
-    let _8: (int, int) -> int throws never
-
-    bb0: {
-        _1 = user.Calculator { const "add" };
-        _2 = user.Calculator { const "mul" };
-        _3 = make_bound_method user.Calculator.compute(copy _1);
-        _4 = make_bound_method user.Calculator.compute(copy _2);
-        _6 = copy _3;
-        _5 = call const fn user.apply(copy _6, const 3_i64, const 4_i64) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _4;
-        _7 = call const fn user.apply(copy _8, const 3_i64, const 4_i64) -> [bb2];
-    }
-
-    bb2: {
-        _0 = [copy _5, copy _7];
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.test_unbound_higher_order() -> string[] {
-    // Locals:
-    let _0: string[] // _0 // return
-    let _1: Employee[] // employees
-    let _2: Employee
-    let _3: Employee[]
-
-    bb0: {
-        _2 = user.Employee { const "Alice", const "Smith" };
-        _1 = [copy _2];
-        _3 = copy _1;
-        _0 = call const fn user.apply_to_each(copy _3, const fn user.Employee.full_name) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_unbound_in_map() -> string[] {
-    // Locals:
-    let _0: string[] // _0 // return
-    let _1: Employee[] // employees
-    let _2: Employee
-    let _3: Employee
-
-    bb0: {
-        _2 = user.Employee { const "Alice", const "Smith" };
-        _3 = user.Employee { const "Bob", const "Jones" };
-        _1 = [copy _2, copy _3];
-        _0 = call const fn baml.Array.map(copy _1, const fn user.Employee.full_name) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RangeCheck.to_json(self: RangeCheck) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: RangeCheck // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: RangeCheck
-    let _5: baml.json.json
-    let _6: int
-    let _7: RangeCheck
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "min": copy _2, const "max": copy _5 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Config.to_json(self: Config) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Config // self // param
-    let _2: baml.json.json
-    let _3: Encoder
-    let _4: Config
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn user.Encoder.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "encoder": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.Calculator.to_json(self: Calculator) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Calculator // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Calculator
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "op": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.Formatter.to_json(self: Formatter) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Formatter // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Formatter
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "prefix": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.Employee.to_json(self: Employee) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Employee // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Employee
-    let _5: baml.json.json
-    let _6: string
-    let _7: Employee
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "first": copy _2, const "last": copy _5 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Box.to_json(self: Box) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Box // self // param
-    let _2: baml.json.json
-    let _3: void
-    let _4: Box
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.json.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "value": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.Counter.to_json(self: Counter) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Counter // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: Counter
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "value": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.Encoder.to_json(self: Encoder) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Encoder // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Encoder
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "charset": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.Box.unwrap(self: Box) -> void {
-    // Locals:
-    let _0: void // _0 // return
-    let _1: Box // self // param
-
-    bb0: {
-        _0 = copy _1.0;
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }

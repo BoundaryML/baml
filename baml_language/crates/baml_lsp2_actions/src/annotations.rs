@@ -1,8 +1,11 @@
 //! Inline type / parameter-name annotations for BAML files (inlay hints).
 //!
-//! Provides `annotations(db, file) -> Vec<InlineAnnotation>` — a regular
-//! function (not a Salsa query) that walks all expression-body functions in a
-//! file and produces two kinds of hints:
+//! Provides `file_annotations(db, file) -> &Vec<InlineAnnotation>` — a Salsa
+//! tracked query that walks expression-body functions in a file
+//! (top-level functions, class/interface methods, and the synthesized
+//! `$init_test` registration functions), recursing into lambda bodies (e.g.
+//! the bodies of `test` / `testset` blocks, which lower to lambdas passed to
+//! `register_test`). It produces two kinds of hints:
 //!
 //! ## Type hints on `let` bindings
 //!
@@ -29,6 +32,12 @@
 //!
 //! Each hint is positioned at the start of the argument's span.
 //!
+//! ## Scopes
+//!
+//! Types are resolved through the source span's ancestor scopes so a
+//! binding/expression living in a nested block or lambda resolves without
+//! accidentally matching an arena-local id from a different body.
+//!
 //! ## Suppression
 //!
 //! We suppress type hints for:
@@ -39,14 +48,23 @@
 //! - The callee type is not `Ty::Function` (no param info)
 //! - The param name is `None` (positional-only parameter)
 //! - The argument count != param count (variadic / error cases)
+//!
+//! LLM declarative functions are skipped entirely (and never recursed into), so
+//! their synthetic `client` / `function_name` / `args` calls produce no hints.
 
 use baml_base::SourceFile;
-use baml_compiler2_ast::{Expr, Stmt};
-use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::ScopeKind};
-use baml_compiler2_tir::ty::Ty;
+use baml_compiler2_ast::{
+    Expr, ExprId, Stmt,
+    ast::{AstSourceMap, ExprBody, FunctionOrigin},
+};
+use baml_compiler2_hir::{body::FunctionBody, scope::FileScopeId};
+use baml_compiler2_hir_ty::ide::infer_for_scope;
+use baml_type::Ty;
 use text_size::TextSize;
 
 use crate::{Db, utils};
+
+type SemanticIndex<'a> = baml_compiler2_hir::semantic_index::FileSemanticIndex<'a>;
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -60,7 +78,7 @@ pub enum AnnotationKind {
 }
 
 /// A single inline annotation (inlay hint) to display in the editor.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct InlineAnnotation {
     /// Byte offset in the file where the hint is inserted.
     pub offset: TextSize,
@@ -81,187 +99,225 @@ pub struct InlineAnnotation {
 /// Returns annotations sorted in document order (required by the LSP
 /// `textDocument/inlayHint` contract).
 ///
-/// Regular function (not a Salsa query). Internally calls Salsa-cached
-/// queries (`function_body`, `function_body_source_map`,
-/// `infer_scope_types`, `file_item_tree`, `file_semantic_index`).
-pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+/// Salsa tracked query: walks every function body against type
+/// inference (measured 40–150ms on real projects), which is too slow to
+/// recompute per request while the file is unchanged. Editors re-request
+/// inlay hints on every scroll, so this is the hottest read path.
+///
+/// Named `file_annotations` (like `file_outline`) because the tracked-query
+/// machinery claims the bare name in the type namespace, which would collide
+/// with this module.
+#[salsa::tracked(returns(ref))]
+pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
 
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
-    for (func_local_id, func_data) in &item_tree.functions {
-        let func_loc = FunctionLoc::new(db, file, *func_local_id);
+    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
 
-        // Only expression-body functions have type information we can display.
+        // Process user-written functions and methods, plus the synthesized
+        // `$init_test*` registration functions (so test/testset bodies — which
+        // lower to lambdas — get hints). Skip LLM declarative functions: we must
+        // never surface their synthetic `client` / `function_name` / `args`
+        // calls, and since we don't recurse into skipped functions, their
+        // internals stay hidden.
+        let is_user = func_data.metadata.origin == FunctionOrigin::UserDefined;
+        let is_test_init = func_data.name.as_str().starts_with("$init_test");
+        if (!is_user && !is_test_init)
+            || baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
+        {
+            continue;
+        }
+
         let body = baml_compiler2_hir::body::function_body(db, func_loc);
         let FunctionBody::Expr(expr_body) = body.as_ref() else {
             continue;
         };
-
-        // Source map gives ExprId/StmtId/PatId → TextRange.
         let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func_loc)
         else {
             continue;
         };
 
-        // Find the function's scope in the semantic index.
-        let func_scope_file_id = index
-            .scopes
-            .iter()
-            .enumerate()
-            .find(|(_, s)| s.kind == ScopeKind::Function && s.range == func_data.span)
-            .map(|(i, _)| {
-                #[allow(clippy::cast_possible_truncation)]
-                baml_compiler2_hir::scope::FileScopeId::new(i as u32)
+        let owner_scope = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
+            .map(|scope| scope.file_scope_id(db))
+            .unwrap_or_else(|| {
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
+                index.scope_at_offset(func_span.start(), Some(&func_data.name))
             });
-
-        let Some(func_scope_file_id) = func_scope_file_id else {
-            continue;
-        };
-
-        let func_scope_id = index.scope_ids[func_scope_file_id.index() as usize];
-        let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
-
-        // ── Type hints for let bindings without annotations ───────────────────
-
-        for (stmt_id, stmt) in expr_body.stmts.iter() {
-            let Stmt::Let { pattern, .. } = stmt else {
-                continue;
-            };
-
-            // Skip if the pattern itself encodes an annotation (a `Chain`
-            // with at least one `Type` link). Plain `Pattern::Bind` means
-            // the user wrote no annotation — that's where we want hints.
-            //
-            // STUB(patterns/phase2): a more accurate check would walk the
-            // chain looking for Type links. For now we just check if the
-            // outermost pattern is a Chain — any chain is treated as
-            // "has annotation."
-            let pat = &expr_body.patterns[*pattern];
-            // A `let x: <pattern>` binding (Bind with sub-pattern) or a
-            // bare type pattern already carries an explicit annotation
-            // — skip.
-            if matches!(
-                pat,
-                baml_compiler2_ast::Pattern::Bind {
-                    subpat: Some(_),
-                    ..
-                } | baml_compiler2_ast::Pattern::Type(_)
-            ) {
-                continue;
-            }
-
-            // Get the binding name to suppress hints for `_`.
-            let Some(binding_name) = pat.binding_name(&expr_body.patterns) else {
-                continue; // Not a simple binding (or `_` wildcard) — skip
-            };
-            let _binding_name = binding_name.as_str();
-
-            // Look up the inferred type.
-            let Some(ty) = inference.binding_type(*pattern) else {
-                // Try other scopes for nested blocks.
-                let ty_str = find_binding_ty_any_scope(db, index, *pattern);
-                if let Some(ty_str) = ty_str {
-                    // Emit hint: position at end of pattern span.
-                    let pat_span = source_map.pattern_span(*pattern);
-                    if !pat_span.is_empty() {
-                        out.push(InlineAnnotation {
-                            offset: pat_span.end(),
-                            label: format!(": {ty_str}"),
-                            kind: AnnotationKind::Type,
-                            padding_left: false,
-                            padding_right: true,
-                        });
-                    }
-                }
-                continue;
-            };
-
-            // Suppress noisy / unhelpful types.
-            if should_suppress_type(ty) {
-                continue;
-            }
-
-            let ty_str = utils::display_ty(ty);
-
-            // Position the hint at the end of the pattern span (after the var name).
-            let pat_span = source_map.pattern_span(*pattern);
-            if pat_span.is_empty() {
-                // Fall back to using the statement span start if the pattern span is unknown.
-                let stmt_span = source_map.stmt_span(stmt_id);
-                if stmt_span.is_empty() {
-                    continue;
-                }
-                // Emit after the identifier — we don't know the exact position, skip.
-                let _ = stmt_span;
-                continue;
-            }
-
-            out.push(InlineAnnotation {
-                offset: pat_span.end(),
-                label: format!(": {ty_str}"),
-                kind: AnnotationKind::Type,
-                padding_left: false,
-                padding_right: true,
-            });
-        }
-
-        // ── Parameter-name hints on call expressions ──────────────────────────
-
-        for (_expr_id, expr) in expr_body.exprs.iter() {
-            let Expr::Call { callee, args, .. } = expr else {
-                continue;
-            };
-
-            // Get the callee's type.
-            let Some(callee_ty) = inference.expression_type(*callee) else {
-                continue;
-            };
-
-            // Only process `Ty::Function` where params have names.
-            let Ty::Function { params, .. } = callee_ty else {
-                continue;
-            };
-
-            // Skip if arg count doesn't match param count (variadic / error cases).
-            if args.len() != params.len() {
-                continue;
-            }
-
-            for (arg_expr_id, (param_name, _param_ty)) in args.iter().zip(params.iter()) {
-                // Only emit hints for named parameters.
-                let Some(name) = param_name else {
-                    continue;
-                };
-
-                let name_str = name.as_str();
-
-                // Skip `self` parameter hints — they're implicit.
-                if name_str == "self" {
-                    continue;
-                }
-
-                // Position hint at the start of the argument's span.
-                let arg_span = source_map.expr_span(*arg_expr_id);
-                if arg_span.is_empty() {
-                    continue;
-                }
-
-                out.push(InlineAnnotation {
-                    offset: arg_span.start(),
-                    label: format!("{name_str}: "),
-                    kind: AnnotationKind::Parameter,
-                    padding_left: false,
-                    padding_right: false,
-                });
-            }
-        }
+        process_body(
+            db,
+            file,
+            index,
+            owner_scope,
+            expr_body,
+            &source_map,
+            &mut out,
+        );
     }
 
     // Sort by offset to ensure document order (required by LSP).
     out.sort_by_key(|h| h.offset);
     out
+}
+
+/// Emit hints for a single expression body — `let`-binding type hints and call
+/// parameter-name hints — then recurse into any lambda bodies it contains
+/// (each lambda has its own `ExprBody` arena and source map, e.g. the body of a
+/// `test` block lowered to a lambda passed to `register_test`).
+fn process_body(
+    db: &dyn Db,
+    file: SourceFile,
+    index: &SemanticIndex<'_>,
+    owner_scope: FileScopeId,
+    body: &ExprBody,
+    source_map: &AstSourceMap,
+    out: &mut Vec<InlineAnnotation>,
+) {
+    // ── Type hints for let bindings without annotations ───────────────────────
+    for (stmt_id, stmt) in body.stmts.iter() {
+        let Stmt::Let { pattern, .. } = stmt else {
+            continue;
+        };
+
+        // Skip compiler-synthesized bindings — e.g. the accumulator a `${…}`
+        // interpolation lowers to (`let " __m3_concat" = ""`). Their spans point
+        // inside the backtick template, so a `: T` hint there is noise the user
+        // never wrote. Marked at lowering time (see `AstSourceMap::synthetic_stmts`).
+        if source_map.is_synthetic_stmt(stmt_id) {
+            continue;
+        }
+
+        // `let x: T` (Bind with sub-pattern) or a bare type pattern already
+        // carries an explicit annotation — skip.
+        let pat = &body.patterns[*pattern];
+        if matches!(
+            pat,
+            baml_compiler2_ast::Pattern::Bind {
+                subpat: Some(_),
+                ..
+            } | baml_compiler2_ast::Pattern::Type(_)
+        ) {
+            continue;
+        }
+
+        // Skip `_` / non-simple bindings.
+        if pat.binding_name(&body.patterns).is_none() {
+            continue;
+        }
+
+        let pat_span = source_map.pattern_span(*pattern);
+        if pat_span.is_empty() {
+            continue;
+        }
+
+        // Resolve through the binding's real source scope chain. PatIds are
+        // arena-local, so scanning every file scope can hit a foreign body that
+        // happens to reuse the same numeric id.
+        let mut ty_str: Option<String> = None;
+        let use_scope = scope_at_offset_within_body(index, pat_span.start(), owner_scope);
+        for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
+            let scope_id = index.scope_ids[file_scope_id.index() as usize];
+            let Some(inference) = infer_for_scope(db, scope_id) else {
+                continue;
+            };
+            if let Some(ty) = inference.type_of_pat.get(pattern) {
+                let ty = ty.to_plain();
+                if !should_suppress_type(&ty) {
+                    ty_str = Some(utils::display_ty_for_file(db, file, &ty));
+                }
+                break;
+            }
+        }
+        let Some(ty_str) = ty_str else {
+            continue;
+        };
+
+        out.push(InlineAnnotation {
+            offset: pat_span.end(),
+            label: format!(": {ty_str}"),
+            kind: AnnotationKind::Type,
+            padding_left: false,
+            padding_right: true,
+        });
+    }
+
+    // ── Parameter-name hints on calls ─────────────────────────────────────────
+    // Lambda bodies share this arena, so this one pass covers them too.
+    for (expr_id, expr) in body.exprs.iter() {
+        if let Expr::Call { callee, args, .. } = expr {
+            // Skip synthesized test/testset registration calls — their
+            // `name` / `body` / `collector` / `runner` arguments are codegen,
+            // not user-facing. We still recurse into their lambda arguments
+            // (the actual test bodies) via the `Expr::Lambda` arm below.
+            if is_synthetic_registration(body, *callee) {
+                continue;
+            }
+            // Skip compiler-synthesized wrapping calls — e.g. the
+            // `string.from(${expr})` that `${…}` interpolation lowers to.
+            // Marked at lowering time (see `AstSourceMap::synthetic_exprs`),
+            // so without this every interpolation would get a spurious
+            // `value:` parameter hint.
+            if source_map.is_synthetic_expr(expr_id) {
+                continue;
+            }
+            let callee_span = source_map.expr_span(*callee);
+            if callee_span.is_empty() {
+                continue;
+            }
+
+            // Find a scope where the callee resolves to a function type.
+            // ExprIds are arena-local (per body), so restrict lookup to the
+            // callee's source scope chain instead of scanning every scope in
+            // the file for the first matching numeric id.
+            let use_scope = scope_at_offset_within_body(index, callee_span.start(), owner_scope);
+            for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
+                let scope_id = index.scope_ids[file_scope_id.index() as usize];
+                let Some(inference) = infer_for_scope(db, scope_id) else {
+                    continue;
+                };
+                let Some(callee_ty) = inference
+                    .type_of_expr
+                    .get(callee)
+                    .map(baml_type::interned::Ty::to_plain)
+                else {
+                    continue;
+                };
+                let Ty::Function { ref params, .. } = callee_ty else {
+                    continue;
+                };
+                if args.len() != params.len() {
+                    continue;
+                }
+                for (arg, param) in args.iter().zip(params.iter()) {
+                    if arg.label.is_some() {
+                        continue;
+                    }
+                    let Some(name) = &param.name else {
+                        continue;
+                    };
+                    let name_str = name.as_str();
+                    // `self` is implicit.
+                    if name_str == "self" {
+                        continue;
+                    }
+                    let arg_span = source_map.expr_span(arg.expr);
+                    if arg_span.is_empty() {
+                        continue;
+                    }
+                    out.push(InlineAnnotation {
+                        offset: arg_span.start(),
+                        label: format!("{name_str}: "),
+                        kind: AnnotationKind::Parameter,
+                        padding_left: false,
+                        padding_right: false,
+                    });
+                }
+                break;
+            }
+        }
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -279,24 +335,318 @@ fn should_suppress_type(ty: &Ty) -> bool {
     )
 }
 
-/// Search all scopes in the file for the binding type of `pat_id`.
-///
-/// Used as a fallback when the let binding is in a nested block scope
-/// (not directly in the enclosing function scope). Returns the display
-/// string directly to avoid allocating a `Ty`.
-fn find_binding_ty_any_scope(
-    db: &dyn Db,
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
-    pat_id: baml_compiler2_ast::PatId,
-) -> Option<String> {
-    for scope_id in &index.scope_ids {
-        let inference = baml_compiler2_tir::inference::infer_scope_types(db, *scope_id);
-        if let Some(ty) = inference.binding_type(pat_id) {
-            if should_suppress_type(ty) {
-                return None;
-            }
-            return Some(utils::display_ty(ty));
-        }
+/// True if `callee` names a synthesized test/testset registration method
+/// (`register_test` / `register_test_set`). These calls are emitted by
+/// `$init_test` desugaring; their `name` / `body` / `collector` / `runner`
+/// arguments are codegen and shouldn't get parameter-name hints.
+fn is_synthetic_registration(body: &ExprBody, callee: ExprId) -> bool {
+    let name = match &body.exprs[callee] {
+        Expr::MemberAccess { member, .. } => member.as_str(),
+        Expr::Path(segments) => match segments.last() {
+            Some(n) => n.as_str(),
+            None => return false,
+        },
+        _ => return false,
+    };
+    matches!(name, "register_test" | "register_test_set")
+}
+
+fn scope_at_offset_within_body(
+    index: &SemanticIndex<'_>,
+    offset: TextSize,
+    owner_scope: FileScopeId,
+) -> FileScopeId {
+    let scope_id = index.scope_at_offset(offset, None);
+    if scope_is_descendant_or_self(index, scope_id, owner_scope) {
+        scope_id
+    } else {
+        owner_scope
     }
-    None
+}
+
+fn ancestor_scopes_within_body(
+    index: &SemanticIndex<'_>,
+    start_scope: FileScopeId,
+    owner_scope: FileScopeId,
+) -> Vec<FileScopeId> {
+    let mut scopes = Vec::new();
+    let mut current = Some(start_scope);
+    while let Some(scope_id) = current {
+        scopes.push(scope_id);
+        if scope_id == owner_scope {
+            return scopes;
+        }
+        current = index.scopes[scope_id.index() as usize].parent;
+    }
+    vec![owner_scope]
+}
+
+fn scope_is_descendant_or_self(
+    index: &SemanticIndex<'_>,
+    scope_id: FileScopeId,
+    owner_scope: FileScopeId,
+) -> bool {
+    scope_id == owner_scope
+        || index.scopes[owner_scope.index() as usize]
+            .descendants
+            .contains(&scope_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::ProjectTest;
+
+    #[test]
+    fn annotations_skip_declarative_llm_synthetic_call_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function Summarize(input: string) -> string {
+    client: GPT4
+    prompt: `Summarize ${input}`
+}
+
+function Echo(x: string) -> string {
+    x
+}
+
+function UseEcho() -> string {
+    Echo("hi")
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"x: "),
+            "expected regular function call parameter hints to remain, got {labels:?}"
+        );
+        assert!(
+            labels
+                .iter()
+                .all(|label| !matches!(*label, "client: " | "function_name: " | "args: ")),
+            "LLM synthetic call hints should be suppressed, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn annotations_skip_tagged_template_synthetic_hints() {
+        // A custom `//baml:tagged_string` tag used in an expression function
+        // desugars to a closure body full of compiler-generated nodes
+        // (`__tt_parts`/`__tt_values`/`__tt_cur` accumulators and `.push(...)`
+        // calls). None of them should produce inlay hints — only the user's
+        // `let q` binding does. Marked synthetic at lowering (see
+        // `AstSourceMap::synthetic_stmts`/`synthetic_exprs`), so this holds even
+        // if those nodes later gain real spans / lose their type annotations.
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+//baml:tagged_string
+function sql(body: (x: int) -> baml.TaggedString) -> string {
+    "ok"
+}
+
+function Demo(items: int[]) -> string {
+    let q = sql`SELECT ${1} ${for (let x in items)}c_${x}, ${endfor}done`
+    q
+}
+"##,
+        );
+        let project = builder.build();
+        let hints = file_annotations(&project.db, project.files[0]);
+
+        // The synthesized `.push(...)` calls must not surface `value:`-style hints.
+        assert!(
+            hints.iter().all(|h| h.kind != AnnotationKind::Parameter),
+            "tagged-template desugaring must not emit parameter hints, got {:?}",
+            hints.iter().map(|h| h.label.as_str()).collect::<Vec<_>>()
+        );
+        // The only type hint is the user's `let q: string`; the `__tt_*`
+        // accumulators must not contribute their own.
+        let type_hints: Vec<_> = hints
+            .iter()
+            .filter(|h| h.kind == AnnotationKind::Type)
+            .map(|h| h.label.as_str())
+            .collect();
+        assert_eq!(
+            type_hints,
+            vec![": string"],
+            "only the user's `let q` should get a type hint"
+        );
+    }
+
+    #[test]
+    fn annotations_skip_string_interpolation_synthetic_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function Greet(name: string, items: int[]) -> string {
+    let greeting = `Hi ${name}! you have ${items.length()} items`
+    let counted = `count: ${ let n = items.length() }${n} done`
+    greeting + counted
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        // `${expr}` lowers to `string.from(expr)`; that synthetic wrapper call
+        // must not produce a `value:` parameter hint on every interpolation.
+        assert!(
+            !labels.contains(&"value: "),
+            "synthesized string.from() interpolation calls should not get parameter hints, got {labels:?}"
+        );
+        // The concat-scope accumulator (`let " __m3_concat" = ""`, a
+        // compiler-synthesized binding) must not produce a type hint either;
+        // real `let` bindings (`greeting`, `counted`) still do, so the
+        // suppression is targeted.
+        assert!(
+            labels.iter().any(|label| label.starts_with(": ")),
+            "real let bindings should still get type hints, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn annotations_inside_test_bodies() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function greet(name: string) -> string {
+    name
+}
+
+test "greets" {
+    let g = greet("x")
+    assert.equal(g, "x")
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"name: "),
+            "expected a parameter hint inside the test body, got {labels:?}"
+        );
+        assert!(
+            labels.iter().any(|label| label.starts_with(": ")),
+            "expected a let type hint inside the test body, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn annotations_inside_methods() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function greet(name: string) -> string {
+    name
+}
+
+class Greeter {
+    prefix: string,
+
+    function run(self, name: string) -> string {
+        let g = greet(name)
+        g
+    }
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"name: "),
+            "expected a parameter hint inside the method body, got {labels:?}"
+        );
+        assert!(
+            labels.iter().any(|label| label.starts_with(": ")),
+            "expected a let type hint inside the method body, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn annotations_suppress_test_registration_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+testset "math" {
+    test "adds" {
+        assert.equal(1 + 1, 2)
+    }
+    test "subtracts" {
+        assert.equal(2 - 1, 1)
+    }
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        assert!(
+            labels
+                .iter()
+                .all(|label| !matches!(*label, "name: " | "body: " | "collector: " | "runner: ")),
+            "synthesized test/testset registration hints should be suppressed, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn call_parameter_hints_use_the_calls_own_scope() {
+        let mut builder = ProjectTest::builder();
+        let source = r##"
+function Left(alpha: string) -> string {
+    alpha
+}
+
+function Right(beta: string) -> string {
+    beta
+}
+
+function Earlier() -> string {
+    Left("x")
+}
+
+function Later() -> string {
+    Right("y")
+}
+"##;
+        builder.source("main.baml", source);
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let y_offset = TextSize::from(
+            u32::try_from(source.find("\"y\"").expect("test arg")).expect("offset fits"),
+        );
+        let labels_at_y: Vec<_> = hints
+            .iter()
+            .filter(|hint| hint.offset == y_offset)
+            .map(|hint| hint.label.as_str())
+            .collect();
+
+        assert_eq!(
+            labels_at_y,
+            vec!["beta: "],
+            "expected Later's call to use Right's parameter, got {labels_at_y:?}"
+        );
+    }
 }

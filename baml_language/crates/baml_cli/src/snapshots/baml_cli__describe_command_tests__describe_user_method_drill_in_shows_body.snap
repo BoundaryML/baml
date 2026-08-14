@@ -1,0 +1,14 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+method Greet  methods.baml:6-8
+
+    function Greet(self) -> string {
+        "Hello"
+    }
+
+container:
+  class            User                             methods.baml:2
+
+references (0):

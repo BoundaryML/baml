@@ -2,24 +2,21 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
+fn user.DestructureQualifiedLet() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: llm.openai.Outer<string> // outer
-    let _2: llm.openai.Box<string>
-    let _3: llm.openai.Outer<string>
-    let _4: llm.openai.Box<string>
-    let _5: string
-    let _6: string // value
+    let _1: llm.openai.Response // response
+    let _2: llm.openai.Response
+    let _3: int
+    let _4: int // score
 
     bb0: {
-        _2 = user.llm.openai.Box<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { const "done" };
-        _1 = user.llm.openai.Outer<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { copy _2 };
-        _3 = copy _1;
-        _4 = copy _3.0;
-        _5 = copy _4.0;
-        _6 = copy _5;
-        _0 = call const fn baml.String.length(copy _6) -> [bb1];
+        _1 = user.llm.openai.Response { const "ok", const 41_i64 };
+        _2 = copy _1;
+        _3 = copy _2.1;
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb1;
     }
 
     bb1: {
@@ -27,28 +24,41 @@ fn user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
     }
 }
 
-fn user.DeepGenericDestructureQualifiedLet() -> int {
+fn user.DestructureQualifiedMatch() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: llm.openai.Outer<int> // outer
-    let _2: llm.openai.Box<int>
-    let _3: llm.openai.Outer<int>
-    let _4: llm.openai.Box<int>
+    let _1: llm.openai.Response // response
+    let _2: bool
+    let _3: int
+    let _4: bool
     let _5: int
-    let _6: int // value
+    let _6: int // matched
 
     bb0: {
-        _2 = user.llm.openai.Box<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { const 52_i64 };
-        _1 = user.llm.openai.Outer<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { copy _2 };
-        _3 = copy _1;
-        _4 = copy _3.0;
-        _5 = copy _4.0;
-        _6 = copy _5;
-        _0 = copy _6;
-        goto -> bb1;
+        _1 = user.llm.openai.Response { const "ok", const 42_i64 };
+        _2 = is_type(copy _1, llm.openai.Response);
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
+        _3 = copy _1.1;
+        _4 = copy _3 == const 0_i64;
+        branch copy _4 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _5 = copy _1.1;
+        _6 = copy _5;
+        _0 = copy _6;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -114,20 +124,14 @@ fn user.DestructureNamespaceQualifiedMatch() -> int {
     }
 }
 
-fn user.DestructureQualifiedLet() -> int {
+fn user.TypePatternQualifiedLet() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: llm.openai.Response // response
-    let _2: llm.openai.Response
-    let _3: int
-    let _4: int // score
 
     bb0: {
-        _1 = user.llm.openai.Response { const "ok", const 41_i64 };
-        _2 = copy _1;
-        _3 = copy _2.1;
-        _4 = copy _3;
-        _0 = copy _4;
+        _1 = user.llm.openai.Response { const "ok", const 43_i64 };
+        _0 = copy _1.1;
         goto -> bb1;
     }
 
@@ -136,154 +140,18 @@ fn user.DestructureQualifiedLet() -> int {
     }
 }
 
-fn user.DestructureQualifiedMatch() -> int {
+fn user.TypePatternQualifiedMatch() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: llm.openai.Response // response
-    let _2: bool
-    let _3: int
-    let _4: bool
-    let _5: int
-    let _6: int // matched
 
     bb0: {
-        _1 = user.llm.openai.Response { const "ok", const 42_i64 };
-        _2 = is_type(copy _1, llm.openai.Response);
-        branch copy _2 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = copy _1.1;
-        _4 = copy _3 == const 0_i64;
-        branch copy _4 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _5 = copy _1.1;
-        _6 = copy _5;
-        _0 = copy _6;
-        goto -> bb4;
-    }
-
-    bb3: {
-        _0 = const 0_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.GenericDestructureNamespaceQualifiedLet() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: llm.openai.Box<string> // boxed
-    let _2: llm.openai.Box<string>
-    let _3: string
-    let _4: string // value
-
-    bb0: {
-        _1 = user.llm.openai.Box<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { const "ok" };
-        _2 = copy _1;
-        _3 = copy _2.0;
-        _4 = copy _3;
-        _0 = call const fn baml.String.length(copy _4) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.GenericDestructureQualifiedLet() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: llm.openai.Box<int> // boxed
-    let _2: llm.openai.Box<int>
-    let _3: int
-    let _4: int // value
-
-    bb0: {
-        _1 = user.llm.openai.Box<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { const 49_i64 };
-        _2 = copy _1;
-        _3 = copy _2.0;
-        _4 = copy _3;
-        _0 = copy _4;
+        _1 = user.llm.openai.Response { const "ok", const 44_i64 };
+        _0 = copy _1.1;
         goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.GenericTypePatternNamespaceQualifiedMatch() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: llm.openai.Box<int> | llm.openai.Box<string> // boxed
-    let _2: bool
-    let _3: int
-    let _4: bool
-
-    bb0: {
-        _1 =  { const "ready" };
-        _2 = is_type(copy _1, llm.openai.Box<int>);
-        branch copy _2 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = copy _1.0;
-        _4 = is_type(copy _3, int);
-        branch copy _4 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _0 = const 51_i64;
-        goto -> bb4;
-    }
-
-    bb3: {
-        _0 = const 0_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.GenericTypePatternQualifiedMatch() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: llm.openai.Box<int> | llm.openai.Box<string> // boxed
-    let _2: bool
-    let _3: string
-    let _4: bool
-
-    bb0: {
-        _1 =  { const 50_i64 };
-        _2 = is_type(copy _1, llm.openai.Box<string>);
-        branch copy _2 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = copy _1.0;
-        _4 = is_type(copy _3, string);
-        branch copy _4 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _0 = const 50_i64;
-        goto -> bb4;
-    }
-
-    bb3: {
-        _0 = const 0_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -320,14 +188,20 @@ fn user.TypePatternNamespaceQualifiedMatch() -> int {
     }
 }
 
-fn user.TypePatternQualifiedLet() -> int {
+fn user.GenericDestructureQualifiedLet() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: llm.openai.Response // response
+    let _1: llm.openai.Box<int> // boxed
+    let _2: llm.openai.Box<int>
+    let _3: int
+    let _4: int // value
 
     bb0: {
-        _1 = user.llm.openai.Response { const "ok", const 43_i64 };
-        _0 = copy _1.1;
+        _1 = user.llm.openai.Box<int> { const 49_i64 };
+        _2 = copy _1;
+        _3 = copy _2.0;
+        _4 = copy _3;
+        _0 = copy _4;
         goto -> bb1;
     }
 
@@ -336,15 +210,125 @@ fn user.TypePatternQualifiedLet() -> int {
     }
 }
 
-fn user.TypePatternQualifiedMatch() -> int {
+fn user.GenericDestructureNamespaceQualifiedLet() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: llm.openai.Response // response
+    let _1: llm.openai.Box<string> // boxed
+    let _2: llm.openai.Box<string>
+    let _3: string
+    let _4: string // value
 
     bb0: {
-        _1 = user.llm.openai.Response { const "ok", const 44_i64 };
-        _0 = copy _1.1;
+        _1 = user.llm.openai.Box<string> { const "ok" };
+        _2 = copy _1;
+        _3 = copy _2.0;
+        _4 = copy _3;
+        _0 = call const fn baml.String.length(copy _4) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.GenericTypePatternQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Box<int> | llm.openai.Box<string> // boxed
+    let _2: bool
+
+    bb0: {
+        _1 = user.llm.openai.Box<int> { const 50_i64 };
+        _2 = is_type(copy _1, llm.openai.Box<string>);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 50_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.GenericTypePatternNamespaceQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Box<int> | llm.openai.Box<string> // boxed
+    let _2: bool
+
+    bb0: {
+        _1 = user.llm.openai.Box<string> { const "ready" };
+        _2 = is_type(copy _1, llm.openai.Box<int>);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 51_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.DeepGenericDestructureQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Outer<int> // outer
+    let _2: llm.openai.Box<int>
+    let _3: llm.openai.Outer<int>
+    let _4: llm.openai.Box<int>
+    let _5: int
+    let _6: int // value
+
+    bb0: {
+        _2 = user.llm.openai.Box<int> { const 52_i64 };
+        _1 = user.llm.openai.Outer<int> { copy _2 };
+        _3 = copy _1;
+        _4 = copy _3.0;
+        _5 = copy _4.0;
+        _6 = copy _5;
+        _0 = copy _6;
         goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Outer<string> // outer
+    let _2: llm.openai.Box<string>
+    let _3: llm.openai.Outer<string>
+    let _4: llm.openai.Box<string>
+    let _5: string
+    let _6: string // value
+
+    bb0: {
+        _2 = user.llm.openai.Box<string> { const "done" };
+        _1 = user.llm.openai.Outer<string> { copy _2 };
+        _3 = copy _1;
+        _4 = copy _3.0;
+        _5 = copy _4.0;
+        _6 = copy _5;
+        _0 = call const fn baml.String.length(copy _6) -> [bb1];
     }
 
     bb1: {
@@ -369,182 +353,6 @@ fn user.llm.openai.DestructureBareInNamespace(response: llm.openai.Response) -> 
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Response {
-    // Locals:
-    let _0: llm.openai.Response // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: int
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "text") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "score") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(int);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.llm.openai.Response { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void> {
-    // Locals:
-    let _0: llm.openai.Box<void> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: void
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(#0);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.llm.openai.Box<TypeArgRef(0)> { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<void> {
-    // Locals:
-    let _0: llm.openai.Outer<void> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: llm.openai.Box<void>
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "inner") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(llm.openai.Box<#0>);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.llm.openai.Outer<TypeArgRef(0)> { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.llm.openai.Box.to_json(self: llm.openai.Box) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: llm.openai.Box // self // param
-    let _2: baml.json.json
-    let _3: void
-    let _4: llm.openai.Box
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.json.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "value": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.llm.openai.Response.to_json(self: llm.openai.Response) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: llm.openai.Response // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: llm.openai.Response
-    let _5: baml.json.json
-    let _6: int
-    let _7: llm.openai.Response
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "text": copy _2, const "score": copy _5 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.llm.openai.Outer.to_json(self: llm.openai.Outer) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: llm.openai.Outer // self // param
-    let _2: baml.json.json
-    let _3: llm.openai.Box<void>
-    let _4: llm.openai.Outer
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(#0);
-        _2 = call const fn user.llm.openai.Box.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "inner": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

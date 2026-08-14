@@ -7,30 +7,22 @@ source: crates/baml_tests/src/generated_tests.rs
 // Helper functions used as call targets
 function MayFail(x: int) -> string {
     match (x) {
-        0 => {
-            throw "string error"
-        },
+        0 => throw "string error",
         _ => "ok",
     }
 }
 
 function MayFailIntOrString(x: int) -> string {
     match (x) {
-        0 => {
-            throw "string error"
-        },
-        1 => {
-            throw 1
-        },
+        0 => throw "string error",
+        1 => throw 1,
         _ => "ok",
     }
 }
 
 function AlsoMayFail(x: int) -> string {
     match (x) {
-        0 => {
-            throw "secondary error"
-        },
+        0 => throw "secondary error",
         _ => "also ok",
     }
 }

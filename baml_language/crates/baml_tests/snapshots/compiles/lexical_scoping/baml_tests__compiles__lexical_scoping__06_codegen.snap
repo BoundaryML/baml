@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14551
 ---
 function user.branch_locals(b: bool) -> int {
     load_var b
@@ -31,16 +32,14 @@ function user.capture_before_after_shadow() -> int {
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 0)>, 1
     call_indirect
-    store_var _6
+    load_const 10
+    mul_int
+    store_var _5
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 1)>, 1
     call_indirect
-    store_var _8
-    load_var _6
-    load_const 10
-    bin_op *
-    load_var _8
-    bin_op +
+    load_var _5
+    add_int
     return
 }
 
@@ -52,39 +51,38 @@ function user.declared_type_restored() -> string {
 function user.for_loop_restores_outer() -> int {
     load_const 2
     load_const 3
+    load_type int
     alloc_array 2
-    store_var _2
-    load_const 0
-    store_var __for_idx
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
 
   L0:
-    load_var __for_idx
-    load_var _2
-    call baml.Array.length
-    cmp_op <
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const 1
-    return
+    load_var _4
+    store_var x
+    jump L0
 
   L2:
-    load_var _2
-    load_var __for_idx
-    load_array_element
-    store_var x
-    load_var __for_idx
     load_const 1
-    add_int
-    store_var __for_idx
-    jump L0
+    return
 }
 
 function user.initializer_uses_previous() -> int {
     load_const 1
     load_const 1
-    bin_op +
+    add_int
     return
 }
 
@@ -122,24 +120,7 @@ function user.same_scope_shadow() -> int {
 function user.shadow_param(x: int) -> int {
     load_var x
     load_const 1
-    bin_op +
-    return
-}
-
-function user.watch_block_cleanup() -> int {
-    load_const 1
-    store_var x
-    load_const "x"
-    load_const null
-    watch x
-    load_const 2
-    store_var x
-    load_const "x"
-    load_const null
-    watch x
-    unwatch x
-    load_var x
-    unwatch x
+    add_int
     return
 }
 

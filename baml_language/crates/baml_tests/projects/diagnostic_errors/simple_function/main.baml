@@ -1,8 +1,8 @@
 function HelloWorld(name: string) -> string {
-  client GPT4
-  prompt #"
-    Say hello to {{name}}
-  "#
+  client: GPT4
+  prompt: `
+    Say hello to ${name}
+  `
 }
 
 class User {

@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
-use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use baml_types::{
     tracing::events::{ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, TraceEvent},
     BamlMap,

@@ -1,0 +1,79 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function property_shorthand.$init_test_ns_property_shorthand_property_shorthand(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "class properties use shorthand"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "map entries use shorthand"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "shorthand mixes with explicit properties and nests"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "shorthand works across multiple nested classes"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function property_shorthand.property_shorthand_class(mode: string, retries: int, label: string) -> property_shorthand.PropertyShorthandRequest {
+    load_var mode
+    load_const "mode"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_var2 2 3
+    init_instance user.property_shorthand.PropertyShorthandRequest .options, .retries, .label
+    return
+}
+
+function property_shorthand.property_shorthand_map(count: int, retries: int) -> map<string, int> {
+    load_var2 1 2
+    load_const "count"
+    load_const "retries"
+    load_type string
+    load_type int
+    alloc_map 2
+    return
+}
+
+function property_shorthand.property_shorthand_mixed(mode: string, retries: int, label: string) -> property_shorthand.PropertyShorthandEnvelope {
+    load_var mode
+    load_const "mode"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_var retries
+    load_const 1
+    add_int
+    load_var label
+    init_instance user.property_shorthand.PropertyShorthandRequest .options, .retries, .label
+    init_instance user.property_shorthand.PropertyShorthandEnvelope .request
+    return
+}
+
+function property_shorthand.property_shorthand_multi_nested(value: string) -> property_shorthand.PropertyShorthandOuter {
+    load_var value
+    init_instance user.property_shorthand.PropertyShorthandLeaf .value
+    init_instance user.property_shorthand.PropertyShorthandMiddle .leaf
+    init_instance user.property_shorthand.PropertyShorthandOuter .middle
+    return
+}

@@ -1,70 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8767
 ---
 function $init() -> null {
     call $init_let_0
     store_global user.MyAwsClient
     load_const null
-    return
-}
-
-function user.MyAwsClient$new() -> null {
-    alloc_instance baml.llm.PrimitiveClient
-    load_const "MyAwsClient"
-    init_field .name
-    load_const "aws-bedrock"
-    init_field .provider
-    alloc_instance baml.llm.PrimitiveClientOptions
-    load_const "anthropic.claude-3-haiku-20240307-v1:0"
-    init_field .model
-    load_const null
-    init_field .base_url
-    load_const null
-    init_field .allowed_role_metadata
-    load_const null
-    init_field .finish_reason_allow_list
-    load_const null
-    init_field .finish_reason_deny_list
-    load_const null
-    init_field .supports_streaming
-    load_const null
-    init_field .default_role
-    load_const null
-    init_field .allowed_roles
-    load_const null
-    init_field .remap_roles
-    load_const "sk-1234"
-    init_field .api_key
-    alloc_instance baml.llm.BedrockOptions
-    load_const null
-    init_field .region
-    load_const null
-    init_field .endpoint_url
-    load_const null
-    init_field .access_key_id
-    load_const null
-    init_field .secret_access_key
-    load_const null
-    init_field .session_token
-    load_const null
-    init_field .profile
-    load_const null
-    init_field .stop_sequences
-    load_const 100
-    init_field .max_tokens
-    load_const 0.7
-    init_field .temperature
-    load_const null
-    init_field .top_p
-    init_field .provider_options
-    load_const null
-    init_field .media_url_handler
-    alloc_map 0
-    init_field .headers
-    alloc_map 0
-    init_field .query_params
-    alloc_map 0
-    init_field .request_body
-    init_field .options
     return
 }

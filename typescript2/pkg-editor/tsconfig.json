@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "paths": {
+      "@b/pkg-playground": ["../pkg-playground/src"],
+      "@b/pkg-playground/*": ["../pkg-playground/src/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

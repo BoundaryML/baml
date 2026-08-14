@@ -75,6 +75,8 @@ function ArrayAccessWithVariable(arr: float[], idx: int) -> float {
 //
 // Function: baml.String.replace
 //
+// Function: baml.Float.to_fixed
+//
 // Function: baml.media.image.from_url
 //
 // Function: baml.media.audio.from_url
@@ -136,7 +138,5 @@ function ArrayAccessWithVariable(arr: float[], idx: int) -> float {
 // Function: baml.deep_copy
 //
 // Function: baml.deep_equals
-//
-// Function: baml.unstable.string
 //
 // Function: baml.fetch_as

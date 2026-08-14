@@ -1,14 +1,14 @@
-# baml_core
+# baml_bridge
 
 Python bindings for the BAML runtime (powered by `bex_engine`).
 
-`baml_core` is the bridge layer that generated `baml_sdk` packages
+`baml_bridge` is the bridge layer that generated `baml_sdk` packages
 import at runtime: it provides the `BamlRuntime` singleton, the
 protobuf encoder/decoder, the function/method factories, and the
 `Collector` / `BamlCtxManager` observability primitives.
 
 ```python
-from baml_core import BamlRuntime
+from baml_bridge import BamlRuntime
 
 rt = BamlRuntime.initialize_runtime(
     root_path=".",

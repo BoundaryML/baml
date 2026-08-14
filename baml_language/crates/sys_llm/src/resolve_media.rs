@@ -225,7 +225,9 @@ async fn fetch_url_response(
         body: String::new(),
     };
     let resp = io
-        .http_send(req)
+        // No client-side deadline: preserve the prior unbounded behavior (`0n`
+        // maps to `None` in `timeout_from_nanos`).
+        .http__send(req, std::sync::Arc::new(num_bigint::BigInt::from(0i64)))
         .await
         .map_err(|e| BuildRequestError::Other(format!("failed to fetch media URL {url}: {e}")))?;
 
@@ -260,7 +262,7 @@ async fn resolve_file(
     io: &dyn RuntimeIo,
 ) -> Result<(), BuildRequestError> {
     let file = io
-        .fs_open(path.to_string(), BexExternalValue::String("r".to_string()))
+        .fs_open(path.to_string(), BexExternalValue::String("r".into()))
         .await
         .map_err(|e| {
             BuildRequestError::FileNotResolved(format!("failed to open file {path}: {e}"))
@@ -411,9 +413,10 @@ mod tests {
     }
 
     impl RuntimeIo for MockHttpIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<

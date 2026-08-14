@@ -1,0 +1,475 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function match_container_types.$init_test_ns_match_container_types_match_container_types(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_container_int_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_container_string_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "is_int_list_is_int_array"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "is_string_list_is_not_int_array"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_container_int_map"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_container_string_map"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_switch_int_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_switch_string_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_switch_prims_still_dispatch"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_invariance_int_list_not_member_of_union_element_arm"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_invariance_union_element_constructed_list_matches"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_invariance_mixed_first_arm_does_not_capture_int_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_invariance_mixed_first_arm_captures_union_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "is_int_list_is_not_unknown_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "is_unknown_constructed_list_is_unknown_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_unknown_list_arm_rejects_int_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_container_types"
+    load_const "match_unknown_list_arm_captures_unknown_list"
+    make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function match_container_types.classify_int_list_fn() -> string {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    call user.match_container_types.classify_list
+    return
+}
+
+function match_container_types.classify_int_map_fn() -> string {
+    load_const 1
+    load_const "k"
+    load_type string
+    load_type int
+    alloc_map 1
+    call user.match_container_types.classify_map
+    return
+}
+
+function match_container_types.classify_list(x: int[] | string[]) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind int[], slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "strings"
+    jump L2
+
+  L1:
+    load_const "ints"
+
+  L2:
+    return
+}
+
+function match_container_types.classify_map(x: map<string, int> | map<string, string>) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind map<string, int>, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "string values"
+    jump L2
+
+  L1:
+    load_const "int values"
+
+  L2:
+    return
+}
+
+function match_container_types.classify_string_list_fn() -> string {
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    call user.match_container_types.classify_list
+    return
+}
+
+function match_container_types.classify_string_map_fn() -> string {
+    load_const "v"
+    load_const "k"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.match_container_types.classify_map
+    return
+}
+
+function match_container_types.classify_switch(x: int[] | string[] | int | string | bool) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind int[], slot=2
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var x
+    store_var _3
+    load_var _3
+    narrow_bind string[], slot=3
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var x
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=4
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var x
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=5
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "bool"
+    jump L8
+
+  L4:
+    load_const "string"
+    jump L8
+
+  L5:
+    load_const "int"
+    jump L8
+
+  L6:
+    load_const "strings"
+    jump L8
+
+  L7:
+    load_const "ints"
+
+  L8:
+    return
+}
+
+function match_container_types.classify_switch_int_list_fn() -> string {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    call user.match_container_types.classify_switch
+    return
+}
+
+function match_container_types.classify_switch_prims_fn() -> string {
+    load_const 42
+    call user.match_container_types.classify_switch
+    return
+}
+
+function match_container_types.classify_switch_string_list_fn() -> string {
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    call user.match_container_types.classify_switch
+    return
+}
+
+function match_container_types.classify_union_element(u: (int | string)[] | int[]) -> string {
+    load_var u
+    store_var _2
+    load_var _2
+    narrow_bind int[], slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "mixed"
+    jump L2
+
+  L1:
+    load_const "ints"
+
+  L2:
+    return
+}
+
+function match_container_types.classify_union_element_mixed_first(u: (int | string)[] | int[]) -> string {
+    load_var u
+    store_var _2
+    load_var _2
+    narrow_bind (int | string)[], slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ints"
+    jump L2
+
+  L1:
+    load_const "mixed"
+
+  L2:
+    return
+}
+
+function match_container_types.classify_unknown_vs_int(u: unknown[] | int[]) -> string {
+    load_var u
+    store_var _2
+    load_var _2
+    narrow_bind unknown[], slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ints"
+    jump L2
+
+  L1:
+    load_const "unknowns"
+
+  L2:
+    return
+}
+
+function match_container_types.int_list_is_int_array_fn() -> bool {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    is_type int[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function match_container_types.int_list_is_not_unknown_list_fn() -> bool {
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    is_type unknown[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function match_container_types.int_list_vs_union_element_arm_fn() -> string {
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    call user.match_container_types.classify_union_element
+    return
+}
+
+function match_container_types.mixed_first_int_list_fn() -> string {
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    call user.match_container_types.classify_union_element_mixed_first
+    return
+}
+
+function match_container_types.mixed_first_union_list_fn() -> string {
+    load_const 1
+    load_const 2
+    load_type int | string
+    alloc_array 2
+    call user.match_container_types.classify_union_element_mixed_first
+    return
+}
+
+function match_container_types.string_list_is_int_array_fn() -> bool {
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    is_type int[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function match_container_types.union_element_constructed_matches_fn() -> string {
+    load_const 1
+    load_const 2
+    load_type int | string
+    alloc_array 2
+    call user.match_container_types.classify_union_element
+    return
+}
+
+function match_container_types.unknown_arm_captures_unknown_list_fn() -> string {
+    load_const 1
+    load_const 2
+    load_type unknown
+    alloc_array 2
+    call user.match_container_types.classify_unknown_vs_int
+    return
+}
+
+function match_container_types.unknown_arm_rejects_int_list_fn() -> string {
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    call user.match_container_types.classify_unknown_vs_int
+    return
+}
+
+function match_container_types.unknown_list_is_unknown_list_fn() -> bool {
+    load_const 1
+    load_const 2
+    load_type unknown
+    alloc_array 2
+    is_type unknown[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}

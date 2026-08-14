@@ -1,21 +1,91 @@
 baseline_dir = ".ci/size-gate"
 
-[artifacts.bridge_cffi-stripped]
-package = "bridge_cffi"
-# ignore default features (includes bundle-http → reqwest + hyper + rustls)
-no_default_features = true
-policy.max_gzip_bytes = 6_391_456
-policy.max_delta_pct = 10.0
+# The size gate tracks the three artifacts users actually ship:
+#   1. baml-cli       — the CLI binary (measured on every native platform)
+#   2. packed-program — a trivial program built with `baml pack`, i.e. the
+#                       pack-host binary + bytecode envelope a user ships
+#                       (measured on every native platform)
+#   3. bridge_wasm    — the WASM build
+#
+# Each artifact is gated on ONE metric (`gate`):
+#   * binaries (baml-cli, packed-program) gate on FILE size — the actual
+#     on-disk size a user installs/ships.
+#   * bridge_wasm gates on GZIP — what ships over the wire.
+# The non-gated size is still measured and shown in the report (clearly
+# marked), but it is not what we benchmark against.
+#
+# Two gates, both kept tight as we drive size down, applied to the gated
+# metric:
+#   * max_delta_pct — per-platform regression guard vs the committed
+#     baseline in `baseline_dir`. 3% absorbs normal build-to-build LTO
+#     jitter while still catching accidental growth.
+#   * max_file_bytes / max_gzip_bytes — an absolute hard ceiling. Set PER
+#     PLATFORM (binaries differ across OSes) so each platform is capped
+#     ~3% above its own recorded baseline — enough to absorb build-to-build
+#     and local-vs-CI build variance (observed ~2.4%), while the 3%
+#     max_delta_pct is the precise slippage guard. Bump a ceiling only as a
+#     deliberate, reviewed commit when a real size increase lands.
+#
+# When recording a new platform (`mise run size-gate-record`), commit the
+# baseline it writes and add the matching `max_file_bytes` ceiling here,
+# ~3% above that file size.
 
-[artifacts.bridge_cffi]
-package = "bridge_cffi"
-policy.max_gzip_bytes = 6_391_456
-policy.max_delta_pct = 10.0
+[artifacts.baml-cli]
+kind = "bin"
+package = "baml_cli"
+bin = "baml-cli"
+policy.max_delta_pct = 3.0
 
+# baml-cli is larger than the python/node CLIs because `sdkgen_rust`
+# formats generated code with `quote` + `prettyplease`, which pulls `syn`
+# into the CLI's runtime graph (the string-template generators don't).
+# Baselines include the first-class C# generator now linked into baml-cli.
+# Reclaiming the `syn` cost would mean dropping prettyplease (raw,
+# unformatted generated SDK output).
+[artifacts.baml-cli.platform.aarch64-apple-darwin]
+max_file_bytes = "20.9 MiB"
+
+[artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
+max_file_bytes = "26.9 MiB"
+
+[artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
+max_file_bytes = "22.5 MiB"
+
+[artifacts.packed-program]
+kind = "pack"
+policy.max_delta_pct = 3.0
+
+# Bumped ~3% above the Aug 2026 baselines when the builtin ai/provider
+# stdlib packages landed (PR #4352): the packed program carries their
+# bytecode (~700 KB).
+[artifacts.packed-program.platform.aarch64-apple-darwin]
+max_file_bytes = "14.3 MiB"
+
+[artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
+max_file_bytes = "18.3 MiB"
+
+[artifacts.packed-program.platform.x86_64-pc-windows-msvc]
+max_file_bytes = "15.3 MiB"
+
+[artifacts.packed-program.pack]
+cli_package = "baml_cli"
+cli_bin = "baml-cli"
+host_package = "baml_pack_host"
+host_bin = "baml-pack-host"
+fixture = "crates/tools_size_gate/fixtures/minimal.baml"
+function = "Identity"
+
+# WASM is gated on GZIP (the download size), not file size — that's what
+# actually ships over the wire. gate = "gzip" makes both the ceiling and
+# the delta use gzip, and the report flags it.
 [artifacts.bridge_wasm]
+kind = "cdylib"
+gate = "gzip"
 package = "bridge_wasm"
 target = "wasm32-unknown-unknown"
 no_default_features = true
 wasm = true
-policy.max_gzip_bytes = 3_500_000
-policy.max_delta_pct = 10.0
+policy.max_delta_pct = 3.0
+
+[artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
+max_gzip_bytes = "4.5 MiB"

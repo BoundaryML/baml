@@ -2,6 +2,12 @@
 
 use super::support::{make_db, render_tir};
 
+fn assert_declared_throws_violation(output: &str, declared: &str, thrown: &str, message: &str) {
+    let expected =
+        format!("declared throws is `{declared}`, but this function may also throw `{thrown}`");
+    assert!(output.contains(&expected), "{message}, got:\n{output}");
+}
+
 #[test]
 fn throw_expr_is_never_and_marks_following_code_dead() {
     let mut db = make_db();
@@ -70,13 +76,11 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected throws-contract violation, got:\n{output}"
-    );
-    assert!(
-        output.contains("string"),
-        "expected escaping throw type to include string, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected escaping throw type to include string",
     );
 }
 
@@ -165,8 +169,9 @@ function f(e: TimeoutError | OtherError) -> int {
     );
 }
 
+/// Ensures impossible typed bindings report a mismatch without bogus reachability errors.
 #[test]
-fn impossible_typed_match_binding_is_unreachable() {
+fn impossible_typed_match_binding_reports_mismatch() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -180,12 +185,16 @@ fn impossible_typed_match_binding_is_unreachable() {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains("unreachable arm"),
-        "expected `let s: string` against int scrutinee to be unreachable, got:\n{output}"
+        output.contains("type mismatch: expected int, got string"),
+        "expected `let s: string` against int scrutinee to report a type mismatch, got:\n{output}"
     );
     assert!(
         output.contains("s: string =>"),
         "expected diagnostic output to include the impossible string arm, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unreachable arm"),
+        "invalid typed patterns should not emit secondary reachability diagnostics, got:\n{output}"
     );
 }
 
@@ -459,9 +468,9 @@ fn function_type_throws_direct_callback_violation_is_humanized() {
     );
     assert!(
         output.contains(
-            "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+            "The callback type does not say what it can throw. If `cb` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws."
         ),
-        "expected direct callback violation to use callback-oriented wording, got:\n{output}"
+        "expected direct callback violation to frame `throws never` as the infallible-host-callback case, got:\n{output}"
     );
 }
 
@@ -482,21 +491,24 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output
-            .contains("this body may throw through callback `cb`, but declared throws is `never`."),
-        "expected omitted inline lambda to inherit callback throws context, got:\n{output}"
-    );
-    assert!(
-        output.contains(
-            "Add `throws string` to the callback, catch the call, or make the callback non-throwing."
-        ),
-        "expected actionable callback-specific fix text, got:\n{output}"
+    // The inline lambda's effective throws (`string`) binds the callee's
+    // effect param, so the checker reports the precise violation — not the
+    // older "may throw through callback" fallback that couldn't name the type.
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected omitted inline lambda throws to propagate through the callback param",
     );
 }
 
 #[test]
-fn omitted_inline_lambda_current_limitation_gets_callback_aware_primary_message() {
+fn omitted_inline_lambda_covered_by_declared_throws_is_clean() {
+    // Historically a "current limitation": the checker could not see that the
+    // callback's throw was covered by `demo`'s declared `throws string` and
+    // reported a callback-aware violation anyway. The lambda's effective
+    // throws now binds the callee's effect param, so a covered throw is
+    // accepted silently.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -513,14 +525,8 @@ function demo() -> int throws string {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains(
-            "this body may throw through callback `cb`, but declared throws is `string`."
-        ),
-        "expected callback-aware primary message for current limitation, got:\n{output}"
-    );
-    assert!(
-        output.contains("Add `throws string` to the callback, catch the call, or make the callback non-throwing."),
-        "expected callback-specific fix text for current limitation, got:\n{output}"
+        !output.contains("declared throws"),
+        "expected no throws violation when the callback throw is covered by the declared throws, got:\n{output}"
     );
 }
 
@@ -538,13 +544,11 @@ fn explicit_lambda_throws_annotation_is_checked_against_body() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected explicit lambda throws annotation to be validated, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected lambda throws validation to report the concrete escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected explicit lambda throws annotation to report the concrete escaping throw",
     );
 }
 
@@ -592,9 +596,11 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected omitted inline lambda to inherit optional function throws context, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected omitted inline lambda to inherit optional function throws context",
     );
 }
 
@@ -609,9 +615,69 @@ fn function_type_throws_optional_call_propagates_callback_surface() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected optional call to propagate the callee throws surface into the contract check, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected optional call to propagate the callee throws surface into the contract check",
+    );
+}
+
+#[test]
+fn named_reordered_callback_arg_instantiates_throws_from_call_plan() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function invoke(cb: (value: int) -> int, value: int = 1) -> int {
+  cb(value)
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function f() -> int throws never {
+  invoke(value = 1, cb = risky)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected reordered named callback arg to instantiate concrete throws",
+    );
+}
+
+#[test]
+fn callable_throws_uses_call_plan_for_named_reordered_args() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function invoke(cb: (value: int) -> int, value: int = 1) -> int {
+  cb(value)
+}
+
+function forward(cb: (value: int) -> int) -> int {
+  invoke(value = 1, cb = cb)
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function f() -> int throws never {
+  forward(risky)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected callable throws summary to use reordered named call binding",
     );
 }
 
@@ -636,13 +702,11 @@ function f(box: Box) -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected unbound method call to propagate callback throws into the contract check, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected unbound method call to report the concrete escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected unbound method call to report the concrete escaping throw",
     );
     assert!(
         !output.contains("missing unknown"),
@@ -663,13 +727,18 @@ fn omitted_lambda_throws_inherits_builtin_map_callback_context() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected builtin map to propagate omitted inline lambda throws, got:\n{output}"
+    // The lambda's EFFECTIVE throws (`string`, from its body) feeds `map`'s
+    // throws generic, so the violation names the concrete type rather than a
+    // symbolic `E` or a collapsed `unknown`.
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected builtin map to propagate omitted inline lambda throws",
     );
     assert!(
         !output.contains("missing unknown"),
-        "expected builtin map omitted lambda path to stay symbolic/concrete rather than collapsing to unknown, got:\n{output}"
+        "expected builtin map omitted lambda path to stay concrete rather than collapsing to unknown, got:\n{output}"
     );
 }
 
@@ -686,14 +755,66 @@ fn function_type_throws_builtin_map_propagates_callback_surface() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected builtin map to propagate callback throws into the enclosing contract check, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected builtin map to propagate callback throws into the enclosing contract check",
     );
 }
 
 #[test]
-fn stored_lambda_with_omitted_throws_reports_local_violation() {
+fn generic_bound_associated_error_is_reused_by_throws_analysis() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"class Boom {}
+
+interface Runner<Input> {
+  type Output
+  type Error
+
+  function run(self, input: Input) -> Self.Output throws Self.Error
+}
+
+class Task<T> {
+  function run<Output, Error, R extends Runner<Task<T>, Output = Output, Error = Error>>(
+    self,
+    runner: R,
+  ) -> Output throws Error {
+    runner.run(self)
+  }
+}
+
+class ConcreteRunner {
+  implements Runner<Task<int>> {
+    type Output = int
+    type Error = Boom
+
+    function run(self, input: Task<int>) -> int throws Boom {
+      throw Boom {}
+    }
+  }
+}
+
+function caller(task: Task<int>) -> int throws Boom {
+  task.run(runner = ConcreteRunner {})
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("declared throws"),
+        "expected the runner's concrete associated Error to satisfy the caller, got:\n{output}"
+    );
+    assert!(
+        !output.contains("extraneous throws declaration"),
+        "expected the concrete Boom throw to remain visible, got:\n{output}"
+    );
+}
+
+#[test]
+fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -707,13 +828,49 @@ fn stored_lambda_with_omitted_throws_reports_local_violation() {
     );
 
     let output = render_tir(&db, file);
+    // The unannotated lambda's surface is INFERRED (`throws string`), so the
+    // throw inside it is not a local violation — it becomes part of the
+    // lambda's type and is checked wherever the lambda is invoked.
     assert!(
-        output.contains("throws contract violation"),
-        "expected stored lambda with omitted throws to fail locally, got:\n{output}"
+        !output.contains("declared throws"),
+        "expected no local violation for an unannotated lambda (throws are inferred), got:\n{output}"
     );
+}
+
+#[test]
+fn defining_a_throwing_lambda_does_not_charge_the_enclosing_functions_throw_set() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function defines(value: int) -> int throws never {
+  let risky = (n: int) -> int {
+    throw "boom"
+  }
+  return value
+}
+
+function calls(value: int) -> int throws never {
+  return defines(value)
+}"#,
+    );
+
+    // `defines` never invokes `risky`, so `boom` is the lambda's effect and not
+    // its definer's. The distinction is carried by walking the body structurally
+    // and stopping at `Expr::Lambda`; a flat scan of the expression arena would
+    // see the `throw` as though `defines` wrote it, give `defines` a
+    // package-level throw set of `string`, and propagate that to every caller.
+    let output = render_tir(&db, file);
     assert!(
-        output.contains("missing string"),
-        "expected local closed-lambda violation to report the concrete escaping throw, got:\n{output}"
+        !output.contains("declared throws"),
+        "neither the definer nor its caller may violate `throws never`, got:\n{output}"
+    );
+    // The effect is not lost, just attributed to the right place: the lambda's
+    // own inferred type carries it. FLIPPED to literal grain: the spec's
+    // callback_effect_param_flows_through fixture pins inferred surfaces
+    // keeping the thrown literal's type (TIR widened here).
+    assert!(
+        output.contains("(n: int) -> int throws \"boom\""),
+        "the throw must land on the lambda's inferred type, got:\n{output}"
     );
 }
 
@@ -722,7 +879,7 @@ fn alias_hidden_omitted_lambda_reports_local_violation() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        r#"type HiddenHandler = (value: int) -> int
+        r#"type HiddenHandler = (value: int) -> int throws never
 
 function store(handler: HiddenHandler) -> int throws never {
   return handler(1)
@@ -736,13 +893,11 @@ function f() -> int {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected alias-hidden omitted lambda to fail locally, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected alias-hidden local violation to report the escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected alias-hidden local violation to report the escaping throw",
     );
 }
 
@@ -759,13 +914,11 @@ fn returned_omitted_lambda_reports_local_violation() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected returned omitted lambda to fail locally, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected returned omitted lambda violation to report the escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected returned omitted lambda violation to report the escaping throw",
     );
 }
 
@@ -774,7 +927,7 @@ fn function_type_throws_alias_hidden_callback_rejects_throwing_value() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        r#"type HiddenHandler = (value: int) -> int
+        r#"type HiddenHandler = (value: int) -> int throws never
 
 function store(handler: HiddenHandler) -> int throws never {
   return handler(1)
@@ -867,11 +1020,14 @@ function f() -> int {
 
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
-    // Only the trailing wildcard `_ => 3` should be unreachable (int is fully
-    // handled by the literal + typed arms). The `int` arm must stay reachable.
-    assert!(
-        unreachable_count <= 1,
-        "typed int arm after literal 42 arm should NOT be unreachable, got:\n{output}"
+    // hir_ty keeps LITERAL grain on cross-function throw surfaces (the
+    // ratified S13 rule; TIR widened facts at the call boundary), so the
+    // one fact here is `42`: the literal arm handles it completely and
+    // BOTH later arms are provably unreachable.
+    assert_eq!(
+        unreachable_count, 2,
+        "under literal-grain facts the typed and wildcard arms are dead, got:
+{output}"
     );
 }
 
@@ -908,5 +1064,186 @@ function f() -> int {
     assert!(
         unreachable_count <= 1,
         "typed Status arm after Status.Active arm should NOT be unreachable, got:\n{output}"
+    );
+}
+
+// ── BEP-034 `spawn ... with` middleware diagnostics ──────────────────────
+// Every wrong shape must produce a CONCRETE, actionable message (the chain's
+// actual input type, never `T, E` placeholders or silence).
+
+#[test]
+fn spawn_with_non_callable_reports_concrete_mismatch() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int { let x = spawn with 42 { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains(
+            "expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
+        ),
+        "non-callable `with` must report the concrete transformer shape, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_shape_fn_names_the_contract() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function g(n: int) -> int { n }
+function f() -> int { let x = spawn with g { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("must return a `baml.spawn.SpawnParams`")
+            && output.contains("got `(n: int) -> int throws never`"),
+        "wrong-shape `with` must name the middleware contract, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_return_reports_link_input() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function h<T, E>() -> (baml.spawn.SpawnParams<T, E>) -> int throws never { (p) -> { 7 } }
+function f() -> int { let x = spawn with h() { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`")
+            && output.contains("must return a `baml.spawn.SpawnParams`"),
+        "wrong-return transformer must report the link's concrete input, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_chain_input_mismatch_is_concrete() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function fix() -> (baml.spawn.SpawnParams<string, never>) -> baml.spawn.SpawnParams<string, never> throws never { (p) -> { p } }
+function f() -> int { let x = spawn with fix() { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("got (baml.spawn.SpawnParams<string, never>)")
+            && output.contains("expected (baml.spawn.SpawnParams<int, never>)"),
+        "chain input mismatch must show both concrete SpawnParams types, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_non_fn_variable_reports() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let nope = 7;
+  let x = spawn with nope { 1 };
+  await x
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("takes middleware transformer functions") && output.contains("got `int`"),
+        "non-function variable in `with` must report, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_param_variable_reports() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function g(n: int) -> int { n }
+function f() -> int {
+  let t = g;
+  let x = spawn with t { 1 };
+  await x
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`"),
+        "wrong-param variable transformer must report the link input, got:\n{output}"
+    );
+}
+
+#[test]
+fn defer_return_escape_reports_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  defer { return 1 }
+  0
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("`return` cannot leave a `defer` body"),
+        "expected DeferControlFlowEscape error for return, got:\n{output}"
+    );
+}
+
+#[test]
+fn defer_break_escape_reports_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  for (let i in [1, 2]) {
+    defer { break }
+  }
+  0
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("`break` cannot leave a `defer` body"),
+        "expected DeferControlFlowEscape error for break escaping to the outer loop, got:\n{output}"
+    );
+}
+
+#[test]
+fn defer_inner_loop_break_is_allowed() {
+    // BEP-042 loop-aware rule: a break targeting a loop declared INSIDE the
+    // defer body does not escape the defer and must be accepted.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  defer {
+    for (let x in [1, 2]) {
+      break
+    }
+  }
+  0
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("cannot leave a `defer` body"),
+        "break targeting a loop inside the defer should be allowed, got:\n{output}"
+    );
+}
+
+#[test]
+fn defer_throw_is_allowed() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  defer { throw "x" }
+  0
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("cannot leave a `defer` body"),
+        "throw inside a defer should be allowed, got:\n{output}"
     );
 }

@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[repro.baml:23:22]
+ 23 │     string => return e
+    ·                      ┬
+    ·                      ╰── expected `bool`, found `string`
+    ╰────

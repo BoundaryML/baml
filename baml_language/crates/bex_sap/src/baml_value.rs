@@ -23,12 +23,7 @@ impl<T, M> ValueWithMeta<T, M> {
     pub const fn new(value: T, meta: M) -> Self {
         Self { value, meta }
     }
-    pub const fn as_ref(&self) -> ValueWithMeta<&T, &M> {
-        ValueWithMeta {
-            value: &self.value,
-            meta: &self.meta,
-        }
-    }
+
     pub fn map_value<U, F: FnOnce(T) -> U>(self, f: F) -> ValueWithMeta<U, M> {
         ValueWithMeta {
             value: f(self.value),
@@ -47,6 +42,7 @@ impl<T, M> ValueWithMeta<T, M> {
 pub enum BamlValue<'s, 'v, 't, N: TypeIdent> {
     String(BamlString<'s>),
     Int(BamlInt),
+    Bigint(BamlBigint),
     Float(BamlFloat),
     Bool(BamlBool),
     Null(BamlNull),
@@ -62,6 +58,7 @@ pub enum BamlValue<'s, 'v, 't, N: TypeIdent> {
 pub enum BamlPrimitive<'s> {
     String(BamlString<'s>),
     Int(BamlInt),
+    Bigint(BamlBigint),
     Float(BamlFloat),
     Bool(BamlBool),
     Null(BamlNull),
@@ -72,6 +69,7 @@ impl<'s, N: TypeIdent> From<BamlPrimitive<'s>> for BamlValue<'s, '_, '_, N> {
         match value {
             BamlPrimitive::String(s) => BamlValue::String(s),
             BamlPrimitive::Int(i) => BamlValue::Int(i),
+            BamlPrimitive::Bigint(b) => BamlValue::Bigint(b),
             BamlPrimitive::Float(f) => BamlValue::Float(f),
             BamlPrimitive::Bool(b) => BamlValue::Bool(b),
             BamlPrimitive::Null(n) => BamlValue::Null(n),
@@ -87,6 +85,10 @@ pub struct BamlString<'s> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BamlInt {
     pub value: i64,
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BamlBigint {
+    pub value: num_bigint::BigInt,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BamlFloat {
@@ -161,6 +163,7 @@ impl<N: TypeIdent> serde::Serialize for BamlValue<'_, '_, '_, N> {
         match self {
             BamlValue::String(s) => s.serialize(serializer),
             BamlValue::Int(i) => i.serialize(serializer),
+            BamlValue::Bigint(b) => b.serialize(serializer),
             BamlValue::Float(f) => f.serialize(serializer),
             BamlValue::Bool(b) => b.serialize(serializer),
             BamlValue::Null(n) => n.serialize(serializer),
@@ -183,6 +186,13 @@ impl serde::Serialize for BamlString<'_> {
 impl serde::Serialize for BamlInt {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_i64(self.value)
+    }
+}
+
+impl serde::Serialize for BamlBigint {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Bigints can exceed JSON number precision; serialize as a decimal string.
+        serializer.serialize_str(&self.value.to_string())
     }
 }
 

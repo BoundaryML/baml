@@ -1,0 +1,136 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 54357
+---
+=== PPIR ===
+class user.Bag {
+  contents: int
+}
+class user.Bag$stream {
+  contents: int | null
+}
+class user.Box2 {
+  first: bool
+  second: int[]?
+}
+class user.Box2$stream {
+  first: bool | null
+  second: int[] | null
+}
+class user.Flagged {
+  flag: bool
+  note: string
+}
+class user.Flagged$stream {
+  flag: bool | null
+  note: string | null
+}
+class user.IntPair {
+  a: int
+  b: int
+}
+class user.IntPair$stream {
+  a: int | null
+  b: int | null
+}
+class user.Mixed {
+  value: int | float | bool
+}
+class user.Mixed$stream {
+  value: int | float | bool | null
+}
+class user.Pair {
+  kind: int | bool
+  payload: int | string
+}
+class user.Pair$stream {
+  kind: int | bool | null
+  payload: int | string | null
+}
+class user.Team {
+  scores: int[]
+}
+class user.Team$stream {
+  scores: int[]
+}
+enum user.Color3 {Red, Green, Blue}
+enum user.Direction4 {North, East, South, West}
+enum user.ExcessiveEnum {First, Second, Third, Fourth, Fifth, Sixth, Seventh, Eighth, Ninth, Tenth, Eleventh, Twelfth}
+function user.class_destructure_field_union_missing_int(m: user.Mixed) -> int  [expr] {
+  {  } match (m) { Mixed { value: float } => 1, Mixed { value: bool } => 2 }
+}
+function user.class_destructure_two_field_union_missing_combination(p: user.Pair) -> int  [expr] {
+  {  } match (p) { Pair { kind: int, payload: int } => 1, Pair { kind: int, payload: string } => 2, Pair { kind: bool, payload: int } => 3 }
+}
+function user.class_destructure_unreachable_after_bare(b: user.Bag) -> int  [expr] {
+  {  } match (b) { Bag {  } => 1, Bag { contents: int } => 2 }
+}
+function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int  [expr] {
+  {  } match (f) { Flagged { flag: false, note: "zero" } => 1, Flagged { flag: false, note: string } => 2 }
+}
+function user.enum_with_excessive_missing_variants(e: user.ExcessiveEnum) -> int  [expr] {
+  {  } match (e) { user.ExcessiveEnum.First => 1 }
+}
+function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int  [expr] {
+  {  } match (d) { user.Direction4.North => 1 }
+}
+function user.enum_with_single_missing_variant(c: user.Color3) -> int  [expr] {
+  {  } match (c) { user.Color3.Green => 1, user.Color3.Blue => 2 }
+}
+function user.int_literal_non_exhaustive(n: int) -> int  [expr] {
+  {  } match (n) { 1 => 1 }
+}
+function user.irrefutable_while_let(n: int) -> int  [expr] {
+  { while let x: int = n { break } } 1
+}
+function user.nested_class_optional_missing_combination(b: user.Box2) -> int  [expr] {
+  {  } match (b) { Box2 { first: true, second: null } => 1, Box2 { first: true, second: int[] } => 2, Box2 { first: false, second: null } => 3 }
+}
+function user.or_different_names_three(v: int) -> int  [expr] {
+  {  } match (v) { x | y | z => 1 }
+}
+function user.or_different_names_two(v: int) -> int  [expr] {
+  {  } match (v) { x | y => 1 }
+}
+function user.or_mixed_names_in_chain(v: int | string) -> int  [expr] {
+  {  } match (v) { x: int | y: string => 1 }
+}
+function user.or_multiple_binds_diff_narrows(v: int | string) -> int  [expr] {
+  {  } match (v) { a: b: int | a: b: string => 1 }
+}
+function user.or_one_binds_one_doesnt(v: int) -> int  [expr] {
+  {  } match (v) { x | _ => 1 }
+}
+function user.or_pattern_optional_int_non_exhaustive(x: int?) -> int  [expr] {
+  {  } match (x) { null => 0, 0 | 1 => 1 }
+}
+function user.or_pattern_two_field_non_exhaustive(p: user.IntPair) -> int  [expr] {
+  {  } match (p) { IntPair { a: 0 | 1, b: 2 | 3 } => 1 }
+}
+function user.or_same_name_distinct_narrows(v: int | string) -> int  [expr] {
+  {  } match (v) { x: int | x: string => 1 }
+}
+function user.refutable_for_array_prefix(rows: int[][]) -> int  [expr] {
+  { let total = 0; for [first, ..] in rows { total Add= first } } total
+}
+function user.refutable_for_class_field_array_prefix(teams: user.Team[]) -> int  [expr] {
+  { let total = 0; for Team { scores: [first, ..] } in teams { total Add= first } } total
+}
+function user.refutable_let_array_prefix(xs: int[]) -> int  [expr] {
+  { let [first, ..] = xs } first
+}
+function user.refutable_let_empty_array(xs: int[]) -> int  [expr] {
+  { let [] = xs } 1
+}
+function user.slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int  [expr] {
+  {  } match (xs) { [] => 0, [true, ..] => 1, [.., false] => 2 }
+}
+function user.slice_prefix_suffix_subsumes_fixed(xs: bool[]) -> int  [expr] {
+  {  } match (xs) { [false, .., true] => 1, [false, true] => 2, _ => 3 }
+}
+function user.slice_repeated_prefix_unreachable(xs: bool[]) -> int  [expr] {
+  {  } match (xs) { [true, ..] => 1, [true, ..] => 2, _ => 3 }
+}
+function user.slice_repeated_suffix_unreachable(xs: bool[]) -> int  [expr] {
+  {  } match (xs) { [.., true] => 1, [.., true] => 2, _ => 3 }
+}

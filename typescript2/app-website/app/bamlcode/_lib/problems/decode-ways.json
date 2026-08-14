@@ -1,0 +1,18 @@
+{
+  "slug": "decode-ways",
+  "id": 91,
+  "title": "Decode Ways",
+  "difficulty": "Medium",
+  "category": "Dynamic Programming",
+  "statement": "A message of digits is encoded to letters with `A -> 1`, `B -> 2`, ..., `Z -> 26`. Given a string `s` of digits, return the number of ways to **decode** it.\n\nA leading `0` (or a `0` that can't pair into 10..26) yields no valid decoding for that piece.\n\n**Example**\n\n```\n\"12\"   => 2   // \"AB\" or \"L\"\n\"226\"  => 3   // \"BZ\", \"VF\", \"BBF\"\n\"06\"   => 0\n```",
+  "signature": "function NumDecodings(s: string) -> int",
+  "starter": "function NumDecodings(s: string) -> int {\n  // Count valid decodings of the digit string (A=1..Z=26).\n  return 0;\n}",
+  "solution": "function NumDecodings(s: string) -> int {\n  let chars = s.chars();\n  let n = chars.length();\n  if (n == 0) {\n    return 0;\n  }\n  if (chars[0] == \"0\") {\n    return 0;\n  }\n  let prev2 = 1;\n  let prev1 = 1;\n  let i = 1;\n  while (i < n) {\n    let cur = 0;\n    if (chars[i] != \"0\") {\n      cur += prev1;\n    }\n    let twoStr = chars[i - 1] + chars[i];\n    let two = int.parse(twoStr);\n    if (two >= 10 && two <= 26) {\n      cur += prev2;\n    }\n    prev2 = prev1;\n    prev1 = cur;\n    i += 1;\n  }\n  return prev1;\n}",
+  "tests": [
+    { "call": "NumDecodings(\"12\")", "expected": "2" },
+    { "call": "NumDecodings(\"226\")", "expected": "3" },
+    { "call": "NumDecodings(\"06\")", "expected": "0" },
+    { "call": "NumDecodings(\"11106\")", "expected": "2", "hidden": true },
+    { "call": "NumDecodings(\"2101\")", "expected": "1", "hidden": true }
+  ]
+}

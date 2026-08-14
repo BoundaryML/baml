@@ -1,0 +1,18 @@
+{
+  "slug": "longest-substring-without-repeating-characters",
+  "id": 3,
+  "title": "Longest Substring Without Repeating Characters",
+  "difficulty": "Medium",
+  "category": "Sliding Window",
+  "statement": "Given a string `s`, find the length of the **longest substring** without repeating characters.\n\n**Example**\n\n```\n\"abcabcbb\"  => 3   // \"abc\"\n\"bbbbb\"     => 1   // \"b\"\n\"pwwkew\"    => 3   // \"wke\"\n```",
+  "signature": "function LengthOfLongestSubstring(s: string) -> int",
+  "starter": "function LengthOfLongestSubstring(s: string) -> int {\n  // Return the length of the longest substring with all distinct characters.\n  return 0;\n}",
+  "solution": "function LengthOfLongestSubstring(s: string) -> int {\n  let chars = s.chars();\n  let n = chars.length();\n  let last: map<string, int> = {};\n  let best = 0;\n  let start = 0;\n  let i = 0;\n  while (i < n) {\n    let c = chars[i];\n    let seen = last.get(c);\n    if (seen != null) {\n      if (seen >= start) {\n        start = seen + 1;\n      }\n    }\n    last.set(c, i);\n    let len = i - start + 1;\n    if (len > best) {\n      best = len;\n    }\n    i += 1;\n  }\n  return best;\n}",
+  "tests": [
+    { "call": "LengthOfLongestSubstring(\"abcabcbb\")", "expected": "3" },
+    { "call": "LengthOfLongestSubstring(\"bbbbb\")", "expected": "1" },
+    { "call": "LengthOfLongestSubstring(\"pwwkew\")", "expected": "3" },
+    { "call": "LengthOfLongestSubstring(\"\")", "expected": "0", "hidden": true },
+    { "call": "LengthOfLongestSubstring(\"dvdf\")", "expected": "3", "hidden": true }
+  ]
+}

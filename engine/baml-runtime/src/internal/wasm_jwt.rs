@@ -8,7 +8,6 @@
 ///
 /// At the time of writing, the Vertex provider is the only code in the
 /// runtime that produces JWT's.
-use aws_smithy_types::event_stream::Header;
 use base64::{
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
     Engine,

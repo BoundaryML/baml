@@ -1,0 +1,10 @@
+[package]
+name = "baml-rust-verify"
+
+# Generator config for the consumer-realistic verifier: `baml-cli generate`
+# emits the `baml_sdk` crate that pins `baml_bridge = "=<version>"`, which the
+# verify workflow resolves to the packaged `.crate`.
+[generator.rust]
+output_type = "rust"
+naming_convention = "preserve-case"
+output_dir = "gen"

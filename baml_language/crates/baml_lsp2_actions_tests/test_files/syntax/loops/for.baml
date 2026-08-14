@@ -60,12 +60,18 @@ function SumUnknownType(xs: int, b: string) -> int {
 
 //----
 //- diagnostics
-// Error: cannot iterate over type `int`
-//     ╭─[ loops_for.baml:28:16 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[loops_for.baml:16:12]
+//  16 │         result = x;
+//     ·                  ┬
+//     ·                  ╰── expected `int`, found `string`
+//     ╰────
+// E0006
+//
+//   × cannot iterate over type `int`
+//     ╭─[loops_for.baml:28:16]
 //  28 │     for (let x in xs) {
-//     │                   ─┬  
-//     │                    ╰── cannot iterate over type `int`
-//     │ 
-//     │ Note: Error code: E0006
-// ────╯
+//     ·                   ──
+//     ╰────

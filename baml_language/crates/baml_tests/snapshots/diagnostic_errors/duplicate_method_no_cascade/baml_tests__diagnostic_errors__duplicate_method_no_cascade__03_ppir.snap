@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Box {
+}
+class user.Box$stream {
+}
+function user.repro(box: user.Box) -> int  [expr] {
+  {  } box.value()
+}
+function user.value(self: ?) -> int  [expr] {
+  {  } 1
+}
+function user.value(self: ?) -> string  [expr] {
+  {  } "hello"
+}

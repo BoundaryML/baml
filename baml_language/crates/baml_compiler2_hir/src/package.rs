@@ -9,7 +9,7 @@ use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, Diagnostic
 use rustc_hash::FxHashMap;
 
 use crate::{
-    contributions::Definition,
+    contributions::{Definition, DefinitionKind},
     namespace::{NameConflict, NamespaceId, NamespaceItems, namespace_items},
 };
 
@@ -41,10 +41,10 @@ impl<'db> NamespaceShadow<'db> {
             .map(|(_, c)| c.name_span);
 
         let message = format!(
-            "Namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
+            "namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
             self.ns_name,
             self.ns_name,
-            def.kind_name(),
+            def.source_kind_name(db),
             self.ns_name
         );
 
@@ -55,7 +55,7 @@ impl<'db> NamespaceShadow<'db> {
                 Span { file_id, range },
                 format!(
                     "this {} is shadowed by namespace `{}`",
-                    def.kind_name(),
+                    def.source_kind_name(db),
                     self.ns_name
                 ),
             );
@@ -82,6 +82,10 @@ pub struct PackageItemsExtra<'db> {
 /// All items across all namespaces within a package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageItems<'db> {
+    /// The name of the package these items belong to — the scope in which they,
+    /// and any impls resolving their members, are visible. Reconstruct the
+    /// interned id with `PackageId::new(db, package.clone())` when one is needed.
+    pub package: Name,
     /// Namespace path -> items within that namespace.
     pub namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>>,
     /// Conflicts and other rare data. `None` when no conflicts exist.
@@ -164,7 +168,15 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     // Use compiler2_all_files() so that compiler2-only builtin stubs (e.g.
     // Array<T>, Map<K,V>) are visible here without being added to the v1
     // compiler's project.files() list.
-    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    //
+    // `IndexSet` (not `HashSet`) so the downstream `namespaces` map is built
+    // in a deterministic insertion order. Without this, when two namespaces
+    // declare items with the same short name (e.g. two `Status` enums in
+    // different `ns_*/` directories), downstream consumers that key by short
+    // name (`baml_compiler2_mir::lower::enum_variants`) see whichever
+    // namespace was inserted last — flipping the choice of bytecode lowering
+    // path across runs.
+    let mut ns_paths: indexmap::IndexSet<Vec<Name>> = indexmap::IndexSet::new();
     for file in crate::compiler2_all_files(db) {
         let pkg_info = crate::file_package::file_package(db, file);
         if pkg_info.package == *package_name {
@@ -194,6 +206,9 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
                 .get(first_segment)
                 .or_else(|| root_ns.values.get(first_segment))
             {
+                if is_allowed_builtin_namespace_shadow(db, &package_name, ns_path, *def) {
+                    continue;
+                }
                 shadows.push(NamespaceShadow {
                     ns_name: first_segment.clone(),
                     ns_path: ns_path.clone(),
@@ -215,11 +230,151 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
         }))
     };
 
-    PackageItems { namespaces, extra }
+    PackageItems {
+        package: package_name,
+        namespaces,
+        extra,
+    }
 }
 
-/// Declares the packages that `package_id` depends on.
-/// Currently hardcoded: "user" depends on "baml", everything else depends on nothing.
+fn is_allowed_builtin_namespace_shadow(
+    db: &dyn crate::Db,
+    package_name: &Name,
+    ns_path: &[Name],
+    def: Definition<'_>,
+) -> bool {
+    package_name.as_str() == "boundary"
+        && ns_path.len() == 1
+        && ns_path[0].as_str() == "id"
+        && def.kind() == DefinitionKind::Function
+        && def.file(db).path(db).to_string_lossy() == "<builtin>/boundary/core.baml"
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicU32, Ordering},
+    };
+
+    use baml_base::{FileId, SourceFile};
+    use baml_workspace::{Compiler2ExtraFiles, Project};
+    use salsa::Setter;
+
+    use super::{PackageId, is_allowed_builtin_namespace_shadow, package_items};
+    use crate::Db;
+
+    #[salsa::db]
+    struct TestDb {
+        storage: salsa::Storage<TestDb>,
+        next_file_id: AtomicU32,
+        project: Option<Project>,
+        extra: Option<Compiler2ExtraFiles>,
+    }
+
+    impl Default for TestDb {
+        fn default() -> Self {
+            Self {
+                storage: salsa::Storage::default(),
+                next_file_id: AtomicU32::new(0),
+                project: None,
+                extra: None,
+            }
+        }
+    }
+
+    impl TestDb {
+        fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
+            let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
+            SourceFile::new(self, content.to_string(), path.into(), file_id)
+        }
+
+        fn with_builtins() -> Self {
+            let mut db = Self::default();
+            let builtin_files = baml_builtins2::ALL
+                .iter()
+                .map(|builtin| db.add_file(PathBuf::from(builtin.virtual_path()), builtin.contents))
+                .collect::<Vec<_>>();
+            let project = Project::new(&db, PathBuf::from("/test"), Vec::new());
+            project.set_files(&mut db).to(Vec::new());
+            db.project = Some(project);
+            db.extra = Some(Compiler2ExtraFiles::new(&db, builtin_files));
+            db
+        }
+    }
+
+    #[salsa::db]
+    impl salsa::Database for TestDb {}
+
+    #[salsa::db]
+    impl baml_workspace::Db for TestDb {
+        fn project(&self) -> Project {
+            self.project.expect("test db initialized")
+        }
+    }
+
+    #[salsa::db]
+    impl Db for TestDb {
+        fn compiler2_extra_files(&self) -> Option<Compiler2ExtraFiles> {
+            self.extra
+        }
+    }
+
+    #[test]
+    fn boundary_id_builtin_namespace_shadow_is_allowlisted() {
+        let db = TestDb::with_builtins();
+        let boundary = baml_base::Name::new("boundary");
+        let id = baml_base::Name::new("id");
+        let package = package_items(&db, PackageId::new(&db, boundary.clone()));
+        let root = package.namespaces.get(&Vec::new()).expect("root namespace");
+        let id_namespace = vec![id.clone()];
+
+        let id_def = root.values.get(&id).copied().expect("boundary.id function");
+        assert!(
+            package.namespaces.contains_key(&id_namespace),
+            "boundary.id namespace should exist"
+        );
+        assert!(
+            is_allowed_builtin_namespace_shadow(&db, &boundary, &id_namespace, id_def),
+            "boundary.id root function shadowed by boundary.id namespace is the only allowed builtin collision"
+        );
+        assert!(
+            package.shadows().is_empty(),
+            "the allowlisted boundary.id collision should not emit namespace-shadow diagnostics"
+        );
+    }
+
+    #[test]
+    fn builtin_namespace_shadow_allowlist_rejects_other_builtin_collisions() {
+        let db = TestDb::with_builtins();
+        let boundary = baml_base::Name::new("boundary");
+        let id = baml_base::Name::new("id");
+        let package = package_items(&db, PackageId::new(&db, boundary.clone()));
+        let root = package.namespaces.get(&Vec::new()).expect("root namespace");
+        let id_def = root.values.get(&id).copied().expect("boundary.id function");
+
+        assert!(!is_allowed_builtin_namespace_shadow(
+            &db,
+            &baml_base::Name::new("baml"),
+            std::slice::from_ref(&id),
+            id_def
+        ));
+        assert!(!is_allowed_builtin_namespace_shadow(
+            &db,
+            &boundary,
+            &[baml_base::Name::new("other")],
+            id_def
+        ));
+    }
+}
+
+/// The *direct* dependencies of `package_id` (hardcoded for now).
+///
+/// Note these lists are not uniformly flattened: `testing`/`assert` list `baml`
+/// but not `baml`'s own `log`/`reflect`. Callers that need every package whose
+/// items could be visible from `package_id` (interface coherence,
+/// `type_implements_with_deps`) must use [`package_dependency_closure`], not this
+/// direct list.
 #[salsa::tracked(returns(ref))]
 pub fn package_dependencies<'db>(
     db: &'db dyn crate::Db,
@@ -231,21 +386,73 @@ pub fn package_dependencies<'db>(
         "log" => vec![],
         // "reflect" has no deps — it only uses the `type` primitive.
         "reflect" => vec![],
+        // "boundary" has no deps — it only returns the current boundary id as
+        // a primitive string.
+        "boundary" => vec![],
         // "baml" depends on "log" and "reflect" so stdlib code can call
-        // log.info/debug/etc. and reflect.type_of<T>() inside ns_llm.
+        // log.info/debug/etc. and reflect.type_of<T>() inside builtin BAML namespaces.
         "baml" => vec![
             PackageId::new(db, Name::new("log")),
             PackageId::new(db, Name::new("reflect")),
         ],
-        // The "testing" and "assert" packages depend on "baml" only.
-        "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
-        // User packages depend on "baml", "testing", "assert", "log", and "reflect".
+        // The "testing" packages depends on "baml".
+        "testing" => vec![PackageId::new(db, Name::new("baml"))],
+        // The "ai" package uses baml primitives and reflection.
+        "ai" | "assert" => vec![
+            PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("reflect")),
+        ],
+        // Provider client packages implement the `ai.Client` interface; the
+        // claude_code harness client also logs its own event stream.
+        "openai" | "anthropic" | "google" | "claude_code" => vec![
+            PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("reflect")),
+            PackageId::new(db, Name::new("log")),
+            PackageId::new(db, Name::new("ai")),
+        ],
+        // User packages depend on public builtin packages.
         _ => vec![
             PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("boundary")),
             PackageId::new(db, Name::new("testing")),
             PackageId::new(db, Name::new("assert")),
             PackageId::new(db, Name::new("log")),
             PackageId::new(db, Name::new("reflect")),
+            PackageId::new(db, Name::new("ai")),
+            PackageId::new(db, Name::new("openai")),
+            PackageId::new(db, Name::new("anthropic")),
+            PackageId::new(db, Name::new("google")),
+            PackageId::new(db, Name::new("claude_code")),
         ],
     }
+}
+
+/// The full transitive dependency closure of `package_id` (excluding itself), in
+/// deterministic breadth-first order with duplicates removed.
+///
+/// Unlike [`package_dependencies`] (direct-only, not uniformly flattened), this
+/// is what coherence and membership checks need: every package whose impls could
+/// be visible from `package_id`, regardless of how flat the direct lists happen
+/// to be. The walk is cycle-safe (a `seen` set), though the dependency graph is
+/// currently a DAG.
+#[salsa::tracked(returns(ref))]
+pub fn package_dependency_closure<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+) -> Vec<PackageId<'db>> {
+    let mut seen: std::collections::HashSet<PackageId<'db>> = std::collections::HashSet::new();
+    let mut order: Vec<PackageId<'db>> = Vec::new();
+    let mut queue: std::collections::VecDeque<PackageId<'db>> =
+        package_dependencies(db, package_id)
+            .iter()
+            .copied()
+            .collect();
+    while let Some(dep) = queue.pop_front() {
+        if dep == package_id || !seen.insert(dep) {
+            continue;
+        }
+        order.push(dep);
+        queue.extend(package_dependencies(db, dep).iter().copied());
+    }
+    order
 }

@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use sys_glob::GlobPattern;
-use sys_ops::io::{self, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
+use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
 use sys_types::BexHeap;
 
 use crate::{send_wrapper::SendWrapper, wasm_fs::WasmVfs};
@@ -42,11 +42,13 @@ impl WasmIoGlob {
 
 type GlobHandle = GlobPattern;
 
-fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, OpErrorKind> {
+fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmBamlError> {
     glob._handle
         .clone()
         .downcast::<GlobHandle>()
-        .map_err(|_| OpErrorKind::Other("Invalid glob handle type".into()))
+        .map_err(|_| VmBamlError::DevOther {
+            message: "Invalid glob handle type".into(),
+        })
 }
 
 impl io::IoNamespaceGlob for WasmIoGlob {
@@ -62,7 +64,7 @@ impl io::IoNamespaceGlob for WasmIoGlob {
                 let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(compiled);
                 SysOpOutput::ok(owned::glob::Glob { _handle: handle })
             }
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(e)),
+            Err(e) => SysOpOutput::err(VmBamlError::InvalidArgument { message: e }),
         }
     }
 }
@@ -86,7 +88,7 @@ impl io::IoClassGlobGlob for WasmIoGlob {
         };
         let scan_args = match ScanArgs::from_root(&root) {
             Ok(args) => args,
-            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e)),
+            Err(e) => return SysOpOutput::err(VmBamlError::InvalidArgument { message: e }),
         };
 
         let mut scanned_paths = Vec::new();
@@ -97,7 +99,7 @@ impl io::IoClassGlobGlob for WasmIoGlob {
             scan_args.only_files,
             &mut scanned_paths,
         ) {
-            return SysOpOutput::err(OpErrorKind::Other(e));
+            return SysOpOutput::err(VmBamlError::Io { message: e });
         }
 
         let mut paths = Vec::new();
@@ -279,7 +281,7 @@ fn get_string_field(
 ) -> Result<String, String> {
     match fields.get(key) {
         None | Some(BexExternalValue::Null) => Ok(default.to_string()),
-        Some(value) => value.as_string().ok_or_else(|| {
+        Some(value) => value.as_string().map(|s| s.to_string()).ok_or_else(|| {
             format!(
                 "ScanOptions.{key} must be a string, got {}",
                 value.type_name()

@@ -122,8 +122,7 @@ fn responses_node_to_message(
             content,
             metadata,
         } => {
-            let is_assistant = role == "assistant";
-            let parts = responses_content_parts(content.as_ref(), is_assistant)?;
+            let parts = responses_content_parts(content.as_ref(), role)?;
             let extra = match metadata {
                 serde_json::Value::Object(map) => map.clone(),
                 _ => serde_json::Map::new(),
@@ -141,25 +140,36 @@ fn responses_node_to_message(
 
 fn responses_content_parts(
     content: &PromptAstSimple,
-    is_assistant: bool,
+    role: &str,
 ) -> Result<Vec<ResponsesContentPart>, crate::build_request::BuildRequestError> {
     match content {
         PromptAstSimple::String(s) => {
-            if is_assistant {
+            if role == "assistant" {
                 Ok(vec![ResponsesContentPart::OutputText { text: s.clone() }])
             } else {
                 Ok(vec![ResponsesContentPart::InputText { text: s.clone() }])
             }
         }
-        PromptAstSimple::Media(media) => responses_media_part(media).map(|part| vec![part]),
+        PromptAstSimple::Media(media) => {
+            if role != "user" {
+                return Err(unsupported_media_role(role, media.kind));
+            }
+            responses_media_part(media).map(|part| vec![part])
+        }
         PromptAstSimple::Multiple(items) => {
             let mut parts = Vec::new();
             for item in items {
-                parts.extend(responses_content_parts(item, is_assistant)?);
+                parts.extend(responses_content_parts(item, role)?);
             }
             Ok(parts)
         }
     }
+}
+
+fn unsupported_media_role(role: &str, kind: MediaKind) -> crate::build_request::BuildRequestError {
+    crate::build_request::BuildRequestError::UnsupportedMedia(format!(
+        "OpenAI Responses API only supports {kind} input in user messages; found media in a {role} message"
+    ))
 }
 
 fn responses_media_part(
@@ -263,6 +273,14 @@ mod tests {
         Arc::new(PromptAst::Message {
             role: role.to_string(),
             content: Arc::new(PromptAstSimple::String(text.to_string())),
+            metadata: serde_json::Value::Null,
+        })
+    }
+
+    fn msg_with_content(role: &str, content: PromptAstSimple) -> Arc<PromptAst> {
+        Arc::new(PromptAst::Message {
+            role: role.to_string(),
+            content: Arc::new(content),
             metadata: serde_json::Value::Null,
         })
     }
@@ -472,7 +490,7 @@ mod tests {
     #[test]
     fn responses_assistant_uses_output_text() {
         let content = PromptAstSimple::String("hello".into());
-        let parts = responses_content_parts(&content, true).unwrap();
+        let parts = responses_content_parts(&content, "assistant").unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -483,7 +501,7 @@ mod tests {
     #[test]
     fn responses_user_uses_input_text() {
         let content = PromptAstSimple::String("hello".into());
-        let parts = responses_content_parts(&content, false).unwrap();
+        let parts = responses_content_parts(&content, "user").unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -528,6 +546,25 @@ mod tests {
                 {"role": "user", "content": [{"type": "input_text", "text": "How are you?"}]},
                 {"role": "assistant", "content": [{"type": "output_text", "text": "I'm well."}]}
             ])
+        );
+    }
+
+    #[test]
+    fn responses_rejects_system_image_before_http() {
+        let media = make_media(
+            MediaKind::Image,
+            MediaContent::Url {
+                url: "https://example.com/img.png".into(),
+                base64_data: None,
+            },
+            Some("image/png"),
+        );
+        let prompt = msg_with_content("system", PromptAstSimple::Media(media));
+
+        let err = prompt_to_responses_input(&prompt).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("only supports image input in user messages")
         );
     }
 }

@@ -9,9 +9,10 @@ fn user.array_length() -> int {
     let _2: int[]
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = copy _1;
-        _0 = call const fn baml.Array.length(copy _2) -> [bb1];
+        _0 = len(_2);
+        goto -> bb1;
     }
 
     bb1: {
@@ -88,33 +89,6 @@ fn user.Baz.Greeting(self: Baz) -> string {
     }
 }
 
-fn user.Baz.from_json(j: baml.json.json) -> Baz {
-    // Locals:
-    let _0: Baz // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Baz { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.param_in_if_statement(b: bool) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -135,30 +109,6 @@ fn user.param_in_if_statement(b: bool) -> int {
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.Baz.to_json(self: Baz) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Baz // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Baz
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "name": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

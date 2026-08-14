@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:24:20]
+ 24 │             let s: Self => "self",
+    ·                    ────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:29:18]
+ 29 │         other is Self
+    ·                  ────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:32:16]
+ 32 │         let a: Self = other;
+    ·                ────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:37:24]
+ 37 │             let s: Box<Self> => 1,
+    ·                        ────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:42:25]
+ 42 │         reflect.type_of<Self>().to_string()
+    ·                         ────
+    ╰────

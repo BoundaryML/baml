@@ -6,8 +6,8 @@
 //! functions" rule. It is a Salsa tracked query because:
 //!
 //! - Both `textDocument/documentSymbol` and `workspace/symbol` need it.
-//! - It depends only on `file_symbol_contributions` + `file_item_tree`,
-//!   both of which are Salsa-cached per file revision.
+//! - It depends only on `file_symbol_contributions` + the PPIR item-data
+//!   firewall queries, all of which are Salsa-cached per file revision.
 //! - Workspace symbol search iterates all files — caching per-file outlines
 //!   avoids redundant work.
 //!
@@ -15,7 +15,8 @@
 //!
 //! Top-level items come from `file_symbol_contributions` (which carries the
 //! `name_span` for each item). Children (class fields, enum variants, methods)
-//! come from the corresponding entry in `file_item_tree`.
+//! come from the corresponding PPIR item-data firewall query
+//! (`class_data`/`class_source_map`, `enum_data`/`enum_source_map`, …).
 //!
 //! Note: `ClassField` and `EnumVariant` in the item tree do not carry a source
 //! span of their own (Risk #1 from the plan). For Phase 2, children use a
@@ -23,9 +24,10 @@
 //! to `ClassField` / `EnumVariant` in the HIR item tree.
 
 use baml_base::SourceFile;
-use baml_compiler2_hir::{
-    contributions::DefinitionKind, file_item_tree, file_item_tree_source_map,
-    file_symbol_contributions,
+use baml_compiler2_hir::{contributions::DefinitionKind, file_symbol_contributions};
+use baml_compiler2_ppir::item_data::{
+    class_data, class_source_map, enum_data, enum_source_map, function_data, function_source_map,
+    let_data,
 };
 use text_size::TextRange;
 
@@ -55,16 +57,14 @@ pub struct OutlineItem {
 /// Hierarchical symbol outline for a single file.
 ///
 /// Salsa tracked query — cached per file revision. Both `file_symbol_contributions`
-/// and `file_item_tree` are Salsa-cached, so this query is cheap to re-evaluate
-/// when the file hasn't changed.
+/// and the PPIR item-data firewall queries are Salsa-cached, so this query is
+/// cheap to re-evaluate when the file hasn't changed.
 ///
 /// Returns `Vec<OutlineItem>` in the order contributions appear (types first,
 /// then values, preserving declaration order within each group).
 #[salsa::tracked(returns(ref))]
 pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
     let contribs = file_symbol_contributions(db, file);
-    let item_tree = file_item_tree(db, file);
-    let source_map = file_item_tree_source_map(db, file);
 
     let mut items: Vec<OutlineItem> = Vec::new();
 
@@ -74,8 +74,8 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
 
         let children = match contrib.definition {
             Definition::Class(class_loc) => {
-                let class = &item_tree[class_loc.id(db)];
-                let field_spans = source_map.class_field_spans.get(&class_loc.id(db));
+                let class = class_data(db, class_loc);
+                let field_name_spans = &class_source_map(db, class_loc).field_name_spans;
 
                 let mut child_items: Vec<OutlineItem> = Vec::new();
 
@@ -84,30 +84,26 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
                     child_items.push(OutlineItem {
                         name: field.name.to_string(),
                         kind: DefinitionKind::Field,
-                        name_span: field_spans
-                            .and_then(|spans| spans.get(i).copied())
+                        name_span: field_name_spans
+                            .get(i)
+                            .copied()
                             .unwrap_or_else(|| TextRange::empty(TextRange::default().start())),
                         children: Vec::new(),
                     });
                 }
 
-                // Methods — look up in item_tree via their LocalItemId.
-                // Skip auto-derived methods (e.g. synthesized `to_json` /
-                // `from_json`): they have no source-level span, so attempting
-                // to describe them via `describe_item_member` would fail when
-                // it tries to slice the source text.
-                for method_id in &class.methods {
-                    let method = &item_tree[*method_id];
-                    if matches!(
-                        method.origin,
-                        baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
-                    ) {
+                // Methods — resolve each `FunctionLoc` via the firewall.
+                for method_loc in &class.methods {
+                    let method = function_data(db, *method_loc);
+                    if method.metadata.is_language_internal {
                         continue;
                     }
                     child_items.push(OutlineItem {
                         name: method.name.to_string(),
                         kind: DefinitionKind::Method,
-                        name_span: TextRange::empty(method.span.start()),
+                        name_span: TextRange::empty(
+                            function_source_map(db, *method_loc).span.start(),
+                        ),
                         children: Vec::new(),
                     });
                 }
@@ -116,8 +112,8 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
             }
 
             Definition::Enum(enum_loc) => {
-                let enum_def = &item_tree[enum_loc.id(db)];
-                let variant_spans = source_map.enum_variant_spans.get(&enum_loc.id(db));
+                let enum_def = enum_data(db, enum_loc);
+                let variant_name_spans = &enum_source_map(db, enum_loc).variant_name_spans;
 
                 enum_def
                     .variants
@@ -126,8 +122,9 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
                     .map(|(i, v)| OutlineItem {
                         name: v.name.to_string(),
                         kind: DefinitionKind::Variant,
-                        name_span: variant_spans
-                            .and_then(|spans| spans.get(i).copied())
+                        name_span: variant_name_spans
+                            .get(i)
+                            .copied()
                             .unwrap_or_else(|| TextRange::empty(TextRange::default().start())),
                         children: Vec::new(),
                     })
@@ -148,6 +145,9 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
 
     // ── Values: functions, template strings, clients, generators, tests, retry policies ──
     for (name, contrib) in &contribs.values {
+        if contrib.definition.is_language_internal(db) {
+            continue;
+        }
         // Value-namespace items have no children in the outline for Phase 2.
         // (Function params/return type could be added in a future phase.)
         //
@@ -155,10 +155,10 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
         // (Client or RetryPolicy) rather than the generic `Let` kind.
         let kind = match contrib.definition {
             baml_compiler2_hir::contributions::Definition::Let(loc) => {
-                match item_tree[loc.id(db)].origin {
+                match let_data(db, loc).origin {
                     baml_compiler2_ast::ast::LetOrigin::Client => DefinitionKind::Client,
                     baml_compiler2_ast::ast::LetOrigin::RetryPolicy => DefinitionKind::RetryPolicy,
-                    _ => DefinitionKind::Let,
+                    baml_compiler2_ast::ast::LetOrigin::Source => DefinitionKind::Let,
                 }
             }
             other => other.kind(),

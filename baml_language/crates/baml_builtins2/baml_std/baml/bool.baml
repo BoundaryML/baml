@@ -1,5 +1,3 @@
+/// A boolean value — either `true` or `false`.
 class Bool {
-  function to_json(self) -> baml.json.json {
-    $rust_function
-  }
 }

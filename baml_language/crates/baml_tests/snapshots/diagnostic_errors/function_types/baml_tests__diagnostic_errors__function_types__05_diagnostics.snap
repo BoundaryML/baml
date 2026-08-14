@@ -1,14 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 31533
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected (x: int) -> int throws never, got 1
-    ╭─[ function_types.baml:25:5 ]
-    │
- 25 │     1
-    │     ┬  
-    │     ╰── type mismatch: expected (x: int) -> int throws never, got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
+
+  × mismatched types
+    ╭─[function_types.baml:23:57]
+ 23 │ ╭─▶ function GetTransform() -> (x: int) -> int throws never {
+ 24 │ │       // For now just return a placeholder - actual function values come later
+ 25 │ │       1
+ 26 │ ├─▶ }
+    · ╰──── expected `(x: int) -> int throws never`, found `1`
+    ╰────

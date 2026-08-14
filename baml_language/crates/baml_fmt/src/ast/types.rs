@@ -20,10 +20,12 @@ pub enum Type {
     /// Generally only string literals are used in normal types,
     /// but other literals are valid in some contexts like match bindings.
     Literal(Literal),
+    SignedLiteral(SignedLiteralType),
     Union(UnionType),
     Optional(OptionalType),
     Array(ArrayType),
     Generic(GenericType),
+    AssociatedProjection(AssociatedProjectionType),
     Function(FunctionType),
     /// Types constrained by attributes.
     Constrained(ConstrainedType<Type>),
@@ -43,10 +45,12 @@ impl Type {
             Type::Paren(_) => false,
             Type::Path(_) => true,
             Type::Literal(_) => false,
+            Type::SignedLiteral(_) => false,
             Type::Union(_) => true,
             Type::Optional(inner) => inner.ty.multi_line_is_indented(),
             Type::Array(inner) => inner.ty.multi_line_is_indented(),
             Type::Generic(_) => false,
+            Type::AssociatedProjection(_) => false,
             Type::Function(_) => true,
             Type::Constrained(_) => true,
             Type::Unknown(_) => true, // to be safe
@@ -114,10 +118,12 @@ impl Printable for Type {
             Type::Paren(paren) => paren.print(shape, printer),
             Type::Path(path) => path.print(shape, printer),
             Type::Literal(literal) => literal.print(shape, printer),
+            Type::SignedLiteral(literal) => literal.print(shape, printer),
             Type::Union(union) => union.print(shape, printer),
             Type::Optional(optional) => optional.print(shape, printer),
             Type::Array(array) => array.print(shape, printer),
             Type::Generic(generic) => generic.print(shape, printer),
+            Type::AssociatedProjection(projection) => projection.print(shape, printer),
             Type::Function(function) => function.print(shape, printer),
             Type::Constrained(constrained) => constrained.print(shape, printer),
             Type::Unknown(range) => {
@@ -133,10 +139,12 @@ impl Printable for Type {
             Type::Paren(paren) => paren.leftmost_token(),
             Type::Path(path) => path.leftmost_token(),
             Type::Literal(literal) => literal.leftmost_token(),
+            Type::SignedLiteral(literal) => literal.leftmost_token(),
             Type::Union(union) => union.leftmost_token(),
             Type::Optional(optional) => optional.leftmost_token(),
             Type::Array(array) => array.leftmost_token(),
             Type::Generic(generic) => generic.leftmost_token(),
+            Type::AssociatedProjection(projection) => projection.leftmost_token(),
             Type::Function(function) => function.leftmost_token(),
             Type::Constrained(constrained) => constrained.leftmost_token(),
             Type::Unknown(range) => *range,
@@ -147,10 +155,12 @@ impl Printable for Type {
             Type::Paren(paren) => paren.rightmost_token(),
             Type::Path(path) => path.rightmost_token(),
             Type::Literal(literal) => literal.rightmost_token(),
+            Type::SignedLiteral(literal) => literal.rightmost_token(),
             Type::Union(union) => union.rightmost_token(),
             Type::Optional(optional) => optional.rightmost_token(),
             Type::Array(array) => array.rightmost_token(),
             Type::Generic(generic) => generic.rightmost_token(),
+            Type::AssociatedProjection(projection) => projection.rightmost_token(),
             Type::Function(function) => function.rightmost_token(),
             Type::Constrained(constrained) => constrained.rightmost_token(),
             Type::Unknown(range) => *range,
@@ -261,6 +271,31 @@ impl Printable for PathType {
             .last()
             .map_or(&self.first, |(_, word)| word)
             .span()
+    }
+}
+
+/// A negative numeric literal used as a type/pattern atom, such as `-42`.
+/// Keep token anchors for surrounding trivia while preserving any unusual
+/// whitespace or comments between the sign and literal verbatim.
+#[derive(Debug)]
+pub struct SignedLiteralType {
+    pub minus: t::Minus,
+    pub literal: TextRange,
+}
+
+impl Printable for SignedLiteralType {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let range = TextRange::new(self.minus.span().start(), self.literal.end());
+        printer.print_input_range(range);
+        PrintInfo {
+            multi_lined: printer.input[range].contains('\n'),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.minus.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.literal
     }
 }
 
@@ -404,9 +439,11 @@ pub enum UnionTypeMember {
     Paren(ParenType),
     Path(PathType),
     Literal(Literal),
+    SignedLiteral(SignedLiteralType),
     Optional(OptionalType),
     Array(ArrayType),
     Generic(GenericType),
+    AssociatedProjection(AssociatedProjectionType),
     Function(FunctionType),
     /// Types constrained by attributes.
     Constrained(ConstrainedType<UnionTypeMember>),
@@ -421,9 +458,48 @@ impl UnionTypeMember {
     fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let first = it.expect_next("a type")?;
         match first.kind() {
+            SyntaxKind::MINUS => {
+                let minus = t::Minus::from_cst(first)?;
+                let literal = it.expect_next("numeric literal after '-'")?;
+                if !matches!(
+                    literal.kind(),
+                    SyntaxKind::BIGINT_LITERAL
+                        | SyntaxKind::INTEGER_LITERAL
+                        | SyntaxKind::FLOAT_LITERAL
+                ) {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "BIGINT_LITERAL, INTEGER_LITERAL, or FLOAT_LITERAL".into(),
+                        found: literal.kind(),
+                        at: literal.text_range(),
+                    });
+                }
+                Ok(UnionTypeMember::SignedLiteral(SignedLiteralType {
+                    minus,
+                    literal: literal.text_range(),
+                }))
+            }
             SyntaxKind::L_PAREN => {
                 // Either a parenthesized type or a function type
                 let open_paren = t::LParen::from_cst(first)?;
+                if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
+                    let base: Type = it.expect_parse()?;
+                    let as_token: t::As = it.expect_parse()?;
+                    let interface: Type = it.expect_parse()?;
+                    let close_paren: t::RParen = it.expect_parse()?;
+                    let dot: t::Dot = it.expect_parse()?;
+                    let member: t::Word = it.expect_parse()?;
+                    return Ok(UnionTypeMember::AssociatedProjection(
+                        AssociatedProjectionType {
+                            open_paren,
+                            base: Box::new(base),
+                            as_token,
+                            interface: Box::new(interface),
+                            close_paren,
+                            dot,
+                            member,
+                        },
+                    ));
+                }
                 let mut params = Vec::new();
                 let close_paren = loop {
                     let Some(elem) = it.next() else {
@@ -590,9 +666,13 @@ impl From<UnionTypeMember> for Type {
             UnionTypeMember::Paren(paren) => Type::Paren(paren),
             UnionTypeMember::Path(path) => Type::Path(path),
             UnionTypeMember::Literal(literal) => Type::Literal(literal),
+            UnionTypeMember::SignedLiteral(literal) => Type::SignedLiteral(literal),
             UnionTypeMember::Optional(optional) => Type::Optional(optional),
             UnionTypeMember::Array(array) => Type::Array(array),
             UnionTypeMember::Generic(generic) => Type::Generic(generic),
+            UnionTypeMember::AssociatedProjection(projection) => {
+                Type::AssociatedProjection(projection)
+            }
             UnionTypeMember::Function(function) => Type::Function(function),
             UnionTypeMember::Constrained(constrained) => Type::Constrained(constrained.into()),
             UnionTypeMember::Unknown(range) => Type::Unknown(range),
@@ -606,9 +686,11 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Paren(paren) => paren.print(shape, printer),
             UnionTypeMember::Path(path) => path.print(shape, printer),
             UnionTypeMember::Literal(literal) => literal.print(shape, printer),
+            UnionTypeMember::SignedLiteral(literal) => literal.print(shape, printer),
             UnionTypeMember::Optional(optional) => optional.print(shape, printer),
             UnionTypeMember::Array(array) => array.print(shape, printer),
             UnionTypeMember::Generic(generic) => generic.print(shape, printer),
+            UnionTypeMember::AssociatedProjection(projection) => projection.print(shape, printer),
             UnionTypeMember::Function(function) => function.print(shape, printer),
             UnionTypeMember::Constrained(constrained) => constrained.print(shape, printer),
             UnionTypeMember::Unknown(range) => {
@@ -622,9 +704,11 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Paren(paren) => paren.leftmost_token(),
             UnionTypeMember::Path(path) => path.leftmost_token(),
             UnionTypeMember::Literal(lit) => lit.leftmost_token(),
+            UnionTypeMember::SignedLiteral(lit) => lit.leftmost_token(),
             UnionTypeMember::Optional(optional) => optional.leftmost_token(),
             UnionTypeMember::Array(array) => array.leftmost_token(),
             UnionTypeMember::Generic(generic) => generic.leftmost_token(),
+            UnionTypeMember::AssociatedProjection(projection) => projection.leftmost_token(),
             UnionTypeMember::Function(function) => function.leftmost_token(),
             UnionTypeMember::Constrained(constrained) => constrained.leftmost_token(),
             UnionTypeMember::Unknown(range) => *range,
@@ -635,9 +719,11 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Paren(paren) => paren.rightmost_token(),
             UnionTypeMember::Path(path) => path.rightmost_token(),
             UnionTypeMember::Literal(lit) => lit.rightmost_token(),
+            UnionTypeMember::SignedLiteral(lit) => lit.rightmost_token(),
             UnionTypeMember::Optional(optional) => optional.rightmost_token(),
             UnionTypeMember::Array(array) => array.rightmost_token(),
             UnionTypeMember::Generic(generic) => generic.rightmost_token(),
+            UnionTypeMember::AssociatedProjection(projection) => projection.rightmost_token(),
             UnionTypeMember::Function(function) => function.rightmost_token(),
             UnionTypeMember::Constrained(constrained) => constrained.rightmost_token(),
             UnionTypeMember::Unknown(range) => *range,
@@ -720,12 +806,133 @@ impl Printable for GenericType {
     }
 }
 
+#[derive(Debug)]
+pub struct AssociatedProjectionType {
+    pub open_paren: t::LParen,
+    pub base: Box<Type>,
+    pub as_token: t::As,
+    pub interface: Box<Type>,
+    pub close_paren: t::RParen,
+    pub dot: t::Dot,
+    pub member: t::Word,
+}
+
+impl Printable for AssociatedProjectionType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        printer.print(&*self.base, shape.clone());
+        printer.print_str(" ");
+        printer.print_raw_token(&self.as_token);
+        printer.print_str(" ");
+        printer.print(&*self.interface, shape);
+        printer.print_raw_token(&self.close_paren);
+        printer.print_raw_token(&self.dot);
+        printer.print_raw_token(&self.member);
+        PrintInfo::default_single_line()
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.member.span()
+    }
+}
+
+#[derive(Debug)]
+pub enum TypeArg {
+    Type(Type),
+    Associated(AssociatedTypeArgBinding),
+}
+
+impl TypeArg {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::TYPE_EXPR => Type::from_cst(elem).map(TypeArg::Type),
+            SyntaxKind::ASSOCIATED_TYPE_DECL => {
+                AssociatedTypeArgBinding::from_cst(elem).map(TypeArg::Associated)
+            }
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "TYPE_EXPR or ASSOCIATED_TYPE_DECL".into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for TypeArg {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            TypeArg::Type(ty) => ty.print(shape, printer),
+            TypeArg::Associated(binding) => binding.print(shape, printer),
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            TypeArg::Type(ty) => ty.leftmost_token(),
+            TypeArg::Associated(binding) => binding.leftmost_token(),
+        }
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            TypeArg::Type(ty) => ty.rightmost_token(),
+            TypeArg::Associated(binding) => binding.rightmost_token(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct AssociatedTypeArgBinding {
+    pub name: t::Word,
+    pub equals: t::Equals,
+    pub ty: Type,
+}
+
+impl FromCST for AssociatedTypeArgBinding {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::ASSOCIATED_TYPE_DECL)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let name = it.expect_parse()?;
+        let equals = it.expect_parse()?;
+        let ty = it.expect_parse()?;
+        it.expect_end()?;
+
+        Ok(AssociatedTypeArgBinding { name, equals, ty })
+    }
+}
+
+impl Printable for AssociatedTypeArgBinding {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.name);
+        let (_, equals_trailing) = printer.trivia.get_for_range_split(self.equals.span());
+        printer.print_str(" = ");
+        printer.print_trivia_squished(equals_trailing);
+        let leading = printer.trivia.get_leading_for_element(&self.ty);
+        printer.print_trivia_squished(leading);
+        self.ty.print(shape, printer)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.name.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.ty.rightmost_token()
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::TYPE_ARGS`] node.
 #[derive(Debug)]
 pub struct TypeArgs {
     pub open_angle: t::Less,
-    pub first: Box<Type>,
-    pub rest: Vec<(t::Comma, Type)>,
+    pub first: Box<TypeArg>,
+    pub rest: Vec<(t::Comma, TypeArg)>,
     pub close_angle: t::Greater,
 }
 
@@ -738,7 +945,7 @@ impl FromCST for TypeArgs {
 
         let open_angle: t::Less = it.expect_parse()?;
 
-        let first: Type = it.expect_parse()?;
+        let first = TypeArg::from_cst(it.expect_next("type argument")?)?;
 
         let mut rest = Vec::new();
         let close_angle = loop {
@@ -748,7 +955,13 @@ impl FromCST for TypeArgs {
             match elem.kind() {
                 SyntaxKind::COMMA => {
                     let comma = t::Comma::from_cst(elem)?;
-                    let next: Type = it.expect_parse()?;
+                    let Some(next_elem) = it.peek() else {
+                        return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
+                    };
+                    if next_elem.kind() == SyntaxKind::GREATER {
+                        continue;
+                    }
+                    let next = TypeArg::from_cst(it.expect_next("type argument")?)?;
                     rest.push((comma, next));
                 }
                 SyntaxKind::GREATER => {
@@ -817,7 +1030,7 @@ impl PrintMultiLine for TypeArgs {
                 printer.trivia.get_for_range_split(self.close_angle.span());
             printer
                 .print_trivia_with_newline(close_angle_leading.trim_blanks(), inner_shape.indent);
-            printer.print_spaces(inner_shape.indent);
+            printer.print_spaces(shape.indent);
             printer.print_raw_token(&self.close_angle);
             return PrintInfo::default_multi_lined();
         }
@@ -1071,7 +1284,7 @@ impl Printable for FunctionType {
 /// Exists in [`FunctionType`] but also in [`ParenType`] for some reason.
 #[derive(Debug)]
 pub struct FunctionTypeParam {
-    pub name: Option<(t::Word, Option<t::Colon>)>,
+    pub name: Option<(t::Word, Option<t::Question>, Option<t::Colon>)>,
     pub ty: Type,
 }
 
@@ -1081,13 +1294,19 @@ impl FromCST for FunctionTypeParam {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        let name = if let Some(name) = it.next_if_kind(SyntaxKind::WORD) {
+        let name = if let Some(name) =
+            it.next_if(|e| matches!(e.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+        {
             let name = t::Word::new_from_span(name.text_range());
+            let question = it
+                .next_if_kind(SyntaxKind::QUESTION)
+                .map(t::Question::from_cst)
+                .transpose()?;
             let colon = it
                 .next_if_kind(SyntaxKind::COLON)
                 .map(t::Colon::from_cst)
                 .transpose()?;
-            Some((name, colon))
+            Some((name, question, colon))
         } else {
             None
         };
@@ -1102,8 +1321,11 @@ impl FromCST for FunctionTypeParam {
 
 impl Printable for FunctionTypeParam {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        if let Some((name, colon)) = &self.name {
+        if let Some((name, question, colon)) = &self.name {
             printer.print_raw_token(name);
+            if let Some(question) = question {
+                printer.print_raw_token(question);
+            }
             if let Some(colon) = colon {
                 printer.print_raw_token(colon);
             } else {
@@ -1116,7 +1338,7 @@ impl Printable for FunctionTypeParam {
     fn leftmost_token(&self) -> TextRange {
         self.name
             .as_ref()
-            .map_or(self.ty.leftmost_token(), |(name, _)| name.span())
+            .map_or(self.ty.leftmost_token(), |(name, _, _)| name.span())
     }
     fn rightmost_token(&self) -> TextRange {
         self.ty.rightmost_token()
@@ -1137,7 +1359,7 @@ impl<T: Printable> PrintMultiLine for ConstrainedType<T> {
     ///
     /// ```baml
     /// map<string, int>
-    ///     @assert(...)
+    ///     @stream.done
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let ty_info = printer.print(&*self.ty, shape.clone());
@@ -1245,5 +1467,78 @@ impl From<ConstrainedType<UnionTypeMember>> for ConstrainedType<Type> {
             ty: Box::new((*member.ty).into()),
             attrs: member.attrs,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_db::{
+        baml_compiler_parser::parse_green,
+        baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode},
+    };
+    use baml_project::ProjectDatabase;
+
+    use super::*;
+
+    fn function_type_param(source: &str, index: usize) -> FunctionTypeParam {
+        let mut db = ProjectDatabase::new();
+        let file = db.add_file("test.baml", source);
+        let parsed = parse_green(&db, file);
+        let syntax_tree = SyntaxNode::new_root(parsed);
+        let node = syntax_tree
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+            .nth(index)
+            .expect("expected FUNCTION_TYPE_PARAM");
+
+        FunctionTypeParam::from_cst(SyntaxElement::Node(node))
+            .expect("expected FunctionTypeParam to parse")
+    }
+
+    #[test]
+    fn function_type_param_optional_name_round_trips() {
+        let source = "type Searcher = (name?: string) -> int\n";
+        let param = function_type_param(source, 0);
+        let Some((name, question, colon)) = &param.name else {
+            panic!("expected named function type param");
+        };
+
+        assert!(question.is_some(), "expected optional marker before colon");
+        assert!(colon.is_some(), "expected colon after optional marker");
+        assert_eq!(param.leftmost_token(), name.span());
+
+        let formatted = crate::format(source, &crate::FormatOptions::default())
+            .expect("formatter should print optional function type params");
+        assert!(formatted.contains("(name?: string) -> int"));
+        assert_eq!(
+            crate::format(&formatted, &crate::FormatOptions::default())
+                .expect("formatter should be idempotent"),
+            formatted
+        );
+    }
+
+    #[test]
+    fn function_type_param_optional_name_with_optional_type_round_trips() {
+        let source = "type Searcher = (name?: (string)?) -> int\n";
+        let param = function_type_param(source, 0);
+
+        assert!(
+            param
+                .name
+                .as_ref()
+                .and_then(|(_, q, _)| q.as_ref())
+                .is_some()
+        );
+        assert!(matches!(param.ty, Type::Optional(_)));
+
+        let formatted = crate::format(source, &crate::FormatOptions::default())
+            .expect("formatter should disambiguate optional parameter and optional type");
+        assert!(formatted.contains("name?:"));
+        assert!(formatted.contains("string"));
+        assert_eq!(
+            crate::format(&formatted, &crate::FormatOptions::default())
+                .expect("formatter should be idempotent"),
+            formatted
+        );
     }
 }

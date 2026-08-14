@@ -2,29 +2,13 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.annotatedLiteralUnion() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: 1 | 2 // x
-
-    bb0: {
-        _1 = const 1_i64;
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.arrayOfInts() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // x
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _0 = copy _1;
         goto -> bb1;
     }
@@ -40,7 +24,7 @@ fn user.mapOfInts() -> map<string, int> {
     let _1: map<string, int> // m
 
     bb0: {
-        _1 = { const "a": const 1_i64, const "b": const 2_i64 };
+        _1 = { const "a": const 1_i64, const "b": const 2_i64 }: map<string, int>;
         _0 = copy _1;
         goto -> bb1;
     }
@@ -58,9 +42,25 @@ fn user.nestedArray() -> int[][] {
     let _3: int[]
 
     bb0: {
-        _2 = [const 1_i64, const 2_i64];
-        _3 = [const 3_i64, const 4_i64];
-        _1 = [copy _2, copy _3];
+        _2 = [const 1_i64, const 2_i64]: int[];
+        _3 = [const 3_i64, const 4_i64]: int[];
+        _1 = [copy _2, copy _3]: int[][];
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.annotatedLiteralUnion() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: 1 | 2 // x
+
+    bb0: {
+        _1 = const 1_i64;
         _0 = copy _1;
         goto -> bb1;
     }

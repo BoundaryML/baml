@@ -48,18 +48,14 @@ function OpenAIEnumMatch(m: Model) -> string {
 
 function OpenAIThrowClass(x: int) -> string {
     match (x) {
-        0 => {
-            throw Error { status_code: 429, body: "rate limited" }
-        },
+        0 => throw Error { status_code: 429, body: "rate limited" },
         _ => "ok",
     }
 }
 
 function OpenAIThrowEnum(x: int) -> string {
     match (x) {
-        0 => {
-            throw Model.O3
-        },
+        0 => throw Model.O3,
         _ => "ok",
     }
 }

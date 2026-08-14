@@ -2,5 +2,6 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-function         env.get                          <builtin>/baml/ns_env/env.baml:1
-function         env.get_or_panic                 <builtin>/baml/ns_env/env.baml:5
+function         baml.env.get                     <builtin>/baml/ns_env/env.baml:6
+function         baml.env.get_or_panic            <builtin>/baml/ns_env/env.baml:11
+function         baml.env.get_or_panic_lenient    <builtin>/baml/ns_env/env.baml:23

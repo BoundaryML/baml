@@ -1,0 +1,72 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.IntToStringBareLiteral() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: type
+
+    bb0: {
+        _1 = load_type(7);
+        _0 = call const fn baml.String.from<copy _1>(const 7_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.IntAbsBareLiteral() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = call const fn baml.Int.abs(const 3_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.IntPowBareLiteral() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = call const fn baml.Int.pow(const 2_i64, const 3_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.FloatFloorBareLiteral() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = call const fn baml.Float.floor(const 2.5_f64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BigintToStringBareLiteral() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: type
+
+    bb0: {
+        _1 = load_type(42n);
+        _0 = call const fn baml.String.from<copy _1>(const 42n) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

@@ -2,11 +2,9 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-function deep_copy  <builtin>/baml/core.baml:2
+function deep_copy  (baml.deep_copy)  <builtin>/baml/core.baml:3-5
 
-//baml:mut_vm
-function deep_copy<T>(value: T) -> T {
-  $rust_function
-}
+/// Returns a deep copy of `value` — all nested structures are recursively cloned.
+function deep_copy<T>(value: T) -> T throws never
 
 references (0):

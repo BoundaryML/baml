@@ -13,10 +13,10 @@ too_many_arguments = "allow"
 
 [dependencies]
 anyhow.workspace = true
-baml-cli.workspace = true
+baml-cli = { path = "../../../cli", default-features = false }
 baml-ids.workspace = true
 baml-log.workspace = true
-baml-runtime = { path = "../../../baml-runtime", features = ["internal"] }
+baml-runtime = { path = "../../../baml-runtime", default-features = false, features = ["internal"] }
 baml-types.workspace = true
 base64.workspace = true
 env_logger.workspace = true
@@ -43,6 +43,12 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "valuable",
 ] }
+
+[features]
+# AWS Bedrock provider support, forwarded through the runtime stack. On by
+# default; build with --no-default-features to drop the aws-* dependency tree.
+default = ["bedrock"]
+bedrock = ["baml-runtime/bedrock", "baml-cli/bedrock"]
 
 [dev-dependencies.magnus]
 version = "0.7.1"

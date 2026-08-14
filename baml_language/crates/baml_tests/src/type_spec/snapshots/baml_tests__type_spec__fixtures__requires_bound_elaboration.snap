@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+708..711 'key': throws never
+730..795 '{\n   ...n    }': never
+747..757 'self.value': T
+747..785 'self.v...ring>>': user.RbeHasKey<Key = string>
+747..789 'self.v...>>.key': string
+810..817 'summary': throws never
+834..929 '{\n   ...n    }': string
+844..851 'let tag': string
+854..869 'self.value.name': string
+854..875 'self.v... + ":"': string
+854..888 'self.v....key()': string
+872..875 '":"': ":"
+878..886 'self.key': (self: user.RbeBox<T>) -> string throws never
+878..888 'self.key()': string
+920..923 'tag': string
+941..949 'rbe_main': throws never
+975..1106 '{\n   ...  s\n}': string
+981..990 'let boxed': user.RbeBox<user.RbeUser>
+993..1053 'RbeBox...a" } }': user.RbeBox<user.RbeUser>
+1018..1051 'RbeUse...Ada" }': user.RbeUser
+1032..1036 '"u1"': "u1"
+1044..1049 '"Ada"': "Ada"
+1058..1063 'let s': string
+1066..1079 'boxed.summary': (self: user.RbeBox<user.RbeUser>) -> string throws never
+1066..1081 'boxed.summary()': string
+1103..1104 's': string

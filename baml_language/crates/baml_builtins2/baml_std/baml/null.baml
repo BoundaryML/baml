@@ -1,5 +1,3 @@
+/// The null type, representing the absence of a value.
 class Null {
-  function to_json(self) -> baml.json.json {
-    $rust_function
-  }
 }

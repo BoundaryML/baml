@@ -6,14 +6,20 @@
 // Run with:
 //   cd baml_language/crates/bridge_wasm && wasm-pack test --node
 
+use std::collections::HashMap;
+
+use base64::Engine;
+use bex_events::{
+    prof::read::read_bamlprof_from_bytes,
+    run::{CallStatus, ReconstructedProfile, bamlprof},
+};
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
-    baml_core::cffi::{
-        BamlOutboundValue, CallFunctionArgs, baml_outbound_value::Value as OutboundValue,
-    },
+    baml_bridge::cffi::{BamlOutboundValue, baml_outbound_value::Value as OutboundValue},
 };
 use prost::Message;
 use wasm_bindgen::{JsCast, prelude::*};
+use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_node_experimental);
@@ -255,7 +261,12 @@ fn mock_vfs(files: &[(&str, &str)], dirs: &[&str]) -> JsValue {
     obj.into()
 }
 
-fn callbacks() -> JsValue {
+struct TestRuntime {
+    runtime: BamlWasmRuntime,
+    notifications: js_sys::Array,
+}
+
+fn callbacks(notifications: &js_sys::Array) -> JsValue {
     let obj = js_sys::Object::new();
     js_sys::Reflect::set(
         &obj,
@@ -283,10 +294,27 @@ fn callbacks() -> JsValue {
     js_sys::Reflect::set(&obj, &JsValue::from_str("lsp_send_notification"), &noop).unwrap();
     js_sys::Reflect::set(&obj, &JsValue::from_str("lsp_send_response"), &noop).unwrap();
     js_sys::Reflect::set(&obj, &JsValue::from_str("lsp_make_request"), &noop).unwrap();
+    let captured_notifications = notifications.clone();
+    let playground = Closure::wrap(Box::new(move |value: JsValue| {
+        captured_notifications.push(&value);
+    }) as Box<dyn FnMut(JsValue)>);
+    let playground_fn = playground
+        .as_ref()
+        .unchecked_ref::<js_sys::Function>()
+        .clone();
+    playground.forget();
     js_sys::Reflect::set(
         &obj,
         &JsValue::from_str("playground_send_notification"),
-        &noop,
+        &playground_fn,
+    )
+    .unwrap();
+    // host_dispatch: invoked when BAML calls a host-registered JS callable.
+    // The fs/glob tests don't exercise host callables; a noop is sufficient.
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("host_dispatch"),
+        &js_sys::Function::new_with_args("key, callId, argsBytes", ""),
     )
     .unwrap();
 
@@ -307,7 +335,7 @@ fn open_project(runtime: &BamlWasmRuntime, source: &str) {
     });
 }
 
-fn runtime(files: &[(&str, &str)], dirs: &[&str], source: &str) -> BamlWasmRuntime {
+fn runtime(files: &[(&str, &str)], dirs: &[&str], source: &str) -> TestRuntime {
     runtime_with_symlinks(files, dirs, &[], source)
 }
 
@@ -316,7 +344,7 @@ fn runtime_with_symlinks(
     dirs: &[&str],
     symlinks: &[&str],
     source: &str,
-) -> BamlWasmRuntime {
+) -> TestRuntime {
     let vfs = mock_vfs(files, dirs);
     if !symlinks.is_empty() {
         let map = js_sys::Reflect::get(&vfs, &JsValue::from_str("_symlinks")).unwrap();
@@ -324,37 +352,130 @@ fn runtime_with_symlinks(
             js_sys::Reflect::set(&map, &JsValue::from_str(path), &JsValue::TRUE).unwrap();
         }
     }
-    let callbacks = callbacks();
+    let notifications = js_sys::Array::new();
+    let callbacks = callbacks(&notifications);
     let runtime = BamlWasmRuntime::create(callbacks.unchecked_ref(), vfs.unchecked_into()).unwrap();
     open_project(&runtime, source);
-    runtime
+    TestRuntime {
+        runtime,
+        notifications,
+    }
 }
 
-async fn call_no_args(runtime: &BamlWasmRuntime, call_id: u32, name: &str) -> BamlOutboundValue {
-    let args = CallFunctionArgs::default().encode_to_vec();
-    let bytes = runtime
-        .call_function(call_id, "/workspace/baml_src".to_string(), name, &args)
-        .await
-        .unwrap();
-    BamlOutboundValue::decode(bytes.as_slice()).unwrap()
+async fn call_no_args(runtime: &TestRuntime, call_id: u32, name: &str) -> BamlOutboundValue {
+    call_run(runtime, call_id, name, &[]).await.unwrap()
 }
 
 async fn call_no_args_result(
-    runtime: &BamlWasmRuntime,
+    runtime: &TestRuntime,
     call_id: u32,
     name: &str,
 ) -> Result<BamlOutboundValue, JsValue> {
-    let args = CallFunctionArgs::default().encode_to_vec();
-    let bytes = runtime
-        .call_function(call_id, "/workspace/baml_src".to_string(), name, &args)
-        .await?;
-    Ok(BamlOutboundValue::decode(bytes.as_slice()).unwrap())
+    call_run(runtime, call_id, name, &[]).await
+}
+
+async fn call_run(
+    runtime: &TestRuntime,
+    call_id: u32,
+    name: &str,
+    args: &[u8],
+) -> Result<BamlOutboundValue, JsValue> {
+    let start_index = runtime.notifications.length();
+    runtime
+        .runtime
+        .start_run(call_id, "/workspace/baml_src".to_string(), name, args)?;
+    wait_for_run_result(&runtime.notifications, start_index).await
+}
+
+async fn wait_for_run_result(
+    notifications: &js_sys::Array,
+    start_index: u32,
+) -> Result<BamlOutboundValue, JsValue> {
+    for _ in 0..100 {
+        for idx in start_index..notifications.length() {
+            let notification = notifications.get(idx);
+            if let Some(outcome) = complete_outcome(&notification) {
+                return decode_outcome(&outcome);
+            }
+        }
+        JsFuture::from(js_sys::Promise::resolve(&JsValue::UNDEFINED)).await?;
+    }
+    Err(JsValue::from_str(
+        "timed out waiting for RunStore completion notification",
+    ))
+}
+
+fn complete_outcome(notification: &JsValue) -> Option<JsValue> {
+    if get_string(notification, "type")? != "runPatch" {
+        return None;
+    }
+    let patch = js_sys::Reflect::get(notification, &JsValue::from_str("patch")).ok()?;
+    let changes = js_sys::Reflect::get(&patch, &JsValue::from_str("changes"))
+        .ok()?
+        .dyn_into::<js_sys::Array>()
+        .ok()?;
+    for idx in 0..changes.length() {
+        let change = changes.get(idx);
+        if get_string(&change, "type").as_deref() == Some("complete") {
+            return js_sys::Reflect::get(&change, &JsValue::from_str("outcome")).ok();
+        }
+    }
+    None
+}
+
+fn decode_outcome(outcome: &JsValue) -> Result<BamlOutboundValue, JsValue> {
+    match get_string(outcome, "status").as_deref() {
+        Some("succeeded") => {
+            let result = js_sys::Reflect::get(outcome, &JsValue::from_str("result"))?;
+            let encoded = get_string(&result, "value")
+                .ok_or_else(|| JsValue::from_str("RunStore success missing result value"))?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .map_err(|e| JsValue::from_str(&format!("invalid base64 run result: {e}")))?;
+            BamlOutboundValue::decode(bytes.as_slice())
+                .map_err(|e| JsValue::from_str(&format!("invalid outbound run result: {e}")))
+        }
+        Some("failed") => {
+            let error = js_sys::Reflect::get(outcome, &JsValue::from_str("error"))?;
+            let message = get_string(&error, "message").unwrap_or_else(|| "run failed".to_string());
+            Err(JsValue::from_str(&message))
+        }
+        Some(other) => Err(JsValue::from_str(&format!("run completed with {other}"))),
+        None => Err(JsValue::from_str("RunStore completion missing status")),
+    }
+}
+
+fn get_string(value: &JsValue, key: &str) -> Option<String> {
+    js_sys::Reflect::get(value, &JsValue::from_str(key))
+        .ok()
+        .and_then(|value| value.as_string())
+}
+
+fn profile_artifact_bytes(notifications: &js_sys::Array, start_index: u32) -> Option<Vec<u8>> {
+    for idx in start_index..notifications.length() {
+        let notification = notifications.get(idx);
+        if get_string(&notification, "type").as_deref() != Some("profileArtifactChunk") {
+            continue;
+        }
+        let encoded = get_string(&notification, "bytesBase64")?;
+        return base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .ok();
+    }
+    None
 }
 
 fn bool_value(value: BamlOutboundValue) -> bool {
     match value.value {
         Some(OutboundValue::BoolValue(v)) => v,
         other => panic!("expected bool result, got {other:?}"),
+    }
+}
+
+fn int_value(value: BamlOutboundValue) -> i64 {
+    match value.value {
+        Some(OutboundValue::IntValue(v)) => v,
+        other => panic!("expected int result, got {other:?}"),
     }
 }
 
@@ -430,6 +551,41 @@ function GlobScanDirectoryOptions() -> string[] {
   let glob = baml.glob.new("**/*.txt");
   glob.scan(baml.glob.ScanOptions { cwd: "/workspace/data", only_files: false })
 }
+
+function RemoveDirEmptyThenGone() -> bool {
+  baml.fs.remove_dir("/workspace/data/dir.txt");
+  !baml.fs.exists("/workspace/data/dir.txt")
+}
+
+function RemoveDirAllTreeThenGone() -> bool {
+  baml.fs.remove_dir_all("/workspace/data");
+  !baml.fs.exists("/workspace/data")
+}
+
+function RemoveDirAllRejectsFile() -> null {
+  baml.fs.remove_dir_all("/workspace/data/a.txt")
+}
+
+function RemoveDirAllMissingIdempotent() -> bool {
+  baml.fs.remove_dir_all("/workspace/does_not_exist");
+  !baml.fs.exists("/workspace/does_not_exist")
+}
+"#;
+
+const PROFILE_SOURCE: &str = r#"
+function ProfileMarker() -> int {
+  7
+}
+"#;
+
+const PROFILE_PARITY_SOURCE: &str = r#"
+function parity_leaf(n: int) -> int { n + 1 }
+function parity_mid(n: int) -> int {
+  parity_leaf(n) + parity_leaf(n + 10)
+}
+function main() -> int {
+  parity_mid(1) + parity_leaf(5)
+}
 "#;
 
 fn runtime_files() -> Vec<(&'static str, &'static str)> {
@@ -460,6 +616,128 @@ async fn wasm_runtime_mkdir_recursive_then_exists() {
 
     let result = call_no_args(&runtime, 1, "MkdirRecursive").await;
     assert!(bool_value(result));
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_emits_reader_compatible_profile_artifact() {
+    let files = vec![("/workspace/baml_src/main.baml", PROFILE_SOURCE)];
+    let dirs = vec!["/workspace", "/workspace/baml_src"];
+    let runtime = runtime(&files, &dirs, PROFILE_SOURCE);
+
+    let start_index = runtime.notifications.length();
+    let result = call_no_args(&runtime, 11, "ProfileMarker").await;
+    assert_eq!(int_value(result), 7);
+
+    let bytes = profile_artifact_bytes(&runtime.notifications, start_index)
+        .expect("profileArtifactChunk notification with retained .bamlprof bytes");
+    let parsed = read_bamlprof_from_bytes(&bytes).expect("WASM .bamlprof bytes parse");
+    let table = parsed
+        .header
+        .function_table
+        .as_ref()
+        .expect("WASM .bamlprof header has function metadata");
+    assert!(
+        table
+            .functions
+            .iter()
+            .any(|f| f.fqn == "user.ProfileMarker"),
+        "profile header must include the executed function: {table:#?}"
+    );
+
+    let reconstructed =
+        bamlprof::reconstruct_bamlprof(&parsed).expect("WASM .bamlprof reconstructs");
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "WASM profile reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+    assert!(
+        reconstructed
+            .calls
+            .iter()
+            .any(|call| call.function_name.as_deref() == Some("user.ProfileMarker")),
+        "reconstructed call tree should include ProfileMarker: {:#?}",
+        reconstructed.calls
+    );
+}
+
+#[wasm_bindgen_test]
+async fn wasm_profile_reconstructs_canonical_parity_shape() {
+    let files = vec![("/workspace/baml_src/main.baml", PROFILE_PARITY_SOURCE)];
+    let dirs = vec!["/workspace", "/workspace/baml_src"];
+    let runtime = runtime(&files, &dirs, PROFILE_PARITY_SOURCE);
+
+    let start_index = runtime.notifications.length();
+    let result = call_no_args(&runtime, 12, "main").await;
+    assert_eq!(int_value(result), 18);
+
+    let bytes = profile_artifact_bytes(&runtime.notifications, start_index)
+        .expect("profileArtifactChunk notification with retained .bamlprof bytes");
+    let parsed = read_bamlprof_from_bytes(&bytes).expect("WASM .bamlprof bytes parse");
+    let reconstructed = bamlprof::reconstruct_bamlprof(&parsed).expect("WASM profile reconstructs");
+    assert_canonical_profile_parity_shape(&reconstructed);
+}
+
+fn assert_canonical_profile_parity_shape(reconstructed: &ReconstructedProfile) {
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "profile parity reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+
+    let calls_by_id: HashMap<_, _> = reconstructed
+        .calls
+        .iter()
+        .map(|call| (call.id, call))
+        .collect();
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    let mut edges: HashMap<(String, String), usize> = HashMap::new();
+
+    for call in &reconstructed.calls {
+        assert_eq!(
+            call.status,
+            CallStatus::Ok,
+            "parity fixture should have only successful calls"
+        );
+        let start = call.started_at_ns.expect("call has start timestamp");
+        let end = call.ended_at_ns.expect("call has end timestamp");
+        assert!(end >= start, "call timestamps are monotonic");
+
+        let function_name = call
+            .function_name
+            .clone()
+            .unwrap_or_else(|| "<unknown>".to_string());
+        *counts.entry(function_name.clone()).or_default() += 1;
+        let parent_name = call
+            .parent_id
+            .and_then(|parent_id| calls_by_id.get(&parent_id))
+            .and_then(|parent| parent.function_name.clone())
+            .unwrap_or_else(|| "<root>".to_string());
+        *edges.entry((parent_name, function_name)).or_default() += 1;
+    }
+
+    assert_eq!(counts.get("user.main"), Some(&1));
+    assert_eq!(counts.get("user.parity_mid"), Some(&1));
+    assert_eq!(counts.get("user.parity_leaf"), Some(&3));
+    assert_eq!(
+        edges.get(&("<root>".to_string(), "user.main".to_string())),
+        Some(&1)
+    );
+    assert_eq!(
+        edges.get(&("user.main".to_string(), "user.parity_mid".to_string())),
+        Some(&1)
+    );
+    assert_eq!(
+        edges.get(&(
+            "user.parity_mid".to_string(),
+            "user.parity_leaf".to_string()
+        )),
+        Some(&2)
+    );
+    assert_eq!(
+        edges.get(&("user.main".to_string(), "user.parity_leaf".to_string())),
+        Some(&1)
+    );
 }
 
 #[wasm_bindgen_test]
@@ -506,6 +784,51 @@ async fn wasm_runtime_read_dir_surfaces_symlink_flag() {
         tagged,
         vec!["F:.hidden.txt", "F:b.rs", "F:dir.txt", "F:sub", "L:a.txt",]
     );
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_remove_dir_removes_empty_directory() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 20, "RemoveDirEmptyThenGone").await;
+    assert!(bool_value(result));
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_remove_dir_all_removes_tree() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 21, "RemoveDirAllTreeThenGone").await;
+    assert!(bool_value(result));
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_remove_dir_all_rejects_regular_file() {
+    // Regression guard for CodeRabbit finding B: on WASM, remove_dir_all handed a
+    // regular file must error (matching native), not silently delete the file.
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args_result(&runtime, 22, "RemoveDirAllRejectsFile").await;
+    assert!(
+        result.is_err(),
+        "remove_dir_all on a regular file must error, got: {result:?}"
+    );
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_remove_dir_all_idempotent_on_missing() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 23, "RemoveDirAllMissingIdempotent").await;
+    assert!(bool_value(result));
 }
 
 #[wasm_bindgen_test]

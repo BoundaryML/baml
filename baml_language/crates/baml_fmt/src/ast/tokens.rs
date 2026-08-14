@@ -10,7 +10,6 @@ pub trait Token {
     fn span(&self) -> TextRange;
 }
 
-pub trait KeywordToken: Token {}
 macro_rules! define_keyword_tokens {
     ($($keyword:literal => SyntaxKind::$syntax_kind:ident => $name:ident;)*) => {
         $(
@@ -42,7 +41,6 @@ macro_rules! define_keyword_tokens {
                     Ok(Self::new_from_span(token.text_range()))
                 }
             }
-            impl KeywordToken for $name {}
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     f.write_str($keyword)
@@ -55,6 +53,11 @@ macro_rules! define_keyword_tokens {
 define_keyword_tokens! {
     "class" => SyntaxKind::KW_CLASS => Class;
     "enum" => SyntaxKind::KW_ENUM => Enum;
+    "interface" => SyntaxKind::KW_INTERFACE => Interface;
+    "implements" => SyntaxKind::KW_IMPLEMENTS => Implements;
+    "implement" => SyntaxKind::KW_IMPLEMENT => Implement;
+    "extends" => SyntaxKind::KW_EXTENDS => Extends;
+    "requires" => SyntaxKind::KW_REQUIRES => Requires;
     "function" => SyntaxKind::KW_FUNCTION => Function;
     "client" => SyntaxKind::KW_CLIENT => Client;
     "generator" => SyntaxKind::KW_GENERATOR => Generator;
@@ -62,25 +65,68 @@ define_keyword_tokens! {
     "testset" => SyntaxKind::KW_TESTSET => TestSet;
     "retry_policy" => SyntaxKind::KW_RETRY_POLICY => RetryPolicy;
     "template_string" => SyntaxKind::KW_TEMPLATE_STRING => TemplateString;
-    "type_builder" => SyntaxKind::KW_TYPE_BUILDER => TypeBuilder;
     "if" => SyntaxKind::KW_IF => If;
     "else" => SyntaxKind::KW_ELSE => Else;
     "for" => SyntaxKind::KW_FOR => For;
     "while" => SyntaxKind::KW_WHILE => While;
     "let" => SyntaxKind::KW_LET => Let;
+    "const" => SyntaxKind::KW_CONST => Const;
     "in" => SyntaxKind::KW_IN => In;
     "break" => SyntaxKind::KW_BREAK => Break;
     "continue" => SyntaxKind::KW_CONTINUE => Continue;
     "return" => SyntaxKind::KW_RETURN => Return;
+    "throw" => SyntaxKind::KW_THROW => Throw;
     "match" => SyntaxKind::KW_MATCH => Match;
-    "watch" => SyntaxKind::KW_WATCH => Watch;
+    "catch" => SyntaxKind::KW_CATCH => Catch;
+    "catch_all" => SyntaxKind::KW_CATCH_ALL => CatchAll;
+    "catch_all_panics" => SyntaxKind::KW_CATCH_ALL_PANICS => CatchAllPanics;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
-    "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
+    "is" => SyntaxKind::KW_IS => Is;
+    "spawn" => SyntaxKind::KW_SPAWN => Spawn;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
+    "type" => SyntaxKind::KW_TYPE => TypeKw;
+    "as" => SyntaxKind::KW_AS => As;
 }
 
-pub trait PunctuationToken: Token {}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BindingKeyword {
+    Let(Let),
+    Const(Const),
+}
+
+impl Token for BindingKeyword {
+    fn span(&self) -> TextRange {
+        match self {
+            Self::Let(token) => token.span(),
+            Self::Const(token) => token.span(),
+        }
+    }
+}
+
+impl FromCST for BindingKeyword {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::KW_LET => Ok(Self::Let(Let::from_cst(elem)?)),
+            SyntaxKind::KW_CONST => Ok(Self::Const(Const::from_cst(elem)?)),
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KW_LET or KW_CONST".into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl std::fmt::Display for BindingKeyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Let(token) => token.fmt(f),
+            Self::Const(token) => token.fmt(f),
+        }
+    }
+}
+
 macro_rules! define_punctuation_tokens {
     ($($punct:literal => SyntaxKind::$syntax_kind:ident => $name:ident;)*) => {
         $(
@@ -112,7 +158,6 @@ macro_rules! define_punctuation_tokens {
                     Ok(Self::new_from_span(token.text_range()))
                 }
             }
-            impl PunctuationToken for $name {}
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     f.write_str($punct)
@@ -472,6 +517,40 @@ impl KnownKind for IntegerLiteral {
     }
 }
 
+/// A boolean / null literal — `true` (`KW_TRUE`), `false` (`KW_FALSE`), or
+/// `null` (`KW_NULL`). One token type spanning the three re-lexed kinds.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct KeywordLiteral {
+    pub token_span: TextRange,
+}
+impl KeywordLiteral {
+    /// Does not verify that the span is actually a boolean/null literal token.
+    #[must_use]
+    pub fn new_from_span(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+}
+impl FromCST for KeywordLiteral {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        match token.kind() {
+            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
+                Ok(Self::new_from_span(token.text_range()))
+            }
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KW_TRUE, KW_FALSE, or KW_NULL".into(),
+                found,
+                at: token.text_range(),
+            }),
+        }
+    }
+}
+impl Token for KeywordLiteral {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FloatLiteral {
     pub token_span: TextRange,
@@ -512,10 +591,41 @@ impl Word {
         Self { token_span }
     }
 }
+
+/// True for token kinds the parser accepts as identifiers in name positions.
+///
+/// The lexer emits dedicated keyword kinds for these words, but the parser
+/// keeps them valid as field, parameter, method, and member-access names
+/// (e.g. a class field or parameter named `client`, or `x.implements(y)` on
+/// the reflection `type` value). The CST therefore contains the keyword kind
+/// where the strong AST expects a name, and [`Word::from_cst`] must accept it.
+/// Mirrors `at_member_name` and `parse_parameter` in `baml_compiler_parser`.
+#[must_use]
+pub fn is_word_like(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_IMPLEMENTS
+            | SyntaxKind::KW_IMPLEMENT
+            | SyntaxKind::KW_EXTENDS
+            | SyntaxKind::KW_REQUIRES
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
+    )
+}
+
 impl FromCST for Word {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::WORD)?;
+        if !is_word_like(token.kind()) {
+            return Err(StrongAstError::UnexpectedKind {
+                expected: SyntaxKind::WORD,
+                found: token.kind(),
+                at: token.text_range(),
+            });
+        }
         Ok(Self::new_from_span(token.text_range()))
     }
 }
@@ -641,9 +751,11 @@ impl Printable for RawString {
 
         let interior = &text[start_quote + 1..end_quote].trim();
         let mut lines = interior.lines();
-        let first_line = lines
-            .next()
-            .unwrap_or_else(|| unreachable!("split always has at least one element"));
+        let Some(first_line) = lines.next() else {
+            // Interior is empty after trim (e.g. `#"\n"#`) — print as-is.
+            printer.print_raw_token(self);
+            return PrintInfo { multi_lined };
+        };
         let min_indent = lines
             .clone()
             .map(|line| {
@@ -686,6 +798,151 @@ impl Printable for RawString {
         printer.print_spaces(shape.indent);
         printer.print_str(&text[end_quote..]);
 
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
+    }
+}
+
+/// BEP-049 backtick-interpolated string literal.
+///
+/// A backtick string is auto-dedented at lower time (BEP-049 §12,
+/// `baml_base::dedent::dedent_backtick`) with its `${...}` interpolations
+/// replaced by placeholders and §13 whitespace control applied, so its runtime
+/// *value* depends on the interior's indentation. The formatter re-indents a
+/// multi-line interior to sit one level past the surrounding block (like a raw
+/// string) but ONLY when that is provably value-preserving: it strips the same
+/// common-prefix the runtime would, re-emits at the block indent, and then
+/// re-derives the value of both forms and bails to verbatim if they differ. A
+/// literal with a `${for}`/`${if}` block tag or a multi-line interpolation is
+/// always printed verbatim (see the `dedent_safe` field), since re-indenting
+/// those could change the §13 / placeholder-dedent value.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BacktickString {
+    pub token_span: TextRange,
+    /// `true` when the literal has no `${for}`/`${if}` block tag and no
+    /// multi-line `${...}` interpolation, so re-indenting its text lines cannot
+    /// change the runtime value.
+    dedent_safe: bool,
+}
+impl FromCST for BacktickString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::BACKTICK_STRING_LITERAL)?;
+
+        let start = node
+            .first_child_token_of_kind(SyntaxKind::BACKTICK)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::BACKTICK, node.text_range()))?;
+
+        // Block tags (§13 whitespace control) and multi-line interpolations
+        // (placeholdered before the §12 min-indent, so their inner lines are NOT
+        // re-indented) make a plain re-indent value-unsafe. Detect them up front.
+        let dedent_safe = !node.children().any(|child| match child.kind() {
+            SyntaxKind::BACKTICK_FOR_OPEN
+            | SyntaxKind::BACKTICK_ENDFOR
+            | SyntaxKind::BACKTICK_IF_OPEN
+            | SyntaxKind::BACKTICK_ELSE_IF
+            | SyntaxKind::BACKTICK_ELSE
+            | SyntaxKind::BACKTICK_ENDIF => true,
+            SyntaxKind::BACKTICK_INTERPOLATION => child.text().to_string().contains('\n'),
+            _ => false,
+        });
+
+        Ok(BacktickString {
+            token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+            dedent_safe,
+        })
+    }
+}
+impl Token for BacktickString {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for BacktickString {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BACKTICK_STRING_LITERAL
+    }
+}
+
+/// Re-indent a multi-line backtick literal `text` so its interior sits one level
+/// past `indent`, or return `None` to print it verbatim (single line, malformed,
+/// or the re-indent would change the runtime value).
+fn reindent_backtick(text: &str, indent: usize, indent_width: usize) -> Option<String> {
+    if !text.contains('\n') {
+        return None;
+    }
+    // The delimiter is a run of N backticks on each side (tick ladder).
+    let ticks = text.bytes().take_while(|&c| c == b'`').count();
+    if ticks == 0 || text.len() < ticks * 2 {
+        return None;
+    }
+    let inner = &text[ticks..text.len() - ticks];
+
+    // Source-level dedent: strip the common leading-whitespace prefix and the
+    // delimiters' own line breaks, exactly as the compiler's §12 dedent does,
+    // and on the raw source for the same reason it does — so escapes and
+    // `${...}` stay intact and the printed form remains valid source.
+    let dedented = baml_db::dedent::dedent_backtick(inner);
+    if dedented.is_empty() {
+        return None;
+    }
+
+    let base = indent + indent_width;
+    let mut candidate_inner = String::from("\n");
+    for (i, line) in dedented.lines().enumerate() {
+        if i > 0 {
+            candidate_inner.push('\n');
+        }
+        if !line.is_empty() {
+            candidate_inner.extend(std::iter::repeat_n(' ', base));
+            candidate_inner.push_str(line);
+        }
+    }
+    candidate_inner.push('\n');
+    candidate_inner.extend(std::iter::repeat_n(' ', indent));
+
+    // Bail to verbatim unless the runtime value (§12 dedented, then escapes
+    // decoded — the compiler's order) is byte-identical for the original and
+    // re-indented interiors.
+    let value = |s: &str| {
+        baml_db::escape::unescape_backtick_string_literal(&baml_db::dedent::dedent_backtick(s))
+    };
+    if value(inner) != value(&candidate_inner) {
+        return None;
+    }
+
+    Some(format!(
+        "{}{}{}",
+        &text[..ticks],
+        candidate_inner,
+        &text[text.len() - ticks..]
+    ))
+}
+
+impl Printable for BacktickString {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let text = &printer.input[self.span()];
+        let multi_lined = text.contains('\n');
+        let reindented = if self.dedent_safe {
+            reindent_backtick(text, shape.indent, printer.config.indent_width)
+        } else {
+            None
+        };
+        match reindented {
+            Some(reindented) => printer.print_str(&reindented),
+            None => printer.print_raw_token(self),
+        }
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {

@@ -2,7 +2,6 @@ use std::{collections::HashMap, time::Duration};
 
 use anyhow::{Context, Result};
 use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent};
-use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use indexmap::IndexMap;
 use internal_baml_core::ir::ClientWalker;

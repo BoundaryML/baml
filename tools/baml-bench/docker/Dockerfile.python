@@ -1,0 +1,33 @@
+# Shared slim image for every pure-Python service (api, baml-worker, baml-dedup,
+# baml-builder, notion-fixer, ingress, cron). They differ only by the
+# `command:` in docker-compose.
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bake the BAML skill into the image so the baml-worker can inject it on Fly
+# (no host mount there). The baml-worker rglobs SKILL.md under BAML_SKILL_DIR,
+# so the exact repo layout doesn't matter. Locally, docker-compose still
+# bind-mounts the live skill over /baml-skill.
+RUN git clone --depth 1 https://github.com/BoundaryML/baml-skill.git /baml-skill || true
+
+WORKDIR /app
+COPY pyproject.toml ./
+COPY libs ./libs
+COPY services ./services
+
+RUN pip install --no-cache-dir -e .
+
+# Drop root at runtime. Pre-create /data/blobs owned by the unprivileged user so
+# a fresh named volume mounted there inherits writable ownership.
+RUN groupadd -r -g 1000 appuser \
+    && useradd -r -u 1000 -g appuser -d /app -s /usr/sbin/nologin appuser \
+    && mkdir -p /data/blobs \
+    && chown -R appuser:appuser /app /data
+
+ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app/libs:/app
+USER appuser
+# default command; overridden per service in docker-compose
+CMD ["python", "-m", "services.api"]

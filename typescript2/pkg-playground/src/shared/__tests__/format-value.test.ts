@@ -42,7 +42,11 @@ describe('formatValue', () => {
   });
 
   it('formats prompt_ast', () => {
-    const value = { $baml: { type: '$prompt_ast' }, content_type: 'simple', value: {} };
+    const value = {
+      $baml: { type: '$prompt_ast' },
+      content_type: 'simple',
+      value: {},
+    };
     expect(formatValue(value, 'inline-hint')).toBe('<prompt_ast>');
   });
 

@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.ImplementsErrorArg {
+  v: int
+}
+class user.ImplementsErrorArg$stream {
+  v: int | null
+}
+class user.NotIface {
+  v: int
+}
+class user.NotIface$stream {
+  v: int | null
+}
+type user.PlainAlias = Plain
+type user.PlainAlias$stream = Plain
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [expr] {
+  { return 0 }
+}
+function user.p(self: ?) -> T  [missing]
+function user.q(self: ?) -> int  [missing]

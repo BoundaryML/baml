@@ -1,5 +1,3 @@
-/// Emit a custom event with the given name and data.
-/// The event will be associated with the current span context.
-function send(event_name: string, data: map<string, unknown>) -> void {
-  $compiler_intrinsic
-}
+// The `baml.events.send` intrinsic has been removed.
+// Custom user events are no longer part of the runtime; this namespace is
+// intentionally empty pending the observability rebuild.

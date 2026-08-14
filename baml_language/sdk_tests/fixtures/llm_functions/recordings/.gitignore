@@ -1,0 +1,5 @@
+# insta writes pending snapshots next to their targets while reviewing a
+# re-record (`cargo insta review`). They are transient — never commit them.
+*.snap.new
+*.snap.new.*
+*.pending-snap

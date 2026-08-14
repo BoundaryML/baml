@@ -1,4 +1,4 @@
-// This is a BAML file, which extends the Jinja2 templating language to write LLM functions.
+// This is a BAML file. Prompts are backtick templates with ${...} interpolations.
 // Run a test to see how it works!
 
 // https://docs.boundaryml.com
@@ -22,17 +22,13 @@ class Item {
 // the receipt can be an image OR text here!
 function ExtractReceipt(receipt: image | string) -> Receipt {
   // see clients.baml
-  client GPT4o
-  prompt #"
-    {# start a user message #}
-    {{ _.role("user") }}
-
+  client: GPT4o
+  prompt: `
     Extract info from this receipt:
-    {{ receipt }}
+    ${receipt}
 
-    {# special macro to print the output schema instructions. #}
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 // Test when the input is an image
@@ -63,8 +59,6 @@ test StarbucksTextReceiptTest {
   }
 }
 
-// This is a BAML config file, which extends the Jinja2 templating language to write LLM functions.
-
 class Resume {
   name string
   education Education[] @description("Extract in the same order listed")
@@ -79,22 +73,21 @@ class Education {
 
 function ExtractResume(resume_text: string) -> Resume {
   // see clients.baml
-  client GPT4o
+  client: GPT4o
 
-  // The prompt uses Jinja syntax. Change the models or this text and watch the prompt preview change!
-  prompt #"
+  // Change the models or this text and watch the prompt preview change!
+  prompt: `
     Parse the following resume and return a structured representation of the data in the schema below.
 
     Resume:
     ---
-    {{ resume_text }}
+    ${resume_text}
     ---
 
-    {# special macro to print the output instructions. #}
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test Test1 {
@@ -131,21 +124,21 @@ class Message {
 
 // inputs can be more complex than just a string
 function ClassifyMessage(message: Message) -> Category {
-  client GPT4o
+  client: GPT4o
 
-  prompt #"
+  prompt: `
     Classify the following INPUT into ONE
     of categories listed.
 
     INPUT:
     ---
-    {{ message.userName }}: {{ message.message }}
+    ${message.userName}: ${message.message}
     ---
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     Response:
-  "#
+  `
 }
 
 test Test1 {
@@ -157,99 +150,59 @@ test Test1 {
     }
   }
 }
-// These are LLM clients you can use in your functions. We currently support Anthropic, OpenAI / Azure, Gemini, and Ollama as providers.
+// These are LLM clients you can use in your functions. Clients are constructed
+// values now; reliability composes with ai.Retry / ai.Fallback / ai.RoundRobin.
 
-// We also support any other provider that follows the OpenAI API specification, such as HuggingFace.
+client GPT4 = openai.OpenAiClient.new(
+  model = "gpt-4",
+  api_key = env.OPENAI_API_KEY,
+);
 
-// For this playground, we have setup a few clients for you to use already with some free credits.
+// A client wrapped with a retry policy.
+client GPT4o = ai.clients.Retry.new(
+  inner = openai.OpenAiClient.new(model = "gpt-4o", api_key = env.OPENAI_API_KEY),
+  max_attempts = 3,
+);
 
-client<llm> GPT4 {
-  // Use one of the following: https://docs.boundaryml.com/docs/snippets/clients/providers/openai
-  provider openai
-  // You can pass in any parameters from the OpenAI Python documentation into the options block.
-  options {
-    model gpt-4
-    api_key env.OPENAI_API_KEY
-  }
-}
+client Claude = anthropic.AnthropicClient.new(
+  model = "claude-3-haiku-20240307",
+  api_key = env.ANTHROPIC_API_KEY,
+  max_tokens = 1000,
+);
 
-client<llm> GPT4o {
-  provider openai
-  retry_policy CustomRetry
-  options {
-    model gpt-4o
-    api_key env.OPENAI_API_KEY
-  }
-}
+client Gemini = google.GoogleClient.new(
+  model = "gemini-2.5-flash",
+  api_key = env.GOOGLE_API_KEY,
+);
 
-retry_policy CustomRetry {
-  max_retries 3
-}
-
-client<llm> Claude {
-  provider anthropic
-  options {
-    model claude-3-haiku-20240307
-    api_key env.ANTHROPIC_API_KEY
-    max_tokens 1000
-
-  }
-}
-
-client<llm> Gemini {
-  provider google-ai
-  options {
-    model "gemini-2.5-flash"
-    api_key env.GOOGLE_API_KEY
-  }
-}
-
-// You can use the fallback provider to add more resilience to your application.
-
-// A fallback will attempt to use the first client, and if it fails, it will try the second client, and so on.
-
+// You can use a fallback to add more resilience to your application.
+// A fallback will attempt to use the first client, and if it fails, it will
+// try the second client, and so on.
 // https://docs.boundaryml.com/docs/snippets/clients/fallback
-
-client<llm> SuperDuperClient {
-  provider fallback
-  options {
-    // clients from clients.baml
-    strategy [
-      GPT4
-      GPT4o
-      Gemini
-    ]
-  }
-}
+client SuperDuperClient = ai.clients.Fallback {
+  members: [
+    GPT4,
+    GPT4o,
+    Gemini,
+  ],
+};
 
 // An example of a BAML client with a retry policy
-
 // https://docs.boundaryml.com/docs/snippets/clients/retry
+client MyClient = ai.clients.Retry.new(
+  inner = anthropic.AnthropicClient.new(
+    model = "claude-3-sonnet-20240229",
+    api_key = env.ANTHROPIC_API_KEY,
+  ),
+  max_attempts = 3,
+);
 
-
-retry_policy MyPolicyName {
-  max_retries 3
-}
-
-client<llm> MyClient {
-  provider anthropic
-  retry_policy MyPolicyName
-  options {
-    model "claude-3-sonnet-20240229"
-    api_key env.ANTHROPIC_API_KEY
-  }
-}
-// The round_robin provider allows you to distribute requests across multiple clients in a round-robin fashion. After each call, the next client in the list will be used.
-
-client<llm> MyRoundRobinClient {
-  provider round-robin
-  options {
-    strategy [
-      GPT4o
-      Gemini
-    ]
-  }
-}
+// Round robin distributes requests across multiple clients. After each call,
+// the next client in the list will be used.
+client MyRoundRobinClient = ai.clients.RoundRobin.new([
+  GPT4o,
+  Gemini,
+]);
 
 class WeatherAPI {
   city string @description("the user's city")
@@ -257,18 +210,17 @@ class WeatherAPI {
 }
 
 function UseTool(user_message: string) -> WeatherAPI {
-  client GPT4o
-  prompt #"
+  client: GPT4o
+  prompt: `
     Extract the info from this message
     ---
-    {{ user_message }}
+    ${user_message}
     ---
 
-    {# special macro to print the output schema. #}
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test TestOne {
@@ -292,18 +244,17 @@ class SendEmail {
 }
 
 function ChooseOneTool(user_message: string) -> WeatherAPI2 | SendEmail {
-  client GPT4o
-  prompt #"
+  client: GPT4o
+  prompt: `
     Choose the right schema that contains all the information in this message:
     ---
-    {{ user_message }}
+    ${user_message}
     ---
 
-    {# special macro to print the output schema. #}
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test TestOneFunc {
@@ -326,18 +277,17 @@ test TestOneFunc2 {
 
 
 function ChooseNTools(user_message: string) -> (WeatherAPI2 | SendEmail)[] {
-  client GPT4o
-  prompt #"
+  client: GPT4o
+  prompt: `
     Choose the right schema(s) that contains all the information in this message:
     ---
-    {{ user_message }}
+    ${user_message}
     ---
 
-    {# special macro to print the output schema. #}
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test TestNTools {
@@ -353,17 +303,13 @@ test TestNTools {
 
 // BAML supports multi-modal inputs!
 
-// How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#image
-
 function AudioInput(audioInput: audio) -> string {
-  client Gemini
-  prompt #"
-    {{ _.role("user") }}
-
+  client: Gemini
+  prompt: `
    Does this sound like a roar? Yes or no? One word no other characters.
 
-    {{ audioInput }}
-  "#
+    ${audioInput}
+  `
 }
 
 
@@ -376,10 +322,6 @@ test TestURLAudioInput{
   }
 }
 
-// BAML supports multi-modal inputs! Check the raw cURL request toggle in the playground to see the prompt is transformed into an API call
-
-// How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#image
-
 class ImageDescription {
   description string
   tags string[] @description(#"
@@ -388,13 +330,12 @@ class ImageDescription {
 }
 
 function DescribeImage(myImage: image) -> ImageDescription {
-  client GPT4o
-  prompt #"
-    {{ _.role("user") }}
-    Describe this in 2 sentences: {{ myImage }}
+  client: GPT4o
+  prompt: `
+    Describe this in 2 sentences: ${myImage}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 
@@ -407,17 +348,13 @@ test ImageTest {
 
 // BAML supports multi-modal inputs including Pdfs!
 
-// How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#pdf
-
 function PdfInput(pdfInput: pdf) -> string {
-  client GPT4o
-  prompt #"
-    {{ _.role("user") }}
-
+  client: GPT4o
+  prompt: `
     Get the title of the pdfs
 
-    {{ pdfInput }}
-  "#
+    ${pdfInput}
+  `
 }
 
 test TestFilePdfInput {
@@ -429,19 +366,15 @@ test TestFilePdfInput {
   }
 }
 // BAML supports multi-modal inputs including videos!
-
-// How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#video
 // Note: Video input only works with Google models (Gemini)
 
 function VideoInput(videoInput: video) -> string {
-  client Gemini
-  prompt #"
-    {{ _.role("user") }}
-
+  client: Gemini
+  prompt: `
     Describe what happens in this video in 5 words or less.
 
-    {{ videoInput }}
-  "#
+    ${videoInput}
+  `
 }
 
 test TestFileVideoInput {
@@ -467,25 +400,23 @@ class OEducation {
 
 function ExtractResumeUsingOllama(resume_text: string) -> OResume {
   // see ollama-clients.baml
-  client Llama3
+  client: Llama3
   // client Mistral
   // client Gemma2
   // client Phi3
 
-  // The prompt uses Jinja syntax. Change the models or this text and watch the prompt preview change!
-  prompt #"
+  prompt: `
     Parse the following resume and return a structured representation of the data in the schema below.
 
     Resume:
     ---
-    {{ resume_text }}
+    ${resume_text}
     ---
 
-    {# special macro to print the output instructions. #}
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test OllamaTest1 {
@@ -523,24 +454,24 @@ class OMessage {
 // This will be available as an enum in your Python and Typescript code.
 // inputs can be more complex than just a string
 function ClassifyMessageUsingOllama(message: OMessage) -> OCategory {
-  client Llama3
+  client: Llama3
   // client Mistral
   // client Gemma2
   // client Phi3
 
-  prompt #"
+  prompt: `
     Classify the following INPUT into ONE
     of categories listed.
 
     INPUT:
     ---
-    {{ message.userName }}: {{ message.message }}
+    ${message.userName}: ${message.message}
     ---
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     Response:
-  "#
+  `
 }
 
 test OllamaTest1 {
@@ -552,65 +483,37 @@ test OllamaTest1 {
     }
   }
 }
-client<llm> Llama3 {
-  // See https://docs.boundaryml.com/docs/snippets/clients/providers/ollama
-  // to learn more about how to configure this client
-  //
-  // Note that you should run ollama using `OLLAMA_ORIGINS='*' ollama serve`
-  // and you'll also need to `ollama pull llama3` to use this client
-  provider ollama
-  options {
-    base_url "http://localhost:11434/v1"
-    model "llama3"
-  }
-}
+// Local Ollama models speak the OpenAI wire protocol, so they are constructed
+// OpenAI clients pointed at the local server.
+//
+// Note that you should run ollama using `OLLAMA_ORIGINS='*' ollama serve`
+// and you'll also need to `ollama pull llama3` to use these clients.
 
-client<llm> Mistral {
-  // See https://docs.boundaryml.com/docs/snippets/clients/providers/ollama
-  // to learn more about how to configure this client
-  //
-  // Note that you should run ollama using `OLLAMA_ORIGINS='*' ollama serve`
-  // and you'll also need to `ollama pull mistral` to use this client
-  provider ollama
-  options {
-    base_url "http://localhost:11434/v1"
-    model "mistral"
-  }
-}
+client Llama3 = openai.OpenAiClient.new(
+  model = "llama3",
+  base_url = "http://localhost:11434/v1",
+);
 
-client<llm> Gemma2 {
-  // See https://docs.boundaryml.com/docs/snippets/clients/providers/ollama
-  // to learn more about how to configure this client
-  //
-  // Note that you should run ollama using `OLLAMA_ORIGINS='*' ollama serve`
-  // and you'll also need to `ollama pull gemma2` to use this client
-  provider ollama
-  options {
-    base_url "http://localhost:11434/v1"
-    model "gemma2"
-  }
-}
+client Mistral = openai.OpenAiClient.new(
+  model = "mistral",
+  base_url = "http://localhost:11434/v1",
+);
 
-client<llm> Phi3 {
-  // See https://docs.boundaryml.com/docs/snippets/clients/providers/ollama
-  // to learn more about how to configure this client
-  //
-  // Note that you should run ollama using `OLLAMA_ORIGINS='*' ollama serve`
-  // and you'll also need to `ollama pull phi3` to use this client
-  provider ollama
-  options {
-    base_url "http://localhost:11434/v1"
-    model "phi3"
-  }
-}
+client Gemma2 = openai.OpenAiClient.new(
+  model = "gemma2",
+  base_url = "http://localhost:11434/v1",
+);
+
+client Phi3 = openai.OpenAiClient.new(
+  model = "phi3",
+  base_url = "http://localhost:11434/v1",
+);
 
 // BAML excels at parsing the schemas from LLM responses.
 
 // In this example we tell the model to think step by step and explain its reasoning
 // before outputting the answer.
 
-// Run this prompt, and you'll notice the BAML function still returns the expected return type (OrderInfo),
-// even though there is a bunch of "reasoning" text present in the "raw text". It works with streaming or even standalone enum outputs too!
 class Email {
     subject string
     body string
@@ -631,18 +534,18 @@ class OrderInfo {
 }
 
 function GetOrderInfo(email: Email) -> OrderInfo {
-  client GPT4o
-  prompt #"
+  client: GPT4o
+  prompt: `
     Extract the info from this email in the INPUT:
 
     INPUT:
     -------
-    from: {{email.from_address}}
-    Email Subject: {{email.subject}}
-    Email Body: {{email.body}}
+    from: ${email.from_address}
+    Email Subject: ${email.subject}
+    Email Body: ${email.body}
     -------
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     Before you output the JSON, please explain your
     reasoning step-by-step. Here is an example on how to do this:
@@ -651,7 +554,7 @@ function GetOrderInfo(email: Email) -> OrderInfo {
     {
       ... the json schema ...
     }'
-  "#
+  `
 }
 
 test Test1 {
@@ -683,8 +586,6 @@ test Test1 {
 // You can improve results by aliasing field names to symbols like "k1" ... "kN".
 // This makes the LLM pay attention to your descriptions instead of just the enum or property name, since those can introduce biases. See paper: https://arxiv.org/abs/2305.08298 for more details.
 
-// Check the prompt preview to see that aliases are being sent.
-
 // When you add aliases you don't need to change your resulting python code. Your models
 // stay the same. They are merely a way to aid in prompt engineering.
 enum MyClass {
@@ -705,18 +606,18 @@ enum MyClass {
 }
 
 function ClassifyMessageWithSymbol(input: string) -> MyClass {
-  client GPT4o
+  client: GPT4o
 
-  prompt #"
+  prompt: `
     Classify the following INPUT into ONE
     of the following categories:
 
-    INPUT: {{ input }}
+    INPUT: ${input}
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     Response:
-  "#
+  `
 }
 
 test Test1 {
@@ -734,25 +635,20 @@ enum MyCategory {
     Question
 }
 
+// Prompts are instructions-only now; role markers are gone.
 function ClassifyMessageWithRoles(input: string) -> MyCategory {
-  client GPT4o
+  client: GPT4o
 
-  prompt #"
-    {# _.role("system") starts a system message #}
-    {{ _.role("system") }}
-
+  prompt: `
     Classify the following INPUT into ONE
     of the following categories:
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
-    {# This starts a user message #}
-    {{ _.role("user") }}
-
-    INPUT: {{ input }}
+    INPUT: ${input}
 
     Response:
-  "#
+  `
 }
 
 test Test1 {
@@ -766,28 +662,26 @@ class User {
   is_active bool
 }
 
+// Jinja conditionals are gone; interpolate the flag and let the model decide.
 function FunctionWithConditionals(user: User) -> string {
-  client GPT4o
-  prompt #"
-    {% if user.is_active %}
-      Greet the user {{ user.name }}!
-    {% else %}
-      Tell the user to activate their account
-    {% endif %}
-  "#
+  client: GPT4o
+  prompt: `
+    The user is ${user.name}. Active: ${user.is_active}.
+    If the user is active, greet them; otherwise tell them to activate
+    their account.
+  `
 }
 class MyUserMessage {
   user_name string
   content string
 }
 
+// Jinja loops are gone; interpolate the list directly.
 function FunctionWithLoops(messages: MyUserMessage[]) -> string {
-  client GPT4o
-  prompt #"
-    {% for message in messages %}
-      {{ message.user_name }}: {{ message.content }}
-    {% endfor %}
-  "#
+  client: GPT4o
+  prompt: `
+    ${messages}
+  `
 }
 
 test TestName {
@@ -806,29 +700,20 @@ test TestName {
   }
 }
 
-// We can define other "template string" variables that can be used in a prompt.
 class UserMessage {
   message string
   role string
 }
 
-// prompt strings and template strings use Jinja2 syntax: https://jinja.palletsprojects.com/en/3.1.x/templates/
-template_string PrintMessages(messages: UserMessage[]) #"
-  {% for m in messages %}
-    {{ _.role(m.role) }}
-    {{ m.message }}
-  {% endfor %}
-"#
-
 function ClassifyConversation(messages: UserMessage[]) -> Category[] {
-  client GPT4o
-  prompt #"
+  client: GPT4o
+  prompt: `
     Classify this conversation:
-    {{ PrintMessages(messages) }}
+    ${messages}
 
     Use the following categories:
-    {{ ctx.output_format}}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 test TestClassifyConvo {

@@ -23,23 +23,6 @@ impl<'a> Printer<'a> {
         }
     }
 
-    #[inline]
-    #[must_use]
-    pub fn new(
-        input: &'a str,
-        config: &'a FormatOptions,
-        output: String,
-        trivia: &'a TriviaInfo,
-    ) -> Self {
-        Printer {
-            input,
-            config,
-            output,
-            trivia,
-            warnings: Vec::new(),
-        }
-    }
-
     /// Prints some number of spaces. Useful for indentation.
     #[inline]
     pub fn print_spaces(&mut self, num: usize) {
@@ -228,6 +211,27 @@ impl<'a> Printer<'a> {
         self.print_trivia_trailing(trailing_trivia);
     }
 
+    /// Like [`Self::print_standalone_with_trivia`] but omits the trailing trivia,
+    /// leaving it for an enclosing construct to emit.
+    ///
+    /// Used when wrapping a braceless `return` arm into a `{ … ; }` block: the
+    /// statement `;` must sit directly after the expression, and any same-line
+    /// trailing comment belongs to the whole arm (emitted after the wrapped
+    /// `},`). Printing the trailing trivia here would split the comment from its
+    /// `;` and — when the arm has no comma, so the arm's rightmost token *is* the
+    /// return value — duplicate it.
+    pub fn print_standalone_leading_and_body(&mut self, printable: &impl Printable, indent: usize) {
+        let leading_trivia = self.trivia.get_leading_for_element(printable);
+        self.print_trivia_with_newline(leading_trivia, indent);
+        self.print_spaces(indent);
+        let shape = Shape {
+            width: self.config.line_width.saturating_sub(indent),
+            indent,
+            first_line_offset: 0,
+        };
+        self.print(printable, shape);
+    }
+
     /// Checks that all the trivia can fit on a single line (no line comments or block comments containing newlines).
     /// If so, prints all the trivia with no spaces between and returns the length of the trivia.
     ///
@@ -294,18 +298,6 @@ impl<'a> Printer<'a> {
         Printer::new_empty(self.input, self.config, self.trivia)
     }
 
-    /// Runs the function on a sub-printer (a copy of the current printer but with an empty output).
-    ///
-    /// The output of the sub-printer is returned, without changing the current printer.
-    pub fn with_sub_printer(
-        &self,
-        f: impl FnOnce(&mut Printer<'a>) -> PrintInfo,
-    ) -> (String, PrintInfo, Vec<PrinterWarning>) {
-        let mut empty_copy = Printer::new_empty(self.input, self.config, self.trivia);
-        let info = f(&mut empty_copy);
-        (empty_copy.output, info, empty_copy.warnings)
-    }
-
     /// Runs the function on a sub-printer  (a copy of the current printer but with an empty output).
     /// If the function returns `Some(info)`, the sub-printer
     /// is appended to the current printer and the info is returned. Otherwise, the sub-printer is
@@ -359,13 +351,8 @@ impl<'a> Printer<'a> {
 
     /// The current length of the output.
     #[must_use]
-    pub const fn len(&self) -> usize {
+    pub(crate) const fn len(&self) -> usize {
         self.output.len()
-    }
-
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.output.is_empty()
     }
 }
 

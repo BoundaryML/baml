@@ -18,19 +18,21 @@ pub struct ClassMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EnumMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InterfaceMarker;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeAliasMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ClientMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TestMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct GeneratorMarker;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TemplateStringMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RetryPolicyMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LetMarker;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ImplMarker;
 
 // ── LocalItemId ──────────────────────────────────────────────────────────────
 
@@ -60,16 +62,6 @@ impl<T> LocalItemId<T> {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    pub const fn name_hash(self) -> u16 {
-        (self.packed >> 16) as u16
-    }
-
-    #[allow(clippy::cast_possible_truncation)]
-    pub const fn collision_index(self) -> u16 {
-        self.packed as u16
-    }
-
     pub const fn as_u32(self) -> u32 {
         self.packed
     }
@@ -88,6 +80,25 @@ pub fn hash_name(name: &baml_base::Name) -> u16 {
     h
 }
 
+/// Hash an `implements` block's structural identity — its interface-target head
+/// and for-target head — to 16 bits for use in `LocalItemId<ImplMarker>`.
+///
+/// Impls have no declared name, so this position-independent seed (plus the
+/// `LocalItemId` collision index) gives them stable IDs that survive reordering
+/// of unrelated items and whitespace edits. Multiple impls sharing a
+/// `(iface_head, for_head)` (e.g. `Converter<int>` and `Converter<float>` on
+/// one class) collide here and are disambiguated by the collision index.
+pub fn hash_impl_key(iface_head: &baml_base::Name, for_head: &baml_base::Name) -> u16 {
+    use std::collections::hash_map::DefaultHasher;
+
+    let mut hasher = DefaultHasher::new();
+    iface_head.hash(&mut hasher);
+    for_head.hash(&mut hasher);
+    #[expect(clippy::cast_possible_truncation)]
+    let h = hasher.finish() as u16;
+    h
+}
+
 // ── ItemKind ─────────────────────────────────────────────────────────────────
 
 /// Item kinds for collision tracking in the `ItemTree`.
@@ -96,11 +107,12 @@ pub enum ItemKind {
     Function,
     Class,
     Enum,
+    Interface,
     TypeAlias,
     Client,
-    Generator,
     Test,
     TemplateString,
     RetryPolicy,
     Let,
+    Impl,
 }

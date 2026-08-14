@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.ArrayConfig() -> map<string, string[]>  [expr] {
+  {  } map { "array_key_with_qu...": ["abc", "abc", "ccc"], "array1": ["one", "two"], "array2": ["one", "two"] }
+}
+function user.BoolConfig() -> map<string, bool>  [expr] {
+  {  } map { "booleanValue": true }
+}
+function user.NestedConfig() -> map<string, map<string, string>>  [expr] {
+  {  } map { "nestedKey": map { "key": "value", "key2": "value2" }, "headers": map { "x-api-key": "myapikey", "authorization": "Bearer token" } }
+}
+function user.NumberArrayConfig() -> map<string, int[]>  [expr] {
+  {  } map { "array3Numbers": [1, 2, 3] }
+}
+function user.NumberConfig() -> map<string, int>  [expr] {
+  {  } map { "max_tokens": 100, "myInteger": 100 }
+}
+function user.StringConfig() -> map<string, string>  [expr] {
+  {  } map { "key2": "some random value", "hello": "world", "thing": "hello", "block_string": "hello there my fr...", "inline_raw_string": "inline \"raw\" stri...", "string key": "value with spaces", "stringKey": "true", "oneMoreValueToTes...": "value" }
+}

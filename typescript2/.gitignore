@@ -8,6 +8,8 @@ dist/
 .next-dev/
 .turbo/
 .next-build/
+*.vsix
+*.tsbuildinfo
 
 # WASM output (built by wasm-pack)
 pkg-playground/wasm/
@@ -24,3 +26,6 @@ pkg-playground/wasm/
 
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
+
+# Staged copy of pkg-playground/wasm for npm publishing (prep-wasm-publish.mjs)
+wasm-publish/

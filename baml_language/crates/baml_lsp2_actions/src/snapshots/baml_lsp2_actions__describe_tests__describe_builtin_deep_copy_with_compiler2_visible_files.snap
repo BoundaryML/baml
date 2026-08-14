@@ -2,5 +2,5 @@
 source: crates/baml_lsp2_actions/src/describe_tests.rs
 expression: "project.format_description(&descs[0])"
 ---
-function deep_copy  core.baml:2
-shape: function deep_copy(value: T) -> T
+function deep_copy  (baml.deep_copy)  core.baml:3
+shape: function deep_copy(value: T) -> T throws never

@@ -3,7 +3,10 @@
 //! This crate defines opaque resource handles that can be stored on the VM heap.
 //! The actual resources (files, sockets) are managed by the sys provider.
 
+pub mod host_value;
 use std::sync::Arc;
+
+pub use host_value::{HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch};
 
 /// Type of resource for identification and cleanup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,6 +15,7 @@ pub enum ResourceType {
     Socket,
     Response,
     SseStream,
+    WsStream,
     StreamAccumulator,
 }
 
@@ -60,18 +64,6 @@ impl ResourceHandle {
                 kind,
                 display_name,
                 registry: Some(registry),
-            }),
-        }
-    }
-
-    /// Create a handle without cleanup (for testing or when cleanup is external).
-    pub fn new_without_cleanup(key: usize, kind: ResourceType, display_name: String) -> Self {
-        Self {
-            inner: Arc::new(ResourceHandleInner {
-                key,
-                kind,
-                display_name,
-                registry: None,
             }),
         }
     }
@@ -126,6 +118,7 @@ impl std::fmt::Display for ResourceHandle {
             ResourceType::Socket => write!(f, "socket:{}", self.display_name()),
             ResourceType::Response => write!(f, "http-response:{}", self.display_name()),
             ResourceType::SseStream => write!(f, "sse-stream:{}", self.display_name()),
+            ResourceType::WsStream => write!(f, "ws-stream:{}", self.display_name()),
             ResourceType::StreamAccumulator => {
                 write!(f, "stream-accumulator:{}", self.display_name())
             }

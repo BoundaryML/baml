@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use bex_vm_types::{
     HeapPtr, Object, Value,
-    types::{Instance, Variant},
+    types::{Array, Instance, Map, Variant},
 };
 use indexmap::IndexMap;
 
@@ -67,7 +67,7 @@ impl TlabChunk {
 ///
 /// // Fast allocation - just bumps pointer
 /// let ptr1 = tlab.alloc_string("hello".to_string());
-/// let ptr2 = tlab.alloc_array(vec![Value::Int(1), Value::Int(2)]);
+/// let ptr2 = tlab.alloc_array(baml_type::RealizedTy::int(), vec![Value::int(1), Value::int(2)]);
 ///
 /// // When chunk exhausted, refill gets a new region
 /// for _ in 0..2000 {
@@ -86,7 +86,21 @@ pub struct Tlab {
 }
 
 impl Tlab {
-    /// Create a new TLAB with an initial chunk from the heap.
+    /// Create a new TLAB with an initial chunk eagerly reserved from the
+    /// heap.
+    ///
+    /// **Avoid in production code paths.** Reserving a chunk here happens
+    /// outside any [`HeapPermitManager`](crate::HeapPermitManager) permit;
+    /// if a concurrent GC clears Gen0 before the caller registers as a
+    /// holder and acquires its permit, this TLAB's cursor is left pointing
+    /// into a freed/cleared region. Subsequent allocations panic with
+    /// `index N out of bounds (len=0)` (debug) or segfault (release).
+    ///
+    /// Permit-managed holders (`BexVm`, `FutureManagerInner`, …) must use
+    /// [`Tlab::new_empty`] so the first refill happens under a held permit.
+    /// `Tlab::new` is retained for standalone heap tests that exercise
+    /// TLAB mechanics without the permit infrastructure (those tests
+    /// guarantee single-threaded access).
     pub fn new(heap: Arc<BexHeap>) -> Self {
         let chunk = heap.alloc_tlab_chunk();
         Self {
@@ -98,7 +112,11 @@ impl Tlab {
 
     /// Create a TLAB without allocating an initial chunk.
     ///
-    /// The first allocation will trigger a refill.
+    /// The first allocation will trigger a refill. This is the right
+    /// constructor for permit-managed holders: it defers the
+    /// `alloc_tlab_chunk` call until the holder has been registered with
+    /// [`HeapPermitManager`](crate::HeapPermitManager) and acquired its
+    /// permit, so a concurrent GC cannot strand the TLAB cursor.
     pub fn new_empty(heap: Arc<BexHeap>) -> Self {
         Self {
             alloc_ptr: 0,
@@ -141,32 +159,56 @@ impl Tlab {
         unsafe { self.heap.make_heap_ptr(ptr) }
     }
 
+    /// Allocate a float object.
+    #[inline]
+    pub fn alloc_float(&mut self, f: f64) -> HeapPtr {
+        self.alloc(Object::Float(f))
+    }
+
     /// Allocate a string object.
     #[inline]
-    pub fn alloc_string(&mut self, s: String) -> HeapPtr {
-        self.alloc(Object::String(s))
+    pub fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
+        self.alloc(Object::String(s.into()))
     }
 
-    /// Allocate an array object.
+    /// Allocate an array object whose elements have static type `element_ty`.
     #[inline]
-    pub fn alloc_array(&mut self, values: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Array(values))
+    pub fn alloc_array(
+        &mut self,
+        element_ty: baml_type::RealizedTy,
+        values: Vec<Value>,
+    ) -> HeapPtr {
+        self.alloc(Object::Array(Array::new(element_ty, values)))
     }
 
-    /// Allocate a map object.
+    /// Allocate a map object whose keys/values have static types `key_ty`/`value_ty`.
     #[inline]
-    pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> HeapPtr {
-        self.alloc(Object::Map(values))
+    pub fn alloc_map(
+        &mut self,
+        key_ty: baml_type::RealizedTy,
+        value_ty: baml_type::RealizedTy,
+        values: IndexMap<bex_str::BexStr, Value>,
+    ) -> HeapPtr {
+        self.alloc(Object::Map(Map::new(key_ty, value_ty, values)))
     }
 
-    /// Allocate an instance object.
+    /// Allocate a non-generic instance object (empty class type args).
     #[inline]
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Instance(Instance {
-            class,
-            class_type_args: vec![],
-            fields,
-        }))
+        self.alloc_instance_with_type_args(class, Box::new([]), fields)
+    }
+
+    /// Allocate an instance object carrying its concrete class type args (De
+    /// Bruijn order). Used by the inbound FFI path to land a generic instance's
+    /// wire-supplied `type_args` into `Object::Instance::class_type_args`.
+    #[inline]
+    pub fn alloc_instance_with_type_args(
+        &mut self,
+        class: HeapPtr,
+        type_args: Box<[baml_type::RealizedTy]>,
+        fields: Vec<Value>,
+    ) -> HeapPtr {
+        self.alloc(Object::Instance(Instance::new(class, type_args, fields)))
     }
 
     /// Allocate a variant object.
@@ -178,7 +220,14 @@ impl Tlab {
     /// Allocate a uint8 array object.
     #[inline]
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
-        self.alloc(Object::Uint8Array(data))
+        self.alloc(Object::Uint8Array(data.into()))
+    }
+
+    /// Allocate an arbitrary-precision integer on the heap. Wraps the value in
+    /// an `Arc` so the digit slice can be shared by clones without a deep copy.
+    #[inline]
+    pub fn alloc_bigint(&mut self, value: num_bigint::BigInt) -> HeapPtr {
+        self.alloc(Object::Bigint(Arc::new(value)))
     }
 
     /// Allocate opaque Rust data on the heap.
@@ -195,7 +244,7 @@ impl Tlab {
 
     /// Allocate a type descriptor object on the heap.
     #[inline]
-    pub fn alloc_type(&mut self, ty: baml_type::Ty) -> HeapPtr {
+    pub fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
         self.alloc(Object::Type(Box::new(ty)))
     }
 
@@ -203,6 +252,12 @@ impl Tlab {
     #[inline]
     pub fn alloc_future(&mut self, future: bex_vm_types::Future) -> HeapPtr {
         self.alloc(Object::Future(future))
+    }
+
+    /// Allocate a bound method on the heap.
+    #[inline]
+    pub fn alloc_bound_method(&mut self, method: bex_vm_types::BoundMethod) -> HeapPtr {
+        self.alloc(Object::BoundMethod(method))
     }
 
     /// Get a new chunk from the heap (cold path).
@@ -285,6 +340,67 @@ impl std::fmt::Debug for Tlab {
 pub trait TlabHolder {
     fn tlab(&self) -> &Tlab;
     fn tlab_mut(&mut self) -> &mut Tlab;
+
+    fn alloc(&mut self, obj: Object) -> HeapPtr {
+        self.tlab_mut().alloc(obj)
+    }
+
+    fn alloc_float(&mut self, f: f64) -> HeapPtr {
+        self.tlab_mut().alloc_float(f)
+    }
+
+    fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
+        self.tlab_mut().alloc_string(s)
+    }
+
+    fn alloc_array(&mut self, element_ty: baml_type::RealizedTy, values: Vec<Value>) -> HeapPtr {
+        self.tlab_mut().alloc_array(element_ty, values)
+    }
+
+    fn alloc_map(
+        &mut self,
+        key_ty: baml_type::RealizedTy,
+        value_ty: baml_type::RealizedTy,
+        values: IndexMap<bex_str::BexStr, Value>,
+    ) -> HeapPtr {
+        self.tlab_mut().alloc_map(key_ty, value_ty, values)
+    }
+
+    fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
+        self.tlab_mut().alloc_instance(class, fields)
+    }
+
+    fn alloc_variant(&mut self, enm: HeapPtr, index: usize) -> HeapPtr {
+        self.tlab_mut().alloc_variant(enm, index)
+    }
+
+    fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
+        self.tlab_mut().alloc_uint8array(data)
+    }
+
+    fn alloc_bigint(&mut self, value: num_bigint::BigInt) -> HeapPtr {
+        self.tlab_mut().alloc_bigint(value)
+    }
+
+    fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+        self.tlab_mut().alloc_rust_data(data)
+    }
+
+    fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
+        self.tlab_mut().alloc_collector(collector)
+    }
+
+    fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
+        self.tlab_mut().alloc_type(ty)
+    }
+
+    fn alloc_future(&mut self, future: bex_vm_types::Future) -> HeapPtr {
+        self.tlab_mut().alloc_future(future)
+    }
+
+    fn alloc_bound_method(&mut self, method: bex_vm_types::BoundMethod) -> HeapPtr {
+        self.tlab_mut().alloc_bound_method(method)
+    }
 }
 
 #[cfg(test)]
@@ -311,7 +427,10 @@ mod tests {
         let runtime_idx = canary_idx - ct_len;
         unsafe {
             let gen0 = &*heap.gen0.get();
-            gen0.set(runtime_idx, Object::String("clobbered".to_string()));
+            gen0.set(
+                runtime_idx,
+                Object::String(bex_str::BexStr::from("clobbered")),
+            );
         }
 
         let result = catch_unwind(AssertUnwindSafe(|| {
@@ -325,7 +444,7 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let _ptr = tlab.alloc(Object::String("hello".to_string()));
+        let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from("hello")));
         assert_eq!(tlab.remaining(), 99);
     }
 
@@ -335,7 +454,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         for i in 0..10 {
-            let _ptr = tlab.alloc(Object::String(format!("obj{i}")));
+            let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!("obj{i}"))));
         }
         assert_eq!(tlab.remaining(), 90);
     }
@@ -347,26 +466,26 @@ mod tests {
 
         // Allocate 5 objects (fills first chunk)
         for i in 0..5 {
-            let _ptr = tlab.alloc(Object::String(format!("obj{i}")));
+            let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!("obj{i}"))));
         }
         assert_eq!(tlab.remaining(), 0);
 
         // Next allocation triggers refill
-        let _ptr = tlab.alloc(Object::String("obj5".to_string()));
+        let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from("obj5")));
         assert_eq!(tlab.remaining(), 4);
     }
 
     #[test]
     fn test_tlab_with_compile_time_objects() {
         let compile_time: Vec<Object> = vec![
-            Object::String("builtin1".to_string()),
-            Object::String("builtin2".to_string()),
+            Object::String(bex_str::BexStr::from("builtin1")),
+            Object::String(bex_str::BexStr::from("builtin2")),
         ];
         let heap = BexHeap::with_tlab_size(compile_time, 100);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // First runtime allocation must land outside the compile-time region.
-        let ptr = tlab.alloc(Object::String("runtime".to_string()));
+        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from("runtime")));
         assert!(
             !heap.is_compile_time_ptr(ptr),
             "runtime allocation must not overlap compile-time objects"
@@ -382,8 +501,8 @@ mod tests {
         let mut tlab2 = Tlab::new(heap2);
 
         // Allocate from both TLABs
-        let ptr1 = tlab1.alloc(Object::String("from_tlab1".to_string()));
-        let ptr2 = tlab2.alloc(Object::String("from_tlab2".to_string()));
+        let ptr1 = tlab1.alloc(Object::String(bex_str::BexStr::from("from_tlab1")));
+        let ptr2 = tlab2.alloc(Object::String(bex_str::BexStr::from("from_tlab2")));
 
         // They should get different pointers (different TLAB regions).
         assert_ne!(ptr1, ptr2);
@@ -394,13 +513,13 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let ptr = tlab.alloc(Object::String("test_value".to_string()));
+        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from("test_value")));
 
         // SAFETY: Single-threaded test, no concurrent access
         unsafe {
             let obj = tlab.get_object(ptr);
             match obj {
-                Object::String(s) => assert_eq!(s, "test_value"),
+                Object::String(s) => assert_eq!(s.as_str(), "test_value"),
                 _ => panic!("Expected String object"),
             }
         }
@@ -411,11 +530,11 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let ptr = tlab.alloc_string("hello world".to_string());
+        let ptr = tlab.alloc_string("hello world");
 
         unsafe {
             match ptr.get() {
-                Object::String(s) => assert_eq!(s, "hello world"),
+                Object::String(s) => assert_eq!(s.as_str(), "hello world"),
                 _ => panic!("Expected String"),
             }
         }
@@ -426,14 +545,14 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let values = vec![Value::Int(1), Value::Int(2), Value::Int(3)];
-        let ptr = tlab.alloc_array(values);
+        let values = vec![Value::int(1), Value::int(2), Value::int(3)];
+        let ptr = tlab.alloc_array(baml_type::RealizedTy::int(), values);
 
         unsafe {
             match ptr.get() {
                 Object::Array(arr) => {
                     assert_eq!(arr.len(), 3);
-                    assert_eq!(arr[0], Value::Int(1));
+                    assert_eq!(arr.get(0), Some(Value::int(1)));
                 }
                 _ => panic!("Expected Array"),
             }
@@ -446,13 +565,17 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         let mut map = IndexMap::new();
-        map.insert("key".to_string(), Value::Int(42));
-        let ptr = tlab.alloc_map(map);
+        map.insert(bex_str::BexStr::from("key"), Value::int(42));
+        let ptr = tlab.alloc_map(
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::int(),
+            map,
+        );
 
         unsafe {
             match ptr.get() {
                 Object::Map(m) => {
-                    assert_eq!(m.get("key"), Some(&Value::Int(42)));
+                    assert_eq!(m.get("key"), Some(Value::int(42)));
                 }
                 _ => panic!("Expected Map"),
             }
@@ -473,10 +596,10 @@ mod tests {
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
-                    field_type: baml_type::Ty::Int {
+                    field_type: baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     },
-                    field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
                         attr: baml_type::TyAttr::default(),
                     }),
                     description: None,
@@ -485,10 +608,10 @@ mod tests {
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
-                    field_type: baml_type::Ty::Int {
+                    field_type: baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     },
-                    field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
                         attr: baml_type::TyAttr::default(),
                     }),
                     description: None,
@@ -500,10 +623,12 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
 
         // Allocate an instance of that class
-        let fields = vec![Value::Int(10), Value::Int(20)];
+        let fields = vec![Value::int(10), Value::int(20)];
         let instance_ptr = tlab.alloc_instance(class_ptr, fields);
 
         unsafe {
@@ -511,7 +636,7 @@ mod tests {
                 Object::Instance(inst) => {
                     assert_eq!(inst.class, class_ptr);
                     assert_eq!(inst.fields.len(), 2);
-                    assert_eq!(inst.fields[0], Value::Int(10));
+                    assert_eq!(inst.load_field(0), Value::int(10));
                 }
                 _ => panic!("Expected Instance"),
             }
@@ -632,7 +757,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         // Allocate an object
-        let ptr = tlab.alloc(Object::String("original".to_string()));
+        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from("original")));
 
         // Verify original value
         unsafe {
@@ -644,7 +769,7 @@ mod tests {
 
         // Mutate the object using set_object
         unsafe {
-            tlab.set_object(ptr, Object::String("mutated".to_string()));
+            tlab.set_object(ptr, Object::String(bex_str::BexStr::from("mutated")));
         }
 
         // Verify mutation
@@ -680,7 +805,9 @@ mod tests {
                     // Each thread allocates multiple objects
                     let mut pointers = Vec::new();
                     for i in 0..10 {
-                        let ptr = tlab.alloc(Object::String(format!("thread_{thread_id}_obj_{i}")));
+                        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!(
+                            "thread_{thread_id}_obj_{i}"
+                        ))));
                         pointers.push(ptr);
                     }
 
@@ -757,7 +884,9 @@ mod tests {
                     // to force multiple refills
                     let mut pointers = Vec::new();
                     for i in 0..20 {
-                        let ptr = tlab.alloc(Object::String(format!("t{thread_id}_o{i}")));
+                        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!(
+                            "t{thread_id}_o{i}"
+                        ))));
                         pointers.push(ptr);
                     }
 

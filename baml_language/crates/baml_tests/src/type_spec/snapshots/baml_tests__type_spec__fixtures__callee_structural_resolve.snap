@@ -1,0 +1,50 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+74..87 'fgp_deep_copy': throws never
+110..285 '{\n   ...  n\n}': int
+116..121 'let x': int
+124..125 '0': 0
+130..137 'let inc': () -> int throws never
+140..163 '() -> ...1; x }': () -> int throws never
+150..163 '{ x += 1; x }': int
+152..153 'x': int
+157..158 '1': 1
+160..161 'x': int
+168..176 'let inc2': () -> int throws never
+179..193 'baml.deep_copy': (value: () -> int throws never) -> (() -> int throws never) throws never
+179..198 'baml.d...y(inc)': () -> int throws never
+194..197 'inc': () -> int throws never
+239..242 'inc': () -> int throws never
+239..244 'inc()': int
+249..254 'let n': int
+257..261 'inc2': () -> int throws never
+257..263 'inc2()': int
+282..283 'n': int
+295..308 'fgp_push_only': throws never
+331..542 '{\n   ...one\n}': int
+337..344 'let sum': int
+347..348 '0': 0
+353..362 'let total': (() -> void throws never)[]
+365..367 '[]': (() -> void throws never)[]
+377..382 'let i': int
+386..395 '[1, 2, 3]': int[]
+387..388 '1': 1
+390..391 '2': 2
+393..394 '3': 3
+397..448 '{\n   ...n    }': int
+407..417 'total.push': (self: (() -> void throws never)[], item: () -> void throws never) -> int throws never
+407..442 'total....= i })': int
+418..441 '() -> ...+= i }': () -> void throws never
+429..441 '{ sum += i }': void
+431..434 'sum': int
+438..439 'i': int
+458..464 'let cb': () -> void throws never
+468..473 'total': (() -> void throws never)[]
+475..495 '{\n   ...n    }': void
+485..487 'cb': () -> void throws never
+485..489 'cb()': void
+500..508 'let done': int
+511..514 'sum': int
+536..540 'done': int

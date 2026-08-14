@@ -1,0 +1,25 @@
+# A slim, self-contained AWS SigV4 (HTTP, header location) signer.
+#
+# Replaces the upstream `aws-sigv4` crate (and its `aws-smithy-*` /
+# `aws-credential-types` dependency tree) for BAML's only use case: signing
+# Bedrock Converse requests. No Smithy, no async runtime, no event streams.
+[package]
+name = "forked_aws_sigv4"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "aws_sigv4"
+
+[dependencies]
+hex = { workspace = true }
+hmac = { workspace = true }
+percent-encoding = { workspace = true }
+sha2 = { workspace = true }
+web-time = { workspace = true }
+
+[lints]
+workspace = true

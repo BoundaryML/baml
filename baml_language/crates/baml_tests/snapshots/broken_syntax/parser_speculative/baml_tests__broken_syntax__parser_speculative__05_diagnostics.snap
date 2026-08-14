@@ -1,164 +1,54 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 1967
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved name: GPT4
-   ╭─[ ambiguous_function.baml:1:1 ]
-   │
- 1 │ ╭─▶ // This could initially look like either type
-   ┆ ┆   
- 5 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0003
-───╯
+  [parse] E0010
 
-  [type] Error: unresolved name: GPT4
-   ╭─[ ambiguous_function.baml:2:44 ]
-   │
- 2 │ ╭─▶ function Ambiguous(input: string) -> string {
-   ┆ ┆   
- 5 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0003
-───╯
-
-  [parse] Error: Expected LLM function missing 'prompt' field, found '}'
-   ╭─[ ambiguous_function.baml:5:1 ]
-   │
+  × unexpected token
+   ╭─[ambiguous_function.baml:5:1]
  5 │ }
-   │ ┬  
-   │ ╰── Expected LLM function missing 'prompt' field, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   · ┬
+   · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
+   ╰────
 
-  [type] Error: type mismatch: expected baml.llm.Client, got null
-    ╭─[ ambiguous_function.baml:5:2 ]
-    │
-  5 │ ╭─▶ }
-    ┆ ┆   
- 11 │ ├─▶ }
-    │ │       
-    │ ╰─────── type mismatch: expected baml.llm.Client, got null
-    │     
-    │     Note: Error code: E0001
-────╯
+  [parse] E0010
 
-  [type] Error: type mismatch: expected baml.llm.Client, got null
-    ╭─[ ambiguous_function.baml:8:45 ]
-    │
-  8 │ ╭─▶ function AnotherLLM(input: string) -> string {
-    ┆ ┆   
- 11 │ ├─▶ }
-    │ │       
-    │ ╰─────── type mismatch: expected baml.llm.Client, got null
-    │     
-    │     Note: Error code: E0001
-────╯
+  × unexpected token
+   ╭─[ambiguous_function.baml:9:8]
+ 9 │   clent: GPT4
+   ·        ┬
+   ·        ╰── expected `expression`, found `':'`
+   ╰────
 
-  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
-   ╭─[ ambiguous_function.baml:9:3 ]
-   │
- 9 │   clent GPT4  // Typo in "client"
-   │   ──┬──  
-   │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+  [parse] E0010
 
-  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
-   ╭─[ ambiguous_function.baml:9:9 ]
-   │
- 9 │   clent GPT4  // Typo in "client"
-   │         ──┬─  
-   │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+  × unexpected token
+    ╭─[ambiguous_function.baml:10:9]
+ 10 │   prompt: `Process: ${input}`
+    ·         ┬
+    ·         ╰── expected `expression`, found `':'`
+    ╰────
 
-  [parse] Error: Expected LLM function missing 'client' field, found '}'
-    ╭─[ ambiguous_function.baml:11:1 ]
-    │
- 11 │ }
-    │ ┬  
-    │ ╰── Expected LLM function missing 'client' field, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [type] E0003
 
-  [type] Error: unresolved name: GPT4
-   ╭─[ llm_function.baml:1:1 ]
-   │
- 1 │ ╭─▶ function ExtractData(text: string) -> JsonData {
-   ┆ ┆   
- 7 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0003
-───╯
+  × unresolved name: `GPT4`
+   ╭─[llm_function.baml:2:11]
+ 2 │   client: GPT4
+   ·           ────
+   ╰────
 
-  [type] Error: unresolved name: GPT4
-   ╭─[ llm_function.baml:1:47 ]
-   │
- 1 │ ╭─▶ function ExtractData(text: string) -> JsonData {
-   ┆ ┆   
- 7 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0003
-───╯
+  [type] E0003
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ mixed_functions.baml:1:1 ]
-    │
-  1 │ ╭─▶ // Mix of LLM and expression functions in one file
-    ┆ ┆   
- 10 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  × unresolved name: `GPT4`
+   ╭─[mixed_functions.baml:3:11]
+ 3 │   client: GPT4
+   ·           ────
+   ╰────
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ mixed_functions.baml:2:46 ]
-    │
-  2 │ ╭─▶ function LLMAnalyze(text: string) -> Analysis {
-    ┆ ┆   
- 10 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  [type] E0003
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ mixed_functions.baml:29:2 ]
-    │
- 29 │ ╭─▶ }
-    ┆ ┆   
- 39 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
-
-  [type] Error: unresolved name: GPT4
-    ╭─[ mixed_functions.baml:31:49 ]
-    │
- 31 │ ╭─▶ function ChainedProcess(input: string) -> string {
-    ┆ ┆   
- 39 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  × unresolved name: `GPT4`
+    ╭─[mixed_functions.baml:32:11]
+ 32 │   client: GPT4
+    ·           ────
+    ╰────

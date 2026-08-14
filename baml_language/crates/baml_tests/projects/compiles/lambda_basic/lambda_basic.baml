@@ -47,12 +47,6 @@ function test_nested() -> int {
     outer(41)
 }
 
-// Generic lambda
-function test_generic_lambda() -> int {
-    let identity = <T>(x: T) -> T { x }
-    identity(42)
-}
-
 // Multi-param lambda
 function test_multi_param() -> int {
     let add = (a: int, b: int) -> int { a + b }

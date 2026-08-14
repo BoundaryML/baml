@@ -5,6 +5,7 @@ use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     package::{PackageId, PackageItems, package_items},
 };
+use baml_type::{BuiltinTypeName, Package};
 
 use crate::Db;
 
@@ -32,6 +33,8 @@ pub enum ResolvedTarget<'db> {
         parent: Definition<'db>,
         member_name: Name,
     },
+    /// A BAML or crosswalk keyword (e.g. `"class"`, `"interface"`).
+    Keyword(String),
 }
 
 impl std::fmt::Debug for ResolvedTarget<'_> {
@@ -45,6 +48,7 @@ impl std::fmt::Debug for ResolvedTarget<'_> {
             ResolvedTarget::Member { member_name, .. } => {
                 write!(f, "Member({member_name:?})")
             }
+            ResolvedTarget::Keyword(kw) => write!(f, "Keyword({kw:?})"),
         }
     }
 }
@@ -98,7 +102,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def {
+        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
             return Some(ResolvedTarget::Item(def));
         }
     }
@@ -111,7 +115,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def {
+        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
             return Some(ResolvedTarget::Member {
                 parent: def,
                 member_name,
@@ -120,6 +124,29 @@ pub fn resolve_target<'db>(
     }
 
     None
+}
+
+/// Resolve a lowercase builtin type spelling, optionally followed by a member,
+/// to its definition in the `baml` package.
+///
+/// Intrinsic types (`void`, `never`, `unknown`) intentionally return `None`
+/// because they have language-reference topics rather than addressable stdlib
+/// definitions.
+pub fn resolve_builtin_type_target<'db>(
+    db: &'db dyn Db,
+    name: &str,
+) -> Option<ResolvedTarget<'db>> {
+    let (alias, member_path) = name.split_once('.').unwrap_or((name, ""));
+    let builtin = BuiltinTypeName::from_alias(alias)?;
+    let definition_path = builtin.builtin_definition_path()?;
+    let mut target = definition_path.join(".");
+    if !member_path.is_empty() {
+        target.push('.');
+        target.push_str(member_path);
+    }
+
+    let package = PackageId::new(db, Name::new(baml_base::BAML_PACKAGE));
+    resolve_target(db, package, &target)
 }
 
 /// Check if the given namespace path exists in the package (either as an exact
@@ -139,6 +166,8 @@ fn is_valid_namespace(pkg: &PackageItems<'_>, ns_path: &[Name]) -> bool {
 /// A single entry in a flat symbol listing.
 #[derive(Clone)]
 pub struct ListingEntry {
+    /// Package name that owns this symbol (for example `"user"` or `"baml"`).
+    pub package_name: Name,
     /// Symbol kind (class, function, enum, etc.).
     pub kind: DefinitionKind,
     /// Namespace path components (e.g. `["llm"]` or `["foo", "bar"]`; empty = root namespace).
@@ -154,13 +183,26 @@ pub struct ListingEntry {
 }
 
 impl ListingEntry {
-    /// Fully-qualified name with namespace prefix (e.g. `"llm.Config"` or `"ExtractResume"`).
+    /// Build the copy/paste-safe symbol path shown by `baml describe`.
+    ///
+    /// # Returns
+    ///
+    /// - User-package entries as user-local paths (for example `"llm.Config"`).
+    /// - Non-user package entries as package-qualified paths (for example
+    ///   `"baml.iter.Range"`), so the emitted text can be passed back into
+    ///   `baml describe` verbatim.
     pub fn fqn(&self) -> String {
-        if self.ns_path.is_empty() {
+        let local_path = if self.ns_path.is_empty() {
             self.item_name.as_str().to_string()
         } else {
             let parts: Vec<&str> = self.ns_path.iter().map(Name::as_str).collect();
             format!("{}.{}", parts.join("."), self.item_name.as_str())
+        };
+
+        if is_user_package_name(&self.package_name) {
+            local_path
+        } else {
+            format!("{}.{}", self.package_name.as_str(), local_path)
         }
     }
 }
@@ -172,24 +214,41 @@ impl ListingEntry {
 /// as `ns_path.join(".") + "." + item_name` (or bare `item_name` for root namespace).
 pub fn list_package_items(db: &dyn Db, package_id: PackageId<'_>) -> Vec<ListingEntry> {
     let pkg = package_items(db, package_id);
-    collect_entries_from_package(db, pkg)
+    let package_name = package_id.name(db);
+    collect_entries_from_package(db, pkg, &package_name)
 }
 
 /// Collect listing entries from a `PackageItems`, including all namespaces.
-fn collect_entries_from_package(db: &dyn Db, pkg: &PackageItems<'_>) -> Vec<ListingEntry> {
+fn collect_entries_from_package(
+    db: &dyn Db,
+    pkg: &PackageItems<'_>,
+    package_name: &Name,
+) -> Vec<ListingEntry> {
     let mut entries = Vec::new();
 
     for (ns_path, ns_items) in &pkg.namespaces {
         // Collect from types (classes, enums, type aliases).
         for (name, def) in &ns_items.types {
-            if let Some(entry) = make_entry(db, ns_path.clone(), name.clone(), *def) {
+            if let Some(entry) = make_entry(
+                db,
+                package_name.clone(),
+                ns_path.clone(),
+                name.clone(),
+                *def,
+            ) {
                 entries.push(entry);
             }
         }
 
         // Collect from values (functions, clients, generators, etc.).
         for (name, def) in &ns_items.values {
-            if let Some(entry) = make_entry(db, ns_path.clone(), name.clone(), *def) {
+            if let Some(entry) = make_entry(
+                db,
+                package_name.clone(),
+                ns_path.clone(),
+                name.clone(),
+                *def,
+            ) {
                 entries.push(entry);
             }
         }
@@ -220,6 +279,7 @@ pub fn list_namespace_items(
     namespace_path: &[baml_base::Name],
 ) -> Option<Vec<ListingEntry>> {
     let pkg = package_items(db, package_id);
+    let package_name = package_id.name(db);
 
     // Check that the requested namespace path exists or has children.
     let has_exact = pkg.namespaces.contains_key(namespace_path);
@@ -244,12 +304,24 @@ pub fn list_namespace_items(
         }
 
         for (name, def) in &ns_items.types {
-            if let Some(entry) = make_entry(db, ns_path.clone(), name.clone(), *def) {
+            if let Some(entry) = make_entry(
+                db,
+                package_name.clone(),
+                ns_path.clone(),
+                name.clone(),
+                *def,
+            ) {
                 entries.push(entry);
             }
         }
         for (name, def) in &ns_items.values {
-            if let Some(entry) = make_entry(db, ns_path.clone(), name.clone(), *def) {
+            if let Some(entry) = make_entry(
+                db,
+                package_name.clone(),
+                ns_path.clone(),
+                name.clone(),
+                *def,
+            ) {
                 entries.push(entry);
             }
         }
@@ -268,21 +340,32 @@ pub fn non_user_package_names(db: &dyn Db) -> std::collections::HashSet<String> 
     let mut names = std::collections::HashSet::new();
     for file in baml_compiler2_hir::compiler2_all_files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let pkg_name = pkg_info.package.as_str().to_string();
-        if pkg_name != "user" {
-            names.insert(pkg_name);
+        if !is_user_package_name(&pkg_info.package) {
+            names.insert(pkg_info.package.as_str().to_string());
         }
     }
     names
 }
 
+/// Return whether `package_name` identifies the implicit user package.
+///
+/// This funnels package-locality checks through the typed `Package` classifier
+/// instead of comparing raw `"user"` string literals at call sites.
+fn is_user_package_name(package_name: &Name) -> bool {
+    matches!(Package::from_name(package_name.clone()), Package::Local)
+}
+
 /// Build a single `ListingEntry` from a definition.
 fn make_entry(
     db: &dyn Db,
+    package_name: Name,
     ns_path: Vec<Name>,
     item_name: Name,
     def: Definition<'_>,
 ) -> Option<ListingEntry> {
+    if def.is_language_internal(db) {
+        return None;
+    }
     let (file, name_span) = crate::utils::definition_span(db, def)?;
     let file_path = file.path(db).display().to_string();
     let text = file.text(db);
@@ -294,6 +377,7 @@ fn make_entry(
         + 1;
 
     Some(ListingEntry {
+        package_name,
         kind: def.kind(),
         ns_path,
         item_name,

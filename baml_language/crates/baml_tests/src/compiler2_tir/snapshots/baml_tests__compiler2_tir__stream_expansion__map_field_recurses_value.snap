@@ -5,24 +5,12 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
-function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
-}
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
-}
 class user.WithMaps {
   simple: map<string, int>
   complex: map<string, user.Inner>
 }
-function user.WithMaps.to_json(self: user.WithMaps) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "simple": self.simple.to_json(), "complex": self.complex.to_json() } : map<string, baml.json.json>
-}
-function user.WithMaps.from_json(j: baml.json.json) -> user.WithMaps throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithMaps { simple: baml.json.from_json<map<string, int>>(baml.json.field(j, "simple")), complex: baml.json.from_json<map<string, Inner>>(baml.json.field(j, "complex")) } : user.WithMaps
-}
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 class user.WithMaps$stream {
   simple: map<string, int>

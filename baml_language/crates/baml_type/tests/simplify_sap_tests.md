@@ -13,7 +13,6 @@ Each test has a `## name`, optional `### aliases`, an `### input` type, and
 - Unions: `A | B`
 - Grouping: `(A | B)`
 - SAP attrs: `@sap.parse_without_null`, `@sap.pending_never`, `@sap.in_progress_never`
-- Asserts: `@assert((_) => f1)` where `f1` maps to func_idx=1
 
 Attrs bind to the immediately preceding type. Use parens for union-level attrs:
 `(int | string) @sap.parse_without_null`.
@@ -234,38 +233,6 @@ int @sap.parse_without_null | 5
 
 ---
 
-# Asserts — dedup in unions
-
-## assert_subtype_of_no_assert
-
-### input
-int @assert((_) => f1) | int
-
-### expected
-int
-
----
-
-## dedup_equal_asserts
-
-### input
-int @assert((_) => f1) | int @assert((_) => f1)
-
-### expected
-int @assert((_) => f1)
-
----
-
-## incomparable_asserts
-
-### input
-int @assert((_) => f1) | int @assert((_) => f2)
-
-### expected
-int @assert((_) => f1) | int @assert((_) => f2)
-
----
-
 # Type alias expansion
 
 ## alias_expansion
@@ -323,28 +290,6 @@ int @sap.parse_without_null | 5
 
 ### expected
 (int @sap.in_progress_never | string @sap.in_progress_never) @sap.in_progress_never
-
----
-
-## distribute_sap_idempotent_with_different_asserts
-
-### input
-(int @sap.parse_without_null @assert((_) => f1) | int @sap.parse_without_null @assert((_) => f2)) @sap.parse_without_null
-
-### expected
-(int @sap.parse_without_null @assert((_) => f1) | int @sap.parse_without_null @assert((_) => f2)) @sap.parse_without_null
-
----
-
-# Assert distribution into unions
-
-## distribute_asserts_into_union
-
-### input
-(5 @assert((_) => f1) | 6 @assert((_) => f2)) @assert((_) => f0)
-
-### expected
-5 @assert((_) => f1) @assert((_) => f0) | 6 @assert((_) => f2) @assert((_) => f0)
 
 ---
 
@@ -462,18 +407,6 @@ is narrower-than-or-equal-to the other.
 
 ---
 
-## literal_with_assert_subsumed_by_base
-
-`5 @assert(f1)` is narrower than bare `int` — dropped.
-
-### input
-5 @assert((_) => f1) | int
-
-### expected
-int
-
----
-
 ## literal_first_not_subsumed_by_narrower_base
 
 `5 (def)` is structurally subtype of `int`, but `int` has
@@ -526,21 +459,6 @@ int
 
 ---
 
-## alias_to_union_with_outer_assert
-
-Assert distributes into the expanded union variants.
-
-### aliases
-X = int | string
-
-### input
-$X @assert((_) => f1)
-
-### expected
-int @assert((_) => f1) | string @assert((_) => f1)
-
----
-
 ## alias_to_union_with_outer_sap
 
 SAP flag distributes into expanded union variants and stays
@@ -554,20 +472,6 @@ $X @sap.parse_without_null
 
 ### expected
 (int @sap.parse_without_null | string @sap.parse_without_null) @sap.parse_without_null
-
----
-
-## nested_union_assert_distribution
-
-Inner union gets assert f1 distributed into 5 and 6.
-Outer union then distributes assert f2 into all three variants
-(including the already-flattened inner variants).
-
-### input
-((5 | 6) @assert((_) => f1) | 7) @assert((_) => f2)
-
-### expected
-5 @assert((_) => f1) @assert((_) => f2) | 6 @assert((_) => f1) @assert((_) => f2) | 7 @assert((_) => f2)
 
 ---
 
@@ -658,46 +562,6 @@ Three levels of union nesting all flatten into one.
 
 ### expected
 int | bool | string | float | MyClass | null
-
----
-
-## assert_and_sap_together_on_literal
-
-A literal with both an assert and a SAP flag — the assert
-makes it narrower than the bare base type, so it gets dropped.
-
-### input
-5 @sap.parse_without_null @assert((_) => f1) | int
-
-### expected
-int
-
----
-
-## assert_and_sap_together_base_has_sap_too
-
-Both variants have @sap.pw. The asserted variant is narrower
-(has asserts, other doesn't). Gets deduped.
-
-### input
-int @sap.parse_without_null @assert((_) => f1) | int @sap.parse_without_null
-
-### expected
-int @sap.parse_without_null
-
----
-
-## distribute_mixed_sap_and_asserts
-
-Union-level has both a SAP flag and asserts. SAP flag
-distributes (or) and stays. Asserts distribute (concat)
-and are removed from union level.
-
-### input
-(int | string) @sap.pending_never @assert((_) => f1)
-
-### expected
-(int @sap.pending_never @assert((_) => f1) | string @sap.pending_never @assert((_) => f1)) @sap.pending_never
 
 ---
 

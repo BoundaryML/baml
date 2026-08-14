@@ -9,6 +9,8 @@
 # Namespaces ([[namespaces]]):
 #   name                 - Crate prefix (e.g., "baml" for baml_* crates)
 #   approved_prefixes    - Valid sub-prefixes (e.g., "compiler" allows baml_compiler_*)
+#   approved_suffixes    - Full tails accepted verbatim (e.g., "python_pydantic2"
+#                          allows sdkgen_python_pydantic2; validated as a unit)
 #   test_crate_exceptions - Test crates exempt from "must have prefix crate" rule
 #   dependency_rules     - Rules that only apply to crates in this namespace
 #   link_crates          - Cross-namespace deps shown as proxy nodes in this cluster
@@ -49,9 +51,8 @@ external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan", "req
 # Implied dependencies: if a crate depends on both the key and a value,
 # the edge to the value is hidden (it's visually implied by the key).
 [graph.implied_deps]
-baml_builtins = ["baml_builtins_macros"]
 baml_project = ["baml_db"]
-baml_type = ["baml_base", "baml_builtins"]
+baml_type = ["baml_base"]
 bex_heap = ["bex_external_types"]
 bex_external_types = ["bex_vm_types"]
 bex_vm_types = ["bex_resource_types"]
@@ -59,48 +60,91 @@ bex_vm_types = ["bex_resource_types"]
 # Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
 pattern = "anyhow"
-allowed_crates = ["*_cli", "tools_*", "cargo-*", "baml_lsp_*"]
+allowed_crates = [
+    "*_cli",
+    "tools_*",
+    "cargo-*",
+    "baml_lsp_*",
+    # `baml_exec` and `baml_pack_host` are surface-area crates per
+    # BEP-027: the shared `baml run` / `baml pack` executor and the
+    # runtime host binary embedded in packed executables. They sit at
+    # the application boundary (same as `baml_cli`) and use anyhow for
+    # the same reason — top-level error surfacing.
+    "baml_exec",
+    "baml_pack_host",
+    # `baml` is the wrapper binary users install. `baml_release` is
+    # shared release-boundary fetch/install code used by the wrapper
+    # and pack; it exposes typed fetch errors but uses anyhow for
+    # validation helpers and caller-facing context.
+    "baml",
+    "baml_release",
+]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "builtins2", "codegen", "compiler2", "lsp2"]
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2", "type"]
+# The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
+# the same shape), not a prefix + word.
+approved_suffixes = ["compiler2_hir_ty"]
 test_crate_exceptions = ["baml_tests"]
-embed_crates = ["tools_onionskin", "bex_project"]
+embed_crates = ["bex_project"]
+# The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
+# `bridge_python`/`bridge_nodejs`) while the published crate is `baml_bridge`.
+name_exceptions = { "bridge_rust" = "baml_bridge" }
 
 # baml-specific dependency rules
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler", "compiler2"]
-allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins_codegen", "baml_builtins2_codegen"]
-reason = "Use baml_db or baml_project to access compiler interfaces."
+# `baml_surface` is the semantic-surface API boundary over the compiler
+# (handles + export IR); it wraps compiler queries so downstream consumers
+# don't have to be on this list.
+allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen", "baml_surface"]
+reason = "Use baml_db, baml_project, or baml_surface to access compiler interfaces."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
 pattern.exclude = ["bex_vm_types"]
-allowed_crates = ["bridge_cffi", "baml_cli"]
+# `baml_exec` and `baml_pack_host` are BEP-027 surface-area crates
+# (shared executor + packed-binary runtime host) and sit at the same
+# application boundary as `baml_cli` — they need direct access to the
+# engine, events, and VM types.
+allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host"]
 reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_project", "baml_cli"]
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_project", "baml_cli", "baml_exec", "baml_pack_host"]
 reason = "Only compiler_emit and baml_project crates should depend on bex_vm_types (pure data layer)."
 
 
 # tools namespace configuration
 [[namespaces]]
 name = "tools"
-approved_prefixes = ["sap"]
+approved_prefixes = ["sap", "semantic", "compile"]
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
 name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
+
+# forked AWS crates retain the upstream folder names while publishing
+# package names that cannot collide with the real crates.
+[[namespaces]]
+name = "forked_aws"
+name_exceptions = { "aws-bedrock" = "forked_aws_bedrock", "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4" }
+
+# forked Google crates follow the same package-name convention.
+[[namespaces]]
+name = "forked_google"
+approved_prefixes = ["cloud"]
+name_exceptions = { "google-cloud-auth" = "forked_google_cloud_auth" }
 
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
 approved_prefixes = ["events"]
-link_crates = ["baml_builtins", "baml_type", "sys_types"]
+link_crates = ["baml_type", "sys_types"]
 
 # lsp namespace configuration
 [[namespaces]]
@@ -110,6 +154,7 @@ link_crates = ["baml_db", "baml_project"]
 # bridge namespace configuration
 [[namespaces]]
 name = "bridge"
+approved_suffixes = ["typescript_web"]
 link_crates = ["bex_project", "sys_native", "sys_types"]
 
 # Bridge crates should go through bex_project for runtime access, not depend on bex internals directly.
@@ -127,8 +172,18 @@ name = "sys"
 link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
 
 [[namespaces]]
-name = "codegen"
+name = "sdkgen"
+# Each SDK generator has a meaningful language-specific tail that is validated
+# as a unit rather than by sub-prefix.
+approved_suffixes = ["python_pydantic2", "typescript_shared"]
 
 [[namespaces]]
 name = "surface"
-name_exceptions = {"baml_cli" = "baml_cli", "baml_playground_wasm" = "baml_playground_wasm" }
+# Surface-area crates that don't fit the prefix-based namespaces — they
+# sit at the application boundary and depend on bex_* internals
+# directly (where `baml_*` crates normally cannot). `baml_exec` is the
+# BEP-027 shared executor used by `baml run` and the packed host;
+# `baml_pack_host` is the runtime binary embedded in packed
+# executables. Listed here so they're exempt from the baml-namespace
+# rules forbidding bex_* deps.
+name_exceptions = {"baml" = "baml", "baml_cli" = "baml_cli", "baml_exec" = "baml_exec", "baml_pack_host" = "baml_pack_host" }

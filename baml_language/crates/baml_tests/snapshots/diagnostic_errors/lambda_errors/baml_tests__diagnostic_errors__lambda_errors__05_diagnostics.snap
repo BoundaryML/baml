@@ -1,76 +1,47 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33192
+assertion_line: 35998
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got int
-   ╭─[ lambda_errors.baml:2:39 ]
-   │
- 2 │ ╭─▶ function test_return_mismatch() -> int {
-   ┆ ┆   
- 5 │ ├─▶ }
-   │ │       
-   │ ╰─────── type mismatch: expected string, got int
-   │     
-   │     Note: Error code: E0001
-───╯
+  [type] E0001
 
-  [type] Error: cannot infer type of lambda parameter `x` — add a type annotation or provide context
-   ╭─[ lambda_errors.baml:9:14 ]
-   │
- 9 │     let bad = (x) -> { x * 2 }
-   │              ────────┬────────  
-   │                      ╰────────── cannot infer type of lambda parameter `x` — add a type annotation or provide context
-   │ 
-   │ Note: Error code: E0002
-───╯
+  × mismatched types
+   ╭─[lambda_errors.baml:3:34]
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   ·                                  ────┬────
+   ·                                      ╰── expected `string`, found `int`
+   ╰────
 
-  [type] Error: expected 1 argument(s), got 2
-    ╭─[ lambda_errors.baml:16:15 ]
-    │
- 16 │     items.map((x, y) -> { x })
-    │               ───────┬───────  
-    │                      ╰───────── expected 1 argument(s), got 2
-    │ 
-    │ Note: Error code: E0005
-────╯
+  [type] E0001
 
-  [type] Error: type mismatch: expected int, got string
-    ╭─[ lambda_errors.baml:21:25 ]
-    │
- 21 │     let items: int[] = [1, 2, 3]
-    │                         ┬  
-    │                         ╰── type mismatch: expected int, got string
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] Error: type mismatch: expected int, got string
-    ╭─[ lambda_errors.baml:22:15 ]
-    │
+  × mismatched types
+    ╭─[lambda_errors.baml:22:15]
  22 │     items.map((x: string) -> { x })
-    │               ──────────┬─────────  
-    │                         ╰─────────── type mismatch: expected int, got string
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·               ──────────┬─────────
+    ·                         ╰── expected `(int) -> int throws never`, found `(x: string) -> int throws never`
+    ╰────
 
-  [type] Error: unresolved type: NonExistentType
-    ╭─[ lambda_errors.baml:27:16 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[lambda_errors.baml:22:30]
+ 22 │     items.map((x: string) -> { x })
+    ·                              ──┬──
+    ·                                ╰── expected `int`, found `string`
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: NonExistentType
+    ╭─[lambda_errors.baml:27:17]
  27 │     let f = (x: NonExistentType) -> { 0 }
-    │                ────────┬───────  
-    │                        ╰───────── unresolved type: NonExistentType
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                 ───────────────
+    ╰────
 
-  [type] Error: unresolved type: NonExistentType
-    ╭─[ lambda_errors.baml:33:24 ]
-    │
+  [type] E0002
+
+  × unresolved type: NonExistentType
+    ╭─[lambda_errors.baml:33:25]
  33 │     let f = (x: int) -> NonExistentType { x }
-    │                        ────────┬───────  
-    │                                ╰───────── unresolved type: NonExistentType
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                         ───────────────
+    ╰────

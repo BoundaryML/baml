@@ -1,90 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17884
 ---
-function user.Config.from_json(j: baml.json.json) -> Config {
-    load_var j
-    load_const "key"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "env"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.Config
-    load_var _2
-    init_field .key
-    load_var _5
-    init_field .env
-    return
-}
-
-function user.Config.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .key
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .env
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "key"
-    load_const "env"
-    alloc_map 2
-    return
-}
-
-function user.Error.from_json(j: baml.json.json) -> Error {
-    load_var j
-    load_const "code"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.Error
-    load_var _2
-    init_field .code
-    load_var _5
-    init_field .message
-    return
-}
-
-function user.Error.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .code
-    call baml.Int.to_json
-    store_var _2
-    load_var self
-    load_field .message
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "code"
-    load_const "message"
-    alloc_map 2
-    return
-}
-
 function user.RootAliasParam(cfg: Config) -> string {
     load_var cfg
     load_field .key
@@ -92,27 +9,25 @@ function user.RootAliasParam(cfg: Config) -> string {
 }
 
 function user.RootConstruct(key: string) -> Config {
-    alloc_instance user.Config
     load_var key
-    init_field .key
     load_const "prod"
-    init_field .env
+    init_instance user.Config .key, .env
     return
 }
 
 function user.RootEnumMatch(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -160,11 +75,9 @@ function user.RootThrowClass(x: int) -> string {
     return
 
   L1:
-    alloc_instance user.Error
     load_const 500
-    init_field .code
     load_const "root error"
-    init_field .message
+    init_instance user.Error .code, .message
     throw
 }
 
@@ -221,172 +134,6 @@ function user.RootUsesNestedClient(c: llm.openai.Client) -> string {
     return
 }
 
-function user.RootWithCrossNsAlias.from_json(j: baml.json.json) -> RootWithCrossNsAlias {
-    load_var j
-    load_const "llm_alias"
-    call baml.json.field
-    store_var _3
-    load_type llm.Response
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "own_alias"
-    call baml.json.field
-    store_var _6
-    load_type Config
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.RootWithCrossNsAlias
-    load_var _2
-    init_field .llm_alias
-    load_var _5
-    init_field .own_alias
-    return
-}
-
-function user.RootWithCrossNsAlias.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .llm_alias
-    call user.llm.Response.to_json
-    store_var _2
-    load_var self
-    load_field .own_alias
-    call user.Config.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "llm_alias"
-    load_const "own_alias"
-    alloc_map 2
-    return
-}
-
-function user.RootWithCrossNsFields.from_json(j: baml.json.json) -> RootWithCrossNsFields {
-    load_var j
-    load_const "own_config"
-    call baml.json.field
-    store_var _3
-    load_type Config
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "llm_config"
-    call baml.json.field
-    store_var _6
-    load_type llm.Config
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    load_var j
-    load_const "auth_config"
-    call baml.json.field
-    store_var _9
-    load_type auth.Config
-    load_var _9
-    call baml.json.from_json
-    store_var _8
-    load_var j
-    load_const "llm_response"
-    call baml.json.field
-    store_var _12
-    load_type llm.Response
-    load_var _12
-    call baml.json.from_json
-    store_var _11
-    load_var j
-    load_const "nested_client"
-    call baml.json.field
-    store_var _15
-    load_type llm.openai.Client
-    load_var _15
-    call baml.json.from_json
-    store_var _14
-    load_var j
-    load_const "own_status"
-    call baml.json.field
-    store_var _18
-    load_type Status
-    load_var _18
-    call baml.json.from_json
-    store_var _17
-    load_var j
-    load_const "own_alias"
-    call baml.json.field
-    store_var _21
-    load_type Config
-    load_var _21
-    call baml.json.from_json
-    store_var _20
-    alloc_instance user.RootWithCrossNsFields
-    load_var _2
-    init_field .own_config
-    load_var _5
-    init_field .llm_config
-    load_var _8
-    init_field .auth_config
-    load_var _11
-    init_field .llm_response
-    load_var _14
-    init_field .nested_client
-    load_var _17
-    init_field .own_status
-    load_var _20
-    init_field .own_alias
-    return
-}
-
-function user.RootWithCrossNsFields.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .own_config
-    call user.Config.to_json
-    store_var _2
-    load_var self
-    load_field .llm_config
-    call user.llm.Config.to_json
-    store_var _5
-    load_var self
-    load_field .auth_config
-    call user.auth.Config.to_json
-    store_var _8
-    load_var self
-    load_field .llm_response
-    call user.llm.Response.to_json
-    store_var _11
-    load_var self
-    load_field .nested_client
-    call user.llm.openai.Client.to_json
-    store_var _14
-    load_var self
-    load_field .own_status
-    load_const "to_json"
-    load_map_element
-    call_indirect
-    store_var _17
-    load_var self
-    load_field .own_alias
-    call user.Config.to_json
-    store_var _22
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
-    load_var _14
-    load_var _17
-    load_var _22
-    load_const "own_config"
-    load_const "llm_config"
-    load_const "auth_config"
-    load_const "llm_response"
-    load_const "nested_client"
-    load_const "own_status"
-    load_const "own_alias"
-    alloc_map 7
-    return
-}
-
 function user.auth.AuthAliasParam(t: auth.Token) -> string {
     load_var t
     load_field .value
@@ -394,11 +141,9 @@ function user.auth.AuthAliasParam(t: auth.Token) -> string {
 }
 
 function user.auth.AuthConstruct(provider: string) -> auth.Config {
-    alloc_instance user.auth.Config
     load_var provider
-    init_field .provider
     load_const "s3cret"
-    init_field .secret
+    init_instance user.auth.Config .provider, .secret
     return
 }
 
@@ -445,12 +190,10 @@ function user.auth.AuthIdentity(cfg: auth.Config) -> auth.Config {
 }
 
 function user.auth.AuthMakeToken(v: string) -> auth.Token {
-    alloc_instance user.auth.Token
     load_var v
-    init_field .value
     load_const user.auth.Role.User
     alloc_variant user.auth.Role
-    init_field .role
+    init_instance user.auth.Token .value, .role
     return
 }
 
@@ -487,17 +230,17 @@ function user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
 
 function user.auth.AuthMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -540,11 +283,9 @@ function user.auth.AuthThrowClass(x: int) -> string {
     return
 
   L1:
-    alloc_instance user.auth.Error
     load_const "auth failed"
-    init_field .realm
     load_const true
-    init_field .expired
+    init_instance user.auth.Error .realm, .expired
     throw
 }
 
@@ -577,11 +318,9 @@ function user.auth.AuthThrowsRootError(x: int) -> string {
     return
 
   L1:
-    alloc_instance user.Error
     load_const 403
-    init_field .code
     load_const "forbidden"
-    init_field .message
+    init_instance user.Error .code, .message
     throw
 }
 
@@ -621,218 +360,6 @@ function user.auth.AuthUsesRootStatus() -> Status {
     return
 }
 
-function user.auth.Config.from_json(j: baml.json.json) -> auth.Config {
-    load_var j
-    load_const "provider"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "secret"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.auth.Config
-    load_var _2
-    init_field .provider
-    load_var _5
-    init_field .secret
-    return
-}
-
-function user.auth.Config.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .provider
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .secret
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "provider"
-    load_const "secret"
-    alloc_map 2
-    return
-}
-
-function user.auth.Error.from_json(j: baml.json.json) -> auth.Error {
-    load_var j
-    load_const "realm"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "expired"
-    call baml.json.field
-    store_var _6
-    load_type bool
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.auth.Error
-    load_var _2
-    init_field .realm
-    load_var _5
-    init_field .expired
-    return
-}
-
-function user.auth.Error.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .realm
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .expired
-    call baml.Bool.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "realm"
-    load_const "expired"
-    alloc_map 2
-    return
-}
-
-function user.auth.Token.from_json(j: baml.json.json) -> auth.Token {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "role"
-    call baml.json.field
-    store_var _6
-    load_type auth.Role
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.auth.Token
-    load_var _2
-    init_field .value
-    load_var _5
-    init_field .role
-    return
-}
-
-function user.auth.Token.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .value
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .role
-    load_const "to_json"
-    load_map_element
-    call_indirect
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "value"
-    load_const "role"
-    alloc_map 2
-    return
-}
-
-function user.llm.Config.from_json(j: baml.json.json) -> llm.Config {
-    load_var j
-    load_const "model"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "temperature"
-    call baml.json.field
-    store_var _6
-    load_type float
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.Config
-    load_var _2
-    init_field .model
-    load_var _5
-    init_field .temperature
-    return
-}
-
-function user.llm.Config.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .model
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .temperature
-    call baml.Float.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "model"
-    load_const "temperature"
-    alloc_map 2
-    return
-}
-
-function user.llm.Error.from_json(j: baml.json.json) -> llm.Error {
-    load_var j
-    load_const "reason"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "retryable"
-    call baml.json.field
-    store_var _6
-    load_type bool
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.Error
-    load_var _2
-    init_field .reason
-    load_var _5
-    init_field .retryable
-    return
-}
-
-function user.llm.Error.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .reason
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .retryable
-    call baml.Bool.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "reason"
-    load_const "retryable"
-    alloc_map 2
-    return
-}
-
 function user.llm.LlmAliasParam(cfg: llm.Config) -> string {
     load_var cfg
     load_field .model
@@ -840,11 +367,9 @@ function user.llm.LlmAliasParam(cfg: llm.Config) -> string {
 }
 
 function user.llm.LlmConstruct(model: string) -> llm.Config {
-    alloc_instance user.llm.Config
     load_var model
-    init_field .model
     load_const 0.7
-    init_field .temperature
+    init_instance user.llm.Config .model, .temperature
     return
 }
 
@@ -892,17 +417,17 @@ function user.llm.LlmIdentity(cfg: llm.Config) -> llm.Config {
 
 function user.llm.LlmMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -928,11 +453,9 @@ function user.llm.LlmMixedConfigs(llm_cfg: llm.Config, root_cfg: Config, auth_cf
 }
 
 function user.llm.LlmResponseConstruct(text: string) -> llm.Response {
-    alloc_instance user.llm.Response
     load_var text
-    init_field .text
     load_const 42
-    init_field .tokens
+    init_instance user.llm.Response .text, .tokens
     return
 }
 
@@ -948,11 +471,9 @@ function user.llm.LlmThrowClass(x: int) -> string {
     return
 
   L1:
-    alloc_instance user.llm.Error
     load_const "llm failed"
-    init_field .reason
     load_const true
-    init_field .retryable
+    init_instance user.llm.Error .reason, .retryable
     throw
 }
 
@@ -1002,11 +523,9 @@ function user.llm.LlmThrowsRootError(x: int) -> string {
     return
 
   L1:
-    alloc_instance user.Error
     load_const 404
-    init_field .code
     load_const "not found"
-    init_field .message
+    init_instance user.Error .code, .message
     throw
 }
 
@@ -1058,336 +577,10 @@ function user.llm.LlmUsesRootStatus() -> Status {
     return
 }
 
-function user.llm.LlmWithCrossNsFields.from_json(j: baml.json.json) -> llm.LlmWithCrossNsFields {
-    load_var j
-    load_const "own_config"
-    call baml.json.field
-    store_var _3
-    load_type llm.Config
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "own_response"
-    call baml.json.field
-    store_var _6
-    load_type llm.Response
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    load_var j
-    load_const "root_config"
-    call baml.json.field
-    store_var _9
-    load_type Config
-    load_var _9
-    call baml.json.from_json
-    store_var _8
-    load_var j
-    load_const "root_error"
-    call baml.json.field
-    store_var _12
-    load_type Error
-    load_var _12
-    call baml.json.from_json
-    store_var _11
-    load_var j
-    load_const "auth_config"
-    call baml.json.field
-    store_var _15
-    load_type auth.Config
-    load_var _15
-    call baml.json.from_json
-    store_var _14
-    load_var j
-    load_const "nested_client"
-    call baml.json.field
-    store_var _18
-    load_type llm.openai.Client
-    load_var _18
-    call baml.json.from_json
-    store_var _17
-    load_var j
-    load_const "own_status"
-    call baml.json.field
-    store_var _21
-    load_type llm.Status
-    load_var _21
-    call baml.json.from_json
-    store_var _20
-    load_var j
-    load_const "own_alias"
-    call baml.json.field
-    store_var _24
-    load_type llm.Config
-    load_var _24
-    call baml.json.from_json
-    store_var _23
-    load_var j
-    load_const "root_alias"
-    call baml.json.field
-    store_var _27
-    load_type Config
-    load_var _27
-    call baml.json.from_json
-    store_var _26
-    alloc_instance user.llm.LlmWithCrossNsFields
-    load_var _2
-    init_field .own_config
-    load_var _5
-    init_field .own_response
-    load_var _8
-    init_field .root_config
-    load_var _11
-    init_field .root_error
-    load_var _14
-    init_field .auth_config
-    load_var _17
-    init_field .nested_client
-    load_var _20
-    init_field .own_status
-    load_var _23
-    init_field .own_alias
-    load_var _26
-    init_field .root_alias
-    return
-}
-
-function user.llm.LlmWithCrossNsFields.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .own_config
-    call user.llm.Config.to_json
-    store_var _2
-    load_var self
-    load_field .own_response
-    call user.llm.Response.to_json
-    store_var _5
-    load_var self
-    load_field .root_config
-    call user.Config.to_json
-    store_var _8
-    load_var self
-    load_field .root_error
-    call user.Error.to_json
-    store_var _11
-    load_var self
-    load_field .auth_config
-    call user.auth.Config.to_json
-    store_var _14
-    load_var self
-    load_field .nested_client
-    call user.llm.openai.Client.to_json
-    store_var _17
-    load_var self
-    load_field .own_status
-    load_const "to_json"
-    load_map_element
-    call_indirect
-    store_var _20
-    load_var self
-    load_field .own_alias
-    call user.llm.Config.to_json
-    store_var _25
-    load_var self
-    load_field .root_alias
-    call user.Config.to_json
-    store_var _28
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
-    load_var _14
-    load_var _17
-    load_var _20
-    load_var _25
-    load_var _28
-    load_const "own_config"
-    load_const "own_response"
-    load_const "root_config"
-    load_const "root_error"
-    load_const "auth_config"
-    load_const "nested_client"
-    load_const "own_status"
-    load_const "own_alias"
-    load_const "root_alias"
-    alloc_map 9
-    return
-}
-
-function user.llm.LlmWithRootAlias.from_json(j: baml.json.json) -> llm.LlmWithRootAlias {
-    load_var j
-    load_const "root_alias"
-    call baml.json.field
-    store_var _3
-    load_type Config
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "own_alias"
-    call baml.json.field
-    store_var _6
-    load_type llm.Response
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.LlmWithRootAlias
-    load_var _2
-    init_field .root_alias
-    load_var _5
-    init_field .own_alias
-    return
-}
-
-function user.llm.LlmWithRootAlias.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .root_alias
-    call user.Config.to_json
-    store_var _2
-    load_var self
-    load_field .own_alias
-    call user.llm.Response.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "root_alias"
-    load_const "own_alias"
-    alloc_map 2
-    return
-}
-
-function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
-    load_var j
-    load_const "text"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "tokens"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.Response
-    load_var _2
-    init_field .text
-    load_var _5
-    init_field .tokens
-    return
-}
-
-function user.llm.Response.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .text
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .tokens
-    call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "text"
-    load_const "tokens"
-    alloc_map 2
-    return
-}
-
-function user.llm.openai.Client.from_json(j: baml.json.json) -> llm.openai.Client {
-    load_var j
-    load_const "api_key"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "org_id"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.openai.Client
-    load_var _2
-    init_field .api_key
-    load_var _5
-    init_field .org_id
-    return
-}
-
-function user.llm.openai.Client.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .api_key
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .org_id
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "api_key"
-    load_const "org_id"
-    alloc_map 2
-    return
-}
-
-function user.llm.openai.Error.from_json(j: baml.json.json) -> llm.openai.Error {
-    load_var j
-    load_const "status_code"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "body"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.openai.Error
-    load_var _2
-    init_field .status_code
-    load_var _5
-    init_field .body
-    return
-}
-
-function user.llm.openai.Error.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .status_code
-    call baml.Int.to_json
-    store_var _2
-    load_var self
-    load_field .body
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "status_code"
-    load_const "body"
-    alloc_map 2
-    return
-}
-
 function user.llm.openai.OpenAIConstruct(key: string) -> llm.openai.Client {
-    alloc_instance user.llm.openai.Client
     load_var key
-    init_field .api_key
     load_const "org-123"
-    init_field .org_id
+    init_instance user.llm.openai.Client .api_key, .org_id
     return
 }
 
@@ -1497,17 +690,17 @@ function user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
 
 function user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -1575,11 +768,9 @@ function user.llm.openai.OpenAIThrowClass(x: int) -> string {
     return
 
   L1:
-    alloc_instance user.llm.openai.Error
     load_const 429
-    init_field .status_code
     load_const "rate limited"
-    init_field .body
+    init_instance user.llm.openai.Error .status_code, .body
     throw
 }
 

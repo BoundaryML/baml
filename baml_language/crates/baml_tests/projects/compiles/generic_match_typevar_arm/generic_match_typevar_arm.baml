@@ -1,0 +1,22 @@
+// B-634 (resolved): a generic `match` arm `let s: Opt<T>` (where `T` is the
+// enclosing function's type var) lowers its runtime type-test so the frame
+// type-arg `T` is a `TypeArgRef`, compared *invariantly* by the canonical
+// algebra. A widened reified `T` still matches a narrower value arg through union
+// absorption (`Sq <: Shape` ⇒ `Shape | Sq == Shape`), so no covariance is needed.
+//
+// This project locks the emitted template: the `Opt<T>` arm's IsType constant
+// carries `TypeArgRef(0)` (rendered `#0`), not the retired covariant
+// `TypeArgRefOrWildcard(0)` (`#0?`), in the *_04_5_mir / *_06_codegen snapshots.
+
+class Opt<T> {
+  value: T,
+}
+
+class Non {}
+
+function unwrap_or<T>(o: Opt<T> | Non, default: T) -> T {
+  match (o) {
+    let s: Opt<T> => s.value,
+    _ => default,
+  }
+}

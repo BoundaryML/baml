@@ -1,0 +1,280 @@
+name: Stdlib Matrix
+
+# Publishes the BAML ↔ TypeScript stdlib comparison to GitHub Pages.
+#
+# Triggered by a completed BAML Language Release rather than by a push: the
+# matrix describes a released stdlib surface, and rebuilding it for every commit
+# would publish a view of code nobody can install yet.
+#
+# The release workflow serves every channel from one definition, and a
+# `workflow_run` payload does not carry the inputs it was dispatched with, so
+# there is no way here to tell a canary cut from a nightly or a dry run. That
+# turns out not to matter: `run --check` compares the *inputs* the deployed
+# report was built from — the stdlib surface's content hash and the TypeScript
+# release — and stops the job when they have not moved. A release that did not
+# touch the stdlib costs a build and no model calls at all.
+#
+# Cost is bounded by the same mechanism that makes the tool resumable. The
+# currently-deployed matrix.json is fetched and passed as `--previous`, so a
+# symbol whose declaration and references are unchanged keeps the judgement it
+# already has and is never sent to a model again. Only what actually moved is
+# re-judged. The first run, with nothing deployed to carry forward, is the one
+# that pays in full.
+
+on:
+  workflow_run:
+    workflows: ["BAML Language Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Rebuild even when the stdlib surface is unchanged"
+        type: boolean
+        default: false
+        required: false
+
+# Never cancel in flight: a cancelled run can leave Pages mid-deploy, and the
+# work is expensive enough that finishing beats starting over.
+concurrency:
+  group: stdlib-matrix
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: "Build the matrix and the site"
+    # Only a release that succeeded describes a surface worth publishing.
+    if: >-
+      github.repository == 'BoundaryML/baml' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # A cold run is ~200 sessions, each up to seven model calls plus the
+    # subprocess lookups between them, eight sessions at a time. An incremental
+    # run is minutes; this bound is for the cold one.
+    timeout-minutes: 120
+    # Holds OPENAI_API_KEY. Pages needs its own environment, which is why
+    # deploying is a separate job — a job may name only one.
+    #
+    # -prod rather than -dev: the key in -dev was rejected on every one of 199
+    # sessions, and the one here is the more recently rotated.
+    environment: boundary-tools-prod
+    outputs:
+      changed: ${{ steps.ratchet.outputs.changed }}
+    steps:
+      # A `workflow_run` job checks out the default branch unless told
+      # otherwise, which would publish a matrix of whatever canary happens to
+      # hold rather than of the surface that was just released.
+      - name: "Checkout the released commit"
+        uses: useblacksmith/checkout@v1
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      # No mise: nothing here comes from it. Rust arrives through rustup and
+      # baml_language/rust-toolchain.toml, node and pnpm through the setup-node
+      # actions below, and jq is on the image. Installing it with no
+      # `install_args` pulls every tool in mise.toml — including `cargo:bacon`,
+      # whose binstall failed and took the job with it.
+      - name: "Install Rust toolchain"
+        working-directory: baml_language
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "stdlib-matrix-baml-cli"
+
+      - name: "Build the BAML CLI"
+        run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+
+      # Two workspaces, deliberately. The extractor reads the repo-pinned
+      # `typescript` and `@types/node` resolved against the ROOT package.json,
+      # while the web app lives in typescript2's separate pnpm workspace.
+      - name: "Setup Node for the root workspace"
+        uses: ./.github/actions/setup-node
+        with:
+          enable-turbo-cache: "false"
+
+      - name: "Setup Node for the web app"
+        uses: ./.github/actions/setup-node2
+
+      # A 404 is the expected first run, not a failure: there is nothing
+      # deployed to carry forward yet.
+      - name: "Fetch the deployed report"
+        id: previous
+        env:
+          SITE: ${{ vars.STDLIB_MATRIX_URL || 'https://boundaryml.github.io/baml' }}
+        run: |
+          set -euo pipefail
+          if ! curl -fsSL --max-time 60 "${SITE}/matrix.json" -o previous.json; then
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing deployed yet; this run judges the whole surface."
+            exit 0
+          fi
+          # A report the tool can no longer read is worse than none: passing it
+          # as --previous or --baseline is a hard error, which would fail the
+          # job rather than fall back to a cold run. The format has changed once
+          # already (the judgement key moved to the TypeScript side).
+          #
+          # `|| echo` rather than a bare `jq`: `set -e` is active, and a body
+          # that is not JSON at all — an error page served with status 200 — is
+          # the same situation as an old format, not a reason to fail.
+          version="$(jq -r '.format_version // 0' previous.json 2>/dev/null || echo unreadable)"
+          if [[ "${version}" != "2" ]]; then
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::deployed report is format v${version}, this tool writes v2; judging the whole surface"
+            rm -f previous.json
+            exit 0
+          fi
+          echo "have=true" >> "$GITHUB_OUTPUT"
+          jq -er '"carried forward from \(.counts.judgements) judgements"' previous.json
+
+      # The ratchet compares the inputs the deployed report was built from. A
+      # release that did not move the stdlib stops here, before any model call.
+      - name: "Has the surface moved?"
+        id: ratchet
+        env:
+          FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+        run: |
+          set -euo pipefail
+          # `extracted` is reported separately from `changed`, because the build
+          # below needs to know something different: whether data/ exists yet.
+          # Both paths out of this step set it, and the early ones set it false
+          # — a forced dispatch skips the comparison, and skipping the
+          # comparison means skipping the extraction that comes with it.
+          if [[ "${{ steps.previous.outputs.have }}" != "true" || "${FORCED}" == "true" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "extracted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # This run does the extraction; the build below reuses its data/, so
+          # the decision and the report it gates are made from the same bytes.
+          if tools/stdlib-matrix/run --check --baseline previous.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "extracted=true" >> "$GITHUB_OUTPUT"
+            echo "The deployed report was built from these inputs; nothing to publish."
+          else
+            status=$?
+            # 1 is "out of date", which is the whole point. 2 is a tool error.
+            if ((status != 1)); then
+              echo "stdlib-matrix: --check failed with ${status}" >&2
+              exit "${status}"
+            fi
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "extracted=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "Build the matrix"
+        if: steps.ratchet.outputs.changed == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          # Two independent questions, which were one flag until a forced
+          # dispatch told them apart: whether there is a report to carry
+          # forward, and whether data/ has already been built. A forced run has
+          # the first and not the second, and claiming otherwise made the tool
+          # refuse with "--skip-extract passed but data/ is incomplete".
+          args=()
+          if [[ "${{ steps.previous.outputs.have }}" == "true" ]]; then
+            args+=(--previous "${GITHUB_WORKSPACE}/previous.json")
+          fi
+          if [[ "${{ steps.ratchet.outputs.extracted }}" == "true" ]]; then
+            args+=(--skip-extract)
+          fi
+          # Written straight into the site's public directory rather than copied
+          # there afterwards. `run` creates the destination directory, and that
+          # directory is one git cannot supply: it holds nothing but the report,
+          # which is gitignored, so a fresh checkout has no `public/` at all and
+          # the copy that used to follow failed on it.
+          tools/stdlib-matrix/run --llm \
+            --json-output typescript2/app-stdlib-matrix/public/matrix.json \
+            "${args[@]}"
+
+      # A session that did not come back leaves symbols unjudged, which in the
+      # published report is indistinguishable from symbols nothing reached — so
+      # the question is whether this report says *less* than the one already
+      # deployed, not whether anything failed at all.
+      #
+      # Refusing on any failure was the original rule, written when a failure
+      # meant one call out of a few hundred. A session is now a multi-round loop
+      # and there are two hundred of them, so at this scale some transient
+      # failure is close to certain: a run judging 2557 symbols with six failed
+      # sessions is a good run, and blocking it would mean never publishing
+      # again. What must not happen is publishing a report with less coverage
+      # than the one it replaces.
+      - name: "Refuse to publish a thinner report"
+        if: steps.ratchet.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          report=typescript2/app-stdlib-matrix/public/matrix.json
+          failures="$(jq -er '.failures | length' "${report}")"
+          if ((failures > 0)); then
+            echo "::warning::${failures} sessions did not come back; their symbols are unjudged" >&2
+            jq -r '.failures[] | "  \(.pass) · \(.subject) — \(.reason)"' "${report}" >&2
+          fi
+          jq -er '.counts | "matched \(.matched) · unnecessary \(.unnecessary) · absent \(.unmatched) · unjudged \(.unjudged)"' "${report}"
+
+          # A run that mostly failed is not a thin report, it is a broken one.
+          # This is checked before the comparison below, because "nothing to be
+          # thinner than" was letting the worst case through: the first run
+          # published 0 judgements and 2780 unjudged symbols — every session
+          # having failed identically on a rejected API key — and an empty
+          # matrix went live because there was no previous report to be worse
+          # than. A healthy run leaves close to nothing unjudged.
+          now="$(jq -er '.counts.unjudged' "${report}")"
+          total="$(jq -er '.counts.ts_symbols' "${report}")"
+          if ((now * 2 > total)); then
+            echo "::error::${now} of ${total} symbols went unjudged; this run did not work, keeping whatever is deployed" >&2
+            exit 1
+          fi
+
+          if [[ "${{ steps.previous.outputs.have }}" != "true" ]]; then
+            # Nothing to be thinner than, and the check above says it is not
+            # broken. A first run publishes what it got.
+            exit 0
+          fi
+          before="$(jq -er '.counts.unjudged' previous.json)"
+          if ((now > before)); then
+            echo "::error::coverage regressed: ${before} unjudged deployed, ${now} in this run; keeping the deployed report" >&2
+            exit 1
+          fi
+
+      # The report is fetched by the page at runtime, so it ships beside it.
+      - name: "Build the site"
+        if: steps.ratchet.outputs.changed == 'true'
+        working-directory: typescript2/app-stdlib-matrix
+        run: |
+          set -euo pipefail
+          # No copy: the report was written here directly, which is also what
+          # created this directory.
+          pnpm exec tsc -b --noEmit
+          pnpm exec vite build
+          cp "${GITHUB_WORKSPACE}/tools/stdlib-matrix/report/matrix.md" dist/matrix.md
+
+      - name: "Upload the site"
+        if: steps.ratchet.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: typescript2/app-stdlib-matrix/dist
+
+  deploy:
+    name: "Deploy to Pages"
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: "Deploy"
+        id: deploy
+        uses: actions/deploy-pages@v4

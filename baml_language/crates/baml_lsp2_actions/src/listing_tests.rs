@@ -92,6 +92,106 @@ fn list_package_items_fqns_include_namespace() {
     assert!(entries.iter().any(|e| e.fqn() == "lorem.Resume"));
 }
 
+/// Builtin package listings include the package segment so names can round-trip
+/// through `baml describe` without callers needing to guess the package.
+#[test]
+fn list_package_items_builtin_fqns_include_package_name() {
+    let project = make_multi_ns_project();
+    let pkg_id =
+        baml_compiler2_hir::package::PackageId::new(&project.db, baml_base::Name::new("baml"));
+    let entries = crate::listing::list_package_items(&project.db, pkg_id);
+
+    assert!(
+        entries.iter().any(|e| e.fqn() == "baml.iter.Range"),
+        "expected builtin listing to include package-qualified names"
+    );
+    assert!(
+        !entries.iter().any(|e| e.fqn() == "iter.Range"),
+        "builtin listing must not emit unqualified names"
+    );
+}
+
+#[test]
+fn language_internal_functions_are_hidden_from_describe() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "tests.baml",
+        r#"
+function Identity(value: string) -> string {
+    value
+}
+
+test "identity" {
+    assert.equal(Identity("ok"), "ok")
+}
+"#,
+    );
+    let project = builder.build();
+    let pkg_id =
+        baml_compiler2_hir::package::PackageId::new(&project.db, baml_base::Name::new("user"));
+    let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
+    let (internal_name, internal_def) = pkg
+        .namespaces
+        .values()
+        .flat_map(|namespace| namespace.values.iter())
+        .find(|(name, _)| name.as_str().starts_with("$init_test"))
+        .expect("test lowering should synthesize an init function");
+
+    assert!(internal_def.is_language_internal(&project.db));
+    assert!(
+        crate::listing::list_package_items(&project.db, pkg_id)
+            .iter()
+            .all(|entry| entry.item_name.as_str() != internal_name.as_str())
+    );
+    assert!(crate::listing::resolve_target(&project.db, pkg_id, internal_name.as_str()).is_none());
+    assert!(
+        crate::describe::describe(&project.db, &project.files, internal_name.as_str()).is_empty()
+    );
+    assert!(
+        crate::describe::describe_by_definition(&project.db, &project.files, *internal_def)
+            .is_none()
+    );
+}
+
+#[test]
+fn llm_companions_remain_visible_to_describe() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "functions.baml",
+        r##"
+function Summarize(input: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `Summarize ${input}`
+}
+"##,
+    );
+    let project = builder.build();
+    let pkg_id =
+        baml_compiler2_hir::package::PackageId::new(&project.db, baml_base::Name::new("user"));
+    let entries = crate::listing::list_package_items(&project.db, pkg_id);
+
+    // The AST-level companions. `$stream` is synthesized in PPIR rather than
+    // lowered as an item, so it is deliberately absent from this listing.
+    for name in [
+        "Summarize$spec",
+        "Summarize$render_prompt",
+        "Summarize$parse",
+    ] {
+        assert!(
+            entries.iter().any(|entry| entry.item_name.as_str() == name),
+            "expected `{name}` in describe listing; got {:?}",
+            entries
+                .iter()
+                .map(|entry| entry.item_name.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(matches!(
+            crate::listing::resolve_target(&project.db, pkg_id, name),
+            Some(ResolvedTarget::Item(_))
+        ));
+    }
+}
+
 #[test]
 fn list_namespace_items_llm() {
     let project = make_multi_ns_project();
@@ -307,4 +407,39 @@ fn round_trip_member() {
     }
 
     assert!(checked > 0, "expected at least one member to be checked");
+}
+
+#[test]
+fn out_of_body_implements_method_appears_in_class_outline() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "types.baml",
+        r#"
+interface Animal {
+    function speak(self) -> string
+}
+
+class Dog {}
+
+implements Animal for Dog {
+    function speak(self) -> string { return "woof" }
+}
+"#,
+    );
+    let project = builder.build();
+
+    let outline = crate::outline::file_outline(&project.db, project.files[0]);
+    let dog = outline
+        .iter()
+        .find(|item| item.name == "Dog")
+        .expect("Dog should appear in outline");
+
+    assert!(
+        dog.children.iter().any(|child| {
+            child.name == "speak"
+                && child.kind == baml_compiler2_hir::contributions::DefinitionKind::Method
+        }),
+        "expected out-of-body impl method to be visible as a Dog outline child, got: {:?}",
+        dog.children
+    );
 }

@@ -1,4 +1,4 @@
-use bex_vm_types::{HeapPtr, Object, ObjectIndex};
+use bex_vm_types::{HeapPtr, Object};
 
 use crate::BexHeap;
 
@@ -61,9 +61,6 @@ impl BexHeap {
     #[inline]
     pub fn verify_quick(&self) {}
 
-    #[inline]
-    pub fn debug_assert_valid_index(&self, _idx: HeapPtr) {}
-
     /// Create a HeapPtr from a raw pointer.
     /// In non-debug mode, just wraps the pointer.
     #[inline]
@@ -90,16 +87,12 @@ impl BexHeap {
         self.debug_state().epoch()
     }
 
-    pub(crate) fn make_object_index(&self, raw: usize) -> ObjectIndex {
-        ObjectIndex::from_raw(raw)
-    }
-
     pub(crate) fn placeholder_object(&self) -> Object {
-        Object::String(String::new())
+        Object::String(bex_str::BexStr::empty())
     }
 
     pub(crate) fn tlab_canary_object(&self, _chunk_start: usize, _chunk_end: usize) -> Object {
-        Object::String(String::new())
+        Object::String(bex_str::BexStr::empty())
     }
 
     pub(crate) fn finalize_inactive_space(&self) {

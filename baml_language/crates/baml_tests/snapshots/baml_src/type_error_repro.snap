@@ -1,0 +1,1264 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function type_error_repro.$init_test_ns_type_error_repro_type_error_repro(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "bytecode_1d_array_write_local"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "bytecode_1d_array_write_through_field"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "bytecode_1d_array_read_through_field"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "bytecode_2d_array_write_local"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "bytecode_2d_array_write_through_field"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "bytecode_map_write_through_field"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "bytecode_map_write_local"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "bytecode_non_self_param_array_write"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "array_index_with_int_works"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "int_through_function_call_as_index_works"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "nested_array_index_with_int_works"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "array_element_assignment_2d_type_error"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "array_element_assignment_1d"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_array_read_works"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_array_write_type_error"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "nested_array_read_with_variables"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "nested_array_write_with_variables"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "array_write_with_variable_index"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_1d_array_write_through_self"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_2d_array_write_through_self_literals"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_2d_array_write_minimal"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_map_write_through_self"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "map_write_local_variable"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_nested_field_array_write"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_map_then_array_write_through_self"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_3d_array_write_through_self"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "class_method_array_push_through_self"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "non_self_param_array_write"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "optional_index_with_null_index_returns_null"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "optional_index_with_valid_index_returns_element"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "negated_int_min_literal_is_valid"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "map_with_string_alias_key_is_accepted"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_error_repro"
+    load_const "map_with_repeated_string_alias_union_key_is_accepted"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function type_error_repro.BoardMinimal.new() -> type_error_repro.BoardMinimal {
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_type string[]
+    alloc_array 3
+    init_instance user.type_error_repro.BoardMinimal .cells
+    return
+}
+
+function type_error_repro.BoardMinimal.play(self: type_error_repro.BoardMinimal, player: string, row: int, col: int) -> null {
+    load_var self
+    load_field .cells
+    load_var row
+    load_array_element
+    load_var2 4 2
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.BoardRead.get(self: type_error_repro.BoardRead, row: int, col: int) -> string {
+    load_var self
+    load_field .cells
+    load_var row
+    load_array_element
+    load_var col
+    load_array_element
+    return
+}
+
+function type_error_repro.BoardRead.new() -> type_error_repro.BoardRead {
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_type string[]
+    alloc_array 3
+    init_instance user.type_error_repro.BoardRead .cells
+    return
+}
+
+function type_error_repro.BoardWrite.get(self: type_error_repro.BoardWrite, row: int, col: int) -> string {
+    load_var self
+    load_field .cells
+    load_var row
+    load_array_element
+    load_var col
+    load_array_element
+    return
+}
+
+function type_error_repro.BoardWrite.new() -> type_error_repro.BoardWrite {
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_type string[]
+    alloc_array 3
+    init_instance user.type_error_repro.BoardWrite .cells
+    return
+}
+
+function type_error_repro.BoardWrite.play(self: type_error_repro.BoardWrite, player: string, row: int, col: int) -> null {
+    load_var self
+    load_field .cells
+    load_var row
+    load_array_element
+    load_var2 4 2
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.BytecodeContainer.set(self: type_error_repro.BytecodeContainer, idx: int, val: string) -> null {
+    load_var self
+    load_field .items
+    load_var2 2 3
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.BytecodeContainerRead.get(self: type_error_repro.BytecodeContainerRead, idx: int) -> string {
+    load_var self
+    load_field .items
+    load_var idx
+    load_array_element
+    return
+}
+
+function type_error_repro.BytecodeGrid.set(self: type_error_repro.BytecodeGrid, row: int, col: int, val: string) -> null {
+    load_var self
+    load_field .cells
+    load_var row
+    load_array_element
+    load_var2 3 4
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.BytecodeScores.set(self: type_error_repro.BytecodeScores, key: string, val: int) -> null {
+    load_var self
+    load_field .data
+    load_var2 2 3
+    store_map_element
+    load_const null
+    return
+}
+
+function type_error_repro.ContainerSelf.get(self: type_error_repro.ContainerSelf, idx: int) -> string {
+    load_var self
+    load_field .items
+    load_var idx
+    load_array_element
+    return
+}
+
+function type_error_repro.ContainerSelf.new() -> type_error_repro.ContainerSelf {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    init_instance user.type_error_repro.ContainerSelf .items
+    return
+}
+
+function type_error_repro.ContainerSelf.set(self: type_error_repro.ContainerSelf, idx: int, val: string) -> null {
+    load_var self
+    load_field .items
+    load_var2 2 3
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.Cube.get(self: type_error_repro.Cube, x: int, y: int, z: int) -> int {
+    load_var self
+    load_field .data
+    load_var x
+    load_array_element
+    load_var y
+    load_array_element
+    load_var z
+    load_array_element
+    return
+}
+
+function type_error_repro.Cube.new() -> type_error_repro.Cube {
+    load_const 0
+    load_const 0
+    load_type int
+    alloc_array 2
+    load_const 0
+    load_const 0
+    load_type int
+    alloc_array 2
+    load_type int[]
+    alloc_array 2
+    load_const 0
+    load_const 0
+    load_type int
+    alloc_array 2
+    load_const 0
+    load_const 0
+    load_type int
+    alloc_array 2
+    load_type int[]
+    alloc_array 2
+    load_type int[][]
+    alloc_array 2
+    init_instance user.type_error_repro.Cube .data
+    return
+}
+
+function type_error_repro.Cube.set(self: type_error_repro.Cube, x: int, y: int, z: int, val: int) -> null {
+    load_var self
+    load_field .data
+    load_var x
+    load_array_element
+    load_var y
+    load_array_element
+    load_var2 4 5
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.GridSelf.get(self: type_error_repro.GridSelf, row: int, col: int) -> string {
+    load_var self
+    load_field .cells
+    load_var row
+    load_array_element
+    load_var col
+    load_array_element
+    return
+}
+
+function type_error_repro.GridSelf.new() -> type_error_repro.GridSelf {
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_type string[]
+    alloc_array 3
+    init_instance user.type_error_repro.GridSelf .cells
+    return
+}
+
+function type_error_repro.GridSelf.set(self: type_error_repro.GridSelf, row: int, col: int, val: string) -> null {
+    load_var self
+    load_field .cells
+    load_var row
+    load_array_element
+    load_var2 3 4
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.OuterItems.get(self: type_error_repro.OuterItems, idx: int) -> string {
+    load_var self
+    load_field .inner
+    load_field .items
+    load_var idx
+    load_array_element
+    return
+}
+
+function type_error_repro.OuterItems.new() -> type_error_repro.OuterItems {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    init_instance user.type_error_repro.InnerItems .items
+    init_instance user.type_error_repro.OuterItems .inner
+    return
+}
+
+function type_error_repro.OuterItems.set(self: type_error_repro.OuterItems, idx: int, val: string) -> null {
+    load_var self
+    load_field .inner
+    load_field .items
+    load_var2 2 3
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.Registry.get(self: type_error_repro.Registry, key: string, idx: int) -> int {
+    load_var self
+    load_field .data
+    load_var key
+    load_map_element
+    load_var idx
+    load_array_element
+    return
+}
+
+function type_error_repro.Registry.new() -> type_error_repro.Registry {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_const "nums"
+    load_type string
+    load_type int[]
+    alloc_map 1
+    init_instance user.type_error_repro.Registry .data
+    return
+}
+
+function type_error_repro.Registry.set(self: type_error_repro.Registry, key: string, idx: int, val: int) -> null {
+    load_var self
+    load_field .data
+    load_var key
+    load_map_element
+    load_var2 3 4
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.ScoresSelf.get(self: type_error_repro.ScoresSelf, key: string) -> int {
+    load_var self
+    load_field .data
+    load_var key
+    load_map_element
+    return
+}
+
+function type_error_repro.ScoresSelf.new() -> type_error_repro.ScoresSelf {
+    load_type string
+    load_type int
+    alloc_map 0
+    init_instance user.type_error_repro.ScoresSelf .data
+    return
+}
+
+function type_error_repro.ScoresSelf.set(self: type_error_repro.ScoresSelf, key: string, val: int) -> null {
+    load_var self
+    load_field .data
+    load_var2 2 3
+    store_map_element
+    load_const null
+    return
+}
+
+function type_error_repro.Stack.new() -> type_error_repro.Stack {
+    load_type int
+    alloc_array 0
+    init_instance user.type_error_repro.Stack .items
+    return
+}
+
+function type_error_repro.Stack.peek(self: type_error_repro.Stack) -> int {
+    load_var self
+    load_field .items
+    load_const 0
+    load_array_element
+    return
+}
+
+function type_error_repro.Stack.push(self: type_error_repro.Stack, val: int) -> null {
+    load_type int
+    load_var self
+    load_field .items
+    load_var val
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+}
+
+function type_error_repro.array_element_assignment_1d_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    store_var arr
+    load_var arr
+    load_const 1
+    load_const "z"
+    store_array_element
+    load_var arr
+    load_const 1
+    load_array_element
+    return
+}
+
+function type_error_repro.array_element_assignment_2d_type_error_body() -> string {
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_const ""
+    load_const ""
+    load_const ""
+    load_type string
+    alloc_array 3
+    load_type string[]
+    alloc_array 3
+    store_var cells
+    load_var cells
+    load_const 1
+    load_array_element
+    load_const 2
+    load_const "x"
+    store_array_element
+    load_var cells
+    load_const 1
+    load_array_element
+    load_const 2
+    load_array_element
+    return
+}
+
+function type_error_repro.array_index_with_int_works_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_const 1
+    load_array_element
+    return
+}
+
+function type_error_repro.array_write_with_variable_index_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    store_var arr
+    load_var arr
+    load_const 1
+    load_const "z"
+    store_array_element
+    load_var arr
+    load_const 1
+    load_array_element
+    return
+}
+
+function type_error_repro.bytecode_1d_array_read_through_field_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    init_instance user.type_error_repro.BytecodeContainerRead .items
+    load_const 1
+    call user.type_error_repro.BytecodeContainerRead.get
+    return
+}
+
+function type_error_repro.bytecode_1d_array_write_local_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    store_var arr
+    load_var arr
+    load_const 1
+    load_const "z"
+    store_array_element
+    load_var arr
+    load_const 1
+    load_array_element
+    return
+}
+
+function type_error_repro.bytecode_1d_array_write_through_field_body() -> null {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    init_instance user.type_error_repro.BytecodeContainer .items
+    load_const 1
+    load_const "z"
+    call user.type_error_repro.BytecodeContainer.set
+    pop 1
+    load_const null
+    return
+}
+
+function type_error_repro.bytecode_2d_array_write_local_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    load_const "c"
+    load_const "d"
+    load_type string
+    alloc_array 2
+    load_type string[]
+    alloc_array 2
+    store_var cells
+    load_var cells
+    load_const 1
+    load_array_element
+    load_const 0
+    load_const "x"
+    store_array_element
+    load_var cells
+    load_const 1
+    load_array_element
+    load_const 0
+    load_array_element
+    return
+}
+
+function type_error_repro.bytecode_2d_array_write_through_field_body() -> null {
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    load_const "c"
+    load_const "d"
+    load_type string
+    alloc_array 2
+    load_type string[]
+    alloc_array 2
+    init_instance user.type_error_repro.BytecodeGrid .cells
+    load_const 1
+    load_const 0
+    load_const "x"
+    call user.type_error_repro.BytecodeGrid.set
+    pop 1
+    load_const null
+    return
+}
+
+function type_error_repro.bytecode_map_write_local_body() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var scores
+    load_var scores
+    load_const "alice"
+    load_const 100
+    store_map_element
+    load_var scores
+    load_const "alice"
+    load_map_element
+    return
+}
+
+function type_error_repro.bytecode_map_write_through_field_body() -> null {
+    load_type string
+    load_type int
+    alloc_map 0
+    init_instance user.type_error_repro.BytecodeScores .data
+    load_const "alice"
+    load_const 100
+    call user.type_error_repro.BytecodeScores.set
+    pop 1
+    load_const null
+    return
+}
+
+function type_error_repro.bytecode_non_self_param_array_write_body() -> null {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    init_instance user.type_error_repro.BytecodeContainerNonSelf .items
+    load_const 1
+    load_const "z"
+    call user.type_error_repro.bytecode_set_item
+    pop 1
+    load_const null
+    return
+}
+
+function type_error_repro.bytecode_set_item(c: type_error_repro.BytecodeContainerNonSelf, idx: int, val: string) -> null {
+    load_var c
+    load_field .items
+    load_var2 2 3
+    store_array_element
+    load_const null
+    return
+}
+
+function type_error_repro.class_method_1d_array_write_through_self_body() -> string {
+    call user.type_error_repro.ContainerSelf.new
+    store_var c
+    load_var c
+    load_const 1
+    load_const "z"
+    call user.type_error_repro.ContainerSelf.set
+    pop 1
+    load_var c
+    load_const 1
+    call user.type_error_repro.ContainerSelf.get
+    return
+}
+
+function type_error_repro.class_method_2d_array_write_minimal_body() -> null {
+    call user.type_error_repro.BoardMinimal.new
+    load_const "x"
+    load_const 1
+    load_const 2
+    call user.type_error_repro.BoardMinimal.play
+    pop 1
+    load_const null
+    return
+}
+
+function type_error_repro.class_method_2d_array_write_through_self_literals_body() -> string {
+    call user.type_error_repro.GridSelf.new
+    store_var g
+    load_var g
+    load_const 1
+    load_const 2
+    load_const "x"
+    call user.type_error_repro.GridSelf.set
+    pop 1
+    load_var g
+    load_const 1
+    load_const 2
+    call user.type_error_repro.GridSelf.get
+    return
+}
+
+function type_error_repro.class_method_3d_array_write_through_self_body() -> int {
+    call user.type_error_repro.Cube.new
+    store_var c
+    load_var c
+    load_const 1
+    load_const 0
+    load_const 1
+    load_const 42
+    call user.type_error_repro.Cube.set
+    pop 1
+    load_var c
+    load_const 1
+    load_const 0
+    load_const 1
+    call user.type_error_repro.Cube.get
+    return
+}
+
+function type_error_repro.class_method_array_push_through_self_body() -> int {
+    call user.type_error_repro.Stack.new
+    store_var s
+    load_var s
+    load_const 42
+    call user.type_error_repro.Stack.push
+    pop 1
+    load_var s
+    call user.type_error_repro.Stack.peek
+    return
+}
+
+function type_error_repro.class_method_array_read_works_body() -> string {
+    call user.type_error_repro.BoardRead.new
+    load_const 1
+    load_const 2
+    call user.type_error_repro.BoardRead.get
+    return
+}
+
+function type_error_repro.class_method_array_write_type_error_body() -> string {
+    call user.type_error_repro.BoardWrite.new
+    store_var board
+    load_var board
+    load_const "x"
+    load_const 1
+    load_const 2
+    call user.type_error_repro.BoardWrite.play
+    pop 1
+    load_var board
+    load_const 1
+    load_const 2
+    call user.type_error_repro.BoardWrite.get
+    return
+}
+
+function type_error_repro.class_method_map_then_array_write_through_self_body() -> int {
+    call user.type_error_repro.Registry.new
+    store_var r
+    load_var r
+    load_const "nums"
+    load_const 0
+    load_const 99
+    call user.type_error_repro.Registry.set
+    pop 1
+    load_var r
+    load_const "nums"
+    load_const 0
+    call user.type_error_repro.Registry.get
+    return
+}
+
+function type_error_repro.class_method_map_write_through_self_body() -> int {
+    call user.type_error_repro.ScoresSelf.new
+    store_var s
+    load_var s
+    load_const "alice"
+    load_const 100
+    call user.type_error_repro.ScoresSelf.set
+    pop 1
+    load_var s
+    load_const "alice"
+    call user.type_error_repro.ScoresSelf.get
+    return
+}
+
+function type_error_repro.class_method_nested_field_array_write_body() -> string {
+    call user.type_error_repro.OuterItems.new
+    store_var o
+    load_var o
+    load_const 1
+    load_const "z"
+    call user.type_error_repro.OuterItems.set
+    pop 1
+    load_var o
+    load_const 1
+    call user.type_error_repro.OuterItems.get
+    return
+}
+
+function type_error_repro.get_cell_for_nested_test(cells: string[][], row: int, col: int) -> string {
+    load_var2 1 2
+    load_array_element
+    load_var col
+    load_array_element
+    return
+}
+
+function type_error_repro.get_element_for_int_through_call(arr: string[], idx: int) -> string {
+    load_var2 1 2
+    load_array_element
+    return
+}
+
+function type_error_repro.int_through_function_call_as_index_works_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_const 1
+    call user.type_error_repro.get_element_for_int_through_call
+    return
+}
+
+function type_error_repro.map_with_repeated_string_alias_union_key_body() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var counts
+    load_type string
+    load_type int
+    load_var counts
+    load_const "x"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var counts
+    load_const "x"
+    call baml.Map.get
+    store_var _5
+    load_var _5
+    store_var _0
+    load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 0
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function type_error_repro.map_with_string_alias_key_body() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var counts
+    load_type string
+    load_type int
+    load_var counts
+    load_const "x"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var counts
+    load_const "x"
+    call baml.Map.get
+    store_var _5
+    load_var _5
+    store_var _0
+    load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 0
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function type_error_repro.map_write_local_variable_body() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var scores
+    load_var scores
+    load_const "alice"
+    load_const 100
+    store_map_element
+    load_var scores
+    load_const "alice"
+    load_map_element
+    return
+}
+
+function type_error_repro.negated_int_min_literal_body() -> int {
+    load_const -4611686018427387904
+    return
+}
+
+function type_error_repro.nested_array_index_with_int_works_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_const "d"
+    load_const "e"
+    load_const "f"
+    load_type string
+    alloc_array 3
+    load_const "g"
+    load_const "h"
+    load_const "i"
+    load_type string
+    alloc_array 3
+    load_type string[]
+    alloc_array 3
+    load_const 1
+    load_const 2
+    call user.type_error_repro.get_cell_for_nested_test
+    return
+}
+
+function type_error_repro.nested_array_read_with_variables_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_const "d"
+    load_const "e"
+    load_const "f"
+    load_type string
+    alloc_array 3
+    load_const "g"
+    load_const "h"
+    load_const "i"
+    load_type string
+    alloc_array 3
+    load_type string[]
+    alloc_array 3
+    load_const 1
+    load_array_element
+    load_const 2
+    load_array_element
+    return
+}
+
+function type_error_repro.nested_array_write_with_variables_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_const "d"
+    load_const "e"
+    load_const "f"
+    load_type string
+    alloc_array 3
+    load_const "g"
+    load_const "h"
+    load_const "i"
+    load_type string
+    alloc_array 3
+    load_type string[]
+    alloc_array 3
+    store_var cells
+    load_var cells
+    load_const 1
+    load_array_element
+    load_const 2
+    load_const "x"
+    store_array_element
+    load_var cells
+    load_const 1
+    load_array_element
+    load_const 2
+    load_array_element
+    return
+}
+
+function type_error_repro.non_self_param_array_write_body() -> string {
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    init_instance user.type_error_repro.ContainerNonSelf .items
+    store_var_load_var c
+    load_const 1
+    load_const "z"
+    call user.type_error_repro.set_item_non_self
+    pop 1
+    load_var c
+    load_field .items
+    load_const 1
+    load_array_element
+    return
+}
+
+function type_error_repro.optional_index_with_null_index_body() -> int | null {
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    store_var_load_var arr
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const null
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 2
+    load_array_element
+    jump L3
+
+  L2:
+    load_const null
+
+  L3:
+    return
+}
+
+function type_error_repro.optional_index_with_valid_index_body() -> int | null {
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    store_var_load_var arr
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const 1
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 2
+    load_array_element
+    jump L3
+
+  L2:
+    load_const null
+
+  L3:
+    return
+}
+
+function type_error_repro.set_item_non_self(c: type_error_repro.ContainerNonSelf, idx: int, val: string) -> null {
+    load_var c
+    load_field .items
+    load_var2 2 3
+    store_array_element
+    load_const null
+    return
+}

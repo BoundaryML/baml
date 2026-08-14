@@ -18,43 +18,31 @@ function TestBamlEventsTypo() -> void {
 
 //----
 //- diagnostics
-// Error: unresolved name: ev
-//    ╭─[ expr_unresolved_builtin_namespace.baml:3:32 ]
-//    │
-//  3 │ ╭─▶ function TestBamlEv() -> void {
-//  4 │ ├─▶     baml.ev.send("test", {})
-//    │ │                                  
-//    │ ╰────────────────────────────────── unresolved name: ev
-//    │     
-//    │     Note: Error code: E0003
-// ───╯
-// Error: unresolved name: lo
-//    ╭─[ expr_unresolved_builtin_namespace.baml:7:32 ]
-//    │
-//  7 │ ╭─▶ function TestBamlLo() -> void {
-//  8 │ ├─▶     baml.lo.info("test")
-//    │ │                              
-//    │ ╰────────────────────────────── unresolved name: lo
-//    │     
-//    │     Note: Error code: E0003
-// ───╯
-// Error: unresolved name: inf
-//     ╭─[ expr_unresolved_builtin_namespace.baml:11:32 ]
-//     │
-//  11 │ ╭─▶ function TestLogInf() -> void {
-//  12 │ ├─▶     log.inf("test")
-//     │ │                         
-//     │ ╰───────────────────────── unresolved name: inf
-//     │     
-//     │     Note: Error code: E0003
-// ────╯
-// Error: unresolved name: event
-//     ╭─[ expr_unresolved_builtin_namespace.baml:15:40 ]
-//     │
-//  15 │ ╭─▶ function TestBamlEventsTypo() -> void {
-//  16 │ ├─▶     baml.event.send("test", {})
-//     │ │                                     
-//     │ ╰───────────────────────────────────── unresolved name: event
-//     │     
-//     │     Note: Error code: E0003
-// ────╯
+// E0003
+//
+//   × unresolved name: `baml.ev.send`
+//    ╭─[expr_unresolved_builtin_namespace.baml:4:5]
+//  4 │     baml.ev.send("test", {})
+//    ·     ────────────
+//    ╰────
+// E0003
+//
+//   × unresolved name: `baml.lo.info`
+//    ╭─[expr_unresolved_builtin_namespace.baml:8:5]
+//  8 │     baml.lo.info("test")
+//    ·     ────────────
+//    ╰────
+// E0003
+//
+//   × unresolved name: `log.inf`
+//     ╭─[expr_unresolved_builtin_namespace.baml:12:5]
+//  12 │     log.inf("test")
+//     ·     ───────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `baml.event.send`
+//     ╭─[expr_unresolved_builtin_namespace.baml:16:5]
+//  16 │     baml.event.send("test", {})
+//     ·     ───────────────
+//     ╰────

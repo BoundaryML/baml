@@ -8,11 +8,11 @@ edition = "2021"
 # This is the MSRV (Minimum Supported Rust Version) for the workspace
 rust-version = "1.70"
 authors = ["Boundary <contact@boundaryml.com>"]
-homepage = "https://github.com/BoundaryML/baml"
+homepage = "https://github.com/BoundaryML/baml/blob/canary/README.v0.md"
 documentation = "https://docs.boundaryml.com"
 repository = "https://github.com/BoundaryML/baml"
 license = "Apache-2.0"
-version = "0.222.0"
+version = "0.225.0"
 
 [workspace.dependencies]
 # external dependencies
@@ -37,9 +37,9 @@ hex = "0.4"
 
 # internal dependencies
 # Versions are managed by cargo-release (see release.toml)
-baml-macros = { version = "0.222.0", path = "baml-macros" }
-baml = { version = "0.222.0", path = "baml" }
-baml-sys = { version = "0.222.0", path = "baml-sys" }
+baml-macros = { version = "0.225.0", path = "baml-macros" }
+baml = { version = "0.225.0", path = "baml" }
+baml-sys = { version = "0.225.0", path = "baml-sys" }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

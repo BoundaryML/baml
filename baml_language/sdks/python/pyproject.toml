@@ -1,6 +1,6 @@
 [project]
-name = "baml_core"
-version = "0.1.3"
+name = "baml_bridge"
+version = "0.16.0"
 description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 license = "Apache-2.0"
@@ -8,6 +8,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "protobuf>=6.31.1",
+    # `UNSET` is built with `typing_extensions.Sentinel` (PEP 661).
+    "typing-extensions>=4.14.0",
 ]
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
@@ -28,32 +30,31 @@ dev = [
     "pytest>=7",
     "pytest-asyncio>=0.21",
     "pytest-xdist>=3",
-    "maturin>=1.0,<2.0",
+    "maturin>=1.9.4,<2.0",
     "grpcio-tools>=1.50",
     "pydantic>=2",
-    "pyright>=1.1.409",
+    "pyright>=1.1.410",
     "ruff",
     "ty",
 ]
 
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.9.4,<2.0"]
 build-backend = "maturin"
 
 
 [tool.maturin]
 python-source = "src"
 manifest-path = "rust/bridge_python/Cargo.toml"
-module-name = "baml_core.baml_py"
-features = ["extension-module"]
-include = [{ path = "src/baml_core/py.typed", format = ["sdist", "wheel"] }]
+module-name = "baml_bridge.baml_py"
+include = [{ path = "src/baml_bridge/py.typed", format = ["sdist", "wheel"] }]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "-n auto"
 
 [tool.ruff]
-extend-exclude = ["src/baml_core/cffi/v1/*_pb2.py"]
+extend-exclude = ["src/baml_bridge/cffi/v1/*_pb2.py"]
 
 [tool.ty.environment]
 extra-paths = ["tests/sim"]

@@ -1,0 +1,26 @@
+# C++ sdk-test crate. Fans out across every fixture under
+# `sdk_tests/fixtures/<fixture>/baml_src/` and produces a generated SDK at
+# `<fixture>/generated/baml_sdk/` (plus a `test.sh` compile-and-run driver)
+# and two toolchain test invocations per fixture (compile, run) plus the
+# shared `build_diagnostics::no_build_failures` test.
+#
+# While `sdkgen_cpp` is a stub every test is `#[ignore]`d, matching how
+# typescript_node shipped before its emitter landed.
+#
+# `sdk_test_harness_setup` runs at build time (codegen + scaffold emit);
+# `sdk_test_harness_runner` runs at test time. The bridge_cffi cdylib the
+# tests link is built by `setup.sh` via the nextest setup-script binding.
+[package]
+name = "sdk_test_cpp"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+sdk_test_harness_setup = { path = "../../harness_setup" }
+
+[dev-dependencies]
+sdk_test_harness_runner = { path = "../../harness_runner" }
+
+[package.metadata.ci]
+wasm_support = false

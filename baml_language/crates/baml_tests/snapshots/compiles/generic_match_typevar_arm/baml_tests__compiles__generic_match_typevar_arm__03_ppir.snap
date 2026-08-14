@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12521
+---
+=== PPIR ===
+class user.Non {
+}
+class user.Non$stream {
+}
+class user.Opt {
+  value: T
+}
+class user.Opt$stream {
+  value: T | null
+}
+function user.unwrap_or(o: user.Opt<T> | user.Non, default: T) -> T  [expr] {
+  {  } match (o) { s: user.Opt<T> => s.value, _ => default }
+}

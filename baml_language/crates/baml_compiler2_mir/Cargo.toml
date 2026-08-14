@@ -10,15 +10,16 @@ rust-version = { workspace = true }
 baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }
+baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
-baml_compiler2_tir = { workspace = true }
 baml_type = { workspace = true }
+baml_type_runtime = { workspace = true }
+baml_workspace = { workspace = true }
 indexmap = { workspace = true }
-log = { workspace = true }
+num-bigint = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
 smol_str = { workspace = true }
-text-size = { workspace = true }
 
 [lints]
 workspace = true

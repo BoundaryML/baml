@@ -1,0 +1,17 @@
+{
+  "slug": "product-of-array-except-self",
+  "id": 238,
+  "title": "Product of Array Except Self",
+  "difficulty": "Medium",
+  "category": "Arrays & Hashing",
+  "statement": "Given an integer array `nums`, return an array `answer` such that `answer[i]` is the product of all elements of `nums` except `nums[i]`.\n\nSolve it **without using division** and in `O(n)`.\n\n**Example**\n\n```\nnums = [1, 2, 3, 4]  => [24, 12, 8, 6]\n```",
+  "signature": "function ProductExceptSelf(nums: int[]) -> int[]",
+  "starter": "function ProductExceptSelf(nums: int[]) -> int[] {\n  // Return answer[i] = product of all nums except nums[i] (no division).\n  return [];\n}",
+  "solution": "function ProductExceptSelf(nums: int[]) -> int[] {\n  let n = nums.length();\n  let res: int[] = [];\n  let i = 0;\n  while (i < n) {\n    res.push(1);\n    i += 1;\n  }\n  let prefix = 1;\n  let j = 0;\n  while (j < n) {\n    res[j] = prefix;\n    prefix = prefix * nums[j];\n    j += 1;\n  }\n  let suffix = 1;\n  let k = n - 1;\n  while (k >= 0) {\n    res[k] = res[k] * suffix;\n    suffix = suffix * nums[k];\n    k -= 1;\n  }\n  return res;\n}",
+  "tests": [
+    { "call": "ProductExceptSelf([1, 2, 3, 4])", "expected": "[24, 12, 8, 6]" },
+    { "call": "ProductExceptSelf([-1, 1, 0, -3, 3])", "expected": "[0, 0, 9, 0, 0]" },
+    { "call": "ProductExceptSelf([2, 3])", "expected": "[3, 2]", "hidden": true },
+    { "call": "ProductExceptSelf([5, 1, 1])", "expected": "[1, 5, 5]", "hidden": true }
+  ]
+}

@@ -1,34 +1,29 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 38038
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got int
-   ╭─[ main.baml:1:1 ]
-   │
- 1 │ // Expression names — type errors: non-string expressions as test names.
-   │ │ 
-   │ ╰─ type mismatch: expected string, got int
-   │ 
-   │ Note: Error code: E0001
-───╯
+  [type] E0004
 
-  [type] Error: type mismatch: expected string, got 42
-   ╭─[ main.baml:7:6 ]
-   │
+  × operator `+` cannot be applied to `"a"` and `1`
+   ╭─[main.baml:3:6]
+ 3 │ test "a" + 1 {
+   ·      ───────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[main.baml:7:6]
  7 │ test 42 {
-   │      ─┬  
-   │       ╰── type mismatch: expected string, got 42
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·      ─┬
+   ·       ╰── expected `string`, found `42`
+   ╰────
 
-  [type] Error: type mismatch: expected string, got int
-    ╭─[ main.baml:13:11 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:13:11]
  13 │     test (5 + i) {
-    │           ──┬──  
-    │             ╰──── type mismatch: expected string, got int
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·           ──┬──
+    ·             ╰── expected `string`, found `int`
+    ╰────

@@ -17,13 +17,13 @@ const PARSE_CLASS: &str = "__SapParseTarget";
 /// The synthetic field name within the class.
 const PARSE_FIELD: &str = "value";
 
-/// Self-referential struct that owns the `TypeCtx` and the `baml_type::Ty`
+/// Self-referential struct that owns the `TypeCtx` and the `baml_type::RuntimeTy`
 /// for the parse target, and borrows `TypeRefDb` + `AnnotatedTy` from them.
 #[self_referencing]
 pub struct CompiledSapModel {
     type_ctx: sap_model::TypeCtx,
-    /// The `baml_type::Ty` extracted from the synthetic class field.
-    parse_ty: baml_type::Ty,
+    /// The `baml_type::RuntimeTy` extracted from the synthetic class field.
+    parse_ty: baml_type::RuntimeTy,
     #[borrows(type_ctx)]
     #[covariant]
     pub db: TypeRefDb<'this, TypeName>,
@@ -80,19 +80,13 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
     // This mirrors `BexEngine::extract_class_definitions` / `extract_enum_definitions`.
     let mut class_defs: IndexMap<TypeName, sys_types::ClassDefinition> = IndexMap::new();
     let mut enum_defs: IndexMap<TypeName, sys_types::EnumDefinition> = IndexMap::new();
-    let mut parse_field_ty: Option<baml_type::Ty> = None;
+    let mut parse_field_ty: Option<baml_type::RuntimeTy> = None;
 
     for obj in &program.objects {
         match obj {
-            bex_vm_types::Object::Class(cls)
-                if cls
-                    .name
-                    .module_path
-                    .first()
-                    .is_none_or(|first| first != "baml") =>
-            {
+            bex_vm_types::Object::Class(cls) if cls.name.package() != "baml" => {
                 // Extract the field type from our synthetic class.
-                if cls.name.name.as_str() == PARSE_CLASS {
+                if cls.name.name().as_str() == PARSE_CLASS {
                     let field = cls
                         .fields
                         .iter()
@@ -108,7 +102,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                 class_defs.insert(
                     cls.name.clone(),
                     sys_types::ClassDefinition {
-                        name: cls.name.display_name.to_string(),
+                        name: cls.name.display_name().to_string(),
                         description: cls.description.clone(),
                         alias: cls.alias.clone(),
                         fields: cls
@@ -125,17 +119,11 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                     },
                 );
             }
-            bex_vm_types::Object::Enum(enm)
-                if enm
-                    .name
-                    .module_path
-                    .first()
-                    .is_none_or(|first| first != "baml") =>
-            {
+            bex_vm_types::Object::Enum(enm) if enm.name.package() != "baml" => {
                 enum_defs.insert(
                     enm.name.clone(),
                     sys_types::EnumDefinition {
-                        name: enm.name.display_name.to_string(),
+                        name: enm.name.display_name().to_string(),
                         description: enm.description.clone(),
                         alias: enm.alias.clone(),
                         variants: enm
@@ -158,11 +146,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
     let parse_ty = parse_field_ty
         .ok_or_else(|| format!("Synthetic class {PARSE_CLASS} not found in compiled output"))?;
 
-    let type_alias_definitions = program
-        .recursive_type_alias_defs
-        .clone()
-        .into_iter()
-        .collect();
+    let type_alias_definitions = program.recursive_type_aliases().into_iter().collect();
     let type_ctx =
         sap_model::TypeCtx::new(&class_defs, Arc::new(enum_defs), &type_alias_definitions);
 
@@ -174,7 +158,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                 .build_db()
                 .map_err(|e| format!("SAP type conversion error: {e}"))
         },
-        ty_builder: |type_ctx: &sap_model::TypeCtx, parse_ty: &baml_type::Ty| {
+        ty_builder: |type_ctx: &sap_model::TypeCtx, parse_ty: &baml_type::RuntimeTy| {
             type_ctx
                 .convert_ty(parse_ty)
                 .map_err(|e| format!("Failed to convert parse type: {e}"))

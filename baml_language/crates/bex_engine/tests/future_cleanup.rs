@@ -12,13 +12,8 @@ use sys_native::SysOpsExt;
 fn make_engine(source: &str) -> Arc<BexEngine> {
     let snapshot = compile_for_engine(source);
     Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     )
 }
 
@@ -40,9 +35,9 @@ async fn active_futures_drains_after_awaited_sleep() {
     // leave no entries behind in the future manager once it returns.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
             42
         }
     "#;
@@ -59,7 +54,7 @@ async fn active_futures_drains_after_awaited_sleep() {
 async fn future_state_race_under_multithread_stress() {
     // Regression test for the data race between the engine's spawned task
     // (writer of the `Future` heap object) and the VM (reader). Many
-    // fast-resolving sys-ops (`baml.sys.sleep(0)`) on a multi-threaded
+    // fast-resolving sys-ops (`baml.sys.sleep(baml.time.Duration.from_milliseconds(0n))`) on a multi-threaded
     // tokio runtime exercise the path where the spawned task's write to
     // `Future::Ready` can land before — or alongside — the VM's first
     // read in `Await`. The atomic discriminant on `Future` makes this
@@ -67,14 +62,14 @@ async fn future_state_race_under_multithread_stress() {
     // and (in debug) panic on a non-Pending state.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
             1
         }
     "#;
@@ -101,7 +96,7 @@ async fn active_futures_drains_across_concurrent_calls() {
     // entries linger and bias the count.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(0);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
             7
         }
     "#;

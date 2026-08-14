@@ -1,14 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 1066
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] Error: Expected return type (->), found throws
-    ╭─[ main.baml:15:31 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:15:31]
  15 │ function ThrowsHttpResponse() throws root.http.Response {
-    │                               ───┬──  
-    │                                  ╰──── Expected return type (->), found throws
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                               ───┬──
+    ·                                  ╰── expected `return type (->)`, found `throws`
+    ╰────

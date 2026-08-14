@@ -1,0 +1,68 @@
+1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+1:7-14       "MyClass"          source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:15-16      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:5-6        "a"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:7-10       "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+3:5-6        "b"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+3:7-13       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+4:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+6:1-4        "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+6:5-6        "x"                source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+6:7-8        "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+6:9-16       "MyClass"          source.baml meta.statement.let.baml meta.constructor.expression.baml entity.name.type.baml
+6:17-18      "{"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
+6:19-20      "a"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+6:20-21      ":"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+6:22-23      "1"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml constant.numeric.integer.baml
+6:23-24      ","                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.separator.comma.baml
+6:25-26      "b"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+6:26-27      ":"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+6:28-29      "\""               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+6:29-30      "2"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
+6:30-31      "\""               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+6:32-33      "}"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.end.baml
+6:33-34      ";"                source.baml punctuation.terminator.statement.baml
+8:1-4        "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+8:5-6        "y"                source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+8:7-8        "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+8:9-16       "MyClass"          source.baml meta.statement.let.baml meta.constructor.expression.baml entity.name.type.baml
+8:17-18      "{"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
+8:19-20      "a"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+8:20-21      ":"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+8:22-23      "1"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml constant.numeric.integer.baml
+8:23-24      ","                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.separator.comma.baml
+8:24-30      " ...x "           source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml
+8:30-31      "}"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.end.baml
+8:31-32      ";"                source.baml punctuation.terminator.statement.baml
+11:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+11:5-19      "default_person"   source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+11:20-21     "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+11:22-28     "Person"           source.baml meta.statement.let.baml meta.constructor.expression.baml entity.name.type.baml
+11:29-30     "{"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
+12:5-9       "name"             source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+12:9-10      ":"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+12:11-12     "\""               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+12:12-20     "John Doe"         source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
+12:20-21     "\""               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+12:21-22     ","                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.separator.comma.baml
+13:5-8       "age"              source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+13:8-9       ":"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+13:10-12     "20"               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml constant.numeric.integer.baml
+13:12-13     ","                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.separator.comma.baml
+14:5-9       "poem"             source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+14:9-10      ":"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+14:11-12     "\""               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+14:12-45     "Never was there a man more plain." source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
+14:45-46     "\""               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+15:1-2       "}"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.end.baml
+15:2-3       ";"                source.baml punctuation.terminator.statement.baml
+18:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
+18:7-13      "Person"           source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+18:14-15     "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+19:3-7       "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+19:8-14      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+20:3-6       "age"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+20:7-10      "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+21:3-7       "poem"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+21:8-14      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+22:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml

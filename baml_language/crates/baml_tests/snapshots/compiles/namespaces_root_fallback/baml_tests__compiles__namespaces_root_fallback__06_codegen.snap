@@ -1,58 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17130
 ---
-function user.Config.from_json(j: baml.json.json) -> Config {
-    load_var j
-    load_const "key"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Config
-    load_var _2
-    init_field .key
-    return
-}
-
-function user.Config.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .key
-    call baml.String.to_json
-    load_const "key"
-    alloc_map 1
-    return
-}
-
-function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
-    load_var j
-    load_const "text"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.llm.Response
-    load_var _2
-    init_field .text
-    return
-}
-
-function user.llm.Response.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .text
-    call baml.String.to_json
-    load_const "text"
-    alloc_map 1
-    return
-}
-
 function user.llm.UseConfig(cfg: Config) -> llm.Response {
-    alloc_instance user.llm.Response
     load_var cfg
     load_field .key
-    init_field .text
+    init_instance user.llm.Response .text
     return
 }

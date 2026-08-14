@@ -37,7 +37,7 @@ function caller() -> string {
     }
     function user.caller() -> string throws never {
       { : "ok"
-        let x = identity<T>(42) : int
+        let x = identity(42) : int
         "ok" : "ok"
       }
     }
@@ -68,7 +68,7 @@ function caller() -> string {
     }
     function user.caller() -> string throws never {
       { : "ok"
-        let x = identity<T>(42) : 42 -> int
+        let x = identity(42) : int
         "ok" : "ok"
       }
     }
@@ -89,7 +89,7 @@ function caller() -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.no_generics(x: int) -> int throws never {
       { : int
         x : int
@@ -99,7 +99,7 @@ function caller() -> int {
       { : int
         no_generics(42) : int
       }
-      !! 70..94: function `no_generics` expects 0 type argument(s), got 1
+      !! 74..94: function `no_generics` expects 0 type argument(s), got 1
     }
     ");
 }
@@ -121,19 +121,271 @@ function caller() -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.identity<T>(x: T) -> T throws never {
       { : T
         x : T
       }
     }
     function user.caller() -> int throws never {
-      { : int | 42
-        identity<T>(42) : int | 42
+      { : int
+        identity(42) : int
       }
-      !! 66..95: function `identity` expects 1 type argument(s), got 2
+      !! 70..95: function `identity` expects 1 type argument(s), got 2
     }
     ");
+}
+
+/// Instantiation expression: `foo<int>` as a *value* (not called) binds T=int
+/// and produces a concrete, specialized function type `(x: int) -> int`.
+#[test]
+fn generic_apply_value_is_specialized() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function caller() -> string {
+    let f = identity<int>;
+    "ok"
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.caller() -> string throws never {
+      { : "ok"
+        let f = identity<...> : (x: int) -> int throws never
+        "ok" : "ok"
+      }
+    }
+    "#);
+}
+
+/// Regression for the silent-drop bug: `let f = identity<int>; f("s")` must be a
+/// type error — the specialized value takes `int`, not `string`. Before
+/// instantiation expressions existed, `identity<int>` collapsed to the fully
+/// generic `identity` and `f("s")` was wrongly accepted by re-inferring T=string.
+#[test]
+fn generic_apply_value_rejects_wrong_arg() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function caller() -> int {
+    let f = identity<int>;
+    f("string")
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.caller() -> int throws never {
+      { : int
+        let f = identity<...> : (x: int) -> int throws never
+        f("string") : int
+      }
+      !! 99..107: type mismatch: expected int, got "string"
+    }
+    "#);
+}
+
+/// Companion: calling the specialized value with a matching `int` is accepted.
+#[test]
+fn generic_apply_value_accepts_right_arg() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function caller() -> int {
+    let f = identity<int>;
+    f(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.caller() -> int throws never {
+      { : int
+        let f = identity<...> : (x: int) -> int throws never
+        f(1) : int
+      }
+    }
+    ");
+}
+
+/// Arity mismatch on an instantiation expression: `identity<int, string>` (1
+/// declared param, 2 provided) → `WrongTypeArgArity`.
+#[test]
+fn generic_apply_value_arity_mismatch() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function caller() -> string {
+    let f = identity<int, string>;
+    "ok"
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.caller() -> string throws never {
+      { : "ok"
+        let f = identity<...> : (x: int) -> int throws never
+        "ok" : "ok"
+      }
+      !! 81..102: function `identity` expects 1 type argument(s), got 2
+    }
+    "#);
+}
+
+/// A bare reference to a generic function (`let f = identity`, no type args and
+/// no expected type) is an *unrealized* function value, so it is rejected: a
+/// generic function is a type constructor and must be specialized (`identity<int>`)
+/// or inferable from context before it can be used as a value.
+#[test]
+fn bare_generic_function_ref_rejected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function caller() -> string {
+    let f = identity;
+    f("string")
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.caller() -> string throws never {
+      { : string
+        let f = identity : (x: string) -> string throws never
+        f("string") : string
+      }
+    }
+    "#);
+}
+
+/// Multiple bound type args as a *value*: `pair<int, string>` specializes BOTH
+/// params, yielding the concrete `(a: int, b: string) -> string`.
+#[test]
+fn generic_apply_two_type_args_specialized() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function pair<A, B>(a: A, b: B) -> string { "ok" }
+function caller() -> string {
+    let f = pair<int, string>;
+    "done"
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.pair<A, B>(a: A, b: B) -> string throws never {
+      { : "ok"
+        "ok" : "ok"
+      }
+    }
+    function user.caller() -> string throws never {
+      { : "done"
+        let f = pair<...> : (a: int, b: string) -> string throws never
+        "done" : "done"
+      }
+    }
+    "#);
+}
+
+/// Multiple bound type args reject a mismatched argument: with `pair<int, string>`,
+/// calling `f(1, 2)` is a type error on the second (`string`) parameter, proving
+/// each param specialized independently (the first `int` arg is fine).
+#[test]
+fn generic_apply_two_type_args_rejects_wrong_arg() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function pair<A, B>(a: A, b: B) -> string { "ok" }
+function caller() -> string {
+    let f = pair<int, string>;
+    f(1, 2)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.pair<A, B>(a: A, b: B) -> string throws never {
+      { : "ok"
+        "ok" : "ok"
+      }
+    }
+    function user.caller() -> string throws never {
+      { : string
+        let f = pair<...> : (a: int, b: string) -> string throws never
+        f(1, 2) : string
+      }
+      !! 122..123: type mismatch: expected string, got 2
+    }
+    "#);
+}
+
+/// A parenthesized base `(identity)<int>` is *rejected* — only a bare path
+/// reference may be specialized into a value — but lowering recovers by still
+/// specializing the inner path, so there is no cascading "must be specialized"
+/// error and the value's type is the concrete `(x: int) -> int` shown below. The
+/// rejection itself (`TypeArgsOnNonPathBase`) is an AST-lowering diagnostic that
+/// `render_tir` does not surface; `parenthesized_generic_apply_is_rejected`
+/// (interfaces.rs) covers it.
+#[test]
+fn generic_apply_through_parenthesized_receiver() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function caller() -> string {
+    let f = (identity)<int>;
+    "ok"
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.caller() -> string throws never {
+      { : "ok"
+        let f = identity<...> : (x: int) -> int throws never
+        "ok" : "ok"
+      }
+    }
+    "#);
 }
 
 /// Multiple type params: explicit binding of two type vars resolves cleanly.
@@ -157,8 +409,119 @@ function caller() -> string {
     }
     function user.caller() -> string throws never {
       { : string
-        pair<A, B>(1, "hello") : string
+        pair(1, "hello") : string
       }
+    }
+    "#);
+}
+
+/// A *param-dependent instantiation value* (`let f = foo<T>` inside a generic
+/// body) is a function value whose type `(T) -> T` mentions the enclosing,
+/// rigid `T`. Calling it with a mismatched concrete argument must be rejected —
+/// `T` is fixed by `pd`'s caller, so `f(1)` is a type error rather than silently
+/// re-inferring `T = int` and collapsing `foo<T>` to `foo<int>`.
+#[test]
+fn instantiation_value_call_keeps_ambient_typevar_rigid() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function pd<T>(y: T) -> int {
+    let f = identity<T>;
+    f(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.pd<T>(y: T) -> int throws never {
+      { : T
+        let f = identity<...> : (x: T) -> T throws never
+        f<T>(1) : T
+      }
+      !! 67..104: type mismatch: expected int, got T
+      !! 100..101: type mismatch: expected T, got 1
+    }
+    ");
+}
+
+/// Companion to the above: calling the rigid instantiation value with a
+/// *matching* argument (`y : T` inside `fwd<T>`) is fine. By contrast, a bare
+/// *uninstantiated* generic reference (`let g = identity`) is an unrealized
+/// function value and is rejected — it must be specialized before use.
+#[test]
+fn instantiation_value_call_preserves_valid_inference() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function fwd<T>(y: T) -> T {
+    let f = identity<T>;
+    f(y)
+}
+function uses() -> int {
+    let g = identity;
+    g(5)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.fwd<T>(y: T) -> T throws never {
+      { : T
+        let f = identity<...> : (x: T) -> T throws never
+        f<T>(y) : T
+      }
+    }
+    function user.uses() -> int throws never {
+      { : int
+        let g = identity : (x: int) -> int throws never
+        g(5) : int
+      }
+    }
+    ");
+}
+
+/// A generic *lambda* (`<T>(x: T) -> T { x }`) is a function value parameterizing
+/// itself, which is rejected with a hard error — even wrapped in parentheses with
+/// explicit type args. The invalid lambda takes the error type, so the surrounding
+/// `<int>` application and the call recover without cascading.
+#[test]
+fn paren_generic_lambda_instantiation() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function caller() -> int {
+    let f = (<T>(x: T) -> T { x })<int>;
+    f("string")
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.caller() -> int throws never {
+      { : !error
+        let f = : (x: !error) -> !error throws never
+          (x: T) -> T { ... } : (x: !error) -> !error throws never
+            {
+              x
+            }
+        f("string") : !error
+      }
+      !! 48..49: unresolved type: T
+      !! 54..55: unresolved type: T
+    }
+    lambda user.caller {
     }
     "#);
 }

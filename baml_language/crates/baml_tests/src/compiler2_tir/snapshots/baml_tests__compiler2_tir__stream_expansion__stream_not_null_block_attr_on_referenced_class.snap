@@ -6,27 +6,15 @@ class user.NotNullEducation {
   school: string
   year: int
 }
-function user.NotNullEducation.to_json(self: user.NotNullEducation) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "school": self.school.to_json(), "year": self.year.to_json() } : map<string, baml.json.json>
-}
-function user.NotNullEducation.from_json(j: baml.json.json) -> user.NotNullEducation throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  NotNullEducation { school: baml.json.from_json<string>(baml.json.field(j, "school")), year: baml.json.from_json<int>(baml.json.field(j, "year")) } : user.NotNullEducation
-}
 class user.References {
   education: user.NotNullEducation
   educations: user.NotNullEducation[]
 }
-function user.References.to_json(self: user.References) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "education": self.education.to_json(), "educations": self.educations.to_json() } : map<string, baml.json.json>
-}
-function user.References.from_json(j: baml.json.json) -> user.References throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  References { education: baml.json.from_json<NotNullEducation>(baml.json.field(j, "education")), educations: baml.json.from_json<NotNullEducation[]>(baml.json.field(j, "educations")) } : user.References
-}
 class user.NotNullEducation$stream {
-  school: null | string
-  year: null | int
+  school: string | null
+  year: int | null
 }
 class user.References$stream {
-  education: null | user.NotNullEducation$stream
+  education: user.NotNullEducation$stream | null
   educations: user.NotNullEducation$stream[]
 }

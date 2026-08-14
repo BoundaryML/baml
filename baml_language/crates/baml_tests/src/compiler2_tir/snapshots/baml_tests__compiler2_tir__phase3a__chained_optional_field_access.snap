@@ -5,29 +5,17 @@ expression: "render_tir(&db, file)"
 class user.Address {
   street: string
 }
-function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "street": self.street.to_json() } : map<string, baml.json.json>
-}
-function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Address { street: baml.json.from_json<string>(baml.json.field(j, "street")) } : user.Address
-}
 class user.User {
-  address: user.Address?
+  address: user.Address | null
 }
-function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "address": self.address?.to_json() } : map<string, baml.json.json?>
-}
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  User { address: baml.json.from_json<Address?>(baml.json.field(j, "address")) } : user.User
-}
-function user.f(u: user.User?) -> string? throws never {
-  { : string?
-    u?.address?.street : string?
+function user.f(u: user.User | null) -> string | null throws never {
+  { : string | null
+    u?.address?.street : string | null
   }
 }
 class user.Address$stream {
-  street: null | string
+  street: string | null
 }
 class user.User$stream {
-  address: null | user.Address$stream
+  address: user.Address$stream | null
 }

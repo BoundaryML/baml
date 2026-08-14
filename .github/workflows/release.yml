@@ -117,11 +117,11 @@ jobs:
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.8"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wheels-*
           path: dist
@@ -152,7 +152,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -175,7 +175,7 @@ jobs:
           fi
           echo "npm $current_version satisfies >= $required_version"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
@@ -190,7 +190,7 @@ jobs:
   #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v6
 
   #     - uses: rubygems/configure-rubygems-credentials@main
   #       with:
@@ -199,7 +199,7 @@ jobs:
 
   #     - uses: jdx/mise-action@v2
 
-  #     - uses: actions/download-artifact@v4
+  #     - uses: actions/download-artifact@v8
   #       with:
   #         pattern: gem-*
   #         path: engine/language_client_ruby/pkg/
@@ -220,7 +220,7 @@ jobs:
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -251,7 +251,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
@@ -261,7 +261,7 @@ jobs:
           install_dependencies: false
           npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: baml-vscode-vsix-*
           path: vsix-artifacts
@@ -280,7 +280,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
@@ -290,7 +290,7 @@ jobs:
           install_dependencies: false
           npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: baml-vscode-vsix-*
           path: vsix-artifacts
@@ -309,13 +309,13 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Java
         uses: ./.github/actions/setup-java
       - name: Download extension zips
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: baml-jetbrains-zip-*
           path: ./jetbrains/build/distributions/
@@ -335,21 +335,21 @@ jobs:
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Download all baml-cli artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: baml-cli-*
           path: cli-artifacts
           merge-multiple: true
       - name: Download all libbaml-cffi artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: libbaml-cffi-*
           path: cffi-artifacts
           merge-multiple: true
       - name: Download playground artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: playground-dist-*
           path: playground-artifacts
@@ -371,7 +371,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ needs.determine-version.outputs.version_string }}
+          name: BAML v0 ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}
           body_path: CHANGELOG.txt
           draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}

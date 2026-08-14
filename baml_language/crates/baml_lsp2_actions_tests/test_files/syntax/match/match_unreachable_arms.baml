@@ -32,30 +32,24 @@ function DuplicateLiteral(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//     ╭─[ match_match_unreachable_arms.baml:11:19 ]
-//     │
+// E0063
+//
+//   × unreachable arm
+//     ╭─[match_match_unreachable_arms.baml:11:19]
 //  11 │     let n: int => "unreachable"
-//     │                   ──────┬──────  
-//     │                         ╰──────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// Error: unreachable arm
-//     ╭─[ match_match_unreachable_arms.baml:19:22 ]
-//     │
+//     ·                   ─────────────
+//     ╰────
+// E0063
+//
+//   × unreachable arm
+//     ╭─[match_match_unreachable_arms.baml:19:22]
 //  19 │     Status.Active => "duplicate",
-//     │                      ─────┬─────  
-//     │                           ╰─────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// Error: unreachable arm
-//     ╭─[ match_match_unreachable_arms.baml:28:11 ]
-//     │
+//     ·                      ───────────
+//     ╰────
+// E0063
+//
+//   × unreachable arm
+//     ╭─[match_match_unreachable_arms.baml:28:11]
 //  28 │     42 => "duplicate",
-//     │           ─────┬─────  
-//     │                ╰─────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
+//     ·           ───────────
+//     ╰────

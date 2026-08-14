@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a.rs
+expression: tir.as_str()
+---
+function user.lambda_capture_later_param(a: int = f(), b: int = 1) -> int throws never {
+  { : int
+    a : int
+  }
+  !! 46..78: default for parameter `a` cannot reference later parameter `b`
+}
+block user.lambda_capture_later_param {
+}
+lambda user.lambda_capture_later_param {
+}

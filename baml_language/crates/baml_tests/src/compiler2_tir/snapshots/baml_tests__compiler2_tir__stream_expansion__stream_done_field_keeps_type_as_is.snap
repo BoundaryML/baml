@@ -6,13 +6,7 @@ class user.WithDone {
   name: string
   age: int
 }
-function user.WithDone.to_json(self: user.WithDone) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "age": self.age.to_json() } : map<string, baml.json.json>
-}
-function user.WithDone.from_json(j: baml.json.json) -> user.WithDone throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithDone { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.WithDone
-}
 class user.WithDone$stream {
   name: string
-  age: null | int
+  age: int | null
 }

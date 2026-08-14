@@ -1,0 +1,39 @@
+1:1-73       "// Phase 1: Verify that nested map/array literals type-check against the" source.baml comment.line.double-slash.baml
+2:1-32       "// recursive `json` alias body." source.baml comment.line.double-slash.baml
+4:1-9        "function"         source.baml meta.function.baml keyword.declaration.function.baml
+4:10-26      "NestedMapLiteral" source.baml meta.function.baml entity.name.function.baml
+4:26-27      "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+4:27-28      ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+4:29-31      "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+4:32-36      "json"             source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+4:37-38      "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+5:3-4        "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml punctuation.definition.map.begin.baml
+5:4-5        "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+5:5-6        "a"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
+5:6-7        "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
+5:7-8        ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
+5:9-10       "1"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml constant.numeric.integer.baml
+5:10-11      ","                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml punctuation.separator.comma.baml
+5:12-13      "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+5:13-14      "b"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
+5:14-15      "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
+5:15-16      ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
+5:17-18      "["                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+5:18-19      "2"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.array.baml constant.numeric.integer.baml
+5:19-20      ","                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.array.baml punctuation.separator.comma.baml
+5:21-22      "3"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.array.baml constant.numeric.integer.baml
+5:22-23      "]"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.array.baml punctuation.definition.array.end.baml
+5:23-24      ","                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml punctuation.separator.comma.baml
+5:25-26      "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+5:26-27      "c"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
+5:27-28      "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
+5:28-29      ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
+5:30-31      "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.map.baml punctuation.definition.map.begin.baml
+5:31-32      "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+5:32-38      "nested"           source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
+5:38-39      "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
+5:39-40      ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
+5:41-45      "null"             source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.map.baml meta.map.entry.baml constant.language.null.baml
+5:45-46      "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml meta.expression.map.baml punctuation.definition.map.end.baml
+5:46-47      "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.map.baml punctuation.definition.map.end.baml
+6:1-2        "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

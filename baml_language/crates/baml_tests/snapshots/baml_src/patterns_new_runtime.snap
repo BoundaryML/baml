@@ -1,0 +1,4790 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 152
+---
+function patterns_new_runtime.$init_test_ns_patterns_new_runtime_patterns_new_runtime(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "dispatches_int_callback"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "dispatches_string_callback"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "dispatches_bound_method_by_receiver_dropped_signature"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "dispatches_closure_minted_in_generic_frame"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "non_final_fn_arm_decides_against_wildcard"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "fn_is_test_discriminates_by_signature"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_or_of_same_binding"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_or_of_six_same_bindings"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_of_bare_bindings_uses_value"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_of_chain_narrows_uses_value"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_chain_of_bindings_aliases_scrutinee"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_chain_trailing_binding_after_array_type_aliases_value"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_chain_binding_used_in_guard"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_let_chain_of_bindings"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_let_chain_trailing_binding_after_type_aliases_iteration_value"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_let_chain_alias_capture_per_iteration"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_let_or_of_same_binding"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_let_or_of_six_same_bindings"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_array_destructure_rest_sums_rows"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_array_destructure_rest_capture_gets_fresh_cell_per_iteration"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_array_destructure_inside_class_destructure_sums_fields"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "catch_or_of_same_typed_binding"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_wildcard_discards_value"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_bind_with_type_ascription"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_of_chain_bindings_swapped"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "chain_second_binding_capture_after_reassign"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_class_destructure_binds_shorthand_and_ignores_omitted_fields"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_class_destructure_renames_field_binding"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_class_destructure_nested_class"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_nested_same_field_names_are_ok_with_distinct_bindings"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_generic_class_destructure_substitutes_field_types"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "empty_generic_class_destructure_uses_contextual_type"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_generic_class_type_patterns_distinguish_type_args"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_generic_class_destructure_union_tests_substituted_field_type"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "generic_class_destructure_backfills_through_wrapped_flow_types"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "empty_generic_class_destructure_covers_union_of_same_class_instantiations"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "deep_generic_class_destructure_substitutes_through_nested_fields"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_class_destructure_tests_field_literal_and_falls_through"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_class_destructure_tests_union_field_type"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_top_level_class_destructure_tests_union_scrutinee"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_class_destructure_same_binding_name_compatible_types"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_class_destructure_same_binding_name_different_depths"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_empty_and_prefix_rest"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 42)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_exact_length"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 43)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_binds_rest_copy"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_suffix_rest"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_array_destructure_binds_whole_rest"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_array_destructure_nested_rest_only_is_irrefutable"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_entire_alphabet_of_bindings"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_binding_from_class_field_or_nested_array_position"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 49)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_wildcard_inside_chained_binding_type_array_pattern"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 50)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_shadows_outer_local_only_inside_arm"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 51)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_array_destructure_nested_rest_only_is_irrefutable"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 52)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_literal_and_type_element_patterns"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 53)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_or_patterns_share_bindings"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 54)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_or_patterns_nested_arrays_share_bindings"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 55)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_nested_array_binding_projects_inner_element"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 56)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_or_patterns_nested_class_array_fields"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 57)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_outer_chain_applies_to_whole_array"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 58)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_alternating_class_array_five_levels_or_flipped_traversal"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 59)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_four_alternates_same_name_different_paths"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 60)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_deep_class_array_or_picks_deep_cell"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 61)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_2d_array_vs_class_with_2d_field"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 62)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_two_prefix_rest_suffix_binding"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 63)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_prefix_rest_two_suffix_bindings"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 64)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_inside_class_destructure_empty_field"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 65)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_with_class_elements"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 66)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_wildcard_elements_and_rest"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 67)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_wildcard_length_shapes"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 68)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_wildcards_nested_in_class_fields"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 69)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_destructure_wildcard_class_fields_and_rest"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 70)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_array_destructure_rest_wildcard_is_irrefutable"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 71)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "class_destructure_shorthand_field_same_name_as_class_binds_field"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 72)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_class_destructure_binds_nested_field"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 73)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_deep_class_destructure_binds_inner_field"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 74)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_deep_class_destructure_falls_through_to_binding_arm"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 75)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_deep_class_destructure_binds_when_second_alt_matches"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 76)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_deep_class_destructure_sums_fields"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 77)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_deep_class_destructure_capture_gets_fresh_cell_per_iteration"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 78)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "let_class_destructure_binds_inner_zip"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 79)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_class_destructure_binds_inner_zip"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 80)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "for_class_destructure_binds_inner_zip"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 81)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_class_field_pattern_should_refine_parent_union_scrutinee"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 82)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_class_destructure_union_field_int_arm"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 83)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_class_destructure_union_field_float_arm"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 84)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_class_destructure_union_field_bool_arm"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 85)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_array_element_pattern_should_refine_parent_union_scrutinee"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 86)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_class_patterns_should_refine_parent_union_scrutinee"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 87)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "match_or_array_patterns_should_refine_parent_union_scrutinee"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 88)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_nested_class_optional_full_coverage_true_present"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 89)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_nested_class_optional_full_coverage_false_null"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 90)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_slice_prefix_dispatch"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 91)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_slice_suffix_dispatch"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 92)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_enum_full_variant_dispatch_north"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 93)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_enum_full_variant_dispatch_west"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 94)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_or_pattern_in_class_field_first_alt"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 95)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_or_pattern_in_class_field_falls_to_wildcard"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 96)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_optional_literal_or_arm_zero"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 97)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_optional_literal_or_arm_null"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 98)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "rustc_port_optional_literal_or_arm_other"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 99)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_matches_int"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 100)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_matches_class"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 101)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_matches_closure"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 102)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_matches_null"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 103)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_respects_guard"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 104)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function patterns_new_runtime.DispatchCounter.bump(self: patterns_new_runtime.DispatchCounter, d: int) -> int {
+    load_var self
+    load_field .n
+    load_var d
+    add_int
+    return
+}
+
+function patterns_new_runtime.classify_box_either(box: patterns_new_runtime.BoxT<int> | patterns_new_runtime.BoxT<string>) -> int {
+    load_var box
+    is_type patterns_new_runtime.BoxT<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var box
+    is_type patterns_new_runtime.BoxT<...>
+    pop_jump_if_false L2
+    load_const 7
+    jump L2
+
+  L1:
+    load_const 7
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.classify_box_int(boxed: patterns_new_runtime.BoxT<int>) -> int {
+    load_const 1
+    return
+}
+
+function patterns_new_runtime.classify_box_string(boxed: patterns_new_runtime.BoxT<string>) -> int {
+    load_const 20
+    return
+}
+
+function patterns_new_runtime.classify_box_union_by_field(box: patterns_new_runtime.BoxT<int> | patterns_new_runtime.BoxT<string>) -> int {
+    load_var box
+    is_type patterns_new_runtime.BoxT<...>
+    pop_jump_if_false L0
+    load_var box
+    load_field .0
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var box
+    load_field .0
+    call baml.String.length
+    jump L2
+
+  L1:
+    load_var _4
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.classify_box_union_by_type(box: patterns_new_runtime.BoxT<int> | patterns_new_runtime.BoxT<string>) -> int {
+    load_var box
+    is_type patterns_new_runtime.BoxT<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 2
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.deep_destruct_box() -> int {
+    load_const 123
+    load_type int
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    load_type int
+    init_instance<1> user.patterns_new_runtime.OuterT .inner
+    load_field .inner
+    load_field .value
+    return
+}
+
+function patterns_new_runtime.describe_direction(d: patterns_new_runtime.Direction) -> string {
+    load_var d
+    discriminant
+    jump_table [L3, L2, L1, L0], default L5
+
+  L0: Direction.West
+    load_const "left"
+    jump L4
+
+  L1: Direction.South
+    load_const "down"
+    jump L4
+
+  L2: Direction.East
+    load_const "right"
+    jump L4
+
+  L3: Direction.North
+    load_const "up"
+
+  L4:
+    return
+
+  L5:
+    unreachable
+}
+
+function patterns_new_runtime.dispatch_cb(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> string {
+    load_var cb
+    store_var _2
+    load_var _2
+    narrow_bind (int) -> int throws never, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "x"
+    load_var cb
+    call_indirect
+    store_var _9
+    load_const "str:"
+    load_var _9
+    bin_op +
+    jump L2
+
+  L1:
+    load_const 2
+    load_var _2
+    call_indirect
+    store_var _5
+    load_type int
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "int:"
+    load_var _4
+    bin_op +
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.exact_length(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L1
+    load_var xs
+    container_len
+    store_var_load_var _6
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L2
+    load_var xs
+    container_len
+    store_var_load_var _11
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const 3
+    jump L6
+
+  L3:
+    load_const 2
+    jump L6
+
+  L4:
+    load_const 1
+    jump L6
+
+  L5:
+    load_const 0
+
+  L6:
+    return
+}
+
+function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<int>[]) -> int {
+    load_const 0
+    store_var total
+    load_var boxes
+    load_type baml.iter.Iterable<Error = never, Item = patterns_new_runtime.BoxT<int>>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = patterns_new_runtime.BoxT<int>>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 2 4
+    load_field .value
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
+    load_var box
+    is_type patterns_new_runtime.BoxT<...>
+    pop_jump_if_false L0
+    load_var box
+    load_field .0
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var _4
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
+    load_var box
+    is_type patterns_new_runtime.BoxT<...>
+    pop_jump_if_false L0
+    load_var box
+    load_field .0
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var _4
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.make_generic_cb(v: #0) -> (int) -> #0 throws never {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_var v
+    make_closure .<lambda(make_generic_cb, 0)>, captures=1, ntypeargs=1
+    return
+}
+
+function patterns_new_runtime.match_box_union(b: patterns_new_runtime.BoxUnion) -> int {
+    load_var b
+    is_type patterns_new_runtime.BoxUnion
+    pop_jump_if_false L0
+    load_var b
+    load_field .value
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 2
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.match_coord_user() -> int {
+    load_const 22222
+    init_instance user.patterns_new_runtime.Coordinate4 .zip
+    init_instance user.patterns_new_runtime.Address4 .coordinate
+    init_instance user.patterns_new_runtime.Profile4 .address
+    init_instance user.patterns_new_runtime.UserNested .profile
+    store_var_load_var _1
+    is_type patterns_new_runtime.UserNested
+    pop_jump_if_false L0
+    load_var _1
+    load_field .profile
+    store_var_load_var _6
+    is_type patterns_new_runtime.Profile4
+    pop_jump_if_false L0
+    load_var _6
+    load_field .address
+    store_var_load_var _8
+    is_type patterns_new_runtime.Address4
+    pop_jump_if_false L0
+    load_var _8
+    load_field .coordinate
+    store_var_load_var _10
+    is_type patterns_new_runtime.Coordinate4
+    pop_jump_if_false L0
+    load_var _10
+    load_field .zip
+    load_const 11111
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _1
+    load_field .profile
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.match_person_as(p: patterns_new_runtime.PersonAS) -> int {
+    load_var p
+    is_type patterns_new_runtime.PersonAS
+    pop_jump_if_false L0
+    load_var p
+    load_field .age
+    load_const 7
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var p
+    load_field .age
+    jump L2
+
+  L1:
+    load_const 70
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.or_deep_class() -> int {
+    load_const 7
+    load_const 2
+    init_instance user.patterns_new_runtime.Coordinate3 .zip, .plus4
+    init_instance user.patterns_new_runtime.Address3 .coordinate
+    init_instance user.patterns_new_runtime.UserOr .address
+    store_var_load_var _1
+    is_type patterns_new_runtime.UserOr
+    pop_jump_if_false L0
+    load_var _1
+    load_field .address
+    store_var_load_var _5
+    is_type patterns_new_runtime.Address3
+    pop_jump_if_false L0
+    load_var _5
+    load_field .coordinate
+    store_var_load_var _7
+    is_type patterns_new_runtime.Coordinate3
+    pop_jump_if_false L0
+    load_var _7
+    load_field .zip
+    store_var _10
+    load_var _10
+    narrow_bind int, slot=4
+    pop_jump_if_false L0
+    load_var _7
+    load_field .plus4
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _1
+    is_type patterns_new_runtime.UserOr
+    pop_jump_if_false L1
+    load_var _1
+    load_field .address
+    store_var_load_var _17
+    is_type patterns_new_runtime.Address3
+    pop_jump_if_false L1
+    load_var _17
+    load_field .coordinate
+    store_var_load_var _19
+    is_type patterns_new_runtime.Coordinate3
+    pop_jump_if_false L1
+    load_var _19
+    load_field .zip
+    store_var _22
+    load_var _22
+    narrow_bind int, slot=7
+    pop_jump_if_false L1
+    load_var _19
+    load_field .plus4
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var _22
+    jump L4
+
+  L3:
+    load_var _10
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
+    load_var g
+    is_type patterns_new_runtime.Grid1
+    pop_jump_if_false L0
+    load_var g
+    load_field .cells
+    store_var_load_var _3
+    is_type patterns_new_runtime.Cell1[]
+    pop_jump_if_false L0
+    load_var _3
+    container_len
+    store_var_load_var _5
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var _3
+    load_const 1
+    load_array_element
+    store_var_load_var _9
+    is_type patterns_new_runtime.Cell1
+    pop_jump_if_false L0
+    load_var _9
+    load_field .row
+    store_var_load_var _11
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _11
+    container_len
+    store_var_load_var _13
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var g
+    is_type patterns_new_runtime.Grid1
+    pop_jump_if_false L1
+    load_var g
+    load_field .cells
+    store_var_load_var _27
+    is_type patterns_new_runtime.Cell1[]
+    pop_jump_if_false L1
+    load_var _27
+    container_len
+    store_var_load_var _29
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var _27
+    container_len
+    store_var _31
+    load_var2 7 9
+    load_const 1
+    sub_int
+    load_array_element
+    store_var_load_var _33
+    is_type patterns_new_runtime.Cell1
+    pop_jump_if_false L1
+    load_var _33
+    load_field .row
+    store_var_load_var _35
+    is_type int[]
+    pop_jump_if_false L1
+    load_var _35
+    container_len
+    store_var_load_var _37
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var _35
+    container_len
+    store_var _39
+    load_var _35
+    container_len
+    store_var _41
+    load_var g
+    load_field .cells
+    store_var _43
+    load_var _43
+    container_len
+    store_var _44
+    load_var2 15 16
+    load_const 1
+    sub_int
+    load_array_element
+    load_field .row
+    store_var _47
+    load_var _47
+    container_len
+    store_var _48
+    load_var _47
+    container_len
+    store_var _52
+    load_var2 17 18
+    load_const 2
+    sub_int
+    load_array_element
+    jump L4
+
+  L3:
+    load_var g
+    load_field .cells
+    load_const 1
+    load_array_element
+    load_field .row
+    load_const 1
+    load_array_element
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns_new_runtime.Wrap1 | int[][] | int[]) -> int {
+    load_var p
+    is_type patterns_new_runtime.Pair1
+    pop_jump_if_false L0
+    load_var p
+    load_field .0
+    store_var_load_var _3
+    is_type patterns_new_runtime.Wrap1
+    pop_jump_if_false L0
+    load_var _3
+    load_field .inner
+    store_var_load_var _5
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _5
+    container_len
+    store_var_load_var _7
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var _5
+    load_const 1
+    load_array_element
+    store_var _12
+    load_var _12
+    narrow_bind int, slot=5
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var p
+    is_type patterns_new_runtime.Pair1
+    pop_jump_if_false L1
+    load_var p
+    load_field .1
+    store_var_load_var _19
+    is_type int[]
+    pop_jump_if_false L1
+    load_var _19
+    container_len
+    store_var_load_var _21
+    load_const 3
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var _19
+    load_const 2
+    load_array_element
+    store_var _27
+    load_var _27
+    narrow_bind int, slot=8
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var p
+    is_type patterns_new_runtime.Wrap1
+    pop_jump_if_false L2
+    load_var p
+    load_field .0
+    store_var_load_var _34
+    is_type int[]
+    pop_jump_if_false L2
+    load_var _34
+    container_len
+    store_var_load_var _36
+    load_const 3
+    cmp_int_op >=
+    pop_jump_if_false L2
+    load_var _34
+    container_len
+    store_var _38
+    load_var2 9 11
+    load_const 3
+    sub_int
+    load_array_element
+    store_var _41
+    load_var _41
+    narrow_bind int, slot=12
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var p
+    is_type int[][]
+    pop_jump_if_false L3
+    load_var p
+    container_len
+    store_var_load_var _55
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L3
+    load_var p
+    load_const 1
+    load_array_element
+    store_var_load_var _59
+    is_type int[]
+    pop_jump_if_false L3
+    load_var _59
+    container_len
+    store_var_load_var _61
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L3
+    load_var _59
+    container_len
+    store_var _63
+    load_var2 20 22
+    load_const 1
+    sub_int
+    load_array_element
+    store_var _66
+    load_var _66
+    narrow_bind int, slot=23
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L8
+
+  L4:
+    load_var p
+    load_const 1
+    load_array_element
+    container_len
+    store_var _70
+    load_var _66
+    jump L8
+
+  L5:
+    load_var _34
+    container_len
+    store_var _42
+    load_var _34
+    container_len
+    store_var _44
+    load_var p
+    load_field .0
+    store_var _46
+    load_var _46
+    container_len
+    store_var _47
+    load_var _46
+    container_len
+    store_var _50
+    load_var _46
+    container_len
+    store_var _52
+    load_var _41
+    jump L8
+
+  L6:
+    load_var _27
+    jump L8
+
+  L7:
+    load_var _12
+
+  L8:
+    return
+}
+
+function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int {
+    load_var s
+    is_type patterns_new_runtime.Sheet1
+    pop_jump_if_false L0
+    load_var s
+    load_field .rows
+    store_var_load_var _3
+    is_type patterns_new_runtime.Row1[]
+    pop_jump_if_false L0
+    load_var _3
+    container_len
+    store_var_load_var _5
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var _3
+    load_const 1
+    load_array_element
+    store_var_load_var _9
+    is_type patterns_new_runtime.Row1
+    pop_jump_if_false L0
+    load_var _9
+    load_field .slots
+    store_var_load_var _11
+    is_type patterns_new_runtime.Slot1[]
+    pop_jump_if_false L0
+    load_var _11
+    container_len
+    store_var_load_var _13
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var _11
+    load_const 1
+    load_array_element
+    store_var_load_var _17
+    is_type patterns_new_runtime.Slot1
+    pop_jump_if_false L0
+    load_var _17
+    load_field .atoms
+    store_var_load_var _19
+    is_type patterns_new_runtime.Atom1[]
+    pop_jump_if_false L0
+    load_var _19
+    container_len
+    store_var_load_var _21
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var _19
+    load_const 1
+    load_array_element
+    store_var_load_var _25
+    is_type patterns_new_runtime.Atom1
+    pop_jump_if_false L0
+    load_var _25
+    load_field .value
+    store_var _28
+    load_var _28
+    narrow_bind int, slot=11
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    is_type patterns_new_runtime.Sheet1
+    pop_jump_if_false L1
+    load_var s
+    load_field .rows
+    store_var_load_var _43
+    is_type patterns_new_runtime.Row1[]
+    pop_jump_if_false L1
+    load_var _43
+    container_len
+    store_var_load_var _45
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var _43
+    container_len
+    store_var _47
+    load_var2 12 14
+    load_const 1
+    sub_int
+    load_array_element
+    store_var_load_var _49
+    is_type patterns_new_runtime.Row1
+    pop_jump_if_false L1
+    load_var _49
+    load_field .slots
+    store_var_load_var _51
+    is_type patterns_new_runtime.Slot1[]
+    pop_jump_if_false L1
+    load_var _51
+    container_len
+    store_var_load_var _53
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var _51
+    container_len
+    store_var _55
+    load_var2 16 18
+    load_const 1
+    sub_int
+    load_array_element
+    store_var_load_var _57
+    is_type patterns_new_runtime.Slot1
+    pop_jump_if_false L1
+    load_var _57
+    load_field .atoms
+    store_var_load_var _59
+    is_type patterns_new_runtime.Atom1[]
+    pop_jump_if_false L1
+    load_var _59
+    container_len
+    store_var_load_var _61
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var _59
+    container_len
+    store_var _63
+    load_var2 20 22
+    load_const 2
+    sub_int
+    load_array_element
+    store_var_load_var _65
+    is_type patterns_new_runtime.Atom1
+    pop_jump_if_false L1
+    load_var _65
+    load_field .value
+    store_var _68
+    load_var _68
+    narrow_bind int, slot=24
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var _59
+    container_len
+    store_var _69
+    load_var s
+    load_field .rows
+    store_var _71
+    load_var _71
+    container_len
+    store_var _72
+    load_var2 26 27
+    load_const 1
+    sub_int
+    load_array_element
+    load_field .slots
+    store_var _75
+    load_var _75
+    container_len
+    store_var _76
+    load_var2 28 29
+    load_const 1
+    sub_int
+    load_array_element
+    load_field .atoms
+    store_var _79
+    load_var _79
+    container_len
+    store_var _80
+    load_var _79
+    container_len
+    store_var _84
+    load_var _68
+    jump L4
+
+  L3:
+    load_var _28
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.prefix_length(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.rest_any(xs: int[]) -> int {
+    load_const 7
+    return
+}
+
+function patterns_new_runtime.risky_throws_string() -> string {
+    load_const "boom"
+    throw
+}
+
+function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patterns_new_runtime.ABCDE_B | patterns_new_runtime.ABCDE_C | patterns_new_runtime.ABCDE_D | patterns_new_runtime.ABCDE_E) -> int {
+    load_var v
+    is_type patterns_new_runtime.ABCDE_A
+    pop_jump_if_false L0
+    load_var v
+    load_field .0
+    is_type int
+    pop_jump_if_false L0
+    jump L19
+
+  L0:
+    load_var v
+    is_type patterns_new_runtime.ABCDE_B
+    pop_jump_if_false L1
+    load_var v
+    load_field .0
+    is_type int
+    pop_jump_if_false L1
+    jump L14
+
+  L1:
+    load_var v
+    is_type patterns_new_runtime.ABCDE_C
+    pop_jump_if_false L2
+    load_var v
+    load_field .0
+    is_type int
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var v
+    is_type patterns_new_runtime.ABCDE_D
+    pop_jump_if_false L3
+    load_var v
+    load_field .0
+    is_type int
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L24
+
+  L4:
+    load_var v
+    type_tag
+    dense_tag [ABCDE_A, ABCDE_B, ABCDE_C, ABCDE_D]
+    jump_table [L8, L7, L6, L5], default L25
+
+  L5: ABCDE_D
+    load_var v
+    load_field .0
+    jump L24
+
+  L6: ABCDE_C
+    load_var v
+    load_field .0
+    jump L24
+
+  L7: ABCDE_B
+    load_var v
+    load_field .0
+    jump L24
+
+  L8: ABCDE_A
+    load_var v
+    load_field .0
+    jump L24
+
+  L9:
+    load_var v
+    type_tag
+    dense_tag [ABCDE_A, ABCDE_B, ABCDE_C, ABCDE_D]
+    jump_table [L13, L12, L11, L10], default L25
+
+  L10: ABCDE_D
+    load_var v
+    load_field .0
+    jump L24
+
+  L11: ABCDE_C
+    load_var v
+    load_field .0
+    jump L24
+
+  L12: ABCDE_B
+    load_var v
+    load_field .0
+    jump L24
+
+  L13: ABCDE_A
+    load_var v
+    load_field .0
+    jump L24
+
+  L14:
+    load_var v
+    type_tag
+    dense_tag [ABCDE_A, ABCDE_B, ABCDE_C, ABCDE_D]
+    jump_table [L18, L17, L16, L15], default L25
+
+  L15: ABCDE_D
+    load_var v
+    load_field .0
+    jump L24
+
+  L16: ABCDE_C
+    load_var v
+    load_field .0
+    jump L24
+
+  L17: ABCDE_B
+    load_var v
+    load_field .0
+    jump L24
+
+  L18: ABCDE_A
+    load_var v
+    load_field .0
+    jump L24
+
+  L19:
+    load_var v
+    type_tag
+    dense_tag [ABCDE_A, ABCDE_B, ABCDE_C, ABCDE_D]
+    jump_table [L23, L22, L21, L20], default L25
+
+  L20: ABCDE_D
+    load_var v
+    load_field .0
+    jump L24
+
+  L21: ABCDE_C
+    load_var v
+    load_field .0
+    jump L24
+
+  L22: ABCDE_B
+    load_var v
+    load_field .0
+    jump L24
+
+  L23: ABCDE_A
+    load_var v
+    load_field .0
+
+  L24:
+    return
+
+  L25:
+    unreachable
+}
+
+function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var xs
+    load_const 0
+    load_array_element
+    load_const true
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L1
+    load_var xs
+    container_len
+    store_var_load_var _10
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var xs
+    container_len
+    store_var _12
+    load_var2 1 4
+    load_const 1
+    sub_int
+    load_array_element
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L2
+    load_var xs
+    container_len
+    store_var_load_var _19
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const 4
+    jump L6
+
+  L3:
+    load_const 3
+    jump L6
+
+  L4:
+    load_var xs
+    container_len
+    store_var _16
+    load_const 2
+    jump L6
+
+  L5:
+    load_const 1
+
+  L6:
+    return
+}
+
+function patterns_new_runtime.score_depth(v: patterns_new_runtime.DepthClass | patterns_new_runtime.DepthClass2) -> int {
+    load_var v
+    is_type patterns_new_runtime.DepthClass
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    is_type patterns_new_runtime.DepthClass2
+    pop_jump_if_false L2
+    load_var v
+    load_field .0
+    is_type patterns_new_runtime.DepthClass3
+    pop_jump_if_false L2
+    load_var v
+    load_field .0
+    load_field .field
+    jump L2
+
+  L1:
+    load_var v
+    load_field .0
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_empty_prefix_rest(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var xs
+    load_const 0
+    load_array_element
+    jump L2
+
+  L1:
+    load_const 0
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_exact_length_45() -> int {
+    load_const 4
+    load_const 5
+    load_type int
+    alloc_array 2
+    store_var_load_var _1
+    is_type _[]
+    pop_jump_if_false L0
+    load_var _1
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _1
+    is_type _[]
+    pop_jump_if_false L1
+    load_var _1
+    container_len
+    store_var_load_var _10
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var _1
+    load_const 0
+    load_array_element
+    load_const 10
+    mul_int
+    load_var _1
+    load_const 1
+    load_array_element
+    add_int
+    jump L4
+
+  L3:
+    load_var _1
+    load_const 0
+    load_array_element
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.score_foo3(f: patterns_new_runtime.Foo3) -> int {
+    load_var f
+    is_type patterns_new_runtime.Foo3
+    pop_jump_if_false L0
+    load_var f
+    load_field .first
+    load_const true
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var f
+    load_field .second
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var f
+    is_type patterns_new_runtime.Foo3
+    pop_jump_if_false L1
+    load_var f
+    load_field .first
+    load_const true
+    cmp_op ==
+    pop_jump_if_false L1
+    load_var f
+    load_field .second
+    is_type int[]
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var f
+    is_type patterns_new_runtime.Foo3
+    pop_jump_if_false L2
+    load_var f
+    load_field .first
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L2
+    load_var f
+    load_field .second
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const 4
+    jump L6
+
+  L3:
+    load_const 3
+    jump L6
+
+  L4:
+    load_const 2
+    jump L6
+
+  L5:
+    load_const 1
+
+  L6:
+    return
+}
+
+function patterns_new_runtime.score_foo_union(f: patterns_new_runtime.FooUnion) -> int {
+    load_var f
+    is_type patterns_new_runtime.FooUnion
+    pop_jump_if_false L0
+    load_var f
+    load_field .value
+    is_type int
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var f
+    is_type patterns_new_runtime.FooUnion
+    pop_jump_if_false L1
+    load_var f
+    load_field .value
+    is_type float
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 3
+    jump L4
+
+  L2:
+    load_const 2
+    jump L4
+
+  L3:
+    load_const 1
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.score_int_optional(x: int | null) -> int {
+    load_var x
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var x
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var x
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const 0
+    jump L6
+
+  L3:
+    load_const 1
+    jump L6
+
+  L4:
+    load_const 1
+    jump L6
+
+  L5:
+    load_const 1
+
+  L6:
+    return
+}
+
+function patterns_new_runtime.score_int_string_array(v: int[] | string[]) -> int {
+    load_var v
+    is_type int[]
+    pop_jump_if_false L0
+    load_var v
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var v
+    load_const 0
+    load_array_element
+    store_var _7
+    load_var _7
+    narrow_bind int, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var v
+    load_const 0
+    load_array_element
+    load_var _7
+    add_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_ints(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var xs
+    load_const 0
+    load_array_element
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var xs
+    load_const 1
+    load_array_element
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L1
+    load_var xs
+    container_len
+    store_var_load_var _14
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var xs
+    load_const 0
+    load_array_element
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 10
+    jump L4
+
+  L3:
+    load_const 12
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.score_opat(input: patterns_new_runtime.OPat_A | patterns_new_runtime.OPat_B) -> int {
+    load_var input
+    is_type patterns_new_runtime.OPat_A
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var input
+    is_type patterns_new_runtime.OPat_B
+    pop_jump_if_false L1
+    load_var input
+    load_field .0
+    store_var_load_var _6
+    is_type int[]
+    pop_jump_if_false L1
+    load_var _6
+    container_len
+    store_var_load_var _8
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var input
+    load_field .0
+    load_const 1
+    load_array_element
+    jump L4
+
+  L3:
+    load_var input
+    load_field .0
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.score_or_array_refine(v: int[] | string[]) -> int {
+    load_var v
+    is_type int[]
+    pop_jump_if_false L0
+    load_var v
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var v
+    load_const 0
+    load_array_element
+    store_var _7
+    load_var _7
+    narrow_bind int, slot=3
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var v
+    is_type int[]
+    pop_jump_if_false L1
+    load_var v
+    container_len
+    store_var_load_var _15
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var v
+    load_const 0
+    load_array_element
+    store_var _19
+    load_var _19
+    narrow_bind int, slot=5
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var v
+    load_const 0
+    load_array_element
+    load_var _19
+    add_int
+    jump L4
+
+  L3:
+    load_var v
+    load_const 0
+    load_array_element
+    load_var _7
+    add_int
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
+    load_var rows
+    is_type _[]
+    pop_jump_if_false L0
+    load_var rows
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var rows
+    load_const 0
+    load_array_element
+    store_var_load_var _6
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _6
+    container_len
+    store_var_load_var _8
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var rows
+    is_type _[]
+    pop_jump_if_false L1
+    load_var rows
+    container_len
+    store_var_load_var _17
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var rows
+    load_const 0
+    load_array_element
+    store_var_load_var _20
+    is_type int[]
+    pop_jump_if_false L1
+    load_var _20
+    container_len
+    store_var_load_var _22
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var rows
+    load_const 0
+    load_array_element
+    load_const 0
+    load_array_element
+    jump L4
+
+  L3:
+    load_var rows
+    load_const 0
+    load_array_element
+    load_const 0
+    load_array_element
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.score_or_share(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L1
+    load_var xs
+    container_len
+    store_var_load_var _10
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var xs
+    load_const 0
+    load_array_element
+    jump L4
+
+  L3:
+    load_var xs
+    load_const 0
+    load_array_element
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _4
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var xs
+    container_len
+    store_var _6
+    load_var xs
+    container_len
+    store_var _8
+    load_var xs
+    container_len
+    store_var _10
+    load_var xs
+    container_len
+    store_var _14
+    load_var xs
+    container_len
+    store_var _21
+    load_var _21
+    load_const 2
+    sub_int
+    load_const 100
+    mul_int
+    load_var2 1 5
+    load_const 2
+    sub_int
+    load_array_element
+    load_const 0
+    load_array_element
+    load_const 10
+    mul_int
+    add_int
+    load_var2 1 6
+    load_const 1
+    sub_int
+    load_array_element
+    load_const 0
+    load_array_element
+    add_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_pair_or(p: patterns_new_runtime.PairAB) -> int {
+    load_var p
+    is_type patterns_new_runtime.PairAB
+    pop_jump_if_false L3
+    load_var p
+    load_field .a
+    store_var_load_var _3
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _3
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L3
+
+  L1:
+    load_var p
+    load_field .b
+    store_var_load_var _6
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L4
+
+  L2:
+    load_var _6
+    load_const 3
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L5
+
+  L4:
+    load_const 1
+
+  L5:
+    return
+}
+
+function patterns_new_runtime.score_person_age(v: patterns_new_runtime.PersonAge | int) -> int {
+    load_var v
+    is_type patterns_new_runtime.PersonAge
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var v
+    load_field .0
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_personid(v: patterns_new_runtime.PersonIdA | patterns_new_runtime.PersonIdB) -> int {
+    load_var v
+    is_type patterns_new_runtime.PersonIdA
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    is_type patterns_new_runtime.PersonIdB
+    pop_jump_if_false L2
+    load_var v
+    load_field .0
+    jump L2
+
+  L1:
+    load_var v
+    load_field .0
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 3
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var xs
+    container_len
+    store_var _6
+    load_var xs
+    container_len
+    store_var _8
+    load_var xs
+    container_len
+    store_var _13
+    load_var xs
+    container_len
+    store_var _17
+    load_var xs
+    load_const 0
+    load_array_element
+    load_const 100
+    mul_int
+    load_var2 1 5
+    load_const 2
+    sub_int
+    load_array_element
+    load_const 10
+    mul_int
+    add_int
+    load_var2 1 6
+    load_const 1
+    sub_int
+    load_array_element
+    add_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_refine_a(v: patterns_new_runtime.RefineA | patterns_new_runtime.RefineB) -> int {
+    load_var v
+    is_type patterns_new_runtime.RefineA
+    pop_jump_if_false L0
+    load_var v
+    load_field .0
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var v
+    load_field .0
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_rest_copy(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var xs
+    load_const 0
+    load_array_element
+    load_const 10
+    mul_int
+    store_var _9
+    load_var xs
+    container_len
+    store_var _12
+    load_var2 3 4
+    load_const 1
+    sub_int
+    add_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_strings_len(xs: string[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var xs
+    load_const 0
+    load_array_element
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var xs
+    container_len
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var xs
+    container_len
+    store_var _5
+    load_var xs
+    container_len
+    store_var _7
+    load_var xs
+    container_len
+    store_var _13
+    load_var _13
+    load_const 1
+    sub_int
+    load_const 10
+    mul_int
+    load_var2 1 4
+    load_const 1
+    sub_int
+    load_array_element
+    add_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -> int {
+    load_var teams
+    is_type _[]
+    pop_jump_if_false L0
+    load_var teams
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var teams
+    load_const 0
+    load_array_element
+    store_var_load_var _6
+    is_type patterns_new_runtime.Team2
+    pop_jump_if_false L0
+    load_var _6
+    load_field .scores
+    store_var_load_var _8
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _8
+    container_len
+    store_var_load_var _10
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var teams
+    is_type _[]
+    pop_jump_if_false L1
+    load_var teams
+    container_len
+    store_var_load_var _20
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var teams
+    load_const 0
+    load_array_element
+    store_var_load_var _23
+    is_type patterns_new_runtime.Team2
+    pop_jump_if_false L1
+    load_var _23
+    load_field .scores
+    store_var_load_var _25
+    is_type int[]
+    pop_jump_if_false L1
+    load_var _25
+    container_len
+    store_var_load_var _27
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var teams
+    load_const 0
+    load_array_element
+    load_field .scores
+    load_const 1
+    load_array_element
+    jump L4
+
+  L3:
+    load_var teams
+    load_const 0
+    load_array_element
+    load_field .scores
+    load_const 0
+    load_array_element
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.score_team3(team: patterns_new_runtime.Team3) -> int {
+    load_var team
+    is_type patterns_new_runtime.Team3
+    pop_jump_if_false L0
+    load_var team
+    load_field .scores
+    store_var_load_var _3
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _3
+    container_len
+    store_var_load_var _5
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var team
+    load_field .scores
+    load_const 0
+    load_array_element
+    jump L2
+
+  L1:
+    load_const 10
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_team4(team: patterns_new_runtime.Team4) -> int {
+    load_var team
+    is_type patterns_new_runtime.Team4
+    pop_jump_if_false L0
+    load_var team
+    load_field .scores
+    store_var_load_var _3
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _3
+    container_len
+    store_var_load_var _5
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var team
+    load_field .scores
+    load_const 1
+    load_array_element
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 3
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var xs
+    container_len
+    store_var _7
+    load_var xs
+    container_len
+    store_var _15
+    load_var xs
+    load_const 0
+    load_array_element
+    load_const 100
+    mul_int
+    load_var xs
+    load_const 1
+    load_array_element
+    load_const 10
+    mul_int
+    add_int
+    load_var2 1 4
+    load_const 1
+    sub_int
+    load_array_element
+    add_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_user_score(users: patterns_new_runtime.UserScore[]) -> int {
+    load_var users
+    is_type _[]
+    pop_jump_if_false L0
+    load_var users
+    container_len
+    store_var_load_var _3
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var users
+    load_const 0
+    load_array_element
+    load_field .score
+    load_const 10
+    mul_int
+    store_var _9
+    load_var users
+    container_len
+    store_var _12
+    load_var2 3 4
+    load_const 1
+    sub_int
+    add_int
+    jump L2
+
+  L1:
+    load_const 0
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_wildcard_second(xs: int[]) -> int {
+    load_var xs
+    is_type _[]
+    pop_jump_if_false L0
+    load_var xs
+    container_len
+    store_var_load_var _3
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var xs
+    load_const 1
+    load_array_element
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_wildcard_user(users: patterns_new_runtime.UserScore[]) -> int {
+    load_var users
+    is_type _[]
+    pop_jump_if_false L0
+    load_var users
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var users
+    load_const 0
+    load_array_element
+    is_type patterns_new_runtime.UserScore
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var users
+    load_const 0
+    load_array_element
+    load_field .score
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap2) -> int {
+    load_var v
+    is_type _[]
+    pop_jump_if_false L0
+    load_var v
+    container_len
+    store_var_load_var _3
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    load_var v
+    load_const 0
+    load_array_element
+    store_var_load_var _6
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _6
+    container_len
+    store_var_load_var _8
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var v
+    is_type patterns_new_runtime.Wrap2
+    pop_jump_if_false L1
+    load_var v
+    load_field .0
+    store_var_load_var _17
+    is_type int[][]
+    pop_jump_if_false L1
+    load_var _17
+    container_len
+    store_var_load_var _19
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L1
+    load_var _17
+    container_len
+    store_var _21
+    load_var2 5 7
+    load_const 1
+    sub_int
+    load_array_element
+    store_var_load_var _23
+    is_type int[]
+    pop_jump_if_false L1
+    load_var _23
+    container_len
+    store_var_load_var _25
+    load_const 2
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var v
+    load_field .0
+    store_var _29
+    load_var _29
+    container_len
+    store_var _30
+    load_var2 10 11
+    load_const 1
+    sub_int
+    load_array_element
+    load_const 1
+    load_array_element
+    jump L4
+
+  L3:
+    load_var v
+    load_const 0
+    load_array_element
+    load_const 0
+    load_array_element
+
+  L4:
+    return
+}
+
+function patterns_new_runtime.test_chain_second_binding_capture() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 1
+    store_deref ?1
+    load_const 2
+    store_deref ?1
+    load_var y
+    make_closure .<lambda(test_chain_second_binding_capture, 0)>, 1
+    call_indirect
+    return
+}
+
+function patterns_new_runtime.test_class_shorthand_same_name_as_class() -> int {
+    load_const 99
+    load_const 1
+    init_instance user.patterns_new_runtime.UserFieldUser .User, .other
+    load_field .User
+    return
+}
+
+function patterns_new_runtime.test_dispatches_bound_method() -> string {
+    load_const 100
+    init_instance user.patterns_new_runtime.DispatchCounter .n
+    make_bound_method user.patterns_new_runtime.DispatchCounter.bump
+    call user.patterns_new_runtime.dispatch_cb
+    return
+}
+
+function patterns_new_runtime.test_dispatches_generic_frame_closure() -> string {
+    load_type int
+    load_const 7
+    call user.patterns_new_runtime.make_generic_cb
+    call user.patterns_new_runtime.dispatch_cb
+    return
+}
+
+function patterns_new_runtime.test_dispatches_int_callback() -> string {
+    make_closure .<lambda(test_dispatches_int_callback, 0)>, 0
+    call user.patterns_new_runtime.dispatch_cb
+    return
+}
+
+function patterns_new_runtime.test_dispatches_string_callback() -> string {
+    make_closure .<lambda(test_dispatches_string_callback, 0)>, 0
+    call user.patterns_new_runtime.dispatch_cb
+    return
+}
+
+function patterns_new_runtime.test_empty_generic_covers_union() -> int {
+    load_const "ready"
+    load_type string
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    call user.patterns_new_runtime.classify_box_either
+    load_const 10
+    mul_int
+    store_var _3
+    load_const 3
+    load_type int
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    call user.patterns_new_runtime.classify_box_either
+    load_var _3
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_empty_generic_destruct_contextual() -> int {
+    load_const 7
+    load_type int
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    call user.patterns_new_runtime.classify_box_int
+    store_var _3
+    load_const "ready"
+    load_type string
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    call user.patterns_new_runtime.classify_box_string
+    load_var _3
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_five_levels_or_flipped() -> int {
+    load_const 0
+    init_instance user.patterns_new_runtime.Atom1 .value
+    store_var_load_var stuffer_atom
+    load_var2 1 1
+    load_type patterns_new_runtime.Atom1
+    alloc_array 3
+    init_instance user.patterns_new_runtime.Slot1 .atoms
+    store_var_load_var stuffer_slot
+    load_var2 2 2
+    load_type patterns_new_runtime.Slot1
+    alloc_array 3
+    init_instance user.patterns_new_runtime.Row1 .slots
+    store_var_load_var stuffer_row
+    load_var2 2 1
+    load_const 42
+    init_instance user.patterns_new_runtime.Atom1 .value
+    load_var stuffer_atom
+    load_type patterns_new_runtime.Atom1
+    alloc_array 3
+    init_instance user.patterns_new_runtime.Slot1 .atoms
+    load_var stuffer_slot
+    load_type patterns_new_runtime.Slot1
+    alloc_array 3
+    init_instance user.patterns_new_runtime.Row1 .slots
+    load_var stuffer_row
+    load_type patterns_new_runtime.Row1
+    alloc_array 3
+    init_instance user.patterns_new_runtime.Sheet1 .rows
+    call user.patterns_new_runtime.pick_sheet
+    return
+}
+
+function patterns_new_runtime.test_fn_arm_before_wildcard(cb: ((int) -> int throws never) | int) -> string {
+    load_var cb
+    store_var _2
+    load_var _2
+    narrow_bind (int) -> int throws never, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "other"
+    jump L2
+
+  L1:
+    load_const 3
+    load_var _2
+    call_indirect
+    store_var _5
+    load_type int
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "fn:"
+    load_var _4
+    bin_op +
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_fn_arm_before_wildcard_fn() -> string {
+    make_closure .<lambda(test_fn_arm_before_wildcard_fn, 0)>, 0
+    call user.patterns_new_runtime.test_fn_arm_before_wildcard
+    return
+}
+
+function patterns_new_runtime.test_fn_arm_before_wildcard_int() -> string {
+    load_const 5
+    call user.patterns_new_runtime.test_fn_arm_before_wildcard
+    return
+}
+
+function patterns_new_runtime.test_fn_is_matching() -> bool {
+    make_closure .<lambda(test_fn_is_matching, 0)>, 0
+    is_type (int) -> int throws unknown
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_fn_is_mismatched() -> bool {
+    make_closure .<lambda(test_fn_is_mismatched, 0)>, 0
+    is_type (string) -> string throws unknown
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
+    load_const 1
+    store_var product
+    load_const 4
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_const 5
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_const 6
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_type patterns_new_runtime.UserCoord
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = patterns_new_runtime.UserCoord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _13
+
+  L0:
+    load_var _13
+    load_type baml.iter.Iterator<Error = never, Item = patterns_new_runtime.UserCoord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+    load_var _14
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 3
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    mul_int
+    store_var product
+    jump L0
+
+  L2:
+    load_var product
+    return
+}
+
+function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
+    load_var ?4
+    make_cell
+    store_var ?4
+    load_type () -> int throws never
+    alloc_array 0
+    store_var funcs
+    load_const 1
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_const 2
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_const 3
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_type patterns_new_runtime.UserCoord
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = patterns_new_runtime.UserCoord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _13
+
+  L0:
+    load_var _13
+    load_type baml.iter.Iterator<Error = never, Item = patterns_new_runtime.UserCoord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+    load_var _14
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    make_cell
+    store_var zip
+    load_var _14
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    store_deref ?4
+    load_type () -> int throws never
+    load_var2 1 4
+    make_closure .<lambda(test_for_deep_class_capture_fresh, 0)>, 1
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var funcs
+    load_const 0
+    load_array_element
+    call_indirect
+    load_const 100
+    mul_int
+    store_var _25
+    load_var funcs
+    load_const 1
+    load_array_element
+    call_indirect
+    store_var _31
+    load_var2 6 7
+    load_const 10
+    mul_int
+    add_int
+    store_var _24
+    load_var funcs
+    load_const 2
+    load_array_element
+    call_indirect
+    load_var _24
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_for_deep_class_sums() -> int {
+    load_const 0
+    store_var total
+    load_const 1
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_const 20
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_const 300
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_type patterns_new_runtime.UserCoord
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = patterns_new_runtime.UserCoord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _13
+
+  L0:
+    load_var _13
+    load_type baml.iter.Iterator<Error = never, Item = patterns_new_runtime.UserCoord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+    load_var _14
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 3
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.test_for_inside_class_destruct() -> int {
+    load_const 0
+    store_var total
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    init_instance user.patterns_new_runtime.Team1 .scores
+    load_type int
+    alloc_array 0
+    init_instance user.patterns_new_runtime.Team1 .scores
+    load_const 3
+    load_type int
+    alloc_array 1
+    init_instance user.patterns_new_runtime.Team1 .scores
+    load_type patterns_new_runtime.Team1
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = patterns_new_runtime.Team1>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _10
+
+  L0:
+    load_var _10
+    load_type baml.iter.Iterator<Error = never, Item = patterns_new_runtime.Team1>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _11
+    load_var _11
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _11
+    load_field .scores
+    container_len
+    store_var _16
+    load_var2 1 4
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
+    load_var ?6
+    make_cell
+    store_var ?6
+    load_type () -> int throws never
+    alloc_array 0
+    store_var funcs
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _4
+    store_var _6
+    load_var _6
+    store_var a
+    load_const null
+    make_cell
+    store_var b
+    load_var _6
+    store_deref ?6
+    load_type () -> int throws never
+    load_var2 1 6
+    make_closure .<lambda(test_for_let_chain_alias_capture, 0)>, 1
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var funcs
+    load_const 0
+    load_array_element
+    call_indirect
+    load_const 100
+    mul_int
+    store_var _13
+    load_var funcs
+    load_const 1
+    load_array_element
+    call_indirect
+    store_var _19
+    load_var2 8 9
+    load_const 10
+    mul_int
+    add_int
+    store_var _12
+    load_var funcs
+    load_const 2
+    load_array_element
+    call_indirect
+    load_var _12
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
+    load_const 0
+    store_var total
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _4
+    store_var _6
+    load_var2 1 4
+    load_var _6
+    add_int
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
+    load_const 0
+    store_var total
+    load_const 4
+    load_const 5
+    load_type int
+    alloc_array 2
+    load_const 6
+    load_const 7
+    load_const 8
+    load_type int
+    alloc_array 3
+    load_type int[]
+    alloc_array 2
+    load_type baml.iter.Iterable<Error = never, Item = int[]>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = never, Item = int[]>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _6
+    store_var row
+    load_var row
+    container_len
+    store_var _13
+    load_var _13
+    load_const 100
+    mul_int
+    load_var row
+    load_const 0
+    load_array_element
+    load_const 10
+    mul_int
+    add_int
+    store_var _11
+    load_var row
+    container_len
+    store_var _18
+    load_var2 1 5
+    load_var _18
+    add_int
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.test_for_let_or_same_binding() -> int {
+    load_const 0
+    store_var total
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_type int
+    alloc_array 4
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 3
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
+    load_const 0
+    store_var total
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 3
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
+    load_const 0
+    store_var total
+    load_const 1
+    load_type int
+    alloc_array 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 2
+    load_type int
+    alloc_array 0
+    load_type int[]
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int[]>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = int[]>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var total
+    load_const 1
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
+    load_var ?4
+    make_cell
+    store_var ?4
+    load_type () -> int throws never
+    alloc_array 0
+    store_var funcs
+    load_const 1
+    load_type int
+    alloc_array 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 2
+    load_const 4
+    load_const 5
+    load_const 6
+    load_type int
+    alloc_array 3
+    load_type int[]
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int[]>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+
+  L0:
+    load_var _7
+    load_type baml.iter.Iterator<Error = never, Item = int[]>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+    load_var _8
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    make_cell
+    store_var row
+    load_var _8
+    store_deref ?4
+    load_type () -> int throws never
+    load_var2 1 4
+    make_closure .<lambda(test_for_rest_capture_fresh_cell, 0)>, 1
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var funcs
+    load_const 0
+    load_array_element
+    call_indirect
+    load_const 100
+    mul_int
+    store_var _16
+    load_var funcs
+    load_const 1
+    load_array_element
+    call_indirect
+    store_var _22
+    load_var2 6 7
+    load_const 10
+    mul_int
+    add_int
+    store_var _15
+    load_var funcs
+    load_const 2
+    load_array_element
+    call_indirect
+    load_var _15
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_for_rest_sums_rows() -> int {
+    load_const 0
+    store_var total
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type int
+    alloc_array 0
+    load_const 4
+    load_type int
+    alloc_array 1
+    load_type int[]
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int[]>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+
+  L0:
+    load_var _7
+    load_type baml.iter.Iterator<Error = never, Item = int[]>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+    load_var _8
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _8
+    container_len
+    store_var _12
+    load_var2 1 4
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
+    load_const 0
+    store_var count
+    load_const 1
+    load_type int
+    alloc_array 1
+    load_type int
+    alloc_array 0
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 2
+    load_type int[]
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int[]>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+
+  L0:
+    load_var _7
+    load_type baml.iter.Iterator<Error = never, Item = int[]>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+    load_var _8
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    jump L0
+
+  L2:
+    load_var count
+    return
+}
+
+function patterns_new_runtime.test_generic_backfills_wrapped() -> int {
+    load_const 40
+    load_type int
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    store_var_load_var boxed
+    call user.patterns_new_runtime.from_optional_box
+    store_var _3
+    load_var boxed
+    call user.patterns_new_runtime.from_union_box
+    load_var _3
+    add_int
+    store_var _2
+    load_var boxed
+    load_type patterns_new_runtime.BoxT<int>
+    alloc_array 1
+    call user.patterns_new_runtime.from_array_boxes
+    load_var _2
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_let_array_rest_binds() -> int {
+    load_const 3
+    return
+}
+
+function patterns_new_runtime.test_let_array_rest_irrefutable() -> int {
+    load_const 1
+    return
+}
+
+function patterns_new_runtime.test_let_class_binds_inner_zip() -> int {
+    load_const 80808
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    return
+}
+
+function patterns_new_runtime.test_let_class_destruct_nested() -> int {
+    load_const 1
+    load_const 94107
+    load_const "SF"
+    init_instance user.patterns_new_runtime.Address6 .zip, .city
+    init_instance user.patterns_new_runtime.PersonAddr6 .age, .address
+    load_field .address
+    load_field .zip
+    return
+}
+
+function patterns_new_runtime.test_let_class_destruct_rename() -> int {
+    load_const "Ada"
+    load_const 42
+    init_instance user.patterns_new_runtime.PersonNA .name, .age
+    load_field .age
+    return
+}
+
+function patterns_new_runtime.test_let_class_destruct_shorthand() -> int {
+    load_const "Ada"
+    load_const 41
+    load_const 99
+    init_instance user.patterns_new_runtime.PersonANS .name, .age, .score
+    load_field .age
+    return
+}
+
+function patterns_new_runtime.test_let_deep_class_inner_field() -> int {
+    load_const 94107
+    load_const 1200
+    init_instance user.patterns_new_runtime.Coordinate2 .zip, .plus4
+    load_const "SF"
+    init_instance user.patterns_new_runtime.Address2 .coordinate, .city
+    load_const 9
+    init_instance user.patterns_new_runtime.Profile2 .address, .score
+    load_const true
+    init_instance user.patterns_new_runtime.UserDeep .profile, .active
+    load_field .profile
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    return
+}
+
+function patterns_new_runtime.test_let_generic_destruct() -> int {
+    load_const 42
+    load_type int
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    load_field .value
+    load_const 1
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_let_nested_same_field_names() -> int {
+    load_const 21
+    init_instance user.patterns_new_runtime.NestedInner .field
+    load_const 1
+    init_instance user.patterns_new_runtime.NestedOuter .field, .other
+    load_field .field
+    store_var_load_var _3
+    load_field .field
+    load_var _3
+    load_field .field
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_let_or_same_binding() -> int {
+    load_const 1
+    return
+}
+
+function patterns_new_runtime.test_let_or_six_same_bindings() -> int {
+    load_const 1
+    return
+}
+
+function patterns_new_runtime.test_let_wildcard_discards() -> int {
+    load_const 42
+    return
+}
+
+function patterns_new_runtime.test_match_alphabet() -> int {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_const 5
+    load_const 6
+    load_const 7
+    load_const 8
+    load_const 9
+    load_const 10
+    load_const 11
+    load_const 12
+    load_const 13
+    load_const 14
+    load_const 15
+    load_const 16
+    load_const 17
+    load_const 18
+    load_const 19
+    load_const 20
+    load_const 21
+    load_const 22
+    load_const 23
+    load_const 24
+    load_const 25
+    load_const 26
+    load_type int
+    alloc_array 26
+    store_var_load_var _1
+    is_type _[]
+    pop_jump_if_false L0
+    load_var _1
+    container_len
+    store_var_load_var _3
+    load_const 26
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var _1
+    load_const 0
+    load_array_element
+    load_var _1
+    load_const 1
+    load_array_element
+    add_int
+    load_var _1
+    load_const 2
+    load_array_element
+    add_int
+    load_var _1
+    load_const 3
+    load_array_element
+    add_int
+    load_var _1
+    load_const 4
+    load_array_element
+    add_int
+    load_var _1
+    load_const 5
+    load_array_element
+    add_int
+    load_var _1
+    load_const 6
+    load_array_element
+    add_int
+    load_var _1
+    load_const 7
+    load_array_element
+    add_int
+    load_var _1
+    load_const 8
+    load_array_element
+    add_int
+    load_var _1
+    load_const 9
+    load_array_element
+    add_int
+    load_var _1
+    load_const 10
+    load_array_element
+    add_int
+    load_var _1
+    load_const 11
+    load_array_element
+    add_int
+    load_var _1
+    load_const 12
+    load_array_element
+    add_int
+    load_var _1
+    load_const 13
+    load_array_element
+    add_int
+    load_var _1
+    load_const 14
+    load_array_element
+    add_int
+    load_var _1
+    load_const 15
+    load_array_element
+    add_int
+    load_var _1
+    load_const 16
+    load_array_element
+    add_int
+    load_var _1
+    load_const 17
+    load_array_element
+    add_int
+    load_var _1
+    load_const 18
+    load_array_element
+    add_int
+    load_var _1
+    load_const 19
+    load_array_element
+    add_int
+    load_var _1
+    load_const 20
+    load_array_element
+    add_int
+    load_var _1
+    load_const 21
+    load_array_element
+    add_int
+    load_var _1
+    load_const 22
+    load_array_element
+    add_int
+    load_var _1
+    load_const 23
+    load_array_element
+    add_int
+    load_var _1
+    load_const 24
+    load_array_element
+    add_int
+    load_var _1
+    load_const 25
+    load_array_element
+    add_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_match_array_shadows_outer() -> int {
+    load_const 4
+    load_const 5
+    load_type int
+    alloc_array 2
+    store_var_load_var _3
+    is_type _[]
+    pop_jump_if_false L0
+    load_var _3
+    container_len
+    store_var_load_var _5
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    store_var inner
+    jump L2
+
+  L1:
+    load_var _3
+    load_const 0
+    load_array_element
+    store_var inner
+
+  L2:
+    load_const 1
+    load_const 10
+    mul_int
+    load_var inner
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_match_bind_type_ascription() -> int {
+    load_const 1
+    load_const 100
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_match_chain_binding_guard() -> int {
+    load_const 4
+    store_var _1
+    load_var _1
+    narrow_bind int, slot=1
+    pop_jump_if_false L0
+    load_var _1
+    store_var_load_var n
+    load_const 2
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var n
+    load_const 10
+    mul_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_match_chain_of_bindings() -> int {
+    load_const 7
+    load_const 7
+    add_int
+    load_const 7
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_match_chain_trailing_binding() -> int {
+    load_const 9
+    load_type int
+    alloc_array 1
+    load_type int[]
+    alloc_array 1
+    store_var _3
+    load_var _3
+    narrow_bind int[][], slot=1
+    pop_jump_if_false L0
+    load_var _3
+    narrow_bind int[][], slot=1
+    pop_jump_if_false L0
+    load_var _3
+    container_len
+    store_var_load_var _4
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var _3
+    load_const 0
+    load_array_element
+    store_var _8
+    load_var _8
+    narrow_bind int[], slot=3
+    pop_jump_if_false L0
+    load_var _8
+    container_len
+    store_var_load_var _9
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var _8
+    load_const 0
+    load_array_element
+    store_var _13
+    load_var _3
+    load_const 0
+    load_array_element
+    load_const 0
+    load_array_element
+    load_const 100
+    mul_int
+    load_var _13
+    load_const 10
+    mul_int
+    add_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_match_class_binds_inner_zip() -> int {
+    load_const 9
+    init_instance user.patterns_new_runtime.Coord .zip
+    init_instance user.patterns_new_runtime.Addr .coordinate
+    init_instance user.patterns_new_runtime.UserCoord .address
+    store_var_load_var _1
+    is_type patterns_new_runtime.UserCoord
+    pop_jump_if_false L0
+    load_var _1
+    load_field .address
+    store_var_load_var _5
+    is_type patterns_new_runtime.Addr
+    pop_jump_if_false L0
+    load_var _5
+    load_field .coordinate
+    store_var_load_var _7
+    is_type patterns_new_runtime.Coord
+    pop_jump_if_false L0
+    load_var _7
+    load_field .zip
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _1
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_match_class_binds_nested() -> int {
+    load_const 12345
+    init_instance user.patterns_new_runtime.Address5 .zip
+    init_instance user.patterns_new_runtime.PersonAddr5 .address
+    load_field .address
+    load_field .zip
+    return
+}
+
+function patterns_new_runtime.test_match_generic_type_args_distinguish() -> int {
+    load_const "ready"
+    load_type string
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    call user.patterns_new_runtime.classify_box_union_by_type
+    load_const 10
+    mul_int
+    store_var _3
+    load_const 7
+    load_type int
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    call user.patterns_new_runtime.classify_box_union_by_type
+    load_var _3
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_match_generic_union_field() -> int {
+    load_const "ready"
+    load_type string
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    call user.patterns_new_runtime.classify_box_union_by_field
+    load_const 10
+    mul_int
+    store_var _3
+    load_const 9
+    load_type int
+    init_instance<1> user.patterns_new_runtime.BoxT .value
+    call user.patterns_new_runtime.classify_box_union_by_field
+    load_var _3
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_match_nested_array_projects_inner() -> int {
+    load_const 4
+    load_type int
+    alloc_array 1
+    load_type int[]
+    alloc_array 1
+    store_var_load_var _1
+    is_type _[]
+    pop_jump_if_false L0
+    load_var _1
+    container_len
+    store_var_load_var _4
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var _1
+    load_const 0
+    load_array_element
+    store_var_load_var _7
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _7
+    container_len
+    store_var_load_var _9
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var _1
+    load_const 0
+    load_array_element
+    load_const 0
+    load_array_element
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_match_or_bare_bindings() -> int {
+    load_const 5
+    load_const 1
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_match_or_chain_narrows() -> int {
+    load_const 10
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 10
+    store_var _5
+    load_var _5
+    narrow_bind int, slot=2
+    pop_jump_if_false L2
+    load_var _5
+    load_const 2
+    mul_int
+    jump L2
+
+  L1:
+    load_var _2
+    load_const 2
+    mul_int
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.test_match_or_chain_swapped() -> int {
+    load_const 7
+    load_const 7
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_match_wildcard_chained_array() -> int {
+    load_const 4
+    load_const 5
+    load_const 6
+    load_type int
+    alloc_array 3
+    container_len
+    return
+}
+
+function patterns_new_runtime.test_or_2d_vs_class() -> int {
+    load_const 7
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 3
+    load_const 8
+    load_const 9
+    load_type int
+    alloc_array 2
+    load_type int[]
+    alloc_array 2
+    call user.patterns_new_runtime.score_wrap2
+    store_var bare
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    load_const 3
+    load_const 11
+    load_const 5
+    load_type int
+    alloc_array 3
+    load_type int[]
+    alloc_array 2
+    init_instance user.patterns_new_runtime.Wrap2 .grid
+    call user.patterns_new_runtime.score_wrap2
+    store_var wrapped
+    load_var bare
+    load_const 100
+    mul_int
+    load_var wrapped
+    add_int
+    return
+}
+
+function patterns_new_runtime.test_or_four_alternates() -> int {
+    load_const 99
+    load_const 7
+    load_const 100
+    load_type int
+    alloc_array 3
+    init_instance user.patterns_new_runtime.Wrap1 .inner
+    load_const 0
+    load_type int
+    alloc_array 1
+    init_instance user.patterns_new_runtime.Pair1 .left, .right
+    call user.patterns_new_runtime.pick_pair
+    store_var a
+    load_const 99
+    load_type int
+    alloc_array 1
+    init_instance user.patterns_new_runtime.Wrap1 .inner
+    load_const 99
+    load_const 99
+    load_const 8
+    load_const 99
+    load_type int
+    alloc_array 4
+    init_instance user.patterns_new_runtime.Pair1 .left, .right
+    call user.patterns_new_runtime.pick_pair
+    store_var b
+    load_const 99
+    load_const 9
+    load_const 99
+    load_const 99
+    load_type int
+    alloc_array 4
+    init_instance user.patterns_new_runtime.Wrap1 .inner
+    call user.patterns_new_runtime.pick_pair
+    store_var c
+    load_const 99
+    load_type int
+    alloc_array 1
+    load_const 4
+    load_const 5
+    load_const 6
+    load_type int
+    alloc_array 3
+    load_const 99
+    load_type int
+    alloc_array 1
+    load_type int[]
+    alloc_array 3
+    call user.patterns_new_runtime.pick_pair
+    store_var d
+    load_var a
+    load_const 1000
+    mul_int
+    load_var b
+    load_const 100
+    mul_int
+    add_int
+    load_var c
+    load_const 10
+    mul_int
+    add_int
+    load_var d
+    add_int
+    return
+}
+
+function patterns_new_runtime.unknown_arm_class_fn() -> string {
+    load_const 1
+    init_instance user.patterns_new_runtime.UnknownArmBox .v
+    load_const true
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_closure_fn() -> string {
+    make_closure .<lambda(unknown_arm_closure_fn, 0)>, 0
+    load_const true
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_gate_false_fn() -> string {
+    load_const 5
+    load_const false
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_int_fn() -> string {
+    load_const 5
+    load_const true
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_null_fn() -> string {
+    load_const null
+    load_const true
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_tested(x: unknown, gate: bool) -> string {
+    load_var x
+    store_var _3
+    load_var _3
+    pop 1
+    load_const true
+    pop_jump_if_false L0
+    load_var gate
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "fell-through"
+    jump L2
+
+  L1:
+    load_const "top"
+
+  L2:
+    return
+}

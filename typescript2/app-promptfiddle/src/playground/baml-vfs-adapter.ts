@@ -11,6 +11,12 @@ import type {
   CpOptions,
 } from "just-bash/browser";
 
+type WasmVfsDirEntry = {
+  name: string;
+  file_type: string;
+  is_symlink: boolean;
+};
+
 /**
  * The wasmVfs property shape exposed by BamlVfs.
  * We declare a minimal structural type here to avoid importing BamlVfs
@@ -21,6 +27,7 @@ interface WasmVfsLike {
   writeFile(path: string, data: Uint8Array): void;
   exists(path: string): boolean;
   readDir(path: string): string[];
+  readDirEntries(path: string): WasmVfsDirEntry[];
   createDir(path: string): void;
   removeFile(path: string): void;
   removeDir(path: string): void;

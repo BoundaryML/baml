@@ -1,10 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5869
 ---
 function user.ByteStringBasic() -> int {
     load_const b"\x68\x65\x6c\x6c\x6f"
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     return
 }
 
@@ -19,7 +20,7 @@ function user.ByteStringDirectIndexRead() -> int {
 function user.ByteStringEmpty() -> int {
     load_const b""
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     return
 }
 
@@ -28,23 +29,25 @@ function user.ByteStringEquality() -> bool {
     call baml.deep_copy
     load_const b"\x61\x62\x63"
     call baml.deep_copy
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
 function user.ByteStringHexEscapes() -> int {
     load_const b"\x48\x65\x6c\x6c\x6f"
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     return
 }
 
 function user.ByteStringInCondition() -> int {
     load_const b"\x61\x62\x63"
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
+    store_var _2
+    load_var _2
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L0
     jump L1
 
@@ -59,7 +62,7 @@ function user.ByteStringInCondition() -> int {
     return
 }
 
-function user.ByteStringIndexAccess() -> int? {
+function user.ByteStringIndexAccess() -> int | null {
     load_const b"\x41\x42\x43"
     call baml.deep_copy
     load_const 0
@@ -74,7 +77,7 @@ function user.ByteStringLiteralAsArg() -> int {
     return
 }
 
-function user.ByteStringMutate() -> int? {
+function user.ByteStringMutate() -> int | null {
     load_const b"\x00\x00\x00"
     call baml.deep_copy
     store_var data
@@ -90,13 +93,13 @@ function user.ByteStringMutate() -> int? {
 
 function user.ByteStringPassAndReturn(data: uint8array) -> int {
     load_var data
-    call baml.Uint8Array.length
+    container_len
     return
 }
 
 function user.ByteStringStandardEscapes() -> int {
     load_const b"\x0a\x09\x0d\x00\x5c\x22"
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     return
 }

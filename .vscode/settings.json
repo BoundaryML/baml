@@ -1,7 +1,11 @@
 {
+  "editor.accessibilitySupport": "off",
   "editor.codeActionsOnSave": {
     "quickfix.biome": "explicit",
     "source.organizeImports.biome": "explicit"
+  },
+  "search.exclude": {
+    "**/*.snap": true
   },
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer",
@@ -56,5 +60,6 @@
       "editor.tabSize": 2
   },
   "baml.enablePlaygroundProxy": true,
-  "editor.accessibilitySupport": "off",
+  "explorer.sortOrder": "mixed",
+  "nixEnvSelector.suggestion": false,
 }

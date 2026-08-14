@@ -55,6 +55,33 @@ function Process(<[CURSOR]input: string) -> string {
     }
 
     #[test]
+    fn test_find_refs_lambda_parameter_in_nested_lambda() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> int {
+    let f = (<[CURSOR]x: int) -> int {
+        let y = x
+        let g = () -> int { x + y }
+        x + g()
+    }
+    f(1)
+}
+"#,
+        );
+
+        let usages = test.find_all_usages();
+        assert_eq!(
+            usages.len(),
+            3,
+            "Should find lambda-parameter usages across nested lambda arenas, found: {:?}",
+            usages
+                .iter()
+                .map(|l| test.format_location_with_name(l))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn test_find_refs_function() {
         let test = CursorTest::new(
             r#"
@@ -111,6 +138,36 @@ function ProcessPerson(p: Person) -> string {
                 .iter()
                 .map(|l| test.format_location_with_name(l))
                 .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_find_refs_interface_in_out_of_body_implements() {
+        let test = CursorTest::new(
+            r#"
+interface <[CURSOR]Animal {
+    function speak(self) -> string
+}
+
+class Dog {}
+
+implements Animal for Dog {
+    function speak(self) -> string { return "woof" }
+}
+"#,
+        );
+
+        let usages = test.find_all_usages();
+        let formatted = usages
+            .iter()
+            .map(|l| test.format_location_with_name(l))
+            .collect::<Vec<_>>();
+
+        assert!(
+            formatted
+                .iter()
+                .any(|usage| usage.ends_with("-> Animal") && usage.contains("test.baml:")),
+            "Should find the interface reference in the out-of-body implements target, found: {formatted:?}"
         );
     }
 

@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-function user.$init_test_32(registry: testing.TestCollector) -> ?  [expr] {
-  { registry.register_test("raw string name", () -> void { {  } assert.is_true(true) }, null); registry.register_test("has \"quotes\" inside", () -> void { {  } assert.is_true(true) }, null); registry.register_test_set("raw testset name", (testset: testing.TestCollector) -> void { { testset.register_test("nested raw name", () -> { {  } assert.is_true(true) }, null) } null }, null) } null
-}

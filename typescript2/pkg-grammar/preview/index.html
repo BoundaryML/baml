@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BAML grammar preview</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --fg: #c9d1d9;
+        --border: #21262d;
+        --muted: #8b949e;
+        --control-bg: #161b22;
+        --hover-bg: #161b22;
+        --selected-bg: #0d2d52;
+        --selected-border: #388bfd;
+        --pad: 16px;
+        --font: 14px / 1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      :root[data-theme-tone="light"] {
+        --bg: #ffffff;
+        --fg: #24292f;
+        --border: #d0d7de;
+        --muted: #57606a;
+        --control-bg: #f6f8fa;
+        --hover-bg: #f6f8fa;
+        --selected-bg: #ddf4ff;
+        --selected-border: #0969da;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      header {
+        padding: 8px 16px;
+        font-size: 12px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .app-title {
+        color: var(--fg);
+        font-weight: 600;
+        margin-right: auto;
+      }
+      button,
+      select {
+        border: 1px solid var(--border);
+        background: var(--control-bg);
+        color: var(--fg);
+        border-radius: 4px;
+        font: inherit;
+        padding: 4px 8px;
+      }
+      .theme-select {
+        max-width: 180px;
+      }
+      button:disabled {
+        color: var(--muted);
+        cursor: not-allowed;
+      }
+      .status {
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+      }
+      .status.same {
+        color: #7ee787;
+      }
+      .status.different {
+        color: #ffa657;
+      }
+      .workspace {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+      }
+      .fixture-sidebar {
+        min-width: 0;
+        min-height: 0;
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar-title {
+        flex: 0 0 auto;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .fixture-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        padding: 6px;
+      }
+      .fixture-row {
+        width: 100%;
+        min-height: 34px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        padding: 6px 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--fg);
+        text-align: left;
+        cursor: default;
+      }
+      .fixture-row:hover {
+        background: var(--hover-bg);
+      }
+      .fixture-row.selected {
+        border-color: var(--selected-border);
+        background: var(--selected-bg);
+      }
+      .fixture-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .fixture-badge {
+        min-width: 56px;
+        padding: 2px 6px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 11px;
+      }
+      .fixture-badge.same {
+        color: #7ee787;
+      }
+      .fixture-badge.different {
+        color: #ffa657;
+      }
+      .fixture-badge.error {
+        color: #ff7b72;
+      }
+      .viewer-shell {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .comparison {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .left-pane,
+      .snapshot-pane {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .left-pane {
+        border-right: 1px solid var(--border);
+      }
+      .panel-title {
+        flex: 0 0 auto;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .source-frame {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+      }
+      .source-view {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin: 0;
+        padding: var(--pad);
+        overflow: auto;
+        white-space: pre;
+        font: var(--font);
+        border: 0;
+        background: transparent;
+        cursor: default;
+      }
+      .source-view pre {
+        margin: 0;
+        padding: 0;
+        background: transparent !important;
+      }
+      .diff-ruler {
+        position: absolute;
+        top: 0;
+        right: 3px;
+        bottom: 0;
+        width: 12px;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .diff-ruler.has-diffs {
+        background: rgba(139, 148, 158, 0.08);
+        border-left: 1px solid rgba(139, 148, 158, 0.18);
+      }
+      .diff-ruler-marker {
+        position: absolute;
+        right: 2px;
+        width: 8px;
+        height: 3px;
+        min-height: 2px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 2px;
+        pointer-events: auto;
+        cursor: pointer;
+        transform: translateY(-1px);
+      }
+      .diff-ruler-marker.different {
+        background: #f85149;
+      }
+      .diff-ruler-marker.missing {
+        background: #d2a8ff;
+      }
+      .diff-ruler-marker:hover {
+        width: 10px;
+        right: 1px;
+      }
+      .span-mark {
+        border-radius: 2px;
+        background: rgba(255, 166, 87, 0.28);
+        outline: 1px solid rgba(255, 166, 87, 0.75);
+      }
+      .diff-mark {
+        background: rgba(248, 81, 73, 0.2);
+        box-shadow: inset 0 -2px rgba(248, 81, 73, 0.85);
+      }
+      .missing-mark {
+        background: rgba(210, 168, 255, 0.18);
+        box-shadow: inset 0 -2px rgba(210, 168, 255, 0.85);
+      }
+      /* Scope inspector */
+      #inspect {
+        flex: 0 0 auto;
+        max-height: 30vh;
+        overflow: auto;
+        padding: 8px 16px;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      #inspect .loc {
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      #inspect .swatch {
+        display: inline-block;
+        width: 11px;
+        height: 11px;
+        border-radius: 2px;
+        border: 1px solid var(--border);
+      }
+      #inspect .scope {
+        color: var(--fg);
+      }
+      #inspect .scope.leaf {
+        color: #79c0ff;
+      }
+      #inspect {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+      }
+      #inspect .muted {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="app-title">BAML grammar snapshots</div>
+      <select id="themeSelect" class="theme-select" aria-label="Theme"></select>
+      <span id="snapshotStatus" class="status">No fixture</span>
+      <button id="acceptSnapshot" type="button" disabled>Accept snapshot</button>
+    </header>
+    <div class="workspace">
+      <aside class="fixture-sidebar">
+        <div class="sidebar-title">Fixtures</div>
+        <div class="fixture-list" id="fixtureList"></div>
+      </aside>
+      <section class="viewer-shell">
+        <main class="comparison">
+          <section class="left-pane">
+            <div class="panel-title">Current</div>
+            <div class="source-frame">
+              <div class="source-view" id="currentView"></div>
+              <div class="diff-ruler" id="currentRuler"></div>
+            </div>
+          </section>
+          <section class="snapshot-pane">
+            <div class="panel-title">Snapshot</div>
+            <div class="source-frame">
+              <div class="source-view" id="savedView"></div>
+              <div class="diff-ruler" id="savedRuler"></div>
+            </div>
+          </section>
+        </main>
+        <footer id="inspect"></footer>
+      </section>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

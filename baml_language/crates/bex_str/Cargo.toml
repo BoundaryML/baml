@@ -1,0 +1,16 @@
+[package]
+name = "bex_str"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bytecount = { workspace = true }
+
+[dev-dependencies]
+divan = { workspace = true }
+indexmap = { workspace = true }
+
+[[bench]]
+name = "bexstr_bench"
+harness = false

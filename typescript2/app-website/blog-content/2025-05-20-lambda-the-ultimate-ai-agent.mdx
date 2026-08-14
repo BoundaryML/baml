@@ -1,0 +1,335 @@
+---
+title: Lambda the Ultimate AI Agent
+description: A new take on Agentic frameworks
+slug: lambda-the-ultimate-ai-agent
+date: May 20, 2025
+tags: ['research']
+author:
+  name: Greg Hale
+  imageUrl: /greg.jpg
+  linkedin: https://www.linkedin.com/in/imalsogreg
+---
+
+<Image
+  src="/blog/2025-05-20-lambda-the-ultimate-ai-agent/lamb-knight.png"
+  alt="A cartoon of Lambda the Ultimate - a Lamb Space Knight"
+  width={600}
+  height={800}
+  style={{ alignSelf: 'center' }}
+  />
+
+# Overview
+
+We propose that the popular notions of of “Agent” and “Tool Call”
+live at a particularly confusing point within in a larger design space.
+Reframing “Agent” and “Tool” as a “Programmer” and “Program
+Fragment” can clarify the architecture of Agentic AI systems
+and suggest more powerful agentic programming models.
+
+## Prelude: Lambda the Ultimate
+
+In the 1970’s and 80’s Gerald Sussman and Guy Steele wrote a number of academic
+papers to illustrate how lambda calculus - a universal model for computation,
+could be extended to get straight to the heart of previously messy concepts like
+subroutines, side-effects, declarative programming, and logic programming.
+
+These papers had titles like [Lambda the Ultimate
+Imperative](https://dspace.mit.edu/handle/1721.1/5790) and [Lambda the Ultimate
+GOTO](https://www2.cs.sfu.ca/CourseCentral/383/havens/pubs/lambda-the-ultimate-goto.pdf),
+establishing the “Lambda the Ultimate” moniker for research into the “ultimate”
+(discovered, rather than invented) mathematical structure of previously invented
+techniques. Today, papers like [Lambda the Ultimate
+Backpropagator](https://engineering.purdue.edu/~qobi/papers/toplas2008.pdf) and
+[LURK: Lambda the Ultimate Recursive
+Knowledge](https://eprint.iacr.org/2023/369) adopt this tradition to explain and
+enrich the programming models for things like machine learning and programming
+with zero-knowledge proofs.
+
+## The Tedious Nature of Tool Calling
+
+Many people building their first agentic applications find the concepts of tool
+calling and “the while loop” confusing. The app structure is like this:
+
+- App developer specifies a list of tools, their parameters and possibly their
+  return types.
+- App developer develops an LLM prompt for choosing a tool based on the current
+  app state.
+- Client code runs “the while loop” - a loop that makes LLM requests to
+  determine the next tool call to make, interprets the tool and runs it, then
+  appends both the tool call and its result to a log of the past tool calls. The
+  Tool-choosing LLM is then called again with a context augmented by the
+  previous tool result. This loop continues until the LLM declares that no more
+  tool calls are required.
+
+With this recipe, an LLM and a client are able to carry out multi-step,
+open-ended tasks on behalf of the user.
+
+The confusing aspects of this model come when we compare it to regular
+programming. We are accustomed to making a number of function calls one
+after the other to accumulate the data needed to build up a return value, the
+Agentic loop forces the app developer to (A) break functions out into a number of tools,
+and to write a prompt instructing an LLM how to choose a tool, then (B) write a while loop
+in the LLM client runs the LLM's chosen tools and updates context for subsequent
+calls to the same LLM function.
+
+<Image
+  src="/blog/2025-05-20-lambda-the-ultimate-ai-agent/while-loop.png"
+  alt="A diagram showing the interaction between client and Agent"
+  width={600}
+  height={800}
+  style={{ alignSelf: 'center' }}
+  />
+
+## Reframing: Agents are Programmers, Tools are Program Fragments
+
+Our hypothetical developer, trying to make sense of the Agentic development
+cycle, may notice that the Tools available to the LLM are similar to Remote
+Procedure Calls. In RPC systems, procedures are “defunctionalized” by converting
+them into names, so that the names can be transmitted to some remote server,
+used to look up the function implementation, and executed. The main difference
+between RPC Calls and Tool Calls is that a developer selects RPC calls within
+a larger function, while an Agent selects Tools within a larger Agentic loop.
+
+Another difference is that
+RPCs have typed return values, and as developers issuing RPC calls, we can
+chain multiple RPC calls together when the outputs of one match the
+inputs of the next. When issuing a series of Tool calls in a loop, there is no
+such chaining. Instead we have an append-only log of Tool calls and tool
+results.
+
+Finally, the developer orchestrating the “while loop” and appending `(tool call,
+tool result)` pairs to a list, feels dissatisfied that they are somehow writing
+a strange type of boilerplate code. Returning to the RPC analogy, the
+application developer is writing a little bit of the RPC framework itself,
+right next to the business logic of their application.
+
+If Tool calls are like RPC calls, then the agent issuing the tool calls becomes
+a programmer issuing RPC calls. The language runtime becomes the Agentic client
+while loop, and the variable binding context becomes the history of the LLM
+context. 
+
+| **Programming** | **Agentic System** |
+| --- | --- |
+| RPC Call | Tool call |
+| Programmer | Agent |
+| Runtime | While loop |
+| Variables | Context stack |
+
+There are several issues related to this analogy. The while loop is not a *good*
+runtime. The context stack is not a *good* binding environment. Tool calls are
+not as flexible or composable as general function calls. In the Agentic System,
+there is nothing analogous to function definition, and no straightforward way to
+compose functions.
+
+**Are these deficiencies in the analogy? Or is the analogy fine, and the
+deficiency lies in the Agentic model?**
+
+<Tip>
+**Greenspun’s Tenth Rule** Any sufficiently complicated C or Fortran program
+contains an ad hoc, informally-specified, bug-ridden, slow implementation of
+half of Common Lisp.
+
+</Tip>
+
+Perhaps Greenspun is right, LLM prodivers have become sufficiently complicated
+Fortran programs and Agent Frameworks are our accidental Common Lisp
+implementation.
+
+## Giving Agents Better Programming Tools
+
+To resolve the awkward edges of writing Agents, we can embrace the model of
+Agent as Programmer, and augment the 1-step tools with compound Tools that
+can be used to compose other Tools into larger fragments.
+
+**In other words - Agents can only do one thing at a time - but what if they could
+write and run whole programs?**
+
+The app developer’s existing tools may look something like this:
+
+- `getWeather: Location -> WeatherReport` Get the weather at some
+  location.
+- `getTime: () -> DateTime` Get the current time.
+- `fetchSimilarDocuments: Query -> String[]` Fetch relevant documents from
+  a vector database.
+- `getAvailability: Name -> DateTime[]` List the upcoming calendar
+  availability of a specific user.
+- `scheduleMeeting: Name -> DateTime -> ()` Book a time on the user’s
+  calendar.
+- `sendFinalMessage: String -> ()` Send a message to the UI and signal to
+  the client that the Agentic action is complete.
+
+The additional tools needed to compose other Tools together could look like this:
+
+- `sequence: ([Tools, .., ToolA]) -> A` Carry out the action of one a
+  sequence of tools, returning the final Tool’s result.
+- `forEach: (A[], (A -> ToolB)) -> B[]` Given a list of `A` values and a
+  tool that turns an `A` into a `B`, return a list of `B` values.
+- `callBuiltin: ((A -> B), A) -> B` Apply a builtin function to an
+  argument.
+- `assignVariable: (Name, A) -> ()` Assign a value to a variable for
+  later use.
+
+Since the key feature of an Agentic AI system is that it can handle queries
+requiring flexibility beyond what can be hard-coded by the human designer, it is
+natural that the human designer should be able to specify the agent’s
+capabilities in smaller chunks, and to allow the AI to specify how those chunks
+should be composed.
+
+The current Agentic AI paradigm does allow tool composition, but only in an
+unnatural way. The agentic framework and the agent have an implicit
+contract that each RPC call will result in some data that will be appended to
+the context, and that full history will be written into the context and fed back
+to the LLM, which produces a new single tool call.
+
+In our updated understanding of the *agent as a programmer*, this is analogous
+to writing one line of a program, executing that, getting the data (along with
+the original goal specification), and writing one line of a new program to
+compute the next step. The programmer has somewhat grotesquely been sucked in
+among the computer’s whirling gears, and the programming process is directly
+interleaved with the hot loop of the interpreter. Our proposal, obvious from
+this perspective, is to remove the programmer from the hot loop, by allowing it
+to write programs that can run more than a single line at a time.
+
+### But Are the Models Smart Enough?
+
+One potential issue with our proposal is that we are giving the LLM more
+expressive power and simultaneously demanding more from its reasoning and
+structured outputs. Is there “anyone home” to make use of that extra expressive
+ability, or are we just giving mice a better graphing calculator?
+
+Let’s do a quick experiment to see if models are able to express their
+programming intent as a structured higher-order tool call.
+
+[Open in PromptFiddle](https://www.promptfiddle.com/BAML-Examples-_nwux) or
+click the Run button below.
+
+<BamlBlock name="1" bamlCode={`
+type Tool = GetAvailability | BookAppointment | BuiltinFunction | Bind
+
+class GetAvailability {
+    type "get_availability"
+    user string
+    return_type "Date[]"
+}
+
+class BookAppointment {
+    type "book_appointment"
+    user string
+    datetime string
+    return_type "unit"
+}
+
+class BuiltinFunction {
+    type "builtin_function"
+    function_name string
+    argument_variables string[]
+    return_type string[]
+}
+
+class Bind {
+    type "bind"
+    variable_name string
+    body Tool
+    return_type string
+}
+
+function GeneratePlan(query: string) -> Tool[] {
+    client GPT4o
+    prompt #"
+    Generate a plan for the following query: {{ query }}
+    A plan is a small program.
+    You have let bindings ("bind")
+    and you can call tools and builtin functions.
+
+    When you produce a list of tool calls, they will be run
+    in sequence.
+
+    There is a standard library of builtin functions:
+     - intersection (returns the intersection of two lists)
+     - head (returns the first element of a list)
+     - tail (returns the list without the first element)
+    
+    For example, to book a common meeting time, you might
+    bind the two availabilities to two variables, bind
+    the intersection to a variable, and then sequnce
+    booking the head of that list of times on each
+    of the two people's calendars.
+
+    Start by writing the plan in pseudocode.
+
+    Finally, after writing the pseudocode, translate
+    to this schema:
+
+    {{ ctx.output_format }}
+    "#
+}
+
+test PlanMeeting3Way {
+    functions [GeneratePlan]
+    args {
+        query "Find a common time for Greg, Bob and Alice to meet"
+    }
+}
+
+client<llm> GPT4o {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+} 
+
+`}
+
+ />
+
+In this example, we have defined tools that can refer to the results of previous
+tools, allowing the model to express a multi-step solution to the query. Our
+prompt gave a hint for solving a two-way calendar scheduling task. Our test
+asks the same agent to schedule a meeting between three people, and the agent
+generalizes to produce a new, valid solution.
+
+We could write the tool handler to interpret these tool calls that would carry
+out the steps without needing to issue a new LLM call to interpret the data
+received at each step. Perhaps unsurprisingly, modern LLMs have the capacity to
+compose multi-step workflows.
+
+To test the limits of the generality of those abilities, try tweaking the
+prompt and tool calls.
+
+We still need benchmarks to measure the quality of full-program Tool generation,
+but there is another reason to be hopeful that this approach is more effective
+than the RPC-style status quo: Neville et. al. (2025) showed that [LLMs Get
+Lost in Multi-Turn Conversation](https://arxiv.org/pdf/2505.06120). 1-step
+RPC-style tools that append to the context are multi-turn conversations.
+
+## Manifesting Lambda, the Ultimate AI Agent
+
+The analogy of an AI Agent as a developer is a definition. Definitions are
+not right or wrong, but they can be helpful if they guide our thinking in
+productive directions, or unhelpful if they lead us astray. Here are the most
+important consequences we derive from this definition:
+
+- **Better DSL**: Current tool-calling approaches provide an inadequate
+  programming model for the Agent, consisting of single-step RPC calls and the
+  assumption that the Agent will be called subsequently with an updated state,
+  from which it will make a new call. Nothing but the call history provides
+  coherence to the agent’s plan. We should aide the Agent by giving it a better
+  programming model.
+- **No Programmer in the Loop**: Compositional tool plans allow the agent’s plan
+  to execute without having to call back into the Agent at every step.
+- **Iterative tooling**: We don’t expect human coders to produce valid programs
+  on the first try. We should provide linting and type-checking capabilities
+  that allow Agents to compose plans iteratively.
+
+This article has presented the analogy of the Agent as a programmer, rather than
+the Agent as a program, and attempted to justify it by using it to design a
+better programming model for tool use. Our main goal is not to advocate for this
+particular proposal, but to stimulate a broader discussion: what is the most
+effective DX (developer experience) for AI, how can we build it, and how much
+latent ability of the LLM can this unlock? We will explore ideas around AIX
+(Developer Experience for AIs) in a future post.
+
+
+If you're interested in these kinds of issues,
+[BoundaryML](https://boundaryml.com) is hiring!

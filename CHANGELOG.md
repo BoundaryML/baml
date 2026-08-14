@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.225.0](https://github.com/boundaryml/baml/compare/0.224.0..0.225.0) - 2026-07-31
+
+### Docs
+
+- brand legacy releases as BAML v0 (#4297) - ([5dbd250](https://github.com/boundaryml/baml/commit/5dbd25084b39523854a8967da5f5363b7368f3a6)) - Sam Lijin
+
+## [0.224.0](https://github.com/boundaryml/baml/compare/0.223.0..0.224.0) - 2026-07-30
+
+### Bug Fixes
+
+- **(python)** rebuild generated models so class order cannot break Pydantic (#793, #3819) - ([dce0e79](https://github.com/boundaryml/baml/commit/dce0e798727544293dbca1e7d9466c11700190ee)) - Gourav Singal
+- Correct React streaming hook data types for nullable fields (#3905) - ([7ed5f83](https://github.com/boundaryml/baml/commit/7ed5f8395849876bc5e9801f3977ee47d992daef)) - Matt Van Horn
+- Prevent `baml test` from hanging on self-referential `.env` variables (#3927) - ([7ac6d80](https://github.com/boundaryml/baml/commit/7ac6d80216a32f6815ca9cfd9a671853bed02463)) - hellovai
+- **(zed)** pin the playground version to the Zed extension version (#3853) - ([33a12c0](https://github.com/boundaryml/baml/commit/33a12c013a2a60cd1de7279a45dc976deb1bffb9)) - Sam Lijin
+- **(openai)** preserve allowlisted content-block metadata in the Responses API, including `prompt_cache_breakpoint` (#4155) - ([a2aa426](https://github.com/boundaryml/baml/commit/a2aa426f695fbec16d38f924dd783659a8fc8d6b)) - Conrad Scherb
+
+## [0.223.0](https://github.com/boundaryml/baml/compare/0.222.0..0.223.0) - 2026-06-23
+
+- Add render_null_as output format option (#3822) - ([e32d2df](https://github.com/boundaryml/baml/commit/e32d2df278f1b9cca345bcf89e57151a91e19b5e)) - aaronvg
+- Bump version to 0.223.0 - ([9c53075](https://github.com/boundaryml/baml/commit/9c530754087f5913d40384055a6eee115991fbed)) - Aaron Villalpando
+
 ## [0.222.0](https://github.com/boundaryml/baml/compare/0.221.0..0.222.0) - 2026-04-27
 
 - Bump version to 0.222.0 - ([d3ddbfa](https://github.com/boundaryml/baml/commit/d3ddbfa0d95671c84f120719da193401a08650da)) - Aaron Villalpando

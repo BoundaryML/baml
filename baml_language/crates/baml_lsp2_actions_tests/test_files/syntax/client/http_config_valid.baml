@@ -46,4 +46,69 @@ client<llm> ValidFallbackClient {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client ValidHttpClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//     ╭─[client_http_config_valid.baml:2:1]
+//   2 │ ╭─▶ client<llm> ValidHttpClient {
+//   3 │ │     provider openai
+//   4 │ │     options {
+//   5 │ │       model "gpt-4"
+//   6 │ │       http {
+//   7 │ │         connect_timeout_ms 5000
+//   8 │ │         request_timeout_ms 30000
+//   9 │ │       }
+//  10 │ │     }
+//  11 │ ├─▶ }
+//     · ╰──── replace with `client Name = <expr>;`
+//     ╰────
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client ValidStreamingClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+//   │ ai.Fallback / ai.RoundRobin)
+//     ╭─[client_http_config_valid.baml:14:1]
+//  14 │ ╭─▶ client<llm> ValidStreamingClient {
+//  15 │ │     provider anthropic
+//  16 │ │     options {
+//  17 │ │       model "claude-3"
+//  18 │ │       http {
+//  19 │ │         time_to_first_token_timeout_ms 15000
+//  20 │ │         idle_timeout_ms 10000
+//  21 │ │       }
+//  22 │ │     }
+//  23 │ ├─▶ }
+//     · ╰──── replace with `client Name = <expr>;`
+//     ╰────
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client InfiniteTimeoutClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+//   │ ai.Fallback / ai.RoundRobin)
+//     ╭─[client_http_config_valid.baml:26:1]
+//  26 │ ╭─▶ client<llm> InfiniteTimeoutClient {
+//  27 │ │     provider openai
+//  28 │ │     options {
+//  29 │ │       model "gpt-4"
+//  30 │ │       http {
+//  31 │ │         request_timeout_ms 0
+//  32 │ │       }
+//  33 │ │     }
+//  34 │ ├─▶ }
+//     · ╰──── replace with `client Name = <expr>;`
+//     ╰────
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client ValidFallbackClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//     ╭─[client_http_config_valid.baml:37:1]
+//  37 │ ╭─▶ client<llm> ValidFallbackClient {
+//  38 │ │     provider fallback
+//  39 │ │     options {
+//  40 │ │       strategy [ValidHttpClient, ValidStreamingClient]
+//  41 │ │       http {
+//  42 │ │         total_timeout_ms 60000
+//  43 │ │       }
+//  44 │ │     }
+//  45 │ ├─▶ }
+//     · ╰──── replace with `client Name = <expr>;`
+//     ╰────

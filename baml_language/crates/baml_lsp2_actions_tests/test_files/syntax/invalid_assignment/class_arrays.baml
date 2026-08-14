@@ -45,30 +45,43 @@ function ClassArrayAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected user.Person[], got user.Animal[]
-//     ╭─[ invalid_assignment_class_arrays.baml:25:6 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_class_arrays.baml:25:8]
 //  25 │     p1 = [Animal { species: "Bird", legs: 2 }];
-//     │         ───────────────────┬──────────────────  
-//     │                            ╰──────────────────── type mismatch: expected user.Person[], got user.Animal[]
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected user.Animal[], got user.Person[]
-//     ╭─[ invalid_assignment_class_arrays.baml:29:6 ]
-//     │
+//     ·           ─────────────────┬─────────────────
+//     ·                            ╰── expected `Person`, found `Animal`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_class_arrays.baml:29:8]
 //  29 │     a1 = [Person { name: "D", age: 4 }];
-//     │         ───────────────┬───────────────  
-//     │                        ╰───────────────── type mismatch: expected user.Animal[], got user.Person[]
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected user.Person[], got user.Person
-//     ╭─[ invalid_assignment_class_arrays.baml:33:7 ]
-//     │
+//     ·           ──────────────┬─────────────
+//     ·                         ╰── expected `Animal`, found `Person`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_class_arrays.baml:33:7]
 //  33 │     p2 = Person { name: "F", age: 6 };
-//     │          ──────────────┬─────────────  
-//     │                        ╰─────────────── type mismatch: expected user.Person[], got user.Person
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·          ──────────────┬─────────────
+//     ·                        ╰── expected `Person[]`, found `Person`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_class_arrays.baml:37:7]
+//  37 │     p3 = [Person { name: "H", age: 8 }];
+//     ·          ───────────────┬──────────────
+//     ·                         ╰── expected `Person`, found `Person[]`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_class_arrays.baml:41:10]
+//  41 │     nums = [Person { name: "I", age: 9 }];
+//     ·             ──────────────┬─────────────
+//     ·                           ╰── expected `int`, found `Person`
+//     ╰────

@@ -1,0 +1,702 @@
+==================
+binary operator precedence
+==================
+
+function f() -> int {
+  a + b * c - d / e % g
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (binary_expression
+          (binary_expression
+            (identifier)
+            (binary_expression
+              (identifier)
+              (identifier)))
+          (binary_expression
+            (binary_expression
+              (identifier)
+              (identifier))
+            (identifier)))))))
+
+==================
+comparison, logical, bitwise operators
+==================
+
+function f() -> bool {
+  a < b && c >= d || !(e == f) && g & h | i ^ j
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (binary_expression
+          (binary_expression
+            (binary_expression
+              (identifier)
+              (identifier))
+            (binary_expression
+              (identifier)
+              (identifier)))
+          (binary_expression
+            (unary_expression
+              (parenthesized_expression
+                (binary_expression
+                  (identifier)
+                  (identifier))))
+            (binary_expression
+              (binary_expression
+                (identifier)
+                (identifier))
+              (binary_expression
+                (identifier)
+                (identifier)))))))))
+
+==================
+hyphenated identifiers are single words, spaced minus is subtraction
+==================
+
+function f() -> int {
+  let model = gpt-4o;
+  n - 1
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (identifier))
+      (expression_statement
+        (binary_expression
+          (identifier)
+          (number))))))
+
+==================
+optional chaining, optional index, optional call, coalesce
+==================
+
+function f() -> int {
+  let a = user?.profile?.name;
+  let b = items?.[0];
+  let c = callback?.(42).length;
+  node?.children?.[0].next?.value = user?.id ?? 0;
+  items?.[0] += 10;
+  b1 ?? 0
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (member_expression
+          (member_expression
+            (identifier)
+            (property_identifier))
+          (property_identifier)))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (index_expression
+          (identifier)
+          (number)))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (member_expression
+          (optional_call_expression
+            (identifier)
+            (arguments
+              (number)))
+          (property_identifier)))
+      (expression_statement
+        (assignment_expression
+          (member_expression
+            (member_expression
+              (index_expression
+                (member_expression
+                  (identifier)
+                  (property_identifier))
+                (number))
+              (property_identifier))
+            (property_identifier))
+          (coalesce_expression
+            (member_expression
+              (identifier)
+              (property_identifier))
+            (number))))
+      (expression_statement
+        (assignment_expression
+          (index_expression
+            (identifier)
+            (number))
+          (number)))
+      (expression_statement
+        (coalesce_expression
+          (identifier)
+          (number))))))
+
+==================
+constructor with fields, spread, and explicit type arguments
+==================
+
+function f() -> User {
+  let y = MyClass { a: 1, ...x };
+  Map<T, R, E, E2> { iter: self, func: fn }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (constructor_expression
+          (identifier)
+          (constructor_body
+            (constructor_field
+              (property_identifier)
+              (number))
+            (spread_element
+              (identifier)))))
+      (expression_statement
+        (constructor_expression
+          (identifier)
+          (type_arguments
+            (type_path
+              (identifier))
+            (type_path
+              (identifier))
+            (type_path
+              (identifier))
+            (type_path
+              (identifier)))
+          (constructor_body
+            (constructor_field
+              (property_identifier)
+              (identifier))
+            (constructor_field
+              (property_identifier)
+              (identifier))))))))
+
+==================
+lambdas: typed, inferred, IIFE, higher order
+==================
+
+function f() -> int {
+  let double = (x: int) -> int { x * 2 };
+  let inferred = (x) -> { x + 1 };
+  let apply = (f: (int) -> int, x: int) -> int { f(f(x)) };
+  ((x: int) -> int { x * x })(7)
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (lambda_expression
+          (lambda_parameters
+            (parameter
+              (identifier)
+              (type_path
+                (identifier))))
+          (type_path
+            (identifier))
+          (block
+            (expression_statement
+              (binary_expression
+                (identifier)
+                (number))))))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (lambda_expression
+          (lambda_parameters
+            (parameter
+              (identifier)))
+          (block
+            (expression_statement
+              (binary_expression
+                (identifier)
+                (number))))))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (lambda_expression
+          (lambda_parameters
+            (parameter
+              (identifier)
+              (function_type
+                (function_type_parameters
+                  (function_type_parameter
+                    (type_path
+                      (identifier))))
+                (type_path
+                  (identifier))))
+            (parameter
+              (identifier)
+              (type_path
+                (identifier))))
+          (type_path
+            (identifier))
+          (block
+            (expression_statement
+              (call_expression
+                (identifier)
+                (arguments
+                  (call_expression
+                    (identifier)
+                    (arguments
+                      (identifier)))))))))
+      (expression_statement
+        (call_expression
+          (parenthesized_expression
+            (lambda_expression
+              (lambda_parameters
+                (parameter
+                  (identifier)
+                  (type_path
+                    (identifier))))
+              (type_path
+                (identifier))
+              (block
+                (expression_statement
+                  (binary_expression
+                    (identifier)
+                    (identifier))))))
+          (arguments
+            (number)))))))
+
+==================
+call with explicit type arguments
+==================
+
+function f() -> int {
+  let v: int = f.zero<int>() ?? 5;
+  let c = root.convert<map<string, PatternInput>, string>(input);
+  baml.json.from_string<ServerReply>(res.text())
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (chain_pattern
+          (type_pattern
+            (type_path
+              (identifier)))
+          (type_pattern
+            (type_path
+              (identifier))))
+        (coalesce_expression
+          (call_expression
+            (member_expression
+              (identifier)
+              (property_identifier))
+            (type_arguments
+              (type_path
+                (identifier)))
+            (arguments))
+          (number)))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (call_expression
+          (member_expression
+            (identifier)
+            (property_identifier))
+          (type_arguments
+            (type_path
+              (identifier)
+              (type_arguments
+                (type_path
+                  (identifier))
+                (type_path
+                  (identifier))))
+            (type_path
+              (identifier)))
+          (arguments
+            (identifier))))
+      (expression_statement
+        (binary_expression
+          (binary_expression
+            (member_expression
+              (member_expression
+                (identifier)
+                (property_identifier))
+              (property_identifier))
+            (identifier))
+          (parenthesized_expression
+            (call_expression
+              (member_expression
+                (identifier)
+                (property_identifier))
+              (arguments))))))))
+
+==================
+method chains, index access, array literals, map literals
+==================
+
+function f() -> json {
+  let a = [1, 2, 3][0];
+  let m = { "a": 1, "b": [2, 3], "c": { "nested": null } };
+  matrix.map((row: int[]) -> { row.map((x) -> { x * x }) })
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (index_expression
+          (array_expression
+            (number)
+            (number)
+            (number))
+          (number)))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (map_expression
+          (map_entry
+            (string)
+            (number))
+          (map_entry
+            (string)
+            (array_expression
+              (number)
+              (number)))
+          (map_entry
+            (string)
+            (map_expression
+              (map_entry
+                (string)
+                (null))))))
+      (expression_statement
+        (call_expression
+          (member_expression
+            (identifier)
+            (property_identifier))
+          (arguments
+            (lambda_expression
+              (lambda_parameters
+                (parameter
+                  (identifier)
+                  (array_type
+                    (type_path
+                      (identifier)))))
+              (block
+                (expression_statement
+                  (call_expression
+                    (member_expression
+                      (identifier)
+                      (property_identifier))
+                    (arguments
+                      (lambda_expression
+                        (lambda_parameters
+                          (parameter
+                            (identifier)))
+                        (block
+                          (expression_statement
+                            (binary_expression
+                              (identifier)
+                              (identifier))))))))))))))))
+
+==================
+spawn, await, spawn with options and named arguments
+==================
+
+function f() -> int {
+  let fut = spawn { run_turn(history, msg) };
+  let g = spawn with baml.spawn.options(cancel = tok, detach = true) { 42 };
+  (await fut) + (await g)
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (spawn_expression
+          (block
+            (expression_statement
+              (call_expression
+                (identifier)
+                (arguments
+                  (identifier)
+                  (identifier)))))))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (spawn_expression
+          (call_expression
+            (member_expression
+              (member_expression
+                (identifier)
+                (property_identifier))
+              (property_identifier))
+            (arguments
+              (assignment_expression
+                (identifier)
+                (identifier))
+              (named_argument
+                (identifier)
+                (boolean))))
+          (block
+            (expression_statement
+              (number)))))
+      (expression_statement
+        (binary_expression
+          (parenthesized_expression
+            (await_expression
+              (identifier)))
+          (parenthesized_expression
+            (await_expression
+              (identifier))))))))
+
+==================
+dollar-joined identifiers and $-prefixed members
+==================
+
+function f() -> string {
+  let tests = GenerateTests$parse(data);
+  foo.$watch
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (call_expression
+          (identifier)
+          (arguments
+            (identifier))))
+      (expression_statement
+        (member_expression
+          (identifier)
+          (property_identifier))))))
+
+==================
+upcast expression
+==================
+
+function read_name(p: Person) -> string {
+  return p.as<Named>.name
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (return_expression
+          (member_expression
+            (upcast_expression
+              (identifier)
+              (type_path
+                (identifier)))
+            (property_identifier)))))))
+
+==================
+env access parses as member expression
+==================
+
+function f() -> string {
+  baml.env.get("NO_COLOR");
+  env.OPENAI_API_KEY
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (call_expression
+          (member_expression
+            (member_expression
+              (identifier)
+              (property_identifier))
+            (property_identifier))
+          (arguments
+            (string))))
+      (expression_statement
+        (member_expression
+          (identifier)
+          (property_identifier))))))
+
+==================
+const is contextual: usable as an identifier
+==================
+
+function ConstToken() -> int {
+  const x = 1;
+  let const = x;
+  const
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (number))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (identifier))
+      (expression_statement
+        (identifier)))))
+
+==================
+numbers: int, float, scientific, bigint
+==================
+
+function f() -> float {
+  const base: int = 16;
+  const big = 9007199254740993n;
+  const rate = 1.5e-3;
+  1e10 + 3.14
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (chain_pattern
+          (type_pattern
+            (type_path
+              (identifier)))
+          (type_pattern
+            (type_path
+              (identifier))))
+        (number))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (number))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (number))
+      (expression_statement
+        (binary_expression
+          (number)
+          (number))))))

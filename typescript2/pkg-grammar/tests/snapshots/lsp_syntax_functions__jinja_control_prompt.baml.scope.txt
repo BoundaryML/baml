@@ -1,0 +1,68 @@
+1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+1:7-14       "Message"          source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:15-16      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:3-7        "role"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:8-9        "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+2:9-13       "user"             source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+2:13-14      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+2:15-16      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+2:17-18      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+2:18-27      "assistant"        source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+2:27-28      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+2:29-30      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+2:31-37      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+3:3-10       "message"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+3:11-17      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+4:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+6:1-9        "function"         source.baml meta.function.baml keyword.declaration.function.baml
+6:10-13      "Bot"              source.baml meta.function.baml entity.name.function.baml
+6:13-14      "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+6:14-19      "convo"            source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+6:19-20      ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+6:21-28      "Message"          source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+6:28-29      "["                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+6:29-30      "]"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+6:30-31      ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+6:32-34      "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+6:35-41      "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+6:42-43      "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+7:3-9        "client"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml keyword.other.llm.client.baml
+7:10-11      "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+7:11-24      "openai/gpt-4o"    source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml
+7:24-25      "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.end.baml
+8:3-9        "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
+8:10-11      "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+8:11-12      "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+9:1-33       "    You are a helpful assistant." source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+10:5-7       "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+10:8-11      "ctx"              source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+10:11-12     "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml punctuation.accessor.baml
+10:12-25     "output_format"    source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+10:26-28     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+12:5-7       "{%"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml punctuation.section.template.begin.baml
+12:8-11      "for"              source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml keyword.control.template.baml
+12:12-13     "m"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml meta.dotted-expression.baml variable.other.readwrite.baml
+12:14-16     "in"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml keyword.control.template.baml
+12:17-22     "convo"            source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml meta.dotted-expression.baml variable.other.readwrite.baml
+12:23-25     "%}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml punctuation.section.template.end.baml
+13:5-7       "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+13:8-9       "_"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml variable.other.readwrite.baml
+13:9-10      "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml punctuation.accessor.baml
+13:10-14     "role"             source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml entity.name.function.baml
+13:14-15     "("                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+13:15-16     "m"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+13:16-17     "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml punctuation.accessor.baml
+13:17-21     "role"             source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+13:21-22     ")"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+13:23-25     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+14:5-7       "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+14:8-9       "m"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+14:9-10      "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml punctuation.accessor.baml
+14:10-17     "message"          source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+14:18-20     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+15:5-7       "{%"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml punctuation.section.template.begin.baml
+15:8-14      "endfor"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml keyword.control.template.baml
+15:15-17     "%}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.control.baml punctuation.section.template.end.baml
+16:3-4       "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+16:4-5       "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+17:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

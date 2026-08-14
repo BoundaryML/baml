@@ -1,4 +1,4 @@
-//! Build script that generates tests from projects/ directory and benchmarks from benches/.
+//! Build script that generates tests from the projects/ directory.
 //! Each folder becomes a test module with comprehensive compiler phase tests.
 
 use std::{
@@ -29,6 +29,205 @@ fn main() {
 
     // Generate tests
     generate_tests(&manifest_dir);
+
+    // Generate CodSpeed benches from the tools/speedtest workloads.
+    generate_speedtest_benches(&manifest_dir);
+}
+
+// ============================================================================
+// Speedtest workload benches
+// ============================================================================
+//
+// The `tools/speedtest` harness drives a corpus of cross-language micro-
+// benchmarks (BAML vs Python vs JS) defined as `.md` workloads. Rather than
+// hand-maintaining a parallel set of `#[divan::bench]` functions in
+// runtime_benchmark.rs, we lift every workload's *BAML* source straight out of
+// that corpus and emit one bench per workload.
+//
+// Expansion (some workloads use a Python `## eval-setup` block + `$$` templating)
+// is delegated to `tools/speedtest/export_baml.py`, which reuses the exact same
+// `speedtest.loader` logic the harness itself uses — so there is a single source
+// of truth for parsing. We shell out to `python3` once and read back JSON.
+//
+// The generated functions are named `vm_speedtest_<slug>` so they are picked up
+// by the same `vm_` CodSpeed filter as the hand-written VM benches, and are
+// `include!`d into runtime_benchmark.rs after `bench_vm_main` is in scope.
+//
+// This step degrades gracefully: if `python3` or the workloads are unavailable
+// (e.g. a minimal build environment), it emits an empty file and a warning
+// rather than failing the build of the whole crate.
+
+/// Fully-qualified name of the blocking sleep builtin. Workloads whose BAML
+/// calls this are excluded from the generated walltime benches.
+const SLEEP_FQN: &str = "baml.sys.sleep";
+
+struct Workload {
+    name: String,
+    baml: String,
+}
+
+fn generate_speedtest_benches(manifest_dir: &str) {
+    // crates/baml_tests -> repo root -> tools/speedtest
+    let speedtest_dir = Path::new(manifest_dir)
+        .join("..")
+        .join("..")
+        .join("tools")
+        .join("speedtest");
+    let workloads_dir = speedtest_dir.join("workloads");
+    let export_script = speedtest_dir.join("export_baml.py");
+
+    // Re-run whenever the corpus or the expansion logic changes.
+    println!("cargo:rerun-if-changed={}", workloads_dir.display());
+    println!("cargo:rerun-if-changed={}", export_script.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        speedtest_dir.join("src/speedtest/loader.py").display()
+    );
+
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("speedtest_benches.rs");
+
+    let all_workloads = match load_speedtest_workloads(&export_script, &workloads_dir) {
+        Ok(w) => w,
+        Err(e) => {
+            println!("cargo:warning=speedtest benches disabled: {e}");
+            // Emit an empty (but valid) file so the include! in the bench compiles.
+            fs::write(
+                &dest_path,
+                "// speedtest workloads unavailable at build time; no benches generated.\n",
+            )
+            .unwrap();
+            return;
+        }
+    };
+
+    // Exclude workloads that call the blocking sleep builtin: as a walltime
+    // benchmark their sample time is dominated by sleeping rather than VM work,
+    // which only adds noise and CI time. Matched by fully-qualified name so a
+    // workload that merely mentions "sleep" elsewhere is unaffected.
+    let (workloads, skipped): (Vec<&Workload>, Vec<&Workload>) = all_workloads
+        .iter()
+        .partition(|w| !w.baml.contains(SLEEP_FQN));
+    if !skipped.is_empty() {
+        let names: Vec<&str> = skipped.iter().map(|w| w.name.as_str()).collect();
+        println!(
+            "cargo:warning=speedtest: skipping {} sleep-based workload(s) (calls `{SLEEP_FQN}`): {}",
+            skipped.len(),
+            names.join(", ")
+        );
+    }
+
+    let mut used = std::collections::BTreeSet::new();
+    let benches: TokenStream = workloads
+        .iter()
+        .map(|w| {
+            // `name` already carries the `category::` prefix (e.g.
+            // "classes::method call 100k"), so slugify it directly.
+            let mut slug = slugify(&w.name);
+            // Guard against the (unlikely) collision after slugification.
+            while !used.insert(slug.clone()) {
+                slug.push('_');
+            }
+            let fn_ident = format_ident!("vm_speedtest_{slug}");
+            let source = &w.baml;
+            let display = &w.name;
+            quote! {
+                #[doc = #display]
+                #[divan::bench]
+                fn #fn_ident(bencher: divan::Bencher) {
+                    bench_vm_main(bencher, #source);
+                }
+            }
+        })
+        .collect();
+
+    let header = "\
+// Auto-generated speedtest workload benches by build.rs.
+// Source of truth: tools/speedtest/workloads/*.md (expanded via export_baml.py).
+// Do not edit this file directly.
+";
+
+    write_formatted_code(&dest_path, benches, header);
+}
+
+/// Run `export_baml.py` and parse its JSON output into the workload list.
+fn load_speedtest_workloads(
+    export_script: &Path,
+    workloads_dir: &Path,
+) -> Result<Vec<Workload>, String> {
+    if !export_script.is_file() {
+        return Err(format!(
+            "export script not found at {}",
+            export_script.display()
+        ));
+    }
+    if !workloads_dir.is_dir() {
+        return Err(format!(
+            "workloads dir not found at {}",
+            workloads_dir.display()
+        ));
+    }
+
+    let python = env::var("PYTHON3").unwrap_or_else(|_| "python3".to_string());
+    let output = std::process::Command::new(&python)
+        .arg(export_script)
+        .arg(workloads_dir)
+        .output()
+        .map_err(|e| format!("failed to run `{python}`: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "`{python} export_baml.py` exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    // The exporter (via speedtest.loader) warns to stderr when a workload `.md`
+    // fails to parse and is dropped. Surface those so a malformed workload can't
+    // silently disappear from the generated suite behind a still-green build.
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    for line in stderr.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        println!("cargo:warning=speedtest export: {line}");
+    }
+
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("failed to parse export_baml.py JSON: {e}"))?;
+    let arr = value
+        .as_array()
+        .ok_or_else(|| "export_baml.py did not emit a JSON array".to_string())?;
+
+    let mut workloads = Vec::with_capacity(arr.len());
+    for item in arr {
+        let field = |key: &str| {
+            item.get(key)
+                .and_then(|v| v.as_str())
+                .map(str::to_owned)
+                .ok_or_else(|| format!("workload missing string field `{key}`"))
+        };
+        workloads.push(Workload {
+            name: field("name")?,
+            baml: field("baml")?,
+        });
+    }
+    Ok(workloads)
+}
+
+/// Turn an arbitrary workload name into a valid, lowercase Rust identifier
+/// fragment (e.g. "string::split long literal 1k" -> "string_split_long_literal_1k").
+fn slugify(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut prev_underscore = false;
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.extend(ch.to_lowercase());
+            prev_underscore = false;
+        } else if !prev_underscore {
+            out.push('_');
+            prev_underscore = true;
+        }
+    }
+    out.trim_matches('_').to_string()
 }
 
 fn generate_tests(manifest_dir: &str) {
@@ -218,19 +417,18 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     let is_stdlib = project.name == "__baml_std__";
     let is_testing_std = project.name == "__testing_std__";
     let is_assert_std = project.name == "__assert_std__";
+    let is_ai_std = project.name == "__ai_std__";
     let stdlib_package_filter: Option<&str> = if is_stdlib {
         Some("baml")
     } else if is_testing_std {
         Some("testing")
     } else if is_assert_std {
         Some("assert")
+    } else if is_ai_std {
+        Some("ai")
     } else {
         None
     };
-
-    // All tiers get lexer and parser
-    let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
-    let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
     // All tiers get diagnostics (with tier-specific invariant assertions)
     let diagnostics_test = generate_diagnostics_test(project, project.tier);
@@ -238,24 +436,22 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     // Tier-specific phases
     let (hir_test, tir_test, mir_test, codegen_test, formatter_tests) = match project.tier {
         Tier::BrokenSyntax => {
-            // Tier 1: lexer + parser + diagnostics only — no higher phases
+            // Tier 1: diagnostics only - no higher phases
             (quote! {}, quote! {}, quote! {}, quote! {}, quote! {})
         }
         Tier::DiagnosticErrors => {
             // Tier 2: HIR, TIR, formatter — no MIR, no codegen
             let hir = generate_hir_test(project, stdlib_package_filter);
-            let tir = generate_tir_test(project, stdlib_package_filter);
             let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-            (hir, tir, quote! {}, quote! {}, fmt)
+            (hir, quote! {}, quote! {}, quote! {}, fmt)
         }
         Tier::Compiles | Tier::Passing | Tier::PassingLlm => {
             // Tier 3+: all compiler phases
             let hir = generate_hir_test(project, stdlib_package_filter);
-            let tir = generate_tir_test(project, stdlib_package_filter);
             let mir = generate_mir_test(project, stdlib_package_filter);
             let cg = generate_codegen_test(project, stdlib_package_filter);
             let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-            (hir, tir, mir, cg, fmt)
+            (hir, quote! {}, mir, cg, fmt)
         }
     };
 
@@ -284,18 +480,14 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     quote! {
         mod #module_name {
             use baml_db::*;
-            use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
             use baml_project::ProjectDatabase;
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
-            use salsa::Setter;
             #[allow(unused_imports)]
             use crate::utils::*;
             const SNAPSHOT_PATH: &str = #snapshot_path;
 
-            #lexer_tests
-            #parser_tests
             #hir_test
             #tir_test
             #mir_test
@@ -303,89 +495,6 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             #codegen_test
             #formatter_tests
             #parser_specific_tests
-        }
-    }
-}
-
-fn generate_lexer_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_01_lexer_{}", baml_file.name);
-    let snapshot_name = format!("01_lexer__{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            // Normalize line endings for cross-platform compatibility
-            let content = content.replace("\r\n", "\n");
-            let mut db = ProjectDatabase::new();
-            let source_file = db.add_file(#relative_path, &content);
-            let tokens = baml_compiler_lexer::lex_file(&db, source_file);
-
-            // Format tokens as readable text
-            let mut output = String::new();
-            for token in tokens.iter() {
-                if !matches!(token.kind,
-                    baml_compiler_lexer::TokenKind::Whitespace |
-                    baml_compiler_lexer::TokenKind::Newline
-                ) {
-                    writeln!(output, "{:?} {:?}", token.kind, token.text).unwrap();
-                }
-            }
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!(#snapshot_name, output);
-            });
-        }
-    }
-}
-
-fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_02_parser_{}", baml_file.name);
-    let snapshot_name = format!("02_parser__{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            // Normalize line endings for cross-platform compatibility
-            let content = content.replace("\r\n", "\n");
-            let mut db = ProjectDatabase::new();
-            let root = db.set_project_root(std::path::Path::new("."));
-            let source_file = db.add_file(#relative_path, &content);
-            root.set_files(&mut db).to(vec![source_file]);
-            let tree = baml_compiler_parser::syntax_tree(&db, source_file);
-            let errors = baml_compiler_parser::parse_errors(&db, source_file);
-
-            let mut output = String::new();
-            writeln!(output, "=== SYNTAX TREE ===").unwrap();
-            write!(output, "{}", crate::format_syntax_tree(&tree)).unwrap();
-            writeln!(output, "\n=== ERRORS ===").unwrap();
-            if errors.is_empty() {
-                writeln!(output, "None").unwrap();
-            } else {
-                // Build sources map for rendering
-                let file_id = source_file.file_id(&db);
-                let mut sources = HashMap::new();
-                let mut file_paths = HashMap::new();
-                sources.insert(file_id, content.clone());
-                file_paths.insert(file_id, source_file.path(&db));
-                let config = RenderConfig::test();
-
-                for error in errors.iter() {
-                    let diag = error.to_diagnostic();
-                    writeln!(output, "{}", render_diagnostic(&diag, &sources, &file_paths, &config)).unwrap();
-                }
-            }
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!(#snapshot_name, output);
-            });
         }
     }
 }
@@ -418,7 +527,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
         quote! {
             {
                 let pkg_filter = #pkg_lit;
-                writeln!(output, "\n=== HIR2 (package {}) ===", pkg_filter).unwrap();
+                writeln!(output, "\n=== PPIR (package {}) ===", pkg_filter).unwrap();
                 use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
                 let mut baml_files: Vec<_> = compiler2_all_files(&db)
                     .into_iter()
@@ -427,7 +536,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                 baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
                 for sf in baml_files {
                     writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
-                    output.push_str(&render_hir2(&db, sf));
+                    output.push_str(&render_ppir(&db, sf));
                 }
             }
         }
@@ -437,8 +546,8 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
 
     quote! {
         #[test]
-        fn test_03_hir() {
-            use crate::compiler2_tir::support::render_hir2;
+        fn test_03_ppir() {
+            use crate::compiler2_tir::support::render_ppir;
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -447,88 +556,16 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             #file_loaders
 
             let mut output = String::new();
-            writeln!(output, "=== HIR2 ===").unwrap();
+            writeln!(output, "=== PPIR ===").unwrap();
 
             for source_file in &source_files {
-                output.push_str(&render_hir2(&db, *source_file));
+                output.push_str(&render_ppir(&db, *source_file));
             }
 
             #stdlib_section
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!("03_hir", output);
-            });
-        }
-    }
-}
-
-fn generate_tir_test(project: &TestProject, stdlib_package_filter: Option<&str>) -> TokenStream {
-    let file_loaders: TokenStream = project
-        .files
-        .iter()
-        .map(|baml_file| {
-            let full_path = baml_file.full_path.display().to_string();
-            let relative_path = baml_file.relative_path.display().to_string();
-            let include_content = make_include_str(&full_path);
-
-            quote! {
-                {
-                    let content = #include_content;
-                    let content = content.replace("\r\n", "\n");
-                    let sf = db.add_file(
-                        #relative_path,
-                        &content,
-                    );
-                    source_files.push(sf);
-                }
-            }
-        })
-        .collect();
-
-    let stdlib_section = if let Some(pkg_name) = stdlib_package_filter {
-        let pkg_lit = syn::LitStr::new(pkg_name, proc_macro2::Span::call_site());
-        quote! {
-            {
-                let pkg_filter = #pkg_lit;
-                writeln!(output, "\n=== TIR2 (package {}) ===", pkg_filter).unwrap();
-                use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
-                let mut baml_files: Vec<_> = compiler2_all_files(&db)
-                    .into_iter()
-                    .filter(|f| file_package(&db, *f).package.as_str() == pkg_filter)
-                    .collect();
-                baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
-                for sf in baml_files {
-                    writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
-                    output.push_str(&render_tir(&db, sf));
-                }
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    quote! {
-        #[test]
-        fn test_04_tir() {
-            use crate::compiler2_tir::support::render_tir;
-
-            let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
-            let mut source_files = Vec::new();
-
-            #file_loaders
-
-            let mut output = String::new();
-            writeln!(output, "=== TIR2 ===").unwrap();
-
-            for source_file in &source_files {
-                output.push_str(&render_tir(&db, *source_file));
-            }
-
-            #stdlib_section
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!("04_tir", output);
+                assert_snapshot!("03_ppir", output);
             });
         }
     }
@@ -570,11 +607,9 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                     .collect();
                 baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
                 for sf in baml_files {
-                    let item_tree = file_item_tree(&db, sf);
-                    let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                    functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                    for (local_id, _func_data) in functions {
-                        let func_loc = FunctionLoc::new(&db, sf, *local_id);
+                    let mut functions = file_functions(&db, sf).to_vec();
+                    functions.sort_by_key(|loc| function_source_map(&db, *loc).span.start());
+                    for func_loc in functions {
                         let mir = lower_function(&db, func_loc, OptLevel::Two);
                         writeln!(output, "{}", display_function(&mir)).unwrap();
                     }
@@ -588,8 +623,8 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
     quote! {
         #[test]
         fn test_04_5_mir() {
-            use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
             use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
+            use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -601,11 +636,12 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             writeln!(output, "=== MIR2 ===").unwrap();
 
             for source_file in &source_files {
-                let item_tree = file_item_tree(&db, *source_file);
-                let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                for (local_id, _func_data) in functions {
-                    let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
+                // Dump in source order (by declaration span) — an intrinsic,
+                // salsa-enumeration-independent key, so the snapshot never churns
+                // on a firewall/tie-break change the way a name sort would.
+                let mut functions = file_functions(&db, *source_file).to_vec();
+                functions.sort_by_key(|loc| function_source_map(&db, *loc).span.start());
+                for func_loc in functions {
                     let mir = lower_function(&db, func_loc, OptLevel::Two);
                     writeln!(output, "{}", display_function(&mir)).unwrap();
                 }
@@ -779,6 +815,11 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
                 file_paths.insert(file_id, source_file.path(&db));
             }
 
+            // Diagnostic spans must tightly cover the offending construct, never
+            // the leading/trailing whitespace around it (see
+            // `assert_diagnostic_spans_exclude_trivia`).
+            assert_diagnostic_spans_exclude_trivia(#project_name, &diagnostics, &sources);
+
             let config = RenderConfig::test();
 
             let mut output = String::new();
@@ -834,7 +875,21 @@ fn generate_codegen_test(
         let pkg_prefix_lit = syn::LitStr::new(&pkg_prefix, proc_macro2::Span::call_site());
         quote! { |name: &&String| name.starts_with(#pkg_prefix_lit) }
     } else {
-        quote! { |name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env.") && !name.starts_with("testing.") && !name.starts_with("assert.") && !name.starts_with("log.") }
+        // A user project's snapshot shows USER code only. The stdlib package
+        // list is derived from `baml_builtins2::ALL`, so adding a builtin
+        // package never again balloons every project's snapshot — the
+        // per-package `__*_std__` projects are what cover stdlib bytecode.
+        quote! { |name: &&String| {
+            let is_stdlib = baml_builtins2::stdlib_package_names()
+                .iter()
+                .any(|pkg| {
+                    let pkg: &str = pkg;
+                    name.len() > pkg.len()
+                        && name.as_bytes()[pkg.len()] == b'.'
+                        && name.starts_with(pkg)
+                });
+            !is_stdlib && !name.starts_with("env.")
+        } }
     };
 
     quote! {
@@ -1003,10 +1058,11 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                             format!("=== STRONG AST ERROR ===\n{}", e)
                         }
                     };
-                    with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                        assert_snapshot!(#snapshot_name, output);
-                    });
-                    return;
+                    panic!(
+                        "Formatter rejected compiler-test input that reaches the formatter tier ({}):\n{}",
+                        #relative_path,
+                        output
+                    );
                 }
             };
 

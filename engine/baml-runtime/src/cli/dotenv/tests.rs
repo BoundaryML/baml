@@ -189,6 +189,58 @@ AFTER=after_multiline
         Ok(())
     }
 
+    // Regression: a self-appending variable (`PATH=$PATH:/foo`) must terminate.
+    // The old fixpoint expander re-expanded the variable into its own growing
+    // value and looped forever, doubling memory each pass until the process
+    // hung / OOMed. It must instead append to the *process* value.
+    #[test]
+    fn test_self_reference_does_not_hang() -> Result<()> {
+        env::set_var("BAML_TEST_SELFREF_PATH", "/existing/bin");
+
+        let content = "BAML_TEST_SELFREF_PATH=${BAML_TEST_SELFREF_PATH}:/added/bin\n";
+        let vars = load_env_from_string(content)?;
+
+        assert_eq!(
+            vars.get("BAML_TEST_SELFREF_PATH"),
+            Some(&"/existing/bin:/added/bin".to_string())
+        );
+
+        env::remove_var("BAML_TEST_SELFREF_PATH");
+        Ok(())
+    }
+
+    // A self-append with no matching process variable leaves the reference
+    // literal (lookup returns None) and terminates without growth.
+    #[test]
+    fn test_self_reference_without_process_value_terminates() -> Result<()> {
+        env::remove_var("BAML_TEST_UNSET_SELFREF");
+
+        let content = "BAML_TEST_UNSET_SELFREF=$BAML_TEST_UNSET_SELFREF:/added\n";
+        let vars = load_env_from_string(content)?;
+
+        // No process value: `$BAML_TEST_UNSET_SELFREF` is left literal, no growth.
+        assert_eq!(
+            vars.get("BAML_TEST_UNSET_SELFREF"),
+            Some(&"$BAML_TEST_UNSET_SELFREF:/added".to_string())
+        );
+        Ok(())
+    }
+
+    // A reference cycle between two variables must terminate rather than hang.
+    #[test]
+    fn test_reference_cycle_terminates() -> Result<()> {
+        env::remove_var("BAML_TEST_CYCLE_A");
+        env::remove_var("BAML_TEST_CYCLE_B");
+
+        let content =
+            "BAML_TEST_CYCLE_A=${BAML_TEST_CYCLE_B}\nBAML_TEST_CYCLE_B=${BAML_TEST_CYCLE_A}\n";
+        // The only assertion that matters: this returns instead of hanging.
+        let vars = load_env_from_string(content)?;
+        assert!(vars.contains_key("BAML_TEST_CYCLE_A"));
+        assert!(vars.contains_key("BAML_TEST_CYCLE_B"));
+        Ok(())
+    }
+
     #[test]
     fn test_missing_variable() -> Result<()> {
         let content = r#"

@@ -1,0 +1,112 @@
+// See crates/bridge_ctypes/README.md for the list of consumers and the
+// commands used to regenerate each language's proto client.
+syntax = "proto3";
+package baml_bridge.cffi.v1;
+
+// BamlHandle / BamlHandleType are shared with the outbound side; they live in
+// their own file so baml_outbound.proto can import them without depending on
+// this inbound file.
+import "baml_bridge/cffi/v1/baml_handle.proto";
+import "baml_bridge/cffi/v1/baml_type.proto";
+
+option go_package = "./cffi";
+// C++ generates against the lite runtime (no descriptors/reflection);
+// ignored by every other generator in this repo (prost, protoc-gen-go).
+option optimize_for = LITE_RUNTIME;
+
+// -----------------------------------------------------------------------------
+// Inbound values — host language to engine
+// -----------------------------------------------------------------------------
+
+// Core value type. `value_type` is a sparse exact-type annotation for this
+// node, never a copy of the enclosing union. Most values omit it and are
+// decoded from the declared contextual type plus payload shape. Hosts set it
+// only when shape/context cannot preserve their choice (for example an empty
+// container, an overlapping union arm, or a literal-vs-primitive selection).
+message InboundValue {
+  BamlTy value_type = 1;
+  oneof value {
+    string string_value = 2;
+    int64 int_value = 3;
+    double float_value = 4;
+    bool bool_value = 5;
+    InboundListValue list_value = 6;
+    InboundMapValue map_value = 7;
+    InboundClassValue class_value = 8;
+    InboundEnumValue enum_value = 9;
+    BamlHandle handle = 10;
+    bytes uint8array_value = 11;
+    string bigint_value = 12;
+    // A reflected BAML type passed as a value (mirrors a `type`-typed BAML
+    // value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+    // argument value so the host can pass types as data.
+    BamlTy ty_value = 13;
+  }
+  // Absent oneof = null value.
+}
+
+message InboundListValue {
+  repeated InboundValue values = 1;
+}
+
+message InboundMapValue {
+  repeated InboundMapEntry entries = 1;
+}
+
+message InboundMapEntry {
+  oneof key {
+    string string_key = 1;
+    int64 int_key = 2;
+    bool bool_key = 3;
+    InboundEnumValue enum_key = 5;
+  }
+  InboundValue value = 6;
+}
+
+message InboundClassValue {
+  reserved 1;
+  repeated InboundMapEntry fields = 2;
+}
+
+message InboundEnumValue {
+  string name = 1;
+  string value = 2;
+}
+
+// -----------------------------------------------------------------------------
+// Function call protocol
+// -----------------------------------------------------------------------------
+
+// One explicit `TypeVar` binding for a generic function/method call: the
+// TypeVar name paired with the concrete type it is bound to.
+message BamlTyArg {
+  string type_var = 1; // TypeVar name, e.g. "T", "A"
+  BamlTy type_value = 2; // the concrete binding
+}
+
+message CallFunctionArgs {
+  repeated InboundMapEntry kwargs = 1;
+  uint64 call_id = 2;
+  // Explicit TypeVar bindings for a generic function/method call. Named and
+  // order-preserving: each entry self-describes its TypeVar, and entries are
+  // sent in De Bruijn order (enclosing class params first — recovered from a
+  // generic receiver's type args — then the callee's own `<...>` params,
+  // `_types=` in Python). The engine maps each named binding onto the entry
+  // frame's `type_args` slot by matching the TypeVar name against the callee's
+  // generic params (see `set_entry_point_with_type_args`). Empty for
+  // non-generic calls.
+  repeated BamlTyArg type_args = 3;
+  oneof call_target {
+    string function_name = 4;
+    uint64 function_handle = 5;
+  }
+}
+
+// CallAck is the engine's acknowledgment of an inbound call. It flows
+// engine->host, but is defined in the inbound proto because it completes
+// the inbound call contract (CallFunctionArgs request + CallAck response).
+message CallAck {
+  oneof response {
+    string error = 1;
+  }
+}

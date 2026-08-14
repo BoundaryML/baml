@@ -1,0 +1,173 @@
+name: BAML SDK Release - Publish Node.js npm
+
+# Reusable publisher for the Node.js SDK. Downloads the per-platform sub-packages
+# assembled by build2-nodejs-sdk.reusable.yaml, wires the umbrella package's
+# optionalDependencies, and publishes the umbrella + sub-packages to npm.
+# Called by release-baml-language.yml (real releases), which owns the needs/if
+# gating and passes the frozen release plan.
+#
+# npm OIDC trusted publishing matches the *calling* (entry-point) workflow's
+# filename, not this reusable file, so the npm trusted-publisher config on each
+# package must name release-baml-language.yml (org/repo casing is exact, no
+# environment). See https://docs.npmjs.com/trusted-publishers.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit to publish from"
+        type: string
+        required: true
+      channel:
+        description: "Release channel (nightly|canary); selects the npm dist-tag"
+        type: string
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publish-npm:
+    name: Publish Node.js npm
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Download per-platform npm packages
+        uses: actions/download-artifact@v4
+        with:
+          # Each build matrix job uploaded a single npm/<platform>/ sub-package
+          # (stamped package.json + baml_node.<platform>.node); merge-multiple
+          # reconstructs the full npm/ tree under the bridge dir.
+          pattern: nodejs-sdk-*
+          path: baml_language/sdks/typescript/bridge_typescript/npm
+          merge-multiple: true
+      - name: Download umbrella dist
+        uses: actions/download-artifact@v4
+        with:
+          # The umbrella ships `files: ["dist"]`; the build job assembled this
+          # platform-agnostic dist/ once (on the linux-gnu target). Restore it here
+          # so `npm publish` of the umbrella includes the built JS/types.
+          name: nodejs-umbrella-dist
+          path: baml_language/sdks/typescript/bridge_typescript/dist
+      - name: Setup Node.js
+        # The publisher only uses npm. Avoid the repository composite here because
+        # it always enables pnpm caching, whose post-job save fails when this job
+        # intentionally does not install a pnpm store.
+        uses: actions/setup-node@v6
+        with:
+          node-version: latest
+          registry-url: "https://registry.npmjs.org"
+      - name: Ensure npm CLI supports trusted publishing
+        run: |
+          set -euo pipefail
+          required_version="11.5.1"
+          current_version="$(npm --version)"
+          if [ "$(printf '%s\n' "$required_version" "$current_version" | sort -V | head -n1)" != "$required_version" ]; then
+            echo "npm $current_version is lower than required $required_version" >&2
+            echo "npm 11.5.1+ is required for trusted publishing because it is the earliest version that can use OIDC auth" >&2
+            exit 1
+          fi
+          echo "npm $current_version satisfies >= $required_version"
+          # OIDC keyless publishing needs the id-token request endpoint, which GitHub
+          # only injects when `id-token: write` reaches this job. If it's missing,
+          # npm can't do trusted publishing and falls back to ENEEDAUTH.
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "OIDC id-token endpoint is available (id-token: write is in effect)."
+          else
+            echo "::error::OIDC id-token endpoint is NOT available in this job; npm cannot use trusted publishing. Check id-token: write on the calling job."
+            exit 1
+          fi
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          # The per-platform package.json files were already stamped in the build
+          # jobs; this stamps the umbrella package.json from the same frozen plan,
+          # so the umbrella version (and the optionalDependencies wired below) match
+          # the downloaded sub-packages.
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+      - name: Wire umbrella optionalDependencies
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+        run: |
+          set -euo pipefail
+          echo "Per-platform sub-packages downloaded from the build matrix:"
+          ls -R npm
+          # Wiring optionalDependencies only needs the napi CLI, not the bridge's
+          # full dependency tree, so install just that. Version comes from the
+          # bridge devDependencies so it stays in sync with local builds.
+          napi_version="$(jq -r '.devDependencies["@napi-rs/cli"]' package.json)"
+          npm install -g "@napi-rs/cli@${napi_version}"
+          # pre-publish only updates the umbrella package.json optionalDependencies
+          # (pinned to the stamped version) over the already-assembled npm/ tree.
+          # --skip-optional-publish: we publish each package explicitly below so we
+          #   can attach the channel dist-tag (napi prepublish cannot set one).
+          # --no-gh-release: GitHub releases are handled by publish-github-release.
+          napi pre-publish -t npm --no-gh-release --skip-optional-publish
+      - name: Publish to npm
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          # A canary cut is a clean stable SemVer, so it takes the default `latest`
+          # dist-tag; nightlies use the `nightly` tag so `npm install` never
+          # resolves a prerelease by default.
+          if [[ "$CHANNEL" == "canary" ]]; then
+            tag="latest"
+          else
+            tag="$CHANNEL"
+          fi
+          # --- OIDC diagnostics: show the auth state npm sees before publishing ---
+          echo "=== auth / OIDC environment ==="
+          echo "OIDC id-token endpoint set: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
+          echo "NODE_AUTH_TOKEN set:        ${NODE_AUTH_TOKEN:+yes}"
+          echo "npm registry:               $(npm config get registry)"
+          echo "--- npmrc (auth lines, token redacted) ---"
+          npm config ls -l 2>/dev/null | grep -iE "registry|_authtoken|provenance|userconfig" | sed -E 's/(_authToken=).*/\1<redacted>/I' || true
+          echo "==============================="
+          echo "Publishing @boundaryml/baml-bridge packages with dist-tag '$tag'"
+          # `npm publish --loglevel verbose` makes the OIDC keyless exchange visible
+          # in the log (a request to the id-token endpoint vs. just sending a token).
+          #
+          # Idempotency guard for reruns: the stamped version is frozen in the release
+          # plan, so a rerun after a mid-loop failure re-attempts the same version.
+          # npm rejects republishing an existing version, which under `set -e` would
+          # abort before the not-yet-published packages are reached, leaving a partial
+          # release. Skip any package whose exact version is already on the registry so
+          # a rerun resumes from where it stopped.
+          publish_if_needed() {
+            local pkg_dir="$1"
+            local name version existing
+            name="$(jq -r '.name' "$pkg_dir/package.json")"
+            version="$(jq -r '.version' "$pkg_dir/package.json")"
+            # `npm view <name>@<version> version` prints the version when it exists,
+            # prints nothing (exit 0) when that version is absent, and errors (E404)
+            # when the package has never been published. `|| true` keeps that
+            # first-publish 404 from tripping `set -e`; an empty result means
+            # "not published yet -> publish".
+            existing="$(npm view "${name}@${version}" version 2>/dev/null || true)"
+            if [ "$existing" = "$version" ]; then
+              echo "Skipping ${name}@${version} (already published)"
+              return 0
+            fi
+            echo "Publishing ${name}@${version} (${pkg_dir})"
+            (cd "$pkg_dir" && npm publish --access public --tag "$tag" --loglevel verbose)
+          }
+          for dir in npm/*/; do
+            publish_if_needed "$dir"
+          done
+          # Umbrella package lives in the working directory.
+          publish_if_needed "."

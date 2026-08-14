@@ -22,7 +22,8 @@ use rowan::TextRange;
 
 use crate::{
     ast::{
-        FromCST, GenericArgs, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
+        FromCST, GenericArgs, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, TypeArgs,
+        tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::{EmittableTrivia, TriviaSliceExt},
@@ -84,6 +85,15 @@ fn print_trivia_squished_spaced(
         printer.print_str(" ");
     }
     trivia_len
+}
+
+fn print_binding_keyword_with_trailing_trivia(printer: &mut Printer, keyword: &t::BindingKeyword) {
+    printer.print_raw_token(keyword);
+    printer.print_str(" ");
+    let (_, trailing) = printer.trivia.get_for_range_split(keyword.span());
+    if print_trivia_squished_spaced(printer, trailing, false, false) > 0 {
+        printer.print_str(" ");
+    }
 }
 
 /// Top-level pattern AST node — corresponds to a [`SyntaxKind::PATTERN`].
@@ -187,10 +197,10 @@ impl Printable for MatchPattern {
 
 // ─── Atoms ────────────────────────────────────────────────────────────────────
 
-/// `_` or `let _`.
+/// `_`, `let _`, or `const _`.
 #[derive(Debug)]
 pub struct WildcardPattern {
-    pub let_keyword: Option<t::Let>,
+    pub let_keyword: Option<t::BindingKeyword>,
     pub underscore: t::Word,
 }
 
@@ -198,8 +208,8 @@ impl WildcardPattern {
     fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it
-            .next_if_kind(SyntaxKind::KW_LET)
-            .map(t::Let::from_cst)
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(t::BindingKeyword::from_cst)
             .transpose()?;
         let underscore_elem = it.expect_next("`_`")?;
         let underscore = t::Word::from_cst(underscore_elem)?;
@@ -214,8 +224,7 @@ impl WildcardPattern {
 impl Printable for WildcardPattern {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         if let Some(let_kw) = &self.let_keyword {
-            printer.print_raw_token(let_kw);
-            printer.print_str(" ");
+            print_binding_keyword_with_trailing_trivia(printer, let_kw);
         }
         printer.print_raw_token(&self.underscore);
         PrintInfo::default_single_line()
@@ -231,7 +240,7 @@ impl Printable for WildcardPattern {
     }
 }
 
-/// `let WORD` or `let WORD : <pattern>` — name binding with an optional
+/// `let WORD`/`const WORD` or `let WORD : <pattern>`/`const WORD : <pattern>` — name binding with an optional
 /// sub-pattern. The sub-pattern can be a type ascription (`let x: int`),
 /// another binding (`let x: let y`), a structural destructure
 /// (`let x: [a, b]`, `let x: Class { f }`), etc. The parser folds the
@@ -239,7 +248,7 @@ impl Printable for WildcardPattern {
 /// (no `CHAIN_PATTERN` wrapper).
 #[derive(Debug)]
 pub struct BindingPattern {
-    pub let_keyword: t::Let,
+    pub let_keyword: t::BindingKeyword,
     pub name: t::Word,
     pub subpat: Option<(t::Colon, Box<MatchPattern>)>,
 }
@@ -247,7 +256,7 @@ pub struct BindingPattern {
 impl BindingPattern {
     fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
-        let let_keyword = it.expect_parse()?;
+        let let_keyword = t::BindingKeyword::from_cst(it.expect_next("binding introducer")?)?;
         let name = it.expect_parse()?;
         let subpat = if let Some(colon_elem) = it.next_if_kind(SyntaxKind::COLON) {
             let colon = t::Colon::from_cst(colon_elem)?;
@@ -267,8 +276,7 @@ impl BindingPattern {
 
 impl Printable for BindingPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.let_keyword);
-        printer.print_str(" ");
+        print_binding_keyword_with_trailing_trivia(printer, &self.let_keyword);
         printer.print_raw_token(&self.name);
         let mut info = PrintInfo::default_single_line();
         if let Some((colon, pattern)) = &self.subpat {
@@ -296,24 +304,67 @@ impl Printable for BindingPattern {
     }
 }
 
-/// `(let)? path.Class { field, renamed: <pattern>, ... }`.
+/// `(let|const)? path.Class { field, renamed: <pattern>, ... }`.
 #[derive(Debug)]
 pub struct DestructurePattern {
-    pub let_keyword: Option<t::Let>,
+    pub let_keyword: Option<t::BindingKeyword>,
     pub first: t::Word,
     pub rest: Vec<(t::Dot, t::Word)>,
-    pub generic_args: Option<GenericArgs>,
+    pub generic_args: Option<DestructureTypeArgs>,
     pub open_brace: t::LBrace,
     pub fields: Vec<(FieldPattern, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
+}
+
+#[derive(Debug)]
+pub enum DestructureTypeArgs {
+    Generic(GenericArgs),
+    Type(TypeArgs),
+}
+
+impl FromCST for DestructureTypeArgs {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::GENERIC_ARGS => GenericArgs::from_cst(elem).map(Self::Generic),
+            SyntaxKind::TYPE_ARGS => TypeArgs::from_cst(elem).map(Self::Type),
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "GENERIC_ARGS or TYPE_ARGS".into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for DestructureTypeArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            DestructureTypeArgs::Generic(args) => args.print(shape, printer),
+            DestructureTypeArgs::Type(args) => args.print(shape, printer),
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            DestructureTypeArgs::Generic(args) => args.leftmost_token(),
+            DestructureTypeArgs::Type(args) => args.leftmost_token(),
+        }
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            DestructureTypeArgs::Generic(args) => args.rightmost_token(),
+            DestructureTypeArgs::Type(args) => args.rightmost_token(),
+        }
+    }
 }
 
 impl DestructurePattern {
     fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it
-            .next_if_kind(SyntaxKind::KW_LET)
-            .map(t::Let::from_cst)
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(t::BindingKeyword::from_cst)
             .transpose()?;
         let first = it.expect_parse()?;
         let mut rest = Vec::new();
@@ -323,8 +374,13 @@ impl DestructurePattern {
             rest.push((dot, word));
         }
         let generic_args = it
-            .next_if_kind(SyntaxKind::GENERIC_ARGS)
-            .map(GenericArgs::from_cst)
+            .next_if(|elem| {
+                matches!(
+                    elem.kind(),
+                    SyntaxKind::GENERIC_ARGS | SyntaxKind::TYPE_ARGS
+                )
+            })
+            .map(DestructureTypeArgs::from_cst)
             .transpose()?;
         let open_brace = it.expect_parse()?;
         let mut fields = Vec::new();
@@ -356,8 +412,7 @@ impl DestructurePattern {
 
     fn print_path(&self, printer: &mut Printer) {
         if let Some(let_kw) = &self.let_keyword {
-            printer.print_raw_token(let_kw);
-            printer.print_str(" ");
+            print_binding_keyword_with_trailing_trivia(printer, let_kw);
         }
         printer.print_raw_token(&self.first);
         for (dot, word) in &self.rest {

@@ -1,10 +1,8 @@
-client<llm> GPT4o {
-    provider openai
-    options {
-        model "gpt-4o"
-        api_key env.OPENAI_API_KEY
-    }
-}
+client GPT4o = openai.OpenAiClient.new(
+    model = "gpt-4o",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
 class Sentiment {
     feeling string
@@ -13,13 +11,13 @@ class Sentiment {
 }
 
 function ClassifySentiment(text: string) -> Sentiment {
-    client GPT4o
-    prompt #"classify {{ text }}"#
+    client: GPT4o
+    prompt: `classify ${text}`
 }
 
 function GenerateTests(count: int, topic: string) -> string[] {
-    client GPT4o
-    prompt #"generate {{ count }} tests about {{ topic }}"#
+    client: GPT4o
+    prompt: `generate ${count} tests about ${topic}`
 }
 
 testset "test" {
@@ -64,6 +62,6 @@ function Foo() -> string | image {
 }
 
 function ClassifySentiment2(text: string) -> string {
-    client GPT4o
-    prompt #"classify {{ text }}"#
+    client: GPT4o
+    prompt: `classify ${text}`
 }

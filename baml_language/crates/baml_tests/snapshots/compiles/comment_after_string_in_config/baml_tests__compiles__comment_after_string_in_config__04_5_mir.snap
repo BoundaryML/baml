@@ -2,29 +2,3 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.OpenRouterMistralSmall3_1_24b$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: string
-    let _3: map<void, void>
-    let _4: map<void, void>
-    let _5: map<string, float>
-
-    bb0: {
-        _2 = call const fn baml.env.get_or_panic(const "OPENROUTER_API_KEY") -> [bb1];
-    }
-
-    bb1: {
-        _3 = {  };
-        _4 = {  };
-        _5 = { const "temperature": const 0.1_f64 };
-        _1 = baml.llm.PrimitiveClientOptions { const "mistralai/mistral-small-3.1-24b-instruct", const "https://openrouter.ai/api/v1", const null, const null, const null, const null, const null, const null, const null, copy _2, const null, const null, copy _3, copy _4, copy _5 };
-        _0 = baml.llm.PrimitiveClient { const "OpenRouterMistralSmall3_1_24b", const "openai-generic", copy _1 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}

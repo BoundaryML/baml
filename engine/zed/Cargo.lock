@@ -746,7 +746,7 @@ dependencies = [
 
 [[package]]
 name = "zed_baml"
-version = "0.218.0"
+version = "0.223.0"
 dependencies = [
  "log",
  "zed_extension_api",

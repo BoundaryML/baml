@@ -10,14 +10,22 @@
 use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-pub use bex::Bex;
+pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::{
-    CANCELLED_PANIC_CLASS, EngineError, FunctionCallContextBuilder, is_cancelled_engine_error,
+    CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
+    FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,
+    UnhandledSpawnErrorHandler, is_cancelled_engine_error, register_inbound_union_ambiguity_policy,
+    value_capture::{
+        CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer,
+        TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogMetadata,
+    },
 };
-pub use bex_events::EventSink;
 pub use bex_external_types::{
-    BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty, TyAttr, try_convert_rust_data,
+    BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
+    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch,
+    runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
+use indexmap::IndexMap;
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};
 use thiserror::Error;
@@ -26,18 +34,39 @@ mod bex;
 mod bex_lsp;
 mod fs;
 mod project;
+mod seed;
 
-pub struct BexArgs(pub HashMap<String, BexExternalValue>);
+pub struct BexArgs {
+    /// Required values keyed by their type-level names and kept in declared order.
+    pub required: IndexMap<String, BexExternalValue>,
+    /// Supplied optional values keyed by their type-level parameter names.
+    pub optional: IndexMap<String, BexExternalValue>,
+}
 
 impl From<HashMap<&str, BexExternalValue>> for BexArgs {
     fn from(m: HashMap<&str, BexExternalValue>) -> Self {
-        BexArgs(m.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+        Self {
+            required: m.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
+            optional: IndexMap::new(),
+        }
     }
 }
 
 impl From<HashMap<String, BexExternalValue>> for BexArgs {
     fn from(m: HashMap<String, BexExternalValue>) -> Self {
-        BexArgs(m)
+        Self {
+            required: m.into_iter().collect(),
+            optional: IndexMap::new(),
+        }
+    }
+}
+
+impl From<IndexMap<String, BexExternalValue>> for BexArgs {
+    fn from(required: IndexMap<String, BexExternalValue>) -> Self {
+        Self {
+            required,
+            optional: IndexMap::new(),
+        }
     }
 }
 
@@ -75,17 +104,36 @@ pub fn new(
     root_path: vfs::VfsPath,
     sys_ops: SysOps,
     files: std::collections::HashMap<crate::fs::FsPath, String>,
-    event_sink: Option<std::sync::Arc<dyn EventSink>>,
 ) -> Result<Arc<impl Bex>, RuntimeError> {
-    let project = project::BexProject::new(&root_path, Arc::new(sys_ops), event_sink);
+    let project = project::BexProject::new(&root_path, Arc::new(sys_ops));
     project.update_all_sources(&files);
     let engine = project.take()?;
     Ok(engine)
 }
 
+/// Initialize a runtime from a serialized BAML program — the borsh-encoded
+/// `bex_vm_types::Program` that `baml pack` embeds — rather than from source
+/// files. Mirrors [`new`] but skips compilation, decoding the program and
+/// instantiating the engine directly.
+///
+/// This is the blessed seam for running pre-packed bytecode: bridge crates call
+/// it instead of reaching into `bex_engine` / `bex_vm_types` themselves.
+#[allow(clippy::needless_pass_by_value)]
+pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex>, RuntimeError> {
+    let program: bex_vm_types::Program =
+        borsh::from_slice(bytecode).map_err(|e| RuntimeError::Compilation {
+            message: format!("Failed to deserialize BAML bytecode: {e}"),
+        })?;
+    let engine = bex_engine::BexEngine::new(program, Arc::new(sys_ops), Vec::new())?;
+    Ok(Arc::new(engine))
+}
+
+// Schema types re-exported for `bridge_wasm`, which depends on `bex_project`
+// but not `baml_project` and needs to name them in its `From` impl.
+pub use baml_project::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use bex_lsp::{
-    BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, LlmCapabilities, LspClientSenderTrait,
-    LspError, PlaygroundNotification, PlaygroundSender, ProjectDiagnostic, ProjectUpdate,
-    TestExpandError, new_lsp,
+    BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
+    LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, PlaygroundSourceFile,
+    PreparedRun, ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

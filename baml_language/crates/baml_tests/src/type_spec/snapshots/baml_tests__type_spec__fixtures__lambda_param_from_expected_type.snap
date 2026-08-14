@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+218..223 'apply': throws never
+272..284 '{\n    f(v)\n}': int
+278..279 'f': (x: int) -> int throws never
+278..282 'f(v)': int
+280..281 'v': int
+295..296 'l': throws never
+306..395 '{\n   ...int\n}': int
+312..317 'apply': (f: (x: int) -> int throws never, v: int) -> int throws never
+312..339 'apply(...}, 41)': int
+318..334 '(x) ->... + 1 }': (x: int) -> int throws never
+325..334 '{ x + 1 }': int
+327..328 'x': int
+327..332 'x + 1': int
+331..332 '1': 1
+336..338 '41': 41

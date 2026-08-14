@@ -1,12 +1,27 @@
 import { type NodeProps } from '@xyflow/react';
+import { Repeat } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
+import { getChrome, nodeBackground, nodeShadow, stateStyle } from '../constants';
+import { depthScale } from '../lod';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 
-export const HexagonNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
+export const HexagonNode: ComponentType<NodeProps> = memo(({ data }) => {
   const d = data as WorkflowNodeData;
-  const isHighlighted = d.selected || selected;
-  const borderColor = isHighlighted ? '#4fc3f7' : '#3c3c3c';
+  const isHighlighted = d.selected;
+  const theme = useGraphThemeContext();
+  const chrome = getChrome(theme);
+  const loop = chrome.loop;
+  // Deeper nodes render smaller (semantic-zoom hierarchy).
+  const s = depthScale(typeof d.depth === 'number' ? d.depth : 0);
+  // Loops use the cyan accent regardless of state.
+  const base = stateStyle(theme, d.executionState);
+  const colors = {
+    ...base,
+    accent: loop.accent,
+    border: isHighlighted ? chrome.selectionRing.color : loop.border,
+  };
 
   return (
     <>
@@ -15,31 +30,50 @@ export const HexagonNode: ComponentType<NodeProps> = memo(({ data, selected }) =
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '8px 12px',
-          borderRadius: 6,
-          background: '#252526',
-          border: `2px solid ${borderColor}`,
-          boxShadow: isHighlighted ? `0 0 0 3px #4fc3f7, 0 0 12px rgba(79,195,247,0.4)` : '0 1px 3px rgba(0,0,0,0.3)',
+          gap: 8 * s,
+          padding: `${7 * s}px ${11 * s}px ${7 * s}px ${9 * s}px`,
+          borderRadius: 8,
+          background: nodeBackground(colors, theme),
+          border: `1px solid ${colors.border}`,
+          boxShadow: nodeShadow(colors, !!isHighlighted, theme),
+          width: '100%',
+          height: '100%',
+          boxSizing: 'border-box',
+          color: colors.text,
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          transition: 'box-shadow 120ms ease, border-color 120ms ease',
         }}
       >
         <div
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            background: '#0ea5e9',
+            width: 20 * s,
+            height: 20 * s,
+            borderRadius: 6,
+            background: loop.chipBg,
+            boxShadow: `inset 0 0 0 1px ${loop.chipRing}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <Repeat size={12 * s} color={loop.icon} />
         </div>
-        <div style={{ fontSize: 12, fontWeight: 500, color: '#ccc', maxWidth: 140, wordBreak: 'break-word' }}>
+        <div
+          style={{
+            fontSize: 12 * s,
+            fontWeight: 500,
+            color: colors.text,
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            letterSpacing: '-0.005em',
+            lineHeight: 1.3,
+          }}
+        >
           {d.label}
         </div>
       </div>

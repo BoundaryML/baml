@@ -9,7 +9,10 @@ instances:
         branch: canary
 
 title: Boundary Documentation
-js: ./custom.js
+agents:
+  page-directive: |
+    Version notice: This site documents BAML v0, the legacy DSL. BAML v1 is a separate, fully featured programming language in public beta. If the user intends to use BAML v1, ignore this site's content and use the BAML v1 documentation instead. If the intended version is unclear, clarify it before using this page.
+    For clean Markdown of any page, append .md to the page URL. For the complete documentation index, see https://docs.boundaryml.com/llms.txt. For MCP access, connect to https://docs.boundaryml.com/_mcp/server.
 ai-chat:
   system-prompt: |
     You will be answering questions about BAML (Basically, a Made-up Language) -- an AI framework to write LLM prompts as functions. Here is some background:
@@ -1006,9 +1009,10 @@ colors:
     light: "#ffffff"
     dark: "#0b0d0e"
 logo:
-  light: assets/favicon.ico
-  dark: assets/favicon.ico
-  height: 40
+  light: assets/boundary-black-big.svg
+  dark: assets/boundary-white.svg
+  height: 28
+  href: https://boundaryml.com
 favicon: assets/favicon.ico
 css: assets/styles.css
 layout:

@@ -1,28 +1,16 @@
 //! AWS Bedrock request authorization: credential resolution + `SigV4` signing.
+//!
+//! Credentials and region are resolved via the slim `aws-config` fork, whose
+//! IO is routed through BAML's [`RuntimeIo`] by [`BamlCredentialIo`]. Signing
+//! uses the slim `aws-sigv4` fork. No Smithy runtime is involved.
 
 use std::sync::Arc;
-#[allow(clippy::disallowed_types)]
-use std::time::SystemTime;
 
-use aws_credential_types::{Credentials, provider::ProvideCredentials};
-use aws_sigv4::{
-    http_request::{SignableBody, SignableRequest, SigningSettings, sign},
-    sign::v4,
-};
-use aws_smithy_runtime_api::{
-    client::{
-        http::{HttpConnectorFuture, SharedHttpConnector},
-        result::ConnectorError,
-    },
-    http as smithy_http,
-};
-use aws_smithy_types::body::SdkBody;
+use async_trait::async_trait;
+use aws_config::{CommandOutput, ConfigError, CredentialIo, Credentials, HttpResponse};
 use indexmap::IndexMap;
-#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
-use sys_types::{
-    BexExternalValue,
-    runtime_io::{RuntimeIo, RuntimeIoError},
-};
+use sys_types::{BexExternalValue, runtime_io::RuntimeIo};
+use web_time::SystemTime;
 
 use crate::{
     baml_std::{BedrockOptions, HttpRequest, PrimitiveClient, ProviderOptions},
@@ -33,294 +21,91 @@ use crate::{
 // Platform helpers
 // ---------------------------------------------------------------------------
 
-/// Platform-aware `SystemTime::now()`.
-///
-/// On WASM, `std::time::SystemTime::now()` panics -- use `web_time` instead.
-#[allow(clippy::disallowed_types)]
 fn now() -> SystemTime {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        SystemTime::now()
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        use aws_smithy_async::time::TimeSource;
-        crate::wasm::BrowserTime.now()
-    }
+    SystemTime::now()
 }
 
 // ---------------------------------------------------------------------------
-// Native: sync env/fs providers for AWS SDK config loading
+// CredentialIo adapter over RuntimeIo
 // ---------------------------------------------------------------------------
 
-#[cfg(not(target_arch = "wasm32"))]
-mod native_providers {
-    use std::{future::Future, sync::Arc};
-
-    use aws_types::os_shim_internal::{ProvideEnv, ProvideFs};
-
-    use super::{BexExternalValue, RuntimeIo};
-
-    pub(super) struct BexEnvProvider {
-        pub io: Arc<dyn RuntimeIo>,
-    }
-
-    impl std::fmt::Debug for BexEnvProvider {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("BexEnvProvider").finish()
-        }
-    }
-
-    impl ProvideEnv for BexEnvProvider {
-        fn get(&self, k: &str) -> Result<String, std::env::VarError> {
-            let io = self.io.clone();
-            let key = k.to_string();
-            // ProvideEnv::get is sync but RuntimeIo::env_get is async (and may
-            // contain real awaits). We can't block_on from inside the tokio
-            // runtime, and block_in_place only works on multi-threaded runtimes.
-            // A short-lived thread lets us call block_on from outside the
-            // runtime.
-            let handle = tokio::runtime::Handle::current();
-            let result = std::thread::spawn(move || handle.block_on(io.env_get(key)))
-                .join()
-                .unwrap_or(Err(super::RuntimeIoError::Other("thread panicked".into())));
-            match result {
-                Ok(Some(v)) => Ok(v),
-                Ok(None) | Err(_) => Err(std::env::VarError::NotPresent),
-            }
-        }
-    }
-
-    pub(super) struct BexFsProvider {
-        pub io: Arc<dyn RuntimeIo>,
-    }
-
-    impl std::fmt::Debug for BexFsProvider {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("BexFsProvider").finish()
-        }
-    }
-
-    impl ProvideFs for BexFsProvider {
-        fn read_to_end(
-            &self,
-            path: &std::path::Path,
-        ) -> std::pin::Pin<Box<dyn Future<Output = std::io::Result<Vec<u8>>> + Send + '_>> {
-            let io = self.io.clone();
-            let path_str = path.to_string_lossy().into_owned();
-            Box::pin(async move {
-                let file_handle = io
-                    .fs_open(path_str, BexExternalValue::String("r".to_string()))
-                    .await
-                    .map_err(|_| {
-                        std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
-                    })?;
-                let contents = io.fs_file_text(&file_handle).await.map_err(|_| {
-                    std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
-                })?;
-                Ok(contents.into_bytes())
-            })
-        }
-
-        fn write(
-            &self,
-            _path: &std::path::Path,
-            _contents: &[u8],
-        ) -> std::pin::Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + '_>> {
-            Box::pin(async { Err(std::io::Error::other("not implemented")) })
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// WASM: async credential provider for AWS SDK config loading
-// ---------------------------------------------------------------------------
-
-#[cfg(target_arch = "wasm32")]
-mod wasm_providers {
-    use std::sync::Arc;
-
-    use aws_credential_types::{
-        Credentials,
-        provider::{self, future::ProvideCredentials},
-    };
-
-    use super::RuntimeIo;
-
-    /// Async credential provider that reads AWS env vars via `RuntimeIo`.
-    pub(super) struct EnvCredentialProvider {
-        pub io: Arc<dyn RuntimeIo>,
-    }
-
-    impl std::fmt::Debug for EnvCredentialProvider {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("EnvCredentialProvider").finish()
-        }
-    }
-
-    impl EnvCredentialProvider {
-        async fn resolve(&self) -> provider::Result {
-            let access_key_id = self
-                .io
-                .env_get("AWS_ACCESS_KEY_ID".into())
-                .await
-                .ok()
-                .flatten()
-                .ok_or_else(|| {
-                    provider::error::CredentialsError::unhandled("AWS_ACCESS_KEY_ID not set")
-                })?;
-
-            let secret_access_key = self
-                .io
-                .env_get("AWS_SECRET_ACCESS_KEY".into())
-                .await
-                .ok()
-                .flatten()
-                .ok_or_else(|| {
-                    provider::error::CredentialsError::unhandled("AWS_SECRET_ACCESS_KEY not set")
-                })?;
-
-            let session_token = self
-                .io
-                .env_get("AWS_SESSION_TOKEN".into())
-                .await
-                .ok()
-                .flatten();
-
-            Ok(Credentials::new(
-                access_key_id,
-                secret_access_key,
-                session_token,
-                None,
-                "baml-bedrock-wasm",
-            ))
-        }
-    }
-
-    impl aws_credential_types::provider::ProvideCredentials for EnvCredentialProvider {
-        fn provide_credentials<'a>(&'a self) -> ProvideCredentials<'a>
-        where
-            Self: 'a,
-        {
-            ProvideCredentials::new(self.resolve())
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Custom HTTP connector bridging to RuntimeIo
-// ---------------------------------------------------------------------------
-
-/// An [`aws_smithy_runtime_api::client::http::HttpConnector`] that delegates
-/// all HTTP traffic to a BAML [`RuntimeIo`] implementation.
-#[derive(Clone)]
-struct BamlHttpConnector {
+/// Bridges the `aws-config` [`CredentialIo`] trait to BAML's [`RuntimeIo`].
+///
+/// Environment, file, and HTTP access all go through the runtime so credential
+/// resolution stays inside BAML's sandbox. `credential_process` execution uses
+/// a native subprocess (it has no analogue in `RuntimeIo`).
+struct BamlCredentialIo {
     io: Arc<dyn RuntimeIo>,
 }
 
-// The AWS SDK HttpConnector trait requires `UnwindSafe + RefUnwindSafe`.
-impl std::fmt::Debug for BamlHttpConnector {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BamlHttpConnector").finish()
+#[async_trait]
+impl CredentialIo for BamlCredentialIo {
+    async fn env(&self, key: &str) -> Option<String> {
+        self.io.env_get(key.to_string()).await.ok().flatten()
     }
-}
 
-impl aws_smithy_runtime_api::client::http::HttpConnector for BamlHttpConnector {
-    fn call(&self, request: smithy_http::Request) -> HttpConnectorFuture {
-        let io = self.io.clone();
-        HttpConnectorFuture::new(async move {
-            let method = request.method().to_string();
-            let url = request.uri().to_string();
-            let mut headers = IndexMap::new();
-            for (name, value) in request.headers() {
-                headers.insert(name.to_string(), value.to_string());
-            }
-            let body = request
-                .body()
-                .bytes()
-                .map(|b| String::from_utf8_lossy(b).into_owned())
-                .unwrap_or_default();
+    async fn read_file(&self, path: &str) -> Option<String> {
+        let handle = self
+            .io
+            .fs_open(path.to_string(), BexExternalValue::String("r".into()))
+            .await
+            .ok()?;
+        self.io.fs_file_text(&handle).await.ok()
+    }
 
-            let io_req = sys_types::generated::owned::http::Request {
-                method,
-                url,
-                headers,
-                body,
-            };
-
-            let resp = io
-                .http_send(io_req)
-                .await
-                .map_err(|e| ConnectorError::other(Box::new(e), None))?;
-
-            let resp_body = io
-                .http_response_text(&resp)
-                .await
-                .map_err(|e| ConnectorError::other(Box::new(e), None))?;
-
-            let status =
-                smithy_http::StatusCode::try_from(u16::try_from(resp.status_code).unwrap_or(500))
-                    .map_err(|e| ConnectorError::other(Box::new(e), None))?;
-            let sdk_body = SdkBody::from(resp_body);
-            let mut aws_resp = smithy_http::Response::new(status, sdk_body);
-            for (name, value) in resp.headers {
-                aws_resp
-                    .headers_mut()
-                    .try_insert(name, value)
-                    .map_err(|e| ConnectorError::other(e.into(), None))?;
-            }
-
-            Ok(aws_resp)
+    async fn http(
+        &self,
+        method: &str,
+        url: &str,
+        headers: &[(String, String)],
+    ) -> Result<HttpResponse, ConfigError> {
+        let mut header_map = IndexMap::new();
+        for (k, v) in headers {
+            header_map.insert(k.clone(), v.clone());
+        }
+        let request = sys_types::generated::owned::http::Request {
+            method: method.to_string(),
+            url: url.to_string(),
+            headers: header_map,
+            body: String::new(),
+        };
+        let resp = self
+            .io
+            // Unbounded, as before: `0n` -> no deadline.
+            .http__send(request, std::sync::Arc::new(num_bigint::BigInt::from(0i64)))
+            .await
+            .map_err(|e| ConfigError::Io(e.to_string()))?;
+        let body = self
+            .io
+            .http_response_text(&resp)
+            .await
+            .map_err(|e| ConfigError::Io(e.to_string()))?;
+        Ok(HttpResponse {
+            status: u16::try_from(resp.status_code).unwrap_or(0),
+            body,
         })
     }
-}
 
-fn baml_http_client(
-    io: Arc<dyn RuntimeIo>,
-) -> aws_smithy_runtime_api::client::http::SharedHttpClient {
-    use aws_smithy_runtime_api::client::http::http_client_fn;
-    let connector = SharedHttpConnector::new(BamlHttpConnector { io });
-    http_client_fn(move |_settings, _components| connector.clone())
-}
-
-// ---------------------------------------------------------------------------
-// AWS SDK config loading
-// ---------------------------------------------------------------------------
-
-/// Load the AWS SDK config using the provided `RuntimeIo` for IO.
-///
-/// Accepts `Arc<dyn RuntimeIo>` because the AWS SDK config loader stores
-/// provider objects that capture the IO handle (they need owned handles).
-async fn load_aws_sdk_config(
-    #[cfg_attr(target_arch = "wasm32", allow(unused))] bedrock_opts: &BedrockOptions,
-    io: Arc<dyn RuntimeIo>,
-) -> aws_config::SdkConfig {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use aws_types::os_shim_internal::{Env, Fs};
-        let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .http_client(baml_http_client(io.clone()))
-            .env(Env::from_custom(native_providers::BexEnvProvider {
-                io: io.clone(),
-            }))
-            .fs(Fs::from_custom(native_providers::BexFsProvider {
-                io: io.clone(),
-            }));
-        if let Some(profile) = &bedrock_opts.profile {
-            loader = loader.profile_name(profile);
+    async fn run_command(&self, command: &str) -> Result<CommandOutput, ConfigError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let output = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(command)
+                .output()
+                .map_err(|e| ConfigError::Io(format!("failed to spawn credential_process: {e}")))?;
+            Ok(CommandOutput {
+                status: output.status.code().unwrap_or(-1),
+                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            })
         }
-        loader.load().await
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .sleep_impl(crate::wasm::BrowserSleep)
-            .time_source(crate::wasm::BrowserTime)
-            .http_client(baml_http_client(io.clone()))
-            .credentials_provider(wasm_providers::EnvCredentialProvider { io: io.clone() })
-            .load()
-            .await
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = command;
+            Err(ConfigError::Io(
+                "credential_process is not supported on wasm".into(),
+            ))
+        }
     }
 }
 
@@ -342,21 +127,33 @@ pub(crate) async fn auth_bedrock(
     let credentials = resolve_credentials(&bedrock_opts, io.clone()).await?;
     let region = resolve_region(&bedrock_opts, io).await?;
 
-    let signed_headers = sign_with_credentials(
-        &credentials,
-        &region,
+    let header_pairs: Vec<(&str, &str)> = request
+        .headers
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    let signed = aws_sigv4::sign_request(
         &request.method,
         &request.url,
-        &request.headers,
+        &header_pairs,
         request.body.as_bytes(),
-    )?;
-    request.headers.extend(signed_headers);
+        &credentials,
+        &region,
+        "bedrock",
+        now(),
+    )
+    .map_err(|e| BuildRequestError::AuthorizationFailed(format!("SigV4 signing: {e}")))?;
+
+    for (name, value) in signed {
+        request.headers.insert(name, value);
+    }
 
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// Credential resolution
+// Credential + region resolution
 // ---------------------------------------------------------------------------
 
 /// Resolve the AWS region from explicit options or the default provider chain.
@@ -368,12 +165,14 @@ pub(crate) async fn resolve_region(
         return Ok(region.clone());
     }
 
-    let sdk_config = load_aws_sdk_config(opts, io).await;
-    sdk_config.region().map(ToString::to_string).ok_or_else(|| {
-        BuildRequestError::AuthorizationFailed(
-            "AWS region not found in default provider chain".into(),
-        )
-    })
+    let adapter = BamlCredentialIo { io };
+    aws_config::resolve_region(&adapter, opts.profile.as_deref())
+        .await
+        .ok_or_else(|| {
+            BuildRequestError::AuthorizationFailed(
+                "AWS region not found in default provider chain".into(),
+            )
+        })
 }
 
 /// Resolve AWS credentials from explicit options or the default provider chain.
@@ -387,14 +186,8 @@ async fn resolve_credentials(
     }
 
     // Fall back to the AWS provider chain via RuntimeIo.
-    let sdk_config = load_aws_sdk_config(opts, io).await;
-    let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
-        BuildRequestError::AuthorizationFailed(
-            "AWS credentials provider not found in default provider chain".into(),
-        )
-    })?;
-    credentials_provider
-        .provide_credentials()
+    let adapter = BamlCredentialIo { io };
+    aws_config::resolve_credentials(&adapter, opts.profile.as_deref())
         .await
         .map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -408,63 +201,10 @@ fn credentials_from_options(opts: &BedrockOptions) -> Option<Credentials> {
     let access_key_id = opts.access_key_id.as_ref()?;
     let secret_access_key = opts.secret_access_key.as_ref()?;
     Some(Credentials::new(
-        access_key_id,
-        secret_access_key,
+        access_key_id.clone(),
+        secret_access_key.clone(),
         opts.session_token.clone(),
-        None,
-        "baml-bedrock",
     ))
-}
-
-// ---------------------------------------------------------------------------
-// SigV4 signing
-// ---------------------------------------------------------------------------
-
-/// Sign the request with `SigV4` given resolved credentials and region.
-fn sign_with_credentials(
-    credentials: &Credentials,
-    region: &str,
-    method: &str,
-    url: &str,
-    existing_headers: &IndexMap<String, String>,
-    body: &[u8],
-) -> Result<IndexMap<String, String>, BuildRequestError> {
-    let identity = credentials.clone().into();
-
-    let signing_settings = SigningSettings::default();
-    let signing_params = v4::SigningParams::builder()
-        .identity(&identity)
-        .region(region)
-        .name("bedrock")
-        .time(now())
-        .settings(signing_settings)
-        .build()
-        .map_err(|e| BuildRequestError::AuthorizationFailed(format!("SigV4 params: {e}")))?
-        .into();
-
-    let header_pairs: Vec<(&str, &str)> = existing_headers
-        .iter()
-        .map(|(k, v)| (k.as_str(), v.as_str()))
-        .collect();
-
-    let signable = SignableRequest::new(
-        method,
-        url,
-        header_pairs.into_iter(),
-        SignableBody::Bytes(body),
-    )
-    .map_err(|e| BuildRequestError::AuthorizationFailed(format!("SigV4 signable request: {e}")))?;
-
-    let (instructions, _signature) = sign(signable, &signing_params)
-        .map_err(|e| BuildRequestError::AuthorizationFailed(format!("SigV4 signing: {e}")))?
-        .into_parts();
-
-    let mut signed_headers = IndexMap::new();
-    for (name, value) in instructions.headers() {
-        signed_headers.insert(name.to_string(), value.to_string());
-    }
-
-    Ok(signed_headers)
 }
 
 // ---------------------------------------------------------------------------
@@ -484,6 +224,7 @@ mod tests {
     };
 
     use bex_external_types::AsBexExternalValue;
+    use sys_types::runtime_io::RuntimeIoError;
 
     use super::*;
     use crate::baml_std::PrimitiveClientOptions;
@@ -527,9 +268,10 @@ mod tests {
     struct StubIo;
 
     impl RuntimeIo for StubIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -597,9 +339,10 @@ mod tests {
     }
 
     impl RuntimeIo for MockHttpIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -678,9 +421,10 @@ mod tests {
     impl<F: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe> RuntimeIo
         for EnvIo<F>
     {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -752,9 +496,10 @@ mod tests {
     where
         E: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe,
     {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -839,9 +584,10 @@ mod tests {
     where
         E: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe,
     {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -993,7 +739,7 @@ mod tests {
     }
 
     /// Confirms the full injection flow: env IO provides AWS credentials
-    /// and region, which are resolved through the AWS SDK config loader and
+    /// and region, which are resolved through the AWS provider chain and
     /// used to produce valid `SigV4` headers on the request.
     #[tokio::test]
     async fn sigv4_headers_from_env_via_io() {
@@ -1014,7 +760,7 @@ mod tests {
         assert!(req.headers.contains_key("x-amz-date"));
     }
 
-    /// Confirms that the fs IO is used by the AWS SDK config loader.
+    /// Confirms that the fs IO is used by the AWS provider chain.
     #[tokio::test]
     async fn sigv4_headers_from_credentials_file_via_fs_io() {
         let credentials_file = "\
@@ -1043,7 +789,7 @@ aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
         assert!(req.headers.contains_key("x-amz-date"));
     }
 
-    /// Confirms that the http IO is used when the AWS SDK falls back
+    /// Confirms that the http IO is used when the provider chain falls back
     /// to the container credentials provider.
     #[tokio::test]
     async fn sigv4_headers_from_container_credentials_via_http_io() {

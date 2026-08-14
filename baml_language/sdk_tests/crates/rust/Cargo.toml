@@ -1,0 +1,26 @@
+# Rust sdk-test crate. Fans out across every fixture under
+# `sdk_tests/fixtures/<fixture>/baml_src/` and produces a generated
+# SDK crate at `<fixture>/generated/` (Cargo manifest at the root,
+# sources under `src/`, ported tests gated through `tests/main.rs`)
+# plus three toolchain test invocations per fixture (rustfmt, clippy,
+# cargo test) plus a shared `build_diagnostics::no_build_failures`
+# test.
+#
+# `sdk_test_harness_setup` runs at build time (codegen + scaffold
+# emit); `sdk_test_harness_runner` runs at test time (the
+# test_suite!() macro + run_test_cmd + build_diagnostics! macro the
+# scaffold invokes).
+[package]
+name = "sdk_test_rust"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+sdk_test_harness_setup = { path = "../../harness_setup" }
+
+[dev-dependencies]
+sdk_test_harness_runner = { path = "../../harness_runner" }
+
+[package.metadata.ci]
+wasm_support = false

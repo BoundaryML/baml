@@ -1,7 +1,7 @@
 mod tests;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env,
     fs::File,
     io::{self, BufReader, Read},
@@ -65,10 +65,13 @@ pub fn load_env_file(path: PathBuf) -> Result<HashMap<String, String>> {
 
 pub fn load_env_from_string(content: &str) -> Result<HashMap<String, String>> {
     let mut env_vars = HashMap::new();
+    // Collect the lines up front: indexing into `content.lines()` on every
+    // iteration would make this O(n^2) in the number of lines.
+    let lines: Vec<&str> = content.lines().collect();
     let mut line_index = 0;
 
-    while line_index < content.lines().count() {
-        let raw_line = content.lines().nth(line_index).unwrap();
+    while line_index < lines.len() {
+        let raw_line = lines[line_index];
         line_index += 1;
 
         let line = raw_line.trim();
@@ -108,8 +111,8 @@ pub fn load_env_from_string(content: &str) -> Result<HashMap<String, String>> {
                 // Continue reading lines until we find the closing quote
                 let mut multiline_complete = false;
 
-                while line_index < content.lines().count() && !multiline_complete {
-                    let next_line = content.lines().nth(line_index).unwrap();
+                while line_index < lines.len() && !multiline_complete {
+                    let next_line = lines[line_index];
                     line_index += 1;
 
                     if next_line.trim().ends_with(quote) {
@@ -166,27 +169,84 @@ fn parse_escaped_chars(input: &str) -> String {
     result
 }
 
-/// Expands variable references in values (like $VAR or ${VAR})
+/// Expands variable references (`$VAR` / `${VAR}`) in every value.
+///
+/// Resolution follows standard `.env`/shell semantics:
+/// - A reference resolves to another variable defined in the same file
+///   (transitively), falling back to the process environment, and is left
+///   literal if neither defines it.
+/// - A self-reference, whether direct (`PATH=$PATH:/foo`) or via a cycle
+///   (`A=$B`, `B=$A`), resolves against the process environment only, never
+///   against the variable's own in-file value. This makes `PATH=$PATH:/foo`
+///   append to the real `PATH` and, crucially, guarantees termination: the old
+///   fixpoint loop expanded a var into its own growing value and looped
+///   forever, doubling memory each pass until the process hung/OOMed.
 fn expand_variables(env_vars: &mut HashMap<String, String>) -> Result<()> {
-    let keys: Vec<String> = env_vars.keys().cloned().collect();
-    let mut changes_made = true;
-    while changes_made {
-        changes_made = false;
-        for key in keys.clone() {
-            let value = env_vars.get(&key).unwrap().clone();
-            let expanded = expand_value(&value, env_vars)?;
-            if expanded != value {
-                env_vars.insert(key, expanded);
-                changes_made = true;
-            }
-        }
+    let raw = env_vars.clone();
+    let mut resolved: HashMap<String, String> = HashMap::new();
+    for key in raw.keys() {
+        let mut in_progress = HashSet::new();
+        resolve_key(key, &raw, &mut resolved, &mut in_progress);
     }
-
+    *env_vars = resolved;
     Ok(())
 }
 
-/// Expands a single value, replacing any variable references
-fn expand_value(value: &str, env_vars: &HashMap<String, String>) -> Result<String> {
+/// Resolves (and memoizes) a single key's value, expanding its references.
+///
+/// `in_progress` holds the keys on the current resolution stack so that a
+/// reference back to one of them is detected as a cycle instead of recursing
+/// forever.
+fn resolve_key(
+    key: &str,
+    raw: &HashMap<String, String>,
+    resolved: &mut HashMap<String, String>,
+    in_progress: &mut HashSet<String>,
+) -> String {
+    if let Some(value) = resolved.get(key) {
+        return value.clone();
+    }
+    let Some(raw_value) = raw.get(key).cloned() else {
+        // Referenced key isn't defined in the file: use the process env, if any.
+        return env::var(key).unwrap_or_default();
+    };
+
+    in_progress.insert(key.to_string());
+    let expanded = expand_value(&raw_value, raw, resolved, in_progress);
+    in_progress.remove(key);
+
+    resolved.insert(key.to_string(), expanded.clone());
+    expanded
+}
+
+/// Resolves a single `$VAR` reference encountered while expanding a value.
+///
+/// Returns `None` (leave the reference literal) when the variable is defined
+/// nowhere. A reference to a key currently being resolved is a cycle and is
+/// resolved against the process environment only.
+fn lookup_var(
+    var_name: &str,
+    raw: &HashMap<String, String>,
+    resolved: &mut HashMap<String, String>,
+    in_progress: &mut HashSet<String>,
+) -> Option<String> {
+    if in_progress.contains(var_name) {
+        // Self-reference / cycle: never recurse into the in-file value.
+        return env::var(var_name).ok();
+    }
+    if raw.contains_key(var_name) {
+        return Some(resolve_key(var_name, raw, resolved, in_progress));
+    }
+    env::var(var_name).ok()
+}
+
+/// Expands a single value, replacing any variable references.
+fn expand_value(
+    value: &str,
+    raw: &HashMap<String, String>,
+    resolved: &mut HashMap<String, String>,
+    in_progress: &mut HashSet<String>,
+) -> String {
     let mut result = String::new();
     let mut chars = value.chars().peekable();
 
@@ -207,17 +267,15 @@ fn expand_value(value: &str, env_vars: &HashMap<String, String>) -> Result<Strin
                     var_name.push(c);
                 }
 
-                // Try to find the variable in our env_vars or system env
-                if let Some(var_value) = env_vars.get(&var_name) {
-                    result.push_str(var_value);
-                } else if let Ok(var_value) = env::var(&var_name) {
-                    result.push_str(&var_value);
-                } else {
-                    // Variable not found, leave as is
-                    result.push('$');
-                    result.push('{');
-                    result.push_str(&var_name);
-                    result.push('}');
+                match lookup_var(&var_name, raw, resolved, in_progress) {
+                    Some(var_value) => result.push_str(&var_value),
+                    None => {
+                        // Variable not found, leave as is
+                        result.push('$');
+                        result.push('{');
+                        result.push_str(&var_name);
+                        result.push('}');
+                    }
                 }
             }
             // Handle $VAR format
@@ -236,15 +294,13 @@ fn expand_value(value: &str, env_vars: &HashMap<String, String>) -> Result<Strin
                     }
                 }
 
-                // Try to find the variable in our env_vars or system env
-                if let Some(var_value) = env_vars.get(&var_name) {
-                    result.push_str(var_value);
-                } else if let Ok(var_value) = env::var(&var_name) {
-                    result.push_str(&var_value);
-                } else {
-                    // Variable not found, leave as is
-                    result.push('$');
-                    result.push_str(&var_name);
+                match lookup_var(&var_name, raw, resolved, in_progress) {
+                    Some(var_value) => result.push_str(&var_value),
+                    None => {
+                        // Variable not found, leave as is
+                        result.push('$');
+                        result.push_str(&var_name);
+                    }
                 }
             } else {
                 result.push('$');
@@ -254,7 +310,7 @@ fn expand_value(value: &str, env_vars: &HashMap<String, String>) -> Result<Strin
         }
     }
 
-    Ok(result)
+    result
 }
 
 /// Loads environment variables from commonly used .env file locations

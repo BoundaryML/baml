@@ -1,13 +1,13 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use baml_runtime::TripWire;
-use stream_cancel::Trigger;
+use tokio_util::sync::CancellationToken;
 use wasm_bindgen::prelude::*;
 use web_sys::AbortSignal;
 
 thread_local! {
     static ABORT_CLOSURES: RefCell<HashMap<u32, Closure<dyn Fn()>>> = RefCell::new(HashMap::new());
-    static OPERATION_TRIGGERS: RefCell<HashMap<u32, Trigger>> = RefCell::new(HashMap::new());
+    static OPERATION_TRIGGERS: RefCell<HashMap<u32, CancellationToken>> = RefCell::new(HashMap::new());
     static OPERATION_ID_COUNTER: RefCell<u32> = const { RefCell::new(0) };
 }
 
@@ -29,24 +29,24 @@ pub fn js_abort_signal_to_tripwire(
         id
     });
 
-    let (trigger, tripwire) = stream_cancel::Tripwire::new();
+    let token = CancellationToken::new();
 
     // Early abort check
     if abort_signal.aborted() {
-        trigger.cancel();
-        return Ok(TripWire::new(Some(tripwire)));
+        token.cancel();
+        return Ok(TripWire::new(Some(token)));
     }
 
-    // Store the trigger for later cancellation
+    // Store the token for later cancellation
     OPERATION_TRIGGERS.with(|triggers| {
-        triggers.borrow_mut().insert(operation_id, trigger);
+        triggers.borrow_mut().insert(operation_id, token.clone());
     });
     let op_id = operation_id;
     let closure = Closure::wrap(Box::new(move || {
         // Cancel the operation when abort is triggered
         OPERATION_TRIGGERS.with(|triggers| {
-            if let Some(trigger) = triggers.borrow_mut().remove(&op_id) {
-                trigger.cancel();
+            if let Some(token) = triggers.borrow_mut().remove(&op_id) {
+                token.cancel();
             }
         });
         // Self-cleanup after firing
@@ -64,7 +64,7 @@ pub fn js_abort_signal_to_tripwire(
     });
 
     let tripwire = TripWire::new_with_on_drop(
-        Some(tripwire),
+        Some(token),
         Box::new(move || cleanup_operation(operation_id)),
     );
 

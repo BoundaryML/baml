@@ -62,6 +62,8 @@ function assertNotOk() -> int {
 //
 // Function: baml.String.replace
 //
+// Function: baml.Float.to_fixed
+//
 // Function: baml.media.image.from_url
 //
 // Function: baml.media.audio.from_url
@@ -123,7 +125,5 @@ function assertNotOk() -> int {
 // Function: baml.deep_copy
 //
 // Function: baml.deep_equals
-//
-// Function: baml.unstable.string
 //
 // Function: baml.fetch_as

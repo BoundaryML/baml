@@ -6,12 +6,8 @@ type Graph = map<string, string[]>
 
 type Combination = Primitive | List | Graph
 
-// Alias with attrs.
-type Currency = int @check(gt_ten, {{ this > 10 }})
-type Amount = Currency @assert({{ this > 0 }})
-
-// Should be allowed.
-type MultipleAttrs = int @assert({{ this > 0 }}) @check(gt_ten, {{ this > 10 }})
+type Currency = int
+type Amount = Currency
 
 enum SomeEnum {
     A
@@ -30,43 +26,43 @@ class MergeAttrs {
 }
 
 function PrimitiveAlias(p: Primitive) -> Primitive {
-    client "openai/gpt-4o"
-    prompt #"
-      Return the given value back: {{ p }}
-    "#
+    client: "openai/gpt-4o"
+    prompt: `
+      Return the given value back: ${p}
+    `
 }
 
 function MapAlias(m: Graph) -> Graph {
-    client "openai/gpt-4o"
-    prompt #"
+    client: "openai/gpt-4o"
+    prompt: `
       Return the given Graph back:
 
-      {{ m }}
+      ${m}
 
-      {{ ctx.output_format }}
-    "#
+      ${ctx.output_format}
+    `
 }
 
 function NestedAlias(c: Combination) -> Combination {
-    client "openai/gpt-4o"
-    prompt #"
+    client: "openai/gpt-4o"
+    prompt: `
       Return the given value back:
 
-      {{ c }}
+      ${c}
 
-      {{ ctx.output_format }}
-    "#
+      ${ctx.output_format}
+    `
 }
 
 function MergeAliasAttributes(money: int) -> MergeAttrs {
-    client "openai/gpt-4o"
-    prompt #"
+    client: "openai/gpt-4o"
+    prompt: `
       Return the given integer in the specified format:
 
-      {{ money }}
+      ${money}
 
-      {{ ctx.output_format }}
-    "#
+      ${ctx.output_format}
+    `
 }
 
 //----

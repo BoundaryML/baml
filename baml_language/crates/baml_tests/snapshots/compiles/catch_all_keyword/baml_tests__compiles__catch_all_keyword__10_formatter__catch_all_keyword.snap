@@ -5,12 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
 function MayFailIntOrString(x: int) -> string {
     match (x) {
-        0 => {
-            throw "string error"
-        },
-        1 => {
-            throw 42
-        },
+        0 => throw "string error",
+        1 => throw 42,
         _ => "ok",
     }
 }

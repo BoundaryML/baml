@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 57581
+---
+=== PPIR ===
+class user.MyRunner {
+  threshold: float
+}
+class user.MyRunner$stream {
+  threshold: float | null
+}
+function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_at("root", "simple runner", () -> void { {  } assert.is_true(true) }, my_runner); registry.register_test_at("root", "call runner", () -> void { {  } assert.is_true(true) }, testing.Quorum(5, 3)); registry.register_test_at("root", "constructor runner", () -> void { {  } assert.is_true(true) }, user.MyRunner { threshold: 0.5 }) } null
+}

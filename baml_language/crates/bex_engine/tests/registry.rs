@@ -31,7 +31,6 @@ async fn registry_new_copy_objects_true_returns_instance() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -40,7 +39,7 @@ async fn registry_new_copy_objects_true_returns_instance() {
     let result = engine
         .call_function(
             "testing.TestCollector.new",
-            vec![BexExternalValue::String(String::new())],
+            vec![BexExternalValue::String("".into())],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true, // copy_objects: deep-extract to BexExternalValue
         )
@@ -48,7 +47,9 @@ async fn registry_new_copy_objects_true_returns_instance() {
         .expect("testing.TestCollector.new should succeed");
 
     match &result {
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             assert_eq!(
                 class_name, "testing.TestCollector",
                 "expected class_name 'testing.TestCollector', got '{class_name}'"
@@ -81,7 +82,6 @@ async fn registry_new_copy_objects_false_returns_handle() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -90,7 +90,7 @@ async fn registry_new_copy_objects_false_returns_handle() {
     let result = engine
         .call_function(
             "testing.TestCollector.new",
-            vec![BexExternalValue::String(String::new())],
+            vec![BexExternalValue::String("".into())],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             false, // copy_objects: return Handle instead of deep-extracting
         )

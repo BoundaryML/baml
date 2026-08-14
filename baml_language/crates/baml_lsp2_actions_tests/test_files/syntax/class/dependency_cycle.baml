@@ -1,15 +1,15 @@
 // Basic Mutual recursion between two classes.
 class InterfaceTwo {
-  interface InterfaceOne
+  iface InterfaceOne
 }
 
 class InterfaceOne {
-  interface InterfaceTwo
+  iface InterfaceTwo
 }
 
 // Infinite recursion on the same class.
 class InterfaceThree {
-  interface InterfaceThree
+  iface InterfaceThree
 }
 
 // Long cycle.
@@ -60,7 +60,7 @@ class Union {
 //    |
 //  1 | // Basic Mutual recursion between two classes.
 //  2 | class InterfaceTwo {
-//  3 |   interface InterfaceOne
+//  3 |   iface InterfaceOne
 //  4 | }
 //    |
 // error: Error validating: These classes form a dependency cycle: InterfaceThree
@@ -68,7 +68,7 @@ class Union {
 //    |
 // 10 | // Infinite recursion on the same class.
 // 11 | class InterfaceThree {
-// 12 |   interface InterfaceThree
+// 12 |   iface InterfaceThree
 // 13 | }
 //    |
 // error: Error validating: These classes form a dependency cycle: One -> Two -> Three -> Four -> Five

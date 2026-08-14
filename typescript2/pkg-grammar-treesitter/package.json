@@ -1,0 +1,15 @@
+{
+  "name": "@b/pkg-grammar-treesitter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "tree-sitter grammar for BAML (single source of truth, mirrored read-only to BoundaryML/baml-treesitter for Neovim/Zed/Helix consumers).",
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter generate && tree-sitter test && pnpm run parse-fixtures",
+    "parse-fixtures": "sh -c 'fail=0; for f in ../pkg-grammar/tests/fixtures/*.baml; do n=$(tree-sitter parse \"$f\" | grep -cE \"ERROR|MISSING\"); if [ \"$n\" != 0 ]; then fail=1; echo \"FAIL($n) $f\"; fi; done; [ $fail = 0 ] && echo \"all fixtures parse clean\"; exit $fail' -",
+    "assemble-mirror": "node scripts/assemble-mirror.mjs"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.25.8"
+  }
+}

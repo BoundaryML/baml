@@ -14,15 +14,14 @@ class Test {
 //----
 //- diagnostics
 // (parse error expected - incomplete field)
-// Error: field 'field' is missing a type annotation
-//     ╭─[ type_position.baml:11:5 ]
-//     │
+// E0010
+//
+//   × invalid syntax
+//     ╭─[type_position.baml:11:5]
 //  11 │     field :
-//     │     ──┬──  
-//     │       ╰──── field 'field' is missing a type annotation
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
+//     ·     ──┬──
+//     ·       ╰── field 'field' is missing a type annotation
+//     ╰────
 //
 //- completions
 // (new pipeline detects top-level context here instead of type position)

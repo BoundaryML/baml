@@ -18,6 +18,13 @@ pub(crate) trait EvalStackTrait {
     fn ensure_pop(&mut self) -> Value;
     fn ensure_stack_top(&self) -> StackIndex;
     fn ensure_slot_from_top(&self, index_from_top: usize) -> StackIndex;
+    /// Read a slot without bounds checking. Same invariant as `ensure_pop`:
+    /// the compiler assigns every local/temp a slot within the live frame's
+    /// region, validated at emit time, so the index is always in bounds.
+    fn get_at(&self, idx: StackIndex) -> Value;
+    /// Write a slot without bounds checking (same invariant). `Value: Copy`,
+    /// so the overwrite needs no drop.
+    fn set_at(&mut self, idx: StackIndex, v: Value);
 }
 
 impl EvalStackTrait for EvalStack {
@@ -51,6 +58,22 @@ impl EvalStackTrait for EvalStack {
         #[allow(unsafe_code)]
         unsafe {
             StackIndex::from_raw(self.0.len().unchecked_sub(index_from_top + 1))
+        }
+    }
+
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn get_at(&self, idx: StackIndex) -> Value {
+        // SAFETY: compiler-validated slot (see trait docs).
+        unsafe { *self.0.get_unchecked(idx.raw()) }
+    }
+
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn set_at(&mut self, idx: StackIndex, v: Value) {
+        // SAFETY: compiler-validated slot (see trait docs).
+        unsafe {
+            *self.0.get_unchecked_mut(idx.raw()) = v;
         }
     }
 }

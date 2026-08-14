@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.lambda_first() -> int  [expr] {
+  { let f = (value: int, value: string) -> int { { value = true } value } } 0
+}
+function user.lambda_last() -> int  [expr] {
+  { let f = (value: string, value: int) -> string { { value = true } value } } 0
+}
+function user.named_first(value: int, value: string) -> int  [expr] {
+  {  } value
+}
+function user.named_last(value: string, value: int) -> string  [expr] {
+  {  } value
+}

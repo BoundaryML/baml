@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use js_sys::{Function, Promise, Reflect, Uint8Array};
 use sys_ops::io::{self, IoNamespaceSys};
-use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use sys_types::{
+    BexExternalValue, BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
+};
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::JsFuture;
 
@@ -30,15 +32,20 @@ impl WasmSys {
 
 /// Unpack a JS result object `{ exit_code, stdout_bytes, stderr_bytes }`
 /// into an `owned::sys::ShellOutput`.
-fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, OpErrorKind> {
+fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, VmBamlError> {
     let exit_code_f64 = Reflect::get(obj, &"exit_code".into())
-        .map_err(|e| OpErrorKind::Io {
+        .map_err(|e| VmBamlError::Io {
             message: format!("missing exit_code: {e:?}"),
         })?
         .as_f64()
         .unwrap_or(-1.0);
-    #[allow(clippy::cast_possible_truncation)]
-    let exit_code = exit_code_f64 as i64;
+    // `as i64` for f64 is saturating: NaN → 0, ±inf → i64 extremes,
+    // fractionals → truncated toward zero. A NaN exit code would
+    // silently become 0 (success). `FromPrimitive::from_f64` returns
+    // `None` exactly when the value is non-finite, out of `i64` range,
+    // or non-integer — for those, fall back to `-1` (the same sentinel
+    // the `unwrap_or` above uses when `exit_code` is missing entirely).
+    let exit_code = <i64 as num_traits::FromPrimitive>::from_f64(exit_code_f64).unwrap_or(-1);
 
     let stdout = Reflect::get(obj, &"stdout_bytes".into())
         .ok()
@@ -82,6 +89,13 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
             if let Some(ref stdin) = opts.stdin {
                 let _ = Reflect::set(&obj, &"stdin".into(), &stdin.into());
             }
+            if let Some(keep_stdin_open) = opts.keep_stdin_open {
+                let _ = Reflect::set(
+                    &obj,
+                    &"keep_stdin_open".into(),
+                    &JsValue::from_bool(keep_stdin_open),
+                );
+            }
             js_sys::JSON::stringify(&obj)
                 .map(JsValue::from)
                 .unwrap_or(JsValue::NULL)
@@ -89,7 +103,105 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
     }
 }
 
+impl io::IoClassSysProcess for WasmSys {
+    fn write_stdin(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close_stdin(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn wait(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn kill(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::ok(())
+    }
+}
+
+impl io::IoClassSysProcessLineStream for WasmSys {
+    fn _next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _processlinestream: io::owned::sys::ProcessLineStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _processlinestream: io::owned::sys::ProcessLineStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::ok(())
+    }
+}
+
 impl IoNamespaceSys for WasmSys {
+    fn collect_garbage(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // BexEngine intercepts this operation before ordinary sys-op dispatch
+        // so it can release the calling VM's heap permit and coordinate a
+        // stop-the-world collection. This fallback keeps the generated IO
+        // contract complete for alternate dispatchers.
+        SysOpOutput::ok(())
+    }
+
     fn exec(
         &self,
         _heap: &Arc<BexHeap>,
@@ -116,19 +228,33 @@ impl IoNamespaceSys for WasmSys {
 
             let result = exec_fn
                 .call3(&JsValue::NULL, &program_js, &args_js, &options_js)
-                .map_err(|e| OpErrorKind::Io {
+                .map_err(|e| VmBamlError::Io {
                     message: format!("exec callback failed: {e:?}"),
                 })?;
 
-            let promise: Promise = result.dyn_into().map_err(|_| OpErrorKind::Io {
+            let promise: Promise = result.dyn_into().map_err(|_| VmBamlError::Io {
                 message: "exec callback did not return a Promise".into(),
             })?;
-            let obj = JsFuture::from(promise).await.map_err(|e| OpErrorKind::Io {
+            let obj = JsFuture::from(promise).await.map_err(|e| VmBamlError::Io {
                 message: format!("exec callback rejected: {e:?}"),
             })?;
 
-            unpack_shell_result(&obj)
+            unpack_shell_result(&obj).map_err(VmRustFnError::from)
         }))
+    }
+
+    fn start_process(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::ProcessOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::Process> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
     }
 
     fn shell(
@@ -146,18 +272,18 @@ impl IoNamespaceSys for WasmSys {
 
             let result = shell_fn
                 .call2(&JsValue::NULL, &command_js, &options_js)
-                .map_err(|e| OpErrorKind::Io {
+                .map_err(|e| VmBamlError::Io {
                     message: format!("shell callback failed: {e:?}"),
                 })?;
 
-            let promise: Promise = result.dyn_into().map_err(|_| OpErrorKind::Io {
+            let promise: Promise = result.dyn_into().map_err(|_| VmBamlError::Io {
                 message: "shell callback did not return a Promise".into(),
             })?;
-            let obj = JsFuture::from(promise).await.map_err(|e| OpErrorKind::Io {
+            let obj = JsFuture::from(promise).await.map_err(|e| VmBamlError::Io {
                 message: format!("shell callback rejected: {e:?}"),
             })?;
 
-            unpack_shell_result(&obj)
+            unpack_shell_result(&obj).map_err(VmRustFnError::from)
         }))
     }
 
@@ -165,10 +291,13 @@ impl IoNamespaceSys for WasmSys {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        delay_ms: i64,
+        delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        let millis = i32::try_from(delay_ms.clamp(0, i64::from(i32::MAX))).unwrap_or(i32::MAX);
+        let millis = match sleep_millis_from_delay(delay) {
+            Ok(millis) => millis,
+            Err(err) => return SysOpOutput::err(err),
+        };
         let promise = js_sys::Promise::new(&mut |resolve, _reject| {
             set_timeout(&resolve, millis);
         });
@@ -176,5 +305,40 @@ impl IoNamespaceSys for WasmSys {
             let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
             Ok(())
         }))
+    }
+}
+
+fn sleep_millis_from_delay(delay: BexExternalValue) -> Result<i32, VmRustFnError> {
+    match delay {
+        BexExternalValue::Instance {
+            class_name,
+            mut fields,
+            ..
+        } if class_name == "baml.time.Duration" => {
+            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
+                }));
+            };
+            let BexExternalValue::Bigint(nanos) = nanos else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
+                }));
+            };
+            if nanos.sign() == num_bigint::Sign::Plus {
+                let nanos = u64::try_from(&nanos).unwrap_or(u64::MAX);
+                let rounded_millis = nanos.saturating_add(999_999) / 1_000_000;
+                Ok(i32::try_from(rounded_millis).unwrap_or(i32::MAX))
+            } else {
+                Ok(0)
+            }
+        }
+        BexExternalValue::Union { value, .. } => sleep_millis_from_delay(*value),
+        other => Err(VmRustFnError::from(VmBamlError::Io {
+            message: format!(
+                "sleep delay must be baml.time.Duration, got {}",
+                other.type_name()
+            ),
+        })),
     }
 }

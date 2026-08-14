@@ -45,10 +45,22 @@ pub enum TokenKind {
     Class,
     #[token("enum")]
     Enum,
+    #[token("interface")]
+    Interface,
+    #[token("implements")]
+    Implements,
+    #[token("implement")]
+    Implement,
+    #[token("extends")]
+    Extends,
+    #[token("requires")]
+    Requires,
     #[token("function")]
     Function,
     #[token("client")]
     Client,
+    /// Deprecated: `generator` blocks moved to `baml.toml`. Still lexed so the
+    /// parser can recognize stale blocks and raise a migration diagnostic.
     #[token("generator")]
     Generator,
     #[token("test")]
@@ -59,9 +71,6 @@ pub enum TokenKind {
     RetryPolicy,
     #[token("template_string")]
     TemplateString,
-    #[token("type_builder")]
-    TypeBuilder,
-
     // Control flow keywords
     #[token("if")]
     If,
@@ -91,20 +100,28 @@ pub enum TokenKind {
     CatchAll,
     #[token("throws")]
     Throws,
+    #[token("spawn")]
+    Spawn,
+    #[token("await")]
+    Await,
+    #[token("defer")]
+    Defer,
 
     // Other keywords
-    #[token("watch")]
-    Watch,
     #[token("instanceof")]
     Instanceof,
-    #[token("dynamic")]
-    Dynamic,
-
+    #[token("is")]
+    Is,
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
-    /// Also matches $-prefixed identifiers like $watch for special builtin methods
+    /// Also matches $-prefixed identifiers and `$`-separated names.
+    /// and `$`-separated names like `Foo$bar`. A *trailing* `$` is intentionally
+    /// rejected so that `${` inside a backtick string (BEP-049 interpolation
+    /// marker) doesn't get absorbed into a preceding identifier — e.g.
+    /// `before-${x}` must lex as `Word("before-"), Dollar, LBrace, ...`,
+    /// not `Word("before-$"), LBrace, ...`.
     #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*")]
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_$-]*")]
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*(\$[a-zA-Z_][a-zA-Z0-9_-]*)*")]
     Word,
 
     /// Quote symbol - used for string delimiters
@@ -119,12 +136,70 @@ pub enum TokenKind {
     #[token("#")]
     Hash,
 
-    /// Integer literal
-    #[regex(r"[0-9]+")]
+    /// Backtick symbol - used for interpolated string delimiters (BEP-049)
+    /// Parser assembles backtick strings by collecting tokens between matching
+    /// runs of N backticks (multi-tick ladder, anchored close).
+    /// E.g., `hello ${name}` → Backtick, Word("hello"), ..., Backtick
+    #[token("`")]
+    Backtick,
+
+    /// Bigint literal: decimal (`42n`), hex (`0xFFn`), octal (`0o755n`), or
+    /// binary (`0b1010n`) digits with a trailing `n`, with `_` separators
+    /// allowed among the digits. Wins over Integer by maximal munch.
+    ///
+    /// Prefixed forms deliberately over-accept, exactly like `IntegerLiteral`
+    /// below — see that token's comment. Validation happens in
+    /// `baml_base::num_lit` when the value is parsed.
+    #[regex(r"[0-9][0-9_]*n")]
+    #[regex(r"0[xX][0-9a-fA-F_]*n")]
+    #[regex(r"0[oO][0-9_]*n")]
+    #[regex(r"0[bB][0-9_]*n")]
+    BigintLiteral,
+
+    /// Integer literal: decimal (`42`), hex (`0xFF`), octal (`0o755`), or
+    /// binary (`0b1010`), with `_` separators allowed among the digits.
+    ///
+    /// The prefixed forms deliberately over-accept (rustc's design) so that a
+    /// malformed literal stays one token with a good span instead of
+    /// splitting:
+    /// - `0b`/`0o` consume any decimal digits, so `0b123` is a single token
+    ///   and "invalid digit for a base 2 literal" can point at the `2`.
+    /// - Prefixes also match uppercase (`0X1F`), so "base prefixes are
+    ///   lowercase" can suggest the fix.
+    /// - A bare prefix (`0x`) is still one token, diagnosed as "no valid
+    ///   digits found for number".
+    ///
+    /// Validation and value parsing live in `baml_base::num_lit`.
+    #[regex(r"[0-9][0-9_]*")]
+    #[regex(r"0[xX][0-9a-fA-F_]*")]
+    #[regex(r"0[oO][0-9_]*")]
+    #[regex(r"0[bB][0-9_]*")]
     IntegerLiteral,
 
-    /// Float literal (must come after Integer in regex priority)
-    #[regex(r"[0-9]+\.[0-9]+")]
+    /// Float literal (must come after Integer in regex priority).
+    ///
+    /// Two patterns feed this token:
+    /// - `[0-9]+\.[0-9]+` — plain decimals such as `1.0` or `3.14`.
+    /// - `[0-9]+(\.[0-9]+)?[eE][+-]?[0-9]+` — scientific notation with an
+    ///   integer or decimal mantissa and a required signed/unsigned integer
+    ///   exponent, such as `1e10`, `1E3`, `1e-3`, `2e+5`, or `1.5e-3`.
+    ///
+    /// Maximal munch ensures `1e10` lexes as a single float rather than the
+    /// integer `1` followed by an identifier `e10` (which previously surfaced a
+    /// misleading "unresolved name" error). The exponent digits are mandatory,
+    /// so `1e` still lexes as `IntegerLiteral` + `Word`.
+    ///
+    /// `_` separators are allowed among digits (`1_000.5`, `1e1_0`), matching
+    /// Rust: the fraction must start with a digit (`1._5` stays member
+    /// access) and the exponent must contain at least one digit. One
+    /// deliberate divergence from Rust: the exponent must *start* with a
+    /// digit (`1e_1` is not a float) — logos miscompiles a leading `_*` loop
+    /// in the exponent, breaking backtracking for `1e`/`1e10`, and the form
+    /// is vanishingly rare. Underscores are stripped by
+    /// `baml_base::num_lit::normalize_float_literal` before the text reaches
+    /// `f64::from_str` downstream.
+    #[regex(r"[0-9][0-9_]*\.[0-9][0-9_]*")]
+    #[regex(r"[0-9][0-9_]*(\.[0-9][0-9_]*)?[eE][+-]?[0-9][0-9_]*")]
     FloatLiteral,
 
     // ============ Operators and Punctuation ============
@@ -272,6 +347,11 @@ impl std::fmt::Display for TokenKind {
             // Keywords
             TokenKind::Class => "class",
             TokenKind::Enum => "enum",
+            TokenKind::Interface => "interface",
+            TokenKind::Implements => "implements",
+            TokenKind::Implement => "implement",
+            TokenKind::Extends => "extends",
+            TokenKind::Requires => "requires",
             TokenKind::Function => "function",
             TokenKind::Client => "client",
             TokenKind::Generator => "generator",
@@ -279,7 +359,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::TestSet => "testset",
             TokenKind::RetryPolicy => "retry_policy",
             TokenKind::TemplateString => "template_string",
-            TokenKind::TypeBuilder => "type_builder",
             TokenKind::If => "if",
             TokenKind::Else => "else",
             TokenKind::For => "for",
@@ -294,14 +373,17 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Catch => "catch",
             TokenKind::CatchAll => "catch_all",
             TokenKind::Throws => "throws",
-            TokenKind::Watch => "watch",
+            TokenKind::Spawn => "spawn",
+            TokenKind::Await => "await",
+            TokenKind::Defer => "defer",
             TokenKind::Instanceof => "instanceof",
-            TokenKind::Dynamic => "dynamic",
-
+            TokenKind::Is => "is",
             // Identifiers and literals
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
             TokenKind::Hash => "'#'",
+            TokenKind::Backtick => "'`'",
+            TokenKind::BigintLiteral => "bigint",
             TokenKind::IntegerLiteral => "integer",
             TokenKind::FloatLiteral => "float",
 
@@ -504,6 +586,11 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_is_an_identifier() {
+        assert_eq!(lex_no_whitespace("dynamic"), vec![TokenKind::Word]);
+    }
+
+    #[test]
     fn test_word_with_dollar() {
         // Dollar-qualified names (e.g. companion functions) tokenize as a single Word
         let source = "ExtractResume$render_prompt Foo$bar";
@@ -518,8 +605,8 @@ mod tests {
             .collect();
         assert_eq!(words, vec!["ExtractResume$render_prompt", "Foo$bar"]);
 
-        // $-prefixed words work with dot access: foo.$watch
-        let source2 = "foo.$watch";
+        // $-prefixed words work with dot access.
+        let source2 = "foo.$value";
         let tokens2 = lex_no_whitespace(source2);
         assert_eq!(
             tokens2,
@@ -531,7 +618,7 @@ mod tests {
             .filter(|t| t.kind == TokenKind::Word)
             .map(|t| t.text.as_str())
             .collect();
-        assert_eq!(words2, vec!["foo", "$watch"]);
+        assert_eq!(words2, vec!["foo", "$value"]);
     }
 
     #[test]
@@ -663,7 +750,7 @@ mod tests {
     }
 
     #[test]
-    fn test_raw_string_with_jinja() {
+    fn test_raw_string_with_braces() {
         let source = r##"#"Hello {{ name }}"#"##;
         let tokens = lex_no_whitespace(source);
 
@@ -786,6 +873,71 @@ mod tests {
     }
 
     #[test]
+    fn test_backtick_basic() {
+        let source = "`hello`";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Word, // hello
+                TokenKind::Backtick,
+            ]
+        );
+
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_backtick_multi_tick_ladder() {
+        // Three opening + three closing backticks
+        let source = "```contains `single` ticks```";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Word, // contains
+                TokenKind::Backtick,
+                TokenKind::Word, // single
+                TokenKind::Backtick,
+                TokenKind::Word, // ticks
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+            ]
+        );
+
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_backtick_with_interpolation_tokens() {
+        // ${...} inside backtick — lexer emits the raw tokens; parser assembles
+        let source = "`Hello ${name}`";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Word, // Hello
+                TokenKind::Dollar,
+                TokenKind::LBrace,
+                TokenKind::Word, // name
+                TokenKind::RBrace,
+                TokenKind::Backtick,
+            ]
+        );
+
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
     fn test_url_in_string() {
         // Test that URLs with // inside strings are not treated as comments
         let source = r#""https://google.com""#;
@@ -824,7 +976,7 @@ mod tests {
                 TokenKind::Quote,
                 TokenKind::Word, // This
                 TokenKind::Whitespace,
-                TokenKind::Word, // is
+                TokenKind::Is, // is (now a keyword, even inside strings — the parser assembles string literals from raw tokens)
                 TokenKind::Whitespace,
                 TokenKind::Word, // a
                 TokenKind::Whitespace,
@@ -856,13 +1008,13 @@ mod tests {
                 TokenKind::Whitespace, //
                 TokenKind::Word,       // This
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // is
+                TokenKind::Is, // is (keyword; the parser, not the lexer, recognises this as comment content)
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // a
+                TokenKind::Word, // a
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // comment
-                TokenKind::Newline,    // \n
-                TokenKind::Word,       // code
+                TokenKind::Word, // comment
+                TokenKind::Newline, // \n
+                TokenKind::Word, // code
             ]
         );
 
@@ -892,8 +1044,8 @@ mod tests {
 
     #[test]
     fn test_path_with_keyword_segment() {
-        // `baml.llm.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
-        let tokens = lex_no_whitespace("baml.llm.get_client");
+        // `baml.prompt.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
+        let tokens = lex_no_whitespace("baml.prompt.get_client");
         assert_eq!(
             tokens,
             vec![
@@ -992,5 +1144,198 @@ mod tests {
 
         // Verify lossless
         assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn lex_scientific_notation_float() {
+        // Scientific notation lexes as a single FloatLiteral token rather than
+        // splitting the exponent into a misleading `Word` (the bug this fixes).
+        for src in [
+            "1e10", "1E3", "1e-3", "2e+5", "1.0e10", "1.5e3", "1.5e-3", "10E-2",
+        ] {
+            assert_eq!(
+                lex_no_whitespace(src),
+                vec![TokenKind::FloatLiteral],
+                "expected a single FloatLiteral for {src:?}"
+            );
+            assert_eq!(reconstruct_source(&lex(src)), src);
+        }
+
+        // The exponent digits are mandatory: a bare `e` is not consumed.
+        assert_eq!(
+            lex_no_whitespace("1e"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Word]
+        );
+
+        // A space breaks scientific notation back into integer + identifier.
+        assert_eq!(
+            lex_no_whitespace("1 e10"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Word]
+        );
+
+        // Plain decimals and integers are unaffected (no regression).
+        assert_eq!(lex_no_whitespace("3.14"), vec![TokenKind::FloatLiteral]);
+        assert_eq!(lex_no_whitespace("42"), vec![TokenKind::IntegerLiteral]);
+
+        // Member access on an integer is still integer + dot + word, because the
+        // float patterns require either fractional digits or an exponent.
+        assert_eq!(
+            lex_no_whitespace("3.foo"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Dot, TokenKind::Word]
+        );
+    }
+
+    #[test]
+    fn lex_bigint_literal() {
+        // Plain bigint literals
+        assert_eq!(lex_no_whitespace("42n"), vec![TokenKind::BigintLiteral]);
+        assert_eq!(lex_no_whitespace("0n"), vec![TokenKind::BigintLiteral]);
+        assert_eq!(
+            lex_no_whitespace("99999999999999999999n"),
+            vec![TokenKind::BigintLiteral]
+        );
+
+        // Bigint followed by an identifier — must not consume the identifier part
+        assert_eq!(
+            lex_no_whitespace("42na"),
+            vec![TokenKind::BigintLiteral, TokenKind::Word]
+        );
+
+        // `42n.5` — the `42n` is consumed as BigintLiteral, leaving `.5`
+        // which splits into Dot then IntegerLiteral (not FloatLiteral because the
+        // integer part was already consumed).
+        assert_eq!(
+            lex_no_whitespace("42n.5"),
+            vec![
+                TokenKind::BigintLiteral,
+                TokenKind::Dot,
+                TokenKind::IntegerLiteral
+            ]
+        );
+
+        // Verify that plain integers still lex as IntegerLiteral (no regression)
+        assert_eq!(lex_no_whitespace("42"), vec![TokenKind::IntegerLiteral]);
+
+        // Lossless reconstruction
+        assert_eq!(reconstruct_source(&lex("42n")), "42n");
+        assert_eq!(reconstruct_source(&lex("0n")), "0n");
+    }
+
+    #[test]
+    fn lex_prefixed_int_literals() {
+        // Hex, octal, and binary literals are single IntegerLiteral tokens.
+        for src in [
+            "0xFF", "0xff", "0xCAFE", "0o755", "0b1010", "0x0", "0o0", "0b0",
+        ] {
+            assert_eq!(
+                lex_no_whitespace(src),
+                vec![TokenKind::IntegerLiteral],
+                "expected a single IntegerLiteral for {src:?}"
+            );
+            assert_eq!(reconstruct_source(&lex(src)), src);
+        }
+
+        // Uppercase prefixes stay one token so validation can suggest the
+        // lowercase spelling instead of the text splitting into `0` + word.
+        for src in ["0X1F", "0B10", "0O7"] {
+            assert_eq!(
+                lex_no_whitespace(src),
+                vec![TokenKind::IntegerLiteral],
+                "expected a single IntegerLiteral for {src:?}"
+            );
+        }
+
+        // Binary/octal over-accept decimal digits so invalid literals stay
+        // one token; the error is diagnosed at value-parse time.
+        for src in ["0b123", "0b10_10301", "0o18", "0o1234_9_5670"] {
+            assert_eq!(
+                lex_no_whitespace(src),
+                vec![TokenKind::IntegerLiteral],
+                "expected a single IntegerLiteral for {src:?}"
+            );
+        }
+
+        // A bare prefix is one token, diagnosed as "no valid digits" later.
+        for src in ["0x", "0b", "0o", "0x__", "0b_"] {
+            assert_eq!(
+                lex_no_whitespace(src),
+                vec![TokenKind::IntegerLiteral],
+                "expected a single IntegerLiteral for {src:?}"
+            );
+        }
+
+        // Non-digits for the base are not consumed.
+        assert_eq!(
+            lex_no_whitespace("0xG"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Word]
+        );
+        assert_eq!(
+            lex_no_whitespace("0b1f"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Word]
+        );
+
+        // Member access and float-like tails do not get absorbed.
+        assert_eq!(
+            lex_no_whitespace("0xFF.to_string"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Dot, TokenKind::Word]
+        );
+        assert_eq!(
+            lex_no_whitespace("0x1.5"),
+            vec![
+                TokenKind::IntegerLiteral,
+                TokenKind::Dot,
+                TokenKind::IntegerLiteral
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_underscore_separators() {
+        // Underscores among digits stay inside a single literal token.
+        for (src, kind) in [
+            ("1_000", TokenKind::IntegerLiteral),
+            ("1_", TokenKind::IntegerLiteral),
+            ("1_2_3", TokenKind::IntegerLiteral),
+            ("0xFF_FF", TokenKind::IntegerLiteral),
+            ("0x_F", TokenKind::IntegerLiteral),
+            ("0b10_10", TokenKind::IntegerLiteral),
+            ("0o7_5_5", TokenKind::IntegerLiteral),
+            ("1_000.000_1", TokenKind::FloatLiteral),
+            ("1_.5", TokenKind::FloatLiteral),
+            ("1_0e1_0", TokenKind::FloatLiteral),
+            ("1e-1_0", TokenKind::FloatLiteral),
+            ("1e1_", TokenKind::FloatLiteral),
+            ("1_000n", TokenKind::BigintLiteral),
+            ("0xFF_FFn", TokenKind::BigintLiteral),
+            ("0o755n", TokenKind::BigintLiteral),
+            ("0b10_10n", TokenKind::BigintLiteral),
+        ] {
+            assert_eq!(
+                lex_no_whitespace(src),
+                vec![kind],
+                "expected a single {kind:?} for {src:?}"
+            );
+            assert_eq!(reconstruct_source(&lex(src)), src);
+        }
+
+        // A leading underscore is an identifier, not a literal (as in Rust).
+        assert_eq!(lex_no_whitespace("_1"), vec![TokenKind::Word]);
+
+        // The fraction must start with a digit: `1._5` stays member access.
+        assert_eq!(
+            lex_no_whitespace("1._5"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Dot, TokenKind::Word]
+        );
+
+        // The exponent must start with a digit (deliberate divergence from
+        // Rust, which allows `1e_1` — see the FloatLiteral regex comment).
+        assert_eq!(
+            lex_no_whitespace("1e_"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Word]
+        );
+        assert_eq!(
+            lex_no_whitespace("1e_1"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Word]
+        );
     }
 }

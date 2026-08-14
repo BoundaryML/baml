@@ -14,3 +14,13 @@ rpi/
 
 # insta pending snapshot scratch files (resolved by `cargo insta review`)
 *.pending-snap
+
+# Local scratch projects / fuzz repros (not part of the build)
+workflow_scratch_files/
+
+# Java/Gradle build artifacts
+sdks/java/**/.gradle/
+sdks/java/**/build/
+
+# .bamlprof artifacts (profiling is default-on; BAML_PROFILE=0 opts out)
+**/.baml/profiles/

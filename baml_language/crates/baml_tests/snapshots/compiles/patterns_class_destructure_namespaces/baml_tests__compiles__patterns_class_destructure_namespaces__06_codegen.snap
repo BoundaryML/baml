@@ -1,14 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 21269
 ---
 function user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
-    load_type string
-    alloc_instance<1> user.llm.openai.Outer
-    load_type string
-    alloc_instance<1> user.llm.openai.Box
     load_const "done"
-    init_field .value
-    init_field .inner
+    load_type string
+    init_instance<1> user.llm.openai.Box .value
+    load_type string
+    init_instance<1> user.llm.openai.Outer .inner
     load_field .inner
     load_field .value
     call baml.String.length
@@ -16,42 +15,35 @@ function user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
 }
 
 function user.DeepGenericDestructureQualifiedLet() -> int {
-    load_type int
-    alloc_instance<1> user.llm.openai.Outer
-    load_type int
-    alloc_instance<1> user.llm.openai.Box
     load_const 52
-    init_field .value
-    init_field .inner
+    load_type int
+    init_instance<1> user.llm.openai.Box .value
+    load_type int
+    init_instance<1> user.llm.openai.Outer .inner
     load_field .inner
     load_field .value
     return
 }
 
 function user.DestructureNamespaceQualifiedLet() -> int {
-    alloc_instance user.llm.openai.Response
     load_const "ok"
-    init_field .text
     load_const 45
-    init_field .score
+    init_instance user.llm.openai.Response .text, .score
     load_field .score
     return
 }
 
 function user.DestructureNamespaceQualifiedMatch() -> int {
-    alloc_instance user.llm.openai.Response
     load_const "ok"
-    init_field .text
     load_const 46
-    init_field .score
-    store_var response
-    load_var response
+    init_instance user.llm.openai.Response .text, .score
+    store_var_load_var response
     is_type llm.openai.Response
     pop_jump_if_false L0
     load_var response
     load_field .score
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -68,29 +60,24 @@ function user.DestructureNamespaceQualifiedMatch() -> int {
 }
 
 function user.DestructureQualifiedLet() -> int {
-    alloc_instance user.llm.openai.Response
     load_const "ok"
-    init_field .text
     load_const 41
-    init_field .score
+    init_instance user.llm.openai.Response .text, .score
     load_field .score
     return
 }
 
 function user.DestructureQualifiedMatch() -> int {
-    alloc_instance user.llm.openai.Response
     load_const "ok"
-    init_field .text
     load_const 42
-    init_field .score
-    store_var response
-    load_var response
+    init_instance user.llm.openai.Response .text, .score
+    store_var_load_var response
     is_type llm.openai.Response
     pop_jump_if_false L0
     load_var response
     load_field .score
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -107,35 +94,27 @@ function user.DestructureQualifiedMatch() -> int {
 }
 
 function user.GenericDestructureNamespaceQualifiedLet() -> int {
-    load_type string
-    alloc_instance<1> user.llm.openai.Box
     load_const "ok"
-    init_field .value
+    load_type string
+    init_instance<1> user.llm.openai.Box .value
     load_field .value
     call baml.String.length
     return
 }
 
 function user.GenericDestructureQualifiedLet() -> int {
-    load_type int
-    alloc_instance<1> user.llm.openai.Box
     load_const 49
-    init_field .value
+    load_type int
+    init_instance<1> user.llm.openai.Box .value
     load_field .value
     return
 }
 
 function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
-    load_const null /* unknown class:  */
     load_const "ready"
-    init_field .0
-    store_var boxed
-    load_var boxed
+    load_type string
+    init_instance<1> user.llm.openai.Box .value
     is_type llm.openai.Box<...>
-    pop_jump_if_false L0
-    load_var boxed
-    load_field .0
-    is_type int
     pop_jump_if_false L0
     jump L1
 
@@ -151,16 +130,10 @@ function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
 }
 
 function user.GenericTypePatternQualifiedMatch() -> int {
-    load_const null /* unknown class:  */
     load_const 50
-    init_field .0
-    store_var boxed
-    load_var boxed
+    load_type int
+    init_instance<1> user.llm.openai.Box .value
     is_type llm.openai.Box<...>
-    pop_jump_if_false L0
-    load_var boxed
-    load_field .0
-    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -176,140 +149,39 @@ function user.GenericTypePatternQualifiedMatch() -> int {
 }
 
 function user.TypePatternNamespaceQualifiedLet() -> int {
-    alloc_instance user.llm.openai.Response
     load_const "ok"
-    init_field .text
     load_const 47
-    init_field .score
+    init_instance user.llm.openai.Response .text, .score
     load_field .score
     return
 }
 
 function user.TypePatternNamespaceQualifiedMatch() -> int {
-    alloc_instance user.llm.openai.Response
     load_const "ok"
-    init_field .text
     load_const 48
-    init_field .score
+    init_instance user.llm.openai.Response .text, .score
     load_field .score
     return
 }
 
 function user.TypePatternQualifiedLet() -> int {
-    alloc_instance user.llm.openai.Response
     load_const "ok"
-    init_field .text
     load_const 43
-    init_field .score
+    init_instance user.llm.openai.Response .text, .score
     load_field .score
     return
 }
 
 function user.TypePatternQualifiedMatch() -> int {
-    alloc_instance user.llm.openai.Response
     load_const "ok"
-    init_field .text
     load_const 44
-    init_field .score
+    init_instance user.llm.openai.Response .text, .score
     load_field .score
-    return
-}
-
-function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void> {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type #0
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_type #0
-    alloc_instance<1> user.llm.openai.Box
-    load_var _2
-    init_field .value
-    return
-}
-
-function user.llm.openai.Box.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .value
-    call baml.json.to_json
-    load_const "value"
-    alloc_map 1
     return
 }
 
 function user.llm.openai.DestructureBareInNamespace(response: llm.openai.Response) -> int {
     load_var response
     load_field .score
-    return
-}
-
-function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<void> {
-    load_var j
-    load_const "inner"
-    call baml.json.field
-    store_var _3
-    load_type llm.openai.Box<#0>
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_type #0
-    alloc_instance<1> user.llm.openai.Outer
-    load_var _2
-    init_field .inner
-    return
-}
-
-function user.llm.openai.Outer.to_json(self: null) -> baml.json.json {
-    load_type #0
-    load_var self
-    load_field .inner
-    call user.llm.openai.Box.to_json
-    load_const "inner"
-    alloc_map 1
-    return
-}
-
-function user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Response {
-    load_var j
-    load_const "text"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "score"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.openai.Response
-    load_var _2
-    init_field .text
-    load_var _5
-    init_field .score
-    return
-}
-
-function user.llm.openai.Response.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .text
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .score
-    call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "text"
-    load_const "score"
-    alloc_map 2
     return
 }

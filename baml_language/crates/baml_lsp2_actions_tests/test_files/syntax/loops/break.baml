@@ -46,23 +46,18 @@ function Nested() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected int, got string
-//    ╭─[ loops_break.baml:6:14 ]
-//    │
+// E0001
+//
+//   × mismatched types
+//    ╭─[loops_break.baml:6:14]
 //  6 │     res.push("hi");
-//    │              ──┬─  
-//    │                ╰─── type mismatch: expected int, got string
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Warning: unreachable code: 1 statement(s) after diverging statement
-//     ╭─[ loops_break.baml:20:32 ]
-//     │
-//  20 │ ╭─▶ function OutsideLoop() -> int {
-//     ┆ ┆   
-//  22 │ ├─▶     break;
-//     │ │                
-//     │ ╰──────────────── unreachable code: 1 statement(s) after diverging statement
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
+//    ·              ──┬─
+//    ·                ╰── expected `int`, found `"hi"`
+//    ╰────
+// E0146
+//
+//   ⚠ unreachable code: 1 statement(s) after diverging statement
+//     ╭─[loops_break.baml:22:5]
+//  22 │     break;
+//     ·     ──────
+//     ╰────

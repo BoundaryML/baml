@@ -1,7 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25102
 ---
-function $init_test() -> null {
+function $init_test(registry: unknown) -> null {
     load_var ?1
     call ?
     pop 1
@@ -9,69 +10,21 @@ function $init_test() -> null {
     return
 }
 
-function user.$init_test_32(registry: testing.TestCollector) -> null {
+function user.$init_test_main(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root"
     load_const "with as field"
-    make_closure .<lambda($init_test_32, 0)>, 0
+    make_closure .<lambda($init_test_main, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
 }
 
-function user.Foo.from_json(j: baml.json.json) -> Foo {
-    load_var j
-    load_const "x"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Foo
-    load_var _2
-    init_field .x
-    return
-}
-
-function user.Foo.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .x
-    call baml.Int.to_json
-    load_const "x"
-    alloc_map 1
-    return
-}
-
-function user.HasWith.from_json(j: baml.json.json) -> HasWith {
-    load_var j
-    load_const "with"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.HasWith
-    load_var _2
-    init_field .with
-    return
-}
-
-function user.HasWith.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .with
-    call baml.Int.to_json
-    load_const "with"
-    alloc_map 1
-    return
-}
-
 function user.make_foo() -> Foo {
-    alloc_instance user.Foo
     load_const 1
-    init_field .x
+    init_instance user.Foo .x
     return
 }
 

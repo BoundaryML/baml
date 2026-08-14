@@ -1,92 +1,55 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 2821
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
-   ╭─[ extra_greater.baml:7:29 ]
-   │
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[extra_greater.baml:7:29]
  7 │   bad_field map<string, int>>
-   │                             ┬  
-   │                             ╰── Unmatched '>' in type expression (found 1 extra)
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                             ┬
+   ·                             ╰── unmatched `>` in type expression (found 1 extra)
+   ╰────
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:20:2 ]
-    │
- 20 │ ╭─▶ }
-    ┆ ┆   
- 26 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  [parse] E0010
 
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ extra_greater.baml:23:38 ]
-    │
+  × invalid syntax
+    ╭─[extra_greater.baml:23:38]
  23 │ function BadParam(x: map<string, int>>) -> string {
-    │                                      ┬  
-    │                                      ╰── Unmatched '>' in type expression (found 1 extra)
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                      ┬
+    ·                                      ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:23:50 ]
-    │
- 23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
-    ┆ ┆   
- 26 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  [type] E0003
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:26:2 ]
-    │
- 26 │ ╭─▶ }
-    ┆ ┆   
- 32 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  × unresolved name: `GPT4`
+    ╭─[extra_greater.baml:24:11]
+ 24 │   client: GPT4
+    ·           ────
+    ╰────
 
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ extra_greater.baml:29:45 ]
-    │
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[extra_greater.baml:29:45]
  29 │ function BadReturnType() -> map<string, int>> {
-    │                                             ┬  
-    │                                             ╰── Unmatched '>' in type expression (found 1 extra)
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                             ┬
+    ·                                             ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:29:46 ]
-    │
- 29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
-    ┆ ┆   
- 32 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  [type] E0003
 
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ extra_greater.baml:35:33 ]
-    │
+  × unresolved name: `GPT4`
+    ╭─[extra_greater.baml:30:11]
+ 30 │   client: GPT4
+    ·           ────
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[extra_greater.baml:35:33]
  35 │ type BadAlias = map<string, int>>
-    │                                 ┬  
-    │                                 ╰── Unmatched '>' in type expression (found 1 extra)
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                 ┬
+    ·                                 ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────

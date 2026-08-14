@@ -1,7 +1,8 @@
 version = 1
+revision = 3
 requires-python = ">=3.10"
 
 [[package]]
 name = "baml-py"
-version = "0.211.2"
+version = "0.222.0"
 source = { editable = "." }

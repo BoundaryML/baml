@@ -2,72 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Inner.from_json(j: baml.json.json) -> Inner {
-    // Locals:
-    let _0: Inner // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Inner { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Outer.from_json(j: baml.json.json) -> Outer {
-    // Locals:
-    let _0: Outer // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: Inner
-    let _3: baml.json.json
-    let _4: type
-    let _5: string
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "inner") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(Inner);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "name") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(string);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.Outer { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
 fn user.test_captured_field_access(obj: Outer) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -87,9 +21,9 @@ fn user.test_captured_field_access(obj: Outer) -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_captured_field_access, 0)>() -> null {
+fn .<lambda(test_captured_field_access, 0)>() -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
 
     bb0: {
         _0 = copy capture[0].1;
@@ -120,99 +54,12 @@ fn user.test_captured_nested_field(obj: Outer) -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_captured_nested_field, 0)>() -> null {
+fn .<lambda(test_captured_nested_field, 0)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0].0.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_lambda_param_and_capture(obj: Outer) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: Outer // obj // param [captured]
-    let _2: (int) -> int throws never // add_to_value
-    let _3: (int) -> int throws never
-
-    bb0: {
-        _2 = make_closure lambda[0](copy _1);
-        _3 = copy _2;
-        _0 = call copy _3(const 10_i64) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(test_lambda_param_and_capture, 0)>(x: int) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: int // x // param
-    let _2: int
-
-    bb0: {
-        _2 = copy capture[0].0.0;
-        _0 = copy _1 + copy _2;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_nested_lambda_capture(obj: Outer) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Outer // obj // param [captured]
-    let _2: () -> string throws never // outer_fn
-    let _3: () -> string throws never
-
-    bb0: {
-        _2 = make_closure lambda[0](copy _1);
-        _3 = copy _2;
-        _0 = call copy _3() -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(test_nested_lambda_capture, 0)>() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: () -> string throws never // inner_fn
-    let _2: () -> string throws never
-
-    bb0: {
-        _1 = make_closure lambda[0](copy capture[0]);
-        _2 = copy _1;
-        _0 = call copy _2() -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(<lambda(test_nested_lambda_capture, 0)>, 1)>() -> null {
-    // Locals:
-    let _0: null // _0 // return
-
-    bb0: {
-        _0 = copy capture[0].1;
         goto -> bb1;
     }
 
@@ -248,12 +95,63 @@ fn user.test_no_leak_after_lambda(obj: Outer) -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_no_leak_after_lambda, 0)>() -> null {
+fn .<lambda(test_no_leak_after_lambda, 0)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0].0.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_nested_lambda_capture(obj: Outer) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Outer // obj // param [captured]
+    let _2: () -> string throws never // outer_fn
+    let _3: () -> string throws never
+
+    bb0: {
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_nested_lambda_capture, 0)>() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: () -> string throws never // inner_fn
+    let _2: () -> string throws never
+
+    bb0: {
+        _1 = make_closure lambda[0](copy capture[0]);
+        _2 = copy _1;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda(test_nested_lambda_capture, 0)>, 1)>() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = copy capture[0].1;
         goto -> bb1;
     }
 
@@ -290,9 +188,9 @@ fn user.test_sequential_lambdas(obj: Outer) -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_sequential_lambdas, 0)>() -> null {
+fn .<lambda(test_sequential_lambdas, 0)>() -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
 
     bb0: {
         _0 = copy capture[0].1;
@@ -305,9 +203,9 @@ fn .<lambda(test_sequential_lambdas, 0)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_sequential_lambdas, 1)>() -> null {
+fn .<lambda(test_sequential_lambdas, 1)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0].0.0;
@@ -319,59 +217,38 @@ fn .<lambda(test_sequential_lambdas, 1)>() -> null {
     }
 }
 
-fn user.Outer.to_json(self: Outer) -> baml.json.json {
+fn user.test_lambda_param_and_capture(obj: Outer) -> int {
     // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Outer // self // param
-    let _2: baml.json.json
-    let _3: Inner
-    let _4: Outer
-    let _5: baml.json.json
-    let _6: string
-    let _7: Outer
+    let _0: int // _0 // return
+    let _1: Outer // obj // param [captured]
+    let _2: (int) -> int throws never // add_to_value
+    let _3: (int) -> int throws never
 
     bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn user.Inner.to_json(copy _3) -> [bb1];
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3(const 10_i64) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "inner": copy _2, const "name": copy _5 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
 
-fn user.Inner.to_json(self: Inner) -> baml.json.json {
+// lambda[0]
+fn .<lambda(test_lambda_param_and_capture, 0)>(x: int) -> int {
     // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Inner // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: Inner
+    let _0: int // _0 // return
+    let _1: int // x // param
+    let _2: int
 
     bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+        _2 = copy capture[0].0.0;
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
     }
 
     bb1: {
-        _0 = { const "value": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

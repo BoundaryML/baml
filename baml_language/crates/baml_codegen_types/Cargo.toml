@@ -18,7 +18,14 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+baml_type = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
 strum = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fs2 = { workspace = true }
+
 [dev-dependencies]
-anyhow = { workspace = true }
+tempfile = { workspace = true }

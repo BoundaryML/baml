@@ -20,12 +20,12 @@ inherent_to_string = "allow"
 
 [dependencies]
 anyhow.workspace = true
-baml-cli.workspace = true
+baml-cli = { path = "../cli", default-features = false }
 baml-compiler = { path = "../baml-compiler" }
 baml-ids.workspace = true
 baml-types.workspace = true
 baml-log.workspace = true
-baml-runtime = { path = "../baml-runtime", features = ["internal"] }
+baml-runtime = { path = "../baml-runtime", default-features = false, features = ["internal"] }
 dashmap.workspace = true
 env_logger.workspace = true
 futures.workspace = true
@@ -33,7 +33,7 @@ indexmap.workspace = true
 internal-baml-core.workspace = true
 log.workspace = true
 once_cell.workspace = true
-stream-cancel = "0.8"
+tokio-util = { version = "0.7", features = ["rt"] }
 napi = { version = "3.1.3", features = [
   "anyhow",
   "async",
@@ -55,6 +55,9 @@ tracing-subscriber = { version = "0.3.18", features = [
 napi-build = "2.2.3"
 
 [features]
-default = []
+default = ["bedrock"]
+# AWS Bedrock provider support, forwarded through the runtime stack. On by
+# default; build with --no-default-features to drop the aws-* dependency tree.
+bedrock = ["baml-runtime/bedrock", "baml-cli/bedrock"]
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 thir-interpreter = ["baml-runtime/thir-interpreter"]

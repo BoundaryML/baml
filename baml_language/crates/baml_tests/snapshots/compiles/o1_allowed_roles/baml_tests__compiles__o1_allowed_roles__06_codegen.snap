@@ -1,182 +1,196 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18851
 ---
 function $init() -> null {
     call $init_let_0
     store_global user.O1Client
     call $init_let_1
-    store_global user.O1WithExplicitRoles
+    store_global user.O1MiniClient
     call $init_let_2
     store_global user.Gpt4oClient
-    call $init_let_3
-    store_global user.O1MiniClient
     load_const null
     return
 }
 
-function user.Gpt4oClient$new() -> null {
-    alloc_instance baml.llm.PrimitiveClient
-    load_const "Gpt4oClient"
-    init_field .name
-    load_const "openai"
-    init_field .provider
-    alloc_instance baml.llm.PrimitiveClientOptions
-    load_const "gpt-4o"
-    init_field .model
+function user.AskGpt4o(question: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const null
-    init_field .base_url
-    load_const null
-    init_field .allowed_role_metadata
-    load_const null
-    init_field .finish_reason_allow_list
-    load_const null
-    init_field .finish_reason_deny_list
-    load_const null
-    init_field .supports_streaming
-    load_const null
-    init_field .default_role
-    load_const null
-    init_field .allowed_roles
-    load_const null
-    init_field .remap_roles
-    load_const "sk-test"
-    init_field .api_key
-    load_const null
-    init_field .provider_options
-    load_const null
-    init_field .media_url_handler
-    alloc_map 0
-    init_field .headers
-    alloc_map 0
-    init_field .query_params
-    alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var question
+    call user.AskGpt4o$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
     return
 }
 
-function user.O1Client$new() -> null {
-    alloc_instance baml.llm.PrimitiveClient
-    load_const "O1Client"
-    init_field .name
-    load_const "openai"
-    init_field .provider
-    alloc_instance baml.llm.PrimitiveClientOptions
-    load_const "o1"
-    init_field .model
-    load_const null
-    init_field .base_url
-    load_const null
-    init_field .allowed_role_metadata
-    load_const null
-    init_field .finish_reason_allow_list
-    load_const null
-    init_field .finish_reason_deny_list
-    load_const null
-    init_field .supports_streaming
-    load_const null
-    init_field .default_role
-    load_const null
-    init_field .allowed_roles
-    load_const null
-    init_field .remap_roles
-    load_const "sk-test"
-    init_field .api_key
-    load_const null
-    init_field .provider_options
-    load_const null
-    init_field .media_url_handler
-    alloc_map 0
-    init_field .headers
-    alloc_map 0
-    init_field .query_params
-    alloc_map 0
-    init_field .request_body
-    init_field .options
+function user.AskGpt4o$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
     return
 }
 
-function user.O1MiniClient$new() -> null {
-    alloc_instance baml.llm.PrimitiveClient
-    load_const "O1MiniClient"
-    init_field .name
-    load_const "openai"
-    init_field .provider
-    alloc_instance baml.llm.PrimitiveClientOptions
-    load_const "o1-mini"
-    init_field .model
-    load_const null
-    init_field .base_url
-    load_const null
-    init_field .allowed_role_metadata
-    load_const null
-    init_field .finish_reason_allow_list
-    load_const null
-    init_field .finish_reason_deny_list
-    load_const null
-    init_field .supports_streaming
-    load_const null
-    init_field .default_role
-    load_const null
-    init_field .allowed_roles
-    load_const null
-    init_field .remap_roles
-    load_const "sk-test"
-    init_field .api_key
-    load_const null
-    init_field .provider_options
-    load_const null
-    init_field .media_url_handler
-    alloc_map 0
-    init_field .headers
-    alloc_map 0
-    init_field .query_params
-    alloc_map 0
-    init_field .request_body
-    init_field .options
+function user.AskGpt4o$render_prompt(question: string) -> ai.Prompt {
+    load_var question
+    call user.AskGpt4o$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
     return
 }
 
-function user.O1WithExplicitRoles$new() -> null {
-    alloc_instance baml.llm.PrimitiveClient
-    load_const "O1WithExplicitRoles"
-    init_field .name
-    load_const "openai"
-    init_field .provider
-    alloc_instance baml.llm.PrimitiveClientOptions
-    load_const "o1"
-    init_field .model
+function user.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "AskGpt4o"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(AskGpt4o$spec, 0)>, 1
+    load_var _4
+    load_global user.Gpt4oClient
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.AskGpt4o$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const null
-    init_field .base_url
+    store_var client
+
+  L0:
+    load_var question
+    call user.AskGpt4o$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function user.AskO1(question: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const null
-    init_field .allowed_role_metadata
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var question
+    call user.AskO1$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function user.AskO1$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function user.AskO1$render_prompt(question: string) -> ai.Prompt {
+    load_var question
+    call user.AskO1$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function user.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "AskO1"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(AskO1$spec, 0)>, 1
+    load_var _4
+    load_global user.O1Client
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.AskO1$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const null
-    init_field .finish_reason_allow_list
-    load_const null
-    init_field .finish_reason_deny_list
-    load_const null
-    init_field .supports_streaming
-    load_const null
-    init_field .default_role
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    init_field .allowed_roles
-    load_const null
-    init_field .remap_roles
-    load_const "sk-test"
-    init_field .api_key
-    load_const null
-    init_field .provider_options
-    load_const null
-    init_field .media_url_handler
-    alloc_map 0
-    init_field .headers
-    alloc_map 0
-    init_field .query_params
-    alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_var client
+
+  L0:
+    load_var question
+    call user.AskO1$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
     return
 }

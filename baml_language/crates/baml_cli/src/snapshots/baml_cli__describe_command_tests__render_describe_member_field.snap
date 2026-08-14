@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-field x  types.baml:3
+field x  types.baml:3-3
 
     x int
 

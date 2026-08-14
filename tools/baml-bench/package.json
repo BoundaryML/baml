@@ -1,0 +1,13 @@
+{
+  "name": "baml-bench-convex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Convex functions for the baml-bench pipeline",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.39.1"
+  }
+}

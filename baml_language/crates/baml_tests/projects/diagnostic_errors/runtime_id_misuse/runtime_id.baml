@@ -1,0 +1,73 @@
+// $id misuse diagnostics: every invalid shape of the runtime-identity special
+// form must fail at compile time with a targeted message (never a silent
+// no-op lowering).
+
+// Compound assignment can never be meaningful: baml.id.set only accepts
+// fresh overrides from baml.id.new().
+function compound_assignment() -> string {
+    $id += "-suffix";
+    $id
+}
+
+// Assignment type-checks the RHS against string ($id = e lowers to
+// baml.id.set(e)).
+function non_string_assignment() -> string {
+    $id = 42;
+    $id
+}
+
+// Member access on $id: it is a value, not a binding.
+function member_access() -> int {
+    $id.len()
+}
+
+// $id is a call-site side channel, not an ordinary function argument. This
+// call still omits the required ordinary `x` argument.
+function takes_int(x: int) -> int {
+    x
+}
+
+function call_site_label() -> int {
+    takes_int($id = boundary.id())
+}
+
+// $id cannot be used as a binding name (the binding would be silently dead).
+function shadowing_let() -> int {
+    let $id = 1;
+    2
+}
+
+// ...nor as a parameter name.
+function shadowing_param($id: string) -> string {
+    "x"
+}
+
+// `$id = e` is an implicit `baml.id.set(e)` call: its declared throws
+// (InvalidArgument) escape exactly like a direct call's, so a `throws never`
+// contract must reject it.
+function setter_never(s: string) -> string throws never {
+    $id = s;
+    $id
+}
+
+// The optional-chain form of member access gets the same targeted message
+// (not a "remove the ?." suggestion whose result is itself rejected).
+function optional_member_access() -> int? {
+    $id?.len()
+}
+
+// Destructure field shorthand would create a silently-dead `$id` binding.
+class WithId {
+    field_id string
+    $id string
+}
+
+function shorthand_destructure(w: WithId) -> string {
+    let WithId { $id } = w;
+    "x"
+}
+
+// ...and a function named `$id` is unreachable through a bare call.
+function $id() -> int {
+    1
+}

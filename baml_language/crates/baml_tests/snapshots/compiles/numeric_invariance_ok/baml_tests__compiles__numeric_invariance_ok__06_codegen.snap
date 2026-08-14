@@ -1,0 +1,46 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18309
+---
+function user.BigintFieldOk() -> BigintCounter {
+    load_const 1n
+    init_instance user.BigintCounter .count
+    return
+}
+
+function user.BigintLiteralArray() -> bigint[] {
+    load_const 1n
+    load_const 2n
+    load_type bigint
+    alloc_array 2
+    return
+}
+
+function user.BigintMapLiteral() -> map<string, bigint> {
+    load_const 1n
+    load_const "a"
+    load_type string
+    load_type bigint
+    alloc_map 1
+    return
+}
+
+function user.EmptyBigintArray() -> bigint[] {
+    load_type bigint
+    alloc_array 0
+    return
+}
+
+function user.EvolvingRetype() -> bigint[] {
+    load_type bigint
+    alloc_array 0
+    return
+}
+
+function user.IntArrayIdentity() -> int[] {
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    return
+}

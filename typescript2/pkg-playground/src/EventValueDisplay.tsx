@@ -12,5 +12,9 @@ export const EventValueDisplay: FC<{
   value: BamlJsValue;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
 }> = ({ value, customRenderers }) => (
-  <ValueRenderer value={value} displayMode="inline" customRenderers={customRenderers} />
+  <ValueRenderer
+    value={value}
+    displayMode="inline"
+    customRenderers={customRenderers}
+  />
 );

@@ -29,9 +29,8 @@ rustls = [ "aws-crypto" ]
 
 [dependencies]
 baml_compiler2_visualization = { workspace = true }
-baml_type = { workspace = true }
+baml_version = { workspace = true }
 bex_events = { workspace = true }
-bex_events_native = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
@@ -41,12 +40,14 @@ sys_types = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
-crossbeam = { workspace = true }
+crossbeam-channel = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
-log = { workspace = true }
 lsp-server = { workspace = true }
-parking_lot = { workspace = true }
+lsp-types = { workspace = true }
+notify = { workspace = true }
+num-bigint = { workspace = true }
+parking_lot = { workspace = true, features = [ "deadlock_detection" ] }
 prost = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
@@ -54,15 +55,16 @@ rustls = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "fs", "net", "time", "macros" ] }
+tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "net", "time", "macros" ] }
 tokio-tungstenite = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
-tracing-log = { workspace = true }
 tracing-subscriber = { workspace = true }
-url = { workspace = true }
 vfs = { workspace = true }
 webbrowser = { workspace = true }
+
+[dev-dependencies]
+bex_vm_types = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

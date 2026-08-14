@@ -12,6 +12,7 @@ crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
 baml_type = { workspace = true }
+baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
@@ -19,14 +20,18 @@ bridge_ctypes = { workspace = true }
 sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
-async-trait = { workspace = true }
+sys_wasm = { workspace = true }
+base64 = { workspace = true }
 bytes = { workspace = true }
 console_error_panic_hook = { workspace = true, optional = true }
 futures = { workspace = true }
+getrandom_03 = { workspace = true }
 indexmap = { workspace = true }
 js-sys = { workspace = true }
 log = { workspace = true }
 lsp-server = { workspace = true }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }

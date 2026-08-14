@@ -1,0 +1,245 @@
+name: BAML SDK Release - Build Node.js
+
+# Per-platform NAPI prebuild matrix for the Node.js SDK runtime package
+# `@boundaryml/baml-bridge`. Mirrors `build2-python-sdk.reusable.yaml` (same
+# 8-target set), with `napi-rs` standing in for `maturin`. Each job builds one
+# `*.node` native addon, assembles it into its publishable per-platform sub-package
+# (`@boundaryml/baml-bridge-<platform>`), and uploads that as `nodejs-sdk-<target>`.
+# The publish-npm job downloads them all, wires the umbrella package's
+# optionalDependencies, and publishes the umbrella + sub-packages.
+# Release builds must pass the frozen BAML language release plan so package.json
+# and Rust version surfaces are stamped before any build reads them.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        default: ""
+        required: false
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        default: ""
+        required: false
+  push:
+    branches:
+      # Mirror the Python reusable workflow's rehearsal-branch trigger so the
+      # Node build matrix can be exercised on a branch before release.
+      - sam/publish-nodejs
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-nodejs-sdk
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-24.04-arm
+            # Target glibc 2.28 for aarch64 using the available rust-cross image.
+            # This is newer than the ideal glibc floor; our users still need the oldest
+            # practical compatible baseline we can support for this target.
+            # See https://github.com/BoundaryML/baml/issues/2736
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+            before: |
+              echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
+          - target: aarch64-apple-darwin
+            host: macos-14
+          - target: x86_64-apple-darwin
+            host: macos-14
+          - target: x86_64-pc-windows-msvc
+            host: windows-latest
+          - target: aarch64-pc-windows-msvc
+            host: windows-11-arm
+          - target: x86_64-unknown-linux-gnu
+            # Do not use -latest, since it uses a newer glibc version.
+            host: ubuntu-22.04
+          - target: x86_64-unknown-linux-musl
+            host: ubuntu-22.04
+            before: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              cat >>$GITHUB_ENV <<EOF
+              CC_x86_64_unknown_linux_musl=musl-gcc
+              RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
+              EOF
+          - target: aarch64-unknown-linux-musl
+            host: ubuntu-22.04
+            before: |
+              curl -LO https://musl.cc.timfish.dev/aarch64-linux-musl-cross.tgz
+              tar -xzf aarch64-linux-musl-cross.tgz
+              echo "$PWD/aarch64-linux-musl-cross/bin" >> "$GITHUB_PATH"
+              cat >>$GITHUB_ENV <<EOF
+              RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
+              EOF
+            napi_args: --use-napi-cross
+
+    name: ${{ matrix._.target }}
+    runs-on: ${{ matrix._.host }}
+    container: ${{ matrix._.container }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
+            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          else
+            scripts/baml-language-version plan --channel canary --out release-plan.json
+          fi
+          scripts/baml-language-version stamp --plan release-plan.json
+
+      - name: Check GLIBC version
+        if: contains(matrix._.target, 'linux') && !contains(matrix._.target, 'musl')
+        run: ldd --version
+
+      - name: Align HOME with container root
+        if: matrix._.container
+        # The manylinux container runs as root (euid home /root), but GitHub sets
+        # HOME=/github/home. mise/npm/rustup install under HOME yet npm resolves
+        # against the euid home, so binaries land where PATH can't see them. Point
+        # HOME at the real root home before any tool setup runs.
+        run: echo "HOME=/root" >> "$GITHUB_ENV"
+
+      - name: Setup tools (sccache, direnv, node, pnpm)
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv node npm:pnpm"
+
+      - name: Set up Node.js (container)
+        if: matrix._.container
+        # The manylinux container has no system node/npm and mise doesn't expose
+        # npm on PATH here, but pnpm/action-setup shells out to npm. Provide a real
+        # node/npm first (this is what the setup-node composite did in the original
+        # all-green run).
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Set up pnpm (container)
+        if: matrix._.container
+        # mise's npm backend doesn't expose pnpm inside the manylinux container
+        # (it works on every hosted runner); install it with the official action.
+        # No version here: the action reads packageManager from package.json (as
+        # the setup-node composite did), avoiding a hardcoded/conflicting version.
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Rust toolchain
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          # Hosted runners ship rustup, but the manylinux cross container does not,
+          # so bootstrap it there (setup-rust used to handle this case).
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          # rust-toolchain.toml pins the channel; install it and add this job's
+          # cross target (setup-rust used to do this via its `targets:` input).
+          rustup show
+          rustup target add ${{ matrix._.target }}
+
+      - name: Build tools setup
+        if: matrix._.before
+        run: ${{ matrix._.before }}
+
+      - name: Install dependencies
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+        run: pnpm install --ignore-scripts
+
+      - name: Build protobuf runtime
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+        run: pnpm build:proto
+
+      - name: Build native addon (${{ matrix._.target }})
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+        # Build through the package.json script so CI and local dev share one napi
+        # invocation (writes ./dist/native.js + ./dist/native.d.ts with --esm, which
+        # the published umbrella's `files: ["dist"]` ships). build:clean recreates
+        # dist/ first since clean-dist.js owns its creation; the appended
+        # --target/--use-napi-cross flow through to `napi build` because it is the
+        # final command in build:napi-release.
+        run: |
+          pnpm build:clean
+          pnpm build:napi-release --target ${{ matrix._.target }} ${{ matrix._.napi_args }}
+
+      - name: Assemble per-platform npm package
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+        run: |
+          set -euo pipefail
+          # Build the publishable per-platform sub-package here, in the same job
+          # that compiled the addon: create-npm-dirs stamps every npm/<platform>/
+          # package.json from the (already stamped) umbrella version, and artifacts
+          # drops this job's baml_node.<platform>.node into its matching dir. The
+          # package.json version and the binary it wraps are therefore produced
+          # atomically. The umbrella package (dist/ + optionalDependencies) is
+          # assembled centrally by the publish-npm job, which downloads these.
+          pnpm exec napi create-npm-dirs
+          pnpm exec napi artifacts --output-dir . --npm-dir npm
+          # create-npm-dirs lays down all 8 target dirs; keep only the one that
+          # received this job's addon so each artifact is exactly one sub-package.
+          keep_dir="$(dirname "$(find npm -name 'baml_node.*.node' | head -1)")"
+          test -n "$keep_dir"
+          find npm -mindepth 1 -maxdepth 1 -type d ! -path "$keep_dir" -exec rm -rf {} +
+          echo "Assembled $keep_dir:"
+          ls -l "$keep_dir"
+
+      - name: Upload per-platform npm package
+        uses: actions/upload-artifact@v7
+        with:
+          # Each artifact contains a single npm/<platform>/ tree (package.json +
+          # *.node); the publish job downloads them all with merge-multiple to
+          # reconstruct the full npm/ directory.
+          name: nodejs-sdk-${{ matrix._.target }}
+          path: baml_language/sdks/typescript/bridge_typescript/npm
+          if-no-files-found: error
+
+      # The umbrella package ships `files: ["dist"]`, and that dist/ is
+      # platform-agnostic: the napi loader (dist/native.js, already built above by
+      # build:napi-release) plus the tsc output. Build it exactly once, on the
+      # linux-gnu job, and hand it to the publish job; the per-target .node binaries
+      # ship in the sub-packages, so strip any that copy-native-dts pulled into dist/
+      # to keep the umbrella platform-independent. (If this target is ever dropped
+      # from the matrix, move these two steps to another non-cross target.)
+      - name: Build umbrella dist (platform-agnostic)
+        if: matrix._.target == 'x86_64-unknown-linux-gnu'
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+        run: |
+          set -euo pipefail
+          pnpm build:copy-native-dts
+          pnpm build:ts_build
+          pnpm build:copy-proto
+          pnpm build:tag-generated-files
+          rm -f dist/*.node
+          echo "Assembled umbrella dist/:"
+          ls -l dist
+      - name: Upload umbrella dist
+        if: matrix._.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v7
+        with:
+          # Named so it does NOT match the publish job's `nodejs-sdk-*` download
+          # pattern (that one is merged into npm/); this is downloaded separately
+          # into the umbrella's dist/.
+          name: nodejs-umbrella-dist
+          path: baml_language/sdks/typescript/bridge_typescript/dist
+          if-no-files-found: error

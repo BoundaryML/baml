@@ -8,23 +8,56 @@ license.workspace = true
 
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "dep:rustls", "reqwest/rustls", "rustls?/aws_lc_rs", "rustls?/std" ]
-ring-crypto = [ "dep:rustls", "reqwest/rustls-no-provider", "rustls?/ring", "rustls?/std" ]
+aws-crypto = [
+  "dep:rustls",
+  "reqwest/rustls",
+  "rustls?/aws_lc_rs",
+  "rustls?/std",
+  "bridge_ctypes/aws-crypto",
+]
+ring-crypto = [
+  "dep:rustls",
+  "reqwest/rustls-no-provider",
+  "rustls?/ring",
+  "rustls?/std",
+  "bridge_ctypes/ring-crypto",
+]
 native-tls = [ "reqwest/native-tls" ]
 rustls = [ "aws-crypto" ]
-bundle-http = [ "dep:reqwest" ]
+bundle-http = [
+  "dep:reqwest",
+  "dep:hyper",
+  "dep:hyper-util",
+  "dep:http-body-util",
+  "dep:tokio-rustls",
+  "dep:rustls-pemfile",
+  "dep:bytes",
+  "dep:tokio-tungstenite",
+]
 
 [dependencies]
 baml_type = { workspace = true }
+bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
+bridge_ctypes = { workspace = true, default-features = false }
 sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
+bytes = { workspace = true, optional = true }
 futures = { workspace = true }
+getrandom = { workspace = true }
+http-body-util = { workspace = true, optional = true }
+hyper = { workspace = true, optional = true }
+hyper-util = { workspace = true, optional = true }
 indexmap = { workspace = true }
+jiff = { workspace = true }
+num-bigint = { workspace = true }
+once_cell = { workspace = true }
+prost = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [
   "sync",
@@ -35,6 +68,12 @@ tokio = { workspace = true, features = [
   "io-std",
   "time",
 ] }
+tokio-rustls = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true, features = [
+  "connect",
+  "rustls-tls-native-roots",
+] }
+tracing = { workspace = true }
 walkdir = { workspace = true }
 
 [lints]

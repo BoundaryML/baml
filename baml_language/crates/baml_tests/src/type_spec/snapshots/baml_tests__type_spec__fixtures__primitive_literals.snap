@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+9..10 'f': throws never
+23..151 '{\n   ...msg\n}': string
+29..36 'let msg': string
+39..43 '"hi"': "hi"
+68..76 'let flag': bool
+79..83 'true': true
+107..115 'let half': float
+118..121 '0.5': 0.5
+146..149 'msg': string

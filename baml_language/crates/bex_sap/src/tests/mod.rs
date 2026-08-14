@@ -6,7 +6,6 @@ mod test_basics;
 mod test_class;
 mod test_class_2;
 mod test_code;
-// mod test_constraints; // Assertion::evaluate is todo!()
 mod test_enum;
 mod test_international;
 mod test_lists;
@@ -15,6 +14,7 @@ mod test_maps;
 mod test_partials;
 mod test_streaming;
 mod test_unions;
+mod test_word_bug;
 
 use crate::{baml_db, baml_tyannotated, sap_model::*};
 
@@ -31,11 +31,11 @@ test_deserializer!(
 );
 
 test_deserializer!(
-    test_string_from_string_with_quotes,
+    test_string_from_complete_json_string,
     r#""hello""#,
     baml_tyannotated!(string),
     baml_db! {},
-    "\"hello\""
+    "hello"
 );
 
 test_deserializer!(

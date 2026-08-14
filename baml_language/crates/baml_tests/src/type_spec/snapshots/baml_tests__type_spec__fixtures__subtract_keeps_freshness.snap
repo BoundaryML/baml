@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+68..71 'skf': throws never
+101..239 '{\n   ...  y\n}': int
+107..124 'let x:...| null': int | null
+114..117 'int': int
+114..124 'int | null': int | null
+120..124 'null': null
+127..128 '0': 0
+133..134 'x': int | null
+137..161 'if c {...null }': 7 | null
+140..141 'c': bool
+142..147 '{ 7 }': 7
+144..145 '7': 7
+153..161 '{ null }': null
+155..159 'null': null
+166..203 'if x =...n    }': void
+169..170 'x': 7 | null
+169..178 'x == null': bool
+174..178 'null': null
+179..203 '{\n   ...n    }': never
+196..197 '0': 0
+208..213 'let y': int
+216..217 'x': 7
+236..237 'y': int

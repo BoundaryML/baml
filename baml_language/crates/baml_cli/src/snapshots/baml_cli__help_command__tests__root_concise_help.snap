@@ -1,0 +1,44 @@
+---
+source: crates/baml_cli/src/help_command.rs
+assertion_line: 203
+expression: concise
+---
+Build and run BAML projects.
+
+Usage: baml [OPTIONS] <COMMAND>
+
+Commands:
+  check       Check BAML source files for compiler errors
+  auth        Manage authentication
+  feedback    Report an issue or improvement to Boundary
+  fmt         Format BAML source files
+  describe    Describe a BAML symbol
+  generate    Generate client code from BAML definitions
+  test        Run BAML tests
+  init        Initialize a new BAML project (creates baml.toml)
+  new         Create a new BAML project directory
+  run         Run a BAML function or script
+  playground  Open the BAML playground in your browser
+  pack        Package a BAML target as a standalone executable
+  ide         Install or manage IDE integration assets
+  agent       Install BAML agent skills for this project
+  lsp         Start a language server
+  help        Display documentation for a command
+
+Global options:
+  -q, --quiet...                    Suppress nonessential output
+  -v, --verbose...                  Increase diagnostic verbosity. Repeatable
+      --color <WHEN>                Control ANSI colors [possible values: auto, always, never]
+      --no-progress                 Disable progress output
+      --directory <PATH>            Change to this directory before running the command
+      --project <PATH>              Discover the BAML project from this path
+      --output-preset <PRESET>      Select output defaults [default: auto] [possible values: auto,
+                                    human, agent]
+      --hyperlinks <WHEN>           Control terminal hyperlinks [possible values: auto, always,
+                                    never]
+      --diagnostic-format <FORMAT>  Select the diagnostic format [possible values: human, agent,
+                                    concise]
+  -h, --help                        Display concise help for this command
+  -V, --version                     Print version
+
+Use `baml help <command>` for more details.

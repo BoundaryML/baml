@@ -1,14 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36506
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected int, got string
-   ╭─[ simple_type_error.baml:2:3 ]
-   │
+  [type] E0004
+
+  × operator `+` cannot be applied to `1` and `"foo"`
+   ╭─[simple_type_error.baml:2:3]
  2 │   1 + "foo"
-   │   ────┬────  
-   │       ╰────── type mismatch: expected int, got string
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·   ─────────
+   ╰────

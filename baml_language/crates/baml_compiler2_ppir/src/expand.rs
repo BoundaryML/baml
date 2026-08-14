@@ -143,6 +143,7 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
         PpirTy::Named {
             path,
             generic_args,
+            associated_type_bindings,
             attrs,
         } if path.len() == 1 && path[0].as_str() != "root" => {
             let mut qualified = Vec::with_capacity(alias_ns.len() + 2);
@@ -155,18 +156,27 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
                     .into_iter()
                     .map(|ga| requalify_for_caller(ga, alias_ns, caller_ns))
                     .collect(),
+                associated_type_bindings: associated_type_bindings
+                    .into_iter()
+                    .map(|(name, value)| (name, requalify_for_caller(value, alias_ns, caller_ns)))
+                    .collect(),
                 attrs,
             }
         }
         PpirTy::Named {
             path,
             generic_args,
+            associated_type_bindings,
             attrs,
         } => PpirTy::Named {
             path,
             generic_args: generic_args
                 .into_iter()
                 .map(|ga| requalify_for_caller(ga, alias_ns, caller_ns))
+                .collect(),
+            associated_type_bindings: associated_type_bindings
+                .into_iter()
+                .map(|(name, value)| (name, requalify_for_caller(value, alias_ns, caller_ns)))
                 .collect(),
             attrs,
         },
@@ -287,6 +297,7 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
     match ty {
         // Primitives/literals/never/opaque/enum → unchanged
         PpirTy::Int { .. }
+        | PpirTy::Bigint { .. }
         | PpirTy::Float { .. }
         | PpirTy::String { .. }
         | PpirTy::Bool { .. }
@@ -297,7 +308,10 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
 
         // Named types — depends on classification
         PpirTy::Named {
-            path, generic_args, ..
+            path,
+            generic_args,
+            associated_type_bindings,
+            ..
         } => {
             // Already *$stream → unchanged
             if path.last().is_some_and(|n| n.as_str().ends_with("$stream")) {
@@ -316,6 +330,10 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
                         generic_args: generic_args
                             .iter()
                             .map(|ga| expand_partial(ga, ctx))
+                            .collect(),
+                        associated_type_bindings: associated_type_bindings
+                            .iter()
+                            .map(|(name, value)| (name.clone(), expand_partial(value, ctx)))
                             .collect(),
                         attrs: d,
                     }
@@ -336,11 +354,11 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
             attrs: d,
         },
 
-        // Optional → null | expand_partial(inner)
+        // Optional → expand_partial(inner) | null
         PpirTy::Optional { inner, .. } => PpirTy::Union {
             variants: vec![
-                PpirTy::Null { attrs: d.clone() },
                 expand_partial(inner, ctx),
+                PpirTy::Null { attrs: d.clone() },
             ],
             attrs: d,
         },
@@ -402,11 +420,13 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
 
     let (mut stream_type, default_when_pending, in_progress) = match ty {
         // Primitive/atomic types
-        PpirTy::Int { .. } | PpirTy::Float { .. } | PpirTy::Bool { .. } => (
-            ty.clone_without_attrs(),
-            DefaultWhenPending::PrependNull,
-            InProgress::NotAllowed,
-        ),
+        PpirTy::Int { .. } | PpirTy::Bigint { .. } | PpirTy::Float { .. } | PpirTy::Bool { .. } => {
+            (
+                ty.clone_without_attrs(),
+                DefaultWhenPending::PrependNull,
+                InProgress::NotAllowed,
+            )
+        }
         PpirTy::String { .. } => (
             PpirTy::String { attrs: d.clone() },
             DefaultWhenPending::PrependNull,
@@ -435,7 +455,10 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
 
         // Named types
         PpirTy::Named {
-            path, generic_args, ..
+            path,
+            generic_args,
+            associated_type_bindings,
+            ..
         } => {
             // Already *$stream → treat like T$stream
             if path.last().is_some_and(|n| n.as_str().ends_with("$stream")) {
@@ -475,6 +498,10 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                             PpirTy::Named {
                                 path: stream_path,
                                 generic_args: stream_args,
+                                associated_type_bindings: associated_type_bindings
+                                    .iter()
+                                    .map(|(name, value)| (name.clone(), expand_partial(value, ctx)))
+                                    .collect(),
                                 attrs: d.clone(),
                             },
                             DefaultWhenPending::PrependNull,
@@ -531,6 +558,10 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                             PpirTy::Named {
                                 path: stream_path,
                                 generic_args: stream_args,
+                                associated_type_bindings: associated_type_bindings
+                                    .iter()
+                                    .map(|(name, value)| (name.clone(), expand_partial(value, ctx)))
+                                    .collect(),
                                 attrs: d.clone(),
                             },
                             DefaultWhenPending::PrependNull,
@@ -568,12 +599,12 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
             InProgress::Allowed,
         ),
 
-        // Optional → null | expand_partial(inner)
+        // Optional → expand_partial(inner) | null
         PpirTy::Optional { inner, .. } => (
             PpirTy::Union {
                 variants: vec![
-                    PpirTy::Null { attrs: d.clone() },
                     expand_partial(inner, ctx),
+                    PpirTy::Null { attrs: d.clone() },
                 ],
                 attrs: d.clone(),
             },
@@ -621,9 +652,10 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
     } else {
         match default_when_pending {
             DefaultWhenPending::PrependNull => {
-                // Prepend null | stream_type
+                // Make the field nullable so a not-yet-streamed value can be
+                // null. Null goes last (`T | null`) to match the `?` lowering.
                 stream_type = PpirTy::Union {
-                    variants: vec![PpirTy::Null { attrs: d }, stream_type],
+                    variants: vec![stream_type, PpirTy::Null { attrs: d }],
                     attrs: PpirTypeAttrs::default(),
                 };
                 sap_attrs.parse_without_null = TyAttrValue::Set;

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 9326
 ---
 function user.Bar() -> int {
     load_const 1
@@ -7,7 +8,7 @@ function user.Bar() -> int {
     return
 }
 
-function user.Baz.Greeting(self: null) -> string {
+function user.Baz.Greeting(self: Baz) -> string {
     load_const "Hello, "
     load_var self
     load_field .name
@@ -17,41 +18,16 @@ function user.Baz.Greeting(self: null) -> string {
     return
 }
 
-function user.Baz.from_json(j: baml.json.json) -> Baz {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Baz
-    load_var _2
-    init_field .name
-    return
-}
-
-function user.Baz.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .name
-    call baml.String.to_json
-    load_const "name"
-    alloc_map 1
-    return
-}
-
 function user.Foo(x: int) -> int {
     load_var x
     load_const 1
-    bin_op +
+    add_int
     return
 }
 
 function user.GreetBaz(n: string) -> string {
-    alloc_instance user.Baz
     load_var n
-    init_field .name
+    init_instance user.Baz .name
     call user.Baz.Greeting
     return
 }
@@ -60,8 +36,9 @@ function user.array_length() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
-    call baml.Array.length
+    container_len
     return
 }
 

@@ -1,0 +1,108 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <AssemblyName>Baml.Bridge</AssemblyName>
+    <RootNamespace>Baml</RootNamespace>
+    <PackageId>baml-bridge</PackageId>
+    <Version>0.16.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Authors>BoundaryML</Authors>
+    <Description>Managed runtime bridge for generated BAML C# clients.</Description>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+    <BamlProtocolSchemaRoot
+      Condition="'$(BamlProtocolSchemaRoot)' == ''">../../../../crates/bridge_ctypes/types</BamlProtocolSchemaRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="[3.35.1,4.0.0)" />
+    <PackageReference
+      Include="Grpc.Tools"
+      Version="[2.82.0]"
+      PrivateAssets="all"
+      IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf
+      Include="$(BamlProtocolSchemaRoot)/baml_bridge/cffi/v1/baml_handle.proto"
+      ProtoRoot="$(BamlProtocolSchemaRoot)"
+      GrpcServices="None"
+      Access="Internal"
+      OutputOptions="file_extension=.g.cs" />
+    <Protobuf
+      Include="$(BamlProtocolSchemaRoot)/baml_bridge/cffi/v1/baml_inbound.proto"
+      ProtoRoot="$(BamlProtocolSchemaRoot)"
+      GrpcServices="None"
+      Access="Internal"
+      OutputOptions="file_extension=.g.cs" />
+    <Protobuf
+      Include="$(BamlProtocolSchemaRoot)/baml_bridge/cffi/v1/baml_outbound.proto"
+      ProtoRoot="$(BamlProtocolSchemaRoot)"
+      GrpcServices="None"
+      Access="Internal"
+      OutputOptions="file_extension=.g.cs" />
+    <Protobuf
+      Include="$(BamlProtocolSchemaRoot)/baml_bridge/cffi/v1/baml_type.proto"
+      ProtoRoot="$(BamlProtocolSchemaRoot)"
+      GrpcServices="None"
+      Access="Internal"
+      OutputOptions="file_extension=.g.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <_BamlNativePackageAsset
+      Include="$(BamlNativeAssetRoot)/runtimes/**/*"
+      Condition="'$(BamlNativeAssetRoot)' != ''" />
+    <None Update="README.md" Pack="true" PackagePath="/" />
+    <None
+      Include="$(BamlGeneratedTargetsPath)"
+      Pack="true"
+      PackagePath="buildTransitive/baml-bridge.targets"
+      Visible="false"
+      Condition="'$(BamlGeneratedTargetsPath)' != ''" />
+    <None
+      Include="@(_BamlNativePackageAsset)"
+      Pack="true"
+      PackagePath="runtimes/%(_BamlNativePackageAsset.RecursiveDir)%(_BamlNativePackageAsset.Filename)%(_BamlNativePackageAsset.Extension)"
+      Visible="false" />
+  </ItemGroup>
+
+  <Target Name="RequireBamlPackageAssets" BeforeTargets="Pack">
+    <Error
+      Condition="'$(BamlNativeAssetRoot)' == ''"
+      Text="BamlNativeAssetRoot must identify the staged eight-RID runtime tree." />
+    <Error
+      Condition="'$(BamlExpectedNativeAssetCount)' == ''"
+      Text="BamlExpectedNativeAssetCount must come from the validated platform contract." />
+    <Error
+      Condition="'$(BamlExpectedNativeAssetCount)' != '' and '@(_BamlNativePackageAsset->Count())' != '$(BamlExpectedNativeAssetCount)'"
+      Text="The staged runtime tree must match the validated platform contract: expected $(BamlExpectedNativeAssetCount) native assets; found @(_BamlNativePackageAsset->Count())." />
+    <Error
+      Condition="'$(BamlGeneratedTargetsPath)' == ''"
+      Text="BamlGeneratedTargetsPath must identify the platform-contract-derived buildTransitive target." />
+    <Error
+      Condition="'$(BamlGeneratedTargetsPath)' != '' and !Exists('$(BamlGeneratedTargetsPath)')"
+      Text="The platform-contract-derived buildTransitive target does not exist: $(BamlGeneratedTargetsPath)." />
+  </Target>
+
+  <Target
+    Name="IncludeDeterministicProtobufGeneratedSources"
+    BeforeTargets="CoreCompile"
+    DependsOnTargets="Protobuf_Compile">
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)baml_bridge/cffi/v1/*.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

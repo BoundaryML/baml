@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+254..255 'f': throws never
+337..409 '{\n   ...  u\n}': baml.ops.Equals
+343..348 'let u': baml.ops.Equals
+351..374 'if (c)... { e }': baml.ops.Equals
+355..356 'c': bool
+358..363 '{ x }': T
+360..361 'x': T
+369..374 '{ e }': baml.ops.Equals
+371..372 'e': baml.ops.Equals
+406..407 'u': baml.ops.Equals

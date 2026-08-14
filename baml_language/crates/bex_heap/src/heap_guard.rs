@@ -4,8 +4,14 @@
 //! These ensure that we have only one of:
 //! - A single exclusive heap access [`HeapGuard`], or
 //! - Any number of non-exclusive tracked active heap permits [`ActiveHeapPermit`].
+//!
+//! Spawn-safety invariant: an active permit excludes moving/collecting GC, but
+//! it does not serialize multiple VM mutators. Heap objects reachable from
+//! spawned VMs must use object-level synchronization for mutable state. Raw
+//! heap/container access is only sound while holding [`HeapGuard`] (all mutators
+//! parked) or during proven single-threaded setup.
 
-use ::bex_vm_types::{HeapPtr, RootHaver};
+use ::bex_vm_types::{HeapPtr, PermitProof, RootHaver};
 use ::core::{
     cell::UnsafeCell,
     marker::PhantomData,
@@ -15,7 +21,6 @@ use ::std::{
     collections::HashMap,
     sync::{Arc, Weak},
 };
-use ::tokio::sync::Mutex;
 
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {
@@ -33,6 +38,7 @@ const MAX_PERMITS: u32 = {
     }
 };
 
+/// The existence of a value that implements this trait proves that the heap is currently accessible for non-exclusive access (e.g. by a VM executor task).
 pub trait HeapPermit<T: RootHaver> {
     /// Get a reference to the root holder (for example, the active VM)
     ///
@@ -101,21 +107,18 @@ impl<T: RootHaver> HeapPermit<T> for ActiveHeapPermit<T> {
         unsafe { self.state.holder_mut() }
     }
     fn proof(&self) -> PermitProof<'_> {
-        PermitProof {
-            _marker: PhantomData,
+        // SAFETY: `&self` proves an `ActiveHeapPermit<T>` is held for the
+        // returned proof's lifetime, which is the very invariant
+        // `PermitProof::new` requires. This is the canonical safe
+        // constructor referenced by `PermitProof`'s docs.
+        #[allow(
+            unsafe_code,
+            reason = "this is the canonical safe constructor of PermitProof"
+        )]
+        unsafe {
+            PermitProof::new()
         }
     }
-}
-
-/// A type-erased proof that an [`ActiveHeapPermit`] is held in the current
-/// scope (for at least lifetime `'a`).
-///
-/// Constructed via [`ActiveHeapPermit::proof`]. Carries no runtime data — the
-/// GC-exclusion guarantee comes from the lifetime, which is bound by the
-/// originating permit's borrow.
-#[derive(Clone, Copy)]
-pub struct PermitProof<'a> {
-    _marker: PhantomData<&'a ()>,
 }
 
 impl<T: RootHaver> Deref for ActiveHeapPermit<T> {
@@ -177,76 +180,6 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
     }
 }
 
-/// For use when multiple threads need to share a single permit.
-///
-/// Ensures only one thread can use the permit at a time,
-/// and yields to exclusive access whenever the permit is released.
-pub struct SharedHeapPermit<T: RootHaver> {
-    inner: Mutex<InactiveHeapPermit<T>>,
-}
-impl<T: RootHaver> SharedHeapPermit<T> {
-    pub fn new(inner: InactiveHeapPermit<T>) -> Self {
-        Self {
-            inner: Mutex::new(inner),
-        }
-    }
-    pub async fn acquire(&self) -> SharedHeapPermitGuard<'_, T> {
-        let state = self.inner.lock().await;
-        let permit = Arc::clone(&state.active)
-            .acquire_owned()
-            .await
-            .unwrap_or_else(|_| unreachable!("Semaphore should never be closed"));
-        SharedHeapPermitGuard {
-            state,
-            _permit: permit,
-            _marker: PhantomData,
-        }
-    }
-}
-
-pub struct SharedHeapPermitGuard<'a, T: RootHaver> {
-    state: tokio::sync::MutexGuard<'a, InactiveHeapPermit<T>>,
-    _permit: tokio::sync::OwnedSemaphorePermit,
-    /// Ties the auto `Send`/`Sync` of `SharedHeapPermitGuard` to `T`.
-    ///
-    /// Without this marker, every field of this struct is unconditionally
-    /// `Sync` (notably because [`PermitCell<T>`] has a manual unconditional
-    /// `unsafe impl Sync` — which is itself load-bearing, so that
-    /// `Weak<PermitCell<dyn RootHaver>>` can live in the manager's shared
-    /// `Mutex<Vec<…>>`). That would let the compiler auto-derive
-    /// `SharedHeapPermitGuard<T>: Sync` even when `T: !Sync`, and two threads
-    /// sharing `&SharedHeapPermitGuard<T>` could each call [`Self::holder`]
-    /// to observe `&T` at the same time — UB when `T: !Sync`.
-    _marker: PhantomData<T>,
-}
-impl<'a, T: RootHaver> HeapPermit<T> for SharedHeapPermitGuard<'a, T> {
-    fn holder(&self) -> &T {
-        // SAFETY: we have a permit to access the heap so we can access the root holder.
-        unsafe { self.state.holder() }
-    }
-    fn holder_mut(&mut self) -> &mut T {
-        // SAFETY: we have a permit to access the heap so we can access the root holder.
-        unsafe { self.state.holder_mut() }
-    }
-    fn proof(&self) -> PermitProof<'_> {
-        PermitProof {
-            _marker: PhantomData,
-        }
-    }
-}
-impl<'a, T: RootHaver> Deref for SharedHeapPermitGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.holder()
-    }
-}
-impl<'a, T: RootHaver> DerefMut for SharedHeapPermitGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.holder_mut()
-    }
-}
-
 /// The central heap coordination system.
 ///
 /// At any given time, there can be either:
@@ -292,12 +225,18 @@ impl HeapPermitManager {
         permit
     }
     pub async fn request_park(&self) -> HeapGuard<'_> {
-        let mut guard = self.holders.lock().await;
+        // Drain the semaphore BEFORE taking the holders mutex. The semaphore
+        // is the stop-the-world barrier: once we hold all MAX_PERMITS, no
+        // ActiveHeapPermit::acquire() can complete, so no mutator can run.
+        // Taking the mutex first (and then awaiting acquire_many) deadlocks
+        // against new_permit(): a VM mid-spawn holds an active permit and
+        // wants the mutex; we hold the mutex and want its permit.
         let permits = self
             .active
             .acquire_many(MAX_PERMITS)
             .await
             .unwrap_or_else(|_| unreachable!("We do not close the semaphore"));
+        let mut guard = self.holders.lock().await;
         guard.retain(|holder| holder.strong_count() > 0);
         HeapGuard {
             guard,
@@ -371,5 +310,31 @@ impl<T: ?Sized + RootHaver> PermitCell<T> {
 // gain access via a semaphore permit; the GC gains access by draining all permits
 // while holding the manager mutex. `RootHaver: Send` ensures the inner value is safe
 // to move between threads, which is what's actually happening — never true sharing.
+//
+// # `Sync` is unconditional even for `T: !Sync` — why this is sound
+//
+// The unconditional `Sync` impl below is **structurally** load-bearing:
+// `Weak<PermitCell<dyn RootHaver>>` lives in
+// `HeapPermitManager::holders: Mutex<Vec<Weak<...>>>`, and `Mutex<Vec<Weak<U>>>`
+// requires `U: Send + Sync`. Constraining the bound to `T: Sync` would
+// reject every `T: !Sync` `RootHaver` (e.g. `BexVm`, which intentionally
+// is not `Sync`).
+//
+// What rescues soundness is the *safe wrappers* that hand out access to
+// the inner `T`: `ActiveHeapPermit<T>` and `SharedHeapPermitGuard<'_, T>`
+// each carry a `_marker: PhantomData<T>` field that re-ties the wrapper's
+// auto-`Send`/`Sync` derivation to `T`. So while `&PermitCell<T>` is
+// `Sync` regardless of `T`, the only safe way to project a `&T` out of
+// it is through one of those wrappers, and `&Wrapper<T>: Sync` iff
+// `T: Sync`. Two threads cannot simultaneously hold `&Wrapper<T>: Sync`
+// for `T: !Sync`, so two threads cannot simultaneously call `.holder()`
+// to observe `&T`.
+//
+// **Maintenance hazard**: any future safe API that returns `&T` from a
+// `&PermitCell<T>` *without* the `PhantomData<T>` re-tie (or another
+// equivalent `T: Sync` requirement on the consumer) silently breaks the
+// contract above. If you add such an API, also tighten this `Sync` impl
+// to `T: Sync` (and accept that some `RootHaver`s can no longer be
+// holders), or rework the holders Mutex's element type.
 unsafe impl<T: ?Sized + RootHaver> Send for PermitCell<T> {}
 unsafe impl<T: ?Sized + RootHaver> Sync for PermitCell<T> {}

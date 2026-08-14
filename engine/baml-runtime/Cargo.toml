@@ -42,14 +42,12 @@ bytes.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
 colored.workspace = true
-cowstr.workspace = true
 dashmap.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
 dunce = "1.0.4"
 either.workspace = true
 env_logger.workspace = true
-eventsource-stream = "0.2.3"
 futures.workspace = true
 http.workspace = true
 http-body.workspace = true
@@ -69,7 +67,6 @@ pin-project-lite.workspace = true
 pretty.workspace = true
 percent-encoding = "2.3.1"
 regex.workspace = true
-reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true
 secrecy.workspace = true
 serde.workspace = true
@@ -92,9 +89,8 @@ mime_guess = "=2.0.5"
 mime = "0.3.17"
 
 # For tracing
-envy = "0.4.2"
 chrono = "0.4.38"
-stream-cancel = "0.8.2"
+tokio-util = { version = "0.7", features = ["rt"] }
 async-std = "1.12.0"
 fastrand = "2.1.0"
 test-log = "0.2.16"
@@ -102,15 +98,15 @@ include_dir = "0.7.3"
 infer = "0.16.0"
 url = "2.5.2"
 shell-escape = "0.1.5"
-aws-sigv4 = "1.2.2"
-aws-credential-types = "1.2.1"
-aws-runtime = "1.5.5"
-aws-smithy-async = "1.2.1"
-aws-smithy-runtime-api = "1.7.0"
-aws-smithy-types = "1.2.0"
-aws-smithy-runtime = "1.6.0"
+aws-sigv4 = { version = "1.2.2", optional = true }
+aws-credential-types = { version = "1.2.1", optional = true }
+aws-runtime = { version = "1.5.5", optional = true }
+aws-smithy-async = { version = "1.2.1", optional = true }
+aws-smithy-runtime-api = { version = "1.7.0", optional = true }
+aws-smithy-types = { version = "1.2.0", optional = true }
+aws-smithy-runtime = { version = "1.6.0", optional = true }
 enum_dispatch = "0.3.13"
-aws-smithy-json = "0.60.7"
+aws-smithy-json = { version = "0.60.7", optional = true }
 pretty_assertions = "1.4.0"
 valuable = { version = "0.1.0", features = ["derive"] }
 tracing = { version = "0.1.40", features = ["valuable"] }
@@ -132,25 +128,26 @@ similar = "2.6"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-aws-config = { version = "=1.5.3", default-features = false, features = [] }
+aws-config = { version = "=1.5.3", default-features = false, optional = true, features = [] }
 # You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
 # but depending on ring and aws_lc_rs leads to issues.
 # https://github.com/rustls/rustls/issues/1877
 # https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
-aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, features = [
+aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, optional = true, features = [
 ] }
 colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 js-sys.workspace = true
-reqwest = { version = "0.12.12", features = [
+reqwest = { version = "0.12.12", default-features = false, features = [
+  "charset",
+  "http2",
   "stream",
   "json",
-  "native-tls-vendored",
-  "native-tls-alpn",
+  "rustls-tls",
 ] }
 #
 send_wrapper = { version = "0.6.0", features = ["futures"] }
@@ -166,14 +163,14 @@ tokio = { version = "1", features = ["rt", "sync"] }
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-aws-config = "=1.5.3"
+aws-config = { version = "=1.5.3", optional = true }
 # You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
 # but depending on ring and aws_lc_rs leads to issues.
 # https://github.com/rustls/rustls/issues/1877
 # https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
-aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, features = [
+aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, optional = true, features = [
 ] }
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
@@ -199,11 +196,26 @@ reedline = "0.37"
 
 
 [features]
+default = ["bedrock"]
 defaults = ["skip-integ-tests"]
 internal = []
 skip-integ-tests = []
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 thir-interpreter = []
+# AWS Bedrock provider support. On by default; disable (e.g. --no-default-features)
+# to build without the aws-* SDK dependency tree.
+bedrock = [
+  "dep:aws-config",
+  "dep:aws-sdk-bedrockruntime",
+  "dep:aws-sigv4",
+  "dep:aws-credential-types",
+  "dep:aws-runtime",
+  "dep:aws-smithy-async",
+  "dep:aws-smithy-runtime-api",
+  "dep:aws-smithy-types",
+  "dep:aws-smithy-runtime",
+  "dep:aws-smithy-json",
+]
 
 
 [dev-dependencies]

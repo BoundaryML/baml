@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11320
+---
+=== PPIR ===
+class user.A {
+  b: user.B
+}
+class user.A$stream {
+  b: user.B$stream | null
+}
+class user.B {
+  label: string
+}
+class user.B$stream {
+  label: string | null
+}
+function user.greet(self: ?) -> string  [expr] {
+  {  } self.label
+}
+function user.test_deep_field(a: user.A) -> string  [expr] {
+  {  } a.b.label
+}
+function user.test_deep_method(a: user.A) -> string  [expr] {
+  {  } a.b.greet()
+}
+function user.test_direct_method(b: user.B) -> string  [expr] {
+  {  } b.greet()
+}

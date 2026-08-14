@@ -7,7 +7,7 @@ class Interface1 {
 }
 
 class InterfaceTwo {
-  interface string
+  iface string
   prop2 string
 }
 

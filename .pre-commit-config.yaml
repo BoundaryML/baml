@@ -33,13 +33,22 @@ repos:
         fail_fast: true
 
       - id: check-yaml
+        args: [--allow-multiple-documents]
         fail_fast: true
 
   - repo: local
     hooks:
       # Priority ordering:
-      # 1: Formatters and validators (fmt, stow, bep-readme) - format/validate generated code
+      # 1: Formatters and validators (fmt, stow) - format/validate generated code
       # 2: Linters (clippy) - final checks on formatted code
+
+      - id: grammar-single-source
+        name: tmLanguage grammar single-source check
+        entry: bash -c 'node typescript2/pkg-grammar/scripts/sync.mjs --check'
+        language: system
+        pass_filenames: false
+        files: ^typescript2/(pkg-grammar/(.*\.tmLanguage\.json|language-configuration\.json)|app-vscode-ext/(syntaxes/.*\.tmLanguage\.json|language-configuration\.json))$
+        priority: 0
 
       - id: cargo-fmt
         name: cargo fmt
@@ -50,6 +59,14 @@ repos:
         files: ^baml_language/
         priority: 2
 
+      - id: clang-format-cpp
+        name: clang-format (C++ SDK)
+        entry: bash -c 'cd baml_language && mise run fmt-cpp'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(sdks/cpp/|sdk_tests/crates/cpp/).*\.(h|cc)$
+        priority: 2
+
       - id: cargo-stow
         name: cargo stow
         entry: bash -c 'cd baml_language && mise run stow'
@@ -57,14 +74,6 @@ repos:
         pass_filenames: false
         files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/tools_stow/)
         priority: 2
-
-      - id: bep-readme
-        name: bep readme
-        entry: bash -c 'mise run bep:readme'
-        language: system
-        pass_filenames: false
-        files: ^beps/
-        priority: 3
 
       - id: validate-markdown
         name: validate markdown files
@@ -92,3 +101,12 @@ repos:
         files: ^baml_language/
         priority: 4
         stages: [manual]
+
+      # Temporarily disabled while the Hawk check is paused in CI.
+      # - id: cargo-hawk
+      #   name: cargo hawk (dead public)
+      #   entry: bash -c 'cd baml_language && scripts/hawk'
+      #   language: system
+      #   pass_filenames: false
+      #   files: ^baml_language/(.*\.rs|.*Cargo\.toml|Cargo\.lock|hawk\.toml|scripts/hawk)$
+      #   priority: 5

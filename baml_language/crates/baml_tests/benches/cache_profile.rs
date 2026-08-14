@@ -239,13 +239,8 @@ function main() -> int {
             },
         )
         .expect("compilation failed");
-        let engine = BexEngine::new(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            vec![],
-        )
-        .expect("engine creation failed");
+        let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), vec![])
+            .expect("engine creation failed");
         (db, engine)
     }
 
@@ -320,12 +315,19 @@ function main() -> int {
     // ---- main ----
 
     pub fn run() {
-        let sampler = Sampler::new().unwrap_or_else(|e| {
-            eprintln!("Failed to create sampler: {e}");
-            eprintln!();
-            eprintln!("Run with: sudo ./target/profiling/cache_profile");
-            std::process::exit(1);
-        });
+        let sampler = match Sampler::new() {
+            Ok(sampler) => sampler,
+            Err(e) => {
+                eprintln!("Failed to create sampler: {e}");
+                eprintln!();
+                eprintln!("Run with: sudo ./target/profiling/cache_profile");
+                if cfg!(debug_assertions) {
+                    eprintln!("Skipping cache_profile in debug/test profile.");
+                    return;
+                }
+                std::process::exit(1);
+            }
+        };
 
         let args: Vec<String> = std::env::args().collect();
         let output_path = args

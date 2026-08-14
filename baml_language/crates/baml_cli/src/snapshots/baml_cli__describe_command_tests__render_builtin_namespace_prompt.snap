@@ -1,0 +1,19 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+class            baml.prompt.OutputFormat         <builtin>/baml/ns_prompt/prompt.baml:3
+class            baml.prompt.Role                 <builtin>/baml/ns_prompt/prompt.baml:8
+class            baml.prompt.ContextClient        <builtin>/baml/ns_prompt/prompt.baml:15
+class            baml.prompt.Context              <builtin>/baml/ns_prompt/prompt.baml:23
+function         baml.prompt.render_output_format <builtin>/baml/ns_prompt/prompt.baml:46
+function         baml.prompt.build_output_format  <builtin>/baml/ns_prompt/prompt.baml:51
+function         baml.prompt.make_role            <builtin>/baml/ns_prompt/prompt.baml:56
+function         baml.prompt.get_return_type      <builtin>/baml/ns_prompt/prompt.baml:62
+class            baml.prompt.MediaUrlHandler      <builtin>/baml/ns_prompt/sys_llm_types.baml:6
+class            baml.prompt.PrimitiveClientOptions <builtin>/baml/ns_prompt/sys_llm_types.baml:13
+class            baml.prompt.AzureOpenAiOptions   <builtin>/baml/ns_prompt/sys_llm_types.baml:36
+class            baml.prompt.AnthropicOptions     <builtin>/baml/ns_prompt/sys_llm_types.baml:43
+class            baml.prompt.GoogleAiOptions      <builtin>/baml/ns_prompt/sys_llm_types.baml:47
+class            baml.prompt.VertexAiOptions      <builtin>/baml/ns_prompt/sys_llm_types.baml:55
+class            baml.prompt.BedrockOptions       <builtin>/baml/ns_prompt/sys_llm_types.baml:62

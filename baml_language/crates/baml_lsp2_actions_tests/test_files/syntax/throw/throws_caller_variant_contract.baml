@@ -23,21 +23,14 @@ function CallerGood(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//     ╭─[ throw_throws_caller_variant_contract.baml:10:42 ]
-//     │
-//  10 │ function MayFail(x: int) -> string throws Errors {
-//     │                                          ───┬───  
-//     │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//     │ 
-//     │ Note: Error code: E0096
-// ────╯
-// Warning: extraneous throws declaration: user.Errors
-//     ╭─[ throw_throws_caller_variant_contract.baml:10:42 ]
-//     │
-//  10 │ function MayFail(x: int) -> string throws Errors {
-//     │                                          ───┬───  
-//     │                                             ╰───── extraneous throws declaration: user.Errors
-//     │ 
-//     │ Note: Error code: E0097
-// ────╯
+// E0097
+//
+//   ⚠ extraneous throws declaration: Errors
+//     ╭─[throw_throws_caller_variant_contract.baml:10:50]
+//  10 │ ╭─▶ function MayFail(x: int) -> string throws Errors {
+//  11 │ │     match (x) {
+//  12 │ │       0 => throw Errors.AuthError,
+//  13 │ │       _ => throw Errors.NotFoundError
+//  14 │ │     }
+//  15 │ ╰─▶ }
+//     ╰────

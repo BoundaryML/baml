@@ -1,0 +1,122 @@
+---
+title: "Beware When Using TOON"
+description: TOON is a new serialization format, but has many pitfalls.
+slug: beware-when-using-toon
+date: November 17, 2025
+tags: ['Engineering']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+---
+
+![TOON summary card](/toon.png)
+
+We’ve had a lot of users ask us for [TOON](https://github.com/toon-format/toon?tab=readme-ov-file) support, so starting in BAML 0.214.0, you’ll be able to use `{arg|format(type="toon")}` in your BAML functions!
+
+We do see a number of issues with TOON that we want our users to be aware of, though, and also explain why we're not adding native support for TOON outputs:
+
+- it’s not general-purpose: it’s an optimization for a specific shape of data;
+- its schema description capabilities are weak;
+- LLMs do not understand numbers.
+
+# TOON is not a general-purpose input format
+TOON warns [in its own documentation](https://github.com/toon-format/toon?tab=readme-ov-file#when-not-to-use-toon) that you should not use it if your data is deeply nested, non-uniform, or purely tabular. If you use TOON, you should be sure
+
+1. that your use case is a good fit for TOON, and
+2. that if the shape of your data changes, that it will continue to make sense to use TOON
+
+For example, if you use TOON to render a `Product[]`, that's simple enough:
+
+```
+products[2]{name,color}:
+  Cotton Crewneck T-Shirt,Blue
+  Water-Resistant Running Shoes,Black
+```
+
+but if you make a simple change to `Product`, like add an empty `tags` field, and long-form text `description` and `careInstructions` fields, TOON will just look like malformed YAML:
+
+```
+products[2]:
+  - name: Cotton Crewneck T-Shirt
+    color: Blue
+    tags[0]:
+    description: "A soft, lightweight crewneck made from breathable cotton. Designed for everyday wear with a relaxed fit suitable for layering or wearing on its own."
+    careInstructions: Machine wash cold with similar colors. Tumble dry low or hang to dry. Avoid bleach. Warm iron if needed.
+  - name: Water-Resistant Running Shoes
+    color: Black
+    tags[0]:
+    description: Durable athletic shoes built with a water-resistant upper and cushioned midsole for long-distance comfort. Suitable for road running and light trails.
+    careInstructions: Brush off dirt after use. Clean with mild soap and warm water. Air dry away from direct heat. Do not machine wash or dry.
+```
+
+# TOON is a bad output format
+If you really want to use TOON as an output format, you can use few-shot prompting to inject a TOON schema into your prompt template, like so, and then manually parse the TOON output from the returned string:
+
+```baml
+function ToonOutputPlease(input: Input[]) -> string {
+  client "your-client-here"
+  prompt #"
+	Data is in TOON format (2-space indent, arrays show length and fields).
+	<toon>
+	{{ input|format(type="toon") }}
+    </toon>
+	Task: Return only users with role "user" as TOON. Use the same header. Set [N] to match the row count. Output only the code block.
+  "#
+}
+```
+
+However, you should be aware that **we do not recommend this**. TOON is a bad output format.
+## Limited schema capabilities
+TOON [doesn't actually have a mechanism for describing output schemas](https://docs.boundaryml.com/ref/attributes/description) - it relies on few-shot prompting that describes field names. For the same reason, TOON also can't describe the intended type of an output field.
+
+BAML's `{{ ctx.output_format }}`, by contrast, is designed to not only support any schema, but also to make it easy for you to describe your schema in an LLM-friendly way:
+- [`@alias`](https://docs.boundaryml.com/ref/attributes/alias) and [`@description`](https://docs.boundaryml.com/ref/attributes/description) to attach LLM instructions to fields and types;
+- hoisting for recursive types (e.g. `class Node { child: Node? }`);
+- fields with union types are represented as `or` instead of `|` by default.
+
+We don't see any way to model any of these features in TOON.
+## LLMs do not understand numbers
+TOON requires that arrays are encoded with their length:
+
+```rust
+encode({
+  items: [
+    { sku: 'A1', qty: 2, price: 9.99 },
+    { sku: 'B2', qty: 1, price: 14.5 }
+  ]
+})
+```
+
+```rust
+items[2]{sku,qty,price}:
+  A1,2,9.99
+  B2,1,14.5
+```
+
+For an LLM to produce output in TOON format correctly, therefore, an LLM must be able to count. Unfortunately, LLMs are known to be bad at not just counting, but [are bad at any task that involves understanding the semantics of numbers](https://loeber.substack.com/p/21-everything-we-know-about-llms).
+
+In fact, if I ask gpt-5.1 - a state-of-the-art model released last week - to do some [non-trivial counting](https://chatgpt.com/share/691ac5ac-70c0-800a-a829-e14c965f7f67), its answer will be wrong:[^counting]
+
+```
+{
+"fn_count": 82,
+"fn_names": [<array with 68 elements>],
+"type_count": 8,
+"type_names": [<array with 8 elements>],
+"import_count": 54,
+"import_names": [<array with 55 elements>]
+}
+```
+
+[^counting]: Note that this prompt has to be super insistent on answering in the specified format because without it, gpt-5.1 will [say that it's not good at counting](https://chatgpt.com/share/691ac9b7-47a0-800a-a9a7-c0302f463168).
+
+Now let's say we ask for a model to return output in TOON format, and it makes this mistake:
+1. What do you want to show to your end user?
+2. What should the TOON parser do, and how will it allow you to achieve (1)?
+
+We don't think there are good answers to either of these questions, and in fact, see this as a fundamental design flaw in TOON. (Maybe this is fixable by removing array lengths from TOON?)
+
+# Future Work
+We have a lot of ideas in the backlog for improving our output parser (syntax for mixed output formats, e.g. asking for code snippets in XML; custom handling for bad LLM outputs; prompt optimizer tooling) which we want to explore in the long term.
+
+In the meantime, we're hard at work on a slew of projects tackling the full lifecycle of building AI-powered software, and making it easier to debug, test, and monitor your pipelines. Keep an eye out for the calls for beta testers in [the community Discord](https://boundaryml.com/discord)!

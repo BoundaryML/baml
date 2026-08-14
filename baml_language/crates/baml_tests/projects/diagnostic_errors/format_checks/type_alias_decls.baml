@@ -53,28 +53,28 @@ type OptionalUnion = (int | string)?
 type Json = int | float | string | bool | null | Json[] | map<string, Json>
 
 // ===== Function type =====
-type IntToInt = (x: int) -> int
+type IntToInt = (x: int) -> int throws never
 
 // ===== Function type with multiple params =====
-type BinaryOp = (a: int, b: int) -> int
+type BinaryOp = (a: int, b: int) -> int throws never
 
 // ===== Function type without param names =====
-type UnnamedParams = (int, int) -> int
+type UnnamedParams = (int, int) -> int throws never
 
 // ===== Function type no params =====
-type Producer = () -> string
+type Producer = () -> string throws never
 
 // ===== Nested function type (curried) =====
-type Curried = (x: int) -> (y: int) -> int
+type Curried = (x: int) -> ((y: int) -> int throws never) throws never
 
 // ===== Function type with complex params =====
-type ComplexFn = (items: int[], lookup: map<string, int>) -> string?
+type ComplexFn = (items: int[], lookup: map<string, int>) -> string? throws never
 
 // ===== Function type with union param =====
-type UnionParamFn = (value: int | string) -> bool
+type UnionParamFn = (value: int | string) -> bool throws never
 
 // ===== Function type returning function =====
-type FnFactory = (config: string) -> (int) -> int
+type FnFactory = (config: string) -> ((int) -> int throws never) throws never
 
 // ===== Long union exceeding limit: many string literals =====
 type LongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
@@ -92,10 +92,10 @@ type VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo
 type DeepGeneric = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
 
 // ===== Deeply nested function type exceeding limit =====
-type DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>
+type DeepFnType = (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never
 
 // ===== Function type with many long params exceeding limit =====
-type LongParamFn = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string
+type LongParamFn = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string throws never
 
 // ===== Nested paren unions =====
 type NestedParenUnion = ((int | string) | (bool | float))[]
@@ -111,10 +111,6 @@ type DoubleOptional = int??
 type DoubleArray = int[][]
 type ComplexPostfix = (int | string)?[][]
 type DeepPostfix = ((int | string | bool | float)?[])[]?
-
-// ===== Constrained types exceeding limit =====
-type Constrained = int @check("positive", {{ this > 0 }})
-type ConstrainedLong = map<string, int | string | bool> @check("valid", {{ this != null }})
 
 // ===== Union of classes =====
 class TypeAliasSuccess {
@@ -315,6 +311,10 @@ type TriviaFnType =
     -> // 11 arrow trailing
     // 12 return type leading
     string // 13 return type trailing
+    // 14 throws leading
+    throws // 15 throws trailing
+    // 16 error type leading
+    never // 17 error type trailing
 
 // ===== Trivia in function type (block comments) =====
 type TriviaFnTypeBlock =
@@ -331,6 +331,10 @@ type TriviaFnTypeBlock =
     -> /* 11 arrow trailing */
     /* 12 return type leading */
     string /* 13 return type trailing */
+    /* 14 throws leading */
+    throws /* 15 throws trailing */
+    /* 16 error type leading */
+    never /* 17 error type trailing */
 
 // ===== Trivia in wrapping function type with many params (line comments) =====
 type TriviaLongFnType =
@@ -357,6 +361,10 @@ type TriviaLongFnType =
     -> // 21 trailing
     // 22 leading
     string // 23 trailing
+    // 24 leading
+    throws // 25 trailing
+    // 26 leading
+    never // 27 trailing
 
 // ===== Trivia in optional type (line comments) =====
 type TriviaOptional =

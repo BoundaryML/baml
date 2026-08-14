@@ -21,14 +21,12 @@ function GuardsWithFallback(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: non-exhaustive match on `int`; missing: _
-//     ╭─[ match_match_with_guards.baml:7:53 ]
-//     │
-//   7 │ ╭─▶ function GuardsOnlyNonExhaustive(x: int) -> string {
-//     ┆ ┆   
-//  11 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── non-exhaustive match on `int`; missing: _
-//     │     
-//     │     Note: Error code: E0062
-// ────╯
+// E0062
+//
+//   × non-exhaustive match on type int; missing: _
+//     ╭─[match_match_with_guards.baml:8:3]
+//   8 │ ╭─▶   match (x) {
+//   9 │ │       let n: int if n > 0 => "positive",
+//  10 │ │       let n: int if n < 0 => "negative"
+//  11 │ ╰─▶   }
+//     ╰────

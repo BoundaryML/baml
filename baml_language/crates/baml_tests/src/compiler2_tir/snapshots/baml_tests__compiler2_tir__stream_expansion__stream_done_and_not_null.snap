@@ -8,15 +8,9 @@ class user.Combined {
   age: int
   score: float
 }
-function user.Combined.to_json(self: user.Combined) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "id": self.id.to_json(), "name": self.name.to_json(), "age": self.age.to_json(), "score": self.score.to_json() } : map<string, baml.json.json>
-}
-function user.Combined.from_json(j: baml.json.json) -> user.Combined throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Combined { id: baml.json.from_json<string>(baml.json.field(j, "id")), name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), score: baml.json.from_json<float>(baml.json.field(j, "score")) } : user.Combined
-}
 class user.Combined$stream {
   id: string
   name: string
-  age: null | int
-  score: null | float
+  age: int | null
+  score: float | null
 }

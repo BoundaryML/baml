@@ -52,3 +52,28 @@ pub fn extract_docstring(node: &SyntaxNode) -> Option<String> {
 
     Some(doc_lines.join("\n"))
 }
+
+/// Return `true` when a `//baml:<marker>` directive appears in the leading
+/// comment trivia of `node`. Walks the same children prefix as
+/// `extract_docstring` so the same "immediately attached" semantics apply.
+///
+/// Used by BEP-049 §10 to detect `//baml:tagged_string` on a function
+/// definition; can be reused for any future single-keyword directive.
+pub fn has_baml_marker(node: &SyntaxNode, marker: &str) -> bool {
+    let needle = format!("//baml:{marker}");
+    for child in node.children_with_tokens() {
+        match child {
+            rowan::NodeOrToken::Token(tok) => match tok.kind() {
+                SyntaxKind::LINE_COMMENT => {
+                    if tok.text().trim_end() == needle {
+                        return true;
+                    }
+                }
+                SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE => {}
+                _ => return false,
+            },
+            rowan::NodeOrToken::Node(_) => return false,
+        }
+    }
+    false
+}

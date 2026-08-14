@@ -72,9 +72,7 @@ function LlmAliasParam(cfg: ConfigAlias) -> string {
 // Bare class in throw
 function LlmThrowClass(x: int) -> string {
     match (x) {
-        0 => {
-            throw Error { reason: "llm failed", retryable: true }
-        },
+        0 => throw Error { reason: "llm failed", retryable: true },
         _ => "ok",
     }
 }
@@ -82,9 +80,7 @@ function LlmThrowClass(x: int) -> string {
 // Bare enum in throw
 function LlmThrowEnum(x: int) -> string {
     match (x) {
-        0 => {
-            throw Status.Done
-        },
+        0 => throw Status.Done,
         _ => "ok",
     }
 }
@@ -128,9 +124,7 @@ function LlmUsesRootAlias(cfg: root.ConfigAlias) -> string {
 // Throw root.Error from llm namespace
 function LlmThrowsRootError(x: int) -> string {
     match (x) {
-        0 => {
-            throw root.Error { code: 404, message: "not found" }
-        },
+        0 => throw root.Error { code: 404, message: "not found" },
         _ => "ok",
     }
 }
@@ -138,9 +132,7 @@ function LlmThrowsRootError(x: int) -> string {
 // Throw root enum variant
 function LlmThrowsRootEnum(x: int) -> string {
     match (x) {
-        0 => {
-            throw root.Status.Failed
-        },
+        0 => throw root.Status.Failed,
         _ => "ok",
     }
 }

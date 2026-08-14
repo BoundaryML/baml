@@ -1,48 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12673
 ---
-function user.User.from_json(j: baml.json.json) -> User {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "age"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.User
-    load_var _2
-    init_field .name
-    load_var _5
-    init_field .age
-    return
-}
-
-function user.User.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .name
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .age
-    call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "name"
-    load_const "age"
-    alloc_map 2
-    return
-}
-
 function user.deserialize_user(s: string) -> User {
     load_type User
     load_var s

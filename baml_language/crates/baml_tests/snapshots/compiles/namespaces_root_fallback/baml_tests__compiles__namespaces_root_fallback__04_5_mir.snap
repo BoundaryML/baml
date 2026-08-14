@@ -2,57 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Config.from_json(j: baml.json.json) -> Config {
-    // Locals:
-    let _0: Config // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "key") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Config { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Config.to_json(self: Config) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Config // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Config
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "key": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
 fn user.llm.UseConfig(cfg: Config) -> llm.Response {
     // Locals:
     let _0: llm.Response // _0 // return
@@ -66,57 +15,6 @@ fn user.llm.UseConfig(cfg: Config) -> llm.Response {
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
-    // Locals:
-    let _0: llm.Response // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "text") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.llm.Response { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.llm.Response.to_json(self: llm.Response) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: llm.Response // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: llm.Response
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "text": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

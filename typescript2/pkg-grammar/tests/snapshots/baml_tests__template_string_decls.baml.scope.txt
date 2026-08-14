@@ -1,0 +1,1352 @@
+1:1-68       "// Testing all the formatter cases for template string declarations" source.baml comment.line.double-slash.baml
+2:1-59       "// as well as any special cases inside the template string" source.baml comment.line.double-slash.baml
+4:1-37       "// ===== Basic template string =====" source.baml comment.line.double-slash.baml
+5:1-16       "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+5:17-30      "BasicTemplate"    source.baml meta.template-string.baml entity.name.function.template-string.baml
+5:30-31      "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+5:31-35      "name"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+5:35-36      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+5:37-43      "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+5:43-44      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+5:45-46      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+5:46-47      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+6:1-12       "    Hello, "      source.baml meta.template-string.baml string.quoted.raw.template.baml
+6:12-14      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+6:15-19      "name"             source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+6:20-22      "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+6:22-23      "!"                source.baml meta.template-string.baml string.quoted.raw.template.baml
+7:1-2        "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+7:2-3        "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+9:1-46       "// ===== Template string with no params =====" source.baml comment.line.double-slash.baml
+10:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+10:17-25     "NoParams"         source.baml meta.template-string.baml entity.name.function.template-string.baml
+10:25-26     "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+10:26-27     ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+10:28-29     "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+10:29-30     "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+11:1-42      "    A static template with no parameters." source.baml meta.template-string.baml string.quoted.raw.template.baml
+12:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+12:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+14:1-52      "// ===== Template string with multiple params =====" source.baml comment.line.double-slash.baml
+15:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+15:17-27     "MultiParam"       source.baml meta.template-string.baml entity.name.function.template-string.baml
+15:27-28     "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+15:28-33     "first"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+15:33-34     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+15:35-41     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+15:41-42     ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+15:43-47     "last"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+15:47-48     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+15:49-55     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+15:55-56     ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+15:57-60     "age"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+15:60-61     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+15:62-65     "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+15:65-66     ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+15:67-68     "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+15:68-69     "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+16:1-11      "    Name: "       source.baml meta.template-string.baml string.quoted.raw.template.baml
+16:11-13     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+16:14-19     "first"            source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:20-22     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+16:23-25     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+16:26-30     "last"             source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:31-33     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+17:1-10      "    Age: "        source.baml meta.template-string.baml string.quoted.raw.template.baml
+17:10-12     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+17:13-16     "age"              source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+17:17-19     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+18:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+18:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+20:1-56      "// ===== Template string with complex param types =====" source.baml comment.line.double-slash.baml
+21:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+21:17-30     "ComplexParams"    source.baml meta.template-string.baml entity.name.function.template-string.baml
+21:30-31     "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+21:31-36     "items"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+21:36-37     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+21:38-44     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+21:44-45     "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+21:45-46     "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+21:46-47     ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+21:48-54     "config"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+21:54-55     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+21:56-59     "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+21:59-60     "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+21:60-66     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+21:66-67     ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+21:68-71     "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+21:71-72     ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+21:72-73     ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+21:74-75     "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+21:75-76     "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+22:1-12      "    Items: "      source.baml meta.template-string.baml string.quoted.raw.template.baml
+22:12-14     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+22:15-20     "items"            source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+22:21-23     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+23:1-13      "    Config: "     source.baml meta.template-string.baml string.quoted.raw.template.baml
+23:13-15     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+23:16-22     "config"           source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+23:23-25     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+24:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+24:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+26:1-53      "// ===== Template string with single-line body =====" source.baml comment.line.double-slash.baml
+27:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+27:17-27     "SingleLine"       source.baml meta.template-string.baml entity.name.function.template-string.baml
+27:27-28     "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+27:28-29     "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+27:29-30     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+27:31-34     "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+27:34-35     ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+27:36-37     "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+27:37-38     "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+27:38-47     "Value is "        source.baml meta.template-string.baml string.quoted.raw.template.baml
+27:47-49     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+27:50-51     "x"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+27:52-54     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+27:54-55     "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+27:55-56     "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+29:1-65      "// ===== Template string with many params that should wrap =====" source.baml comment.line.double-slash.baml
+30:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+30:17-27     "ManyParams"       source.baml meta.template-string.baml entity.name.function.template-string.baml
+30:27-28     "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+30:28-43     "first_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+30:43-44     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+30:45-51     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+30:51-52     ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+30:53-69     "second_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+30:69-70     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+30:71-77     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+30:77-78     ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+30:79-94     "third_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+30:94-95     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+30:96-99     "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+30:99-100    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+30:101-117   "fourth_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+30:117-118   ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+30:119-123   "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+30:123-124   ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+30:125-126   "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+30:126-127   "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+31:5-7       "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+31:8-23      "first_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+31:24-26     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+31:27-29     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+31:30-46     "second_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+31:47-49     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+31:50-52     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+31:53-68     "third_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+31:69-71     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+31:72-74     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+31:75-91     "fourth_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+31:92-94     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+32:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+32:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+34:1-36      "// ===== Very long param list =====" source.baml comment.line.double-slash.baml
+35:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+35:17-31     "VeryLongParams"   source.baml meta.template-string.baml entity.name.function.template-string.baml
+35:31-32     "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+35:32-61     "extremely_long_parameter_name" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+35:61-62     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+35:63-69     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+35:69-70     ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+35:71-103    "another_very_long_parameter_name" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+35:103-104   ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+35:105-108   "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+35:108-109   ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+35:110-111   "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+35:111-112   "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+36:5-7       "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+36:8-37      "extremely_long_parameter_name" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+36:38-40     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+36:41-43     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+36:44-76     "another_very_long_parameter_name" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+36:77-79     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+37:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+37:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+39:1-47      "// ===== Template with template comments =====" source.baml comment.line.double-slash.baml
+40:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+40:17-28     "WithComment"      source.baml meta.template-string.baml entity.name.function.template-string.baml
+40:28-29     "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+40:29-30     "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+40:30-31     ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+40:32-38     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+40:38-39     ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+40:40-41     "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+40:41-42     "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+41:5-7       "{#"               source.baml meta.template-string.baml string.quoted.raw.template.baml comment.block.template.baml punctuation.definition.comment.begin.baml
+41:7-35      " This is a template comment " source.baml meta.template-string.baml string.quoted.raw.template.baml comment.block.template.baml
+41:35-37     "#}"               source.baml meta.template-string.baml string.quoted.raw.template.baml comment.block.template.baml punctuation.definition.comment.end.baml
+42:1-12      "    Value: "      source.baml meta.template-string.baml string.quoted.raw.template.baml
+42:12-14     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+42:15-16     "x"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+42:17-19     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+43:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+43:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+45:1-69      "// ===== Trivia on template string declaration (line comments) =====" source.baml comment.line.double-slash.baml
+46:1-21      "// 1 keyword leading" source.baml comment.line.double-slash.baml
+47:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+47:17-38     "// 2 keyword trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+48:1-18      "// 3 name leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+49:1-15      "TriviaTemplate"   source.baml meta.template-string.baml entity.name.function.template-string.baml
+49:16-34     "// 4 name trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+50:1-24      "// 5 open paren leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+51:1-2       "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+51:3-27      "// 6 open paren trailing" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+52:1-19      "// 7 param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+53:1-2       "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+53:3-27      "// 8 param name trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+54:1-19      "// 9 colon leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+55:1-2       ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+55:4-24      "// 10 colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+56:1-19      "// 11 type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+57:1-7       "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+57:8-27      "// 12 type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+58:1-26      "// 13 close paren leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+59:1-2       ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+59:3-29      "// 14 close paren trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+60:1-19      "// 15 body leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+61:1-2       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+61:2-3       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+62:1-11      "    Hello "       source.baml meta.template-string.baml string.quoted.raw.template.baml
+62:11-13     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+62:14-15     "x"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+62:16-18     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+63:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+63:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+65:1-20      "///////////////////" source.baml comment.line.double-slash.baml
+67:1-70      "// ===== Trivia on template string declaration (block comments) =====" source.baml comment.line.double-slash.baml
+68:1-3       "/*"               source.baml comment.block.baml
+68:3-22      " 1 keyword leading " source.baml comment.block.baml
+68:22-24     "*/"               source.baml comment.block.baml
+69:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+69:17-19     "/*"               source.baml meta.template-string.baml comment.block.baml
+69:19-39     " 2 keyword trailing " source.baml meta.template-string.baml comment.block.baml
+69:39-41     "*/"               source.baml meta.template-string.baml comment.block.baml
+70:1-3       "/*"               source.baml meta.template-string.baml comment.block.baml
+70:3-19      " 3 name leading " source.baml meta.template-string.baml comment.block.baml
+70:19-21     "*/"               source.baml meta.template-string.baml comment.block.baml
+71:1-20      "TriviaTemplateBlock" source.baml meta.template-string.baml entity.name.function.template-string.baml
+71:21-23     "/*"               source.baml meta.template-string.baml comment.block.baml
+71:23-40     " 4 name trailing " source.baml meta.template-string.baml comment.block.baml
+71:40-42     "*/"               source.baml meta.template-string.baml comment.block.baml
+72:1-3       "/*"               source.baml meta.template-string.baml comment.block.baml
+72:3-25      " 5 open paren leading " source.baml meta.template-string.baml comment.block.baml
+72:25-27     "*/"               source.baml meta.template-string.baml comment.block.baml
+73:1-2       "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+73:3-5       "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+73:5-28      " 6 open paren trailing " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+73:28-30     "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+74:1-3       "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+74:3-20      " 7 param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+74:20-22     "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+75:1-2       "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+75:3-5       "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+75:5-28      " 8 param name trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+75:28-30     "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+76:1-2       ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+76:3-5       "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+76:5-23      " 9 colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+76:23-25     "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+77:1-3       "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+77:3-20      " 10 type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+77:20-22     "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+78:1-7       "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+78:8-10      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+78:10-28     " 11 type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+78:28-30     "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+79:1-3       "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+79:3-27      " 12 close paren leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+79:27-29     "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+80:1-2       ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+80:3-5       "/*"               source.baml meta.template-string.baml comment.block.baml
+80:5-30      " 13 close paren trailing " source.baml meta.template-string.baml comment.block.baml
+80:30-32     "*/"               source.baml meta.template-string.baml comment.block.baml
+81:1-3       "/*"               source.baml meta.template-string.baml comment.block.baml
+81:3-20      " 14 body leading " source.baml meta.template-string.baml comment.block.baml
+81:20-22     "*/"               source.baml meta.template-string.baml comment.block.baml
+82:1-2       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+82:2-3       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+83:1-11      "    Hello "       source.baml meta.template-string.baml string.quoted.raw.template.baml
+83:11-13     "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+83:14-15     "x"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+83:16-18     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+84:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+84:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+86:1-20      "///////////////////" source.baml comment.line.double-slash.baml
+88:1-50      "// ===== Multi param trivia (line comments) =====" source.baml comment.line.double-slash.baml
+89:1-16      "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+89:17-33     "MultiParamTrivia" source.baml meta.template-string.baml entity.name.function.template-string.baml
+89:33-34     "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+90:5-29      "// 1 first param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+91:5-6       "a"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+91:7-32      "// 2 first param trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+92:5-6       ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+92:7-32      "// 3 first colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+93:5-28      "// 4 first type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+94:5-11      "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+94:12-36     "// 5 first type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+95:5-6       ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+95:7-26      "// 6 comma trailing" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+96:5-30      "// 7 second param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+97:5-6       "b"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+97:7-33      "// 8 second param trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+98:5-6       ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+98:7-33      "// 9 second colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+99:5-30      "// 10 second type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+100:5-8      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+100:9-35     "// 11 second type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+101:1-2      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+101:3-4      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+101:4-5      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+102:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+102:8-9      "a"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+102:10-12    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+102:13-15    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+102:16-17    "b"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+102:18-20    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+103:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+103:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+105:1-51     "// ===== Multi param trivia (block comments) =====" source.baml comment.line.double-slash.baml
+106:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+106:17-38    "MultiParamTriviaBlock" source.baml meta.template-string.baml entity.name.function.template-string.baml
+106:38-39    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+107:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+107:7-30     " 1 first param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+107:30-32    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+108:5-6      "a"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+108:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+108:9-33     " 2 first param trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+108:33-35    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+109:5-6      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+109:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+109:9-33     " 3 first colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+109:33-35    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+110:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+110:7-29     " 4 first type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+110:29-31    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+111:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+111:12-14    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+111:14-37    " 5 first type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+111:37-39    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+112:5-6      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+112:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+112:9-27     " 6 comma trailing " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+112:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+113:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+113:7-31     " 7 second param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+113:31-33    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+114:5-6      "b"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+114:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+114:9-34     " 8 second param trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+114:34-36    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+115:5-6      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+115:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+115:9-34     " 9 second colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+115:34-36    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+116:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+116:7-31     " 10 second type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+116:31-33    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+117:5-8      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+117:9-11     "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+117:11-36    " 11 second type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+117:36-38    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+118:1-2      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+118:3-4      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+118:4-5      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+119:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+119:8-9      "a"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+119:10-12    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+119:13-15    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+119:16-17    "b"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+119:18-20    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+120:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+120:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+122:1-26     "// ===== Short name =====" source.baml comment.line.double-slash.baml
+123:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+123:17-18    "T"                source.baml meta.template-string.baml entity.name.function.template-string.baml
+123:18-19    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+123:19-20    "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+123:20-21    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+123:22-25    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+123:25-26    ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+123:27-28    "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+123:28-29    "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+123:29-31    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+123:32-33    "x"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+123:34-36    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+123:36-37    "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+123:37-38    "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+125:1-41     "// ===== Long name exceeding limit =====" source.baml comment.line.double-slash.baml
+126:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+126:17-115   "ThisIsAnExtremelyLongTemplateStringNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns" source.baml meta.template-string.baml entity.name.function.template-string.baml
+126:115-116  "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+126:116-117  "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+126:117-118  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+126:119-122  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+126:122-123  ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+126:124-125  "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+126:125-126  "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+127:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+127:8-9      "x"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+127:10-12    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+128:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+128:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+130:1-55     "// ===== Long name + many params exceeding limit =====" source.baml comment.line.double-slash.baml
+131:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+131:17-55    "VeryLongTemplateNameWithManyParameters" source.baml meta.template-string.baml entity.name.function.template-string.baml
+131:55-56    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+131:56-71    "first_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+131:71-72    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+131:73-79    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+131:79-80    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+131:81-97    "second_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+131:97-98    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+131:99-102   "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+131:102-103  ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+131:104-119  "third_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+131:119-120  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+131:121-125  "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+131:125-126  ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+131:127-143  "fourth_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+131:143-144  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+131:145-150  "float"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+131:150-151  ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+131:152-153  "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+131:153-154  "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+132:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+132:8-23     "first_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+132:24-26    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+132:27-29    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+132:30-46    "second_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+132:47-49    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+132:50-52    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+132:53-68    "third_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+132:69-71    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+132:72-74    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+132:75-91    "fourth_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+132:92-94    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+133:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+133:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+135:1-62     "// ===== Many params with complex types exceeding limit =====" source.baml comment.line.double-slash.baml
+136:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+136:17-33    "ComplexTypesWrap" source.baml meta.template-string.baml entity.name.function.template-string.baml
+136:33-34    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+136:34-39    "items"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+136:39-40    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+136:41-42    "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+136:42-45    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+136:46-47    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+136:48-54    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+136:55-56    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+136:57-61    "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+136:61-62    ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+136:62-63    "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+136:63-64    "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+136:64-65    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+136:66-72    "config"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+136:72-73    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+136:74-77    "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+136:77-78    "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+136:78-84    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+136:84-85    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+136:86-89    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+136:90-91    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+136:92-98    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+136:98-99    ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+136:99-100   ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+136:101-109  "callback"         source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+136:109-110  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+136:111-112  "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+136:112-113  "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+136:113-114  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.separator.colon.baml
+136:115-118  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+136:118-119  ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.baml
+136:120-121  "y"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+136:121-122  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.separator.colon.baml
+136:123-126  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+136:126-127  ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+136:128-130  "->"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
+136:131-137  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+136:137-138  ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+136:139-140  "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+136:140-141  "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+137:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+137:8-13     "items"            source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+137:14-16    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+137:17-19    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+137:20-26    "config"           source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+137:27-29    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+138:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+138:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+140:1-81     "// ===== Very long param list with many complex params far exceeding limit =====" source.baml comment.line.double-slash.baml
+141:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+141:17-38    "VeryLongComplexParams" source.baml meta.template-string.baml entity.name.function.template-string.baml
+141:38-39    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+141:39-54    "first_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+141:54-55    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+141:56-59    "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+141:59-60    "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+141:60-66    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+141:66-67    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+141:68-71    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+141:72-73    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+141:74-80    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+141:81-82    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+141:83-87    "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+141:87-88    ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+141:88-89    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+141:90-106   "second_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+141:106-107  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+141:108-109  "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+141:109-112  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+141:113-114  "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+141:115-121  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+141:121-122  ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+141:122-123  "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+141:123-124  "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+141:124-125  ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+141:126-141  "third_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+141:141-142  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+141:143-146  "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+141:146-147  "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+141:147-153  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+141:153-154  ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+141:155-158  "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+141:158-159  "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+141:159-165  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+141:165-166  ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+141:167-170  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+141:170-171  ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+141:171-172  ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+141:172-173  ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+141:174-190  "fourth_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+141:190-191  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+141:192-193  "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+141:193-194  "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+141:194-195  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.separator.colon.baml
+141:196-199  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+141:199-200  ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+141:201-203  "->"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
+141:204-210  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+141:210-211  ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+141:212-213  "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+141:213-214  "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+142:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+142:8-23     "first_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+142:24-26    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+142:27-29    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+142:30-46    "second_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+142:47-49    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+142:50-52    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+142:53-68    "third_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+142:69-71    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+143:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+143:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+145:1-71     "// ===== Params with deeply nested generic types exceeding limit =====" source.baml comment.line.double-slash.baml
+146:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+146:17-34    "DeepGenericParams" source.baml meta.template-string.baml entity.name.function.template-string.baml
+146:34-35    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+146:35-39    "data"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+146:39-40    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+146:41-44    "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+146:44-45    "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+146:45-51    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:51-52    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+146:53-56    "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:56-57    "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+146:57-63    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:63-64    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+146:65-68    "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:68-69    "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+146:69-75    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:75-76    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+146:77-80    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:81-82    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+146:83-89    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:90-91    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+146:92-96    "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:97-98    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+146:99-104   "float"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+146:105-106  "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+146:107-111  "null"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml constant.language.null.baml
+146:111-112  ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+146:112-113  ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+146:113-114  ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+146:114-115  ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+146:116-117  "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+146:117-118  "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+147:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+147:8-12     "data"             source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+147:13-15    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+148:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+148:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+150:1-39     "// ===== Params with union types =====" source.baml comment.line.double-slash.baml
+151:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+151:17-28    "UnionParams"      source.baml meta.template-string.baml entity.name.function.template-string.baml
+151:28-29    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+151:29-35    "result"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+151:35-36    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+151:37-43    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+151:44-45    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.type.baml
+151:46-49    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+151:50-51    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.type.baml
+151:52-56    "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+151:57-58    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.type.baml
+151:59-63    "null"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml constant.language.null.baml
+151:63-64    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+151:65-70    "items"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+151:70-71    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+151:72-73    "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+151:73-79    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+151:80-81    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+151:82-85    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+151:85-86    ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+151:86-87    "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+151:87-88    "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+151:88-89    ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+151:90-91    "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+151:91-92    "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+152:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+152:8-14     "result"           source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+152:15-17    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+152:18-20    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+152:21-26    "items"            source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+152:27-29    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+153:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+153:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+155:1-42     "// ===== Params with optional types =====" source.baml comment.line.double-slash.baml
+156:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+156:17-31    "OptionalParams"   source.baml meta.template-string.baml entity.name.function.template-string.baml
+156:31-32    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+156:32-36    "name"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+156:36-37    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+156:38-44    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+156:44-45    "?"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.optional.baml
+156:45-46    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+156:47-50    "age"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+156:50-51    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+156:52-55    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+156:55-56    "?"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.optional.baml
+156:56-57    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+156:58-63    "items"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+156:63-64    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+156:65-71    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+156:71-72    "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+156:72-73    "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+156:73-74    "?"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.optional.baml
+156:74-75    ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+156:76-77    "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+156:77-78    "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+157:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+157:8-12     "name"             source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+157:13-15    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+157:16-18    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+157:19-22    "age"              source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+157:23-25    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+157:26-28    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+157:29-34    "items"            source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+157:35-37    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+158:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+158:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+160:1-42     "// ===== Params with function types =====" source.baml comment.line.double-slash.baml
+161:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+161:17-29    "FnTypeParams"     source.baml meta.template-string.baml entity.name.function.template-string.baml
+161:29-30    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+161:30-39    "transform"        source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+161:39-40    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+161:41-42    "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+161:42-43    "x"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+161:43-44    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.separator.colon.baml
+161:45-48    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+161:48-49    ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+161:50-52    "->"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
+161:53-56    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+161:56-57    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+161:58-65    "combine"          source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+161:65-66    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+161:67-68    "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+161:68-69    "a"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+161:69-70    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.separator.colon.baml
+161:71-77    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+161:77-78    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.baml
+161:79-80    "b"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+161:80-81    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.separator.colon.baml
+161:82-88    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+161:88-89    ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+161:90-92    "->"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
+161:93-99    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+161:99-100   ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+161:101-102  "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+161:102-103  "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+162:1-16     "    transformed"  source.baml meta.template-string.baml string.quoted.raw.template.baml
+163:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+163:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+165:1-67     "// ===== Long name + long complex params far exceeding limit =====" source.baml comment.line.double-slash.baml
+166:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+166:17-55    "ExtremelyLongNamePlusComplexParameters" source.baml meta.template-string.baml entity.name.function.template-string.baml
+166:55-56    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+166:56-86    "first_very_long_parameter_name" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+166:86-87    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+166:88-91    "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+166:91-92    "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+166:92-98    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+166:98-99    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+166:100-103  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+166:104-105  "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+166:106-112  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+166:113-114  "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+166:115-119  "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+166:119-120  ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+166:120-121  ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+166:122-153  "second_very_long_parameter_name" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+166:153-154  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+166:155-156  "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+166:156-159  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+166:160-161  "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+166:162-168  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+166:169-170  "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+166:171-175  "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+166:176-177  "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+166:178-183  "float"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+166:184-185  "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+166:186-190  "null"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml constant.language.null.baml
+166:190-191  ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+166:191-192  "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+166:192-193  "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+166:193-194  ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+166:195-196  "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+166:196-197  "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+167:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+167:8-38     "first_very_long_parameter_name" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+167:39-41    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+167:42-44    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+167:45-76    "second_very_long_parameter_name" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+167:77-79    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+168:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+168:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+170:1-72     "// ===== Six params all with long names and types exceeding limit =====" source.baml comment.line.double-slash.baml
+171:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+171:17-30    "SixLongParams"    source.baml meta.template-string.baml entity.name.function.template-string.baml
+171:30-31    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+171:31-42    "first_param"      source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+171:42-43    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+171:44-50    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+171:50-51    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+171:52-64    "second_param"     source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+171:64-65    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+171:66-69    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+171:69-70    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+171:71-82    "third_param"      source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+171:82-83    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+171:84-88    "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+171:88-89    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+171:90-102   "fourth_param"     source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+171:102-103  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+171:104-109  "float"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+171:109-110  ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+171:111-122  "fifth_param"      source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+171:122-123  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+171:124-130  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+171:130-131  "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+171:131-132  "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+171:132-133  ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+171:134-145  "sixth_param"      source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+171:145-146  ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+171:147-150  "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+171:150-151  "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+171:151-157  "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+171:157-158  ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+171:159-162  "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+171:162-163  ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+171:163-164  ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+171:165-166  "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+171:166-167  "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+172:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+172:8-19     "first_param"      source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+172:20-22    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+172:23-25    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+172:26-38    "second_param"     source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+172:39-41    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+172:42-44    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+172:45-56    "third_param"      source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+172:57-59    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+172:60-62    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+172:63-75    "fourth_param"     source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+172:76-78    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+172:79-81    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+172:82-93    "fifth_param"      source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+172:94-96    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+172:97-99    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+172:100-111  "sixth_param"      source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+172:112-114  "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+173:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+173:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+175:1-62     "// ===== Trivia on wrapping many params (line comments) =====" source.baml comment.line.double-slash.baml
+176:1-21     "// 1 keyword leading" source.baml comment.line.double-slash.baml
+177:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+177:17-38    "// 2 keyword trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+178:1-18     "// 3 name leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+179:1-21     "TriviaWrappingParams" source.baml meta.template-string.baml entity.name.function.template-string.baml
+179:22-40    "// 4 name trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+180:1-24     "// 5 open paren leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+181:1-2      "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+181:3-27     "// 6 open paren trailing" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+182:1-25     "// 7 first param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+183:1-16     "first_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+183:17-41    "// 8 first name trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+184:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+184:3-28     "// 9 first colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+185:1-25     "// 10 first type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+186:1-4      "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+186:4-5      "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+186:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+186:11-12    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+186:13-16    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+186:17-18    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+186:19-25    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+186:26-27    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+186:28-32    "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+186:32-33    ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+186:34-59    "// 11 first type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+187:1-2      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+187:3-23     "// 12 comma trailing" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+188:1-27     "// 13 second param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+189:1-17     "second_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+189:18-44    "// 14 second name trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+190:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+190:3-30     "// 15 second colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+191:1-26     "// 16 second type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+192:1-2      "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+192:2-5      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+192:6-7      "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+192:8-14     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+192:14-15    ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+192:15-16    "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+192:16-17    "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+192:18-44    "// 17 second type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+193:1-2      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+193:3-23     "// 18 comma trailing" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+194:1-26     "// 19 third param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+195:1-16     "third_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+195:17-42    "// 20 third name trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+196:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+196:3-29     "// 21 third colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+197:1-25     "// 22 third type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+198:1-4      "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+198:4-5      "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+198:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+198:11-12    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+198:13-16    "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+198:16-17    "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+198:17-23    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+198:23-24    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+198:25-28    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+198:28-29    ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+198:29-30    ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+198:31-56    "// 23 third type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+199:1-26     "// 24 close paren leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+200:1-2      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+200:3-29     "// 25 close paren trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+201:1-19     "// 26 body leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+202:1-2      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+202:2-3      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+203:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+203:8-23     "first_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+203:24-26    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+203:27-29    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+203:30-46    "second_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+203:47-49    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+203:50-52    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+203:53-68    "third_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+203:69-71    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+204:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+204:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+206:1-20     "///////////////////" source.baml comment.line.double-slash.baml
+208:1-63     "// ===== Trivia on wrapping many params (block comments) =====" source.baml comment.line.double-slash.baml
+209:1-3      "/*"               source.baml comment.block.baml
+209:3-22     " 1 keyword leading " source.baml comment.block.baml
+209:22-24    "*/"               source.baml comment.block.baml
+210:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+210:17-19    "/*"               source.baml meta.template-string.baml comment.block.baml
+210:19-39    " 2 keyword trailing " source.baml meta.template-string.baml comment.block.baml
+210:39-41    "*/"               source.baml meta.template-string.baml comment.block.baml
+211:1-3      "/*"               source.baml meta.template-string.baml comment.block.baml
+211:3-19     " 3 name leading " source.baml meta.template-string.baml comment.block.baml
+211:19-21    "*/"               source.baml meta.template-string.baml comment.block.baml
+212:1-26     "TriviaWrappingParamsBlock" source.baml meta.template-string.baml entity.name.function.template-string.baml
+212:27-29    "/*"               source.baml meta.template-string.baml comment.block.baml
+212:29-46    " 4 name trailing " source.baml meta.template-string.baml comment.block.baml
+212:46-48    "*/"               source.baml meta.template-string.baml comment.block.baml
+213:1-3      "/*"               source.baml meta.template-string.baml comment.block.baml
+213:3-25     " 5 open paren leading " source.baml meta.template-string.baml comment.block.baml
+213:25-27    "*/"               source.baml meta.template-string.baml comment.block.baml
+214:1-2      "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+214:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+214:5-28     " 6 open paren trailing " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+214:28-30    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+215:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+215:3-26     " 7 first param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+215:26-28    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+216:1-16     "first_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+216:17-19    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+216:19-42    " 8 first name trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+216:42-44    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+217:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+217:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+217:5-29     " 9 first colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+217:29-31    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+218:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+218:3-26     " 10 first type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+218:26-28    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+219:1-4      "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+219:4-5      "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+219:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+219:11-12    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+219:13-16    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+219:17-18    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+219:19-25    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+219:26-27    "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+219:28-32    "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+219:32-33    ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+219:34-36    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+219:36-60    " 11 first type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+219:60-62    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+220:1-2      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+220:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+220:5-24     " 12 comma trailing " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+220:24-26    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+221:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+221:3-28     " 13 second param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+221:28-30    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+222:1-17     "second_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+222:18-20    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+222:20-45    " 14 second name trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+222:45-47    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+223:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+223:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+223:5-31     " 15 second colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+223:31-33    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+224:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+224:3-27     " 16 second type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+224:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+225:1-2      "("                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.begin.baml
+225:2-5      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+225:6-7      "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml keyword.operator.type.baml
+225:8-14     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml support.type.primitive.baml
+225:14-15    ")"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
+225:15-16    "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+225:16-17    "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+225:18-20    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+225:20-45    " 17 second type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+225:45-47    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+226:1-2      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+226:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+226:5-24     " 18 comma trailing " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+226:24-26    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+227:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+227:3-27     " 19 third param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+227:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+228:1-16     "third_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+228:17-19    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+228:19-43    " 20 third name trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+228:43-45    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+229:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+229:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+229:5-30     " 21 third colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+229:30-32    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+230:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+230:3-26     " 22 third type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+230:26-28    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+231:1-4      "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+231:4-5      "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+231:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+231:11-12    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+231:13-16    "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+231:16-17    "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+231:17-23    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+231:23-24    ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+231:25-28    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+231:28-29    ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+231:29-30    ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+231:31-33    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+231:33-57    " 23 third type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+231:57-59    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+232:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+232:3-27     " 24 close paren leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+232:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+233:1-2      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+233:3-5      "/*"               source.baml meta.template-string.baml comment.block.baml
+233:5-30     " 25 close paren trailing " source.baml meta.template-string.baml comment.block.baml
+233:30-32    "*/"               source.baml meta.template-string.baml comment.block.baml
+234:1-3      "/*"               source.baml meta.template-string.baml comment.block.baml
+234:3-20     " 26 body leading " source.baml meta.template-string.baml comment.block.baml
+234:20-22    "*/"               source.baml meta.template-string.baml comment.block.baml
+235:1-2      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+235:2-3      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+236:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+236:8-23     "first_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+236:24-26    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+236:27-29    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+236:30-46    "second_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+236:47-49    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+236:50-52    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+236:53-68    "third_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+236:69-71    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+237:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+237:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+239:1-20     "///////////////////" source.baml comment.line.double-slash.baml
+241:1-69     "// ===== Trivia on wrapping long name + params (line comments) =====" source.baml comment.line.double-slash.baml
+242:1-21     "// 1 keyword leading" source.baml comment.line.double-slash.baml
+243:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+243:17-38    "// 2 keyword trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+244:1-18     "// 3 name leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+245:1-41     "TriviaVeryLongTemplateNameWithParameters" source.baml meta.template-string.baml entity.name.function.template-string.baml
+245:42-60    "// 4 name trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+246:1-24     "// 5 open paren leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+247:1-2      "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+247:3-27     "// 6 open paren trailing" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+248:1-25     "// 7 first param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+249:1-16     "first_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+249:17-41    "// 8 first name trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+250:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+250:3-28     "// 9 first colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+251:1-25     "// 10 first type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+252:1-7      "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+252:8-33     "// 11 first type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+253:1-2      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+253:3-23     "// 12 comma trailing" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+254:1-27     "// 13 second param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+255:1-17     "second_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+255:18-44    "// 14 second name trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+256:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+256:3-30     "// 15 second colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+257:1-26     "// 16 second type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+258:1-4      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+258:5-31     "// 17 second type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+259:1-2      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+259:3-23     "// 18 comma trailing" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+260:1-26     "// 19 third param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+261:1-16     "third_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+261:17-42    "// 20 third name trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+262:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+262:3-29     "// 21 third colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+263:1-25     "// 22 third type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+264:1-5      "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+264:6-31     "// 23 third type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+265:1-26     "// 24 close paren leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+266:1-2      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+266:3-29     "// 25 close paren trailing" source.baml meta.template-string.baml comment.line.double-slash.baml
+267:1-19     "// 26 body leading" source.baml meta.template-string.baml comment.line.double-slash.baml
+268:1-2      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+268:2-3      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+269:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+269:8-23     "first_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+269:24-26    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+269:27-29    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+269:30-46    "second_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+269:47-49    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+269:50-52    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+269:53-68    "third_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+269:69-71    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+270:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+270:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+272:1-20     "///////////////////" source.baml comment.line.double-slash.baml
+274:1-70     "// ===== Trivia on wrapping long name + params (block comments) =====" source.baml comment.line.double-slash.baml
+275:1-3      "/*"               source.baml comment.block.baml
+275:3-22     " 1 keyword leading " source.baml comment.block.baml
+275:22-24    "*/"               source.baml comment.block.baml
+276:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+276:17-19    "/*"               source.baml meta.template-string.baml comment.block.baml
+276:19-39    " 2 keyword trailing " source.baml meta.template-string.baml comment.block.baml
+276:39-41    "*/"               source.baml meta.template-string.baml comment.block.baml
+277:1-3      "/*"               source.baml meta.template-string.baml comment.block.baml
+277:3-19     " 3 name leading " source.baml meta.template-string.baml comment.block.baml
+277:19-21    "*/"               source.baml meta.template-string.baml comment.block.baml
+278:1-46     "TriviaVeryLongTemplateNameWithParametersBlock" source.baml meta.template-string.baml entity.name.function.template-string.baml
+278:47-49    "/*"               source.baml meta.template-string.baml comment.block.baml
+278:49-66    " 4 name trailing " source.baml meta.template-string.baml comment.block.baml
+278:66-68    "*/"               source.baml meta.template-string.baml comment.block.baml
+279:1-3      "/*"               source.baml meta.template-string.baml comment.block.baml
+279:3-25     " 5 open paren leading " source.baml meta.template-string.baml comment.block.baml
+279:25-27    "*/"               source.baml meta.template-string.baml comment.block.baml
+280:1-2      "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+280:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+280:5-28     " 6 open paren trailing " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+280:28-30    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+281:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+281:3-26     " 7 first param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+281:26-28    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+282:1-16     "first_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+282:17-19    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+282:19-42    " 8 first name trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+282:42-44    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+283:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+283:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+283:5-29     " 9 first colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+283:29-31    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+284:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+284:3-26     " 10 first type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+284:26-28    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+285:1-7      "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+285:8-10     "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+285:10-34    " 11 first type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+285:34-36    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+286:1-2      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+286:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+286:5-24     " 12 comma trailing " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+286:24-26    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+287:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+287:3-28     " 13 second param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+287:28-30    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+288:1-17     "second_parameter" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+288:18-20    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+288:20-45    " 14 second name trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+288:45-47    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+289:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+289:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+289:5-31     " 15 second colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+289:31-33    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+290:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+290:3-27     " 16 second type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+290:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+291:1-4      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+291:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+291:7-32     " 17 second type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+291:32-34    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+292:1-2      ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+292:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+292:5-24     " 18 comma trailing " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+292:24-26    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+293:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+293:3-27     " 19 third param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+293:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+294:1-16     "third_parameter"  source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+294:17-19    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+294:19-43    " 20 third name trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+294:43-45    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+295:1-2      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+295:3-5      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+295:5-30     " 21 third colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+295:30-32    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+296:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+296:3-26     " 22 third type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+296:26-28    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+297:1-5      "bool"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+297:6-8      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+297:8-32     " 23 third type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+297:32-34    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+298:1-3      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+298:3-27     " 24 close paren leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+298:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+299:1-2      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+299:3-5      "/*"               source.baml meta.template-string.baml comment.block.baml
+299:5-30     " 25 close paren trailing " source.baml meta.template-string.baml comment.block.baml
+299:30-32    "*/"               source.baml meta.template-string.baml comment.block.baml
+300:1-3      "/*"               source.baml meta.template-string.baml comment.block.baml
+300:3-20     " 26 body leading " source.baml meta.template-string.baml comment.block.baml
+300:20-22    "*/"               source.baml meta.template-string.baml comment.block.baml
+301:1-2      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+301:2-3      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+302:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+302:8-23     "first_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+302:24-26    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+302:27-29    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+302:30-46    "second_parameter" source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+302:47-49    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+302:50-52    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+302:53-68    "third_parameter"  source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+302:69-71    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+303:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+303:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+305:1-20     "///////////////////" source.baml comment.line.double-slash.baml
+307:1-79     "// ===== Trivia on param with deeply nested generic type (line comments) =====" source.baml comment.line.double-slash.baml
+308:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+308:17-39    "TriviaDeepGenericParam" source.baml meta.template-string.baml entity.name.function.template-string.baml
+308:39-40    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+309:5-23     "// 1 param leading" source.baml meta.template-string.baml meta.parameters.baml comment.line.double-slash.baml
+310:5-9      "data"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+310:10-28    "// 2 name trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+311:5-6      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+311:7-26     "// 3 colon trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+312:5-22     "// 4 type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+313:5-8      "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+313:9-26     "// 5 map trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+314:5-6      "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+314:7-31     "// 6 open angle trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+315:5-26     "// 7 key type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+316:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+316:12-34    "// 8 key type trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+317:5-6      ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+317:7-26     "// 9 comma trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+318:5-29     "// 10 value type leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+319:5-8      "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+319:9-33     "// 11 inner map trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+320:5-6      "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+320:7-38     "// 12 inner open angle trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+321:5-28     "// 13 inner key leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+322:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+322:12-36    "// 14 inner key trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+323:5-6      ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+323:7-33     "// 15 inner comma trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+324:5-30     "// 16 inner value leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+325:5-8      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+325:9-35     "// 17 inner value trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+326:5-6      "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+326:7-26     "// 18 pipe trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+327:5-31     "// 19 union member leading" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+328:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+328:12-39    "// 20 union member trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.line.double-slash.baml
+329:5-6      ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+329:7-39     "// 21 inner close angle trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+330:5-6      ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+330:7-39     "// 22 outer close angle trailing" source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.line.double-slash.baml
+331:1-2      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+331:3-4      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+331:4-5      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+332:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+332:8-12     "data"             source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+332:13-15    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+333:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+333:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+335:1-80     "// ===== Trivia on param with deeply nested generic type (block comments) =====" source.baml comment.line.double-slash.baml
+336:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+336:17-44    "TriviaDeepGenericParamBlock" source.baml meta.template-string.baml entity.name.function.template-string.baml
+336:44-45    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+337:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+337:7-24     " 1 param leading " source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+337:24-26    "*/"               source.baml meta.template-string.baml meta.parameters.baml comment.block.baml
+338:5-9      "data"             source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+338:10-12    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+338:12-29    " 2 name trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+338:29-31    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+339:5-6      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+339:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+339:9-27     " 3 colon trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+339:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+340:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+340:7-23     " 4 type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+340:23-25    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+341:5-8      "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+341:9-11     "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+341:11-27    " 5 map trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+341:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+342:5-6      "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+342:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+342:9-32     " 6 open angle trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+342:32-34    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+343:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+343:7-27     " 7 key type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+343:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+344:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+344:12-14    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+344:14-35    " 8 key type trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+344:35-37    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+345:5-6      ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+345:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+345:9-27     " 9 comma trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+345:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+346:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+346:7-30     " 10 value type leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+346:30-32    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+347:5-8      "map"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+347:9-11     "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+347:11-34    " 11 inner map trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+347:34-36    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+348:5-6      "<"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+348:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+348:9-39     " 12 inner open angle trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+348:39-41    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+349:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+349:7-29     " 13 inner key leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+349:29-31    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+350:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+350:12-14    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+350:14-37    " 14 inner key trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+350:37-39    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+351:5-6      ","                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+351:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+351:9-34     " 15 inner comma trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+351:34-36    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+352:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+352:7-31     " 16 inner value leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+352:31-33    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+353:5-8      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+353:9-11     "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+353:11-36    " 17 inner value trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+353:36-38    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+354:5-6      "|"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
+354:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+354:9-27     " 18 pipe trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+354:27-29    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+355:5-7      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+355:7-32     " 19 union member leading " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+355:32-34    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+356:5-11     "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
+356:12-14    "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+356:14-40    " 20 union member trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+356:40-42    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml comment.block.baml
+357:5-6      ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+357:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+357:9-40     " 21 inner close angle trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+357:40-42    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+358:5-6      ">"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+358:7-9      "/*"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+358:9-40     " 22 outer close angle trailing " source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+358:40-42    "*/"               source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml comment.block.baml
+359:1-2      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+359:3-4      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+359:4-5      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+360:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+360:8-12     "data"             source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+360:13-15    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+361:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+361:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+363:1-37     "// ===== Extraneous whitespace =====" source.baml comment.line.double-slash.baml
+364:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+364:20-35    "ExtraWhitespace"  source.baml meta.template-string.baml entity.name.function.template-string.baml
+364:38-39    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+364:42-43    "a"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+364:46-47    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+364:50-56    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+364:59-60    ","                source.baml meta.template-string.baml meta.parameters.baml punctuation.separator.comma.baml
+364:63-64    "b"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+364:67-68    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+364:71-74    "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+364:77-78    ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+364:81-82    "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+364:82-83    "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+365:5-7      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+365:8-9      "a"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+365:10-12    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+365:13-15    "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+365:16-17    "b"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+365:18-20    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+366:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+366:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+368:1-42     "// ===== Template with control flow =====" source.baml comment.line.double-slash.baml
+369:1-16     "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+369:17-28    "WithControl"      source.baml meta.template-string.baml entity.name.function.template-string.baml
+369:28-29    "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+369:29-34    "items"            source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+369:34-35    ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+369:36-42    "string"           source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+369:42-43    "["                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+369:43-44    "]"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+369:44-45    ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+369:46-47    "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+369:47-48    "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+370:5-7      "{%"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml punctuation.section.template.begin.baml
+370:8-11     "for"              source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml keyword.control.template.baml
+370:12-16    "item"             source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml meta.dotted-expression.baml variable.other.readwrite.baml
+370:17-19    "in"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml keyword.control.template.baml
+370:20-25    "items"            source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml meta.dotted-expression.baml variable.other.readwrite.baml
+370:26-28    "%}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml punctuation.section.template.end.baml
+371:1-7      "    - "           source.baml meta.template-string.baml string.quoted.raw.template.baml
+371:7-9      "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+371:10-14    "item"             source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+371:15-17    "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+372:5-7      "{%"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml punctuation.section.template.begin.baml
+372:8-14     "endfor"           source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml keyword.control.template.baml
+372:15-17    "%}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.control.baml punctuation.section.template.end.baml
+373:1-2      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+373:2-3      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml

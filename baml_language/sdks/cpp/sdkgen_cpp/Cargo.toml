@@ -1,0 +1,30 @@
+[package]
+name = "sdkgen_cpp"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+baml_base = { workspace = true }
+baml_codegen_types = { workspace = true }
+baml_version = { workspace = true }
+flate2 = { workspace = true }
+
+[build-dependencies]
+flate2 = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+protoc-bin-vendored.workspace = true
+tempfile.workspace = true

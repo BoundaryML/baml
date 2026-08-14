@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 26154
 ---
 function $init() -> null {
     call $init_let_0
@@ -8,7 +9,7 @@ function $init() -> null {
     return
 }
 
-function $init_test() -> null {
+function $init_test(registry: unknown) -> null {
     load_var ?1
     call ?
     pop 1
@@ -16,146 +17,197 @@ function $init_test() -> null {
     return
 }
 
-function user.$init_test_32(registry: testing.TestCollector) -> null {
+function user.$init_test_main(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root"
     load_const "test"
-    make_closure .<lambda($init_test_32, 0)>, 0
+    make_closure .<lambda($init_test_main, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test_set
+    call testing.TestCollector.register_test_set_at
     pop 1
     load_const null
     return
 }
 
-function user.ClassifySentiment(text: string) -> Sentiment {
+function user.ClassifySentiment(text: string, client: ai.Client | null) -> Sentiment {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
     load_type Sentiment
-    load_global user.GPT4o
-    load_const "ClassifySentiment"
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
     load_var text
-    load_const "text"
-    alloc_map 1
-    call baml.llm.call_llm_function
-    return
-}
-
-function user.ClassifySentiment$build_request(text: string) -> baml.http.Request {
-    load_global user.GPT4o
-    load_const "ClassifySentiment"
-    load_var text
-    load_const "text"
-    alloc_map 1
-    call baml.llm.build_request
-    return
-}
-
-function user.ClassifySentiment$build_request_stream(text: string) -> baml.http.Request {
-    load_global user.GPT4o
-    load_const "ClassifySentiment"
-    load_var text
-    load_const "text"
-    alloc_map 1
-    call baml.llm.build_request_stream
+    call user.ClassifySentiment$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<Sentiment, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Sentiment>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
     return
 }
 
 function user.ClassifySentiment$parse(json: string) -> Sentiment {
-    load_const "ClassifySentiment"
+    load_type Sentiment
     load_var json
-    call baml.llm.parse
+    call baml.sap.parse
     return
 }
 
-function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<Sentiment, null | Sentiment$stream> {
-    load_var sse
-    load_const "ClassifySentiment"
-    load_const null
-    call_indirect
-    return
-}
-
-function user.ClassifySentiment$render_prompt(text: string) -> baml.llm.PromptAst {
-    load_global user.GPT4o
-    load_const "ClassifySentiment"
+function user.ClassifySentiment$render_prompt(text: string) -> ai.Prompt {
     load_var text
-    load_const "text"
-    alloc_map 1
-    call baml.llm.render_prompt
+    call user.ClassifySentiment$spec
+    store_var _2
+    load_type Sentiment
+    call ai.wire.render_output_format
+    store_var _3
+    load_type Sentiment
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
     return
 }
 
-function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream<Sentiment, null | Sentiment$stream> {
-    load_global user.GPT4o
+function user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<Sentiment> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
     load_const "ClassifySentiment"
-    load_var text
+    load_deref ?1
     load_const "text"
-    alloc_map 1
-    call baml.llm.stream_llm_function
-    return
-}
-
-function user.ClassifySentiment2(text: string) -> string {
     load_type string
-    load_global user.GPT4o
-    load_const "ClassifySentiment2"
-    load_var text
-    load_const "text"
+    load_type unknown
     alloc_map 1
-    call baml.llm.call_llm_function
+    load_var text
+    make_closure .<lambda(ClassifySentiment$spec, 0)>, 1
+    load_var _4
+    load_global user.GPT4o
+    load_type Sentiment
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.ClassifySentiment2$build_request(text: string) -> baml.http.Request {
-    load_global user.GPT4o
-    load_const "ClassifySentiment2"
+function user.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<Sentiment$stream | null, Sentiment> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
     load_var text
-    load_const "text"
-    alloc_map 1
-    call baml.llm.build_request
+    call user.ClassifySentiment$spec
+    store_var _4
+    load_type Sentiment$stream | null
+    load_type Sentiment
+    load_var2 3 2
+    call ai.stream.from_spec
     return
 }
 
-function user.ClassifySentiment2$build_request_stream(text: string) -> baml.http.Request {
-    load_global user.GPT4o
-    load_const "ClassifySentiment2"
+function user.ClassifySentiment2(text: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
     load_var text
-    load_const "text"
-    alloc_map 1
-    call baml.llm.build_request_stream
+    call user.ClassifySentiment2$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
     return
 }
 
 function user.ClassifySentiment2$parse(json: string) -> string {
-    load_const "ClassifySentiment2"
+    load_type string
     load_var json
-    call baml.llm.parse
+    call baml.sap.parse
     return
 }
 
-function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> {
-    load_var sse
+function user.ClassifySentiment2$render_prompt(text: string) -> ai.Prompt {
+    load_var text
+    call user.ClassifySentiment2$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
     load_const "ClassifySentiment2"
+    load_deref ?1
+    load_const "text"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var text
+    make_closure .<lambda(ClassifySentiment2$spec, 0)>, 1
+    load_var _4
+    load_global user.GPT4o
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const null
-    call_indirect
-    return
-}
+    store_var client
 
-function user.ClassifySentiment2$render_prompt(text: string) -> baml.llm.PromptAst {
-    load_global user.GPT4o
-    load_const "ClassifySentiment2"
+  L0:
     load_var text
-    load_const "text"
-    alloc_map 1
-    call baml.llm.render_prompt
-    return
-}
-
-function user.ClassifySentiment2$stream(text: string) -> baml.llm.Stream<string, null | string> {
-    load_global user.GPT4o
-    load_const "ClassifySentiment2"
-    load_var text
-    load_const "text"
-    alloc_map 1
-    call baml.llm.stream_llm_function
+    call user.ClassifySentiment2$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
     return
 }
 
@@ -168,7 +220,7 @@ function user.Foo() -> string | image {
   L0:
     load_var i
     load_const 2
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -188,180 +240,98 @@ function user.Foo() -> string | image {
     jump L0
 }
 
-function user.GPT4o$new() -> null {
-    load_const "OPENAI_API_KEY"
-    call baml.env.get_or_panic
-    store_var _2
-    alloc_instance baml.llm.PrimitiveClient
-    load_const "GPT4o"
-    init_field .name
-    load_const "openai"
-    init_field .provider
-    alloc_instance baml.llm.PrimitiveClientOptions
-    load_const "gpt-4o"
-    init_field .model
+function user.GenerateTests(count: int, topic: string, client: ai.Client | null) -> string[] {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const null
-    init_field .base_url
-    load_const null
-    init_field .allowed_role_metadata
-    load_const null
-    init_field .finish_reason_allow_list
-    load_const null
-    init_field .finish_reason_deny_list
-    load_const null
-    init_field .supports_streaming
-    load_const null
-    init_field .default_role
-    load_const null
-    init_field .allowed_roles
-    load_const null
-    init_field .remap_roles
-    load_var _2
-    init_field .api_key
-    load_const null
-    init_field .provider_options
-    load_const null
-    init_field .media_url_handler
-    alloc_map 0
-    init_field .headers
-    alloc_map 0
-    init_field .query_params
-    alloc_map 0
-    init_field .request_body
-    init_field .options
-    return
-}
+    store_var client
 
-function user.GenerateTests(count: int, topic: string) -> string[] {
+  L0:
     load_type string[]
-    load_global user.GPT4o
-    load_const "GenerateTests"
-    load_var count
-    load_var topic
-    load_const "count"
-    load_const "topic"
-    alloc_map 2
-    call baml.llm.call_llm_function
-    return
-}
-
-function user.GenerateTests$build_request(count: int, topic: string) -> baml.http.Request {
-    load_global user.GPT4o
-    load_const "GenerateTests"
-    load_var count
-    load_var topic
-    load_const "count"
-    load_const "topic"
-    alloc_map 2
-    call baml.llm.build_request
-    return
-}
-
-function user.GenerateTests$build_request_stream(count: int, topic: string) -> baml.http.Request {
-    load_global user.GPT4o
-    load_const "GenerateTests"
-    load_var count
-    load_var topic
-    load_const "count"
-    load_const "topic"
-    alloc_map 2
-    call baml.llm.build_request_stream
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _6
+    load_var2 1 2
+    call user.GenerateTests$spec
+    store_var _8
+    load_var2 5 6
+    load_type ai.Runner<string[], Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string[]>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var _5
+    load_field .value
     return
 }
 
 function user.GenerateTests$parse(json: string) -> string[] {
-    load_const "GenerateTests"
+    load_type string[]
     load_var json
-    call baml.llm.parse
+    call baml.sap.parse
     return
 }
 
-function user.GenerateTests$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string[], string[]> {
-    load_var sse
-    load_const "GenerateTests"
-    load_const null
-    call_indirect
-    return
-}
-
-function user.GenerateTests$render_prompt(count: int, topic: string) -> baml.llm.PromptAst {
-    load_global user.GPT4o
-    load_const "GenerateTests"
-    load_var count
-    load_var topic
-    load_const "count"
-    load_const "topic"
-    alloc_map 2
-    call baml.llm.render_prompt
-    return
-}
-
-function user.GenerateTests$stream(count: int, topic: string) -> baml.llm.Stream<string[], string[]> {
-    load_global user.GPT4o
-    load_const "GenerateTests"
-    load_var count
-    load_var topic
-    load_const "count"
-    load_const "topic"
-    alloc_map 2
-    call baml.llm.stream_llm_function
-    return
-}
-
-function user.Sentiment.from_json(j: baml.json.json) -> Sentiment {
-    load_var j
-    load_const "feeling"
-    call baml.json.field
+function user.GenerateTests$render_prompt(count: int, topic: string) -> ai.Prompt {
+    load_var2 1 2
+    call user.GenerateTests$spec
     store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "confidence"
-    call baml.json.field
-    store_var _6
-    load_type float
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    load_var j
-    load_const "reasoning"
-    call baml.json.field
-    store_var _9
-    load_type string
-    load_var _9
-    call baml.json.from_json
-    store_var _8
-    alloc_instance user.Sentiment
-    load_var _2
-    init_field .feeling
-    load_var _5
-    init_field .confidence
-    load_var _8
-    init_field .reasoning
+    load_type string[]
+    call ai.wire.render_output_format
+    store_var _4
+    load_type string[]
+    load_var2 3 4
+    call ai.FunctionSpec.prompt
     return
 }
 
-function user.Sentiment.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .feeling
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .confidence
-    call baml.Float.to_json
+function user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[]> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
     store_var _5
-    load_var self
-    load_field .reasoning
-    call baml.String.to_json
-    store_var _8
-    load_var _2
+    load_const "GenerateTests"
+    load_deref ?1
+    load_deref ?2
+    load_const "count"
+    load_const "topic"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    load_var2 1 2
+    make_closure .<lambda(GenerateTests$spec, 0)>, 2
     load_var _5
-    load_var _8
-    load_const "feeling"
-    load_const "confidence"
-    load_const "reasoning"
-    alloc_map 3
+    load_global user.GPT4o
+    load_type string[]
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string[], string[]> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    call user.GenerateTests$spec
+    store_var _5
+    load_type string[]
+    load_type string[]
+    load_var2 4 3
+    call ai.stream.from_spec
     return
 }

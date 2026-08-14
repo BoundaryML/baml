@@ -1,77 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16778
 ---
-function user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
-    load_var j
-    load_const "api_key"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.AppConfig
-    load_var _2
-    init_field .api_key
-    return
-}
-
-function user.AppConfig.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .api_key
-    call baml.String.to_json
-    load_const "api_key"
-    alloc_map 1
-    return
-}
-
 function user.CallOpenAI(cfg: AppConfig) -> llm.openai.OpenAIResponse {
-    alloc_instance user.llm.openai.OpenAIResponse
     load_const "response"
-    init_field .text
     load_const "gpt-4"
-    init_field .model
-    return
-}
-
-function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.openai.OpenAIResponse {
-    load_var j
-    load_const "text"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "model"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.openai.OpenAIResponse
-    load_var _2
-    init_field .text
-    load_var _5
-    init_field .model
-    return
-}
-
-function user.llm.openai.OpenAIResponse.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .text
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .model
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "text"
-    load_const "model"
-    alloc_map 2
+    init_instance user.llm.openai.OpenAIResponse .text, .model
     return
 }

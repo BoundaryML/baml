@@ -36,12 +36,23 @@ pub(crate) trait PullSink {
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error>;
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
 
-    fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error>;
+    fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
-    fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error>;
+    fn alloc_map(
+        &mut self,
+        key_ty: &TyTemplate,
+        value_ty: &TyTemplate,
+        len: usize,
+    ) -> Result<(), Self::Error>;
 
     fn alloc_class_instance(&mut self, class_name: &str, ntypeargs: u16)
     -> Result<(), Self::Error>;
+    fn init_class_instance(
+        &mut self,
+        class_name: &str,
+        ntypeargs: u16,
+        field_count: usize,
+    ) -> Result<(), Self::Error>;
     fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
 
     fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
@@ -51,6 +62,10 @@ pub(crate) trait PullSink {
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error>;
+    /// Coarse runtime type-tag test (`Rvalue::IsTypeTag`): the MIR lowering
+    /// proved the `baml_type::typetag` constant `tag` a sound substitute for
+    /// the structural check, so the test is the tag comparison itself.
+    fn is_type_tag(&mut self, tag: i64) -> Result<(), Self::Error>;
     /// Materialize an `Object::Type` from a `TyTemplate` constant.
     /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
@@ -75,6 +90,21 @@ pub(crate) trait PullSink {
         self.make_closure(lambda_idx, capture_count)
     }
 
+    /// Build a generic-function value (`foo<T>`) for a param-dependent
+    /// instantiation: pops `ntypeargs` `Object::Type` values (pushed by
+    /// preceding `load_type` calls) and resolves `item` to a function global.
+    fn make_generic_function(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error>;
+
+    /// Specialize a runtime callable *value* (`g<int>`): the callable and
+    /// `ntypeargs` `Object::Type` values are already on the stack (pushed by
+    /// preceding `load_type` calls and the value operand); emit
+    /// `MakeGenericFunctionFromValue`.
+    fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error>;
+
     /// Load a captured variable from the current closure's captures array.
     /// Emits `LoadCapture(idx)` in the bytecode emitter.
     fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error>;
@@ -95,13 +125,6 @@ pub(crate) trait StackEffectSink: PullSink {
     /// Store a value into a captured variable (via the closure's captures array).
     /// Emits `StoreCapture(idx)` in the bytecode emitter.
     fn store_capture_value(&mut self, idx: usize) -> Result<(), Self::Error>;
-
-    fn push_watch_channel(
-        &mut self,
-        local: Local,
-        channel_name: Option<&str>,
-    ) -> Result<(), Self::Error>;
-    fn watch_local(&mut self, local: Local) -> Result<(), Self::Error>;
 }
 
 /// How a local assignment statement should be emitted/evaluated.
@@ -137,7 +160,8 @@ pub(crate) fn local_assign_behavior(class: LocalClassification) -> LocalAssignBe
         }
         LocalClassification::Parameter
         | LocalClassification::Real
-        | LocalClassification::CallResultImmediate => LocalAssignBehavior::EvalAndStore,
+        | LocalClassification::CallResultImmediate
+        | LocalClassification::AggregateOperand => LocalAssignBehavior::EvalAndStore,
     }
 }
 
@@ -147,7 +171,8 @@ pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBeha
         LocalClassification::Parameter | LocalClassification::Real => LocalStoreBehavior::StoreSlot,
         LocalClassification::PhiLike
         | LocalClassification::ReturnPhi
-        | LocalClassification::CallResultImmediate => LocalStoreBehavior::KeepOnStack,
+        | LocalClassification::CallResultImmediate
+        | LocalClassification::AggregateOperand => LocalStoreBehavior::KeepOnStack,
         LocalClassification::Virtual | LocalClassification::CopyOf | LocalClassification::Dead => {
             LocalStoreBehavior::PopValue
         }
@@ -191,18 +216,6 @@ pub(crate) fn walk_drop_statement<S: StackEffectSink>(
 ) -> Result<(), S::Error> {
     walk_place_pull(sink, place)?;
     sink.pop_values(1)
-}
-
-/// Shared evaluation for `WatchOptions`.
-pub(crate) fn walk_watch_options_statement<S: StackEffectSink>(
-    sink: &mut S,
-    local: Local,
-    channel_name: Option<&str>,
-    filter: &Operand,
-) -> Result<(), S::Error> {
-    sink.push_watch_channel(local, channel_name)?;
-    walk_operand_pull(sink, filter)?;
-    sink.watch_local(local)
 }
 
 /// Shared pull order for direct calls: each arg only.
@@ -344,14 +357,14 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             walk_operand_pull(sink, operand)?;
             sink.unary_op(*op)
         }
-        Rvalue::Array(elements) => {
+        Rvalue::Array(element_ty, elements) => {
             for element in elements {
                 walk_operand_pull(sink, element)?;
             }
-            sink.alloc_array(elements.len())
+            sink.alloc_array(element_ty, elements.len())
         }
         Rvalue::Uint8Array(bytes) => sink.alloc_uint8array(bytes),
-        Rvalue::Map(entries) => {
+        Rvalue::Map(key_ty, value_ty, entries) => {
             // VM `AllocMap` expects stack layout:
             // [..., v1, v2, ..., k1, k2, ...] for {(k1, v1), (k2, v2), ...}.
             for (_key, value) in entries {
@@ -360,33 +373,43 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             for (key, _value) in entries {
                 walk_operand_pull(sink, key)?;
             }
-            sink.alloc_map(entries.len())
+            sink.alloc_map(key_ty, value_ty, entries.len())
         }
         Rvalue::Aggregate { kind, fields } => match kind {
             AggregateKind::Array => {
                 for field in fields {
                     walk_operand_pull(sink, field)?;
                 }
-                sink.alloc_array(fields.len())
+                // `AggregateKind::Array` carries no element type and is not
+                // produced by the array-literal lowering (which emits the typed
+                // `Rvalue::Array`); this arm is a defensive fallback.
+                sink.alloc_array(
+                    &TyTemplate::from(baml_type::RealizedTy::unknown()),
+                    fields.len(),
+                )
             }
             AggregateKind::Class {
                 name: class_name,
                 type_arg_templates,
             } => {
-                // Emit one LoadType per class-level type arg (before AllocInstance
-                // so the VM can pop them from the stack).
                 let ntypeargs = u16::try_from(type_arg_templates.len())
                     .expect("type_arg_templates count fits in u16");
+
+                if fields.is_empty() {
+                    // Empty class construction has no field values to fuse.
+                    for template in type_arg_templates {
+                        sink.load_type(template)?;
+                    }
+                    return sink.alloc_class_instance(class_name, ntypeargs);
+                }
+
+                for field_operand in fields {
+                    walk_operand_pull(sink, field_operand)?;
+                }
                 for template in type_arg_templates {
                     sink.load_type(template)?;
                 }
-                sink.alloc_class_instance(class_name, ntypeargs)?;
-                for (field_idx, field_operand) in fields.iter().enumerate() {
-                    let name = sink.class_field_name(class_name, field_idx);
-                    walk_operand_pull(sink, field_operand)?;
-                    sink.init_field(field_idx, &name)?;
-                }
-                Ok(())
+                sink.init_class_instance(class_name, ntypeargs, fields.len())
             }
             AggregateKind::EnumVariant { enum_name, variant } => {
                 sink.alloc_enum_variant(enum_name, variant)
@@ -408,6 +431,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             walk_operand_pull(sink, operand)?;
             sink.is_type(ty_template)
         }
+        Rvalue::IsTypeTag { operand, tag } => {
+            walk_operand_pull(sink, operand)?;
+            sink.is_type_tag(*tag)
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -425,6 +452,38 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::MakeBoundMethod { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
+        }
+        Rvalue::MakeVirtualBoundMethod { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("MakeVirtualBoundMethod must be handled in emit_rvalue_pull")
+        }
+        Rvalue::VirtualFieldAccess { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("VirtualFieldAccess must be handled in emit_rvalue_pull")
+        }
+        Rvalue::MakeGenericFunction {
+            item,
+            type_arg_templates,
+        } => {
+            // Push the type-arg templates (resolved against the current frame),
+            // then build the value via the base function's global.
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
+            sink.make_generic_function(item, type_arg_templates.len())
+        }
+        Rvalue::MakeGenericFunctionFromValue {
+            value,
+            type_arg_templates,
+        } => {
+            // Push the type-arg templates (resolved against the current frame),
+            // then the callable value, then specialize it. The value is pushed
+            // last so the opcode pops it off the top before the type args.
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
+            walk_operand_pull(sink, value)?;
+            sink.make_generic_function_from_value(type_arg_templates.len())
         }
         Rvalue::LoadType(template) => sink.load_type(template),
     }

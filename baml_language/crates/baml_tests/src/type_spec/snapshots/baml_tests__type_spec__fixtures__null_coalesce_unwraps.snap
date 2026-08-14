@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+9..17 'coalesce': throws never
+34..63 '{\n   ...int\n}': int
+40..41 'v': int | null
+40..46 'v ?? 0': int
+45..46 '0': 0

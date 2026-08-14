@@ -144,6 +144,7 @@ pub async fn webview_rpc_handler(
             Ok(Json(serde_json::to_value(response)?))
         }
 
+        #[cfg(feature = "bedrock")]
         "LOAD_AWS_CREDS" => {
             let request: LoadAwsCredsRequest = serde_json::from_value(payload)
                 .map_err(|_| ApiError::BadRequest("Invalid AWS creds request".to_string()))?;

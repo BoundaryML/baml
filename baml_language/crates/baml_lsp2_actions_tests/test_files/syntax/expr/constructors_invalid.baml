@@ -71,30 +71,59 @@ function Foo() -> Bar {
 
 //----
 //- diagnostics
-// Error: unresolved name: a
-//     ╭─[ expr_constructors_invalid.baml:11:21 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//    ╭─[expr_constructors_invalid.baml:7:20]
+//  7 │   let x = Bar { a: "hello", c: 12 };
+//    ·                    ───┬───
+//    ·                       ╰── expected `int`, found `"hello"`
+//    ╰────
+// E0007
+//
+//   × class `Bar` has no field `c`
+//    ╭─[expr_constructors_invalid.baml:7:29]
+//  7 │   let x = Bar { a: "hello", c: 12 };
+//    ·                             ─
+//    ╰────
+// E0003
+//
+//   × unresolved name: `a`
+//     ╭─[expr_constructors_invalid.baml:11:21]
 //  11 │     query_params: { a 10 },
-//     │                     ┬  
-//     │                     ╰── unresolved name: a
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: Authorization
-//     ╭─[ expr_constructors_invalid.baml:15:16 ]
-//     │
+//     ·                     ─
+//     ╰────
+// E0002
+//
+//   × unresolved type: baml.HttpRequest
+//     ╭─[expr_constructors_invalid.baml:8:17]
+//   8 │ ╭─▶   let req_bad = baml.HttpRequest {
+//   9 │ │       url: 10,
+//  10 │ │       headers: {},
+//  11 │ │       query_params: { a 10 },
+//  12 │ ╰─▶   };
+//     ╰────
+// E0003
+//
+//   × unresolved name: `Authorization`
+//     ╭─[expr_constructors_invalid.baml:15:16]
 //  15 │     headers: { Authorization "Bearer mytoken" },
-//     │                ──────┬──────  
-//     │                      ╰──────── unresolved name: Authorization
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: foo
-//     ╭─[ expr_constructors_invalid.baml:16:21 ]
-//     │
+//     ·                ─────────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `foo`
+//     ╭─[expr_constructors_invalid.baml:16:21]
 //  16 │     query_params: { foo "bar" },
-//     │                     ─┬─  
-//     │                      ╰─── unresolved name: foo
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
+//     ·                     ───
+//     ╰────
+// E0002
+//
+//   × unresolved type: baml.HttpRequest
+//     ╭─[expr_constructors_invalid.baml:13:18]
+//  13 │ ╭─▶   let req_good = baml.HttpRequest {
+//  14 │ │       url: "https://example.com",
+//  15 │ │       headers: { Authorization "Bearer mytoken" },
+//  16 │ │       query_params: { foo "bar" },
+//  17 │ ╰─▶   };
+//     ╰────

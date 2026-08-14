@@ -28,8 +28,9 @@ export class WorkerRuntimePort implements RuntimePort {
       const data = event.data;
       if (!data || typeof data !== 'object' || !('type' in data)) return;
 
+      const msg = data as WorkerOutMessage;
       for (const handler of this._handlers) {
-        handler(data as WorkerOutMessage);
+        handler(msg);
       }
     };
 
@@ -37,9 +38,12 @@ export class WorkerRuntimePort implements RuntimePort {
   }
 
   postMessage(msg: WorkerInMessage): void {
-    // Transfer the argsProto buffer for callFunction to avoid copying
-    if (msg.type === 'callFunction') {
-      const buffer = msg.argsProto.buffer;
+    // Transfer the argsBytes buffer for function-like calls to avoid copying.
+    if (
+      msg.type === 'startRun' ||
+      msg.type === 'startPreviewRun'
+    ) {
+      const buffer = msg.argsBytes.buffer;
       this._worker.postMessage(msg, [buffer]);
     } else {
       this._worker.postMessage(msg);

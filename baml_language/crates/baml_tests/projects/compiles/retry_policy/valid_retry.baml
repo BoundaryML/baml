@@ -1,13 +1,15 @@
-// Minimal repro: retry_policy inside client block causes parsing errors
+// Retry composes at the client boundary now: the legacy `retry_policy` block
+// is removed, and reliability wraps a base client via `ai.Retry.new`.
 
-client<llm> MyClient {
-  provider openai
-  retry_policy MyRetry
-  options {
-    model "gpt-4"
-  }
-}
+client BaseClient = openai.OpenAiClient.new(
+    model = "gpt-4",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
-retry_policy MyRetry {
-  max_retries 3
+client MyClient = ai.clients.Retry.new(BaseClient, max_attempts = 3);
+
+function UseRetryClient(input: string) -> string {
+    client: MyClient
+    prompt: `echo ${input}`
 }

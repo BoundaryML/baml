@@ -1,0 +1,23 @@
+1:1-9        "function"         source.baml meta.function.baml keyword.declaration.function.baml
+1:10-15      "risky"            source.baml meta.function.baml entity.name.function.baml
+1:15-16      "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+1:16-17      ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+1:18-20      "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+1:21-25      "void"             source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
+1:26-32      "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+1:33-39      "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+1:40-41      "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+2:3-8        "throw"            source.baml meta.function.baml meta.block.function.baml keyword.control.flow.throw.baml
+2:9-10       "\""               source.baml meta.function.baml meta.block.function.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+2:10-14      "boom"             source.baml meta.function.baml meta.block.function.baml string.quoted.double.baml
+2:14-15      "\""               source.baml meta.function.baml meta.block.function.baml string.quoted.double.baml punctuation.definition.string.end.baml
+3:1-2        "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+5:1-5        "test"             source.baml meta.test.baml keyword.declaration.test.baml
+5:6-7        "\""               source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+5:7-36       "throwing body becomes failure" source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml
+5:36-37      "\""               source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml punctuation.definition.string.end.baml
+5:38-39      "{"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.begin.baml
+6:3-8        "risky"            source.baml meta.test.baml meta.block.code.baml meta.function-call.baml entity.name.function.baml
+6:8-9        "("                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+6:9-10       ")"                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+7:1-2        "}"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.end.baml

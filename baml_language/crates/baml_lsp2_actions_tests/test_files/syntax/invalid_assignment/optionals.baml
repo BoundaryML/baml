@@ -43,30 +43,27 @@ function OptionalAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected int?, got "not an int"
-//     ╭─[ invalid_assignment_optionals.baml:31:6 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_optionals.baml:31:6]
 //  31 │     c = "not an int";
-//     │         ──────┬─────  
-//     │               ╰─────── type mismatch: expected int?, got "not an int"
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected string?, got 42
-//     ╭─[ invalid_assignment_optionals.baml:35:6 ]
-//     │
+//     ·         ──────┬─────
+//     ·               ╰── expected `int | null`, found `"not an int"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_optionals.baml:35:6]
 //  35 │     d = 42;
-//     │         ─┬  
-//     │          ╰── type mismatch: expected string?, got 42
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected user.Person?, got user.Animal
-//     ╭─[ invalid_assignment_optionals.baml:39:6 ]
-//     │
+//     ·         ─┬
+//     ·          ╰── expected `string | null`, found `42`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_optionals.baml:39:6]
 //  39 │     e = Animal { species: "Cat", legs: 4 };
-//     │         ─────────────────┬────────────────  
-//     │                          ╰────────────────── type mismatch: expected user.Person?, got user.Animal
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·         ─────────────────┬────────────────
+//     ·                          ╰── expected `Person | null`, found `Animal`
+//     ╰────

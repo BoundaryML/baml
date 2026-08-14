@@ -1,5 +1,0 @@
----
-source: crates/baml_cli/src/describe_command_tests.rs
-expression: output
----
-function         math.trunc                       <builtin>/baml/ns_math/math.baml:1

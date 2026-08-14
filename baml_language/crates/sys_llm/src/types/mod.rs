@@ -6,8 +6,9 @@ mod sap;
 pub use output_format::OutputFormatContent;
 pub(crate) use output_format::{
     Class, ClassField, Enum, EnumValue, HoistClasses, MapStyle, RenderOptions, RenderSetting,
+    is_text_or_image_union,
 };
-pub use sap::SapStreamCache;
+pub use sap::SapParseCache;
 
 /// Errors that can occur during LLM operations (render, specialize, `build_request`).
 #[derive(Debug, thiserror::Error)]
@@ -37,26 +38,29 @@ pub enum LlmOpError {
     NotImplemented { message: String },
 }
 
-impl From<LlmOpError> for ::sys_types::OpErrorKind {
+impl From<LlmOpError> for ::sys_types::VmRustFnError {
     fn from(e: LlmOpError) -> Self {
-        match e {
+        let baml: ::sys_types::VmBamlError = match e {
             LlmOpError::TypeError { expected, actual } => {
-                ::sys_types::OpErrorKind::TypeError { expected, actual }
+                ::sys_types::VmBamlError::InvalidArgument {
+                    message: format!("expected {expected}, got {actual}"),
+                }
             }
-            LlmOpError::RenderPrompt(msg) => ::sys_types::OpErrorKind::RenderPrompt(msg),
-            LlmOpError::Other(msg) => ::sys_types::OpErrorKind::Other(msg),
-            LlmOpError::ParseResponseError(e) => {
-                ::sys_types::OpErrorKind::LlmClientError { message: e }
+            LlmOpError::RenderPrompt(msg) => {
+                ::sys_types::VmBamlError::RenderPrompt { message: msg }
             }
-            LlmOpError::JsonishError(e) => ::sys_types::OpErrorKind::LlmClientError {
+            LlmOpError::Other(msg) => ::sys_types::VmBamlError::DevOther { message: msg },
+            LlmOpError::ParseResponseError(e) => ::sys_types::VmBamlError::LlmClient { message: e },
+            LlmOpError::JsonishError(e) => ::sys_types::VmBamlError::LlmClient {
                 message: e.to_string(),
             },
-            LlmOpError::SapError(e) => ::sys_types::OpErrorKind::LlmClientError {
+            LlmOpError::SapError(e) => ::sys_types::VmBamlError::LlmClient {
                 message: e.to_string(),
             },
             LlmOpError::NotImplemented { message } => {
-                ::sys_types::OpErrorKind::NotImplemented { message }
+                ::sys_types::VmBamlError::NotImplemented { message }
             }
-        }
+        };
+        baml.into()
     }
 }

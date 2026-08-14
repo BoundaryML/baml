@@ -46,12 +46,11 @@ function BadValueReturn(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected string, got 1
-//     ╭─[ misc_return.baml:36:11 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[misc_return.baml:36:11]
 //  36 │    return 1;
-//     │           ┬  
-//     │           ╰── type mismatch: expected string, got 1
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·           ┬
+//     ·           ╰── expected `string`, found `1`
+//     ╰────

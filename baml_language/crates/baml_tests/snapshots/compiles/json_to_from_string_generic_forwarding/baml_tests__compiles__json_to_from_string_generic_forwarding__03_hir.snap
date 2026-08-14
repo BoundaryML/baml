@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-function user.fetch_as(s: string) -> user.T  [expr] {
-  {  } baml.json.from_string(s)
-}

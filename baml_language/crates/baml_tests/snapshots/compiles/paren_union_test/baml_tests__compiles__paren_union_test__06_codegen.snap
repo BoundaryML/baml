@@ -1,20 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19378
 ---
-function user.Union.from_json(j: baml.json.json) -> Union {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type Union
-    load_var _2
-    call baml.json.from_string
-    return
-}
 
-function user.Union.to_json(self: null) -> baml.json.json {
-    load_type Union
-    load_var self
-    call baml.json.to_string
-    call baml.json.parse
-    return
-}

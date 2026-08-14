@@ -69,26 +69,25 @@ The engine uses a Deno-inspired event loop where the VM executes synchronously u
 │  │  VM executes bytecode synchronously                                         ◄──┼──┐  │
 │  └────────────────────────────────────────────────────────────────────────────────┘  │  │
 │        │                                                                             │  │
-│        ├───────────────────┬───────────────────┬───────────────────┐                 │  │
-│        ▼                   ▼                   ▼                   ▼                 │  │
-│  ┌───────────┐      ┌────────────┐      ┌────────────┐      ┌────────────┐           │  │
-│  │ Complete  │      │ Schedule   │      │   Await    │      │  Notify    │           │  │
-│  │ (Value)   │      │ Future     │      │ (pending)  │      │  (watch)   │           │  │
-│  └─────┬─────┘      └─────┬──────┘      └─────┬──────┘      └─────┬──────┘           │  │
-│        │                  │                   │                   │                  │  │
-│        │                  ▼                   ▼                   ▼                  │  │
-│        │           ┌────────────┐      ┌────────────┐      ┌─────────────┐           │  │
-│        │           │ Spawn task │      │ Wait for   │      │ Call        │           │  │
-│        │           │ (tokio)    │      │ completion │      │ notification│           │  │
-│        │           └─────┬──────┘      └─────┬──────┘      │ callback    │           │  │
-│        │                 │                   │             └─────┬───────┘           │  │
-│        │                 │                   ▼                   │                   │  │
-│        │                 │             ┌────────────┐            │                   │  │
-│        │                 │             │ Fulfill    │            │                   │  │
-│        │                 │             │ future     │            │                   │  │
-│        │                 │             └─────┬──────┘            │                   │  │
-│        │                 │                   │                   │                   │  │
-│        │                 └───────────────────┴───────────────────┘───────────────────┘  │
+│        ├───────────────────┬───────────────────┐                                     │  │
+│        ▼                   ▼                   ▼                                     │  │
+│  ┌───────────┐      ┌────────────┐      ┌────────────┐                               │  │
+│  │ Complete  │      │ Schedule   │      │   Await    │                               │  │
+│  │ (Value)   │      │ Future     │      │ (pending)  │                               │  │
+│  └─────┬─────┘      └─────┬──────┘      └─────┬──────┘                               │  │
+│        │                  │                   │                                      │  │
+│        │                  ▼                   ▼                                      │  │
+│        │           ┌────────────┐      ┌────────────┐                                │  │
+│        │           │ Spawn task │      │ Wait for   │                                │  │
+│        │           │ (tokio)    │      │ completion │                                │  │
+│        │           └─────┬──────┘      └─────┬──────┘                                │  │
+│        │                 │                   ▼                                       │  │
+│        │                 │             ┌────────────┐                                │  │
+│        │                 │             │ Fulfill    │                                │  │
+│        │                 │             │ future     │                                │  │
+│        │                 │             └─────┬──────┘                                │  │
+│        │                 │                   │                                       │  │
+│        │                 └───────────────────┴───────────────────────────────────────┘  │
 │        │                                                                                │
 │        ▼                                                                                │
 │  ┌────────────────────────────────────────────────────────────────────────────────┐     │
@@ -105,7 +104,6 @@ The engine uses a Deno-inspired event loop where the VM executes synchronously u
 | `Complete(Value)` | Execution finished, return result |
 | `ScheduleFuture(ObjectIndex)` | Spawn async op, immediately resume VM |
 | `Await(ObjectIndex)` | Wait for future completion, fulfill, then resume VM |
-| `Notify(WatchNotification)` | Call notification callback, then resume VM |
 
 ## Epoch-Based GC Coordination
 

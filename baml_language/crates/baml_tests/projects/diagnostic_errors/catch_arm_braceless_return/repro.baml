@@ -1,0 +1,25 @@
+// B-246 regression: a *braceless* `return` as a catch-arm value.
+//
+// `return` now parses as a diverging expression (type `never`), so a braceless
+// `string => return e` no longer triggers the old cascade of misleading
+// parse/type errors. A genuinely wrong return value must still be caught — and,
+// crucially, it should produce a SINGLE clear diagnostic, not a wall of
+// downstream parse failures.
+//
+// The catch arm is exhaustive (`string` covers the only thrown type) so this
+// fixture isolates exactly one diagnostic: the return-type mismatch on `return e`.
+
+function callee(x: int) -> bool throws string {
+  if (x == 0) {
+    throw "boom"
+  }
+  true
+}
+
+// BUG: `return e` returns a `string` but the function declares `-> bool`.
+// Expect exactly one diagnostic: `type mismatch: expected bool, got string`.
+function caller(x: int) -> bool {
+  callee(x) catch (e) {
+    string => return e
+  }
+}

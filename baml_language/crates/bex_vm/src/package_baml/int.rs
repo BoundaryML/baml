@@ -4,18 +4,19 @@ use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
 impl BamlClassInt for PackageBamlImpl {
-    fn to_json(int: i64) -> Value {
-        Value::Int(int)
-    }
     // ── Comparisons / clamping ────────────────────────────────────────────────
 
     fn abs(int: i64) -> Result<i64, VmRustFnError> {
-        int.checked_abs().ok_or_else(|| {
-            VmBamlError::InvalidArgument {
+        // BAML int is i63 (low bit reserved for the Value tag). The
+        // absolute value of `Value::INT_MIN` (`-2^62`) is `2^62`, which is
+        // ONE PAST `Value::INT_MAX` and therefore not representable.
+        if int == Value::INT_MIN {
+            return Err(VmBamlError::InvalidArgument {
                 message: "int.abs: cannot represent the absolute value of int.min_value() (would overflow)".to_string(),
             }
-            .into()
-        })
+            .into());
+        }
+        Ok(int.wrapping_abs())
     }
 
     fn min(int: i64, other: i64) -> i64 {
@@ -43,6 +44,8 @@ impl BamlClassInt for PackageBamlImpl {
             }
             .into());
         }
+        // Result of isqrt always fits in i63 since INT_MAX < 2^62 and
+        // floor(sqrt(2^62)) = 2^31.
         Ok(int.isqrt())
     }
 
@@ -66,23 +69,41 @@ impl BamlClassInt for PackageBamlImpl {
         } else {
             exp as u32
         };
-        // Saturation value if checked_pow overflows: positive if base >= 0,
-        // or if exp is even (i.e. mathematical sign of result).
-        let saturated = if int >= 0 || exp_u32 % 2 == 0 {
-            i64::MAX
+        // Saturation value if checked_pow overflows or if the result
+        // doesn't fit in i63: positive if base >= 0, or if exp is even
+        // (i.e. mathematical sign of result). Use the *original* `exp`
+        // for the parity check: clamping to `u32::MAX` (odd) above would
+        // otherwise flip the sign for even exponents above u32 range.
+        let saturated = if int >= 0 || exp & 1 == 0 {
+            Value::INT_MAX
         } else {
-            i64::MIN
+            Value::INT_MIN
         };
-        int.checked_pow(exp_u32).unwrap_or(saturated)
+        match int.checked_pow(exp_u32) {
+            Some(v) if (Value::INT_MIN..=Value::INT_MAX).contains(&v) => v,
+            _ => saturated,
+        }
     }
 
-    fn parse(text: &str) -> Result<i64, VmRustFnError> {
-        text.parse::<i64>().map_err(|e| {
+    fn parse(text: &bex_str::BexStr) -> Result<i64, VmRustFnError> {
+        let s = text.as_str();
+        let v: i64 = s.parse::<i64>().map_err(|e| -> VmRustFnError {
             VmBamlError::ParseError {
-                message: format!("int.parse: cannot parse {text:?} as int: {e}"),
+                message: format!("int.parse: cannot parse {s:?} as int: {e}"),
             }
             .into()
-        })
+        })?;
+        if !(Value::INT_MIN..=Value::INT_MAX).contains(&v) {
+            return Err(VmBamlError::ParseError {
+                message: format!(
+                    "int.parse: {s:?} is outside the representable BAML int range [{}, {}]",
+                    Value::INT_MIN,
+                    Value::INT_MAX
+                ),
+            }
+            .into());
+        }
+        Ok(v)
     }
 
     #[allow(

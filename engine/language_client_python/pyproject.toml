@@ -1,8 +1,9 @@
 [project]
 name = "baml-py"
-version = "0.222.0"
-description = "BAML python bindings (pyproject.toml)"
+version = "0.225.0"
+description = "BAML v0 — Python runtime for baml_client"
 readme = "README.md"
+requires-python = ">=3.10"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 # This is what controls the Python license file, see
 # https://github.com/PyO3/maturin/issues/2718 and

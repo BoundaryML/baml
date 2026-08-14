@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// E0014 (DuplicateAttribute): a single-valued schema attribute (`@alias`,
+// `@description`, `@skip`) may appear at most once on one declaration. Today a
+// repeat is silently accepted and the last write wins, discarding the earlier
+// ones — every case below must now be rejected (Linear B-648).
+//
+// A single field with two `@alias` collapses to ONE effective serialized key,
+// so the cross-field E0149 (DuplicateFieldAlias) check never fires here; only
+// E0014 should be reported (no double-reporting).
+
+// Case 1: two `@alias` on one class field.
+class TwoFieldAlias {
+    a: string @alias("first") @alias("second"),
+}
+
+// Case 2: two `@description` on one class field.
+class TwoFieldDescription {
+    a: string @description("first") @description("second"),
+}
+
+// Case 3: two `@alias` on a single enum variant.
+enum TwoVariantAlias {
+    ACTIVE @alias("on") @alias("enabled"),
+    INACTIVE,
+}
+
+// ─── Controls: none of these must be flagged with E0014 ──────────────────────
+
+// A single `@alias` is fine.
+class SingleAlias {
+    a: string @alias("only"),
+}
+
+// `@alias` and `@description` together are two different attributes — fine.
+class AliasAndDescription {
+    a: string @alias("id") @description("the identifier"),
+}
+
+// A single `@alias` on a variant is fine.
+enum SingleVariantAlias {
+    RED @alias("r"),
+    BLUE,
+}

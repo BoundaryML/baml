@@ -5,28 +5,16 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
-function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
-}
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
-}
 class user.WithUnions {
   simple: int | string
   with_class: user.Inner | string
   mixed: int | user.Inner
 }
-function user.WithUnions.to_json(self: user.WithUnions) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "simple": self.simple.to_json(), "with_class": self.with_class.to_json(), "mixed": self.mixed.to_json() } : map<string, baml.json.json>
-}
-function user.WithUnions.from_json(j: baml.json.json) -> user.WithUnions throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithUnions { simple: baml.json.from_json<int | string>(baml.json.field(j, "simple")), with_class: baml.json.from_json<Inner | string>(baml.json.field(j, "with_class")), mixed: baml.json.from_json<int | Inner>(baml.json.field(j, "mixed")) } : user.WithUnions
-}
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 class user.WithUnions$stream {
-  simple: null | int | string
-  with_class: null | user.Inner$stream | string
-  mixed: null | int | user.Inner$stream
+  simple: int | string | null
+  with_class: user.Inner$stream | string | null
+  mixed: int | user.Inner$stream | null
 }

@@ -59,3 +59,16 @@ class PrimitiveTypes(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (4)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+MixedPrimitives.model_rebuild()
+PrimitiveArrays.model_rebuild()
+PrimitiveMaps.model_rebuild()
+PrimitiveTypes.model_rebuild()

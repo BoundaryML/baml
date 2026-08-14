@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Standard ANSI colors */
+.ansi-black-fg {
+  @apply text-gray-900;
+}
+.ansi-red-fg {
+  @apply text-red-600;
+}
+.ansi-green-fg {
+  @apply text-green-600;
+}
+.ansi-yellow-fg {
+  @apply text-yellow-600;
+}
+.ansi-blue-fg {
+  @apply text-blue-600;
+}
+.ansi-magenta-fg {
+  @apply text-purple-600;
+}
+.ansi-cyan-fg {
+  @apply text-cyan-600;
+}
+.ansi-white-fg {
+  @apply text-gray-100;
+}
+
+/* Background colors */
+.ansi-black-bg {
+  @apply bg-gray-900;
+}
+.ansi-red-bg {
+  @apply bg-red-600;
+}
+.ansi-green-bg {
+  @apply bg-green-600;
+}
+.ansi-yellow-bg {
+  @apply bg-yellow-400;
+}
+.ansi-blue-bg {
+  @apply bg-blue-600;
+}
+.ansi-magenta-bg {
+  @apply bg-purple-600;
+}
+.ansi-cyan-bg {
+  @apply bg-cyan-600;
+}
+.ansi-white-bg {
+  @apply bg-gray-100;
+}
+
+/* Bright ANSI colors */
+.ansi-bright-black-fg {
+  @apply text-gray-700;
+}
+.ansi-bright-red-fg {
+  @apply text-red-500;
+}
+.ansi-bright-green-fg {
+  @apply text-green-500;
+}
+.ansi-bright-yellow-fg {
+  @apply text-yellow-500;
+}
+.ansi-bright-blue-fg {
+  @apply text-blue-500;
+}
+.ansi-bright-magenta-fg {
+  @apply text-purple-500;
+}
+.ansi-bright-cyan-fg {
+  @apply text-cyan-500;
+}
+.ansi-bright-white-fg {
+  @apply text-white;
+}
+
+/* Bright backgrounds */
+.ansi-bright-black-bg {
+  @apply bg-gray-700;
+}
+.ansi-bright-red-bg {
+  @apply bg-red-500;
+}
+.ansi-bright-green-bg {
+  @apply bg-green-500;
+}
+.ansi-bright-yellow-bg {
+  @apply bg-yellow-400;
+}
+.ansi-bright-blue-bg {
+  @apply bg-blue-500;
+}
+.ansi-bright-magenta-bg {
+  @apply bg-purple-500;
+}
+.ansi-bright-cyan-bg {
+  @apply bg-cyan-500;
+}
+.ansi-bright-white-bg {
+  @apply bg-white;
+}
+
+/* Dimmed ANSI colors */
+.ansi-dim-black {
+  @apply text-gray-900 opacity-60;
+}
+.ansi-dim-red {
+  @apply text-red-600 opacity-60;
+}
+.ansi-dim-green {
+  @apply text-green-600 opacity-60;
+}
+.ansi-dim-yellow {
+  @apply text-yellow-400 opacity-60;
+}
+.ansi-dim-blue {
+  @apply text-blue-600 opacity-60;
+}
+.ansi-dim-magenta {
+  @apply text-purple-600 opacity-60;
+}
+.ansi-dim-cyan {
+  @apply text-cyan-600 opacity-60;
+}
+.ansi-dim-white {
+  @apply text-gray-100 opacity-60;
+}
+
+.ansi-dim {
+  @apply opacity-60;
+}
+
+/* Dimmed backgrounds */
+.ansi-dim-black-bg {
+  @apply bg-gray-900 opacity-30;
+}
+.ansi-dim-red-bg {
+  @apply bg-red-600 opacity-30;
+}
+.ansi-dim-green-bg {
+  @apply bg-green-600 opacity-30;
+}
+.ansi-dim-yellow-bg {
+  @apply bg-yellow-400 opacity-30;
+}
+.ansi-dim-blue-bg {
+  @apply bg-blue-600 opacity-30;
+}
+.ansi-dim-magenta-bg {
+  @apply bg-purple-600 opacity-30;
+}
+.ansi-dim-cyan-bg {
+  @apply bg-cyan-600 opacity-30;
+}
+.ansi-dim-white-bg {
+  @apply bg-gray-100 opacity-30;
+}

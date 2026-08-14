@@ -3,16 +3,21 @@
 //! This crate has NO dependencies on other compiler crates to avoid circular dependencies.
 
 pub mod attr;
+pub mod client_options;
 pub mod core_types;
-pub mod debug_log;
+pub mod dedent;
+pub mod escape;
 pub mod files;
+pub mod language;
+pub mod num_lit;
 pub mod qualified_name;
 
 // Re-export everything for convenience
 pub use attr::*;
+pub use client_options::*;
 pub use core_types::*;
-pub use debug_log::{DebugMessage, drain_debug_log, has_debug_messages};
 pub use files::*;
+pub use language::*;
 pub use qualified_name::{BAML_STD_PREFIX, Namespace, QualifiedName};
 
 /// Package name for the BAML standard library / builtins.

@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
-    baml_value::{BamlMap, BamlValue},
+    baml_value::BamlMap,
     deserializer::{
         deserialize_flags::{DeserializerConditions, Flag},
         types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
@@ -222,11 +222,6 @@ where
             _ => return Err(ctx.error_unexpected_type(&target, value)),
         };
 
-        let ret = BamlValue::Map(ret);
-        target.meta.expect_asserts(&ret, ctx)?;
-        let BamlValue::Map(ret) = ret else {
-            unreachable!("we just wrapped it in a BamlValue::Map");
-        };
         Ok(Some(
             ValueWithFlags::new(ret, DeserializerMeta::new(target)).with_flags(flags.flags),
         ))

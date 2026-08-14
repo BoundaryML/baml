@@ -1,21 +1,14 @@
 use ::baml_type::TypeName;
 use ::bex_sap::sap_model;
-use ::std::collections::HashMap;
 
-/// Contains all the information needed to run SAP parsing on a stream (or oneshot),
-/// with the ability to cache data for streaming.
-pub struct SapStreamCache {
+/// Cached schema information for incremental or one-shot SAP parsing.
+pub struct SapParseCache {
     types: bex_sap::CompiledSapModel,
-    #[expect(dead_code, reason = "When asserts are implemented, this will be used")]
-    assert_cache: HashMap<AssertCacheKey, bool>,
 }
 
-impl SapStreamCache {
+impl SapParseCache {
     pub fn new(types: bex_sap::CompiledSapModel) -> Self {
-        Self {
-            types,
-            assert_cache: HashMap::new(),
-        }
+        Self { types }
     }
 
     pub fn db(&self) -> &sap_model::TypeRefDb<'_, TypeName> {
@@ -49,9 +42,4 @@ impl SapStreamCache {
     > {
         self.db().resolve_with_meta(self.types.stream_ty().as_ref())
     }
-}
-
-#[derive(Debug, PartialEq, Hash)]
-struct AssertCacheKey {
-    fn_idx: u32,
 }

@@ -13,21 +13,4 @@ function CatchOnVariable(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//    ╭─[ catch_catch_on_non_call.baml:4:10 ]
-//    │
-//  4 │     _ => "caught"
-//    │          ────┬───  
-//    │              ╰───── unreachable arm
-//    │ 
-//    │ Note: Error code: E0063
-// ───╯
-// Warning: unreachable arm
-//     ╭─[ catch_catch_on_non_call.baml:10:10 ]
-//     │
-//  10 │     _ => "caught"
-//     │          ────┬───  
-//     │              ╰───── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
+// <no-diagnostics-expected>

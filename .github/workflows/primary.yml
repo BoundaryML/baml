@@ -36,17 +36,17 @@ env:
 
 jobs:
   # Determine if runtime-related files have changed
-  # This job enables auto-pass when only baml_language/ or typescript/apps/beps/ files are modified
+  # This job enables auto-pass when only baml_language/ or typescript2/app-beps/ files are modified
   determine_changes:
     name: "Determine changes"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       # Flag that is raised when runtime-related code is changed
       # If false, we can skip all runtime tests since only baml_language/ or beps/ changed
       runtime: ${{ steps.check_runtime.outputs.changed }}
       skip_reason: ${{ steps.check_runtime.outputs.skip_reason }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -90,7 +90,7 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          # Check if ALL changed files are in baml_language/ or typescript/apps/beps/ (auto-skip paths)
+          # Check if ALL changed files are in baml_language/ or typescript2/app-beps/ (auto-skip paths)
           # If any file is outside these paths, we need to run the tests
           RUNTIME_CHANGED="false"
           ONLY_BAML_LANGUAGE="true"
@@ -105,18 +105,18 @@ jobs:
               ONLY_BAML_LANGUAGE="false"
             fi
 
-            # Check if file is in typescript/apps/beps/
-            if [[ ! "$file" =~ ^typescript/apps/beps/ ]]; then
+            # Check if file is in typescript2/app-beps/
+            if [[ ! "$file" =~ ^typescript2/app-beps/ ]]; then
               ONLY_BEPS="false"
             fi
 
             # Check if file is in a path that requires runtime tests
-            # Runtime tests are needed for: engine/, typescript/ (except beps), integ-tests/, .github/workflows/primary.yml
+            # Runtime tests are needed for: engine/, typescript/, integ-tests/, .github/workflows/primary.yml
             if [[ "$file" =~ ^engine/ ]] || \
                [[ "$file" =~ ^integ-tests/ ]] || \
                [[ "$file" == ".github/workflows/primary.yml" ]] || \
                [[ "$file" =~ ^\.github/actions/ ]] || \
-               ([[ "$file" =~ ^typescript/ ]] && [[ ! "$file" =~ ^typescript/apps/beps/ ]]); then
+               [[ "$file" =~ ^typescript/ ]]; then
               RUNTIME_CHANGED="true"
             fi
           done <<< "$CHANGED_FILES"
@@ -127,9 +127,9 @@ jobs:
             if [[ "$ONLY_BAML_LANGUAGE" == "true" ]]; then
               SKIP_REASON="Only baml_language/ files changed - these are covered by CI - BAML Language workflow"
             elif [[ "$ONLY_BEPS" == "true" ]]; then
-              SKIP_REASON="Only typescript/apps/beps/ files changed - these are covered by CI - BAML Language BEPs workflow"
+              SKIP_REASON="Only typescript2/app-beps/ files changed - these are covered by the TypeScript2 workflow"
             else
-              SKIP_REASON="No runtime-related files changed (only baml_language/ or typescript/apps/beps/)"
+              SKIP_REASON="No runtime-related files changed (only baml_language/ or typescript2/app-beps/)"
             fi
           fi
 
@@ -141,7 +141,7 @@ jobs:
   # Auto-pass summary when skipping runtime tests
   skip-summary:
     name: "Skip Summary"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'false'
     steps:
@@ -160,26 +160,19 @@ jobs:
 
   # Run all quality checks in parallel (lightweight setup)
   lint:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     strategy:
       matrix:
         check:
-          [typescript-lint, rust-format, rust-lint, rust-lint-wasm, python-lint]
+          [rust-format, rust-lint, rust-lint-wasm, python-lint]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
-
-      # Setup Node.js for TypeScript lint
-      - name: Setup Node.js
-        if: matrix.check == 'typescript-lint'
-        uses: ./.github/actions/setup-node
-        with:
-          node-action-version: "v6"
 
       # Setup Rust for Rust checks
       - name: Setup Rust
@@ -198,10 +191,6 @@ jobs:
         uses: ./.github/actions/setup-python
         with:
           cache: "false"
-
-      - name: Run TypeScript lint
-        if: matrix.check == 'typescript-lint'
-        run: pnpm format:ci
 
       - name: Run Rust format check
         if: matrix.check == 'rust-format'
@@ -227,12 +216,12 @@ jobs:
           cd integ-tests/python && uv run ruff check .
 
   typecheck:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -257,12 +246,12 @@ jobs:
         run: pnpm typecheck --force
 
   build-wasm:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -279,12 +268,12 @@ jobs:
 
   # Test node generator (only needs CLI)
   test-generators:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -336,7 +325,7 @@ jobs:
 
   # Run tests in parallel (rebuild what's needed)
   tests:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     strategy:
@@ -344,7 +333,7 @@ jobs:
         test-suite: [rust-unit, python-integration]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -427,7 +416,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -444,7 +433,7 @@ jobs:
         run: cargo build --release --bin baml-cli --target ${{ matrix.target }}
         working-directory: engine
       - name: Upload CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: baml-cli-${{ matrix.target }}
           path: engine/target/release/baml-cli*
@@ -459,7 +448,7 @@ jobs:
   # Configure "BAML Runtime / CI Failure Alert" as a required status check.
   ci-failure-alert:
     name: "CI Failure Alert"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs:
       - determine_changes
       - lint
@@ -489,18 +478,18 @@ jobs:
 
   # Sync Zed extension to separate repository
   sync-zed-repository:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     # Only run on pushes to canary branch or manual dispatch, and only if runtime changed
     if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout main repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: main-repo
 
       - name: Checkout zed-baml repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: BoundaryML/zed-baml
           token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}

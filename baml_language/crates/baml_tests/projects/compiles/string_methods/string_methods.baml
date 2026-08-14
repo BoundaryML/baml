@@ -1,17 +1,9 @@
-// Test: string method calls should produce no diagnostics
+// Test: string method calls inside backtick interpolation produce no diagnostics.
 
-template_string Sep(n: int) #"
-  {{- "{:,}".format(n) -}}
-"#
+function Upper(s: string) -> string { `${s.to_upper_case()}` }
 
-template_string Upper(s: string) #"
-  {{ s.upper() }}
-"#
+function StartsWith(s: string) -> string { `${s.starts_with("hello")}` }
 
-template_string StartsWith(s: string) #"
-  {% if s.startswith("hello") %}yes{% endif %}
-"#
+function SplitCount(s: string) -> string { `${s.split(",").length()}` }
 
-template_string Split(s: string) #"
-  {% for part in s.split(",") %}{{ part }}{% endfor %}
-"#
+function Trimmed(s: string) -> string { `${s.trim()}` }

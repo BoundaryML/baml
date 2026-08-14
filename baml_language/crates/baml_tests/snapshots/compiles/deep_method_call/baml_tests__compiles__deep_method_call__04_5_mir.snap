@@ -1,61 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8456
 ---
 === MIR2 ===
-fn user.B.from_json(j: baml.json.json) -> B {
-    // Locals:
-    let _0: B // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "label") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.B { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.A.from_json(j: baml.json.json) -> A {
-    // Locals:
-    let _0: A // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: B
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "b") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(B);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.A { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.B.greet(self: B) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -64,6 +11,22 @@ fn user.B.greet(self: B) -> string {
     bb0: {
         _0 = copy _1.0;
         goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_deep_method(a: A) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: A // a // param
+    let _2: (B) -> string throws never
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = call const fn user.B.greet(copy _2) -> [bb1];
     }
 
     bb1: {
@@ -86,22 +49,6 @@ fn user.test_deep_field(a: A) -> string {
     }
 }
 
-fn user.test_deep_method(a: A) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: A // a // param
-    let _2: () -> string throws never
-
-    bb0: {
-        _2 = copy _1.0;
-        _0 = call const fn user.B.greet(copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_direct_method(b: B) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -112,54 +59,6 @@ fn user.test_direct_method(b: B) -> string {
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.A.to_json(self: A) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: A // self // param
-    let _2: baml.json.json
-    let _3: B
-    let _4: A
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn user.B.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "b": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.B.to_json(self: B) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: B // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: B
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "label": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

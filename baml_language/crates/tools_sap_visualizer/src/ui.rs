@@ -961,7 +961,7 @@ impl RowData<'_> {
                     let highlight_fmt = egui::TextFormat {
                         font_id: mono,
                         color: diff_color,
-                        underline: egui::Stroke::new(1.0, diff_color),
+                        underline: egui::Stroke::new(1.0_f32, diff_color),
                         ..Default::default()
                     };
                     let mut sections = Vec::new();

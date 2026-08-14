@@ -1,42 +1,77 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 25847
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected int, got string
-    ╭─[ test.baml:10:7 ]
-    │
- 10 │ class HasDuplicateField {
-    │       ────────┬────────  
-    │               ╰────────── type mismatch: expected int, got string
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [hir] E0014
 
-  [hir] Error: Duplicate field `HasDuplicateField.name`
-    ╭─[ test.baml:13:3 ]
-    │
+  × duplicate attribute `@description`
+   ╭─[test.baml:5:3]
+ 5 │   @@description("First description")
+   ·   ─────────────────┬────────────────
+   ·                    ╰── `@description` first applied here
+   ╰────
+   ╭─[test.baml:7:3]
+ 7 │   @@description("Second description")
+   ·   ─────────────────┬─────────────────
+   ·                    ╰── duplicate `@description` — only the last takes effect
+   ╰────
+
+  [hir] E0012
+
+  × duplicate field `HasDuplicateField.name`
+    ╭─[test.baml:11:3]
  11 │   name string
-    │   ──┬─  
-    │     ╰─── first defined as field here
-    │ 
+    ·   ──┬─
+    ·     ╰── first defined as field here
+    ╰────
+    ╭─[test.baml:13:3]
  13 │   name int
-    │   ──┬─  
-    │     ╰─── duplicate field definition
-    │ 
-    │ Note: Error code: E0012
-────╯
+    ·   ──┬─
+    ·     ╰── duplicate field definition
+    ╰────
 
-  [hir] Error: Duplicate variant `HasDuplicateVariant.RED`
-    ╭─[ test.baml:23:3 ]
-    │
+  [hir] E0014
+
+  × duplicate attribute `@alias`
+    ╭─[test.baml:17:48]
+ 17 │   name string @alias("n") @description("Name") @alias("nm")
+    ·               ─────┬─────                      ──────┬─────
+    ·                    │                                 ╰── duplicate `@alias` — only the last takes effect
+    ·                    ╰── `@alias` first applied here
+    ╰────
+
+  [hir] E0012
+
+  × duplicate variant `HasDuplicateVariant.RED`
+    ╭─[test.baml:21:3]
  21 │   RED
-    │   ─┬─  
-    │    ╰─── first defined as variant here
-    │ 
+    ·   ─┬─
+    ·    ╰── first defined as variant here
+    ╰────
+    ╭─[test.baml:23:3]
  23 │   RED
-    │   ─┬─  
-    │    ╰─── duplicate variant definition
-    │ 
-    │ Note: Error code: E0012
-────╯
+    ·   ─┬─
+    ·    ╰── duplicate variant definition
+    ╰────
+
+  [hir] E0014
+
+  × duplicate attribute `@description`
+    ╭─[test.baml:30:3]
+ 29 │   @@description("First")
+    ·   ───────────┬──────────
+    ·              ╰── `@description` first applied here
+ 30 │   @@description("Second")
+    ·   ───────────┬───────────
+    ·              ╰── duplicate `@description` — only the last takes effect
+    ╰────
+
+  [hir] E0014
+
+  × duplicate attribute `@alias`
+    ╭─[test.baml:34:22]
+ 34 │   ACTIVE @alias("a") @alias("active")
+    ·          ─────┬───── ────────┬───────
+    ·               │              ╰── duplicate `@alias` — only the last takes effect
+    ·               ╰── `@alias` first applied here
+    ╰────

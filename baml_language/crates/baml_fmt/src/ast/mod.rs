@@ -18,7 +18,10 @@ pub use statements::*;
 pub use tokens::*;
 pub use types::*;
 
-use crate::printer::{PrintInfo, Printable, Printer, Shape};
+use crate::{
+    printer::{PrintInfo, Printable, Printer, Shape},
+    trivia_classifier::TriviaSliceExt as _,
+};
 
 pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
@@ -312,34 +315,6 @@ impl SyntaxNodeIter {
 
     /// Consumes the next element and checks it:
     /// - If there are no more elements, returns [`StrongAstError::MissingExpectedElement`].
-    /// - If the element is not a node, returns [`StrongAstError::ShouldBeNode`].
-    /// - If the element is a node but not of the expected kind, returns [`StrongAstError::UnexpectedKind`].
-    /// - Otherwise, returns the node.
-    ///
-    /// Consumes an element even if it returns an error.
-    pub fn expect_node_of_kind(&mut self, kind: SyntaxKind) -> Result<SyntaxNode, StrongAstError> {
-        let Some(elem) = self.next() else {
-            return Err(StrongAstError::missing(kind, self.parent));
-        };
-        let SyntaxElement::Node(node) = elem else {
-            return Err(StrongAstError::ShouldBeNode {
-                at: elem.text_range(),
-            });
-        };
-
-        if node.kind() == kind {
-            Ok(node)
-        } else {
-            Err(StrongAstError::UnexpectedKind {
-                expected: kind,
-                found: node.kind(),
-                at: node.text_range(),
-            })
-        }
-    }
-
-    /// Consumes the next element and checks it:
-    /// - If there are no more elements, returns [`StrongAstError::MissingExpectedElement`].
     /// - Otherwise, the element will parse as the given type.
     ///
     /// Consumes an element even if it returns an error.
@@ -401,21 +376,6 @@ impl SyntaxNodeIter {
     pub fn next_if_kind(&mut self, kind: SyntaxKind) -> Option<SyntaxElement> {
         self.next_if(|elem| elem.kind() == kind)
     }
-
-    /// Peeks at the next element and:
-    /// - If there is no next element, returns `None`.
-    /// - Calls the given function with the next element, if it returns `Some(t)` then the element is consumed and `Some(t)` is returned.
-    /// - Otherwise, the next element is not consumed and `None` is returned.
-    pub fn next_if_and_map<T, F: FnOnce(&SyntaxElement) -> Option<T>>(
-        &mut self,
-        f: F,
-    ) -> Option<T> {
-        if let Some(peeked) = self.peek().and_then(f) {
-            self.peeked = None;
-            return Some(peeked);
-        }
-        None
-    }
 }
 impl Iterator for SyntaxNodeIter {
     type Item = SyntaxElement;
@@ -459,8 +419,15 @@ impl Printable for SourceFile {
         assert_eq!(shape.first_line_offset, 0);
         assert_eq!(shape.width, printer.config.line_width);
 
-        for decl in &self.items {
-            printer.print_standalone_with_trivia(decl, 0);
+        for (idx, decl) in self.items.iter().enumerate() {
+            if idx > 0 {
+                printer.print_newline();
+            }
+
+            let (leading_trivia, trailing_trivia) = printer.trivia.get_for_element(decl);
+            printer.print_trivia_with_newline(leading_trivia.trim_leading_blanks(), 0);
+            printer.print(decl, shape.clone());
+            printer.print_trivia_trailing(trailing_trivia);
             printer.print_newline();
         }
         for trivia in printer.trivia.get_for_eof() {

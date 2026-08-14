@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[callback_param_defaults.baml:7:67]
+ 7 │ function call_with_defaulted_callback(callback: (x: int, y: int = 10) -> string, x: int) -> string {
+   ·                                                                   ─┬
+   ·                                                                    ╰── default expressions are not allowed in function types
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[function_type_defaults.baml:1:68]
+ 1 │ type BadDefaultInFunctionType = (query: string, max_results: int = 10) -> int throws never
+   ·                                                                    ─┬
+   ·                                                                     ╰── default expressions are not allowed in function types
+   ╰────

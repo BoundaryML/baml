@@ -5,26 +5,14 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
-function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
-}
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
-}
 class user.WithOptionals {
-  name: string?
-  inner: user.Inner?
-}
-function user.WithOptionals.to_json(self: user.WithOptionals) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name?.to_json(), "inner": self.inner?.to_json() } : map<string, baml.json.json?>
-}
-function user.WithOptionals.from_json(j: baml.json.json) -> user.WithOptionals throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithOptionals { name: baml.json.from_json<string?>(baml.json.field(j, "name")), inner: baml.json.from_json<Inner?>(baml.json.field(j, "inner")) } : user.WithOptionals
+  name: string | null
+  inner: user.Inner | null
 }
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 class user.WithOptionals$stream {
-  name: null | string
-  inner: null | user.Inner$stream
+  name: string | null
+  inner: user.Inner$stream | null
 }

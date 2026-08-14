@@ -1,66 +1,70 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 608
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] Error: vertex-ai requires either base_url or location (e.g. us-central1) in options
-   ╭─[ test.baml:6:23 ]
-   │
- 6 │ ╭─▶     provider vertex-ai
-   ┆ ┆   
- 9 │ ├─▶     }
-   │ │           
-   │ ╰─────────── missing options
-   │     
-   │     Note: Error code: E0101
-───╯
+  [hir] E0010
 
-  [parse] Error: Expected config key, found '.'
-   ╭─[ test.baml:8:23 ]
-   │
+  × `client<llm>` config blocks are removed; declare a client value instead: `client VertexGCP = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[test.baml:5:1]
+  5 │ ╭─▶ client<llm> VertexGCP {
+  6 │ │       provider vertex-ai
+  7 │ │       options {
+  8 │ │           model gemini-2.0-flash
+  9 │ │       }
+ 10 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[test.baml:8:23]
  8 │         model gemini-2.0-flash
-   │                       ┬  
-   │                       ╰── Expected config key, found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                       ┬
+   ·                       ╰── expected `config key`, found `'.'`
+   ╰────
 
-  [parse] Error: Expected config key, found integer
-   ╭─[ test.baml:8:24 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[test.baml:8:24]
  8 │         model gemini-2.0-flash
-   │                        ┬  
-   │                        ╰── Expected config key, found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                        ┬
+   ·                        ╰── expected `config key`, found `integer`
+   ╰────
 
-  [parse] Error: Expected config key, found '-'
-   ╭─[ test.baml:8:25 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[test.baml:8:25]
  8 │         model gemini-2.0-flash
-   │                         ┬  
-   │                         ╰── Expected config key, found '-'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                         ┬
+   ·                         ╰── expected `config key`, found `'-'`
+   ╰────
 
-  [parse] Error: Expected identifier, found '}'
-   ╭─[ test.baml:9:5 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[test.baml:9:5]
  9 │     }
-   │     ┬  
-   │     ╰── Expected identifier, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·     ┬
+   ·     ╰── expected `identifier`, found `'}'`
+   ╰────
 
-  [parse] Error: Header comments (//#) are not allowed inside LLM functions
-    ╭─[ test.baml:13:5 ]
-    │
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[test.baml:13:5]
  13 │     //# collect source material
-    │     ─────────────┬─────────────  
-    │                  ╰─────────────── Header comments (//#) are not allowed inside LLM functions
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·     ─────────────┬─────────────
+    ·                  ╰── header comments (`//#`) are only allowed in expression functions
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `VertexGCP`
+    ╭─[test.baml:14:13]
+ 14 │     client: VertexGCP
+    ·             ─────────
+    ╰────

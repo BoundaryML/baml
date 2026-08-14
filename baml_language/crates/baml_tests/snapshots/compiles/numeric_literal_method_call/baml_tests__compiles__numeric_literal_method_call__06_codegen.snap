@@ -1,0 +1,36 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18580
+---
+function user.BigintToStringBareLiteral() -> string {
+    load_type 42n
+    load_const 42n
+    call baml.String.from
+    return
+}
+
+function user.FloatFloorBareLiteral() -> float {
+    load_const 2.5
+    call baml.Float.floor
+    return
+}
+
+function user.IntAbsBareLiteral() -> int {
+    load_const 3
+    call baml.Int.abs
+    return
+}
+
+function user.IntPowBareLiteral() -> int {
+    load_const 2
+    load_const 3
+    call baml.Int.pow
+    return
+}
+
+function user.IntToStringBareLiteral() -> string {
+    load_type 7
+    load_const 7
+    call baml.String.from
+    return
+}

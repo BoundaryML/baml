@@ -67,21 +67,51 @@ function NominalTypingAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected user.Person[], got user.Human[]
-//     ╭─[ invalid_assignment_nominal_typing.baml:59:10 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:43:7]
+//  43 │     p2 = Human { name: "F", age: 6 };
+//     ·          ─────────────┬─────────────
+//     ·                       ╰── expected `Person`, found `Human`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:47:7]
+//  47 │     h2 = Person { name: "H", age: 8 };
+//     ·          ──────────────┬─────────────
+//     ·                        ╰── expected `Human`, found `Person`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:51:7]
+//  51 │     a2 = Creature { species: "Lizard", legs: 4 };
+//     ·          ───────────────────┬───────────────────
+//     ·                             ╰── expected `Animal`, found `Creature`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:55:7]
+//  55 │     c2 = Animal { species: "Spider", legs: 8 };
+//     ·          ──────────────────┬──────────────────
+//     ·                            ╰── expected `Creature`, found `Animal`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:59:12]
 //  59 │     people = [Human { name: "J", age: 10 }];
-//     │             ───────────────┬───────────────  
-//     │                            ╰───────────────── type mismatch: expected user.Person[], got user.Human[]
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected user.Human[], got user.Person[]
-//     ╭─[ invalid_assignment_nominal_typing.baml:63:10 ]
-//     │
+//     ·               ──────────────┬─────────────
+//     ·                             ╰── expected `Person`, found `Human`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:63:12]
 //  63 │     humans = [Person { name: "L", age: 12 }];
-//     │             ────────────────┬───────────────  
-//     │                             ╰───────────────── type mismatch: expected user.Human[], got user.Person[]
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·               ──────────────┬──────────────
+//     ·                             ╰── expected `Human`, found `Person`
+//     ╰────

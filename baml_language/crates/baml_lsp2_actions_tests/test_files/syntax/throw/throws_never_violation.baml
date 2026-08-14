@@ -9,12 +9,10 @@ function ThrowsNeverViolation(x: int) -> string throws never {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `never` is missing string
-//    ╭─[ throw_throws_never_violation.baml:3:55 ]
-//    │
-//  3 │ function ThrowsNeverViolation(x: int) -> string throws never {
-//    │                                                       ───┬──  
-//    │                                                          ╰──── throws contract violation: `never` is missing string
-//    │ 
-//    │ Note: Error code: E0096
-// ───╯
+// E0096
+//
+//   × declared throws is `never`, but this function may also throw `string`
+//    ╭─[throw_throws_never_violation.baml:5:11]
+//  5 │     throw "escaped"
+//    ·           ─────────
+//    ╰────

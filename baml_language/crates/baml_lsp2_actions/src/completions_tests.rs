@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{completions::completions_at, testing::CursorTest};
+    use crate::{CompletionKind, completions::completions_at, testing::CursorTest};
 
     #[test]
     fn test_field_access_after_dot() {
@@ -371,6 +371,192 @@ function Test() -> string {
     }
 
     #[test]
+    fn test_image_instance_method_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test(img: image) -> string {
+    img.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["url", "file", "base64", "mime_type"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain image method '{expected}', got: {labels:?}"
+            );
+        }
+        assert!(
+            !labels.contains(&"from_url"),
+            "Instance image completion should not contain static constructors, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_image_static_constructor_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> image {
+    image.<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["from_url", "from_file", "from_base64"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain image constructor '{expected}', got: {labels:?}"
+            );
+        }
+        assert!(
+            !labels.contains(&"base64"),
+            "Static image completion should not contain instance methods, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_string_completion_uses_stdlib_method_names() {
+        let test = CursorTest::new(
+            r#"
+function Test(s: string) -> string {
+    s.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"to_lower_case"),
+            "Should contain stdlib string method 'to_lower_case', got: {labels:?}"
+        );
+        assert!(
+            !labels.contains(&"lower"),
+            "Should not contain stale hardcoded string method 'lower', got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_all_media_types_have_instance_method_completion() {
+        for media_type in ["image", "audio", "video", "pdf"] {
+            let test = CursorTest::new(&format!(
+                r#"
+function Test(value: {media_type}) -> string {{
+    value.<[CURSOR]
+    "done"
+}}
+"#
+            ));
+
+            let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+            let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+            for expected in ["url", "file", "base64", "mime_type"] {
+                assert!(
+                    labels.contains(&expected),
+                    "Should contain {media_type} method '{expected}', got: {labels:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_all_media_types_have_static_constructor_completion() {
+        for media_type in ["image", "audio", "video", "pdf"] {
+            let test = CursorTest::new(&format!(
+                r#"
+function Test() -> {media_type} {{
+    {media_type}.<[CURSOR]
+}}
+"#
+            ));
+
+            let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+            let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+            for expected in ["from_url", "from_file", "from_base64"] {
+                assert!(
+                    labels.contains(&expected),
+                    "Should contain {media_type} constructor '{expected}', got: {labels:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_uint8array_instance_method_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test(bytes: uint8array) -> string {
+    bytes.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["length", "to_base64", "to_string", "sort"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain uint8array method '{expected}', got: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_qualified_builtin_class_method_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test(array: int[]) -> int {
+    baml.Array.<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["length", "at", "push", "map"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain baml.Array method '{expected}', got: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_qualified_media_class_method_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> image {
+    baml.media.Image.<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["url", "base64", "from_url", "from_base64"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain baml.media.Image method '{expected}', got: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
     fn test_baml_package_completions() {
         // Test that `baml.` shows completions for the baml package namespace.
         let test = CursorTest::new(
@@ -389,6 +575,30 @@ function Test() -> string {
         assert!(
             labels.contains(&"events"),
             "Should contain 'events' namespace, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_bare_builtin_package_completions() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> string {
+    b<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"baml"),
+            "Should contain 'baml' package root, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"reflect"),
+            "Should contain 'reflect' package root, got: {labels:?}"
         );
     }
 
@@ -493,6 +703,179 @@ function Test(x: int) -> int {
         assert_eq!(
             x_count, 1,
             "Should only complete the local that shadows parameter 'x', got: {completions:?}"
+        );
+    }
+
+    #[test]
+    fn test_value_completion_after_incomplete_log_call_does_not_reenter_salsa() {
+        let test = CursorTest::new(
+            r#"
+function SimulateHumanGuess(history: string[]) -> string {
+  "guess"
+}
+
+function GuessGameAgent() -> string {
+  let history: string[] = []
+  log.info({"famous_person_name":
+  let user_input = SimulateHumanGuess(history)
+  user_input<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        assert!(
+            completions.iter().any(|c| c.label == "history"),
+            "expected local completion after malformed log call, got: {completions:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_suggests_optional_params() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, max_results: int = 10, filter: string? = null) -> int {
+    max_results
+}
+
+function Test() -> int {
+    Search("cats", <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let max_results = completions
+            .iter()
+            .find(|completion| completion.label == "max_results")
+            .expect("max_results completion");
+        let filter = completions
+            .iter()
+            .find(|completion| completion.label == "filter")
+            .expect("filter completion");
+
+        assert_eq!(max_results.insert_text.as_deref(), Some("max_results = "));
+        assert_eq!(max_results.kind, CompletionKind::Parameter);
+        assert_eq!(filter.insert_text.as_deref(), Some("filter = "));
+        assert_eq!(filter.kind, CompletionKind::Parameter);
+        assert!(
+            completions
+                .iter()
+                .all(|completion| completion.label != "query"),
+            "Should not suggest parameter already provided positionally, got: {completions:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_hides_already_provided_labels() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, max_results: int = 10, filter: string? = null) -> int {
+    max_results
+}
+
+function Test() -> int {
+    Search("cats", max_results = 5, <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            !labels.contains(&"max_results"),
+            "Should not suggest already provided label, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"filter"),
+            "Should still suggest remaining optional label, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_keeps_required_named_params_available() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, max_results: int = 10, filter: string? = null) -> int {
+    max_results
+}
+
+function Test() -> int {
+    Search(max_results = 5, <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"query"),
+            "Required named params should remain available, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"filter"),
+            "Remaining optional params should remain available, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_hides_multiple_positional_params() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, limit: int, filter: string? = null) -> int {
+    limit
+}
+
+function Test() -> int {
+    Search("cats", 5, <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            !labels.contains(&"query"),
+            "Should not suggest first positional parameter, got: {labels:?}"
+        );
+        assert!(
+            !labels.contains(&"limit"),
+            "Should not suggest second positional parameter, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"filter"),
+            "Should still suggest remaining parameter, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_does_not_apply_inside_argument_expression() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, max_results: int = 10, filter: string? = null) -> int {
+    max_results
+}
+
+function Test() -> int {
+    let local_value = 2
+    Search("cats", local_value + <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"local_value"),
+            "Should use value completions inside argument expressions, got: {labels:?}"
+        );
+        assert!(
+            !labels.contains(&"max_results"),
+            "Should not suggest outer call labels inside argument expressions, got: {labels:?}"
         );
     }
 }

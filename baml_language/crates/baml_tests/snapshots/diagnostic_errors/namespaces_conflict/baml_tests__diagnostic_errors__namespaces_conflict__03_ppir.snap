@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 50907
+---
+=== PPIR ===
+class user.llm.Response {
+  text: string
+}
+class user.llm.Response$stream {
+  text: string | null
+}
+class user.llm.Response {
+  body: string
+  status: int
+}
+class user.llm.Response$stream {
+  body: string | null
+  status: int | null
+}

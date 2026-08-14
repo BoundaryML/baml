@@ -1,0 +1,30 @@
+<Project>
+  <Target
+    Name="BamlRejectUnsupportedRuntimeIdentifiers"
+    BeforeTargets="PrepareForBuild">
+    <ItemGroup>
+      <_BamlRequestedRid
+        Include="$(RuntimeIdentifier)"
+        Condition="'$(RuntimeIdentifier)' != ''" />
+      <_BamlRequestedRid
+        Include="$(RuntimeIdentifiers)"
+        Condition="'$(RuntimeIdentifiers)' != ''" />
+      <_BamlSupportedRid Include="@BAML_SUPPORTED_RIDS@" />
+      <_BamlUnsupportedRid Include="@(_BamlRequestedRid)" />
+      <_BamlUnsupportedRid Remove="@(_BamlSupportedRid)" />
+    </ItemGroup>
+    <Error
+      Condition="'@(_BamlUnsupportedRid)' != ''"
+      Code="BAML0010"
+      Text="baml-bridge does not support RuntimeIdentifier(s) @(_BamlUnsupportedRid, ', '). Supported RIDs: @(_BamlSupportedRid, ', ')." />
+  </Target>
+
+  <Target
+    Name="BamlRejectUnsupportedNativeAot"
+    BeforeTargets="PrepareForBuild"
+    Condition="'$(PublishAot)' == 'true'">
+    <Error
+      Code="BAML0019"
+      Text="baml-bridge does not support NativeAOT in v1. Use a normal, trimmed, single-file, or trimmed single-file JIT publish instead." />
+  </Target>
+</Project>

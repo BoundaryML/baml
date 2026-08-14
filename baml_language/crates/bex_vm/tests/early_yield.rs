@@ -22,7 +22,6 @@ use std::sync::{
 
 use baml_project::testing::compile_source;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::Value;
 
 const LOOP_ITERATIONS: i64 = 10_000;
 /// Small interval for testing — production uses 1 << 25 (~32M).
@@ -75,7 +74,9 @@ fn flag_unset_completes_without_early_yield() {
 
     let state = vm.exec().expect("exec");
     match state {
-        VmExecState::Complete(Value::Int(n)) => assert_eq!(n, LOOP_ITERATIONS),
+        VmExecState::Complete(v) if v.is_int() => {
+            assert_eq!(v.as_int().unwrap(), LOOP_ITERATIONS);
+        }
         other => panic!("expected Complete(Int({LOOP_ITERATIONS})), got {other:?}"),
     }
 }
@@ -120,8 +121,8 @@ fn yield_then_resume_completes() {
     // the final Complete, bounded by MAX_EXEC_CALLS.
     for _ in 0..MAX_EXEC_CALLS {
         match vm.exec().expect("exec") {
-            VmExecState::Complete(Value::Int(n)) => {
-                assert_eq!(n, LOOP_ITERATIONS);
+            VmExecState::Complete(v) if v.is_int() => {
+                assert_eq!(v.as_int().unwrap(), LOOP_ITERATIONS);
                 return;
             }
             VmExecState::EarlyYield => continue,

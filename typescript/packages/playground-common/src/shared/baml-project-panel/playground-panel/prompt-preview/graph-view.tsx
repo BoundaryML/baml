@@ -263,7 +263,7 @@ export const GraphView = () => {
 
         // autoPanOnNodeFocus={true}
         selectionMode={SelectionMode.Partial}
-        colorMode="light"
+        colorMode="dark"
       >
         <Background
           className="bg-background"

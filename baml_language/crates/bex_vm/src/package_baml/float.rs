@@ -1,18 +1,15 @@
-use bex_vm_types::Value;
-
 use super::{BamlClassFloat, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
-// `i64::MIN as f64` is exactly representable (`-2^63`); `i64::MAX as f64` rounds
-// up to `2^63` (one past `i64::MAX`). So the in-range predicate is
-// `MIN_F <= r < MAX_PLUS_ONE_F` — note the strict upper bound. NaN fails this
-// check via the usual NaN-comparison rules.
-//
-// `i64::MIN` is `-2^63`, a power of two — exactly representable in f64 despite
-// the cast precision warning.
-#[allow(clippy::cast_precision_loss)]
-const MIN_F: f64 = i64::MIN as f64; // -9_223_372_036_854_775_808.0
-const MAX_PLUS_ONE_F: f64 = 9_223_372_036_854_775_808.0; // 2^63
+// BAML int is i63 (the runtime reserves one bit for the tagged-pointer
+// Value tag). Range: `[-2^62, 2^62 - 1]`. `-2^62` and `2^62` are both
+// powers of two, exactly representable in f64 (as integers with
+// magnitudes far past f64's 53-bit mantissa but with no fractional part).
+// So the in-range predicate is `MIN_F <= r < MAX_PLUS_ONE_F` — note the
+// strict upper bound. NaN fails this check via the usual NaN-comparison
+// rules.
+const MIN_F: f64 = -4_611_686_018_427_387_904.0; // -2^62
+const MAX_PLUS_ONE_F: f64 = 4_611_686_018_427_387_904.0; // 2^62
 
 #[allow(clippy::cast_possible_truncation)]
 fn float_to_int(value: f64, op: &str) -> Result<i64, VmRustFnError> {
@@ -32,9 +29,6 @@ fn float_to_int(value: f64, op: &str) -> Result<i64, VmRustFnError> {
 }
 
 impl BamlClassFloat for PackageBamlImpl {
-    fn to_json(float: f64) -> Value {
-        Value::Float(float)
-    }
     // ── Predicates ────────────────────────────────────────────────────────────
 
     fn is_nan(float: f64) -> bool {
@@ -186,10 +180,11 @@ impl BamlClassFloat for PackageBamlImpl {
 
     // ── Parsing / randomness ──────────────────────────────────────────────────
 
-    fn parse(text: &str) -> Result<f64, VmRustFnError> {
-        text.parse::<f64>().map_err(|e| {
+    fn parse(text: &bex_str::BexStr) -> Result<f64, VmRustFnError> {
+        let s = text.as_str();
+        s.parse::<f64>().map_err(|e| {
             VmBamlError::ParseError {
-                message: format!("float.parse: cannot parse {text:?} as float: {e}"),
+                message: format!("float.parse: cannot parse {s:?} as float: {e}"),
             }
             .into()
         })

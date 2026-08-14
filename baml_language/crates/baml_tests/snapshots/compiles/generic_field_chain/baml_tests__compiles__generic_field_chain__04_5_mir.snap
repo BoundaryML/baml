@@ -2,105 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Box.from_json(j: baml.json.json) -> Box<void> {
-    // Locals:
-    let _0: Box<void> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: void
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(#0);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Box<TypeArgRef(0)> { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.User.from_json(j: baml.json.json) -> User {
-    // Locals:
-    let _0: User // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: int
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "age") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(int);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.User { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.test_generic_capture(box: Box<User>) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Box<User> // box // param [captured]
-    let _2: () -> string throws never // get_name
-    let _3: () -> string throws never
-
-    bb0: {
-        _2 = make_closure lambda[0](copy _1);
-        _3 = copy _2;
-        _0 = call copy _3() -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(test_generic_capture, 0)>() -> null {
-    // Locals:
-    let _0: null // _0 // return
-
-    bb0: {
-        _0 = copy capture[0].0.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_generic_chain(box: Box<User>) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -131,59 +32,35 @@ fn user.test_nested_generic_chain(box: Box<Box<User>>) -> string {
     }
 }
 
-fn user.User.to_json(self: User) -> baml.json.json {
+fn user.test_generic_capture(box: Box<User>) -> string {
     // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: User // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: User
-    let _5: baml.json.json
-    let _6: int
-    let _7: User
+    let _0: string // _0 // return
+    let _1: Box<User> // box // param [captured]
+    let _2: () -> string throws never // get_name
+    let _3: () -> string throws never
 
     bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "name": copy _2, const "age": copy _5 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
 
-fn user.Box.to_json(self: Box) -> baml.json.json {
+// lambda[0]
+fn .<lambda(test_generic_capture, 0)>() -> string {
     // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Box // self // param
-    let _2: baml.json.json
-    let _3: void
-    let _4: Box
+    let _0: string // _0 // return
 
     bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.json.to_json(copy _3) -> [bb1];
+        _0 = copy capture[0].0.0;
+        goto -> bb1;
     }
 
     bb1: {
-        _0 = { const "value": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

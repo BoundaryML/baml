@@ -3,8 +3,8 @@ class Input {
 }
 
 function Foo(input: Input[]) -> string {
-  client "openai/gpt-4o-mini"
-  prompt #"Tell me a haiku."#
+  client: "openai/gpt-4o-mini"
+  prompt: `Tell me a haiku.`
 }
 
 test Foo {
@@ -16,34 +16,13 @@ test Foo {
   ]
 }
 
-// error: Error validating: Invalid array syntax detected.
-//   -->  tests/bad_syntax.baml:15
-//    |
-// 14 |       str_field "hello"
-// 15 |     },,
-// 16 |   ]
-//    |
-// error: Property not known: "input". Did you mean one of these: "args", "functions"?
-//   -->  tests/bad_syntax.baml:12
-//    |
-// 11 |   functions [Foo]
-// 12 |   input [
-//    |
-// error: Error validating: Missing `args` property
-//   -->  tests/bad_syntax.baml:10
-//    |
-//  9 |
-// 10 | test Foo {
-//    |
-
 //----
 //- diagnostics
-// Error: Expected identifier, found ','
-//     ╭─[ misc_bad_syntax.baml:15:7 ]
-//     │
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_bad_syntax.baml:15:7]
 //  15 │     },,
-//     │       ┬  
-//     │       ╰── Expected identifier, found ','
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
+//     ·       ┬
+//     ·       ╰── expected `identifier`, found `','`
+//     ╰────

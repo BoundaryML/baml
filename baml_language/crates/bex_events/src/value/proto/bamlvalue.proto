@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+package baml.value.v1;
+
+enum ValueCodec {
+  VALUE_CODEC_UNSPECIFIED = 0;
+  VALUE_CODEC_BAML_OUTBOUND_VALUE = 1;
+}
+
+enum ValueAvailability {
+  VALUE_AVAILABILITY_UNSPECIFIED = 0;
+  VALUE_AVAILABILITY_PENDING = 1;
+  VALUE_AVAILABILITY_AVAILABLE = 2;
+  VALUE_AVAILABILITY_MISSING = 3;
+  VALUE_AVAILABILITY_OMITTED = 4;
+  VALUE_AVAILABILITY_LOST = 5;
+}
+
+enum ValueCaptureKind {
+  VALUE_CAPTURE_KIND_UNSPECIFIED = 0;
+  VALUE_CAPTURE_KIND_ROOT_INPUT = 1;
+  VALUE_CAPTURE_KIND_ROOT_OUTPUT = 2;
+  VALUE_CAPTURE_KIND_ROOT_ERROR = 3;
+  VALUE_CAPTURE_KIND_LOG_BODY = 4;
+  VALUE_CAPTURE_KIND_CALL_OUTPUT = 5;
+  VALUE_CAPTURE_KIND_CALL_ERROR = 6;
+  VALUE_CAPTURE_KIND_CALL_INPUT = 7;
+}
+
+enum CaptureLossKind {
+  CAPTURE_LOSS_KIND_UNSPECIFIED = 0;
+  CAPTURE_LOSS_KIND_VALUE = 1;
+  CAPTURE_LOSS_KIND_LOG = 2;
+}
+
+enum CaptureLossReason {
+  CAPTURE_LOSS_REASON_UNSPECIFIED = 0;
+  CAPTURE_LOSS_REASON_QUEUE_FULL = 1;
+}
+
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_PENDING = 1;
+  RUN_STATUS_RUNNING = 2;
+  RUN_STATUS_WAITING_FOR_INPUT = 3;
+  RUN_STATUS_WAITING_FOR_ENV = 4;
+  RUN_STATUS_CANCELLING = 5;
+  RUN_STATUS_SUCCEEDED = 6;
+  RUN_STATUS_FAILED = 7;
+  RUN_STATUS_CANCELLED = 8;
+  RUN_STATUS_PANICKED = 9;
+}
+
+message ValueFileHeaderV1 {
+  bytes boundary_id = 1;
+}
+
+message ValueMetadataV1 {
+  string id = 1;
+  ValueCodec codec = 2;
+  ValueAvailability availability = 3;
+  optional uint64 original_size_bytes = 4;
+  optional uint64 retained_size_bytes = 5;
+  optional string diagnostic = 6;
+}
+
+message BlobRefV1 {
+  string algorithm = 1;
+  string digest = 2;
+  uint64 size_bytes = 3;
+}
+
+message TraceCallKeyV1 {
+  bytes process_id = 1;
+  uint64 engine_id = 2;
+  uint64 thread_id = 3;
+  uint64 call_id = 4;
+}
+
+message SourceLocationV1 {
+  optional string file_path = 1;
+  optional uint64 file_id = 2;
+  uint32 line = 3;
+  uint32 column = 4;
+  optional uint32 end_line = 5;
+  optional uint32 end_column = 6;
+  optional uint32 start_offset = 7;
+  optional uint32 end_offset = 8;
+}
+
+message ValueCaptureV1 {
+  ValueCaptureKind kind = 1;
+  TraceCallKeyV1 call = 2;
+}
+
+message LogEventV1 {
+  TraceCallKeyV1 call = 1;
+  optional string level = 2;
+  SourceLocationV1 source = 3;
+  uint64 timestamp_ms = 4;
+  optional string message_preview = 5;
+}
+
+message CaptureLossV1 {
+  CaptureLossKind kind = 1;
+  CaptureLossReason reason = 2;
+  uint64 skipped_count = 3;
+  optional TraceCallKeyV1 call = 4;
+  optional string message = 5;
+  uint64 timestamp_ms = 6;
+}
+
+message TimeAnchorV1 {
+  uint64 epoch_created_at_ms = 1;
+  uint64 trace_zero_ns = 2;
+}
+
+message FunctionRunTargetV1 {
+  string function_name = 1;
+}
+
+message TestRunTargetV1 {
+  uint64 generation = 1;
+  string test_name = 2;
+}
+
+message PreviewRunTargetV1 {
+  string parent_function_name = 1;
+  string helper = 2;
+}
+
+message CompanionRunTargetV1 {
+  optional bytes parent_boundary_id = 1;
+  string function_name = 2;
+}
+
+message InternalRunTargetV1 {
+  string name = 1;
+}
+
+message RunTargetV1 {
+  oneof target {
+    FunctionRunTargetV1 function = 1;
+    TestRunTargetV1 test = 2;
+    PreviewRunTargetV1 preview = 3;
+    CompanionRunTargetV1 companion = 4;
+    InternalRunTargetV1 internal = 5;
+  }
+}
+
+message RunStartedV1 {
+  string project_id = 1;
+  uint64 project_generation = 2;
+  RunTargetV1 target = 3;
+  optional string args_summary = 4;
+  optional string options_summary = 5;
+  uint64 created_at_ms = 6;
+  TimeAnchorV1 time_anchor = 7;
+}
+
+message RunErrorV1 {
+  string class = 1;
+  string message = 2;
+  optional string details = 3;
+  ValueMetadataV1 value_ref = 4;
+}
+
+message RunCancellationV1 {
+  uint64 requested_at_ms = 1;
+  optional uint64 completed_at_ms = 2;
+  optional string reason = 3;
+}
+
+message RunCompletedV1 {
+  RunStatus status = 1;
+  uint64 completed_at_ms = 2;
+  optional string renderer_hint = 3;
+  RunErrorV1 error = 4;
+  RunCancellationV1 cancellation = 5;
+  ValueMetadataV1 result_value_ref = 6;
+}
+
+message ValueRecordV1 {
+  ValueMetadataV1 metadata = 1;
+  bytes body = 2;
+  ValueCaptureV1 capture = 3;
+  RunStartedV1 run_started = 10;
+  RunCompletedV1 run_completed = 11;
+  LogEventV1 log_event = 12;
+  CaptureLossV1 capture_loss = 13;
+  BlobRefV1 blob = 14;
+}

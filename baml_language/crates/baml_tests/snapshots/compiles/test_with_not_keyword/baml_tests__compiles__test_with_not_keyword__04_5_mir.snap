@@ -1,17 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25115
 ---
 === MIR2 ===
-fn user.$init_test_32(registry: testing.TestCollector) -> null {
+fn user.$init_test_main(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: () -> void throws unknown
+    let _3: () -> void throws never
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test(copy _1, const "with as field", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root", const "with as field", copy _3, const null) -> [bb1];
     }
 
     bb1: {
@@ -25,9 +26,9 @@ fn user.$init_test_32(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_32, 0)>() -> null {
+fn .<lambda($init_test_main, 0)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: HasWith // h
     let _2: int
 
@@ -42,60 +43,6 @@ fn .<lambda($init_test_32, 0)>() -> null {
     }
 }
 
-fn user.Foo.from_json(j: baml.json.json) -> Foo {
-    // Locals:
-    let _0: Foo // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "x") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Foo { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.HasWith.from_json(j: baml.json.json) -> HasWith {
-    // Locals:
-    let _0: HasWith // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "with") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.HasWith { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.make_foo() -> Foo {
     // Locals:
     let _0: Foo // _0 // return
@@ -106,54 +53,6 @@ fn user.make_foo() -> Foo {
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.HasWith.to_json(self: HasWith) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: HasWith // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: HasWith
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "with": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.Foo.to_json(self: Foo) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Foo // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: Foo
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "x": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

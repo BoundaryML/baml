@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6132
 ---
 function user.CatchAllTyped(x: int) -> string {
     load_var x
@@ -18,7 +19,7 @@ function user.CatchAllTyped(x: int) -> string {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const "caught int"
@@ -103,7 +104,7 @@ function user.PartialCatch(x: int) -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const "caught string"

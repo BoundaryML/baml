@@ -8,7 +8,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "BAML FFI bindings with runtime dynamic library loading"
+description = "BAML v0 — Rust FFI bindings"
 readme = "README.md"
 keywords = ["baml", "boundaryml", "boundary", "llm", "programming-language"]
 categories = ["external-ffi-bindings"]

@@ -18,6 +18,15 @@ export interface ResultDisplayProps {
   customRenderers?: Record<string, FC<ResultRendererProps>>;
 }
 
-export const ResultDisplay: FC<ResultDisplayProps> = ({ result, customRenderers }) => {
-  return <ValueRenderer value={result} customRenderers={customRenderers} displayMode="expanded" />;
+export const ResultDisplay: FC<ResultDisplayProps> = ({
+  result,
+  customRenderers,
+}) => {
+  return (
+    <ValueRenderer
+      value={result}
+      customRenderers={customRenderers}
+      displayMode="expanded"
+    />
+  );
 };

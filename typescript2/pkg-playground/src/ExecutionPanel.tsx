@@ -9,44 +9,115 @@
  * VS Code webview without an embedded Monaco editor).
  */
 
-import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { encodeCallArgs } from '@b/pkg-proto';
+/** biome-ignore-all lint/style/useFilenamingConvention: preserve the public component filename */
 import type { BamlJsValue } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Square } from 'lucide-react';
-import { Button } from './components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
-import { Input } from './components/ui/input';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip';
-import { CodeBlock } from './components/ui/code-block';
-import { ToggleGroup } from './components/ui/toggle-group';
-import { cn } from './lib/utils';
+import { encodeRunArgs } from '@b/pkg-proto';
+import {
+  KeyRound,
+  Loader2,
+  PanelLeft,
+  Play,
+  Settings,
+  Square,
+} from 'lucide-react';
+import type { ChangeEvent, FC } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArgsForm } from './ArgsForm';
+import {
+  isPlainObject,
+  reconcileArgs,
+  typeLookupFrom,
+} from './args-form-model';
+import { CapturedValueCard } from './CapturedValueCard';
 import { ApiKeysDialog } from './components/ApiKeysDialog';
-import { useEnvVars } from './envAtoms';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
 import { PromptStats } from './components/PromptStats';
-import type { RuntimePort } from './runtime-port';
-import type {
-  ControlFlowGraph,
-  CursorContext,
-  DiagnosticEntry,
-  FetchLogEntry,
-  FunctionInfo,
-  ProjectUpdate,
-  RunEntry,
-  WorkerOutMessage,
-} from './worker-protocol';
-import type { ResultRendererProps } from './result-renderers';
-import { ResultDisplay } from './ResultDisplay';
-import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
-import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestCurl';
-import { GraphView } from './graph/GraphView';
+import { Button } from './components/ui/button';
+import { CodeBlock } from './components/ui/code-block';
+import { Input } from './components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { ToggleGroup } from './components/ui/toggle-group';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './components/ui/tooltip';
+import {
+  selectDefaultFunctionName,
+  selectMainFunctionName,
+} from './default-function-selection';
+import { ExecutionProfileView } from './ExecutionProfileView';
+import { useEnvVars } from './envAtoms';
+import type { ExecutionStoreSnapshot } from './execution-store';
+import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { FunctionSidebar } from './FunctionSidebar';
-import { EventValueDisplay } from './EventValueDisplay';
+import { setGatewayEnabled } from './gateway';
+import { GraphView } from './graph/GraphView';
+import { findLatestGraphRunSnapshot } from './graph-run-selection';
+import { cn } from './lib/utils';
+import { BOUNDARY_PROXY_URL_KEY, getProxyEnvVarConfig } from './proxy-config';
+import { ResultDisplay } from './ResultDisplay';
+import { RunOutputTerminal } from './RunOutputTerminal';
+import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
+import type { ResultRendererProps } from './result-renderers';
+import {
+  applyProjectUpdateToGating,
+  isRunGated,
+  markProjectNotReady,
+  NO_NOT_READY_PROJECTS,
+  type NotReadyProjects,
+} from './run-gating';
+import {
+  createRunStoreClient,
+  isProjectNotReadyError,
+} from './run-store-client';
+import {
+  decodeRunResultValue,
+  type RunStoreDisplayRun,
+  type RunTraceLog,
+  runToDisplayRun,
+  runToTraceRows,
+} from './run-store-projections';
+import type { RuntimePort } from './runtime-port';
+import {
+  parseSerializedTestTreeJson,
+  type SerializedTestDef,
+  type SerializedTestSet,
+} from './serialized-test-tree';
+import { companionFunctionName } from './shared/companion-functions';
+import { collectLatestTestRunResults } from './test-run-results';
+import { ValueRenderer } from './ValueRenderer';
+import type { ValueBodyCache } from './value-body-cache';
+import { createValueBodyCache } from './value-body-cache';
+import {
+  type BoundaryId,
+  type ControlFlowGraph,
+  type CursorContext,
+  type FetchLogEntry,
+  type FunctionInfo,
+  type ProjectUpdate,
+  previewTestKey,
+  type Run,
+  type RunStatus,
+  type SourceNavigationTarget,
+  type TestInfo,
+  type WorkerOutMessage,
+} from './worker-protocol';
 
 registerBuiltinResultRenderers();
+
+const LOGS_PANEL_DEFAULT_HEIGHT = 180;
+const LOGS_PANEL_MIN_HEIGHT = 40;
+const LOGS_PANEL_MAX_HEIGHT = 620;
+
+const IS_MAC =
+  typeof navigator !== 'undefined' && /Mac|iP/.test(navigator.platform);
+/** Shown on the Run button; the actual binding is the panel-scoped keydown
+ *  handler on the Tabs root. */
+const RUN_SHORTCUT_HINT = IS_MAC ? '⌘↵' : 'Ctrl+↵';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,13 +132,131 @@ function tryFormatJson(str: string): string {
   }
 }
 
-function stringifyResult(value: BamlJsValue): string {
-  return JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
+function isTerminalRunStatus(status: RunStatus): boolean {
+  return (
+    status === 'succeeded' ||
+    status === 'failed' ||
+    status === 'cancelled' ||
+    status === 'panicked'
+  );
 }
 
-function formatBuildTime(epochSecs: number): { absolute: string; relative: string } {
+type RunScopedEnvRequest = { boundaryId: BoundaryId; envRequestId: string };
+type PendingEnvDialogRequest = {
+  variable: string;
+  runScoped: RunScopedEnvRequest | null;
+};
+
+function findPendingEnvRequest(
+  runs: Run[],
+  requestId: string,
+  variable: string,
+): RunScopedEnvRequest | null {
+  for (const run of runs) {
+    for (const payload of run.payloads) {
+      const kind = payload.kind;
+      if (
+        kind.type === 'envRequested' &&
+        kind.requestId === requestId &&
+        kind.key === variable &&
+        kind.state === 'pending'
+      ) {
+        return { boundaryId: run.boundaryId, envRequestId: kind.requestId };
+      }
+    }
+  }
+  return null;
+}
+
+function stringifyResult(value: BamlJsValue): string {
+  return JSON.stringify(
+    value,
+    (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+    2,
+  );
+}
+
+type PendingTestTarget = {
+  project: string;
+  kind: 'test' | 'testset';
+  name: string;
+};
+
+function testTargetMatches(candidate: string, target: string): boolean {
+  return (
+    candidate === target ||
+    candidate.endsWith(`/${target}`) ||
+    candidate.split('/').pop() === target
+  );
+}
+
+function isExpandedTestSet(def: SerializedTestDef): def is SerializedTestSet {
+  return Array.isArray((def as { items?: unknown }).items);
+}
+
+function findTestNameInTree(
+  items: SerializedTestDef[],
+  target: string,
+): string | null {
+  for (const item of items) {
+    if ('type' in item && item.type === 'test') {
+      if (testTargetMatches(item.name, target)) return item.name;
+      continue;
+    }
+    if (isExpandedTestSet(item)) {
+      const found = findTestNameInTree(item.items, target);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function collectAllTestNames(item: SerializedTestDef): string[] {
+  if ('type' in item && item.type === 'test') return [item.name];
+  if (!isExpandedTestSet(item)) return [];
+  return item.items.flatMap(collectAllTestNames);
+}
+
+function collectTestNamesInSet(
+  items: SerializedTestDef[],
+  target: string,
+): string[] | 'pending' | null {
+  for (const item of items) {
+    if ('type' in item && item.type === 'lazyTestSet') {
+      if (testTargetMatches(item.name, target)) return 'pending';
+      continue;
+    }
+    if (!isExpandedTestSet(item)) continue;
+    if (testTargetMatches(item.name, target)) return collectAllTestNames(item);
+    const nested = collectTestNamesInSet(item.items, target);
+    if (nested !== null) return nested;
+  }
+  return null;
+}
+
+function hasLazyTestSets(items: SerializedTestDef[]): boolean {
+  for (const item of items) {
+    if ('type' in item && item.type === 'lazyTestSet') return true;
+    if (isExpandedTestSet(item) && hasLazyTestSets(item.items)) return true;
+  }
+  return false;
+}
+
+function isInternalFunction(fn: FunctionInfo): boolean {
+  return fn.origin != null && fn.origin !== 'userDefined';
+}
+
+function formatBuildTime(epochSecs: number): {
+  absolute: string;
+  relative: string;
+} {
   const d = new Date(epochSecs * 1000);
-  const absolute = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const absolute = d.toLocaleTimeString([], {
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    second: '2-digit',
+  });
   const delta = Math.floor(Date.now() / 1000) - epochSecs;
   let relative: string;
   if (delta < 60) relative = `${delta}s ago`;
@@ -95,79 +284,199 @@ export interface ExecutionPanelProps {
   /** Called when user clicks the WASM panic banner to reload the worker. */
   onReload?: () => void;
   /** Called when user clicks an event with source location to jump to that line. */
-  onNavigateToSource?: (source: { fileId: number; line: number; column: number }) => void;
+  onNavigateToSource?: (source: SourceNavigationTarget) => void;
+  /** Called whenever the selected project changes. */
+  onSelectedProjectChange?: (project: string | null) => void;
+  /** Tab shown on mount (default 'run'). Embedded views often want 'graph'. */
+  initialTab?: 'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl';
+  /** Auto-select this function once the project reports it (applied once). */
+  initialFunctionName?: string;
+  /** Auto-run this test once the test tree reports it (applied once). */
+  initialTestName?: string;
+  /** Auto-run tests under this testset once the test tree reports it (applied once). */
+  initialTestsetName?: string;
+  /** Seed for the args JSON editor (default '{}'). */
+  initialArgsJson?: string;
+  /** Per-function seeds for the args editor, keyed by bare or fully-qualified
+      function name. Applied when a function is selected; args the user typed
+      for a function this session take precedence over its seed. */
+  argsByFunction?: Record<string, string>;
+  /** Whether the function/tests sidebar starts open (default true). */
+  initialSidebarOpen?: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// CollectionRunView — renders fetch logs from a collection/expansion RunEntry
+// RequestUrlLabel — for requests routed through the playground proxy, show the
+// original upstream URL (carried in the baml-original-url header) and note the
+// proxy it went through, e.g. "https://api.anthropic.com/v1/messages
+// (via https://proxy.promptfiddle.com)".
 // ---------------------------------------------------------------------------
 
-interface CollectionRunViewProps {
-  run: RunEntry;
+const ORIGINAL_URL_HEADER = 'baml-original-url';
+
+function findHeaderValue(
+  headers: Record<string, string> | null | undefined,
+  name: string,
+): string | undefined {
+  if (!headers) return undefined;
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === lower) return headers[key];
+  }
+  return undefined;
+}
+
+const RequestUrlLabel: FC<{
+  url: string;
+  requestHeaders: Record<string, string> | null | undefined;
+}> = ({ url, requestHeaders }) => {
+  const original = findHeaderValue(requestHeaders, ORIGINAL_URL_HEADER);
+  let display = url;
+  let via: string | null = null;
+  // Only de-proxy when the original URL came through unredacted.
+  if (original && original !== '<redacted>') {
+    try {
+      const parsed = new URL(url);
+      display = `${original.replace(/\/+$/, '')}${parsed.pathname}${parsed.search}`;
+      via = parsed.origin;
+    } catch {
+      /* malformed URL — fall back to showing it verbatim */
+    }
+  }
+  return (
+    <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">
+      {display}
+      {via && <span className="text-vsc-text-faint"> (via {via})</span>}
+    </span>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// CollectionDebugView — renders project/test discovery diagnostics without
+// modeling discovery as a playground execution run.
+// ---------------------------------------------------------------------------
+
+interface CollectionDebugState {
+  id: number;
+  fetchLogs: FetchLogEntry[];
+  error: string | null;
+  status: 'success' | 'error';
+}
+
+interface CollectionDebugViewProps {
+  state: CollectionDebugState;
   expandedLogId: number | null;
   setExpandedLogId: (id: number | null) => void;
-  resultRenderers?: Record<string, FC<ResultRendererProps>>;
 }
 
-const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId, resultRenderers }) => {
-  const hasError = run.status === 'error';
-  const errorMessage = run.error || 'Unknown expansion error';
+const CollectionDebugView: FC<CollectionDebugViewProps> = ({
+  state,
+  expandedLogId,
+  setExpandedLogId,
+}) => {
+  const hasError = state.status === 'error';
+  const errorMessage = state.error || 'Unknown expansion error';
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border shrink-0">
-        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', hasError ? 'bg-vsc-red' : 'bg-vsc-green')} />
-        <span className="text-vsc-accent font-semibold text-[11px]">$collect_tests</span>
-        <span className="text-vsc-text-faint text-[10px] flex-1">{hasError ? 'expansion error' : 'collection fetch logs'}</span>
-        <span className="text-vsc-text-faint text-[10px]">{run.fetchLogs.length} request{run.fetchLogs.length !== 1 ? 's' : ''}</span>
+        <span
+          className={cn(
+            'w-1.5 h-1.5 rounded-full shrink-0',
+            hasError ? 'bg-vsc-red' : 'bg-vsc-green',
+          )}
+        />
+        <span className="text-vsc-accent font-semibold text-[11px]">
+          Test collection
+        </span>
+        <span className="text-vsc-text-faint text-[10px] flex-1">
+          {hasError ? 'expansion error' : 'collection fetch logs'}
+        </span>
+        <span className="text-vsc-text-faint text-[10px]">
+          {state.fetchLogs.length} request
+          {state.fetchLogs.length !== 1 ? 's' : ''}
+        </span>
       </div>
       {/* Error message */}
       {hasError && (
         <div className="px-2.5 py-2 bg-vsc-surface border-b border-vsc-border">
-          <div className="text-[10px] font-semibold text-red-500 mb-1 uppercase tracking-wide">Expansion Error</div>
-          <pre className="text-[11px] text-vsc-text whitespace-pre-wrap font-vsc-mono bg-vsc-bg p-2 rounded border border-vsc-border overflow-auto max-h-[300px]">{errorMessage}</pre>
+          <div className="text-[10px] font-semibold text-red-500 mb-1 uppercase tracking-wide">
+            Expansion Error
+          </div>
+          <pre className="text-[11px] text-vsc-text whitespace-pre-wrap font-vsc-mono bg-vsc-bg p-2 rounded border border-vsc-border overflow-auto max-h-[300px]">
+            {errorMessage}
+          </pre>
         </div>
       )}
       {/* Fetch logs */}
       <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
-        {run.fetchLogs.length === 0 && !hasError && (
+        {state.fetchLogs.length === 0 && !hasError && (
           <div className="p-5 text-center text-vsc-text-faint text-[11px]">
             No fetch logs — collection may not have made any HTTP requests
           </div>
         )}
-        {run.fetchLogs.map((log) => {
+        {state.fetchLogs.map((log) => {
           const isExp = expandedLogId === log.id;
-          const statusColorCls = log.status === null ? 'text-vsc-text-muted'
-            : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
-            : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
+          const statusColorCls =
+            log.status === null
+              ? 'text-vsc-text-muted'
+              : log.status >= 200 && log.status < 300
+                ? 'text-vsc-green'
+                : log.status === 0
+                  ? 'text-vsc-red'
+                  : 'text-vsc-yellow';
           return (
             <div key={`cl-${log.id}`}>
-              <div
+              <button
+                className="flex w-full items-center gap-1.5 border-0 border-b border-vsc-border-subtle bg-transparent py-0.5 pr-2.5 pl-[22px] text-left cursor-pointer"
                 onClick={() => setExpandedLogId(isExp ? null : log.id)}
-                className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
+                type="button"
               >
-                <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
-                <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
-                <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
-                {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
-                <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
-              </div>
+                <span className={`${statusColorCls} font-semibold text-[11px]`}>
+                  {log.status ?? '...'}
+                </span>
+                <span className="text-vsc-text-faint text-[10px]">
+                  {log.method}
+                </span>
+                <RequestUrlLabel
+                  requestHeaders={log.requestHeaders}
+                  url={log.url}
+                />
+                {log.durationMs != null && (
+                  <span className="text-vsc-text-faint text-[10px]">
+                    {log.durationMs}ms
+                  </span>
+                )}
+                <span className="text-vsc-text-faint text-[9px]">
+                  {isExp ? '\u25B4' : '\u25BE'}
+                </span>
+              </button>
               {isExp && (
                 <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
-                  {log.error && <CodeBlock variant="error">{log.error}</CodeBlock>}
+                  {log.error && (
+                    <CodeBlock variant="error">{log.error}</CodeBlock>
+                  )}
                   <div>
-                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
-                    <CodeBlock>{JSON.stringify(log.requestHeaders, null, 2)}</CodeBlock>
+                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                      Request Headers
+                    </div>
+                    <CodeBlock>
+                      {JSON.stringify(log.requestHeaders, null, 2)}
+                    </CodeBlock>
                   </div>
                   {log.requestBody && (
                     <div>
-                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
+                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                        Request Body
+                      </div>
                       <CodeBlock>{tryFormatJson(log.requestBody)}</CodeBlock>
                     </div>
                   )}
                   {log.responseBody != null && (
                     <div>
-                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
+                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                        Response Body
+                      </div>
                       <CodeBlock>{tryFormatJson(log.responseBody)}</CodeBlock>
                     </div>
                   )}
@@ -176,66 +485,199 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
             </div>
           );
         })}
-        {/* Runtime events */}
-        {run.runtimeEvents.length > 0 && (
-          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
-            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
-              Events ({run.runtimeEvents.length})
+      </div>
+    </div>
+  );
+};
+
+const traceStatusClass = (status: Run['calls'][number]['status']): string => {
+  switch (status) {
+    case 'ok':
+      return 'bg-vsc-green';
+    case 'errored':
+      return 'bg-vsc-red';
+    case 'cancelled':
+    case 'exited':
+      return 'bg-vsc-yellow';
+    case 'running':
+      return 'bg-vsc-text-muted';
+    default:
+      status satisfies never;
+      return 'bg-vsc-text-muted';
+  }
+};
+
+function formatTraceMs(value: number | null): string {
+  if (value == null) return '';
+  if (value < 1) return `${value.toFixed(2)}ms`;
+  if (value < 100) return `${value.toFixed(1)}ms`;
+  return `${Math.round(value)}ms`;
+}
+
+function traceLogLevelClass(level: string | null): string {
+  switch (level) {
+    case 'error':
+      return 'text-vsc-red';
+    case 'warn':
+      return 'text-vsc-yellow';
+    case 'debug':
+      return 'text-vsc-text-muted';
+    case 'info':
+    case null:
+      return 'text-vsc-accent';
+    default:
+      return 'text-vsc-text-muted';
+  }
+}
+
+function traceValueStateLabel(value: {
+  state: RunTraceLog['state'];
+}): string | null {
+  switch (value.state) {
+    case 'available':
+      return null;
+    case 'loading':
+      return 'loading';
+    case 'pending':
+      return 'pending';
+    case 'omitted':
+      return 'omitted';
+    case 'truncated':
+      return 'truncated';
+    case 'missing':
+      return 'missing';
+    case 'lost':
+      return 'lost';
+    case 'error':
+      return 'error';
+    case 'unavailable':
+      return 'unavailable';
+    default:
+      value.state satisfies never;
+      return null;
+  }
+}
+
+const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
+  const stateLabel = traceValueStateLabel(log);
+  return (
+    <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span
+          className={cn(
+            'font-vsc-mono text-[10px] uppercase',
+            traceLogLevelClass(log.level),
+          )}
+        >
+          {log.level ?? 'log'}
+        </span>
+        {log.sourceLine != null && (
+          <span className="text-vsc-text-faint text-[10px]">
+            :{log.sourceLine}
+          </span>
+        )}
+        <span className="min-w-0 truncate text-vsc-text-muted text-[11px]">
+          {log.message}
+        </span>
+        {stateLabel && (
+          <span className="ml-auto shrink-0 rounded border border-vsc-border-subtle px-1 py-0.5 text-[10px] text-vsc-text-faint">
+            {stateLabel}
+          </span>
+        )}
+      </div>
+      {log.value !== null && (
+        <div className="mt-1 overflow-x-auto">
+          <ValueRenderer displayMode="inline" value={log.value} />
+        </div>
+      )}
+      {log.diagnostic && (
+        <div className="mt-1 text-[10px] text-vsc-text-faint">
+          {log.diagnostic}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TraceTimelineView: FC<{
+  run: Run | undefined;
+  valueBodyCache: ValueBodyCache;
+}> = ({ run, valueBodyCache }) => {
+  const rows = runToTraceRows(run, valueBodyCache);
+  if (rows.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
+        No trace yet
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-auto bg-vsc-bg font-vsc-mono text-xs">
+      <div className="min-w-[560px] p-2">
+        {rows.map((row) => (
+          <div
+            className="grid grid-cols-[72px_minmax(200px,1fr)_80px] gap-2 items-center border-b border-vsc-border-subtle py-1"
+            key={row.id}
+          >
+            <div className="text-[10px] text-vsc-text-faint text-right">
+              {formatTraceMs(row.offsetMs)}
             </div>
-            <div className="flex flex-col gap-0.5">
-              {run.runtimeEvents.map((evt, evtIdx) => {
-                const kind = evt.event;
-                if (!kind) return null;
-
-                let label: string;
-                let payload: ReactNode;
-                let colorCls: string;
-
-                switch (kind.$case) {
-                  case 'functionStart':
-                    label = 'START';
-                    payload = kind.functionStart.name;
-                    colorCls = 'text-vsc-green';
-                    break;
-                  case 'functionEnd':
-                    label = 'END';
-                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
-                    colorCls = 'text-vsc-text-muted';
-                    break;
-                  case 'log': {
-                    const lvl = kind.log.level;
-                    label = lvl;
-                    payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
-                    colorCls = lvl === 'error' ? 'text-vsc-red'
-                      : lvl === 'warn' ? 'text-vsc-yellow'
-                      : lvl === 'debug' ? 'text-vsc-text-muted'
-                      : 'text-vsc-blue';
-                    break;
-                  }
-                  case 'custom':
-                    label = 'EVENT';
-                    payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
-                    colorCls = 'text-vsc-purple';
-                    break;
-                  case 'setTags':
-                    label = 'TAGS';
-                    payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
-                    colorCls = 'text-vsc-text-muted';
-                    break;
-                  default:
-                    return null;
-                }
-
-                return (
-                  <div key={evtIdx} className="flex items-start gap-1.5 text-[11px]">
-                    <span className={`${colorCls} font-semibold uppercase shrink-0`}>{label}</span>
-                    <span className="text-vsc-text break-all">{payload}</span>
-                  </div>
-                );
-              })}
+            <div className="min-w-0">
+              <div
+                className="flex items-center gap-1.5 min-w-0"
+                style={{ paddingLeft: Math.min(row.depth, 12) * 12 }}
+              >
+                <span
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full shrink-0',
+                    traceStatusClass(row.status),
+                  )}
+                />
+                <span className="text-vsc-text truncate">
+                  {row.functionName}
+                </span>
+                {row.sourceLine != null && (
+                  <span className="text-vsc-text-faint text-[10px] shrink-0">
+                    :{row.sourceLine}
+                  </span>
+                )}
+              </div>
+              <div className="relative mt-1 h-1.5 rounded bg-vsc-surface overflow-hidden">
+                <div
+                  className="absolute top-0 bottom-0 rounded bg-vsc-accent"
+                  style={{
+                    left: `${row.spanLeftPct}%`,
+                    width: `${row.spanWidthPct}%`,
+                  }}
+                />
+              </div>
+              {row.logs.length > 0 && (
+                <div
+                  className="mt-1.5 space-y-1"
+                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
+                >
+                  {row.logs.map((log) => (
+                    <TraceLogView key={log.id} log={log} />
+                  ))}
+                </div>
+              )}
+              {row.callValues.length > 0 && (
+                <div
+                  className="mt-1.5 space-y-1"
+                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
+                >
+                  {row.callValues.map((value) => (
+                    <CapturedValueCard compact key={value.id} value={value} />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="text-[10px] text-vsc-text-faint">
+              {formatTraceMs(row.durationMs)}
             </div>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
@@ -245,34 +687,176 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({
+  port,
+  connectionVersion,
+  resultRenderers,
+  onReload,
+  onNavigateToSource,
+  onSelectedProjectChange,
+  initialTab,
+  initialFunctionName,
+  initialTestName,
+  initialTestsetName,
+  initialArgsJson,
+  argsByFunction,
+  initialSidebarOpen = true,
+}) => {
+  const runStoreClient = useMemo(() => createRunStoreClient(port), [port]);
+  const executionStore = useMemo(
+    () => createExecutionStore(runStoreClient),
+    [runStoreClient],
+  );
+  const valueBodyCache = useMemo(
+    () => createValueBodyCache(runStoreClient),
+    [runStoreClient],
+  );
+  const pendingExecutionStoreDisposalsRef = useRef(
+    new Map<ExecutionStore, ReturnType<typeof setTimeout>>(),
+  );
+  const [executionSnapshot, setExecutionSnapshot] =
+    useState<ExecutionStoreSnapshot>(() => executionStore.getSnapshot());
+  const [valueBodyCacheVersion, setValueBodyCacheVersion] = useState(0);
+  const [argsJsonByBoundaryId, setArgsJsonByBoundaryId] = useState<
+    Record<string, string>
+  >({});
+
+  useEffect(() => {
+    setExecutionSnapshot(executionStore.getSnapshot());
+    return executionStore.subscribe(setExecutionSnapshot);
+  }, [executionStore]);
+
+  useEffect(
+    () =>
+      valueBodyCache.subscribe(() => {
+        setValueBodyCacheVersion((version) => version + 1);
+      }),
+    [valueBodyCache],
+  );
+
+  useEffect(() => {
+    const pendingDispose =
+      pendingExecutionStoreDisposalsRef.current.get(executionStore);
+    if (pendingDispose) {
+      clearTimeout(pendingDispose);
+      pendingExecutionStoreDisposalsRef.current.delete(executionStore);
+    }
+
+    return () => {
+      // React StrictMode runs effect cleanup+setup once after mount in dev.
+      // Defer disposal so the remount can keep the same render-created store.
+      const timer = setTimeout(() => {
+        pendingExecutionStoreDisposalsRef.current.delete(executionStore);
+        executionStore.dispose();
+      }, 0);
+      pendingExecutionStoreDisposalsRef.current.set(executionStore, timer);
+    };
+  }, [executionStore]);
+
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
-  const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
-  const [testTree, setTestTree] = useState<any>(null);
+  const [projectUpdates, setProjectUpdates] = useState<
+    Record<string, ProjectUpdate>
+  >({});
+  // Projects whose last run/preview was refused with `projectNotReady`. The
+  // fail-closed server rejects runs while a rebuild is pending; the UI
+  // renders that as the transient "Preparing current build…" state and clears
+  // it when the next current ProjectUpdate arrives.
+  const [notReadyProjects, setNotReadyProjects] = useState<NotReadyProjects>(
+    NO_NOT_READY_PROJECTS,
+  );
+  const [testTree, setTestTree] = useState<SerializedTestDef[] | null>(null);
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
-  const [testRunResults, setTestRunResults] = useState<Map<string, unknown>>(new Map());
+  const [testStartErrors, setTestStartErrors] = useState<Map<string, string>>(
+    new Map(),
+  );
   const [failedExpands, setFailedExpands] = useState<Set<string>>(new Set());
-  // Synthetic RunEntry that accumulates fetch logs from test collection/expansion operations
-  const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
+  const [collectionDebug, setCollectionDebug] =
+    useState<CollectionDebugState | null>(null);
   // When true, the main content area shows the collection run's fetch logs
   const [viewingCollection, setViewingCollection] = useState(false);
   // When true, the main content area shows the test run history panel
   const [viewingTestRun, setViewingTestRun] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [pendingTestTarget, setPendingTestTarget] =
+    useState<PendingTestTarget | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
-  const [argsJson, setArgsJson] = useState('{}');
+  const [selectedTestName, setSelectedTestName] = useState<string | null>(null);
+  const graphTargetName = selectedTestName ?? selectedFn;
+  const [selectedGraphRunId, setSelectedGraphRunId] =
+    useState<BoundaryId | null>(null);
+  const [selectedPreviewTestKey, setSelectedPreviewTestKey] = useState<
+    string | null
+  >(null);
+  const [showInternalFunctions, setShowInternalFunctions] = useState(false);
+  const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
+  // Args editor mode. 'form' renders the schema-driven ArgsForm when the
+  // selected function carries a param schema; 'raw' is the JSON input. With
+  // no schema (`FunctionInfo.params === undefined`) raw is the only mode.
+  const [argsMode, setArgsMode] = useState<'form' | 'raw'>('form');
+  // Args the user typed for each function this session — restored (over the
+  // `argsByFunction` seed) when they switch back to that function.
+  const typedArgsByFnRef = useRef<Record<string, string>>({});
 
-  // Run history — each entry is a complete invocation with its logs + result
-  const [runs, setRuns] = useState<RunEntry[]>([]);
+  const displayRuns = useMemo(
+    () =>
+      executionSnapshot.runs
+        .map((run) =>
+          runToDisplayRun(run, argsJsonByBoundaryId, valueBodyCache),
+        )
+        .filter((run): run is RunStoreDisplayRun => run != null),
+    [
+      executionSnapshot.runs,
+      argsJsonByBoundaryId,
+      valueBodyCache,
+      valueBodyCacheVersion,
+    ],
+  );
+  const functionRuns = useMemo(
+    () =>
+      displayRuns.filter(
+        (run) =>
+          run.kind === 'function' &&
+          (!selectedProject || run.projectId === selectedProject),
+      ),
+    [displayRuns, selectedProject],
+  );
+  const testRuns = useMemo(
+    () =>
+      displayRuns.filter(
+        (run) =>
+          run.kind === 'test' &&
+          (!selectedProject || run.projectId === selectedProject) &&
+          run.projectGeneration === generation,
+      ),
+    [displayRuns, generation, selectedProject],
+  );
+  const testRunResults = useMemo(
+    () => collectLatestTestRunResults(testRuns, testStartErrors),
+    [testRuns, testStartErrors],
+  );
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const promptContentRef = useRef<HTMLDivElement>(null);
 
-  const [controlFlowGraph, setControlFlowGraph] = useState<ControlFlowGraph | null>(null);
-  const [activeTab, setActiveTab] = useState<'run' | 'graph' | 'prompt' | 'curl'>('run');
-  const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(null);
+  const [controlFlowGraph, setControlFlowGraph] =
+    useState<ControlFlowGraph | null>(null);
+  // CFGs for EVERY function in the project (prefetched) — powers the
+  // workflow-root heuristic when a function is picked from the list.
+  const workflowCfgCacheRef = useRef<Map<string, ControlFlowGraph>>(new Map());
+  const workflowCfgResponsesRef = useRef<Map<string, ControlFlowGraph | null>>(
+    new Map(),
+  );
+  const cfgRequestSequenceRef = useRef(0);
+  const cfgRequestIdsRef = useRef<Map<string, number>>(new Map());
+  const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
+  const [activeTab, setActiveTab] = useState<
+    'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
+  >(initialTab ?? 'run');
+  const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(
+    null,
+  );
   const [cursorOffset, setCursorOffset] = useState<number | null>(null);
 
   // Workflow context: when a function belongs to multiple workflows,
@@ -281,41 +865,123 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     functionName: string;
     workflows: string[];
   } | null>(null);
-  const [promptPreviewResult, setPromptPreviewResult] = useState<BamlJsValue | null>(null);
-  const [curlPreviewResult, setCurlPreviewResult] = useState<BamlJsValue | null>(null);
-  const [promptPreviewError, setPromptPreviewError] = useState<string | null>(null);
+  const [promptPreviewResult, setPromptPreviewResult] =
+    useState<BamlJsValue | null>(null);
+  const [curlPreviewResult, setCurlPreviewResult] =
+    useState<BamlJsValue | null>(null);
+  const [promptPreviewError, setPromptPreviewError] = useState<string | null>(
+    null,
+  );
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen);
+  const [sidebarWidth, setSidebarWidth] = useState(168);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [logsPanelHeight, setLogsPanelHeight] = useState(
+    LOGS_PANEL_DEFAULT_HEIGHT,
+  );
   const resizingRef = useRef(false);
-  const [resultModes, setResultModes] = useState<Record<number, 'parsed' | 'raw'>>({});
+  const [resultModes, setResultModes] = useState<
+    Record<string, 'parsed' | 'raw'>
+  >({});
+  const [runValidationError, setRunValidationError] = useState<string | null>(
+    null,
+  );
 
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
   const showApiKeysDialogRef = useRef(false);
 
-  // Pending io.input() requests keyed by callId, each entry is a queue of { id, prompt }
-  const [pendingInputs, setPendingInputs] = useState<Map<number, Array<{ id: number; prompt: string | undefined }>>>(new Map());
-
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
-  const [wasmPanic, setWasmPanic] = useState<{ message: string; stack?: string } | null>(null);
-  const { envVars, knownRequiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey } = useEnvVars(port);
-  // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
-  const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
+  const [wasmPanic, setWasmPanic] = useState<{
+    message: string;
+    stack?: string;
+  } | null>(null);
+  const {
+    envVars,
+    knownRequiredKeys,
+    shellEnvVars,
+    shellOverriddenKeys,
+    shellDeletedKeys,
+    addEnvVar,
+    removeEnvVar,
+    importEnvVars,
+    addRequiredKey,
+    addShellEnvVar,
+    importShellEnvVars,
+    revertToShell,
+  } = useEnvVars(port);
+  // In-flight worker requests waiting for a value. Ref because it doesn't drive renders.
+  const pendingEnvRequestsRef = useRef<Map<number, PendingEnvDialogRequest>>(
+    new Map(),
+  );
 
   // Ref mirror of envVars so the message handler closure always sees current values.
   const envVarsRef = useRef(envVars);
-  useEffect(() => { envVarsRef.current = envVars; }, [envVars]);
+  useEffect(() => {
+    envVarsRef.current = envVars;
+  }, [envVars]);
+  const executionRunsRef = useRef(executionSnapshot.runs);
+  useEffect(() => {
+    executionRunsRef.current = executionSnapshot.runs;
+    for (const [id, pending] of pendingEnvRequestsRef.current) {
+      if (pending.runScoped) continue;
+      const runScoped = findPendingEnvRequest(
+        executionSnapshot.runs,
+        String(id),
+        pending.variable,
+      );
+      if (runScoped) {
+        pendingEnvRequestsRef.current.set(id, { ...pending, runScoped });
+      }
+    }
+  }, [executionSnapshot.runs]);
+
+  useEffect(() => {
+    onSelectedProjectChange?.(selectedProject);
+  }, [onSelectedProjectChange, selectedProject]);
 
   // Ref mirrors for cursor context handler (avoids stale closures in port.onMessage).
+  // workflowRouteFor is defined further down (it needs the function list);
+  // the cursor handler only runs on messages, after the mirror is set.
+  const workflowRouteForRef = useRef<
+    (fn: string) => { roots: string[]; firstHop: Map<string, string> }
+  >(() => ({ firstHop: new Map(), roots: [] }));
+  // Highlight to apply once the promoted workflow's graph arrives (the
+  // selection-change effect clears highlights, so apply after, not before).
+  const pendingHighlightRef = useRef<{ fn: string; nodeId: number } | null>(
+    null,
+  );
   const selectedFnRef = useRef(selectedFn);
-  useEffect(() => { selectedFnRef.current = selectedFn; }, [selectedFn]);
+  useEffect(() => {
+    selectedFnRef.current = selectedFn;
+  }, [selectedFn]);
+  useEffect(() => {
+    if (selectedFn && selectedTestName) {
+      setSelectedTestName(null);
+    }
+  }, [selectedFn, selectedTestName]);
+  const selectedTestNameRef = useRef(selectedTestName);
+  useEffect(() => {
+    selectedTestNameRef.current = selectedTestName;
+  }, [selectedTestName]);
+  const graphTargetNameRef = useRef(graphTargetName);
+  useEffect(() => {
+    graphTargetNameRef.current = graphTargetName;
+  }, [graphTargetName]);
+  const testGraphRequestsRef = useRef(new Set<string>());
+  const pendingTestSourceNavigationRef = useRef<string | null>(null);
   const controlFlowGraphRef = useRef(controlFlowGraph);
-  useEffect(() => { controlFlowGraphRef.current = controlFlowGraph; }, [controlFlowGraph]);
+  useEffect(() => {
+    controlFlowGraphRef.current = controlFlowGraph;
+  }, [controlFlowGraph]);
+  const graphNavigationRef = useRef<{
+    nodeId: number;
+    startOffset: number;
+    endOffset: number;
+    expiresAt: number;
+  } | null>(null);
 
-  const nextCallIdRef = useRef(0);
-  const pendingCallsRef = useRef<Map<number, { resolve: (v: BamlJsValue) => void; reject: (e: Error) => void }>>(new Map());
   // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
   const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
 
@@ -324,19 +990,57 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   /** Build a lookup from sourceExpr → nodeId for the cached CFG.
    *  When multiple nodes share a sourceExpr, prefer semantic types
    *  (call/loop/branch/header) over structural ones (branchArm). */
-  function buildSourceExprIndex(graph: ControlFlowGraph | null): Map<number, number> {
-    const map = new Map<number, number>();
-    if (!graph) return map;
-    const preferred = new Set(['otherScope', 'loop', 'branchGroup', 'headerContextEnter']);
+  function graphNodeOwnerFunction(
+    node: ControlFlowGraph['nodes'][string],
+  ): string | null {
+    return node.logFilterKey.split('|', 1)[0] || null;
+  }
+
+  function setSourceExprIndexEntry(
+    map: Map<number, number>,
+    sourceExpr: number,
+    nodeId: number,
+    nodeType: string,
+    preferred: Set<string>,
+  ) {
+    if (preferred.has(nodeType) || !map.has(sourceExpr)) {
+      map.set(sourceExpr, nodeId);
+    }
+  }
+
+  function buildSourceExprIndexes(
+    graph: ControlFlowGraph | null,
+    functionName: string | null,
+  ): { owner: Map<number, number>; any: Map<number, number> } {
+    const owner = new Map<number, number>();
+    const any = new Map<number, number>();
+    if (!graph) return { any, owner };
+    const preferred = new Set([
+      'otherScope',
+      'loop',
+      'branchGroup',
+      'headerContextEnter',
+    ]);
     for (const [, node] of Object.entries(graph.nodes)) {
       if (node.sourceExpr == null) continue;
-      if (preferred.has(node.nodeType)) {
-        map.set(node.sourceExpr, node.id);
-      } else if (!map.has(node.sourceExpr)) {
-        map.set(node.sourceExpr, node.id);
+      setSourceExprIndexEntry(
+        any,
+        node.sourceExpr,
+        node.id,
+        node.nodeType,
+        preferred,
+      );
+      if (functionName && graphNodeOwnerFunction(node) === functionName) {
+        setSourceExprIndexEntry(
+          owner,
+          node.sourceExpr,
+          node.id,
+          node.nodeType,
+          preferred,
+        );
       }
     }
-    return map;
+    return { any, owner };
   }
 
   /** Try each candidate expression ID (most-specific first) against the
@@ -347,35 +1051,112 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   function resolveCandidatesToNodeId(
     graph: ControlFlowGraph | null,
     candidates: number[],
+    functionName: string | null,
   ): number | null {
     if (!graph || candidates.length === 0) return null;
-    const index = buildSourceExprIndex(graph);
+    const index = buildSourceExprIndexes(graph, functionName);
     for (const exprId of candidates) {
-      const nodeId = index.get(exprId);
+      const nodeId = index.owner.get(exprId);
+      if (nodeId != null) return nodeId;
+    }
+    for (const exprId of candidates) {
+      const nodeId = index.any.get(exprId);
       if (nodeId != null) return nodeId;
     }
     return null;
   }
 
-  /** Find a graph node whose label starts with `funcName(` — used when candidate
-   *  matching fails because the cursor is on a callee Path expression but the
-   *  graph stores the Call expression. */
+  function functionNameAliases(functionName: string): string[] {
+    const shortName = functionName.split('.').pop();
+    return shortName && shortName !== functionName
+      ? [functionName, shortName]
+      : [functionName];
+  }
+
+  function labelCalleeName(label: string): string {
+    const trimmed = label.trim();
+    const optionalCallStart = trimmed.indexOf('?.(');
+    if (optionalCallStart >= 0)
+      return trimmed.slice(0, optionalCallStart).trim();
+
+    const callStart = trimmed.indexOf('(');
+    if (callStart >= 0) return trimmed.slice(0, callStart).trim();
+
+    return trimmed;
+  }
+
+  function nodeLabelMatchesFunctionName(
+    label: string,
+    functionName: string,
+  ): boolean {
+    const calleeName = labelCalleeName(label);
+    return functionNameAliases(functionName).some(
+      (name) => calleeName === name,
+    );
+  }
+
+  function nodeMatchesFunctionName(
+    node: ControlFlowGraph['nodes'][string],
+    functionName: string,
+  ): boolean {
+    const aliases = functionNameAliases(functionName);
+    if (node.calleeName && aliases.includes(node.calleeName)) return true;
+    return nodeLabelMatchesFunctionName(node.label, functionName);
+  }
+
+  /** Find a graph node for `funcName` — used when candidate matching fails
+   *  because the cursor is on a callee Path expression but the graph stores
+   *  the full Call expression. Prefer runtime-provided callee metadata, with
+   *  label matching only as a compatibility fallback for older graph payloads. */
   function resolveNodeByFunctionName(
     graph: ControlFlowGraph | null,
     funcName: string,
   ): number | null {
     if (!graph || !funcName) return null;
-    const prefix = `${funcName}(`;
     for (const [, node] of Object.entries(graph.nodes)) {
-      if (node.label.startsWith(prefix)) return node.id;
+      if (nodeMatchesFunctionName(node, funcName)) return node.id;
     }
     return null;
   }
 
+  function handleGraphNodeClick(nodeId: number) {
+    setHighlightedNodeId(nodeId);
+
+    const source = (controlFlowGraph ?? controlFlowGraphRef.current)?.nodes[
+      String(nodeId)
+    ]?.sourceSpan;
+    if (source && onNavigateToSource) {
+      if (source.startOffset != null && source.endOffset != null) {
+        graphNavigationRef.current = {
+          endOffset: source.endOffset,
+          expiresAt: performance.now() + 1000,
+          nodeId,
+          startOffset: source.startOffset,
+        };
+      }
+      onNavigateToSource(source);
+    }
+  }
+
   function handleCursorContext(ctx: CursorContext) {
     // Update cursor offset for event highlighting (cursor ↔ event matching)
-    console.log('[DEBUG] CursorContext:', { cursorOffset: ctx.cursorOffset, functionName: ctx.functionName });
     setCursorOffset(ctx.cursorOffset ?? null);
+
+    const graphNavigation = graphNavigationRef.current;
+    if (
+      graphNavigation &&
+      performance.now() <= graphNavigation.expiresAt &&
+      ctx.cursorOffset != null &&
+      ctx.cursorOffset >= graphNavigation.startOffset &&
+      ctx.cursorOffset <= graphNavigation.endOffset
+    ) {
+      setHighlightedNodeId(graphNavigation.nodeId);
+      graphNavigationRef.current = null;
+      return;
+    }
+    if (graphNavigation && performance.now() > graphNavigation.expiresAt) {
+      graphNavigationRef.current = null;
+    }
 
     if (!ctx.functionName) return;
 
@@ -383,11 +1164,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     const cachedGraph = controlFlowGraphRef.current;
 
     const candidates = ctx.sourceExprCandidates ?? [];
-    const nodeId = resolveCandidatesToNodeId(cachedGraph, candidates)
-      ?? (ctx.sourceExprId != null ? resolveNodeByFunctionName(cachedGraph, ctx.functionName) : null);
+    const sourceExprFunctionName =
+      ctx.sourceExprFunctionName ?? ctx.functionName;
+    const nodeId =
+      resolveCandidatesToNodeId(
+        cachedGraph,
+        candidates,
+        sourceExprFunctionName,
+      ) ??
+      (ctx.sourceExprId != null
+        ? resolveNodeByFunctionName(cachedGraph, ctx.functionName)
+        : null);
+    const isCallSite = sourceExprFunctionName !== ctx.functionName;
 
     // Rule 1: cursor is on a node in the currently-displayed workflow
-    if (nodeId != null && ctx.functionName === currentFn) {
+    if (nodeId != null && sourceExprFunctionName === currentFn) {
       setHighlightedNodeId(nodeId);
       return;
     }
@@ -398,28 +1189,106 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       return;
     }
 
-    // Rule 3: navigate to the function the cursor is on.
-    // Always show THAT function's own graph — never auto-redirect to a
-    // workflow. If the function is called from workflows, expose them via
-    // the "called from" picker so the user can opt in.
+    // Rule 3: cursor is on a call expression. Keep/show the function body
+    // that owns the call so the top-level workflow remains the primary view.
+    if (isCallSite) {
+      if (sourceExprFunctionName !== currentFn) {
+        setSelectedPreviewTestKey(null);
+        setSelectedFn(sourceExprFunctionName);
+        setViewingCollection(false);
+        setViewingTestRun(false);
+        setHighlightedNodeId(null);
+      }
+      setWorkflowContext(null);
+      return;
+    }
+
+    // Rule 4: navigate to the function the cursor is on — always promoted to
+    // a workflow that contains it. LineTotal inside Main→Review→ValidateInvoice
+    // shows Main's graph, not LineTotal's, with the call-site node on the path
+    // highlighted. When the helper belongs to several workflows, stay on the
+    // current one if it's among them (else pick the first) and offer a
+    // switcher above the graph. Whole-call-graph roots are preferred; the
+    // worker's direct-caller membership info is the fallback.
+    const route = workflowRouteForRef.current(ctx.functionName);
+    const workflows =
+      route.roots.length > 0 ? route.roots : ctx.workflowMemberships;
+    const root =
+      currentFn && workflows.includes(currentFn) ? currentFn : workflows[0];
+    if (root) {
+      // Prefer the node that calls the function under the cursor (its call
+      // site survives in the expanded graph, e.g. relabeled by a //# header
+      // above the function); fall back to the first hop from the root.
+      const hop = route.firstHop.get(root) ?? ctx.functionName;
+      const target =
+        findCallSiteNode(root, ctx.functionName) ?? findCallSiteNode(root, hop);
+      if (root !== currentFn) {
+        pendingHighlightRef.current =
+          target != null ? { fn: root, nodeId: target } : null;
+        setSelectedPreviewTestKey(null);
+        setSelectedFn(root);
+        setViewingCollection(false);
+        setViewingTestRun(false);
+        setHighlightedNodeId(null);
+      } else if (target != null) {
+        setHighlightedNodeId(target);
+      }
+      setWorkflowContext(
+        workflows.length > 1
+          ? { functionName: ctx.functionName, workflows }
+          : null,
+      );
+      return;
+    }
+    // Not part of any workflow — show the function's own graph.
     if (ctx.functionName !== currentFn) {
+      setSelectedPreviewTestKey(null);
       setSelectedFn(ctx.functionName);
+      setViewingCollection(false);
+      setViewingTestRun(false);
       setHighlightedNodeId(null);
     }
-    // Update "called from" context (shown as a picker above the graph).
-    // Set on every navigation, including when already on the function,
-    // so it reflects the current membership info.
-    if (ctx.workflowMemberships.length > 0) {
-      setWorkflowContext({
-        functionName: ctx.functionName,
-        workflows: ctx.workflowMemberships,
-      });
-    } else {
-      setWorkflowContext(null);
-    }
+    setWorkflowContext(null);
   }
 
   // ── Port message handler ─────────────────────────────────────────────
+
+  function handleControlFlowGraphResult(
+    targetName: string,
+    graph: ControlFlowGraph | null,
+    requestId?: number,
+  ) {
+    if (
+      requestId != null &&
+      cfgRequestIdsRef.current.get(targetName) !== requestId
+    ) {
+      return;
+    }
+    const isTestGraph = testGraphRequestsRef.current.has(targetName);
+    if (!isTestGraph) {
+      workflowCfgResponsesRef.current.set(targetName, graph);
+      setWorkflowCacheVersion((version) => version + 1);
+      if (graph) {
+        workflowCfgCacheRef.current.set(targetName, graph);
+      }
+    }
+
+    if (!graph || targetName !== graphTargetNameRef.current) return;
+    setControlFlowGraph(graph);
+    const pendingHighlight = pendingHighlightRef.current;
+    if (pendingHighlight && pendingHighlight.fn === targetName) {
+      pendingHighlightRef.current = null;
+      setHighlightedNodeId(pendingHighlight.nodeId);
+    }
+
+    if (pendingTestSourceNavigationRef.current === targetName) {
+      pendingTestSourceNavigationRef.current = null;
+      const source = Object.values(graph.nodes).find(
+        (node) => node.nodeType === 'functionRoot',
+      )?.sourceSpan;
+      if (source) onNavigateToSource?.(source);
+    }
+  }
 
   useEffect(() => {
     const unsubscribe = port.onMessage((data: WorkerOutMessage) => {
@@ -437,11 +1306,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               break;
             case 'updateProject':
               setProjectUpdates((prev) => ({ ...prev, [n.project]: n.update }));
+              // A current build re-enables run controls automatically after a
+              // fail-closed `projectNotReady` rejection.
+              setNotReadyProjects((prev) =>
+                applyProjectUpdateToGating(prev, n.project, n.update),
+              );
               break;
             case 'testCollectionResult': {
               try {
-                const jsonStr = new TextDecoder().decode(new Uint8Array(n.data));
-                const tree = JSON.parse(jsonStr);
+                const jsonStr = new TextDecoder().decode(
+                  new Uint8Array(n.data),
+                );
+                const tree = parseSerializedTestTreeJson(jsonStr);
 
                 // Track failed expansions from the server-provided error field
                 if (n.expandError) {
@@ -455,26 +1331,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 setTestTree(tree);
                 setCollectionCallId(n.callId);
                 setGeneration(n.generation);
-                setTestRunResults(new Map());
+                setTestStartErrors(new Map());
 
-                // Create/replace the synthetic RunEntry for collection, hydrating any
-                // fetch logs that arrived before this notification.
+                // Create/replace collection debug state, hydrating any fetch
+                // logs that arrived before this notification.
                 const buffered = pendingLogsRef.current.get(n.callId) ?? [];
                 pendingLogsRef.current.delete(n.callId);
                 const hasError = !!n.expandError;
-                const collectionEntry: RunEntry = {
-                  id: n.callId,
-                  functionName: '$collect_tests',
-                  argsJson: '',
-                  fetchLogs: buffered,
-                  runtimeEvents: [],
-                  result: null,
+                const collectionState: CollectionDebugState = {
                   error: hasError ? n.expandError!.message : null,
+                  fetchLogs: buffered,
+                  id: n.callId,
                   status: hasError ? 'error' : 'success',
-                  startTime: performance.now(),
-                  durationMs: null,
                 };
-                setCollectionRun(collectionEntry);
+                setCollectionDebug(collectionState);
               } catch (e) {
                 console.error('[testCollectionResult] decode error:', e);
               }
@@ -482,92 +1352,103 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             }
             case 'openPlayground':
               setSelectedProject(n.project);
-              if (n.functionName) setSelectedFn(n.functionName);
+              if (n.functionName) {
+                setWorkflowContext(null);
+                setSelectedPreviewTestKey(null);
+                setSelectedFn(n.functionName);
+                setViewingCollection(false);
+                setViewingTestRun(false);
+              } else if (n.testName || n.testsetName) {
+                setWorkflowContext(null);
+                setSelectedPreviewTestKey(null);
+                setSelectedFn(null);
+                setViewingCollection(false);
+                setViewingTestRun(true);
+                setTestTree(null);
+                setCollectionCallId(null);
+                setCollectionDebug(null);
+                setTestStartErrors(new Map());
+                setPendingTestTarget({
+                  kind: n.testName ? 'test' : 'testset',
+                  name: n.testName ?? n.testsetName!,
+                  project: n.project,
+                });
+                port.postMessage({
+                  project: n.project,
+                  type: 'requestCollectTests',
+                });
+              }
               break;
             case 'controlFlowGraphResult':
-              if (n.graph) setControlFlowGraph(n.graph);
+              handleControlFlowGraphResult(
+                n.functionName,
+                n.graph,
+                n.requestId,
+              );
               break;
           }
           break;
         }
 
-        case 'callFunctionResult': {
-          const pending = pendingCallsRef.current.get(data.id);
-          if (pending) {
-            pendingCallsRef.current.delete(data.id);
-            pending.resolve(data.result);
-          }
+        case 'runStarted':
+        case 'runPatch':
+        case 'commandAck':
+        case 'commandError':
+        case 'runList':
+        case 'historyList':
+        case 'runSnapshot':
+        case 'valueBody':
+        case 'runCursorExpired':
+        case 'profileArtifactChunk':
+          // RunStoreClient consumes these during the staged migration. The
+          // legacy reducer keeps ignoring them until the UI cutover.
           break;
-        }
-
-        case 'callFunctionError': {
-          const pending = pendingCallsRef.current.get(data.id);
-          if (pending) {
-            pendingCallsRef.current.delete(data.id);
-            const err = new Error(data.error);
-            (err as any).cancelled = data.cancelled ?? false;
-            pending.reject(err);
-          }
-          break;
-        }
 
         case 'fetchLogNew': {
           const logEntry = data.entry;
           // Always buffer by callId so logs that arrive before testCollectionResult are not lost.
-          const existing = pendingLogsRef.current.get(logEntry.callId);
+          const existing = pendingLogsRef.current.get(data.callId);
           if (existing) {
             existing.push(logEntry);
           } else {
-            pendingLogsRef.current.set(logEntry.callId, [logEntry]);
+            pendingLogsRef.current.set(data.callId, [logEntry]);
           }
           // Route to collection run if callId matches
-          setCollectionRun((prev) => {
-            if (prev && logEntry.callId === prev.id) {
+          setCollectionDebug((prev) => {
+            if (prev && data.callId === prev.id) {
               return { ...prev, fetchLogs: [...prev.fetchLogs, logEntry] };
             }
             return prev;
-          });
-          // Route to regular runs
-          setRuns((prev) => {
-            const targetIdx = prev.findIndex((r) => r.id === logEntry.callId);
-            if (targetIdx === -1) return prev;
-            const target = prev[targetIdx];
-            return [...prev.slice(0, targetIdx), { ...target, fetchLogs: [...target.fetchLogs, logEntry] }, ...prev.slice(targetIdx + 1)];
           });
           break;
         }
 
         case 'fetchLogUpdate':
           // Also update collection run logs
-          setCollectionRun((prev) => {
+          setCollectionDebug((prev) => {
             if (!prev) return prev;
-            const updated = prev.fetchLogs.map((e) => (e.id === data.logId ? { ...e, ...data.patch } : e));
+            const updated = prev.fetchLogs.map((e) =>
+              e.id === data.logId ? { ...e, ...data.patch } : e,
+            );
             if (updated === prev.fetchLogs) return prev;
             return { ...prev, fetchLogs: updated };
           });
-          setRuns((prev) =>
-            prev.map((r) => ({
-              ...r,
-              fetchLogs: r.fetchLogs.map((e) => (e.id === data.logId ? { ...e, ...data.patch } : e)),
-            })),
-          );
           break;
 
-        case 'runtimeEventNew': {
-          const eventEntry = data.event;
-          if (data.callId != null) {
-            setRuns((prev) =>
-              prev.map((r) =>
-                r.id === data.callId
-                  ? { ...r, runtimeEvents: [...r.runtimeEvents, eventEntry] }
-                  : r
-              )
-            );
-            // Also route to collection run if this event belongs to it
-            setCollectionRun((prev) => {
-              if (!prev || prev.id !== data.callId) return prev;
-              return { ...prev, runtimeEvents: [...prev.runtimeEvents, eventEntry] };
-            });
+        case 'processEnvVars': {
+          importShellEnvVars(data.vars);
+          break;
+        }
+
+        case 'envVarFromShell': {
+          addRequiredKey(data.variable);
+          addShellEnvVar(data.variable, data.value);
+          break;
+        }
+
+        case 'knownEnvVarNames': {
+          for (const name of data.names) {
+            addRequiredKey(name);
           }
           break;
         }
@@ -576,11 +1457,36 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           // Always track as a known required key (proactive indicator)
           addRequiredKey(data.variable);
           const cached = envVarsRef.current[data.variable];
+          const runScoped = findPendingEnvRequest(
+            executionRunsRef.current,
+            String(data.id),
+            data.variable,
+          );
           if (cached !== undefined) {
-            port.postMessage({ type: 'envVarResponse', id: data.id, value: cached, variable: data.variable });
+            if (runScoped) {
+              void executionStore
+                .respondToEnv(
+                  runScoped.boundaryId,
+                  runScoped.envRequestId,
+                  cached,
+                )
+                .catch((error) => {
+                  console.warn('[ExecutionPanel] respondToEnv failed:', error);
+                });
+            } else {
+              port.postMessage({
+                id: data.id,
+                type: 'envVarResponse',
+                value: cached,
+                variable: data.variable,
+              });
+            }
           } else {
             // Park the request — it will be resolved when the dialog closes
-            pendingEnvRequestsRef.current.set(data.id, data.variable);
+            pendingEnvRequestsRef.current.set(data.id, {
+              runScoped,
+              variable: data.variable,
+            });
             if (!showApiKeysDialogRef.current) {
               setShowApiKeysDialog(true);
               showApiKeysDialogRef.current = true;
@@ -590,47 +1496,47 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         }
 
         case 'inputRequest': {
-          const { id, prompt, callId } = data;
-          setPendingInputs((prev) => {
-            const next = new Map(prev);
-            const arr = next.get(callId) ?? [];
-            next.set(callId, [...arr, { id, prompt }]);
-            return next;
-          });
+          // Migrated run/test views render input prompts from RunStore payloads.
+          // Legacy input frames are ignored here during the transport cutover.
           break;
         }
 
-        case "ready":
+        case 'inputResolved': {
+          // RunStore inputResolved payloads remove prompts from snapshots.
+          break;
+        }
+
+        case 'ready':
           break;
 
         case 'buildTime':
           setBuildTime(Number(data.value) || null);
           break;
 
-        case "vfsFileChanged":
-        case "vfsFileDeleted":
-        case "diagnostics":
+        case 'vfsFileChanged':
+        case 'vfsFileDeleted':
+        case 'diagnostics':
           break;
 
-        case "controlFlowGraphResult":
-          if (data.graph) setControlFlowGraph(data.graph);
+        case 'controlFlowGraphResult':
+          handleControlFlowGraphResult(
+            data.functionName,
+            data.graph,
+            data.requestId,
+          );
           break;
 
-        case "cursorContext":
+        case 'cursorContext':
           handleCursorContext(data.context);
           break;
 
-        case "wasmPanic":
+        case 'wasmPanic':
           setWasmPanic({ message: data.message, stack: data.stack });
           break;
 
-        case "logDecorations":
-        case "clearLogDecorations":
+        case 'logDecorations':
+        case 'clearLogDecorations':
           // These are handled by MonacoEditor, ignore here
-          break;
-
-        case "runtimeEventError":
-          console.warn('[ExecutionPanel] runtimeEventError:', data.error);
           break;
 
         default:
@@ -646,26 +1552,51 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     return unsubscribe;
   }, [port]);
 
-  // Request control flow graph when selected function changes OR code is edited.
-  // On function/project switch: clear the graph (shows loading state).
+  // Request a control flow graph when the selected function/test changes OR code is edited.
+  // On target/project switch: clear the graph (shows loading state).
   // On code edit (projectUpdateVersion): keep old graph visible, swap when new one arrives.
-  const prevGraphFnRef = useRef(selectedFn);
+  const prevGraphTargetRef = useRef(graphTargetName);
   const prevGraphProjectRef = useRef(selectedProject);
-  const projectUpdateVersion = selectedProject ? projectUpdates[selectedProject] : undefined;
+  const projectUpdateVersion = selectedProject
+    ? projectUpdates[selectedProject]
+    : undefined;
+  const requestControlFlowGraph = useCallback(
+    (project: string, functionName: string) => {
+      const requestId = cfgRequestSequenceRef.current + 1;
+      cfgRequestSequenceRef.current = requestId;
+      cfgRequestIdsRef.current.set(functionName, requestId);
+      port.postMessage({
+        functionName,
+        project,
+        requestId,
+        type: 'requestControlFlowGraph',
+      });
+    },
+    [port],
+  );
 
   useEffect(() => {
-    const fnChanged = prevGraphFnRef.current !== selectedFn;
+    const targetChanged = prevGraphTargetRef.current !== graphTargetName;
     const projChanged = prevGraphProjectRef.current !== selectedProject;
-    prevGraphFnRef.current = selectedFn;
+    prevGraphTargetRef.current = graphTargetName;
     prevGraphProjectRef.current = selectedProject;
 
-    if (fnChanged || projChanged) {
+    if (targetChanged || projChanged) {
       setControlFlowGraph(null);
       setHighlightedNodeId(null);
     }
-    if (!selectedFn || !selectedProject) return;
-    port.postMessage({ type: 'requestControlFlowGraph', project: selectedProject, functionName: selectedFn });
-  }, [port, selectedFn, selectedProject, projectUpdateVersion]);
+    if (!graphTargetName || !selectedProject) return;
+    if (selectedTestName) {
+      testGraphRequestsRef.current.add(selectedTestName);
+    }
+    requestControlFlowGraph(selectedProject, graphTargetName);
+  }, [
+    graphTargetName,
+    requestControlFlowGraph,
+    selectedProject,
+    selectedTestName,
+    projectUpdateVersion,
+  ]);
 
   // Clear preview results when selected function changes
   useEffect(() => {
@@ -676,14 +1607,55 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     setPreviewLoading(false);
   }, [selectedFn]);
 
+  // The authoritative args string for a function at any moment: args the
+  // user typed for it this session win, then its `argsByFunction` seed
+  // (exact or bare-name key, since selection may be namespaced), then the
+  // panel seed. The swap effect writes this into argsJson on selection
+  // change; effects that must not read the (one-commit-stale on selection
+  // change) argsJson state read this instead.
+  const baseArgsFor = useCallback(
+    (fn: string) =>
+      typedArgsByFnRef.current[fn] ??
+      argsByFunction?.[fn] ??
+      argsByFunction?.[fn.split('.').pop() ?? ''] ??
+      initialArgsJson ??
+      '{}',
+    [argsByFunction, initialArgsJson],
+  );
+
+  // Swap the args editor when the selected function changes.
+  const prevArgsFnRef = useRef(selectedFn);
+  useEffect(() => {
+    if (prevArgsFnRef.current === selectedFn) return;
+    prevArgsFnRef.current = selectedFn;
+    if (!selectedFn) return;
+    setArgsJson(baseArgsFor(selectedFn));
+  }, [selectedFn, baseArgsFor]);
+
+  // Whether the fail-closed server is (re)building the selected project's
+  // runtime: either the latest ProjectUpdate is stale (isBexCurrent false) or
+  // a run/preview was refused with `projectNotReady`. Derived here — above
+  // the run/preview callbacks that must consult it.
+  const runtimePreparing = isRunGated(
+    notReadyProjects,
+    selectedProject,
+    selectedProject ? projectUpdates[selectedProject] : undefined,
+  );
+
+  const markSelectedProjectNotReady = useCallback((project: string) => {
+    setNotReadyProjects((prev) => markProjectNotReady(prev, project));
+  }, []);
+
   // Auto-refresh prompt/curl preview when args change while tab is active
   useEffect(() => {
     if (activeTab !== 'prompt' && activeTab !== 'curl') return;
     if (!selectedFn || !selectedProject) return;
 
     const subFn = activeTab === 'prompt' ? 'render_prompt' : 'build_request';
-    const setResult = activeTab === 'prompt' ? setPromptPreviewResult : setCurlPreviewResult;
-    const setError = activeTab === 'prompt' ? setPromptPreviewError : setCurlPreviewError;
+    const setResult =
+      activeTab === 'prompt' ? setPromptPreviewResult : setCurlPreviewResult;
+    const setError =
+      activeTab === 'prompt' ? setPromptPreviewError : setCurlPreviewError;
 
     // Clear previous error while loading (keep last result visible)
     setError(null);
@@ -703,32 +1675,104 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       return;
     }
 
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
       setPreviewLoading(false);
       setError('Args must be a JSON object');
       return;
     }
 
+    // While the server prepares the current build, previews would only be
+    // refused with `projectNotReady`. Skip issuing them; this effect re-runs
+    // when the next ProjectUpdate flips `runtimePreparing` back off.
+    if (runtimePreparing) {
+      setPreviewLoading(false);
+      return;
+    }
+
     setPreviewLoading(true);
 
+    let cancelled = false;
     const timer = setTimeout(async () => {
-      try {
-        const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
-        const callId = nextCallIdRef.current++;
-        const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
-          pendingCallsRef.current.set(callId, { resolve, reject });
-          port.postMessage({
-            type: 'callFunction',
-            id: callId,
-            name: `${selectedFn}.${subFn}`,
-            argsProto: new Uint8Array(argsProto),
-            project: selectedProject,
+      const waitForPreviewRun = (boundaryId: BoundaryId): Promise<Run> => {
+        const existing = executionStore
+          .getSnapshot()
+          .runs.find((run) => run.boundaryId === boundaryId);
+        if (existing && isTerminalRunStatus(existing.status)) {
+          return Promise.resolve(existing);
+        }
+
+        return new Promise((resolve) => {
+          let resolved = false;
+          let shouldUnsubscribe = false;
+          let unsubscribe: (() => void) | null = null;
+          const finish = (run: Run) => {
+            if (resolved) return;
+            resolved = true;
+            if (unsubscribe) {
+              unsubscribe();
+            } else {
+              shouldUnsubscribe = true;
+            }
+            resolve(run);
+          };
+
+          unsubscribe = executionStore.subscribe((snapshot) => {
+            const run = snapshot.runs.find(
+              (entry) => entry.boundaryId === boundaryId,
+            );
+            if (run && isTerminalRunStatus(run.status)) {
+              finish(run);
+            }
           });
+          if (shouldUnsubscribe) {
+            unsubscribe();
+          }
         });
+      };
+
+      try {
+        const previewFunctionName = companionFunctionName(selectedFn, subFn);
+        const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
+        const boundaryId = await executionStore.startPreviewRun({
+          argsBytes: new Uint8Array(argsBytes),
+          functionName: previewFunctionName,
+          helper: subFn,
+          parentFunctionName: selectedFn,
+          project: selectedProject,
+        });
+        const run = await waitForPreviewRun(boundaryId);
+        if (run.error) {
+          throw new Error(run.error.message);
+        }
+        if (run.status === 'cancelled') {
+          throw new Error('Cancelled');
+        }
+        if (run.result?.valueRef) {
+          await valueBodyCache.read(run.boundaryId, run.result.valueRef);
+        }
+        const resultValue = decodeRunResultValue(run, valueBodyCache);
+        if (resultValue == null) {
+          throw new Error('Preview completed without a result');
+        }
+        if (cancelled) return;
         setResult(resultValue);
         setError(null);
         setPreviewLoading(false);
       } catch (e) {
+        if (cancelled) return;
+        if (isProjectNotReadyError(e)) {
+          // Transient fail-closed rejection — surface it as the "Preparing
+          // current build…" state (not a raw error) and keep the last valid
+          // preview visible. Cleared by the next current ProjectUpdate.
+          markSelectedProjectNotReady(selectedProject);
+          setError(null);
+          setPreviewLoading(false);
+          return;
+        }
         const errMsg = e instanceof Error ? e.message : String(e);
         // Don't clear result — keep last valid prompt visible with error banner above
         setError(errMsg);
@@ -736,188 +1780,285 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       }
     }, 500);
 
-    return () => { clearTimeout(timer); setPreviewLoading(false); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, selectedFn, selectedProject, argsJson, port, projectUpdateVersion]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      setPreviewLoading(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeTab,
+    selectedFn,
+    selectedProject,
+    argsJson,
+    port,
+    executionStore,
+    valueBodyCache,
+    projectUpdateVersion,
+    runtimePreparing,
+    markSelectedProjectNotReady,
+  ]);
 
-  // Sync existing envVars to the port whenever port changes
-  useEffect(() => {
-    for (const [key, value] of Object.entries(envVars)) {
-      port.postMessage({ type: 'setEnvVar', key, value });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when port changes
-  }, [port]);
+  // Single write path for args edits (form and raw): the prompt/cURL preview
+  // and run-history snapshots read `argsJson`, and per-function memory reads
+  // `typedArgsByFnRef` — an edit that misses either silently desyncs them.
+  const updateArgsJson = useCallback(
+    (next: string) => {
+      setSelectedPreviewTestKey(null);
+      setArgsJson(next);
+      if (selectedFn) typedArgsByFnRef.current[selectedFn] = next;
+    },
+    [selectedFn],
+  );
 
-  const onArgsJsonChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    setArgsJson(e.target.value);
-  }, []);
+  const onArgsJsonChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => updateArgsJson(e.target.value),
+    [updateArgsJson],
+  );
+
+  const onArgsFormChange = useCallback(
+    (next: Record<string, unknown>) => updateArgsJson(JSON.stringify(next)),
+    [updateArgsJson],
+  );
 
   // ── Run function ───────────────────────────────────────────────────────
 
-  const isRunning = runs.length > 0 && runs[runs.length - 1].status === 'running';
+  const isRunning = functionRuns[0]?.status === 'running';
 
-  const onCancelRun = useCallback((runId: number) => {
-    if (!selectedProject) return;
-    port.postMessage({ type: 'cancelCall', id: runId, project: selectedProject });
-  }, [port, selectedProject]);
+  const onCancelFunctionRun = useCallback(
+    (boundaryId: BoundaryId) => {
+      void executionStore.cancelRun(boundaryId).catch((error) => {
+        console.warn('[ExecutionPanel] cancelRun failed:', error);
+      });
+    },
+    [executionStore],
+  );
 
-  const submitInput = useCallback((id: number, value: string, callId: number) => {
-    port.postMessage({ type: 'inputResponse', id, value });
-    setPendingInputs((prev) => {
-      const next = new Map(prev);
-      const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
-      if (arr.length === 0) next.delete(callId);
-      else next.set(callId, arr);
-      return next;
-    });
-  }, [port]);
+  const submitRunInput = useCallback(
+    (boundaryId: BoundaryId, inputRequestId: string, value: string) => {
+      void executionStore
+        .respondToInput(boundaryId, inputRequestId, value)
+        .catch((error) => {
+          console.warn('[ExecutionPanel] respondToInput failed:', error);
+        });
+    },
+    [executionStore],
+  );
 
-  const toggleResultMode = useCallback((runId: number) => {
+  const toggleResultMode = useCallback((boundaryId: string) => {
     setResultModes((prev) => ({
       ...prev,
-      [runId]: (prev[runId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
+      [boundaryId]:
+        (prev[boundaryId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
     }));
   }, []);
 
-  const onResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    resizingRef.current = true;
-    const startX = e.clientX;
-    const startWidth = sidebarWidth;
+  const onResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      resizingRef.current = true;
+      const startX = e.clientX;
+      const startWidth = sidebarWidth;
 
-    const onMouseMove = (moveE: MouseEvent) => {
-      const delta = moveE.clientX - startX;
-      setSidebarWidth(Math.max(160, Math.min(400, startWidth + delta)));
-    };
-    const onMouseUp = () => {
-      resizingRef.current = false;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }, [sidebarWidth]);
+      const onMouseMove = (moveE: MouseEvent) => {
+        const delta = moveE.clientX - startX;
+        setSidebarWidth(Math.max(160, Math.min(400, startWidth + delta)));
+      };
+      const onMouseUp = () => {
+        resizingRef.current = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [sidebarWidth],
+  );
 
-  const onRunFunction = useCallback(async () => {
-    if (!selectedFn || !selectedProject || isRunning) return;
+  const onLogsResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startHeight = logsPanelHeight;
 
-    const runId = nextCallIdRef.current++;
-    const startTime = performance.now();
-    const newRun: RunEntry = {
-      id: runId,
-      functionName: selectedFn,
-      argsJson,
-      fetchLogs: [],
-      runtimeEvents: [],
-      result: null,
-      error: null,
-      status: 'running',
-      startTime,
-      durationMs: null,
-    };
-    setRuns((prev) => [...prev, newRun]);
-    setExpandedLogId(null);
-
-    requestAnimationFrame(() => {
-      outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-
-    try {
-      const parsed = JSON.parse(argsJson);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error('Arguments must be a JSON object, e.g. {"arr": [3,1,2]}');
-      }
-      const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
-
-      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
-        pendingCallsRef.current.set(runId, { resolve, reject });
-        port.postMessage(
-          { type: 'callFunction', id: runId, name: selectedFn, argsProto: new Uint8Array(argsProto), project: selectedProject },
+      const onMouseMove = (moveE: MouseEvent) => {
+        const delta = startY - moveE.clientY;
+        const maxHeight = Math.max(
+          LOGS_PANEL_MIN_HEIGHT,
+          Math.min(LOGS_PANEL_MAX_HEIGHT, window.innerHeight - 220),
         );
-      });
-
-      const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultValue, status: 'success', durationMs: dur } : r));
-    } catch (e) {
-      const isCancelled = e instanceof Error && (e as any).cancelled === true;
-      const errMsg = e instanceof Error ? e.message : String(e);
-      const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? {
-        ...r,
-        error: isCancelled ? null : errMsg,
-        status: isCancelled ? 'cancelled' : 'error',
-        durationMs: dur,
-      } : r));
-    }
-  }, [selectedFn, selectedProject, argsJson, isRunning, port]);
+        setLogsPanelHeight(
+          Math.max(
+            LOGS_PANEL_MIN_HEIGHT,
+            Math.min(maxHeight, startHeight + delta),
+          ),
+        );
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [logsPanelHeight],
+  );
 
   const handleRefreshTests = useCallback(() => {
     if (!selectedProject) return;
-    port.postMessage({ type: 'requestCollectTests', project: selectedProject });
+    port.postMessage({ project: selectedProject, type: 'requestCollectTests' });
   }, [selectedProject, port]);
 
-  const handleRunTest = useCallback(async (name: string) => {
-    if (!selectedProject) return;
-    // Switch to the test run view so the runs panel is visible even when no function is selected.
-    setViewingTestRun(true);
-    setViewingCollection(false);
-    const runId = nextCallIdRef.current++;
-    const newRun: RunEntry = {
-      id: runId,
-      functionName: 'testing.run_test',
-      testName: name,
-      argsJson: `(test: ${name})`,
-      fetchLogs: [],
-      runtimeEvents: [],
-      result: null,
-      error: null,
-      status: 'running',
-      startTime: performance.now(),
-      durationMs: null,
-    };
-    setRuns((prev) => [...prev, newRun]);
+  const appliedInitialTestTargetRef = useRef(false);
+  useEffect(() => {
+    if (
+      appliedInitialTestTargetRef.current ||
+      !selectedProject ||
+      (!initialTestName && !initialTestsetName)
+    ) {
+      return;
+    }
 
-    try {
-      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
-        pendingCallsRef.current.set(runId, { resolve, reject });
-        port.postMessage({
-          type: 'callTestFunction',
-          id: runId,
-          project: selectedProject,
+    appliedInitialTestTargetRef.current = true;
+    setWorkflowContext(null);
+    setSelectedFn(null);
+    setViewingCollection(false);
+    setViewingTestRun(true);
+    setTestTree(null);
+    setCollectionCallId(null);
+    setCollectionDebug(null);
+    setTestStartErrors(new Map());
+    setPendingTestTarget({
+      kind: initialTestName ? 'test' : 'testset',
+      name: initialTestName ?? initialTestsetName!,
+      project: selectedProject,
+    });
+    port.postMessage({ project: selectedProject, type: 'requestCollectTests' });
+  }, [initialTestName, initialTestsetName, selectedProject, port]);
+
+  const waitForTerminalRun = useCallback(
+    (boundaryId: BoundaryId) => {
+      const existing = executionStore
+        .getSnapshot()
+        .runs.find((run) => run.boundaryId === boundaryId);
+      if (existing && isTerminalRunStatus(existing.status)) {
+        return Promise.resolve();
+      }
+
+      return new Promise<void>((resolve) => {
+        let resolved = false;
+        let unsubscribe: (() => void) | null = null;
+
+        const finish = () => {
+          if (resolved) return;
+          resolved = true;
+          resolve();
+          unsubscribe?.();
+        };
+
+        unsubscribe = executionStore.subscribe((snapshot) => {
+          const run = snapshot.runs.find(
+            (entry) => entry.boundaryId === boundaryId,
+          );
+          if (run && isTerminalRunStatus(run.status)) {
+            finish();
+          }
+        });
+        if (resolved) unsubscribe();
+      });
+    },
+    [executionStore],
+  );
+
+  const handleRunTest = useCallback(
+    async (name: string) => {
+      if (!selectedProject) return;
+      // Switch to the test run view so the runs panel is visible even when no function is selected.
+      setViewingTestRun(true);
+      setViewingCollection(false);
+      setTestStartErrors((prev) => {
+        if (!prev.has(name)) return prev;
+        const next = new Map(prev);
+        next.delete(name);
+        return next;
+      });
+      try {
+        const boundaryId = await executionStore.startTestRun({
           generation,
+          project: selectedProject,
           testName: name,
         });
-      });
+        await waitForTerminalRun(boundaryId);
+      } catch (e) {
+        if (isProjectNotReadyError(e)) {
+          // Fail-closed rebuild window: show the transient preparing state
+          // instead of a per-test error; controls re-enable on the next
+          // current ProjectUpdate.
+          markSelectedProjectNotReady(selectedProject);
+          return;
+        }
+        setTestStartErrors((prev) =>
+          new Map(prev).set(name, e instanceof Error ? e.message : String(e)),
+        );
+      }
+    },
+    [
+      executionStore,
+      generation,
+      selectedProject,
+      waitForTerminalRun,
+      markSelectedProjectNotReady,
+    ],
+  );
 
-      const dur = Math.round(performance.now() - newRun.startTime);
-      setRuns((prev) =>
-        prev.map((r) =>
-          r.id === runId
-            ? { ...r, result: resultValue, status: 'success', durationMs: dur }
-            : r,
-        ),
-      );
-
-      setTestRunResults((prev) => new Map(prev).set(name, resultValue));
-    } catch (e: any) {
-      const dur = Math.round(performance.now() - newRun.startTime);
-      const cancelled = e instanceof Error && (e as any).cancelled === true;
-      setRuns((prev) =>
-        prev.map((r) =>
-          r.id === runId
-            ? { ...r, error: cancelled ? null : (e instanceof Error ? e.message : String(e)), status: cancelled ? 'cancelled' : 'error', durationMs: dur }
-            : r,
-        ),
-      );
-
-      setTestRunResults((prev) =>
-        new Map(prev).set(name, { outcome: 'error', error: e instanceof Error ? e.message : String(e) }),
-      );
+  useEffect(() => {
+    if (!pendingTestTarget || !selectedProject || !testTree) {
+      return;
     }
-  }, [selectedProject, generation, port]);
+    if (pendingTestTarget.project !== selectedProject) {
+      setPendingTestTarget(null);
+      setViewingTestRun(false);
+      return;
+    }
+
+    const treeItems = testTree;
+    const hasPendingLazyTestSets = hasLazyTestSets(treeItems);
+    if (pendingTestTarget.kind === 'test') {
+      const testName = findTestNameInTree(treeItems, pendingTestTarget.name);
+      if (!testName) {
+        if (hasPendingLazyTestSets) return;
+        setPendingTestTarget(null);
+        setViewingTestRun(false);
+        return;
+      }
+      setPendingTestTarget(null);
+      void handleRunTest(testName);
+      return;
+    }
+
+    const testNames = collectTestNamesInSet(treeItems, pendingTestTarget.name);
+    if (testNames === 'pending') return;
+    if (testNames === null) {
+      if (hasPendingLazyTestSets) return;
+      setPendingTestTarget(null);
+      setViewingTestRun(false);
+      return;
+    }
+    setPendingTestTarget(null);
+    setViewingTestRun(true);
+    void (async () => {
+      for (const testName of testNames) {
+        await handleRunTest(testName);
+      }
+    })();
+  }, [pendingTestTarget, selectedProject, testTree, handleRunTest]);
 
   // Track which testsets we've already requested expansion for (per generation)
-  const pendingExpandsRef = useRef<{ project: string | null; generation: number; names: Set<string> }>({ project: null, generation: -1, names: new Set() });
+  const pendingExpandsRef = useRef<{
+    project: string | null;
+    generation: number;
+    names: Set<string>;
+  }>({ generation: -1, names: new Set(), project: null });
 
   // Auto-expand lazy testsets after receiving a new testTree
   useEffect(() => {
@@ -925,69 +2066,575 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     // Reset pending set and failed state when generation or project changes.
     // Generation is per-project on the server, so different projects can share
     // the same generation number — we must track both to avoid leaking state.
-    if (pendingExpandsRef.current.generation !== generation || pendingExpandsRef.current.project !== selectedProject) {
-      pendingExpandsRef.current = { project: selectedProject, generation, names: new Set() };
+    if (
+      pendingExpandsRef.current.generation !== generation ||
+      pendingExpandsRef.current.project !== selectedProject
+    ) {
+      pendingExpandsRef.current = {
+        generation,
+        names: new Set(),
+        project: selectedProject,
+      };
       setFailedExpands(new Set());
     }
     const pending = pendingExpandsRef.current.names;
-    const expandLazy = (items: any[]) => {
+    const expandLazy = (items: SerializedTestDef[]) => {
       for (const item of items) {
-        if (item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
-
+        if (
+          'type' in item &&
+          item.type === 'lazyTestSet' &&
+          !pending.has(item.name)
+        ) {
           pending.add(item.name);
           port.postMessage({
-            type: 'expandTestSet',
-            project: selectedProject,
             generation,
+            project: selectedProject,
             testsetName: item.name,
+            type: 'expandTestSet',
           });
-        } else if (item && item.items && Array.isArray(item.items)) {
+        } else if (isExpandedTestSet(item)) {
           // Recurse into expanded testsets to find nested lazy items
           expandLazy(item.items);
         }
       }
     };
-    if (Array.isArray(testTree)) {
-      expandLazy(testTree);
-    }
+    expandLazy(testTree);
   }, [testTree, selectedProject, generation, port]);
 
   // Retry expansion for a failed (or already expanded) testset
-  const handleRetryExpand = useCallback((testsetName: string) => {
-    if (!selectedProject) return;
-    // Remove from failed set so it shows spinner again
-    setFailedExpands((prev) => {
-      const next = new Set(prev);
-      next.delete(testsetName);
-      return next;
-    });
-    // Remove from pending so auto-expand doesn't skip it
-    pendingExpandsRef.current.names.delete(testsetName);
-    // Re-send expansion request
-    pendingExpandsRef.current.names.add(testsetName);
-    port.postMessage({
-      type: 'expandTestSet',
-      project: selectedProject,
-      generation,
-      testsetName,
-    });
-  }, [selectedProject, generation, port]);
+  const handleRetryExpand = useCallback(
+    (testsetName: string) => {
+      if (!selectedProject) return;
+      // Remove from failed set so it shows spinner again
+      setFailedExpands((prev) => {
+        const next = new Set(prev);
+        next.delete(testsetName);
+        return next;
+      });
+      // Remove from pending so auto-expand doesn't skip it
+      pendingExpandsRef.current.names.delete(testsetName);
+      // Re-send expansion request
+      pendingExpandsRef.current.names.add(testsetName);
+      port.postMessage({
+        generation,
+        project: selectedProject,
+        testsetName,
+        type: 'expandTestSet',
+      });
+    },
+    [selectedProject, generation, port],
+  );
 
   // ── Derived state ──────────────────────────────────────────────────────
 
-  const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
+  const currentUpdate = selectedProject
+    ? projectUpdates[selectedProject]
+    : undefined;
+  const isLoadingProject = selectedProject != null && currentUpdate == null;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
-  const functionNames = functions.map((f) => f.name);
-  const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
+  const previewTests = currentUpdate?.tests ?? [];
+  const internalFunctionCount = functions.filter(isInternalFunction).length;
+  const visibleFunctions = showInternalFunctions
+    ? functions
+    : functions.filter((fn) => !isInternalFunction(fn));
+  const functionNames = visibleFunctions.map((f) => f.name);
   const diags = currentUpdate?.diagnostics ?? [];
 
-  const selectedFnInfo = functions.find((f) => f.name === selectedFn);
+  const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
 
+  const handleSelectPreviewTest = useCallback((test: TestInfo) => {
+    const key = previewTestKey(test);
+    typedArgsByFnRef.current[test.functionName] = test.argsJson;
+    setArgsJson(test.argsJson);
+    setSelectedTestName(null);
+    setSelectedPreviewTestKey(key);
+    setSelectedFn(test.functionName);
+    setViewingCollection(false);
+    setViewingTestRun(false);
+    setHighlightedNodeId(null);
+    setWorkflowContext(null);
+  }, []);
+
+  const handleSelectTest = useCallback(
+    (name: string) => {
+      const currentGraph =
+        graphTargetNameRef.current === name
+          ? controlFlowGraphRef.current
+          : null;
+      const currentSource = currentGraph
+        ? Object.values(currentGraph.nodes).find(
+            (node) => node.nodeType === 'functionRoot',
+          )?.sourceSpan
+        : null;
+      if (currentSource) {
+        pendingTestSourceNavigationRef.current = null;
+        onNavigateToSource?.(currentSource);
+      } else {
+        pendingTestSourceNavigationRef.current = name;
+      }
+
+      selectedTestNameRef.current = name;
+      graphTargetNameRef.current = name;
+      testGraphRequestsRef.current.add(name);
+      setSelectedPreviewTestKey(null);
+      setSelectedFn(null);
+      setSelectedTestName(name);
+      setViewingCollection(false);
+      setViewingTestRun(false);
+      setHighlightedNodeId(null);
+      setWorkflowContext(null);
+      setActiveTab('graph');
+    },
+    [onNavigateToSource],
+  );
+
+  // Keep a selected preview case synchronized with source edits. If the test
+  // is deleted, retain the current function/args as an ordinary manual draft.
   useEffect(() => {
-    setSelectedFn((prev) => prev && !functionNames.includes(prev) ? null : prev);
+    if (!selectedPreviewTestKey) return;
+    const test = previewTests.find(
+      (candidate) => previewTestKey(candidate) === selectedPreviewTestKey,
+    );
+    if (!test) {
+      setSelectedPreviewTestKey(null);
+      return;
+    }
+    typedArgsByFnRef.current[test.functionName] = test.argsJson;
+    setArgsJson(test.argsJson);
+    setSelectedFn(test.functionName);
+  }, [previewTests, selectedPreviewTestKey]);
+
+  // ── Args form wiring ─────────────────────────────────────────────────────
+  // `undefined` = no schema shipped (old engine / extraction miss) → raw-only.
+  const paramSchemas = selectedFnInfo?.params;
+  const projectTypes = currentUpdate?.types;
+  const typeLookup = useMemo(
+    () => typeLookupFrom(projectTypes),
+    [projectTypes],
+  );
+  const argsSchemaKey = JSON.stringify([
+    paramSchemas ?? null,
+    projectTypes ?? null,
+  ]);
+  // The form can only render args that parse to a plain JSON object; anything
+  // else (mid-edit raw JSON, array) falls back to the raw input with a notice
+  // instead of destroying the user's text.
+  const parsedArgs = useMemo<Record<string, unknown> | null>(() => {
+    try {
+      const parsed: unknown = JSON.parse(argsJson);
+      if (isPlainObject(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // fall through
+    }
+    return null;
+  }, [argsJson]);
+  const reconciledFormArgs = useMemo(() => {
+    if (parsedArgs === null || paramSchemas === undefined) return null;
+    return reconcileArgs(parsedArgs, paramSchemas, typeLookup);
+  }, [parsedArgs, paramSchemas, typeLookup]);
+  const showArgsForm =
+    argsMode === 'form' && paramSchemas !== undefined && parsedArgs !== null;
+  const argsFormUnavailable =
+    argsMode === 'form' && paramSchemas !== undefined && parsedArgs === null;
+
+  // Reconcile once for each project/function/schema combination while form
+  // mode is active. This replaces the old function-only seed and normalize
+  // guards, which never re-ran when a same-name function changed type.
+  const argsSchemaScope = selectedFn
+    ? JSON.stringify([selectedProject ?? null, selectedFn, argsSchemaKey])
+    : null;
+  const reconcileStateRef = useRef<{ scope: string | null; done: boolean }>({
+    done: false,
+    scope: null,
+  });
+  useEffect(() => {
+    const state = reconcileStateRef.current;
+    if (argsMode === 'raw') {
+      state.done = false;
+      return;
+    }
+    if (!selectedFn || paramSchemas === undefined || argsSchemaScope === null) {
+      return;
+    }
+    if (state.scope === argsSchemaScope && state.done) return;
+    reconcileStateRef.current = { done: true, scope: argsSchemaScope };
+    let args: unknown;
+    try {
+      args = JSON.parse(baseArgsFor(selectedFn));
+    } catch {
+      return; // not form-renderable; the raw fallback shows it as-is
+    }
+    if (!isPlainObject(args)) return;
+    const reconciled = reconcileArgs(args, paramSchemas, typeLookup);
+    if (reconciled !== args) {
+      updateArgsJson(JSON.stringify(reconciled));
+    }
+  }, [
+    argsMode,
+    selectedFn,
+    paramSchemas,
+    typeLookup,
+    argsSchemaScope,
+    baseArgsFor,
+    updateArgsJson,
+  ]);
+
+  const onRunFunction = useCallback(async () => {
+    if (!selectedFn || !selectedProject || isRunning) return;
+
+    // Don't force the 'run' tab — running keeps the user on whatever tab
+    // they're viewing (graph, trace, prompt, etc.).
+    setExpandedLogId(null);
+    setRunValidationError(null);
+
+    requestAnimationFrame(() => {
+      outputRef.current?.scrollTo({ behavior: 'smooth', top: 0 });
+    });
+
+    try {
+      const parsed: unknown = JSON.parse(argsJson);
+      if (!isPlainObject(parsed)) {
+        throw new Error(
+          'Arguments must be a JSON object, e.g. {"arr": [3,1,2]}',
+        );
+      }
+      // Effects normally keep form state canonical, but Run must also close
+      // the same-commit race after a project/schema update. Raw mode remains
+      // an exact escape hatch and is intentionally not reconciled here.
+      const runArgs =
+        argsMode === 'form' && paramSchemas !== undefined
+          ? reconcileArgs(parsed, paramSchemas, typeLookup)
+          : parsed;
+      const runArgsJson =
+        runArgs === parsed ? argsJson : JSON.stringify(runArgs);
+      if (runArgs !== parsed) updateArgsJson(runArgsJson);
+      const argsBytes = encodeRunArgs(runArgs);
+
+      const boundaryId = await executionStore.startRun({
+        argsBytes: new Uint8Array(argsBytes),
+        functionName: selectedFn,
+        project: selectedProject,
+      });
+      setSelectedGraphRunId(null);
+      setArgsJsonByBoundaryId((prev) => ({
+        ...prev,
+        [boundaryId]: runArgsJson,
+      }));
+    } catch (e) {
+      if (isProjectNotReadyError(e)) {
+        // Fail-closed rebuild window: render the transient "Preparing current
+        // build…" state instead of a raw error. Run re-enables automatically
+        // when the next ProjectUpdate reports a current build.
+        markSelectedProjectNotReady(selectedProject);
+        return;
+      }
+      const errMsg = e instanceof Error ? e.message : String(e);
+      setRunValidationError(errMsg);
+    }
+  }, [
+    selectedFn,
+    selectedProject,
+    argsJson,
+    argsMode,
+    paramSchemas,
+    typeLookup,
+    isRunning,
+    executionStore,
+    updateArgsJson,
+    markSelectedProjectNotReady,
+  ]);
+  // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
+  // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
+  // them. expr functions just return a structured value (raw == parsed).
+  const llmFunctionNames = new Set(
+    functions.filter((f) => f.kind === 'llm').map((f) => f.name),
+  );
+  const latestGraphRunSnapshot = useMemo(
+    () =>
+      findLatestGraphRunSnapshot(
+        executionSnapshot.runs,
+        selectedFn,
+        selectedProject,
+        currentUpdate?.generation ?? null,
+        selectedGraphRunId,
+      ),
+    [
+      executionSnapshot.runs,
+      selectedFn,
+      selectedProject,
+      currentUpdate?.generation,
+      selectedGraphRunId,
+    ],
+  );
+  const handleSelectHistoryRun = useCallback(
+    (run: RunStoreDisplayRun) => {
+      if (
+        !functionNames.includes(run.functionName) ||
+        currentUpdate?.generation == null ||
+        run.projectGeneration !== currentUpdate.generation
+      ) {
+        return;
+      }
+      setWorkflowContext(null);
+      setSelectedPreviewTestKey(null);
+      setViewingCollection(false);
+      setViewingTestRun(false);
+      setSelectedTestName(null);
+      setSelectedFn(run.functionName);
+      setSelectedGraphRunId(run.id);
+      setHighlightedNodeId(null);
+      setActiveTab('graph');
+    },
+    [currentUpdate?.generation, functionNames],
+  );
+  // The run-history/logs strip is lifted out of the sidebar+content row so it
+  // spans the panel's full width; the row gets bottom padding to make room.
+  const runLogsVisible =
+    activeTab === 'run' &&
+    !!selectedFn &&
+    !viewingCollection &&
+    !viewingTestRun;
+
+  useEffect(() => {
+    setSelectedFn((prev) =>
+      prev && !functionNames.includes(prev) ? null : prev,
+    );
   }, [functionNames]);
+
+  // Prefetch every visible function's CFG once per project build so the
+  // workflow-root heuristic can see the whole call graph. The responses
+  // land in workflowCfgCacheRef (display is guarded by selectedFn).
+  const prefetchedCfgRef = useRef<{ version: unknown; names: Set<string> }>({
+    names: new Set(),
+    version: undefined,
+  });
+  useEffect(() => {
+    if (!selectedProject) return;
+    const slot = prefetchedCfgRef.current;
+    if (slot.version !== projectUpdateVersion) {
+      slot.version = projectUpdateVersion;
+      slot.names = new Set();
+      workflowCfgCacheRef.current = new Map();
+      workflowCfgResponsesRef.current = new Map();
+      cfgRequestIdsRef.current = new Map();
+    }
+    for (const name of functionNames) {
+      if (slot.names.has(name)) continue;
+      slot.names.add(name);
+      requestControlFlowGraph(selectedProject, name);
+    }
+  }, [
+    functionNames,
+    selectedProject,
+    projectUpdateVersion,
+    requestControlFlowGraph,
+  ]);
+
+  const workflowNodeCounts = useMemo(() => {
+    void workflowCacheVersion;
+    if (
+      prefetchedCfgRef.current.version !== projectUpdateVersion ||
+      !functionNames.every((name) => workflowCfgResponsesRef.current.has(name))
+    ) {
+      return undefined;
+    }
+
+    return new Map(
+      functionNames.map((name) => [
+        name,
+        Object.keys(workflowCfgResponsesRef.current.get(name)?.nodes ?? {})
+          .length,
+      ]),
+    );
+  }, [functionNames, projectUpdateVersion, workflowCacheVersion]);
+
+  // Reverse call map over the cached CFGs: callee -> the functions that
+  // call it. calleeName may be bare while function names are qualified
+  // (`main.illustrate`), so resolve by exact match or trailing segment.
+  const workflowCallers = useMemo(() => {
+    void workflowCacheVersion;
+    const resolve = (callee: string): string | null =>
+      functionNames.find(
+        (n) =>
+          n === callee || n.endsWith(`.${callee}`) || callee.endsWith(`.${n}`),
+      ) ?? null;
+    const callers = new Map<string, Set<string>>();
+    for (const [fn, g] of workflowCfgCacheRef.current) {
+      for (const node of Object.values(g.nodes)) {
+        // calleeNames covers calls nested inside conditions/arguments;
+        // calleeName alone only covers nodes that ARE a call.
+        const names =
+          node.calleeNames && node.calleeNames.length > 0
+            ? node.calleeNames
+            : node.calleeName
+              ? [node.calleeName]
+              : [];
+        for (const raw of names) {
+          const callee = resolve(raw);
+          if (!callee || callee === fn) continue;
+          let set = callers.get(callee);
+          if (!set) {
+            set = new Set();
+            callers.set(callee, set);
+          }
+          set.add(fn);
+        }
+      }
+    }
+    return callers;
+  }, [workflowCacheVersion, functionNames]);
+
+  // The topmost workflows containing fn: walk the caller chain upward to
+  // functions nobody else calls. Tests never appear — they are not in the
+  // function list, so their call sites are not in the cache. The input may
+  // be a bare name (cursor context) while the map keys are the qualified
+  // list names, so canonicalize first. Alongside the roots, report each
+  // root's "first hop" — the function the root calls on the path down to
+  // fn — so the call-site node can be highlighted after promotion.
+  const workflowRouteFor = useCallback(
+    (rawFn: string): { roots: string[]; firstHop: Map<string, string> } => {
+      const fn =
+        functionNames.find(
+          (n) =>
+            n === rawFn || n.endsWith(`.${rawFn}`) || rawFn.endsWith(`.${n}`),
+        ) ?? rawFn;
+      const roots = new Set<string>();
+      const firstHop = new Map<string, string>();
+      const seen = new Set<string>([fn]);
+      const stack: Array<{ node: string; via: string }> = [
+        ...(workflowCallers.get(fn) ?? []),
+      ].map((c) => ({ node: c, via: fn }));
+      while (stack.length > 0) {
+        const entry = stack.pop();
+        if (!entry || seen.has(entry.node)) continue;
+        seen.add(entry.node);
+        const ups = workflowCallers.get(entry.node);
+        if (!ups || ups.size === 0) {
+          roots.add(entry.node);
+          if (!firstHop.has(entry.node)) firstHop.set(entry.node, entry.via);
+        } else {
+          stack.push(...[...ups].map((u) => ({ node: u, via: entry.node })));
+        }
+      }
+      return { firstHop, roots: [...roots] };
+    },
+    [workflowCallers, functionNames],
+  );
+  useEffect(() => {
+    workflowRouteForRef.current = workflowRouteFor;
+  }, [workflowRouteFor]);
+
+  // The node in rootFn's CFG whose expression calls hopFn — what to
+  // highlight after promoting to the workflow root.
+  const findCallSiteNode = useCallback(
+    (rootFn: string, hopFn: string): number | null => {
+      const g = workflowCfgCacheRef.current.get(rootFn);
+      if (!g) return null;
+      const matches = (raw: string) =>
+        raw === hopFn || hopFn.endsWith(`.${raw}`) || raw.endsWith(`.${hopFn}`);
+      let fallback: number | null = null;
+      for (const node of Object.values(g.nodes)) {
+        const names =
+          node.calleeNames && node.calleeNames.length > 0
+            ? node.calleeNames
+            : node.calleeName
+              ? [node.calleeName]
+              : [];
+        if (!names.some(matches)) continue;
+        if (!node.isContainer) return node.id;
+        fallback = fallback ?? node.id;
+      }
+      return fallback;
+    },
+    [],
+  );
+
+  // Apply the caller's initial function selection once, as soon as the
+  // project reports a matching function. Function names may arrive
+  // namespace-qualified (e.g. `main.illustrate`), so match by exact name
+  // or trailing segment. Never overrides a user choice.
+  const appliedInitialFnRef = useRef(false);
+  useEffect(() => {
+    if (appliedInitialFnRef.current || !initialFunctionName) return;
+    const match = functionNames.find(
+      (n) => n === initialFunctionName || n.endsWith(`.${initialFunctionName}`),
+    );
+    if (!match) return;
+    appliedInitialFnRef.current = true;
+    setSelectedFn((prev) => prev ?? match);
+  }, [functionNames, initialFunctionName]);
+
+  const defaultSelectionScopeRef = useRef<{
+    project: string | null;
+    update: ProjectUpdate | undefined;
+    applied: boolean;
+  }>({ applied: false, project: null, update: undefined });
+  useEffect(() => {
+    const scope = defaultSelectionScopeRef.current;
+    if (
+      scope.project !== selectedProject ||
+      scope.update !== projectUpdateVersion
+    ) {
+      defaultSelectionScopeRef.current = {
+        applied: false,
+        project: selectedProject,
+        update: projectUpdateVersion,
+      };
+    }
+
+    const currentScope = defaultSelectionScopeRef.current;
+    if (
+      currentScope.applied ||
+      selectedFn ||
+      !selectedProject ||
+      functionNames.length === 0 ||
+      viewingCollection ||
+      viewingTestRun
+    ) {
+      return;
+    }
+
+    if (initialFunctionName && !appliedInitialFnRef.current) {
+      const initialMatch = functionNames.find(
+        (n) =>
+          n === initialFunctionName || n.endsWith(`.${initialFunctionName}`),
+      );
+      if (initialMatch) return;
+    }
+
+    let next = selectMainFunctionName(functionNames);
+    if (!next) {
+      const graphResponses = workflowCfgResponsesRef.current;
+      const hasAllGraphResponses = functionNames.every((name) =>
+        graphResponses.has(name),
+      );
+      if (!hasAllGraphResponses) return;
+      next = selectDefaultFunctionName(
+        functionNames,
+        workflowCfgCacheRef.current,
+      );
+    }
+    if (!next) return;
+
+    currentScope.applied = true;
+    setWorkflowContext(null);
+    setSelectedFn(next);
+    setViewingCollection(false);
+    setViewingTestRun(false);
+  }, [
+    functionNames,
+    initialFunctionName,
+    projectUpdateVersion,
+    selectedFn,
+    selectedProject,
+    viewingCollection,
+    viewingTestRun,
+    workflowCacheVersion,
+  ]);
 
   // Reset active tab if current tab is no longer available for the selected function
   useEffect(() => {
@@ -998,803 +2645,1316 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const errors = diags.filter((d) => d.severity === 'error');
   const warnings = diags.filter((d) => d.severity === 'warning');
   const hasErrors = errors.length > 0;
+  // The fail-closed server refuses runs/previews over compile errors and
+  // while a rebuild is pending; keep runtime-derived controls disabled for
+  // both so users see one consistent gate instead of raw rejections.
+  const runtimeControlsDisabled = hasErrors || runtimePreparing;
 
   // Whether any known-required keys are missing — proactive, not just reactive to pending requests
   const hasMissingKeys = [...knownRequiredKeys].some((k) => !envVars[k]);
+
+  // Workflow switcher bar — shown above the graph when the function under
+  // the cursor belongs to more than one workflow. The graph always shows a
+  // containing workflow; this bar switches between them.
+  const workflowSwitcherBar = workflowContext && (
+    <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
+      <span className="text-vsc-text-faint">Workflow:</span>
+      {workflowContext.workflows.map((wf) => (
+        <Button
+          className="h-auto px-1.5 py-0.5 text-[10px]"
+          key={wf}
+          onClick={() => {
+            if (wf === selectedFn) return;
+            const route = workflowRouteFor(workflowContext.functionName);
+            const hop = route.firstHop.get(wf) ?? workflowContext.functionName;
+            const target =
+              findCallSiteNode(wf, workflowContext.functionName) ??
+              findCallSiteNode(wf, hop);
+            pendingHighlightRef.current =
+              target != null ? { fn: wf, nodeId: target } : null;
+            setSelectedPreviewTestKey(null);
+            setSelectedFn(wf);
+            setHighlightedNodeId(null);
+          }}
+          size="sm"
+          variant={wf === selectedFn ? 'secondary' : 'outline'}
+        >
+          {wf}
+        </Button>
+      ))}
+    </div>
+  );
 
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
     <>
-      {/* ──── Status bar ──── */}
-      <div className="flex items-center gap-2 px-2.5 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
-        {connectionVersion != null && (
-          <code className="text-[10px] font-vsc-mono text-vsc-text-faint">v{connectionVersion}</code>
-        )}
-        {buildTime != null && (() => {
-          const { absolute, relative } = formatBuildTime(buildTime);
-          return (
-            <code className="text-[10px] font-vsc-mono text-vsc-text-faint">
-              {absolute} ({relative})
-            </code>
-          );
-        })()}
-        <div className="flex-1" />
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-7 w-7" onClick={() => setShowApiKeysDialog(true)}>
-                <KeyRound size={14} />
-                {hasMissingKeys && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>API Keys</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
-      {/* Project selector (shown when multiple projects exist) */}
-      {projectRoots.length > 1 && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-          <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PROJECT</span>
-          <ToggleGroup
-            value={selectedProject ?? projectRoots[0]}
-            onValueChange={(v) => setSelectedProject(v)}
-            options={projectRoots.map((root) => ({
-              value: root,
-              label: (
-                <>
-                  {root}
-                  {projectUpdates[root] && !projectUpdates[root].isBexCurrent && (
-                    <span className="ml-0.5 text-vsc-yellow">*</span>
-                  )}
-                </>
-              ),
-            }))}
-            size="sm"
-          />
-        </div>
+      {buildTime != null && (
+        <span data-testid="hot-reload-test" style={{ display: 'none' }}>
+          {buildTime}
+        </span>
       )}
-
-      {/* Project state info (single project) */}
-      {projectRoots.length === 1 && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-          <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PROJECT</span>
-          <span className="text-[10px] font-vsc-mono text-vsc-text-muted">
-            {projectRoots[0]}
-          </span>
-        </div>
-      )}
-
-      {/* WASM Panic banner */}
-      {wasmPanic && (
-        <button
-          type="button"
-          onClick={() => {
-            setWasmPanic(null);
-            if (onReload) {
-              onReload();
-            } else {
-              window.location.reload();
-            }
-          }}
-          className="w-full flex items-center gap-2 px-2.5 py-2 border-none border-b border-vsc-border shrink-0 bg-[#5c1a1a] hover:bg-[#6e1f1f] transition-colors cursor-pointer text-left"
-        >
-          <span className="text-[12px]">⚠️</span>
-          <div className="flex-1 min-w-0">
-            <span className="font-vsc-mono text-[11px] text-[#ff6b6b] font-medium">
-              WASM Panic — Click to reload worker
-            </span>
-            <div className="font-vsc-mono text-[10px] text-[#ff6b6b]/70 truncate">
-              {wasmPanic.message}
-            </div>
-          </div>
-        </button>
-      )}
-
-      {/* Diagnostics banner */}
-      {(hasErrors || engineStale) && (
-        <div className="border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
-          {diags.length > 0 ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setDiagsExpanded((v) => !v)}
-                className="w-full flex items-center gap-1 px-2.5 py-1 bg-transparent border-none cursor-pointer text-left"
-              >
-                <span
-                  className="text-[10px] text-[#f48771] select-none transition-transform duration-150"
-                  style={{ display: 'inline-block', transform: diagsExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+      <Tabs
+        className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden"
+        onKeyDown={(e) => {
+          if (!((e.metaKey || e.ctrlKey) && e.key === 'Enter')) return;
+          // Same gates as the Run buttons: no runs from the collection or
+          // test-run views (where the run tab, history, and error strip are
+          // all hidden — a run started here would be invisible), and never
+          // over build errors. (onRunFunction can't check these itself —
+          // hasErrors is derived after its declaration.) Don't swallow the
+          // keystroke when nothing will run.
+          if (viewingCollection || viewingTestRun) return;
+          e.preventDefault();
+          if (!runtimeControlsDisabled) void onRunFunction();
+        }}
+        onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+        // Panel-scoped run shortcut: fires for focus anywhere inside the
+        // playground (form fields, raw input, graph) without stealing
+        // Cmd/Ctrl+Enter from the host's code editor.
+        value={activeTab}
+      >
+        {/* ──── Combined top bar ──── */}
+        <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  className="h-6 w-6 shrink-0"
+                  onClick={() => setSidebarOpen((prev) => !prev)}
+                  size="icon"
+                  variant="ghost"
                 >
-                  ▶
-                </span>
-                <span className="font-vsc-mono text-[10px] text-[#f48771]">
-                  {errors.length > 0 ? `${errors.length} error${errors.length !== 1 ? 's' : ''}` : ''}
-                  {errors.length > 0 && warnings.length > 0 ? ', ' : ''}
-                  {warnings.length > 0 ? `${warnings.length} warning${warnings.length !== 1 ? 's' : ''}` : ''}
-                  {' — using last successful build'}
-                </span>
-              </button>
-              {diagsExpanded && (
-                <div className="px-2.5 pb-1.5 flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
-                  {errors.map((e, i) => (
-                    <div key={`e${i}`} className="font-vsc-mono text-[10px] text-[#f48771]/80 pl-3.5 break-words whitespace-pre-wrap">
-                      {e.message}
-                    </div>
-                  ))}
-                  {warnings.map((w, i) => (
-                    <div key={`w${i}`} className="font-vsc-mono text-[10px] text-[#cca700]/80 pl-3.5 break-words whitespace-pre-wrap">
-                      {w.message}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="px-2.5 py-1 font-vsc-mono text-[10px] text-[#f48771]">
-              Build is stale — using last successful build
-            </div>
-          )}
-        </div>
-      )}
+                  <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
-      {/* Sidebar toggle */}
-      <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setSidebarOpen((prev) => !prev)}
-              >
-                <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        {selectedFn && (
-          <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold">{selectedFn}()</span>
-        )}
-        {selectedFn && (
-          <div className="flex items-center gap-1 ml-auto">
-            <Button
-              variant="success"
+          {selectedTestName && !viewingCollection && !viewingTestRun && (
+            <>
+              <span className="max-w-64 truncate text-[11px] font-vsc-mono text-vsc-accent font-semibold">
+                {selectedTestName}
+              </span>
+              <TabsList className="bg-transparent border-b-0 ml-1 h-7">
+                <TabsTrigger className="py-1 h-7" value="graph">
+                  Graph
+                </TabsTrigger>
+              </TabsList>
+            </>
+          )}
+
+          {selectedFn && !viewingCollection && !viewingTestRun && (
+            <>
+              <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold whitespace-nowrap">
+                {selectedFn}()
+              </span>
+              <TabsList className="bg-transparent border-b-0 ml-1 h-7">
+                <TabsTrigger className="py-1 h-7" value="run">
+                  Run
+                </TabsTrigger>
+                <TabsTrigger className="py-1 h-7" value="graph">
+                  Graph
+                </TabsTrigger>
+                <TabsTrigger className="py-1 h-7" value="trace">
+                  Trace
+                </TabsTrigger>
+                <TabsTrigger className="py-1 h-7" value="flame">
+                  Flame
+                </TabsTrigger>
+                {canPreviewPrompt && (
+                  <TabsTrigger className="py-1 h-7" value="prompt">
+                    Prompt
+                    {selectedFnInfo?.capabilities?.clientName && (
+                      <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
+                        {selectedFnInfo.capabilities.clientName}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                )}
+                {canPreviewCurl && (
+                  <TabsTrigger className="py-1 h-7" value="curl">
+                    cURL
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </>
+          )}
+
+          <div className="flex-1" />
+
+          {projectRoots.length > 1 && (
+            <ToggleGroup
+              onValueChange={(v) => setSelectedProject(v)}
+              options={projectRoots.map((root) => ({
+                label: (
+                  <>
+                    {root}
+                    {projectUpdates[root] &&
+                      !projectUpdates[root].isBexCurrent && (
+                        <span className="ml-0.5 text-vsc-yellow">*</span>
+                      )}
+                  </>
+                ),
+                value: root,
+              }))}
               size="sm"
-              className="text-[11px] font-semibold"
-              disabled={hasErrors || isRunning || !selectedProject}
-              onClick={onRunFunction}
-            >
-              {isRunning ? 'Running...' : 'Run'}
-            </Button>
+              value={selectedProject ?? projectRoots[0]}
+            />
+          )}
+
+          {/* The primary Run button lives next to the args editor inside the
+              Run tab; other tabs keep a compact icon so re-running while
+              watching the graph/trace stays one click away. */}
+          {selectedFn &&
+            !viewingCollection &&
+            !viewingTestRun &&
+            activeTab !== 'run' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      aria-label="Run"
+                      className="h-7 w-7"
+                      disabled={
+                        runtimeControlsDisabled || isRunning || !selectedProject
+                      }
+                      onClick={onRunFunction}
+                      size="icon-xs"
+                      variant="success"
+                    >
+                      <Play />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Run {selectedFn}() ({RUN_SHORTCUT_HINT})
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  className="relative h-7 w-7 shrink-0"
+                  onClick={() => setShowApiKeysDialog(true)}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <KeyRound size={14} />
+                  {hasMissingKeys && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex flex-col gap-0.5">
+                  <span>API Keys</span>
+                  {connectionVersion != null && (
+                    <span className="text-[9px] text-vsc-text-faint font-vsc-mono">
+                      v{connectionVersion}
+                    </span>
+                  )}
+                  {buildTime != null &&
+                    (() => {
+                      const { absolute, relative } = formatBuildTime(buildTime);
+                      return (
+                        <span className="text-[9px] text-vsc-text-faint font-vsc-mono">
+                          {absolute} ({relative})
+                        </span>
+                      );
+                    })()}
+                  {projectRoots.length === 1 && (
+                    <span className="text-[9px] text-vsc-text-faint font-vsc-mono">
+                      {projectRoots[0]}
+                    </span>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Settings (gear) menu */}
+          <div className="relative shrink-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => setShowSettingsMenu((v) => !v)}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <Settings size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Playground settings</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {showSettingsMenu && (
+              <>
+                <button
+                  aria-label="Close settings"
+                  className="fixed inset-0 z-40 cursor-default bg-transparent border-none"
+                  onClick={() => setShowSettingsMenu(false)}
+                  type="button"
+                />
+                <div className="absolute right-0 top-full mt-1 z-50 w-60 rounded border border-vsc-border bg-vsc-surface shadow-lg p-2.5">
+                  <label className="flex items-center gap-1.5 text-[11px] text-vsc-text-muted cursor-pointer select-none">
+                    <input
+                      checked={showInternalFunctions}
+                      className="h-3 w-3 accent-vsc-accent"
+                      onChange={(e) =>
+                        setShowInternalFunctions(e.currentTarget.checked)
+                      }
+                      type="checkbox"
+                    />
+                    <span>Show internal functions</span>
+                    <span className="ml-auto font-vsc-mono text-vsc-text-faint">
+                      {internalFunctionCount}
+                    </span>
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* WASM Panic banner */}
+        {wasmPanic && (
+          <button
+            className="w-full flex items-center gap-2 px-2.5 py-2 border-none border-b border-vsc-border shrink-0 bg-[#5c1a1a] hover:bg-[#6e1f1f] transition-colors cursor-pointer text-left"
+            onClick={() => {
+              setWasmPanic(null);
+              if (onReload) {
+                onReload();
+              } else {
+                window.location.reload();
+              }
+            }}
+            type="button"
+          >
+            <span className="text-[12px]">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <span className="font-vsc-mono text-[11px] text-[#ff6b6b] font-medium">
+                WASM Panic — Click to reload worker
+              </span>
+              <div className="font-vsc-mono text-[10px] text-[#ff6b6b]/70 truncate">
+                {wasmPanic.message}
+              </div>
+            </div>
+          </button>
+        )}
+
+        {/* Preparing banner. The sidebar keeps showing the previous
+            function/test catalog, but runtime-derived controls stay disabled
+            until the fail-closed server reports a current build. */}
+        {selectedProject && runtimePreparing && !hasErrors && (
+          <output className="flex shrink-0 items-center gap-2 border-b border-vsc-border bg-vsc-surface px-2.5 py-1.5">
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-vsc-accent" />
+            <span className="font-vsc-mono text-[11px] text-vsc-text">
+              Preparing current build…
+            </span>
+          </output>
+        )}
+
+        {/* Diagnostics banner */}
+        {hasErrors && (
+          <div className="border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
+            {diags.length > 0 ? (
+              <>
+                <button
+                  className="w-full flex items-center gap-1 px-2.5 py-1 bg-transparent border-none cursor-pointer text-left"
+                  onClick={() => setDiagsExpanded((v) => !v)}
+                  type="button"
+                >
+                  <span
+                    className="text-[10px] text-[#f48771] select-none transition-transform duration-150"
+                    style={{
+                      display: 'inline-block',
+                      transform: diagsExpanded
+                        ? 'rotate(90deg)'
+                        : 'rotate(0deg)',
+                    }}
+                  >
+                    ▶
+                  </span>
+                  <span className="font-vsc-mono text-[10px] text-[#f48771]">
+                    {errors.length > 0
+                      ? `${errors.length} error${errors.length !== 1 ? 's' : ''}`
+                      : ''}
+                    {errors.length > 0 && warnings.length > 0 ? ', ' : ''}
+                    {warnings.length > 0
+                      ? `${warnings.length} warning${warnings.length !== 1 ? 's' : ''}`
+                      : ''}
+                    {' — current build unavailable'}
+                  </span>
+                </button>
+                {diagsExpanded && (
+                  <div className="px-2.5 pb-1.5 flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
+                    {errors.map((e) => (
+                      <div
+                        className="font-vsc-mono text-[10px] text-[#f48771]/80 pl-3.5 break-words whitespace-pre-wrap"
+                        key={`error-${e.message}`}
+                      >
+                        {e.message}
+                      </div>
+                    ))}
+                    {warnings.map((w) => (
+                      <div
+                        className="font-vsc-mono text-[10px] text-[#cca700]/80 pl-3.5 break-words whitespace-pre-wrap"
+                        key={`warning-${w.message}`}
+                      >
+                        {w.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : null}
           </div>
         )}
-      </div>
 
-      {/* Main layout: sidebar + content */}
-      <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <>
-            <div className="shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
-              <FunctionSidebar
-                functions={functions}
-                testTree={testTree}
-                selectedFn={selectedFn}
-                onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); setViewingCollection(false); setViewingTestRun(false); }}
-                onRefreshTests={handleRefreshTests}
-                onRunTest={handleRunTest}
-                testRunResults={testRunResults}
-                failedExpands={failedExpands}
-                onRetryExpand={handleRetryExpand}
-                collectionRun={collectionRun}
-                viewingCollection={viewingCollection}
-                onSelectCollectionView={() => { setViewingCollection(true); setViewingTestRun(false); setSelectedFn(null); }}
+        {/* Main layout: sidebar + content. When the run-history strip is
+            visible it is absolutely positioned across the panel's full
+            width, so the row ends above it. */}
+        <div
+          className="flex flex-1 min-h-0"
+          style={{
+            paddingBottom: runLogsVisible ? logsPanelHeight + 6 : 0,
+          }}
+        >
+          {/* Sidebar */}
+          {sidebarOpen && (
+            <>
+              <div
+                className="shrink-0 overflow-hidden"
+                style={{ width: sidebarWidth }}
+              >
+                <FunctionSidebar
+                  collectionLogCount={collectionDebug?.fetchLogs.length ?? 0}
+                  failedExpands={failedExpands}
+                  functions={visibleFunctions}
+                  internalFunctionCount={internalFunctionCount}
+                  isLoadingProject={isLoadingProject}
+                  onRefreshTests={handleRefreshTests}
+                  onRetryExpand={handleRetryExpand}
+                  onRunTest={handleRunTest}
+                  onSelectCollectionView={() => {
+                    setViewingCollection(true);
+                    setViewingTestRun(false);
+                    setSelectedTestName(null);
+                    setSelectedFn(null);
+                  }}
+                  onSelectFn={(fn) => {
+                    setSelectedTestName(null);
+                    setSelectedPreviewTestKey(null);
+                    setViewingCollection(false);
+                    setViewingTestRun(false);
+                    setHighlightedNodeId(null);
+                    setWorkflowContext(null);
+                    setSelectedFn(fn);
+                  }}
+                  onSelectPreviewTest={handleSelectPreviewTest}
+                  onSelectTest={handleSelectTest}
+                  previewTests={previewTests}
+                  runtimeControlsDisabled={runtimeControlsDisabled}
+                  selectedFn={selectedFn}
+                  selectedPreviewTestKey={selectedPreviewTestKey}
+                  selectedTestName={selectedTestName}
+                  showInternalFunctions={showInternalFunctions}
+                  testRunResults={testRunResults}
+                  testTree={testTree}
+                  viewingCollection={viewingCollection}
+                  workflowNodeCounts={workflowNodeCounts}
+                />
+              </div>
+              <div
+                className="w-1 shrink-0 cursor-col-resize hover:bg-vsc-accent/30 transition-colors border-r border-vsc-border"
+                onMouseDown={onResizeStart}
               />
-            </div>
-            <div
-              onMouseDown={onResizeStart}
-              className="w-1 shrink-0 cursor-col-resize hover:bg-vsc-accent/30 transition-colors border-r border-vsc-border"
-            />
-          </>
-        )}
+            </>
+          )}
 
-        {/* Content area */}
-        <div className="flex-1 flex flex-col min-h-0 min-w-0">
-          {viewingCollection && collectionRun ? (
-            <CollectionRunView
-              run={collectionRun}
-              expandedLogId={expandedLogId}
-              setExpandedLogId={setExpandedLogId}
-              resultRenderers={resultRenderers}
-            />
-          ) : viewingTestRun ? (
-            <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
-              {runs.length === 0 && (
-                <div className="p-5 text-center text-vsc-text-faint text-[11px]">
-                  No test runs yet
-                </div>
-              )}
-              {[...runs].reverse().map((run, runIdx) => {
-                const isLatest = runIdx === 0;
-                const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : run.status === 'cancelled' ? 'bg-vsc-yellow' : 'bg-vsc-text-muted';
-                return (
-                  <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
-                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`} />
-                      <span className="text-vsc-accent font-semibold text-[11px]">
-                        {run.testName ?? run.functionName}
-                      </span>
-                      {run.status === 'running' && (
-                        <>
-                          <span className="text-vsc-text-muted text-[10px]">running...</span>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
-                                  onClick={() => onCancelRun(run.id)}
-                                >
-                                  <Square size={12} />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Cancel execution</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </>
+          {/* Content area */}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0">
+            {viewingCollection && collectionDebug ? (
+              <CollectionDebugView
+                expandedLogId={expandedLogId}
+                setExpandedLogId={setExpandedLogId}
+                state={collectionDebug}
+              />
+            ) : viewingTestRun ? (
+              <div
+                className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg"
+                ref={outputRef}
+              >
+                {testRuns.length === 0 && (
+                  <div className="p-5 text-center text-vsc-text-faint text-[11px]">
+                    No test runs yet
+                  </div>
+                )}
+                {testRuns.map((run, boundaryIdx) => {
+                  const isLatest = boundaryIdx === 0;
+                  const statusCls =
+                    run.status === 'error'
+                      ? 'bg-vsc-red'
+                      : run.status === 'success'
+                        ? 'bg-vsc-green'
+                        : run.status === 'cancelled'
+                          ? 'bg-vsc-yellow'
+                          : 'bg-vsc-text-muted';
+                  return (
+                    <div
+                      className={
+                        !isLatest ? 'border-b-2 border-vsc-border' : ''
+                      }
+                      key={run.id}
+                    >
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`}
+                        />
+                        <span className="text-vsc-accent font-semibold text-[11px]">
+                          {run.testName ?? run.functionName}
+                        </span>
+                        {run.status === 'running' && (
+                          <>
+                            <span className="text-vsc-text-muted text-[10px]">
+                              running...
+                            </span>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
+                                    onClick={() => onCancelFunctionRun(run.id)}
+                                    size="icon"
+                                    variant="ghost"
+                                  >
+                                    <Square size={12} />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Cancel execution
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </>
+                        )}
+                        {run.durationMs != null && (
+                          <span className="text-vsc-text-faint text-[10px] shrink-0">
+                            {run.durationMs}ms
+                          </span>
+                        )}
+                      </div>
+                      {run.rootInput != null && (
+                        <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                          <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                            Input
+                          </div>
+                          <ResultDisplay
+                            customRenderers={resultRenderers}
+                            result={run.rootInput}
+                          />
+                        </div>
                       )}
-                      {run.durationMs != null && (
-                        <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
+                      {run.fetchLogs.map((log) => {
+                        const isExp = expandedLogId === log.id;
+                        const statusColorCls =
+                          log.status === null
+                            ? 'text-vsc-text-muted'
+                            : log.status >= 200 && log.status < 300
+                              ? 'text-vsc-green'
+                              : log.status === 0
+                                ? 'text-vsc-red'
+                                : 'text-vsc-yellow';
+                        return (
+                          <div key={`t-${log.id}`}>
+                            <button
+                              className="flex w-full items-center gap-1.5 border-0 border-b border-vsc-border-subtle bg-transparent py-0.5 pr-2.5 pl-[22px] text-left cursor-pointer"
+                              onClick={() =>
+                                setExpandedLogId(isExp ? null : log.id)
+                              }
+                              type="button"
+                            >
+                              <span
+                                className={`${statusColorCls} font-semibold text-[11px]`}
+                              >
+                                {log.status ?? '...'}
+                              </span>
+                              <span className="text-vsc-text-faint text-[10px]">
+                                {log.method}
+                              </span>
+                              <RequestUrlLabel
+                                requestHeaders={log.requestHeaders}
+                                url={log.url}
+                              />
+                              {log.durationMs != null && (
+                                <span className="text-vsc-text-faint text-[10px]">
+                                  {log.durationMs}ms
+                                </span>
+                              )}
+                              <span className="text-vsc-text-faint text-[9px]">
+                                {isExp ? '\u25B4' : '\u25BE'}
+                              </span>
+                            </button>
+                            {isExp && (
+                              <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
+                                {log.error && (
+                                  <CodeBlock variant="error">
+                                    {log.error}
+                                  </CodeBlock>
+                                )}
+                                <div>
+                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                    Request Headers
+                                  </div>
+                                  <CodeBlock>
+                                    {JSON.stringify(
+                                      log.requestHeaders,
+                                      null,
+                                      2,
+                                    )}
+                                  </CodeBlock>
+                                </div>
+                                {log.requestBody && (
+                                  <div>
+                                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                      Request Body
+                                    </div>
+                                    <CodeBlock>
+                                      {tryFormatJson(log.requestBody)}
+                                    </CodeBlock>
+                                  </div>
+                                )}
+                                {log.responseBody != null && (
+                                  <div>
+                                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                      Response Body
+                                    </div>
+                                    <CodeBlock>
+                                      {tryFormatJson(log.responseBody)}
+                                    </CodeBlock>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {run.inputRequests.map((req) => (
+                        <div
+                          className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface"
+                          key={req.id}
+                        >
+                          <span className="text-vsc-text-faint text-xs shrink-0">
+                            {req.prompt ?? 'Input:'}
+                          </span>
+                          <input
+                            // biome-ignore lint/a11y/noAutofocus: focus the newly requested inline input
+                            autoFocus
+                            className="flex-1 bg-vsc-bg border border-vsc-border rounded px-2 py-1 text-xs text-vsc-text font-vsc-mono focus:outline-none focus:border-vsc-accent"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                submitRunInput(
+                                  run.id,
+                                  req.id,
+                                  e.currentTarget.value,
+                                );
+                              }
+                            }}
+                          />
+                        </div>
+                      ))}
+                      {run.outputChunks.length > 0 && (
+                        <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                          <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                            Output
+                          </div>
+                          <RunOutputTerminal
+                            chunks={run.outputChunks}
+                            runKey={run.id}
+                          />
+                        </div>
+                      )}
+                      {run.status === 'cancelled' && (
+                        <div className="py-1.5 pr-2.5 pl-[22px]">
+                          <div className="text-[11px] text-vsc-text-faint italic">
+                            Cancelled
+                          </div>
+                        </div>
+                      )}
+                      {run.error && (
+                        <div className="py-1.5 pr-2.5 pl-[22px]">
+                          <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">
+                            Error
+                          </div>
+                          <ErrorDisplay error={run.error} />
+                          {run.errorValue != null && (
+                            <div className="mt-1">
+                              <ResultDisplay
+                                customRenderers={resultRenderers}
+                                result={run.errorValue}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {run.result != null && (
+                        <div className="py-1.5 pr-2.5 pl-[22px]">
+                          <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">
+                            Result
+                          </div>
+                          <ResultDisplay
+                            customRenderers={resultRenderers}
+                            result={run.result}
+                          />
+                        </div>
                       )}
                     </div>
-                    {run.fetchLogs.map((log) => {
-                      const isExp = expandedLogId === log.id;
-                      const statusColorCls = log.status === null ? 'text-vsc-text-muted'
-                        : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
-                        : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
-                      return (
-                        <div key={`t-${log.id}`}>
-                          <div
-                            onClick={() => setExpandedLogId(isExp ? null : log.id)}
-                            className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
-                          >
-                            <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
-                            <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
-                            <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
-                            {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
-                            <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
+                  );
+                })}
+              </div>
+            ) : graphTargetName ? (
+              <>
+                {/* Graph view */}
+                <TabsContent
+                  className="flex-1 min-h-0 mt-0 flex flex-col"
+                  style={{ minHeight: 300 }}
+                  value="graph"
+                >
+                  {workflowSwitcherBar}
+                  {controlFlowGraph ? (
+                    <GraphView
+                      calls={latestGraphRunSnapshot?.calls}
+                      customRenderers={resultRenderers}
+                      functionName={graphTargetName}
+                      graph={controlFlowGraph}
+                      graphRuntimeOverlay={
+                        latestGraphRunSnapshot?.graphRuntimeOverlay
+                      }
+                      onNodeClick={handleGraphNodeClick}
+                      run={latestGraphRunSnapshot ?? null}
+                      runError={latestGraphRunSnapshot?.error?.message ?? null}
+                      runStatus={latestGraphRunSnapshot?.status}
+                      selectedNodeId={highlightedNodeId}
+                      valueBodyCache={valueBodyCache}
+                      valueBodyCacheVersion={valueBodyCacheVersion}
+                    />
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
+                      Loading graph...
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* Trace timeline */}
+                <TabsContent
+                  className="flex-1 min-h-0 mt-0 flex flex-col"
+                  style={{ minHeight: 300 }}
+                  value="trace"
+                >
+                  <TraceTimelineView
+                    run={latestGraphRunSnapshot}
+                    valueBodyCache={valueBodyCache}
+                  />
+                </TabsContent>
+
+                {/* Profile flamegraph */}
+                <TabsContent
+                  className="flex-1 min-h-0 mt-0 flex flex-col"
+                  style={{ minHeight: 300 }}
+                  value="flame"
+                >
+                  {activeTab === 'flame' && (
+                    <ExecutionProfileView run={latestGraphRunSnapshot} />
+                  )}
+                </TabsContent>
+
+                {/* Prompt preview */}
+                {canPreviewPrompt && (
+                  <TabsContent
+                    className="flex-1 flex flex-col overflow-hidden mt-0"
+                    value="prompt"
+                  >
+                    {promptPreviewError && (
+                      <div className="px-2.5 py-1.5 text-[10px] text-vsc-error bg-vsc-error/10 border-b border-vsc-error/20 shrink-0">
+                        Preview error: {promptPreviewError}
+                      </div>
+                    )}
+                    <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 group relative">
+                      {promptPreviewResult != null && (
+                        <div className="absolute top-1 right-1 z-10">
+                          <CopyButton textRef={promptContentRef} />
+                        </div>
+                      )}
+                      <div ref={promptContentRef}>
+                        {promptPreviewResult != null ? (
+                          <ResultDisplay
+                            customRenderers={resultRenderers}
+                            result={promptPreviewResult}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+                            {previewLoading
+                              ? 'Loading prompt preview...'
+                              : 'Enter args to preview prompt'}
                           </div>
-                          {isExp && (
-                            <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
-                              {log.error && <CodeBlock variant="error">{log.error}</CodeBlock>}
-                              <div>
-                                <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
-                                <CodeBlock>{JSON.stringify(log.requestHeaders, null, 2)}</CodeBlock>
+                        )}
+                      </div>
+                    </div>
+                    {promptPreviewResult != null && (
+                      <PromptStats
+                        text={stringifyResult(promptPreviewResult)}
+                      />
+                    )}
+                  </TabsContent>
+                )}
+
+                {/* cURL preview */}
+                {canPreviewCurl && (
+                  <TabsContent
+                    className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 mt-0"
+                    value="curl"
+                  >
+                    {curlPreviewResult != null ? (
+                      <ResultDisplay
+                        customRenderers={resultRenderers}
+                        result={curlPreviewResult}
+                      />
+                    ) : curlPreviewError ? (
+                      <div className="flex items-center justify-center text-vsc-error text-xs h-full">
+                        {curlPreviewError}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+                        {previewLoading
+                          ? 'Loading cURL preview...'
+                          : 'Enter args to preview cURL'}
+                      </div>
+                    )}
+                  </TabsContent>
+                )}
+
+                {/* Execution area */}
+                <TabsContent
+                  className="flex-1 flex flex-col min-h-0 mt-0"
+                  value="run"
+                >
+                  {/* Args */}
+                  {/* `nokey`: keep React Flow's global key capture (Space,
+                      Backspace, ...) out of the args inputs */}
+                  <div className="nokey flex flex-col border-b border-vsc-border shrink-0">
+                    <div className="flex items-center min-h-7">
+                      <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
+                        args
+                      </span>
+                      {showArgsForm ? (
+                        <div className="flex-1" />
+                      ) : (
+                        <div className="flex-1 flex items-center min-w-0">
+                          <Input
+                            className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
+                            onChange={onArgsJsonChange}
+                            placeholder='{"key": "value"}'
+                            spellCheck={false}
+                            value={argsJson}
+                          />
+                          {argsFormUnavailable && (
+                            <span className="px-2 text-[10px] text-vsc-text-faint whitespace-nowrap">
+                              not a JSON object — form off
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {paramSchemas !== undefined && (
+                        <ToggleGroup
+                          className="px-1.5 shrink-0"
+                          onValueChange={setArgsMode}
+                          options={[
+                            { label: 'form', value: 'form' },
+                            { label: 'raw', value: 'raw' },
+                          ]}
+                          size="sm"
+                          value={argsMode}
+                        />
+                      )}
+                      <Button
+                        aria-label={isRunning ? 'Running' : 'Run'}
+                        className="mx-1 my-0.5 shrink-0 text-[11px] font-semibold"
+                        disabled={
+                          runtimeControlsDisabled ||
+                          isRunning ||
+                          !selectedProject
+                        }
+                        onClick={onRunFunction}
+                        size="xs"
+                        variant="success"
+                      >
+                        {isRunning ? (
+                          'Running...'
+                        ) : (
+                          <>
+                            Run
+                            <span className="font-normal opacity-70">
+                              {RUN_SHORTCUT_HINT}
+                            </span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {showArgsForm && paramSchemas && reconciledFormArgs && (
+                      <div className="max-h-56 overflow-y-auto px-2 py-1.5 border-t border-vsc-border">
+                        {/* Remount on function or schema changes so local widget
+                            drafts cannot outlive the schema they represent. */}
+                        <ArgsForm
+                          key={`${selectedProject ?? ''}:${selectedFn ?? ''}:${argsSchemaKey}`}
+                          onChange={onArgsFormChange}
+                          params={paramSchemas}
+                          types={projectTypes}
+                          value={reconciledFormArgs}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Live graph */}
+                  <div
+                    className="flex-1 min-h-0 flex flex-col bg-vsc-bg border-b border-vsc-border"
+                    style={{ minHeight: 180 }}
+                  >
+                    {workflowSwitcherBar}
+                    {controlFlowGraph ? (
+                      <GraphView
+                        calls={latestGraphRunSnapshot?.calls}
+                        customRenderers={resultRenderers}
+                        functionName={graphTargetName}
+                        graph={controlFlowGraph}
+                        graphRuntimeOverlay={
+                          latestGraphRunSnapshot?.graphRuntimeOverlay
+                        }
+                        onNodeClick={handleGraphNodeClick}
+                        run={latestGraphRunSnapshot ?? null}
+                        runError={
+                          latestGraphRunSnapshot?.error?.message ?? null
+                        }
+                        runStatus={latestGraphRunSnapshot?.status}
+                        selectedNodeId={highlightedNodeId}
+                        valueBodyCache={valueBodyCache}
+                        valueBodyCacheVersion={valueBodyCacheVersion}
+                      />
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
+                        Loading graph...
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Logs resize handle — spans the full panel width, pinned
+                      just above the run-history strip. */}
+                  <div
+                    className="absolute left-0 right-0 z-10 h-1.5 cursor-row-resize bg-vsc-surface hover:bg-vsc-accent/30 transition-colors border-y border-vsc-border"
+                    onMouseDown={onLogsResizeStart}
+                    style={{ bottom: logsPanelHeight }}
+                    title="Resize logs"
+                  />
+
+                  {/* Run history (scrollable) — full panel width, below the
+                      sidebar+content row. */}
+                  <div
+                    className="absolute left-0 right-0 bottom-0 z-10 overflow-auto font-vsc-mono text-xs bg-vsc-bg"
+                    ref={outputRef}
+                    style={{ height: logsPanelHeight }}
+                  >
+                    {runValidationError && (
+                      <div className="p-2.5 border-b border-vsc-border bg-vsc-error/10">
+                        <ErrorDisplay error={runValidationError} />
+                      </div>
+                    )}
+
+                    {functionRuns.length === 0 && !runValidationError && (
+                      <div className="p-5 text-center text-vsc-text-faint text-[11px]">
+                        Press Run to execute {selectedFn}()
+                      </div>
+                    )}
+
+                    {functionRuns.map((run, boundaryIdx) => {
+                      const isLatest = boundaryIdx === 0;
+                      const isCurrentGeneration =
+                        currentUpdate?.generation != null &&
+                        run.projectGeneration === currentUpdate.generation;
+                      const canViewRunInGraph =
+                        functionNames.includes(run.functionName) &&
+                        isCurrentGeneration;
+                      const isLlmFunctionRun = llmFunctionNames.has(
+                        run.functionName,
+                      );
+                      const statusCls =
+                        run.status === 'error'
+                          ? 'bg-vsc-red'
+                          : run.status === 'success'
+                            ? 'bg-vsc-green'
+                            : run.status === 'cancelled'
+                              ? 'bg-vsc-yellow'
+                              : 'bg-vsc-text-muted';
+
+                      return (
+                        <div
+                          className={
+                            !isLatest ? 'border-b-2 border-vsc-border' : ''
+                          }
+                          key={run.id}
+                        >
+                          {/* Run header */}
+                          <div className="flex items-center bg-vsc-surface border-b border-vsc-border-subtle">
+                            <button
+                              aria-label={`View ${run.functionName} run in graph`}
+                              className="flex flex-1 min-w-0 items-center gap-1.5 px-2.5 py-1.5 text-left hover:bg-vsc-accent/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-vsc-accent disabled:cursor-default disabled:hover:bg-transparent"
+                              disabled={!canViewRunInGraph}
+                              onClick={() => handleSelectHistoryRun(run)}
+                              title={
+                                !functionNames.includes(run.functionName)
+                                  ? 'This function is not available in the current build'
+                                  : isCurrentGeneration
+                                    ? 'View this run in the graph'
+                                    : 'This run belongs to an older build'
+                              }
+                              type="button"
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`}
+                              />
+                              <span className="text-vsc-accent font-semibold text-[11px]">
+                                {run.functionName}()
+                              </span>
+                              <span className="text-vsc-text-faint text-[10px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                                {run.argsJson}
+                              </span>
+                            </button>
+                            {run.status === 'running' && (
+                              <>
+                                <span className="text-vsc-text-muted text-[10px]">
+                                  running...
+                                </span>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        className="mr-1 h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
+                                        onClick={() =>
+                                          onCancelFunctionRun(run.id)
+                                        }
+                                        size="icon"
+                                        variant="ghost"
+                                      >
+                                        <Square size={12} />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Cancel execution
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </>
+                            )}
+                            {run.durationMs != null && (
+                              <span className="px-2.5 text-vsc-text-faint text-[10px] shrink-0">
+                                {run.durationMs}ms
+                              </span>
+                            )}
+                          </div>
+
+                          {run.rootInput != null && (
+                            <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                              <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                Input
                               </div>
-                              {log.requestBody && (
-                                <div>
-                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
-                                  <CodeBlock>{tryFormatJson(log.requestBody)}</CodeBlock>
+                              <ResultDisplay
+                                customRenderers={resultRenderers}
+                                result={run.rootInput}
+                              />
+                            </div>
+                          )}
+
+                          {/* Fetch logs for this run */}
+                          {run.fetchLogs.map((log) => {
+                            const isExp = expandedLogId === log.id;
+                            const statusColorCls =
+                              log.status === null
+                                ? 'text-vsc-text-muted'
+                                : log.status >= 200 && log.status < 300
+                                  ? 'text-vsc-green'
+                                  : log.status === 0
+                                    ? 'text-vsc-red'
+                                    : 'text-vsc-yellow';
+                            return (
+                              <div key={`n-${log.id}`}>
+                                <button
+                                  className="flex w-full items-center gap-1.5 border-0 border-b border-vsc-border-subtle bg-transparent py-0.5 pr-2.5 pl-[22px] text-left cursor-pointer"
+                                  onClick={() =>
+                                    setExpandedLogId(isExp ? null : log.id)
+                                  }
+                                  type="button"
+                                >
+                                  <span
+                                    className={`${statusColorCls} font-semibold text-[11px]`}
+                                  >
+                                    {log.status ?? '...'}
+                                  </span>
+                                  <span className="text-vsc-text-faint text-[10px]">
+                                    {log.method}
+                                  </span>
+                                  <RequestUrlLabel
+                                    requestHeaders={log.requestHeaders}
+                                    url={log.url}
+                                  />
+                                  {log.durationMs != null && (
+                                    <span className="text-vsc-text-faint text-[10px]">
+                                      {log.durationMs}ms
+                                    </span>
+                                  )}
+                                  <span className="text-vsc-text-faint text-[9px]">
+                                    {isExp ? '\u25B4' : '\u25BE'}
+                                  </span>
+                                </button>
+                                {isExp && (
+                                  <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
+                                    {log.error && (
+                                      <CodeBlock variant="error">
+                                        {log.error}
+                                      </CodeBlock>
+                                    )}
+                                    <div>
+                                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                        Request Headers
+                                      </div>
+                                      <CodeBlock>
+                                        {JSON.stringify(
+                                          log.requestHeaders,
+                                          null,
+                                          2,
+                                        )}
+                                      </CodeBlock>
+                                    </div>
+                                    {log.requestBody && (
+                                      <div>
+                                        <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                          Request Body
+                                        </div>
+                                        <CodeBlock>
+                                          {tryFormatJson(log.requestBody)}
+                                        </CodeBlock>
+                                      </div>
+                                    )}
+                                    {log.responseBody != null && (
+                                      <div>
+                                        <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                          Response Body
+                                        </div>
+                                        <CodeBlock>
+                                          {tryFormatJson(log.responseBody)}
+                                        </CodeBlock>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {/* Inline io.input() prompts for this run */}
+                          {run.inputRequests.map((req) => (
+                            <div
+                              className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface"
+                              key={req.id}
+                            >
+                              <span className="text-vsc-text-faint text-xs shrink-0">
+                                {req.prompt ?? 'Input:'}
+                              </span>
+                              <input
+                                // biome-ignore lint/a11y/noAutofocus: focus the newly requested inline input
+                                autoFocus
+                                className="flex-1 bg-vsc-bg border border-vsc-border rounded px-2 py-1 text-xs text-vsc-text font-vsc-mono focus:outline-none focus:border-vsc-accent"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    submitRunInput(
+                                      run.id,
+                                      req.id,
+                                      e.currentTarget.value,
+                                    );
+                                  }
+                                }}
+                              />
+                            </div>
+                          ))}
+
+                          {/* baml.io stream output, rendered as a terminal so
+                              the program's own ANSI colors and cursor control
+                              land the way they would in a shell. */}
+                          {run.outputChunks.length > 0 && (
+                            <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                              <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                Output
+                              </div>
+                              <RunOutputTerminal
+                                chunks={run.outputChunks}
+                                runKey={run.id}
+                              />
+                            </div>
+                          )}
+
+                          {/* Result / Error / Cancelled for this run */}
+                          {run.status === 'cancelled' && (
+                            <div className="py-1.5 pr-2.5 pl-[22px]">
+                              <div className="text-[11px] text-vsc-text-faint italic">
+                                Cancelled
+                              </div>
+                            </div>
+                          )}
+                          {run.error && (
+                            <div className="py-1.5 pr-2.5 pl-[22px]">
+                              <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">
+                                Error
+                              </div>
+                              <ErrorDisplay
+                                error={run.error}
+                                onRetry={onRunFunction}
+                              />
+                              {run.errorValue != null && (
+                                <div className="mt-1">
+                                  <ResultDisplay
+                                    customRenderers={resultRenderers}
+                                    result={run.errorValue}
+                                  />
                                 </div>
                               )}
-                              {log.responseBody != null && (
-                                <div>
-                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
-                                  <CodeBlock>{tryFormatJson(log.responseBody)}</CodeBlock>
+                            </div>
+                          )}
+                          {run.result != null && (
+                            <div className="py-1.5 pr-2.5 pl-[22px]">
+                              {run.status === 'success' &&
+                                run.fetchLogs.length > 0 && (
+                                  <div className="mb-1">
+                                    <MetadataBadges
+                                      durationMs={run.durationMs}
+                                      fetchLogs={run.fetchLogs}
+                                    />
+                                  </div>
+                                )}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1">
+                                  <div className="text-[10px] font-semibold text-vsc-green uppercase tracking-wide">
+                                    Result
+                                  </div>
+                                  {/* Parsed/Raw only applies to LLM functions,
+                                      where Raw is the un-parsed model output.
+                                      expr functions return a structured value. */}
+                                  {isLlmFunctionRun && (
+                                    <ToggleGroup
+                                      onValueChange={(v) =>
+                                        setResultModes((prev) => ({
+                                          ...prev,
+                                          [run.id]: v as 'parsed' | 'raw',
+                                        }))
+                                      }
+                                      options={[
+                                        { label: 'Parsed', value: 'parsed' },
+                                        { label: 'Raw', value: 'raw' },
+                                      ]}
+                                      size="sm"
+                                      value={resultModes[run.id] ?? 'parsed'}
+                                    />
+                                  )}
+                                  <CopyButton
+                                    iconSize={11}
+                                    text={stringifyResult(run.result)}
+                                  />
                                 </div>
-                              )}
+                                {isLlmFunctionRun &&
+                                (resultModes[run.id] ?? 'parsed') === 'raw' ? (
+                                  <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
+                                    {stringifyResult(run.result)}
+                                  </pre>
+                                ) : (
+                                  <ResultDisplay
+                                    customRenderers={resultRenderers}
+                                    result={run.result}
+                                  />
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
                       );
                     })}
-                    {/* Runtime events (log.info, baml.events.send, etc.) */}
-                    {run.runtimeEvents.length > 0 && (
-                      <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
-                        <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
-                          Events ({run.runtimeEvents.length})
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          {run.runtimeEvents.map((evt, evtIdx) => {
-                            const kind = evt.event;
-                            if (!kind) return null;
-
-                            let label: string;
-                            let payload: ReactNode;
-                            let colorCls: string;
-
-                            switch (kind.$case) {
-                              case 'functionStart':
-                                label = 'START';
-                                payload = kind.functionStart.name;
-                                colorCls = 'text-vsc-green';
-                                break;
-                              case 'functionEnd':
-                                label = 'END';
-                                payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
-                                colorCls = 'text-vsc-text-muted';
-                                break;
-                              case 'log': {
-                                const lvl = kind.log.level;
-                                label = lvl;
-                                payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
-                                colorCls = lvl === 'error' ? 'text-vsc-red'
-                                  : lvl === 'warn' ? 'text-vsc-yellow'
-                                  : lvl === 'debug' ? 'text-vsc-text-muted'
-                                  : 'text-vsc-blue';
-                                break;
-                              }
-                              case 'custom':
-                                label = 'EVENT';
-                                payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
-                                colorCls = 'text-vsc-purple';
-                                break;
-                              case 'setTags':
-                                label = 'TAGS';
-                                payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
-                                colorCls = 'text-vsc-text-muted';
-                                break;
-                              default:
-                                return null;
-                            }
-
-                            // Check if cursor is within this event's source span
-                            const source = kind.$case === 'log' ? kind.log.source : undefined;
-                            const isCursorMatch = cursorOffset != null && source != null &&
-                              cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
-
-                            return (
-                              <div
-                                key={`${evt.spanId}-${evtIdx}`}
-                                className={cn(
-                                  "flex items-start gap-1.5 text-[11px]",
-                                  isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
-                                  source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
-                                )}
-                                onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
-                              >
-                                <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
-                                <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    {/* Inline io.input() prompts for this run */}
-                    {(pendingInputs.get(run.id) ?? []).map((req) => (
-                      <div key={req.id} className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface">
-                        <span className="text-vsc-text-faint text-xs shrink-0">{req.prompt ?? 'Input:'}</span>
-                        <input
-                          className="flex-1 bg-vsc-bg border border-vsc-border rounded px-2 py-1 text-xs text-vsc-text font-vsc-mono focus:outline-none focus:border-vsc-accent"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              submitInput(req.id, e.currentTarget.value, run.id);
-                            }
-                          }}
-                        />
-                      </div>
-                    ))}
-                    {run.status === 'cancelled' && (
-                      <div className="py-1.5 pr-2.5 pl-[22px]">
-                        <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
-                      </div>
-                    )}
-                    {run.error && (
-                      <div className="py-1.5 pr-2.5 pl-[22px]">
-                        <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
-                        <ErrorDisplay error={run.error} />
-                      </div>
-                    )}
-                    {run.result != null && (
-                      <div className="py-1.5 pr-2.5 pl-[22px]">
-                        <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
-                        <ResultDisplay result={run.result} customRenderers={resultRenderers} />
-                      </div>
-                    )}
                   </div>
-                );
-              })}
-            </div>
-          ) : selectedFn ? (
-            <Tabs
-              value={activeTab}
-              onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-              className="flex-1 flex flex-col min-h-0"
-            >
-              <div className="flex items-center px-2.5 shrink-0 bg-vsc-surface">
-                <TabsList className="bg-transparent">
-                  <TabsTrigger value="run">Run</TabsTrigger>
-                  <TabsTrigger value="graph">Graph</TabsTrigger>
-                  {canPreviewPrompt && (
-                    <TabsTrigger value="prompt">
-                      Prompt
-                      {selectedFnInfo?.capabilities?.clientName && (
-                        <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
-                          {selectedFnInfo.capabilities.clientName}
-                        </span>
-                      )}
-                    </TabsTrigger>
-                  )}
-                  {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
-                </TabsList>
-                {runs.length > 0 && !isRunning && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto text-[10px] text-vsc-text-muted hover:text-vsc-text"
-                    onClick={() => {
-                      const runIds = runs.map((r) => r.id);
-                      port.postMessage({ type: 'clearHandles', runIds });
-                      setRuns([]);
-                    }}
-                  >
-                    Clear
-                  </Button>
-                )}
+                </TabsContent>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
+                {isLoadingProject
+                  ? 'Loading project...'
+                  : viewingCollection
+                    ? 'Collection not yet available — click Refresh'
+                    : 'Select a function to run'}
               </div>
-
-              {/* Graph view */}
-              <TabsContent value="graph" className="flex-1 min-h-0 mt-0 flex flex-col" style={{ minHeight: 300 }}>
-                {/* "Called from" bar — shown when the current function is called from workflows */}
-                {workflowContext && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
-                    <span className="text-vsc-text-faint">Called from:</span>
-                    {workflowContext.workflows.map((wf) => (
-                      <Button
-                        key={wf}
-                        variant="outline"
-                        size="sm"
-                        className="h-auto px-1.5 py-0.5 text-[10px]"
-                        onClick={() => {
-                          setWorkflowContext(null);
-                          setSelectedFn(wf);
-                          setHighlightedNodeId(null);
-                        }}
-                      >
-                        {wf}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-                {controlFlowGraph ? (
-                  <GraphView
-                    graph={controlFlowGraph}
-                    selectedNodeId={highlightedNodeId}
-                    onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
-                  />
-                ) : (
-                  <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
-                    Loading graph...
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Prompt preview */}
-              {canPreviewPrompt && (
-                <TabsContent value="prompt" className="flex-1 flex flex-col overflow-hidden mt-0">
-                  {promptPreviewError && (
-                    <div className="px-2.5 py-1.5 text-[10px] text-vsc-error bg-vsc-error/10 border-b border-vsc-error/20 shrink-0">
-                      Preview error: {promptPreviewError}
-                    </div>
-                  )}
-                  <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 group relative">
-                    {promptPreviewResult != null && (
-                      <div className="absolute top-1 right-1 z-10">
-                        <CopyButton textRef={promptContentRef} />
-                      </div>
-                    )}
-                    <div ref={promptContentRef}>
-                      {promptPreviewResult != null ? (
-                        <ResultDisplay result={promptPreviewResult} customRenderers={resultRenderers} />
-                      ) : (
-                        <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
-                          {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {promptPreviewResult && <PromptStats text={stringifyResult(promptPreviewResult)} />}
-                </TabsContent>
-              )}
-
-              {/* cURL preview */}
-              {canPreviewCurl && (
-                <TabsContent value="curl" className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 mt-0">
-                  {curlPreviewResult != null ? (
-                    <ResultDisplay result={curlPreviewResult} customRenderers={resultRenderers} />
-                  ) : curlPreviewError ? (
-                    <div className="flex items-center justify-center text-vsc-error text-xs h-full">
-                      {curlPreviewError}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
-                      {previewLoading ? 'Loading cURL preview...' : 'Enter args to preview cURL'}
-                    </div>
-                  )}
-                </TabsContent>
-              )}
-
-              {/* Execution area */}
-              <TabsContent value="run" className="flex-1 flex flex-col min-h-0 mt-0">
-                {/* Args */}
-                <div className="flex items-center border-b border-vsc-border shrink-0">
-                  <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
-                    args
-                  </span>
-                  <Input
-                    spellCheck={false}
-                    value={argsJson}
-                    onChange={onArgsJsonChange}
-                    className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
-                    placeholder='{"key": "value"}'
-                  />
-                </div>
-
-                {/* Run history (scrollable) */}
-                <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
-                  {runs.length === 0 && (
-                    <div className="p-5 text-center text-vsc-text-faint text-[11px]">
-                      Press Run to execute {selectedFn}()
-                    </div>
-                  )}
-
-                  {[...runs].reverse().map((run, runIdx) => {
-                    const isLatest = runIdx === 0;
-                    const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : run.status === 'cancelled' ? 'bg-vsc-yellow' : 'bg-vsc-text-muted';
-
-                    return (
-                      <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
-                        {/* Run header */}
-                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`} />
-                          <span className="text-vsc-accent font-semibold text-[11px]">
-                            {run.functionName}()
-                          </span>
-                          <span className="text-vsc-text-faint text-[10px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                            {run.argsJson}
-                          </span>
-                          {run.status === 'running' && (
-                            <>
-                              <span className="text-vsc-text-muted text-[10px]">running...</span>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
-                                      onClick={() => onCancelRun(run.id)}
-                                    >
-                                      <Square size={12} />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Cancel execution</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </>
-                          )}
-                          {run.durationMs != null && (
-                            <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
-                          )}
-                        </div>
-
-                        {/* Fetch logs for this run */}
-                        {run.fetchLogs.map((log) => {
-                          const isExp = expandedLogId === log.id;
-                          const statusColorCls = log.status === null ? 'text-vsc-text-muted'
-                            : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
-                            : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
-                          return (
-                            <div key={`n-${log.id}`}>
-                              <div
-                                onClick={() => setExpandedLogId(isExp ? null : log.id)}
-                                className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
-                              >
-                                <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
-                                <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
-                                <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
-                                {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
-                                <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
-                              </div>
-                              {isExp && (
-                                <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
-                                  {log.error && <CodeBlock variant="error">{log.error}</CodeBlock>}
-                                  <div>
-                                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
-                                    <CodeBlock>{JSON.stringify(log.requestHeaders, null, 2)}</CodeBlock>
-                                  </div>
-                                  {log.requestBody && (
-                                    <div>
-                                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
-                                      <CodeBlock>{tryFormatJson(log.requestBody)}</CodeBlock>
-                                    </div>
-                                  )}
-                                  {log.responseBody != null && (
-                                    <div>
-                                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
-                                      <CodeBlock>{tryFormatJson(log.responseBody)}</CodeBlock>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {/* Runtime events (log.info, baml.events.send, etc.) */}
-                        {run.runtimeEvents.length > 0 && (
-                          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
-                            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
-                              Events ({run.runtimeEvents.length})
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              {run.runtimeEvents.map((evt, evtIdx) => {
-                                const kind = evt.event;
-                                if (!kind) return null;
-
-                                let label: string;
-                                let payload: ReactNode;
-                                let colorCls: string;
-
-                                switch (kind.$case) {
-                                  case 'functionStart':
-                                    label = 'START';
-                                    payload = kind.functionStart.name;
-                                    colorCls = 'text-vsc-green';
-                                    break;
-                                  case 'functionEnd':
-                                    label = 'END';
-                                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
-                                    colorCls = 'text-vsc-text-muted';
-                                    break;
-                                  case 'log': {
-                                    const lvl = kind.log.level;
-                                    label = lvl;
-                                    payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
-                                    colorCls = lvl === 'error' ? 'text-vsc-red'
-                                      : lvl === 'warn' ? 'text-vsc-yellow'
-                                      : lvl === 'debug' ? 'text-vsc-text-muted'
-                                      : 'text-vsc-blue';
-                                    break;
-                                  }
-                                  case 'custom':
-                                    label = 'EVENT';
-                                    payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
-                                    colorCls = 'text-vsc-purple';
-                                    break;
-                                  case 'setTags':
-                                    label = 'TAGS';
-                                    payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
-                                    colorCls = 'text-vsc-text-muted';
-                                    break;
-                                  default:
-                                    return null;
-                                }
-
-                                // Check if cursor is within this event's source span
-                                const source = kind.$case === 'log' ? kind.log.source : undefined;
-                                const isCursorMatch = cursorOffset != null && source != null &&
-                                  cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
-
-                                return (
-                                  <div
-                                    key={`${evt.spanId}-${evtIdx}`}
-                                    className={cn(
-                                      "flex items-start gap-1.5 text-[11px]",
-                                      isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
-                                      source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
-                                    )}
-                                    onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
-                                  >
-                                    <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
-                                    <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        {/* Inline io.input() prompts for this run */}
-                        {(pendingInputs.get(run.id) ?? []).map((req) => (
-                          <div key={req.id} className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface">
-                            <span className="text-vsc-text-faint text-xs shrink-0">{req.prompt ?? 'Input:'}</span>
-                            <input
-                              className="flex-1 bg-vsc-bg border border-vsc-border rounded px-2 py-1 text-xs text-vsc-text font-vsc-mono focus:outline-none focus:border-vsc-accent"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  submitInput(req.id, e.currentTarget.value, run.id);
-                                }
-                              }}
-                            />
-                          </div>
-                        ))}
-
-                        {/* Result / Error / Cancelled for this run */}
-                        {run.status === 'cancelled' && (
-                          <div className="py-1.5 pr-2.5 pl-[22px]">
-                            <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
-                          </div>
-                        )}
-                        {run.error && (
-                          <div className="py-1.5 pr-2.5 pl-[22px]">
-                            <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
-                            <ErrorDisplay error={run.error} onRetry={onRunFunction} />
-                          </div>
-                        )}
-                        {run.result != null && (
-                          <div className="py-1.5 pr-2.5 pl-[22px]">
-                            {run.status === 'success' && run.fetchLogs.length > 0 && (
-                              <div className="mb-1">
-                                <MetadataBadges fetchLogs={run.fetchLogs} durationMs={run.durationMs} />
-                              </div>
-                            )}
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1">
-                                <div className="text-[10px] font-semibold text-vsc-green uppercase tracking-wide">Result</div>
-                                <ToggleGroup
-                                  value={resultModes[run.id] ?? 'parsed'}
-                                  onValueChange={(v) => setResultModes((prev) => ({ ...prev, [run.id]: v as 'parsed' | 'raw' }))}
-                                  options={[
-                                    { value: 'parsed', label: 'Parsed' },
-                                    { value: 'raw', label: 'Raw' },
-                                  ]}
-                                  size="sm"
-                                />
-                                <CopyButton text={stringifyResult(run.result)} iconSize={11} />
-                              </div>
-                              {(resultModes[run.id] ?? 'parsed') === 'parsed' ? (
-                                <ResultDisplay result={run.result} customRenderers={resultRenderers} />
-                              ) : (
-                                <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
-                                  {stringifyResult(run.result)}
-                                </pre>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </TabsContent>
-            </Tabs>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-              {viewingCollection ? 'Collection not yet available — click Refresh' : 'Select a function to run'}
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      </Tabs>
 
       <ApiKeysDialog
-        open={showApiKeysDialog}
         envVars={envVars}
-        requiredKeys={knownRequiredKeys}
+        onDeleteEnvVar={removeEnvVar}
+        onImportEnvVars={importEnvVars}
         onOpenChange={(open) => {
           setShowApiKeysDialog(open);
           showApiKeysDialogRef.current = open;
           if (!open) {
             // Dialog closed — resolve ALL pending env requests in one batch.
             // If user provided a value, envVarsRef has it. If not, value is undefined → worker errors the call.
-            for (const [id, variable] of pendingEnvRequestsRef.current) {
-              const value = envVarsRef.current[variable];
-              port.postMessage({ type: 'envVarResponse', id, value, variable });
+            for (const [id, pending] of pendingEnvRequestsRef.current) {
+              const value = envVarsRef.current[pending.variable];
+              if (pending.runScoped) {
+                void executionStore
+                  .respondToEnv(
+                    pending.runScoped.boundaryId,
+                    pending.runScoped.envRequestId,
+                    value,
+                  )
+                  .catch((error) => {
+                    console.warn(
+                      '[ExecutionPanel] respondToEnv failed:',
+                      error,
+                    );
+                  });
+              } else {
+                port.postMessage({
+                  id,
+                  type: 'envVarResponse',
+                  value,
+                  variable: pending.variable,
+                });
+              }
             }
             pendingEnvRequestsRef.current.clear();
           }
         }}
+        onRevertToShell={revertToShell}
         onSetEnvVar={addEnvVar}
-        onDeleteEnvVar={removeEnvVar}
-        onImportEnvVars={importEnvVars}
+        onToggleProxy={setGatewayEnabled}
+        open={showApiKeysDialog}
+        proxyEnabled={BOUNDARY_PROXY_URL_KEY in envVars}
+        requiredKeys={knownRequiredKeys}
+        shellDeletedKeys={shellDeletedKeys}
+        shellEnvVars={shellEnvVars}
+        shellOverriddenKeys={shellOverriddenKeys}
+        showProxyEnvVar={getProxyEnvVarConfig().visible}
       />
     </>
   );

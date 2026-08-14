@@ -7,7 +7,7 @@ use std::{
 };
 
 use bex_vm_types::{
-    FutureRead, HeapPtr, Object, ObjectIndex, Value,
+    FutureRead, HeapPtr, Object, Value,
     types::{ObjectType, SentinelKind},
 };
 
@@ -290,13 +290,18 @@ impl BexHeap {
 
     fn verify_object_invariants(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) {
         match obj {
+            // SAFETY: heap-debugger verification runs under STW (it's
+            // called from the GC verifier path); no mutator is concurrently
+            // active.
             Object::Array(values) => {
-                for value in values {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.iter() {
                     self.debug_assert_valid_value(value);
                 }
             }
             Object::Map(values) => {
-                for value in values.values() {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.values() {
                     self.debug_assert_valid_value(value);
                 }
             }
@@ -313,8 +318,8 @@ impl BexHeap {
                     instance.fields.len(),
                     class.fields.len()
                 );
-                for value in &instance.fields {
-                    self.debug_assert_valid_value(value);
+                for slot in &instance.fields {
+                    self.debug_assert_valid_value(&slot.load());
                 }
             }
             Object::Variant(variant) => {
@@ -335,12 +340,15 @@ impl BexHeap {
                 FutureRead::Ready(value) | FutureRead::Error(value) => {
                     self.debug_assert_valid_value(&value);
                 }
-                FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => {}
+                FutureRead::Pending(_)
+                | FutureRead::Cancelled
+                | FutureRead::InternalError(_) => {}
             },
             Object::UnscheduledFuture(future) => {
-                for value in &future.args {
-                    self.debug_assert_valid_value(value);
+                if let Some(name_ptr) = future.name {
+                    self.debug_assert_valid_index(name_ptr);
                 }
+                self.debug_assert_valid_index(future.closure);
             }
             Object::Closure(closure) => {
                 self.debug_assert_valid_index(closure.function);
@@ -353,24 +361,34 @@ impl BexHeap {
                 self.debug_assert_valid_value(&bm.receiver);
             }
             Object::Cell(cell) => {
-                self.debug_assert_valid_value(&cell.value);
+                self.debug_assert_valid_value(&cell.load());
             }
             Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::Class(_)
             | Object::Enum(_)
+            // Compile-time program metadata; their pointers target other
+            // immortal compile-time objects, valid by construction.
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Type(_) => {}
+            | Object::Type(_)
+            | Object::Float(_)
+            // `HostClosure` carries no heap references.
+            | Object::HostClosure(_) => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }
     }
 
     fn debug_assert_valid_value(&self, value: &Value) {
-        if let Value::Object(idx) = value {
-            let _ = unsafe { self.get_object(*idx) };
+        if let Some(idx) = value.as_object_ptr() {
+            let _ = unsafe { self.get_object(idx) };
         }
     }
 
@@ -439,11 +457,5 @@ impl BexHeap {
     #[inline]
     pub(crate) unsafe fn make_heap_ptr(&self, ptr: *mut Object) -> HeapPtr {
         unsafe { HeapPtr::from_ptr(ptr, self.heap_epoch()) }
-    }
-
-    /// Create an ObjectIndex from a raw index.
-    /// In debug mode, includes the current epoch for stale pointer detection.
-    pub(crate) fn make_object_index(&self, raw: usize) -> ObjectIndex {
-        ObjectIndex::from_raw_epoch(raw, self.heap_epoch())
     }
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 21889
 ---
 === COMPILER2 DIAGNOSTICS ===
 No errors found.

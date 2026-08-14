@@ -1,48 +1,21 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3139
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: missing return: expected `null`
-   ╭─[ main.baml:3:26 ]
-   │
- 3 │ ╭─▶ function helper() -> null {
-   ┆ ┆   
- 7 │ ├─▶ }
-   │ │       
-   │ ╰─────── missing return: expected `null`
-   │     
-   │     Note: Error code: E0029
-───╯
+  [parse] E0010
 
-  [parse] Error: test blocks are only allowed at the top level or inside a testset
-   ╭─[ main.baml:4:3 ]
-   │
+  × invalid syntax
+   ╭─[main.baml:4:3]
  4 │   test "inside function" {
-   │   ──┬─  
-   │     ╰─── test blocks are only allowed at the top level or inside a testset
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·   ──┬─
+   ·     ╰── test blocks are only allowed at the top level or inside a testset
+   ╰────
 
-  [type] Error: missing return: expected `null`
-    ╭─[ main.baml:9:27 ]
-    │
-  9 │ ╭─▶ function another() -> null {
-    ┆ ┆   
- 15 │ ├─▶ }
-    │ │       
-    │ ╰─────── missing return: expected `null`
-    │     
-    │     Note: Error code: E0029
-────╯
+  [parse] E0010
 
-  [parse] Error: testset blocks are only allowed at the top level or inside a testset
-    ╭─[ main.baml:10:3 ]
-    │
+  × invalid syntax
+    ╭─[main.baml:10:3]
  10 │   testset "inside function set" {
-    │   ───┬───  
-    │      ╰───── testset blocks are only allowed at the top level or inside a testset
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·   ───┬───
+    ·      ╰── testset blocks are only allowed at the top level or inside a testset
+    ╰────

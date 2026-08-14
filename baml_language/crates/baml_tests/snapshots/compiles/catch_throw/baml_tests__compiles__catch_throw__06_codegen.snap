@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7190
 ---
 function user.AlsoMayFail(x: int) -> string {
     load_var x
@@ -24,7 +25,7 @@ function user.CatchAndRethrow(x: int) -> string {
     load_var e
     throw_if_panic
     load_var e
-    throw
+    rethrow
 
   L0:
     return
@@ -47,7 +48,7 @@ function user.CatchWithFallback(x: int) -> string {
 
   L1:
     load_var _2
-    throw
+    rethrow
 
   L2:
     load_const "caught int fallback"
@@ -71,7 +72,7 @@ function user.CatchWithTypedArm(x: int) -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const "caught string"
@@ -97,7 +98,7 @@ function user.ChainedCatchClauses(x: int) -> string {
 
   L1:
     load_var _2
-    throw
+    rethrow
 
   L2:
     load_const "second handler"
@@ -170,7 +171,7 @@ function user.MultipleCatchArms(x: int) -> string {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const "caught int"
@@ -216,7 +217,7 @@ function user.SingleCatchTyped(x: int) -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const "caught string"

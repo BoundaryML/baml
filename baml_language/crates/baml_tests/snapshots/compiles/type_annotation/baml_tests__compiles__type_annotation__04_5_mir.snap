@@ -7,145 +7,17 @@ fn user.test_type_annotation(function_name: string) -> string {
     let _0: string // _0 // return
     let _1: string // function_name // param
     let _2: type // t
-    let _3: future<type>
 
     bb0: {
-        _3 = dispatch_future const fn baml.llm.get_return_type(copy _1) -> bb1;
+        _2 = sys_op const fn baml.prompt.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
-        _2 = await _3 -> [bb2];
-    }
-
-    bb2: {
         _0 = const "ok";
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
-    // Locals:
-    let _0: RiskFactor // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: float
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "type") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "severity") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(float);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.RiskFactor { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.MetaField.from_json(j: baml.json.json) -> MetaField {
-    // Locals:
-    let _0: MetaField // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "type") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(type);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.MetaField { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.MetaField.to_json(self: MetaField) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: MetaField // self // param
-    let _2: baml.json.json
-    let _3: type
-    let _4: MetaField
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.TypeValue.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "type": copy _2 };
         goto -> bb2;
     }
 
     bb2: {
-        return;
-    }
-}
-
-fn user.RiskFactor.to_json(self: RiskFactor) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: RiskFactor // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: RiskFactor
-    let _5: baml.json.json
-    let _6: float
-    let _7: RiskFactor
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Float.to_json(copy _6) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "type": copy _2, const "severity": copy _5 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -155,67 +27,17 @@ fn user.test_let_binding(function_name: string) -> string {
     let _0: string // _0 // return
     let _1: string // function_name // param
     let _2: type // t
-    let _3: future<type>
 
     bb0: {
-        _3 = dispatch_future const fn baml.llm.get_return_type(copy _1) -> bb1;
+        _2 = sys_op const fn baml.prompt.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
-        _2 = await _3 -> [bb2];
+        _0 = const "ok";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "ok";
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.test_list(function_name: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // function_name // param
-
-    bb0: {
-        _0 = const "ok";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_map(function_name: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // function_name // param
-
-    bb0: {
-        _0 = const "ok";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_optional(function_name: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // function_name // param
-
-    bb0: {
-        _0 = const "ok";
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }
@@ -239,22 +61,62 @@ fn user.test_return_type(function_name: string) -> type {
     // Locals:
     let _0: type // _0 // return
     let _1: string // function_name // param
-    let _2: future<type>
 
     bb0: {
-        _2 = dispatch_future const fn baml.llm.get_return_type(copy _1) -> bb1;
+        _0 = sys_op const fn baml.prompt.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
-        _0 = await _2 -> [bb2];
+        return;
+    }
+}
+
+fn user.test_optional(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
     }
 
-    bb2: {
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_list(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
 
 fn user.test_union(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_map(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param

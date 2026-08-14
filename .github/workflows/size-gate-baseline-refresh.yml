@@ -1,0 +1,144 @@
+name: Size Gate — Daily Baseline Refresh
+
+# Re-pegs the committed size-gate baseline to the *real* sizes CI most
+# recently measured on canary, so the gate never drifts far from reality.
+#
+# Key idea: it does NOT rebuild anything. Every canary CI run already builds
+# and measures the artifacts and uploads `size-gate-<platform>.json`. This
+# job just adopts the newest of those reports as the new baseline and opens
+# a PR. (Rebuilding here would re-pay the mac/windows release builds that are
+# already CI's long pole — no reason to pay them twice.)
+#
+# What the PR changes:
+#   * .ci/size-gate/<platform>.toml  — exact recorded sizes (the relative
+#     `max_delta_pct` baseline)
+#   * .cargo/size-gate.toml          — absolute `max_*_bytes` ceilings, reset
+#     to `margin_pct` above the recorded sizes
+#
+# The PR is reviewed before merge (opened with a PAT so its own size-gate
+# CI runs), which is where a human sees and signs off on any ceiling bump.
+
+on:
+  schedule:
+    # Daily at 09:17 UTC. Scheduled runs use the workflow file on the repo's
+    # default branch; the job always checks out canary explicitly below.
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch whose latest CI sizes to adopt"
+        required: false
+        default: "canary"
+      margin_pct:
+        description: "Ceiling margin above each recorded size (percent)"
+        required: false
+        default: "3.0"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: size-gate-baseline-refresh
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  refresh:
+    name: "Refresh baselines from latest canary CI"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: canary
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Reuse the linux size-gate job's cache so building the debug
+          # cargo-size-gate binary is a near-instant cache hit.
+          shared-key: "linux-cargo"
+          save-if: false
+
+      - name: "Adopt latest CI sizes (bake --branch)"
+        id: bake
+        working-directory: baml_language
+        env:
+          # `bake --branch` shells out to `gh` to find the newest completed
+          # CI run on the branch that has all four size-gate reports, download
+          # them, and adopt them. This is the SAME path a developer runs
+          # locally to fix a stale baseline — one tool, one code path.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.branch || 'canary' }}
+          MARGIN_PCT: ${{ inputs.margin_pct || '3.0' }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cargo run -p cargo-size-gate -- size-gate bake \
+            --branch "$BRANCH" \
+            --repo "$REPO" \
+            --margin-pct "$MARGIN_PCT" \
+            --download-dir "$GITHUB_WORKSPACE/reports" \
+            --summary-out "$GITHUB_WORKSPACE/summary.json"
+
+      - name: "Build the PR body"
+        working-directory: baml_language
+        env:
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run_id=$(jq -r '.run_id // ""' "$GITHUB_WORKSPACE/summary.json")
+          head_sha=$(jq -r '.head_sha // ""' "$GITHUB_WORKSPACE/summary.json")
+          violations=$(jq -r '.violations // 0' "$GITHUB_WORKSPACE/summary.json")
+          mapfile -t reports < <(find "$GITHUB_WORKSPACE/reports" -name 'size-gate-*.json' | sort)
+          cargo run -p cargo-size-gate -- size-gate agg "${reports[@]}" > "$GITHUB_WORKSPACE/refresh-body.md"
+          {
+            echo "Adopted from CI run [\`$head_sha\`]($SERVER_URL/$REPO/actions/runs/$run_id)."
+            echo ""
+            if [ "$violations" -gt 0 ]; then
+              echo "> ⚠️ **$violations platform report(s) exceeded the *previous* gate** — this refresh re-pegs the baseline and ceilings to the sizes below. Confirm the growth is intentional before merging."
+              echo ""
+            fi
+            cat "$GITHUB_WORKSPACE/refresh-body.md"
+          } > "$GITHUB_WORKSPACE/pr-body.md"
+          cat "$GITHUB_WORKSPACE/pr-body.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Open/update baseline-refresh PR"
+        id: cpr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          # PAT (not GITHUB_TOKEN) so the PR triggers its own CI, including
+          # the size-gate check that confirms the new baseline is green.
+          token: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
+          base: canary
+          branch: chore/size-gate-baseline-refresh
+          delete-branch: true
+          title: "chore: refresh size-gate baselines"
+          commit-message: "chore: refresh size-gate baselines from canary CI"
+          body-path: pr-body.md
+          add-paths: |
+            baml_language/.ci/size-gate/*.toml
+            baml_language/.cargo/size-gate.toml
+
+      - name: "Enable auto-merge"
+        # Only when a PR actually exists (no diff → no PR → nothing to do).
+        # With canary's required checks, auto-merge waits for this PR's own
+        # size-gate CI to pass before merging, so a refresh that would
+        # regress never lands. Uses the PAT (the GITHUB_TOKEN can't enable
+        # auto-merge on a PR it didn't author).
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
+        run: |
+          gh pr merge "${{ steps.cpr.outputs.pull-request-number }}" \
+            --squash --auto

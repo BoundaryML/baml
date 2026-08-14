@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use baml_builtins2::MediaValue;
 use serde::{Deserialize, Deserializer};
 
 use super::CompletionUsage;
@@ -47,8 +50,50 @@ struct ChatCompletionChoice {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 struct ChatCompletionResponseMessage {
-    pub content: Option<String>,
+    pub content: Option<ChatMessageContent>,
+    #[serde(default)]
+    pub images: Vec<ChatMessageImage>,
     pub role: ChatCompletionMessageRole,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+enum ChatMessageContent {
+    Text(String),
+    Parts(Vec<ChatMessageContentPart>),
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+struct ChatMessageContentPart {
+    #[serde(rename = "type")]
+    pub part_type: Option<String>,
+    pub text: Option<String>,
+    #[serde(rename = "image_url", alias = "imageUrl")]
+    pub image_url: Option<ImageUrlRef>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+struct ChatMessageImage {
+    #[serde(rename = "type")]
+    pub image_type: Option<String>,
+    #[serde(rename = "image_url", alias = "imageUrl")]
+    pub image_url: Option<ImageUrlRef>,
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+enum ImageUrlRef {
+    Object { url: String },
+    String(String),
+}
+
+impl ImageUrlRef {
+    fn url(&self) -> &str {
+        match self {
+            Self::Object { url } | Self::String(url) => url,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq)]
@@ -116,7 +161,10 @@ pub(in crate::parse_response) fn parse_openai_response(
 
     let choice = &response.choices[0];
 
-    let content = choice.message.content.clone().unwrap_or_default();
+    let mut output = crate::parse_response::LlmOutput::default();
+    push_chat_message_content(&mut output, choice.message.content.as_ref());
+    push_chat_message_images(&mut output, &choice.message.images);
+    let content = output.text_content();
 
     let finish_reason = match choice.finish_reason.as_deref() {
         Some("stop") => FinishReason::Stop,
@@ -142,12 +190,112 @@ pub(in crate::parse_response) fn parse_openai_response(
         .unwrap_or_default();
 
     Ok(LlmProviderResponse {
+        output,
         content,
         model: Some(response.model),
         finish_reason,
         finish_reason_raw: choice.finish_reason.clone(),
         usage,
     })
+}
+
+fn push_chat_message_content(
+    output: &mut crate::parse_response::LlmOutput,
+    content: Option<&ChatMessageContent>,
+) {
+    match content {
+        Some(ChatMessageContent::Text(text)) => output.push_text(text.clone()),
+        Some(ChatMessageContent::Parts(parts)) => {
+            for part in parts {
+                if let Some(text) = &part.text {
+                    output.push_text(text.clone());
+                }
+                if is_image_part_type(part.part_type.as_deref()) {
+                    if let Some(image_url) = &part.image_url {
+                        output.push_media(
+                            media_from_image_url(image_url.url()),
+                            None,
+                            serde_json::json!({
+                                "provider": "openai-chat",
+                                "source": "message.content"
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+        None => {}
+    }
+}
+
+fn push_chat_message_images(
+    output: &mut crate::parse_response::LlmOutput,
+    images: &[ChatMessageImage],
+) {
+    for image in images {
+        if !is_image_part_type(image.image_type.as_deref()) {
+            continue;
+        }
+
+        let url = image
+            .image_url
+            .as_ref()
+            .map(ImageUrlRef::url)
+            .or(image.url.as_deref());
+        let Some(url) = url else {
+            continue;
+        };
+
+        output.push_media(
+            media_from_image_url(url),
+            None,
+            serde_json::json!({
+                "provider": "openai-chat",
+                "source": "message.images"
+            }),
+        );
+    }
+}
+
+fn is_image_part_type(part_type: Option<&str>) -> bool {
+    matches!(
+        part_type,
+        None | Some("image" | "image_url" | "output_image")
+    )
+}
+
+fn media_from_image_url(url: &str) -> Arc<MediaValue> {
+    if let Some((mime_type, base64_data)) = parse_image_data_url(url) {
+        return MediaValue::from_base64(baml_base::MediaKind::Image, base64_data, Some(mime_type));
+    }
+
+    let mime_type = image_mime_type_from_url(url);
+    MediaValue::from_url(baml_base::MediaKind::Image, url, mime_type.as_deref())
+}
+
+fn parse_image_data_url(url: &str) -> Option<(&str, &str)> {
+    let rest = url.strip_prefix("data:")?;
+    let (meta, data) = rest.split_once(',')?;
+    if !meta.ends_with(";base64") {
+        return None;
+    }
+    let mime_type = meta.strip_suffix(";base64")?.split(';').next()?.trim();
+    if !mime_type.starts_with("image/") || data.is_empty() {
+        return None;
+    }
+    Some((mime_type, data))
+}
+
+fn image_mime_type_from_url(url: &str) -> Option<String> {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    let ext = path.rsplit('.').next()?.to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => Some("image/png".to_string()),
+        "jpg" | "jpeg" => Some("image/jpeg".to_string()),
+        "webp" => Some("image/webp".to_string()),
+        "gif" => Some("image/gif".to_string()),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -231,6 +379,92 @@ mod tests {
         let resp = parse_openai_response(body).unwrap();
         assert_eq!(resp.content, "");
         assert_eq!(resp.finish_reason, FinishReason::ToolUse);
+    }
+
+    #[test]
+    fn test_parse_openai_compatible_message_images() {
+        let body = r#"{
+            "model": "google/gemini-2.5-flash-image-preview",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "I've generated an image.",
+                    "images": [{
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:image/png;base64,aW1hZ2U="
+                        }
+                    }]
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 12,
+                "total_tokens": 22
+            }
+        }"#;
+
+        let resp = parse_openai_response(body).unwrap();
+        assert_eq!(resp.content, "I've generated an image.");
+        assert_eq!(resp.output.parts.len(), 2);
+
+        let crate::parse_response::LlmOutputPart::Text { text } = &resp.output.parts[0] else {
+            panic!("expected text output");
+        };
+        assert_eq!(text, "I've generated an image.");
+
+        let crate::parse_response::LlmOutputPart::Media {
+            media, metadata, ..
+        } = &resp.output.parts[1]
+        else {
+            panic!("expected image output");
+        };
+        assert_eq!(media.kind, baml_base::MediaKind::Image);
+        assert_eq!(media.base64(), "aW1hZ2U=");
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+        assert_eq!(metadata["source"], "message.images");
+    }
+
+    #[test]
+    fn test_parse_openai_compatible_content_array_images() {
+        let body = r#"{
+            "model": "image-model",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "caption"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "https://example.com/generated.webp"
+                            }
+                        }
+                    ]
+                },
+                "finish_reason": "stop"
+            }]
+        }"#;
+
+        let resp = parse_openai_response(body).unwrap();
+        assert_eq!(resp.content, "caption");
+        assert_eq!(resp.output.parts.len(), 2);
+
+        let crate::parse_response::LlmOutputPart::Media {
+            media, metadata, ..
+        } = &resp.output.parts[1]
+        else {
+            panic!("expected image output");
+        };
+        assert_eq!(
+            media.url().as_deref(),
+            Some("https://example.com/generated.webp")
+        );
+        assert_eq!(media.mime_type().as_deref(), Some("image/webp"));
+        assert_eq!(metadata["source"], "message.content");
     }
 
     #[test]

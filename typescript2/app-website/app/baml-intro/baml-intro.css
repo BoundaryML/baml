@@ -1,0 +1,1997 @@
+/* =========================================================================
+   /learn6 — "BAML is the programming language for agents": a long-form
+   article. Reading column for prose, wide breakouts for editors and
+   terminals. Reuses learn2.css (code/editors/playground), learn3.css
+   (terminals, infection graph, metrics dag) and learn4.css (sdk pipeline,
+   rotating types) for embedded components.
+   ========================================================================= */
+
+.l6 {
+  --l6-ink: #1a1612;
+  --l6-body: #2b2520;
+  --l6-muted: #6f6a63;
+  --l6-soft: #8a8580;
+  --l6-rule: #e7e2d6;
+  --l6-accent: #6d28d9;
+  --l6-accent-soft: #a78bfa;
+  --l6-amber: #b45309;
+  /* Combined height of the fixed top chrome — SiteBanner (41px) + the shared
+     Navbar (~65px) — used to offset anchor jumps and the "On this page" rail
+     so they clear the nav. The Navbar's own nav-spacer reserves the flow room,
+     so the page sets no top padding itself. Below 640px the banner is hidden
+     and the navbar sits at top:0 (see globals.css), so the chrome shrinks. */
+  --l6-chrome: 84px;
+  padding-bottom: 5rem;
+  font-family:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.68;
+  color: var(--l6-body);
+
+  background: #fdfbf5;
+}
+.l6 .font-mono,
+.l6 code,
+.l6 pre,
+.l6 kbd {
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+}
+.l6 code {
+  padding: 0.08em 0.32em;
+  font-size: 0.9em;
+  background: rgba(26, 22, 18, 0.055);
+  border-radius: 4px;
+}
+.l6 pre code {
+  padding: 0;
+  background: none;
+}
+
+/* ---- layout: centered reading column (blogpost style). Text within the
+   column stays left-aligned; the whole column is centered on the page. The
+   "on this page" rail floats in the right gutter. */
+.l6 {
+  --l6-gutter: clamp(1.2rem, 5vw, 4.5rem);
+}
+/* At <=640px the banner is hidden and the navbar drops to top:0 (globals.css),
+   so the fixed chrome is just the navbar height. */
+@media (max-width: 640px) {
+  .l6 {
+    --l6-chrome: 58px;
+  }
+}
+/* On wide screens widen the side gutter so the centered content clears the
+   fixed "on this page" rail pinned to the right. */
+@media (min-width: 1140px) {
+  .l6 {
+    --l6-gutter: 248px;
+  }
+}
+/* anchor jumps from the rail land below the sticky header */
+:root:has(.l6) {
+  scroll-behavior: smooth;
+}
+.l6-section {
+  max-width: min(800px, calc(100vw - 2 * var(--l6-gutter)));
+  padding: 4.4rem 0 1.2rem;
+  margin: 0 auto;
+  scroll-margin-top: calc(var(--l6-chrome) + 1rem);
+}
+/* Breakout: editors, playgrounds, and side-by-side pairs are wider than the
+   ~760px reading column but stay centered on the page like the prose above.
+   `margin: auto` can't center a child wider than its parent, so we offset the
+   left edge to page-center minus half the breakout's own width. (Negative
+   margins, not transform: a transform here would create a containing block
+   that misplaces the playground's fixed-position Monaco popups.) */
+.l6-breakout,
+.l6-pair {
+  /* ~10% wider than the 800px reading column, so the boxes feel tied to the
+     text rather than spanning the full page. */
+  --l6-bw: min(880px, calc(100vw - 2 * var(--l6-gutter)));
+  width: var(--l6-bw);
+  margin-right: 0;
+  margin-left: calc(50% - var(--l6-bw) / 2);
+}
+.l6-breakout--xl {
+  --l6-bw: min(1400px, calc(100vw - 2 * var(--l6-gutter)));
+}
+
+/* ---- "on this page" rail ---- */
+.l6-toc {
+  position: fixed;
+  /* clear the fixed banner + navbar above */
+  top: calc(var(--l6-chrome) + 1rem);
+  right: 1.2rem;
+  z-index: 15;
+  display: none;
+  width: 200px;
+}
+@media (min-width: 1140px) {
+  .l6-toc {
+    display: block;
+  }
+}
+.l6-toc-cap {
+  margin: 0 0 0.5rem;
+  font-size: 10.5px;
+  color: var(--l6-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.l6-toc ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.l6-toc a {
+  display: block;
+  padding: 2.5px 9px;
+  font-size: 12px;
+  color: var(--l6-muted);
+  text-decoration: none;
+  border-left: 2px solid var(--l6-rule);
+}
+.l6-toc a:hover {
+  color: var(--l6-ink);
+}
+.l6-toc a.l6-toc-active {
+  font-weight: 550;
+  color: var(--l6-accent);
+  border-left-color: var(--l6-accent);
+}
+.l6-toc a.l6-toc-sub {
+  padding-left: 22px;
+  font-size: 11px;
+}
+/* anchored subsections land below the sticky header too */
+.l6 .l6-sub[id] {
+  scroll-margin-top: calc(var(--l6-chrome) + 1rem);
+}
+
+/* every editor and code block gets the same outline (learn2's border vars
+   don't resolve outside the deck, so set it explicitly here) */
+.l6 .l2-bamled-frame,
+.l6 .l2-code {
+  border: 1px solid #d8cfbd;
+}
+
+/* Stop mobile Safari from auto-inflating code text. It inflates the Monaco
+   editors' wrapped lines but not the static <pre> panes, so the same 13px code
+   rendered at two different sizes on iPhone (and the inflated text then
+   wrapped while the static didn't). Pin everything to the declared size. */
+.l6 .l2-code,
+.l6 .l2-bamled-frame,
+.l6 .l2-live {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* The inline error-lens message in the static panes sits at the end of a line
+   inside a horizontal-scroll box, so without a width cap it runs off the right
+   edge instead of wrapping (the Monaco editor wraps via wordWrap). It's an
+   inline <span>, so it needs inline-block for max-width to apply; then it wraps
+   like the BAML editor's diagnostics. */
+.l6 .l2-errorlens {
+  display: inline-block;
+  max-width: 34ch;
+  vertical-align: top;
+  white-space: pre-wrap;
+}
+
+.l6 h1 {
+  margin: 1.2rem 0 1.4rem;
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 680;
+  line-height: 1.08;
+  color: var(--l6-ink);
+  letter-spacing: -0.02em;
+}
+.l6 h2 {
+  margin: 0 0 1rem;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 650;
+  line-height: 1.18;
+  color: var(--l6-ink);
+  letter-spacing: -0.015em;
+}
+.l6 h3 {
+  margin: 0 0 0.8rem;
+  font-size: 19px;
+  font-weight: 620;
+  color: var(--l6-ink);
+}
+/* Numbered sub-headers (the AI-workflows 1/2/3) read as top-level entries
+   in their own list — match the size of the numbered section headers. */
+.l6 h3:has(.l6-num) {
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 650;
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+}
+.l6-num {
+  display: inline-block;
+  padding: 1px 9px;
+  margin-right: 0.6rem;
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--l6-accent);
+  border: 1.4px solid var(--l6-accent);
+  border-radius: 60% 40% 55% 45% / 50% 60% 40% 55%;
+  transform: translateY(-3px) rotate(-2deg);
+}
+/* ---- part dividers: the two top-level sections (workflows / agents).
+   Larger than the numbered subsection headers, with an eyebrow and a rule,
+   so each half of the page reads as its own division. */
+.l6 .l6-part {
+  border-top: 1px solid var(--l6-rule);
+}
+.l6 .l6-part-eyebrow {
+  margin: 0 0 0.55rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--l6-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+.l6 .l6-part-title {
+  margin: 0 0 1.1rem;
+  font-size: clamp(29px, 3.8vw, 42px);
+  font-weight: 680;
+  line-height: 1.12;
+  color: var(--l6-ink);
+  letter-spacing: -0.02em;
+}
+/* Share anchor revealed on header hover — links to (and copies) the section URL. */
+.l6-anchor {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.4em;
+  vertical-align: middle;
+  color: var(--l6-soft);
+  opacity: 0;
+  transition:
+    opacity 140ms ease,
+    color 140ms ease;
+}
+.l6-anchor:hover {
+  color: var(--l6-accent);
+}
+.l6 h2:hover .l6-anchor,
+.l6 h3:hover .l6-anchor,
+.l6 .l6-part-title:hover .l6-anchor,
+.l6-anchor:focus-visible {
+  opacity: 1;
+}
+/* Touch devices have no hover — keep the anchor faintly visible so it's tappable. */
+@media (hover: none) {
+  .l6-anchor {
+    opacity: 0.45;
+  }
+}
+.l6 p {
+  margin: 0 0 1rem;
+}
+.l6-lead {
+  font-size: clamp(17.5px, 1.9vw, 20px);
+  color: var(--l6-ink);
+}
+.l6-lead em {
+  font-style: italic;
+  color: var(--l6-accent);
+}
+.l6-dim {
+  font-size: 14.5px;
+  color: var(--l6-muted);
+}
+.l6-note {
+  padding-left: 0.9rem;
+  margin-top: 1.1rem;
+  font-size: 13.5px;
+  color: var(--l6-muted);
+  border-left: 2px solid var(--l6-rule);
+}
+.l6-link {
+  color: var(--l6-accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(109, 40, 217, 0.35);
+}
+.l6-link:hover {
+  border-bottom-color: var(--l6-accent);
+}
+/* "Spec" chip in a section header linking to its design proposal (BEP). Small,
+   monospace, accent-tinted pill that sits after the title and before the share
+   anchor. Always visible (unlike the hover-only anchor) so the reference is
+   discoverable. */
+.l6-bep {
+  display: inline-flex;
+  gap: 0.2em;
+  align-items: center;
+  padding: 2px 8px;
+  margin-left: 0.55em;
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+  color: var(--l6-accent);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-decoration: none;
+  background: rgba(109, 40, 217, 0.07);
+  border: 1px solid rgba(109, 40, 217, 0.28);
+  border-radius: 999px;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.l6-bep:hover {
+  background: rgba(109, 40, 217, 0.14);
+  border-color: var(--l6-accent);
+}
+
+/* In-prose cross-reference jumps to other sections — keep the underlined look
+   of plain emphasis, but make them clickable and tint on hover. */
+.l6-xref {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(109, 40, 217, 0.4);
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    text-decoration-color 140ms ease;
+}
+.l6-xref:hover {
+  color: var(--l6-accent);
+  text-decoration-color: var(--l6-accent);
+}
+.l6-sub {
+  margin-top: 3rem;
+}
+.l6-block {
+  margin: 1.1rem 0;
+}
+.l6-breakout {
+  margin-top: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+
+/* ---- design philosophy: a bare list of aphorisms (Zen-of-Python style).
+   Monospace, one principle per line, each tee-ing up a section below — the
+   article is where they're demonstrated, so the lines stay unexplained. */
+.l6-tenets {
+  padding: 0;
+  margin: 1.6rem 0 0.5rem;
+  list-style: none;
+}
+.l6-tenet {
+  padding: 0.28rem 0 0.28rem 1.5rem;
+  font-size: 15.5px;
+  line-height: 1.3;
+  color: var(--l6-ink);
+  text-indent: -1.5rem;
+}
+.l6-tenet::before {
+  margin-right: 0.7rem;
+  color: var(--l6-accent);
+  content: "—";
+}
+
+/* ---- eras timeline (homepage hero) ---- */
+.l6-tl {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 420px;
+  padding: 4px 0;
+  margin: 1.6rem 0 1rem;
+  list-style: none;
+}
+/* the connecting line: muted at the top (the past), warming to the accent at
+   the bottom (the open question BAML is here to answer) */
+.l6-tl::before {
+  position: absolute;
+  top: 10px;
+  bottom: 12px;
+  left: 6px;
+  width: 2px;
+  content: "";
+  background: linear-gradient(
+    to bottom,
+    #ddd5c4 0%,
+    var(--l6-accent-soft) 62%,
+    var(--l6-accent) 100%
+  );
+  border-radius: 2px;
+  transform-origin: top center;
+  animation: l6-tl-draw 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.l6-tl-item {
+  position: relative;
+  padding-left: 30px;
+  letter-spacing: -0.01em;
+  animation: l6-tl-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.l6-tl-item:nth-child(1) {
+  animation-delay: 0.15s;
+}
+.l6-tl-item:nth-child(2) {
+  animation-delay: 0.28s;
+}
+.l6-tl-item:nth-child(3) {
+  animation-delay: 0.41s;
+}
+.l6-tl-item:nth-child(4) {
+  animation-delay: 0.54s;
+}
+.l6-tl-node {
+  position: absolute;
+  top: 0.3em;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  background: #fdfbf5;
+  border: 2.5px solid var(--l6-soft);
+  border-radius: 50%;
+}
+.l6-tl-item:nth-child(2) .l6-tl-node {
+  border-color: #9a8fb5;
+}
+.l6-tl-item:nth-child(3) .l6-tl-node {
+  border-color: var(--l6-accent-soft);
+}
+/* the "now" node: filled accent with a soft halo that gently breathes */
+.l6-tl-node--now {
+  left: -1px;
+  width: 16px;
+  height: 16px;
+  background: var(--l6-accent);
+  border-color: var(--l6-accent);
+  box-shadow: 0 0 0 5px rgba(109, 40, 217, 0.14);
+  animation: l6-tl-pulse 2.4s ease-in-out 1s infinite;
+}
+.l6-tl-era {
+  font-weight: 600;
+  color: var(--l6-ink);
+}
+.l6-tl-arrow {
+  margin: 0 0.5ch;
+  color: var(--l6-soft);
+}
+.l6-tl-lang {
+  color: var(--l6-body);
+}
+.l6-tl-item--now .l6-tl-era {
+  color: var(--l6-accent);
+}
+.l6-tl-item--now .l6-tl-arrow {
+  color: var(--l6-accent-soft);
+}
+.l6-tl-item--now .l6-tl-lang {
+  font-family: var(--font-geist-mono), monospace;
+  font-weight: 700;
+  color: var(--l6-accent);
+  letter-spacing: 0.02em;
+}
+@keyframes l6-tl-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes l6-tl-draw {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes l6-tl-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 5px rgba(109, 40, 217, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(109, 40, 217, 0.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .l6-tl::before,
+  .l6-tl-item,
+  .l6-tl-node--now {
+    animation: none;
+  }
+}
+
+/* ---- homepage CTAs (after the design philosophy list) ---- */
+.l6-cta-wrap {
+  padding-top: 0.5rem;
+}
+/* Product screenshots embedded in the article (e.g. the Flame tab): fill the
+   breakout width, keep aspect ratio, and clip to rounded corners with a faint
+   frame so they sit cleanly on the dark page. */
+.l6-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--l6-code-border, #34343a);
+  border-radius: 12px;
+}
+
+/* subtle, centered text-only community link (between parts) */
+.l6-join {
+  padding: 0.5rem 0;
+  text-align: center;
+}
+.l6-join-link {
+  font-size: 13px;
+  color: var(--l6-soft);
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+.l6-join-link:hover {
+  color: var(--l6-accent);
+}
+.l6-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}
+.l6-cta {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.7rem 1.3rem;
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--l6-ink);
+  text-decoration: none;
+  background: #fffdf7;
+  border: 1px solid #d8cfbd;
+  border-radius: 10px;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+.l6-cta span {
+  transition: transform 140ms ease;
+}
+.l6-cta:hover {
+  border-color: var(--l6-accent);
+  transform: translateY(-1px);
+}
+.l6-cta:hover span {
+  transform: translateX(3px);
+}
+.l6-cta--primary {
+  color: #fff;
+  background: var(--l6-accent);
+  border-color: var(--l6-accent);
+}
+.l6-cta--primary:hover {
+  background: #5b21b6;
+  border-color: #5b21b6;
+}
+
+/* ---- hero ---- */
+.l6-hero {
+  padding-top: 4.5rem;
+}
+/* The sheep flows inline with the text, so it sits on the first line next
+   to "BAML" instead of centering against the whole wrapped headline. */
+.l6-hero-sheep {
+  display: inline-block;
+  width: auto;
+  height: 0.92em;
+  margin-right: 0.22em;
+  vertical-align: -0.08em;
+}
+.l6-hero-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-width: 72ch;
+  padding-left: 1.4rem;
+  margin: 0.4rem 0 1.6rem;
+}
+.l6-hero-list li::marker {
+  font-weight: 600;
+  color: var(--l6-accent);
+}
+.l6-hero .l2-terminal {
+  max-width: 440px;
+}
+
+/* ---- pairs & labels ---- */
+.l6-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+  align-items: start;
+  /* vertical only — the centering offset (margin-left) is set above */
+  margin-top: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+/* min-width:0 so a pane can shrink below its (wide) code content instead of
+   blowing the column out past the viewport. */
+.l6-pair > * {
+  min-width: 0;
+}
+@media (max-width: 880px) {
+  .l6-pair {
+    /* minmax(0, 1fr), not 1fr — plain `1fr` keeps min-width:auto, which lets
+       the Monaco editor's content force the column wider than the screen (the
+       single-column .l6-block sections fit because they don't do this). */
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.l6-pane-label {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--l6-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.l6-pane-label--after {
+  color: var(--l6-accent);
+}
+.l6-stackv {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  min-width: 0;
+}
+
+/* ---- benchmark tables ---- */
+.l6-table {
+  width: 100%;
+  margin: 0.4rem 0 0.8rem;
+  font-size: 14.5px;
+  border-collapse: collapse;
+}
+.l6-table th {
+  padding: 0.35rem 0.9rem 0.35rem 0;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--l6-soft);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid var(--l6-rule);
+}
+.l6-table td {
+  padding: 0.45rem 0.9rem 0.45rem 0;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--l6-rule);
+}
+.l6-table td:first-child {
+  font-size: 13px;
+}
+.l6-table-accent td {
+  font-weight: 600;
+  color: var(--l6-accent);
+}
+
+/* ---- benchmark bar charts ---- */
+.l6-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  max-width: 640px;
+  margin: 1.4rem 0 1rem;
+}
+.l6-chart-cap {
+  margin: 0 0 0.55rem;
+  font-size: 11px;
+  color: var(--l6-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.l6-chart-row {
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  padding: 5px 0;
+}
+.l6-chart-name {
+  font-size: 12.5px;
+  color: var(--l6-body);
+}
+.l6-chart-track {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  min-width: 0;
+}
+.l6-chart-fill {
+  position: relative;
+  flex: none;
+  width: 0;
+  height: 24px;
+  overflow: hidden;
+  background: #d9d2c0;
+  border-radius: 4px;
+  animation: l6-chart-grow 0.6s ease-out forwards;
+}
+.l6-chart-fill--baml {
+  background: var(--l6-accent);
+}
+@keyframes l6-chart-grow {
+  to {
+    width: var(--w);
+  }
+}
+/* the lamb rides inside the bar, at its right end; recolored white so it
+   reads against the purple */
+.l6-chart-sheep {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  width: auto;
+  height: 17px;
+  filter: brightness(0) invert(1);
+  transform: translateY(-50%);
+}
+.l6-chart-val {
+  font-size: 12.5px;
+  color: var(--l6-ink);
+  white-space: nowrap;
+  opacity: 0;
+  animation: l6-chart-fade 0.3s ease forwards;
+}
+.l6-chart-sub {
+  font-size: 11px;
+  font-style: normal;
+  color: var(--l6-muted);
+}
+@keyframes l6-chart-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- "try it out" install unit: tabs + command in one light frame,
+   styled like the page's code blocks ---- */
+.l6-try {
+  max-width: 560px;
+  overflow: hidden;
+  background: #fffdf7;
+  border: 1px solid #d8cfbd;
+  border-radius: 10px;
+}
+.l6-try-head {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f6f1e4;
+  border-bottom: 1px solid var(--l6-rule);
+}
+.l6-try-tab {
+  padding: 3px 11px;
+  font-size: 11px;
+  color: var(--l6-muted);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.l6-try-tab:hover {
+  color: var(--l6-ink);
+}
+.l6-try-tab--on {
+  color: var(--l6-accent);
+  background: #fffdf7;
+  border-color: #d8cfbd;
+}
+.l6-try-copy {
+  padding: 3px 9px;
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--l6-muted);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #d8cfbd;
+  border-radius: 6px;
+}
+.l6-try-copy:hover {
+  color: var(--l6-ink);
+}
+/* Install-method toggle (Homebrew / curl) — a secondary row under the head,
+   shown only on the "for humans" tab. Lighter than the main tabs. */
+.l6-try-method {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 8px 10px 0;
+}
+.l6-try-method-cap {
+  margin-right: 0.15rem;
+  font-size: 10px;
+  color: var(--l6-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.l6-try-method-btn {
+  padding: 2px 9px;
+  font-size: 10.5px;
+  color: var(--l6-muted);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+.l6-try-method-btn:hover {
+  color: var(--l6-ink);
+}
+.l6-try-method-btn--on {
+  color: var(--l6-accent);
+  background: #fffdf7;
+  border-color: #d8cfbd;
+}
+.l6-try-body {
+  padding: 0.75rem 0.95rem;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--l6-ink);
+}
+.l6-try-prompt {
+  color: var(--l6-accent);
+}
+
+/* ---- expandable code (details/summary) ---- */
+.l6-details {
+  margin: 1rem 0;
+}
+.l6-details summary {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  color: var(--l6-muted);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.l6-details summary:hover {
+  color: var(--l6-ink);
+}
+.l6-details[open] summary {
+  margin-bottom: 0.7rem;
+}
+
+/* ---- the glow hint (error-handling section) ---- */
+.l6-glow {
+  border-radius: 4px;
+  animation: l6-glow 2s ease-in-out infinite;
+}
+@keyframes l6-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(109, 40, 217, 0);
+    background: rgba(26, 22, 18, 0.055);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.18);
+    background: rgba(109, 40, 217, 0.14);
+  }
+}
+
+/* ---- sdk switcher tabs ---- */
+.l6-sdk-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1rem 0 0.2rem;
+}
+.l6-sdk-tab {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.32rem 0.75rem;
+  font-size: 12.5px;
+  color: var(--l6-muted);
+  cursor: pointer;
+  background: #fffdf6;
+  border: 1px solid var(--l6-rule);
+  border-radius: 8px;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.l6-sdk-tab:hover {
+  color: var(--l6-ink);
+}
+.l6-sdk-tab--on {
+  color: var(--l6-ink);
+  border-color: var(--l6-accent);
+  box-shadow: inset 0 0 0 1px var(--l6-accent);
+}
+.l6-sdk-soon {
+  font-size: 9.5px;
+  color: var(--l6-amber);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+/* Placeholder shown in the generated-SDK pane for languages that don't ship
+   yet (Go, Rust) — a quiet dashed box inviting people to the Discord. */
+.l6-sdk-soon-pane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 1.4rem 1.6rem;
+  color: var(--l6-muted);
+  text-align: center;
+  background: #fffdf6;
+  border: 1px dashed var(--l6-rule);
+  border-radius: 10px;
+}
+.l6-sdk-soon-pane p {
+  max-width: 28ch;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ---- Native LLM Functions: example switcher above the playground ---- */
+.l6-wf-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+.l6-wf-tab {
+  padding: 0.32rem 0.8rem;
+  font-size: 12.5px;
+  color: var(--l6-muted);
+  cursor: pointer;
+  background: #fffdf6;
+  border: 1px solid var(--l6-rule);
+  border-radius: 8px;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.l6-wf-tab:hover {
+  color: var(--l6-ink);
+}
+.l6-wf-tab--on {
+  color: var(--l6-ink);
+  border-color: var(--l6-accent);
+  box-shadow: inset 0 0 0 1px var(--l6-accent);
+}
+/* entry-function highlight (whole-line tint) inside the live playground */
+.l6-wf-hl {
+  background: rgba(109, 40, 217, 0.1);
+}
+/* loading veil shown while a switched workflow's graph compiles + lays out */
+/* =========================================================================
+   Recursive self-improvement — "the sweep". Ripples of refinement radiate
+   from the center (per-cell animation-delay = distance from center); the
+   keyframes carry three passes per 9s cycle. Latch classes keep their
+   improvement after pass N and deepen on later passes, then the field
+   resets with the loop.
+   ========================================================================= */
+/* centered within the text column */
+.l6-si-sweep {
+  display: grid;
+  grid-template-columns: repeat(16, 8px);
+  gap: 3px;
+  width: max-content;
+  margin: 2.2rem auto 0.6rem;
+}
+.l6-swp-cell {
+  width: 8px;
+  height: 8px;
+  background: #e9e4d8;
+  border-radius: 1.5px;
+  animation: l6-swp 9s ease-in-out infinite;
+}
+.l6-swp-l1 {
+  animation-name: l6-swp-l1;
+}
+.l6-swp-l2 {
+  animation-name: l6-swp-l2;
+}
+.l6-swp-l3 {
+  animation-name: l6-swp-l3;
+}
+/* base: pulse on each of the three wavefronts, never keep anything */
+@keyframes l6-swp {
+  0% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  2.5% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  8%,
+  33.3% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  35.8% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  41.3%,
+  66.7% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  69.2% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  74.7%,
+  100% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+}
+/* latches after pass 1, deepens on passes 2 and 3 */
+@keyframes l6-swp-l1 {
+  0% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  2.5% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  8%,
+  33.3% {
+    background: rgba(109, 40, 217, 0.32);
+    transform: scale(1);
+  }
+  35.8% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  41.3%,
+  66.7% {
+    background: rgba(109, 40, 217, 0.48);
+    transform: scale(1);
+  }
+  69.2% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  74.7%,
+  91% {
+    background: rgba(109, 40, 217, 0.66);
+    transform: scale(1);
+  }
+  100% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+}
+/* latches after pass 2, deepens on pass 3 */
+@keyframes l6-swp-l2 {
+  0% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  2.5% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  8%,
+  33.3% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  35.8% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  41.3%,
+  66.7% {
+    background: rgba(109, 40, 217, 0.32);
+    transform: scale(1);
+  }
+  69.2% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  74.7%,
+  91% {
+    background: rgba(109, 40, 217, 0.5);
+    transform: scale(1);
+  }
+  100% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+}
+/* latches after the final pass */
+@keyframes l6-swp-l3 {
+  0% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  2.5% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  8%,
+  33.3% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  35.8% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  41.3%,
+  66.7% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  69.2% {
+    background: #6d28d9;
+    transform: scale(1.4);
+  }
+  74.7%,
+  91% {
+    background: rgba(109, 40, 217, 0.34);
+    transform: scale(1);
+  }
+  100% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+}
+
+/* =========================================================================
+   Scheduler — two unlabeled lanes, bars draw in on schedule, sweep line.
+   Bar keyframes are generated inline by the component.
+   ========================================================================= */
+.l6-sch {
+  position: relative;
+  width: min(560px, 100%);
+  height: 84px;
+  margin: 1.2rem 0 0.4rem;
+}
+.l6-sch-lane {
+  position: absolute;
+  right: 8%;
+  left: 0;
+  height: 14px;
+  border-bottom: 1px dashed var(--l6-rule);
+}
+.l6-sch-lane:first-of-type {
+  top: calc(50% - 17px);
+}
+.l6-sch-lane:last-of-type {
+  top: calc(50% + 3px);
+}
+.l6-sch-bar {
+  position: absolute;
+  height: 14px;
+  background: var(--l6-accent-soft);
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.l6-sch-now {
+  position: absolute;
+  top: calc(50% - 26px);
+  bottom: calc(50% - 26px);
+  width: 1.5px;
+  background: var(--l6-ink);
+  opacity: 0.45;
+  animation: l6-sch-now 8s linear infinite;
+}
+@keyframes l6-sch-now {
+  0% {
+    left: 0%;
+    opacity: 0.45;
+  }
+  82.5% {
+    left: 92%;
+    opacity: 0.45;
+  }
+  90% {
+    opacity: 0;
+  }
+  99% {
+    left: 0%;
+    opacity: 0;
+  }
+  100% {
+    left: 0%;
+    opacity: 0.45;
+  }
+}
+
+/* the playground gets real height on this page */
+.l6 .l2-live {
+  --color-vsc-green: #6d28d9;
+  height: min(76vh, 740px);
+  border: 1px solid #d8cfbd;
+}
+
+/* =========================================================================
+   BAML is purple on this page: run buttons and the editor's run codelens
+   follow the accent.
+   ========================================================================= */
+.l6 .l2-run-btn {
+  background: var(--l6-accent);
+}
+.l6 .l2-run-btn:hover:not(:disabled) {
+  background: #5b21b6;
+}
+.l6 .monaco-editor .codelens-decoration a {
+  color: var(--l6-accent) !important;
+}
+/* On the dark page the deep --l6-accent purple is nearly black against the
+   editor; use the lighter accent so the run/test codelens stays legible. Scoped
+   to the page code-theme so it reaches both the LivePlayground and the
+   standalone BamlEditor panes (the latter isn't a .baml-playground-root). */
+.l6[data-code-theme="dark"] .monaco-editor .codelens-decoration a {
+  color: #a78bfa !important;
+}
+
+/* Reduced motion: only quiet the attention-grabbing inline glow. The
+   diagram loops (cubes, scheduler) stay — same policy as /learn4, where
+   only layout-shifting one-shots are reduced. */
+@media (prefers-reduced-motion: reduce) {
+  .l6-glow {
+    animation: none;
+  }
+}
+
+/* =========================================================================
+   BAML files get a branded header. Any code block whose filename ends in
+   `.baml` (BamlCode or the Monaco BamlEditor) carries .l2-code-head--baml, so
+   it's clear which panes are BAML vs TypeScript/Python/etc. Kept tasteful: a
+   subtle purple-tinted bar + a 2px accent line + purple filename, not a
+   saturated block. `--l6-code-head` falls back to the paper header color when
+   no dark theme is set. Works on every code theme.
+   ========================================================================= */
+.l6 .l2-code-head--baml {
+  background: color-mix(
+    in srgb,
+    var(--l6-accent) 14%,
+    var(--l6-code-head, #f3ecdf)
+  );
+  border-bottom: 2px solid var(--l6-accent);
+}
+.l6 .l2-code-head--baml .l2-code-name {
+  font-weight: 600;
+  color: var(--l6-baml-name, #6d28d9);
+}
+/* swap the generic window dots for the BAML lamb — these are BAML "IDEs". */
+.l6 .l2-code-head--baml .l2-code-dots {
+  display: none;
+}
+.l6 .l2-code-head--baml::before {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  content: "";
+  background: url("/bamllogopurple.svg") center / contain no-repeat;
+}
+/* on dark frames, use the white lamb + lighten the filename so both read on
+   the tinted-dark bar */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+.l2-code-head--baml::before {
+  background-image: url("/baml-lamb-white.png");
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) {
+  --l6-baml-name: #c4b5fd;
+}
+
+/* =========================================================================
+   Dark code themes. Driven by CODE_THEME in Article.tsx, which sets
+   data-code-theme="<name>" on .l6 (and picks the matching Monaco + Shiki
+   themes). Each preset sets frame-chrome variables so the editor *wrapper*
+   matches the editor interior; the shared rules below paint the frames from
+   those variables. Token colors come from the dark Shiki/Monaco themes
+   themselves. Scoped to .l6 so the /learn2 deck is untouched.
+   ========================================================================= */
+.l6[data-code-theme="dark"] {
+  --l6-code-bg: #1e1e1e;
+  --l6-code-head: #252526;
+  --l6-code-border: #34343a;
+  --l6-code-name: #c9c9c9;
+  --l6-code-ln: #5a5a5a;
+  --l6-code-dot: #4a4a4a;
+}
+.l6[data-code-theme="midnight"] {
+  --l6-code-bg: #1a1b26;
+  --l6-code-head: #1f2233;
+  --l6-code-border: #2a2e42;
+  --l6-code-name: #a9b1d6;
+  --l6-code-ln: #3b4261;
+  --l6-code-dot: #3b4261;
+}
+
+/* static highlighted code (BamlCode) */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-code {
+  background: var(--l6-code-bg);
+  border-color: var(--l6-code-border);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-code-head:not(.l2-code-head--baml) {
+  background: var(--l6-code-head);
+  border-bottom-color: var(--l6-code-border);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-code-name {
+  color: var(--l6-code-name);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-code-dots i {
+  background: var(--l6-code-dot);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-ln {
+  color: var(--l6-code-ln);
+}
+
+/* Monaco editor + live playground wrappers (the editor interior background
+   comes from the Monaco theme; these cover the frame, header, and loading
+   states so nothing flashes cream). */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-bamled-frame,
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-live {
+  background: var(--l6-code-bg);
+  border-color: var(--l6-code-border);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-bamled,
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-bamled-loading,
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-live-loading {
+  color: var(--l6-code-name);
+  background: var(--l6-code-bg);
+}
+/* The loading veil over the result pane is a translucent white wash on the
+   cream page; on dark frames that flashes a bright box, so swap it for a dark
+   wash and lift the label/spinner to a readable tone. */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-live-veil {
+  color: var(--l6-code-name);
+  background: color-mix(in srgb, var(--l6-code-bg) 72%, transparent);
+}
+
+/* Diagnostics + line highlights are tuned for the cream page; on dark frames
+   their faint tints disappear. Brighten them and add a left accent bar so the
+   highlighted line and the inline runtime error read clearly. */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-line-hl {
+  background: rgba(167, 139, 250, 0.16);
+  box-shadow: inset 3px 0 0 var(--l6-accent-soft);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-ed-hl {
+  background: rgba(167, 139, 250, 0.16);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l6-wf-hl {
+  background: rgba(167, 139, 250, 0.18);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-line-diag.l2-sev-error {
+  background: rgba(248, 81, 73, 0.14);
+  box-shadow: inset 3px 0 0 #f85149;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-line-diag.l2-sev-warning {
+  background: rgba(210, 153, 34, 0.14);
+  box-shadow: inset 3px 0 0 #d29922;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-errorlens {
+  opacity: 1;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-errorlens.l2-sev-error {
+  color: #ff7b72;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-errorlens.l2-sev-warning {
+  color: #e3b341;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-errorlens.l2-sev-info {
+  color: #8b949e;
+}
+/* Monaco inline-diagnostic line tints */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+.l2-el-line-error {
+  background: rgba(248, 81, 73, 0.12);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-el-line-warning {
+  background: rgba(210, 153, 34, 0.12);
+}
+
+/* ============================================================================
+   Design-philosophy accordion (TenetsAccordion). Ported from the standalone
+   mockup and fully scoped under .l6-tenets-accordion so its generic class names
+   (.card, .frame, .branch, .tv-*, .fg, .stack) and CSS variables never leak
+   into the rest of the site. The mockup's page chrome (dotted-grid .stage, the
+   standalone h2 + intro) is dropped; the section supplies its own heading.
+   ========================================================================== */
+.l6-tenets-accordion {
+  --ground: #fdfbf5;
+  --card: #fffdf7;
+  --ink: #1a1612;
+  --body: #2b2520;
+  --muted: #6f6a63;
+  --soft: #8a8580;
+  --rule: #e7e2d6;
+  --rule-strong: #ddd5c4;
+  --accent: #6d28d9;
+  --accent-tint: rgba(109, 40, 217, 0.09);
+  --red: #b91c1c;
+  --green: #15803d;
+  --amber: #b45309;
+  --amber-bg: rgba(217, 119, 6, 0.12);
+  --amber-line: #d3893f;
+  --sans:
+    var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  color: var(--body);
+}
+.l6-tenets-accordion *,
+.l6-tenets-accordion *::before,
+.l6-tenets-accordion *::after {
+  box-sizing: border-box;
+}
+
+.l6-tenets-accordion .acc {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.l6-tenets-accordion .acc-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 2px;
+  font-family: var(--mono);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+.l6-tenets-accordion .acc-title {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.l6-tenets-accordion .acc-title::before {
+  margin-right: 0.7rem;
+  color: var(--accent);
+  content: "—";
+}
+.l6-tenets-accordion .acc-item.is-open .acc-title::before {
+  content: "+";
+}
+.l6-tenets-accordion .acc-chev {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  color: var(--soft);
+  opacity: 0;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 140ms ease;
+}
+.l6-tenets-accordion .acc-head:hover .acc-chev {
+  opacity: 1;
+}
+.l6-tenets-accordion .acc-item.is-open .acc-chev {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+.l6-tenets-accordion .acc-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.l6-tenets-accordion .acc-item.is-open .acc-body {
+  grid-template-rows: 1fr;
+}
+.l6-tenets-accordion .acc-body-inner {
+  overflow: hidden;
+}
+.l6-tenets-accordion .acc-body-pad {
+  padding: 0 0 20px 25px;
+}
+
+.l6-tenets-accordion .why {
+  max-width: 56ch;
+  margin: 0 0 13px;
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--muted);
+}
+.l6-tenets-accordion .why code {
+  padding: 0.05em 0.35em;
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--body);
+  background: rgba(26, 22, 18, 0.05);
+  border-radius: 4px;
+}
+.l6-tenets-accordion .code {
+  padding: 11px 13px;
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--body);
+  white-space: pre;
+  background: rgba(26, 22, 18, 0.035);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+.l6-tenets-accordion .code .cm {
+  color: var(--soft);
+}
+.l6-tenets-accordion .code .bad {
+  color: var(--red);
+}
+.l6-tenets-accordion .code .ok {
+  color: var(--green);
+}
+
+/* ---- shared demo shell (tenets #4 and #5) ---- */
+.l6-tenets-accordion .cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+@media (max-width: 620px) {
+  .l6-tenets-accordion .cols {
+    grid-template-columns: 1fr;
+  }
+}
+.l6-tenets-accordion .panel {
+  padding: 13px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(26, 22, 18, 0.04);
+  transition: border-color 300ms ease;
+}
+.l6-tenets-accordion .panel.good {
+  border-color: rgba(109, 40, 217, 0.4);
+}
+.l6-tenets-accordion .panel.bad {
+  border-color: rgba(217, 119, 6, 0.4);
+}
+.l6-tenets-accordion .p-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.l6-tenets-accordion .p-titlegroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.l6-tenets-accordion .p-eyebrow {
+  align-self: flex-start;
+  padding: 1px 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 999px;
+}
+.l6-tenets-accordion .p-eyebrow--local,
+.l6-tenets-accordion .p-eyebrow--one {
+  color: #fff;
+  background: var(--accent);
+}
+.l6-tenets-accordion .p-eyebrow--nonlocal,
+.l6-tenets-accordion .p-eyebrow--many {
+  color: var(--amber);
+  background: var(--amber-bg);
+}
+.l6-tenets-accordion .p-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.l6-tenets-accordion .replay {
+  padding: 0;
+  margin-top: 18px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--soft);
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+.l6-tenets-accordion .replay:hover {
+  color: var(--accent);
+}
+
+/* ---- #5: keep edits local (context window) ---- */
+.l6-tenets-accordion .meter {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.l6-tenets-accordion .meter-track {
+  width: 54px;
+  height: 6px;
+  overflow: hidden;
+  background: var(--rule);
+  border-radius: 3px;
+}
+.l6-tenets-accordion .meter-fill {
+  width: 14%;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition:
+    width 220ms linear,
+    background 400ms ease;
+}
+.l6-tenets-accordion .meter-pct {
+  width: 7ch;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  text-align: right;
+}
+.l6-tenets-accordion .window {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  background: rgba(26, 22, 18, 0.02);
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+}
+.l6-tenets-accordion .stack {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+}
+.l6-tenets-accordion .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  border-top: 1px solid rgba(26, 22, 18, 0.04);
+  animation: l6ta-row-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.l6-tenets-accordion .row .file {
+  color: var(--ink);
+}
+.l6-tenets-accordion .row .note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--soft);
+}
+.l6-tenets-accordion .row--task,
+.l6-tenets-accordion .row--edit {
+  background: var(--accent-tint);
+}
+.l6-tenets-accordion .row--task .file,
+.l6-tenets-accordion .row--edit .file {
+  font-weight: 600;
+  color: var(--accent);
+}
+.l6-tenets-accordion .row--task .note,
+.l6-tenets-accordion .row--edit .note {
+  color: var(--accent);
+  opacity: 0.75;
+}
+.l6-tenets-accordion .row--task.evicted {
+  opacity: 0.3;
+}
+.l6-tenets-accordion .dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.l6-tenets-accordion .row--task .dot,
+.l6-tenets-accordion .row--edit .dot {
+  background: var(--accent);
+}
+.l6-tenets-accordion .row--junk .dot {
+  background: var(--rule-strong);
+}
+.l6-tenets-accordion .row--call .dot {
+  background: var(--soft);
+}
+.l6-tenets-accordion .window::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 30px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(var(--card), rgba(255, 253, 247, 0));
+}
+.l6-tenets-accordion .tl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 4px;
+  align-items: center;
+  min-height: 24px;
+  margin-top: 13px;
+}
+.l6-tenets-accordion .tl-arrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  opacity: 0.55;
+}
+.l6-tenets-accordion .step {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 999px;
+  opacity: 0.4;
+  transition: opacity 220ms ease;
+}
+.l6-tenets-accordion .step.is-active {
+  opacity: 1;
+}
+.l6-tenets-accordion .step .sdot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.l6-tenets-accordion .step--task {
+  color: var(--accent);
+  background: var(--accent-tint);
+}
+.l6-tenets-accordion .step--task .sdot {
+  background: var(--accent);
+}
+.l6-tenets-accordion .step--warn {
+  color: var(--amber);
+  background: var(--amber-bg);
+}
+.l6-tenets-accordion .step--warn .sdot {
+  background: var(--amber);
+}
+.l6-tenets-accordion .step--ok {
+  color: #fff;
+  background: var(--accent);
+}
+.l6-tenets-accordion .step--ok .sdot {
+  background: #fff;
+}
+@keyframes l6ta-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- #4: leave one obvious way (branching tree) ---- */
+.l6-tenets-accordion .branch {
+  position: relative;
+  height: 200px;
+  margin-top: 8px;
+}
+.l6-tenets-accordion .branch svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.l6-tenets-accordion .branch line {
+  stroke-width: 1.4;
+  fill: none;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.l6-tenets-accordion .branch line.in {
+  opacity: 0.85;
+}
+.l6-tenets-accordion .ln-many {
+  stroke: var(--amber-line);
+}
+.l6-tenets-accordion .ln-one {
+  stroke: var(--accent);
+}
+.l6-tenets-accordion .branch line.ln-one.in {
+  opacity: 1;
+  stroke-width: 2;
+}
+.l6-tenets-accordion .tnode {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0);
+  transition:
+    opacity 220ms ease,
+    transform 240ms cubic-bezier(0.2, 0.9, 0.3, 1.5);
+}
+.l6-tenets-accordion .tnode.in {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.l6-tenets-accordion .tnode--many {
+  background: var(--amber-line);
+}
+.l6-tenets-accordion .tnode--one {
+  width: 11px;
+  height: 11px;
+  background: var(--accent);
+}
+
+/* ---- #3: trace nondeterminism (waterfall) ---- */
+.l6-tenets-accordion .tv {
+  --labelw: 168px;
+  margin-top: 4px;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(26, 22, 18, 0.04);
+}
+.l6-tenets-accordion .tv-head {
+  padding: 11px 14px;
+  font-family: var(--mono);
+  border-bottom: 1px solid var(--rule);
+}
+.l6-tenets-accordion .tv-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.l6-tenets-accordion .tv-title .m {
+  color: var(--accent);
+}
+.l6-tenets-accordion .tv-body {
+  position: relative;
+  padding: 8px 14px 12px 0;
+}
+.l6-tenets-accordion .tv-grid {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  bottom: 12px;
+  left: var(--labelw);
+  pointer-events: none;
+}
+.l6-tenets-accordion .tv-gl {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(26, 22, 18, 0.05);
+}
+.l6-tenets-accordion .tv-playhead {
+  position: absolute;
+  top: -2px;
+  bottom: 0;
+  left: 0;
+  width: 1.5px;
+  background: var(--accent);
+  opacity: 0;
+}
+.l6-tenets-accordion .tv-playhead.on {
+  opacity: 0.5;
+}
+.l6-tenets-accordion .tv-playhead::before {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  content: "";
+  background: var(--accent);
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+.l6-tenets-accordion .tv-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--labelw) 1fr;
+  align-items: center;
+  height: 25px;
+}
+.l6-tenets-accordion .tv-label {
+  padding-left: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.l6-tenets-accordion .tv-row.in .tv-label {
+  opacity: 1;
+}
+.l6-tenets-accordion .tv-label .note {
+  color: var(--soft);
+}
+.l6-tenets-accordion .tv-label .fail {
+  color: #c2410c;
+}
+.l6-tenets-accordion .tv-track {
+  position: relative;
+  height: 100%;
+}
+.l6-tenets-accordion .tv-bar {
+  position: absolute;
+  top: 6px;
+  width: 0;
+  height: 13px;
+  border-radius: 3px;
+  opacity: 0;
+}
+.l6-tenets-accordion .tv-bar.on {
+  opacity: 1;
+}
+.l6-tenets-accordion .tv-bar--fail {
+  background: repeating-linear-gradient(
+    -45deg,
+    #e6b8a4,
+    #e6b8a4 3px,
+    #f3d9cd 3px,
+    #f3d9cd 6px
+  ) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l6-tenets-accordion .acc-chev,
+  .l6-tenets-accordion .acc-body,
+  .l6-tenets-accordion .row,
+  .l6-tenets-accordion .tnode,
+  .l6-tenets-accordion .branch line,
+  .l6-tenets-accordion .tv-label,
+  .l6-tenets-accordion .tv-bar {
+    transition: none;
+    animation: none;
+  }
+}
+@media (max-width: 620px) {
+  .l6-tenets-accordion .acc-title {
+    font-size: 15px;
+  }
+}

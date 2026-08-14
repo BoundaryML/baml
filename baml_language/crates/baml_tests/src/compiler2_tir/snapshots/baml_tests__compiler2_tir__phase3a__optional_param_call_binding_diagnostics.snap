@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a.rs
+expression: tir
+---
+function user.search(query: string, max: int = 10) -> string throws never {
+  { : string
+    query : string
+  }
+}
+function user.positional_default() -> string throws never {
+  { : string
+    search("cats", 5) : string
+  }
+  !! 124..125: defaulted parameter `max` must be passed by name
+}
+function user.positional_after_named() -> string throws never {
+  { : string
+    search(query = "cats", 5) : string
+  }
+  !! 198..199: positional arguments cannot appear after named arguments
+}
+function user.duplicate_named() -> string throws never {
+  { : string
+    search(query = "cats", max = 1, max = 2) : string
+  }
+  !! 242..282: expected 2 argument(s), got 3
+  !! 280..281: duplicate named argument `max`
+}
+function user.unknown_named() -> string throws never {
+  { : string
+    search(q = "cats") : string
+  }
+  !! 322..340: missing required argument `query`
+  !! 322..340: unknown named argument `q`
+}

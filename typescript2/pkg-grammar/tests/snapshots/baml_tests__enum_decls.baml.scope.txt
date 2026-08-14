@@ -1,0 +1,527 @@
+1:1-57       "// Testing all the formatter cases for enum declarations" source.baml comment.line.double-slash.baml
+3:1-28       "// ===== Minimal enum =====" source.baml comment.line.double-slash.baml
+4:1-5        "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+4:6-13       "Minimal"          source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+4:14-15      "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+5:5-6        "A"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+6:1-2        "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+8:1-28       "// ===== Two variants =====" source.baml comment.line.double-slash.baml
+9:1-5        "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+9:6-17       "TwoVariants"      source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+9:18-19      "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+10:5-8       "Yes"              source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+11:5-7       "No"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+12:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+14:1-33      "// ===== Multiple variants =====" source.baml comment.line.double-slash.baml
+15:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+15:6-18      "MultiVariant"     source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+15:19-20     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+16:5-8       "Red"              source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+17:5-10      "Green"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+18:5-9       "Blue"             source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+19:5-11      "Yellow"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+20:5-11      "Purple"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+21:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+23:1-45      "// ===== Variants with trailing commas =====" source.baml comment.line.double-slash.baml
+24:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+24:6-16      "WithCommas"       source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+24:17-18     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+25:5-6       "A"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+25:6-7       ","                source.baml meta.enum.baml meta.enum.body.baml punctuation.separator.comma.baml
+26:5-6       "B"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+26:6-7       ","                source.baml meta.enum.baml meta.enum.body.baml punctuation.separator.comma.baml
+27:5-6       "C"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+27:6-7       ","                source.baml meta.enum.baml meta.enum.body.baml punctuation.separator.comma.baml
+28:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+30:1-38      "// ===== Variant with attribute =====" source.baml comment.line.double-slash.baml
+31:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+31:6-14      "WithAttr"         source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+31:15-16     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+32:5-11      "Active"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+32:12-13     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+32:13-24     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+32:24-25     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+32:25-26     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+32:26-42     "Currently active" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+32:42-43     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+32:43-44     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+33:5-13      "Inactive"         source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+33:14-15     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+33:15-26     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+33:26-27     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+33:27-28     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+33:28-38     "Not active"       source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+33:38-39     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+33:39-40     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+34:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+36:1-48      "// ===== Variant with multiple attributes =====" source.baml comment.line.double-slash.baml
+37:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+37:6-15      "MultiAttr"        source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+37:16-17     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+38:5-12      "Success"          source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+38:13-14     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+38:14-25     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+38:25-26     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+38:26-27     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+38:27-46     "Operation succeeded" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+38:46-47     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+38:47-48     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+38:49-50     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+38:50-55     "alias"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+38:55-56     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+38:56-57     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+38:57-59     "ok"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+38:59-60     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+38:60-61     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+39:5-12      "Failure"          source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+39:13-14     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+39:14-25     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+39:25-26     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+39:26-27     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+39:27-43     "Operation failed" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+39:43-44     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+39:44-45     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+39:46-47     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+39:47-52     "alias"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+39:52-53     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+39:53-54     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+39:54-57     "err"              source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+39:57-58     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+39:58-59     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+40:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+42:1-59      "// ===== Variant with long attribute exceeding limit =====" source.baml comment.line.double-slash.baml
+43:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+43:6-14      "LongAttr"         source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+43:15-16     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+44:5-24      "VeryImportantStatus" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+44:25-26     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+44:26-37     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+44:37-38     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+44:38-39     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+44:39-182    "This is an extremely detailed description of the variant that pushes the line well past the default formatter line width of one hundred columns" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+44:182-183   "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+44:183-184   ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+45:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+47:1-60      "// ===== Variant with many attributes exceeding limit =====" source.baml comment.line.double-slash.baml
+48:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+48:6-29      "ManyAttrsExceedingLimit" source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+48:30-31     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+49:5-22      "ConfiguredVariant" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+49:23-24     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+49:24-35     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+49:35-36     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+49:36-37     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+49:37-78     "A configured variant with many attributes" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+49:78-79     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+49:79-80     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+49:81-82     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+49:82-87     "alias"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+49:87-88     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+49:88-89     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+49:89-99     "configured"       source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+49:99-100    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+49:100-101   ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+49:102-103   "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+49:103-109   "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+49:109-110   "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+49:110-114   "done"             source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+49:115-116   "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+49:116-122   "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+49:122-123   "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+49:123-131   "not_null"         source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+49:132-133   "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+49:133-139   "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+49:139-140   "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+49:140-150   "with_state"       source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+50:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+52:1-62      "// ===== Long variant name + attributes exceeding limit =====" source.baml comment.line.double-slash.baml
+53:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+53:6-26      "LongVariantPlusAttrs" source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+53:27-28     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+54:5-45      "ThisIsAnExtremelyLongVariantNameByItself" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+54:46-47     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+54:47-58     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+54:58-59     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+54:59-60     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+54:60-89     "and it also has a description" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+54:89-90     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+54:90-91     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+54:92-93     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+54:93-98     "alias"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+54:98-99     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+54:99-100    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+54:100-112   "long_variant"     source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+54:112-113   "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+54:113-114   ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+55:5-48      "AnotherVeryLongVariantNameThatNeedsWrapping" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+55:49-50     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+55:50-61     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+55:61-62     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+55:62-63     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+55:63-79     "another long one" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+55:79-80     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+55:80-81     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+55:82-83     "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+55:83-88     "alias"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+55:88-89     "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+55:89-90     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+55:90-97     "another"          source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+55:97-98     "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+55:98-99     ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+56:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+58:1-39      "// ===== Block attribute on enum =====" source.baml comment.line.double-slash.baml
+59:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+59:6-17      "DynamicEnum"      source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+59:18-19     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+60:5-6       "X"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+61:5-6       "Y"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+62:5-7       "@@"               source.baml meta.enum.baml meta.enum.body.baml meta.attribute.block.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+62:7-14      "dynamic"          source.baml meta.enum.baml meta.enum.body.baml meta.attribute.block.baml storage.type.annotation.baml
+63:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+65:1-58      "// ===== Trivia on enum declaration (line comments) =====" source.baml comment.line.double-slash.baml
+66:1-26      "// 1 enum keyword leading" source.baml comment.line.double-slash.baml
+67:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+67:6-32      "// 2 enum keyword trailing" source.baml meta.enum.baml meta.enum.header.baml comment.line.double-slash.baml
+68:1-18      "// 3 name leading" source.baml meta.enum.baml meta.enum.header.baml comment.line.double-slash.baml
+69:1-11      "TriviaEnum"       source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+69:12-30     "// 4 name trailing" source.baml meta.enum.baml meta.enum.header.baml comment.line.double-slash.baml
+70:1-24      "// 5 open brace leading" source.baml meta.enum.baml meta.enum.header.baml comment.line.double-slash.baml
+71:1-2       "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+71:3-27      "// 6 open brace trailing" source.baml meta.enum.baml meta.enum.body.baml comment.line.double-slash.baml
+72:5-31      "// 7 first variant leading" source.baml meta.enum.baml meta.enum.body.baml comment.line.double-slash.baml
+73:5-6       "A"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+73:7-34      "// 8 first variant trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+74:5-32      "// 9 second variant leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+75:5-6       "B"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+75:7-36      "// 10 second variant trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+76:1-26      "// 11 close brace leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+77:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+77:3-29      "// 12 close brace trailing" source.baml comment.line.double-slash.baml
+79:1-20      "///////////////////" source.baml comment.line.double-slash.baml
+81:1-59      "// ===== Trivia on enum declaration (block comments) =====" source.baml comment.line.double-slash.baml
+82:1-3       "/*"               source.baml comment.block.baml
+82:3-27      " 1 enum keyword leading " source.baml comment.block.baml
+82:27-29     "*/"               source.baml comment.block.baml
+83:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+83:6-8       "/*"               source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+83:8-33      " 2 enum keyword trailing " source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+83:33-35     "*/"               source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+84:1-3       "/*"               source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+84:3-19      " 3 name leading " source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+84:19-21     "*/"               source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+85:1-16      "TriviaEnumBlock"  source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+85:17-19     "/*"               source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+85:19-36     " 4 name trailing " source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+85:36-38     "*/"               source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+86:1-3       "/*"               source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+86:3-25      " 5 open brace leading " source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+86:25-27     "*/"               source.baml meta.enum.baml meta.enum.header.baml comment.block.baml
+87:1-2       "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+87:3-5       "/*"               source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+87:5-28      " 6 open brace trailing " source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+87:28-30     "*/"               source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+88:5-7       "/*"               source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+88:7-32      " 7 first variant leading " source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+88:32-34     "*/"               source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+89:5-6       "A"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+89:7-9       "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+89:9-35      " 8 first variant trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+89:35-37     "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+90:5-7       "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+90:7-33      " 9 second variant leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+90:33-35     "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+91:5-6       "B"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+91:7-9       "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+91:9-37      " 10 second variant trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+91:37-39     "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+92:1-3       "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+92:3-27      " 11 close brace leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+92:27-29     "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+93:1-2       "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+93:3-5       "/*"               source.baml comment.block.baml
+93:5-30      " 12 close brace trailing " source.baml comment.block.baml
+93:30-32     "*/"               source.baml comment.block.baml
+95:1-20      "///////////////////" source.baml comment.line.double-slash.baml
+97:1-65      "// ===== Trivia on variant with attributes (line comments) =====" source.baml comment.line.double-slash.baml
+98:1-5       "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+98:6-23      "TriviaVariantAttr" source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+98:24-25     "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+99:5-25      "// 1 variant leading" source.baml meta.enum.baml meta.enum.body.baml comment.line.double-slash.baml
+100:5-11     "Active"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+100:12-38    "// 2 variant name trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+101:5-22     "// 3 attr leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+102:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+102:6-17     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+102:18-41    "// 4 attr name trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.line.double-slash.baml
+103:5-28     "// 5 open paren leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.line.double-slash.baml
+104:5-6      "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+104:7-31     "// 6 open paren trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+105:5-21     "// 7 arg leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+106:5-6      "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+106:6-12     "active"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+106:12-13    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+106:14-31    "// 8 arg trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+107:5-29     "// 9 close paren leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+108:5-6      ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+108:7-33     "// 10 close paren trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+109:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+111:1-66     "// ===== Trivia on variant with attributes (block comments) =====" source.baml comment.line.double-slash.baml
+112:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+112:6-28     "TriviaVariantAttrBlock" source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+112:29-30    "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+113:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+113:7-26     " 1 variant leading " source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+113:26-28    "*/"               source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+114:5-11     "Active"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+114:12-14    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+114:14-39    " 2 variant name trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+114:39-41    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+115:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+115:7-23     " 3 attr leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+115:23-25    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+116:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+116:6-17     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+116:18-20    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+116:20-42    " 4 attr name trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+116:42-44    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+117:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+117:7-29     " 5 open paren leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+117:29-31    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+118:5-6      "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+118:7-9      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+118:9-32     " 6 open paren trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+118:32-34    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+119:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+119:7-22     " 7 arg leading "  source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+119:22-24    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+120:5-6      "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+120:6-12     "active"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+120:12-13    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+120:14-16    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+120:16-32    " 8 arg trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+120:32-34    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+121:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+121:7-30     " 9 close paren leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+121:30-32    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+122:5-6      ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+122:7-9      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+122:9-34     " 10 close paren trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+122:34-36    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+123:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+125:1-78     "// ===== Trivia on wrapping variant with multiple attrs (line comments) =====" source.baml comment.line.double-slash.baml
+126:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+126:6-28     "TriviaWrapVariantAttrs" source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+126:29-30    "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+127:5-25     "// 1 variant leading" source.baml meta.enum.baml meta.enum.body.baml comment.line.double-slash.baml
+128:5-22     "ConfiguredVariant" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+128:23-49    "// 2 variant name trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+129:5-28     "// 3 first attr leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+130:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+130:6-17     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+130:18-47    "// 4 first attr name trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.line.double-slash.baml
+131:5-28     "// 5 open paren leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.line.double-slash.baml
+132:5-6      "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+132:7-31     "// 6 open paren trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+133:5-21     "// 7 arg leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+134:5-6      "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+134:6-47     "a configured variant with many attributes" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+134:47-48    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+134:49-66    "// 8 arg trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+135:5-29     "// 9 close paren leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+136:5-6      ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+136:7-33     "// 10 close paren trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+137:5-30     "// 11 second attr leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+138:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+138:6-11     "alias"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+138:12-43    "// 12 second attr name trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.line.double-slash.baml
+139:5-29     "// 13 open paren leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.line.double-slash.baml
+140:5-6      "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+140:7-32     "// 14 open paren trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+141:5-22     "// 15 arg leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+142:5-6      "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+142:6-16     "configured"       source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+142:16-17    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+142:18-36    "// 16 arg trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+143:5-30     "// 17 close paren leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.line.double-slash.baml
+144:5-6      ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+144:7-33     "// 18 close paren trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+145:5-29     "// 19 third attr leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+146:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+146:6-12     "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+146:12-13    "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+146:13-17    "done"             source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+146:18-43    "// 20 third attr trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+147:5-30     "// 21 fourth attr leading" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+148:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+148:6-12     "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+148:12-13    "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+148:13-21    "not_null"         source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+148:22-48    "// 22 fourth attr trailing" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.line.double-slash.baml
+149:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+151:1-79     "// ===== Trivia on wrapping variant with multiple attrs (block comments) =====" source.baml comment.line.double-slash.baml
+152:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+152:6-33     "TriviaWrapVariantAttrsBlock" source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+152:34-35    "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+153:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+153:7-26     " 1 variant leading " source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+153:26-28    "*/"               source.baml meta.enum.baml meta.enum.body.baml comment.block.baml
+154:5-22     "ConfiguredVariant" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+154:23-25    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+154:25-50    " 2 variant name trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+154:50-52    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+155:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+155:7-29     " 3 first attr leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+155:29-31    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+156:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+156:6-17     "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+156:18-20    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+156:20-48    " 4 first attr name trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+156:48-50    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+157:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+157:7-29     " 5 open paren leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+157:29-31    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+158:5-6      "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+158:7-9      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+158:9-32     " 6 open paren trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+158:32-34    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+159:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+159:7-22     " 7 arg leading "  source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+159:22-24    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+160:5-6      "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+160:6-47     "a configured variant with many attributes" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+160:47-48    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+160:49-51    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+160:51-67    " 8 arg trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+160:67-69    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+161:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+161:7-30     " 9 close paren leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+161:30-32    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+162:5-6      ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+162:7-9      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+162:9-34     " 10 close paren trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+162:34-36    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+163:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+163:7-31     " 11 second attr leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+163:31-33    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+164:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+164:6-11     "alias"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+164:12-14    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+164:14-44    " 12 second attr name trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+164:44-46    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+165:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+165:7-30     " 13 open paren leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+165:30-32    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml comment.block.baml
+166:5-6      "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+166:7-9      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+166:9-33     " 14 open paren trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+166:33-35    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+167:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+167:7-23     " 15 arg leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+167:23-25    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+168:5-6      "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+168:6-16     "configured"       source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+168:16-17    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+168:18-20    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+168:20-37    " 16 arg trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+168:37-39    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+169:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+169:7-31     " 17 close paren leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+169:31-33    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml comment.block.baml
+170:5-6      ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+170:7-9      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+170:9-34     " 18 close paren trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+170:34-36    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+171:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+171:7-30     " 19 third attr leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+171:30-32    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+172:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+172:6-12     "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+172:12-13    "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+172:13-17    "done"             source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+172:18-20    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+172:20-44    " 20 third attr trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+172:44-46    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+173:5-7      "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+173:7-31     " 21 fourth attr leading " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+173:31-33    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+174:5-6      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+174:6-12     "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+174:12-13    "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+174:13-21    "not_null"         source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+174:22-24    "/*"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+174:24-49    " 22 fourth attr trailing " source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+174:49-51    "*/"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml comment.block.baml
+175:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+177:1-31     "// ===== Short enum name =====" source.baml comment.line.double-slash.baml
+178:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+178:6-7      "E"                source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+178:8-9      "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+179:5-6      "V"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+180:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+182:1-46     "// ===== Long enum name exceeding limit =====" source.baml comment.line.double-slash.baml
+183:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+183:6-98     "ThisIsAnExtremelyLongEnumNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself" source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+183:99-100   "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+184:5-10     "Value"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+185:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+187:1-34     "// ===== Long variant names =====" source.baml comment.line.double-slash.baml
+188:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+188:6-22     "LongVariantNames" source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+188:23-24    "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+189:5-98     "ThisIsAVeryLongVariantNameThatByItselfExceedsTheOneHundredCharacterLineLimitAllByItselfEasily" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+190:5-96     "AnotherExtremelyLongVariantNameForTestingLineWrappingBehaviorInTheFormatterOutputDefinitely" source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+191:5-10     "Short"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+192:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+194:1-29     "// ===== Many variants =====" source.baml comment.line.double-slash.baml
+195:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+195:6-18     "ManyVariants"     source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+195:19-20    "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+196:5-7      "V1"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+197:5-7      "V2"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+198:5-7      "V3"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+199:5-7      "V4"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+200:5-7      "V5"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+201:5-7      "V6"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+202:5-7      "V7"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+203:5-7      "V8"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+204:5-7      "V9"               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+205:5-8      "V10"              source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+206:5-8      "V11"              source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+207:5-8      "V12"              source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+208:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+210:1-37     "// ===== Extraneous whitespace =====" source.baml comment.line.double-slash.baml
+211:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+211:9-24     "ExtraWhitespace"  source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+211:28-29    "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+212:5-6      "A"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+213:5-6      "B"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+213:11-12    "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+213:12-23    "description"      source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+213:23-24    "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+213:26-27    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+213:27-28    "b"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+213:28-29    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+213:31-32    ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+213:37-38    "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+213:38-43    "alias"            source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+213:43-44    "("                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+213:46-47    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+213:47-50    "bee"              source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+213:50-51    "\""               source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+213:53-54    ")"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+214:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml
+216:1-45     "// ===== Variant with dotted attribute =====" source.baml comment.line.double-slash.baml
+217:1-5      "enum"             source.baml meta.enum.baml keyword.declaration.enum.baml
+217:6-20     "DottedAttrEnum"   source.baml meta.enum.baml meta.enum.header.baml entity.name.type.enum.baml
+217:21-22    "{"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.begin.baml
+218:5-6      "X"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+218:7-8      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+218:8-14     "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+218:14-15    "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+218:15-19    "done"             source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+219:5-6      "Y"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml variable.other.enummember.baml
+219:7-8      "@"                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+219:8-14     "stream"           source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+219:14-15    "."                source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml punctuation.accessor.baml
+219:15-23    "not_null"         source.baml meta.enum.baml meta.enum.body.baml meta.enum.variant.baml meta.attribute.baml storage.type.annotation.baml
+220:1-2      "}"                source.baml meta.enum.baml meta.enum.body.baml punctuation.definition.block.end.baml

@@ -45,11 +45,13 @@ impl<N: TypeIdent> WithScore for Flag<'_, '_, '_, N> {
                 values.iter().map(|(_, count)| *count as i32).sum::<i32>()
             }
             Flag::StringToInt(_) => 1,
+            Flag::StringToBigint(_) => 1,
             Flag::StringToBool(_) => 1,
             Flag::StringToNull(_) => 1,
             Flag::StringToChar(_) => 1,
             Flag::StringToFloat(_) => 1,
             Flag::FloatToInt(_) => 1,
+            Flag::FloatToBigint(_) => 1,
             Flag::NoFields(_) => 1,
             // No scores for incompleteness.
             Flag::Incomplete => 0,

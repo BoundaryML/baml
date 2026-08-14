@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15078
 ---
 function user.annotatedLiteralUnion() -> int {
     load_const 1
@@ -10,6 +11,7 @@ function user.arrayOfInts() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     return
 }
@@ -19,6 +21,8 @@ function user.mapOfInts() -> map<string, int> {
     load_const 2
     load_const "a"
     load_const "b"
+    load_type string
+    load_type int
     alloc_map 2
     return
 }
@@ -26,10 +30,13 @@ function user.mapOfInts() -> map<string, int> {
 function user.nestedArray() -> int[][] {
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 2
+    load_type int[]
     alloc_array 2
     return
 }

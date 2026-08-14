@@ -10,7 +10,6 @@ use baml_rpc::{
     BamlTypeId,
 };
 use baml_types::ir_type::TypeNonStreaming;
-use cowstr::CowStr;
 use internal_baml_core::ir::ir_hasher;
 use serde::Serialize;
 
@@ -41,7 +40,7 @@ pub struct FunctionSignatureWithDependencies {
 #[derive(Default, Serialize)]
 pub struct AstSignatureWrapper {
     /// Path to source code
-    pub source_code: HashMap<PathBuf, CowStr>,
+    pub source_code: HashMap<PathBuf, String>,
     pub functions: HashMap<String, FunctionSignatureWithDependencies>,
     pub types: HashMap<String, TypeWithDependencies>,
 }
@@ -221,7 +220,7 @@ impl TryFrom<Arc<crate::BamlRuntime>> for AstSignatureWrapper {
         let source_code = runtime
             .source_files
             .iter()
-            .map(|file| (file.path_buf().clone(), CowStr::from(file.as_str())))
+            .map(|file| (file.path_buf().clone(), file.as_str().to_string()))
             .collect();
 
         Ok(Self {
@@ -343,7 +342,7 @@ enum Status {
         for i in 0..NUM_FILES {
             let file_path = PathBuf::from(format!("baml_src/file_{i:03}.baml"));
             let content = create_fake_content(BYTES_PER_FILE);
-            source_code.insert(file_path, CowStr::from(content));
+            source_code.insert(file_path, content);
         }
 
         // Verify total size
@@ -444,17 +443,17 @@ enum Status {
         // Insert in different orders
         wrapper1
             .source_code
-            .insert(PathBuf::from("a.baml"), CowStr::from(content1));
+            .insert(PathBuf::from("a.baml"), content1.to_string());
         wrapper1
             .source_code
-            .insert(PathBuf::from("b.baml"), CowStr::from(content2));
+            .insert(PathBuf::from("b.baml"), content2.to_string());
 
         wrapper2
             .source_code
-            .insert(PathBuf::from("b.baml"), CowStr::from(content2));
+            .insert(PathBuf::from("b.baml"), content2.to_string());
         wrapper2
             .source_code
-            .insert(PathBuf::from("a.baml"), CowStr::from(content1));
+            .insert(PathBuf::from("a.baml"), content1.to_string());
 
         let hash1 = wrapper1.baml_src_hash().unwrap();
         let hash2 = wrapper2.baml_src_hash().unwrap();
@@ -561,7 +560,7 @@ enum ProcessingStatus {
             }
             content.truncate(BYTES_PER_FILE);
 
-            source_code.insert(file_path, CowStr::from(content));
+            source_code.insert(file_path, content);
         }
 
         let actual_total_size: usize = source_code.values().map(|content| content.len()).sum();

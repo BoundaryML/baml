@@ -19,10 +19,31 @@
     "pretest:unit:run": "pnpm --filter @b/pkg-proto generate"
   },
   "dependencies": {
+    "@b/pkg-editor": "workspace:*",
     "@b/pkg-playground": "workspace:*",
     "@b/pkg-proto": "workspace:*",
+    "@codingame/monaco-vscode-api": "^25.1.2",
+    "@codingame/monaco-vscode-environment-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-explorer-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-files-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-keybindings-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-lifecycle-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-localization-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-outline-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-remote-agent-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-search-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-secret-storage-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-storage-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-view-banner-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-view-status-bar-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-view-title-bar-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-views-service-override": "^25.1.2",
+    "monaco-editor": "^0.55.1",
+    "monaco-languageclient": "^10.7.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "vscode": "npm:@codingame/monaco-vscode-extension-api@^25.1.2",
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",

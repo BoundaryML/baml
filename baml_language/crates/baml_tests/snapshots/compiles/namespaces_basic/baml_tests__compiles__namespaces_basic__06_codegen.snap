@@ -1,106 +1,19 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16432
 ---
-function user.Config.from_json(j: baml.json.json) -> Config {
-    load_var j
-    load_const "key"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "model"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.Config
-    load_var _2
-    init_field .key
-    load_var _5
-    init_field .model
-    return
-}
-
-function user.Config.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .key
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .model
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "key"
-    load_const "model"
-    alloc_map 2
-    return
-}
-
 function user.GetResponse(cfg: Config) -> llm.Response {
-    alloc_instance user.llm.Response
     load_const "hello"
-    init_field .text
     load_var cfg
     load_field .model
-    init_field .model
+    init_instance user.llm.Response .text, .model
     return
 }
 
 function user.llm.MakeResponse(cfg: Config) -> llm.Response {
-    alloc_instance user.llm.Response
     load_const "ok"
-    init_field .text
     load_var cfg
     load_field .model
-    init_field .model
-    return
-}
-
-function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
-    load_var j
-    load_const "text"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "model"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.Response
-    load_var _2
-    init_field .text
-    load_var _5
-    init_field .model
-    return
-}
-
-function user.llm.Response.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .text
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .model
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "text"
-    load_const "model"
-    alloc_map 2
+    init_instance user.llm.Response .text, .model
     return
 }

@@ -1,0 +1,41 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: "describe_via_dispatch(&db, \"string\")"
+---
+class String  (string)  <builtin>/baml/string.baml:5-568
+
+/// A UTF-8 encoded string.
+///
+/// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
+/// All methods returning a new string do not mutate `self` unless noted otherwise.
+class String {}
+
+methods:
+  /// Returns the number of **Unicode code points** (characters) in the string.
+  function length(self) -> int  <builtin>/baml/string.baml:56-58
+  /// Alias for `length()`.
+  function char_count(self) -> int  <builtin>/baml/string.baml:61-63
+  /// Returns the length of the string in **UTF-8 bytes**.
+  function byte_length(self) -> int  <builtin>/baml/string.baml:76-78
+  /// Returns the string with all Unicode characters converted to lowercase.
+  function to_lower_case(self) -> string  <builtin>/baml/string.baml:81-83
+  /// Returns the string with all Unicode characters converted to uppercase.
+  function to_upper_case(self) -> string  <builtin>/baml/string.baml:86-88
+  /// Returns the string with leading and trailing whitespace removed.
+  function trim(self) -> string  <builtin>/baml/string.baml:101-103
+  /// Returns the string with leading whitespace removed (trailing whitespace
+  function trim_start(self) -> string  <builtin>/baml/string.baml:113-115
+  /// Returns the string with trailing whitespace removed (leading whitespace
+  function trim_end(self) -> string  <builtin>/baml/string.baml:125-127
+  /// Returns true if `search` appears anywhere in the string.
+  function includes(self, search: string) -> bool  <builtin>/baml/string.baml:130-132
+  /// Returns true if the string starts with `prefix`.
+  function starts_with(self, prefix: string) -> bool  <builtin>/baml/string.baml:135-137
+  /// Returns true if the string ends with `suffix`.
+  function ends_with(self, suffix: string) -> bool  <builtin>/baml/string.baml:140-142
+  … 60 more lines (re-run with a higher `--budget` to see more; use `--budget 97` for full output)
+
+static_methods:
+  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 97` for full output)
+
+references (0):

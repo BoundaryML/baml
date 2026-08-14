@@ -1,0 +1,160 @@
+{
+  "params": [
+    {
+      "hasDefault": false,
+      "name": "p",
+      "schema": {
+        "name": "user.Person",
+        "type": "ref"
+      }
+    },
+    {
+      "hasDefault": false,
+      "name": "c",
+      "schema": {
+        "name": "user.Color",
+        "type": "ref"
+      }
+    },
+    {
+      "hasDefault": false,
+      "name": "j",
+      "schema": {
+        "name": "user.JSON",
+        "type": "ref"
+      }
+    },
+    {
+      "hasDefault": false,
+      "name": "s",
+      "schema": {
+        "name": "user.Status",
+        "type": "enumVariant",
+        "value": "Active"
+      }
+    },
+    {
+      "hasDefault": false,
+      "name": "l",
+      "schema": {
+        "item": {
+          "type": "string"
+        },
+        "type": "list"
+      }
+    },
+    {
+      "hasDefault": false,
+      "name": "m",
+      "schema": {
+        "key": {
+          "type": "string"
+        },
+        "type": "map",
+        "value": {
+          "type": "float"
+        }
+      }
+    },
+    {
+      "hasDefault": false,
+      "name": "u",
+      "schema": {
+        "type": "union",
+        "variants": [
+          {
+            "type": "int"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "hasDefault": false,
+      "name": "i",
+      "schema": {
+        "kind": "image",
+        "type": "media"
+      }
+    },
+    {
+      "defaultExpression": "3",
+      "hasDefault": true,
+      "name": "x",
+      "schema": {
+        "type": "int"
+      }
+    }
+  ],
+  "types": {
+    "user.Color": {
+      "kind": "enum",
+      "values": ["Red", "Green", "Blue"]
+    },
+    "user.JSON": {
+      "kind": "alias",
+      "schema": {
+        "type": "union",
+        "variants": [
+          {
+            "type": "string"
+          },
+          {
+            "item": {
+              "name": "user.JSON",
+              "type": "ref"
+            },
+            "type": "list"
+          }
+        ]
+      }
+    },
+    "user.Nested": {
+      "fields": [
+        {
+          "name": "x",
+          "schema": {
+            "type": "int"
+          }
+        }
+      ],
+      "kind": "class"
+    },
+    "user.Person": {
+      "fields": [
+        {
+          "name": "name",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "age",
+          "schema": {
+            "inner": {
+              "type": "int"
+            },
+            "type": "optional"
+          }
+        },
+        {
+          "name": "color",
+          "schema": {
+            "name": "user.Color",
+            "type": "ref"
+          }
+        },
+        {
+          "name": "nested",
+          "schema": {
+            "name": "user.Nested",
+            "type": "ref"
+          }
+        }
+      ],
+      "kind": "class"
+    }
+  }
+}

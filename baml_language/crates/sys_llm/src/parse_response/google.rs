@@ -112,6 +112,7 @@ pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, P
         .unwrap_or_default();
 
     Ok(LlmProviderResponse {
+        output: crate::parse_response::LlmOutput::from_text(content.clone()),
         content,
         model: None,
         finish_reason,
@@ -168,6 +169,7 @@ pub(super) fn parse_vertex_response(body: &str) -> Result<LlmProviderResponse, P
         .unwrap_or_default();
 
     Ok(LlmProviderResponse {
+        output: crate::parse_response::LlmOutput::from_text(content.clone()),
         content,
         model: None,
         finish_reason,

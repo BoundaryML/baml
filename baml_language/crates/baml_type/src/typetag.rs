@@ -72,8 +72,40 @@ pub const COLLECTOR: i64 = 11;
 /// Uint8Array type tag.
 pub const UINT8ARRAY: i64 = 12;
 
+/// Bigint type tag.
+pub const BIGINT: i64 = 13;
+
 /// Base value for class type tags (classes start at 100).
 pub const CLASS_BASE: i64 = 100;
 
 /// Unknown/invalid type tag.
 pub const UNKNOWN: i64 = -1;
+
+/// Content-addressed class type tag: `CLASS_BASE + (fnv1a64(fq_name) & 47 bits)`.
+///
+/// A class's tag depends only on its fully-qualified name — never on what
+/// other classes exist or the order files compile in. That stability is what
+/// lets compiled bytecode be cached and relinked per file (tags baked into
+/// match-dispatch tables, comparison chains, and constant pools never shift
+/// when unrelated code changes) and gives dynamically loaded classes
+/// order-independent tags.
+///
+/// The hash is a hand-inlined FNV-1a 64 so the value is pinned by this file
+/// alone — no dependency version can silently re-tag every class. Collisions
+/// (47-bit space) are detected at emit time and reported as compile errors.
+/// The 47-bit mask keeps `CLASS_BASE + hash` comfortably inside `i64` and
+/// disjoint from the primitive tags above.
+#[must_use]
+pub fn class_type_tag(fq_name: &str) -> i64 {
+    const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+    let mut h = FNV_OFFSET;
+    for byte in fq_name.as_bytes() {
+        h ^= u64::from(*byte);
+        h = h.wrapping_mul(FNV_PRIME);
+    }
+    #[allow(clippy::cast_possible_wrap)]
+    {
+        CLASS_BASE + (h & 0x7FFF_FFFF_FFFF) as i64
+    }
+}

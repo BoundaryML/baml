@@ -208,3 +208,34 @@ class UserSettings(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (22)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+Address.model_rebuild()
+Approval.model_rebuild()
+Budget.model_rebuild()
+Contact.model_rebuild()
+Coordinates.model_rebuild()
+DeeplyNested.model_rebuild()
+DisplaySettings.model_rebuild()
+Employee.model_rebuild()
+Level1.model_rebuild()
+Level2.model_rebuild()
+Level3.model_rebuild()
+Level4.model_rebuild()
+Level5.model_rebuild()
+Metadata.model_rebuild()
+NotificationSettings.model_rebuild()
+Preferences.model_rebuild()
+PrivacySettings.model_rebuild()
+Profile.model_rebuild()
+SimpleNested.model_rebuild()
+SocialLinks.model_rebuild()
+User.model_rebuild()
+UserSettings.model_rebuild()

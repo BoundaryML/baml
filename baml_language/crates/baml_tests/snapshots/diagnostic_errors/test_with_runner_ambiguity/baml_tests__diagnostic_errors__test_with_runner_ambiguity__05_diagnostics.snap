@@ -1,24 +1,20 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 38863
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved name: my_runner
-   ╭─[ main.baml:8:27 ]
-   │
- 8 │ test "simple runner" with my_runner {
-   │                           ────┬────  
-   │                               ╰────── unresolved name: my_runner
-   │ 
-   │ Note: Error code: E0003
-───╯
+  [type] E0003
 
-  [type] Error: unresolved name: Quorum
-    ╭─[ main.baml:13:24 ]
-    │
- 13 │ test "call runner" with testing.Quorum(5, 3) {
-    │                        ───────┬───────  
-    │                               ╰───────── unresolved name: Quorum
-    │ 
-    │ Note: Error code: E0003
-────╯
+  × unresolved name: `my_runner`
+   ╭─[main.baml:8:27]
+ 8 │ test "simple runner" with my_runner {
+   ·                           ─────────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:23:32]
+ 23 │ test "constructor runner" with MyRunner { threshold: 0.5 } {
+    ·                                ─────────────┬─────────────
+    ·                                             ╰── expected `((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null`, found `MyRunner`
+    ╰────

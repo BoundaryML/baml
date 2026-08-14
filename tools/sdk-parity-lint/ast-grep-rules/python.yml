@@ -1,0 +1,22 @@
+id: python-test
+language: Python
+rule:
+  pattern: 'def $NAME($$$ARGS): $$$BODY'
+constraints:
+  NAME:
+    regex: '^test_[A-Za-z0-9_]+$'
+---
+id: python-audit-test
+language: Python
+rule:
+  pattern: 'def $NAME($$$ARGS): $$$BODY'
+constraints:
+  NAME:
+    regex: '^test[A-Za-z0-9_]*$'
+---
+id: sdk-parity-lint-skip
+language: Python
+rule:
+  all:
+    - kind: comment
+    - regex: 'SDK_PARITY_LINT\(skip\):'

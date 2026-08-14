@@ -1,0 +1,1062 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function json_auto_derive.$init_test_ns_json_auto_derive_json_auto_derive(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "simple_class_to_json_roundtrip"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "user_to_json_override_suppresses_auto_derive"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "int_to_json_resolves_and_executes"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "float_to_json_resolves_and_executes"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "bool_to_json_resolves_and_executes"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "null_to_json_resolves_and_executes"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "array_of_int_to_json_returns_json_array"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "array_of_class_to_json_honors_override"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "map_of_int_to_json_returns_json_map"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "typevar_to_json_compiles_in_generic_class"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "primitive_field_to_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "array_of_primitive_to_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "nested_class_override_honored_direct"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "nested_class_override_honored_in_array"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "nested_class_override_honored_in_map"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "recursive_class_to_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "generic_class_to_json_concrete"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "generic_class_to_json_array_typearg"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "generic_class_honors_override_through_typevar"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "generic_class_with_optional_typevar_field"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "generic_class_with_optional_typevar_field_null"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "generic_class_with_optional_typevar_field_honors_override"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "primitive_field_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "array_of_primitive_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "nested_class_override_honored_direct_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "nested_class_override_honored_in_array_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "nested_class_override_honored_in_map_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "recursive_class_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "generic_class_from_json_concrete"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "generic_class_honors_override_through_typevar_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "optional_class_override_honored_from_json_non_null"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "optional_class_override_honored_from_json_null"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "optional_primitive_field_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "map_of_primitive_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "top_level_from_json_call_concrete_class"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "top_level_from_json_call_primitive"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "independent_synthesis_only_from_json_defined"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "independent_synthesis_only_to_json_defined"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "round_trip_with_overrides_both_directions"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "alias_chain_dispatch_to_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "alias_chain_dispatch_from_json"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_auto_derive"
+    load_const "from_json_wrapper_body_fallback"
+    make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function json_auto_derive.BAliasFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BAliasFrom {
+    load_const 99
+    init_instance user.json_auto_derive.BAliasFrom .y
+    return
+}
+
+function json_auto_derive.BAliasTo.baml.ToJson.to_json(self: json_auto_derive.BAliasTo) -> baml.json.json {
+    load_const 42
+    return
+}
+
+function json_auto_derive.BArr.baml.ToJson.to_json(self: json_auto_derive.BArr) -> baml.json.json {
+    load_const 99
+    return
+}
+
+function json_auto_derive.BMapFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BMapFrom {
+    load_const 0
+    init_instance user.json_auto_derive.BMapFrom .v
+    return
+}
+
+function json_auto_derive.BOnlyFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom {
+    load_const 99
+    init_instance user.json_auto_derive.BOnlyFrom .y
+    return
+}
+
+function json_auto_derive.BOnlyTo.baml.ToJson.to_json(self: json_auto_derive.BOnlyTo) -> baml.json.json {
+    load_const "[redacted]"
+    return
+}
+
+function json_auto_derive.BOptFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOptFrom {
+    load_const 99
+    init_instance user.json_auto_derive.BOptFrom .y
+    return
+}
+
+function json_auto_derive.BOverride.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOverride {
+    load_const 99
+    init_instance user.json_auto_derive.BOverride .y
+    return
+}
+
+function json_auto_derive.BSecret.baml.ToJson.to_json(self: json_auto_derive.BSecret) -> baml.json.json {
+    load_const "[secret]"
+    return
+}
+
+function json_auto_derive.BStr.baml.ToJson.to_json(self: json_auto_derive.BStr) -> baml.json.json {
+    load_const "B"
+    return
+}
+
+function json_auto_derive.BZero.baml.ToJson.to_json(self: json_auto_derive.BZero) -> baml.json.json {
+    load_const 0
+    return
+}
+
+function json_auto_derive.BZeroFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BZeroFrom {
+    load_const 0
+    init_instance user.json_auto_derive.BZeroFrom .y
+    return
+}
+
+function json_auto_derive.G.f(self: json_auto_derive.G<#0>) -> baml.json.json[] {
+    load_type #0
+    load_type baml.json.json
+    load_type baml.json.JsonParseError | baml.json.JsonSerializationError
+    load_var self
+    load_field .items
+    load_type #0
+    make_closure .<lambda(G.f, 0)>, captures=0, ntypeargs=1
+    call baml.Array.map
+    return
+}
+
+function json_auto_derive.Secret.baml.ToJson.to_json(self: json_auto_derive.Secret) -> baml.json.json {
+    load_const "[redacted]"
+    return
+}
+
+function json_auto_derive.SecretBoth.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretBoth {
+    load_const "[reset]"
+    init_instance user.json_auto_derive.SecretBoth .data
+    return
+}
+
+function json_auto_derive.SecretBoth.baml.ToJson.to_json(self: json_auto_derive.SecretBoth) -> baml.json.json {
+    load_const "[redacted]"
+    return
+}
+
+function json_auto_derive.SecretRedact.baml.ToJson.to_json(self: json_auto_derive.SecretRedact) -> baml.json.json {
+    load_const "[redacted]"
+    return
+}
+
+function json_auto_derive.SecretRedact2.baml.ToJson.to_json(self: json_auto_derive.SecretRedact2) -> baml.json.json {
+    load_const "[redacted]"
+    return
+}
+
+function json_auto_derive.SecretReset.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretReset {
+    load_const "[reset]"
+    init_instance user.json_auto_derive.SecretReset .data
+    return
+}
+
+function json_auto_derive.alias_chain_dispatch_from_json_val() -> int {
+    load_const "{\"y\":7}"
+    call baml.json.parse
+    call user.json_auto_derive.BAliasFrom.baml.FromJson.from_json
+    load_field .y
+    return
+}
+
+function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
+    load_const 7
+    init_instance user.json_auto_derive.BAliasTo .y
+    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 1
+    unary_op -
+    jump L2
+
+  L1:
+    load_var _3
+
+  L2:
+    return
+}
+
+function json_auto_derive.array_of_class_to_json_str() -> string {
+    load_type json_auto_derive.BArr[]
+    load_const 1
+    init_instance user.json_auto_derive.BArr .x
+    load_const 2
+    init_instance user.json_auto_derive.BArr .x
+    load_type json_auto_derive.BArr
+    alloc_array 2
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.array_of_int_to_json_str() -> string {
+    load_type int[]
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.array_of_primitive_from_json_sum() -> int {
+    load_const "{\"xs\":[1,2,3]}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.C4
+    load_var j
+    call baml.json.to
+    store_var c
+    load_var c
+    load_field .xs
+    load_const 0
+    load_array_element
+    load_var c
+    load_field .xs
+    load_const 1
+    load_array_element
+    add_int
+    load_var c
+    load_field .xs
+    load_const 2
+    load_array_element
+    add_int
+    return
+}
+
+function json_auto_derive.array_of_primitive_to_json_str() -> string {
+    load_type json_auto_derive.C2
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    init_instance user.json_auto_derive.C2 .xs
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.bool_to_json_result() -> baml.json.json {
+    load_type bool
+    load_const true
+    call baml.json.from
+    return
+}
+
+function json_auto_derive.float_to_json_result() -> baml.json.json {
+    load_type float
+    load_const 2.5
+    call baml.json.from
+    return
+}
+
+function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
+    load_const "{\"value\":42}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.Holder
+    load_var j
+    call baml.json.to
+    load_field .value
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 1
+    unary_op -
+    jump L2
+
+  L1:
+    load_var _6
+
+  L2:
+    return
+}
+
+function json_auto_derive.generic_class_from_json_concrete_val() -> int {
+    load_const "{\"value\":42}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.Box6<int>
+    load_var j
+    call baml.json.to
+    load_field .value
+    return
+}
+
+function json_auto_derive.generic_class_honors_override_from_json_val() -> string {
+    load_const "{\"value\":{\"data\":\"hunter2\"}}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.Box7<json_auto_derive.SecretReset>
+    load_var j
+    call baml.json.to
+    load_field .value
+    load_field .0
+    return
+}
+
+function json_auto_derive.generic_class_honors_override_str() -> string {
+    load_type json_auto_derive.Box3<json_auto_derive.SecretRedact>
+    load_const "hunter2"
+    init_instance user.json_auto_derive.SecretRedact .data
+    load_type json_auto_derive.SecretRedact
+    init_instance<1> user.json_auto_derive.Box3 .value
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.generic_class_optional_override_str() -> string {
+    load_type json_auto_derive.Box5<json_auto_derive.SecretRedact2>
+    load_const "hunter2"
+    init_instance user.json_auto_derive.SecretRedact2 .data
+    load_type json_auto_derive.SecretRedact2
+    init_instance<1> user.json_auto_derive.Box5 .value
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.generic_class_optional_typevar_null_str() -> string {
+    load_type json_auto_derive.Box4<int>
+    load_const null
+    load_type int
+    init_instance<1> user.json_auto_derive.Box4 .value
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.generic_class_optional_typevar_str() -> string {
+    load_type json_auto_derive.Box4<int>
+    load_const 42
+    load_type int
+    init_instance<1> user.json_auto_derive.Box4 .value
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.generic_class_to_json_array_typearg_str() -> string {
+    load_type json_auto_derive.Box2<int[]>
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type int[]
+    init_instance<1> user.json_auto_derive.Box2 .value
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.generic_class_to_json_concrete_str() -> string {
+    load_type json_auto_derive.Box1<int>
+    load_const 42
+    load_type int
+    init_instance<1> user.json_auto_derive.Box1 .value
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.independent_synthesis_only_from_json_result() -> string {
+    load_type json_auto_derive.AOnlyFrom
+    load_const 1
+    init_instance user.json_auto_derive.BOnlyFrom .y
+    init_instance user.json_auto_derive.AOnlyFrom .b
+    call baml.json.from
+    call baml.json.stringify
+    call baml.json.parse
+    store_var _8
+    load_type json_auto_derive.AOnlyFrom
+    load_var _8
+    call baml.json.to
+    load_field .b
+    load_field .y
+    load_const 99
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "regression"
+    jump L2
+
+  L1:
+    load_const "override-honored"
+
+  L2:
+    return
+}
+
+function json_auto_derive.independent_synthesis_only_to_json_val() -> int {
+    load_const "{\"b\":{\"y\":7}}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.AOnlyTo
+    load_var j
+    call baml.json.to
+    load_field .b
+    load_field .y
+    return
+}
+
+function json_auto_derive.int_to_json_result() -> baml.json.json {
+    load_type int
+    load_const 42
+    call baml.json.from
+    return
+}
+
+function json_auto_derive.map_of_int_to_json_str() -> string {
+    load_type map<string, int>
+    load_const 1
+    load_const 2
+    load_const "a"
+    load_const "b"
+    load_type string
+    load_type int
+    alloc_map 2
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.map_of_primitive_from_json_sum() -> int {
+    load_const "{\"lookup\":{\"a\":1,\"b\":2,\"c\":3}}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.C6
+    load_var j
+    call baml.json.to
+    store_var c
+    load_var c
+    load_field .lookup
+    load_const "a"
+    load_map_element
+    load_var c
+    load_field .lookup
+    load_const "b"
+    load_map_element
+    add_int
+    load_var c
+    load_field .lookup
+    load_const "c"
+    load_map_element
+    add_int
+    return
+}
+
+function json_auto_derive.nested_class_override_array_from_json_sum() -> int {
+    load_const "{\"items\":[{\"y\":1},{\"y\":2}]}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.AItemsFrom
+    load_var j
+    call baml.json.to
+    store_var a
+    load_var a
+    load_field .items
+    load_const 0
+    load_array_element
+    load_field .y
+    load_var a
+    load_field .items
+    load_const 1
+    load_array_element
+    load_field .y
+    add_int
+    return
+}
+
+function json_auto_derive.nested_class_override_direct_from_json_val() -> int {
+    load_const "{\"b\":{\"y\":7}}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.AOverride
+    load_var j
+    call baml.json.to
+    load_field .b
+    load_field .y
+    return
+}
+
+function json_auto_derive.nested_class_override_direct_str() -> string {
+    load_type json_auto_derive.ASecret
+    load_const 7
+    init_instance user.json_auto_derive.BSecret .y
+    init_instance user.json_auto_derive.ASecret .b
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.nested_class_override_in_array_str() -> string {
+    load_type json_auto_derive.AItems
+    load_const 1
+    init_instance user.json_auto_derive.BZero .y
+    load_const 2
+    init_instance user.json_auto_derive.BZero .y
+    load_type json_auto_derive.BZero
+    alloc_array 2
+    init_instance user.json_auto_derive.AItems .items
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.nested_class_override_in_map_str() -> string {
+    load_type json_auto_derive.ALookup
+    load_const 1
+    init_instance user.json_auto_derive.BStr .v
+    load_const 2
+    init_instance user.json_auto_derive.BStr .v
+    load_const "k1"
+    load_const "k2"
+    load_type string
+    load_type json_auto_derive.BStr
+    alloc_map 2
+    init_instance user.json_auto_derive.ALookup .lookup
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.nested_class_override_map_from_json_sum() -> int {
+    load_const "{\"lookup\":{\"k1\":{\"v\":7},\"k2\":{\"v\":9}}}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.ALookupFrom
+    load_var j
+    call baml.json.to
+    store_var a
+    load_var a
+    load_field .lookup
+    load_const "k1"
+    load_map_element
+    load_field .v
+    load_var a
+    load_field .lookup
+    load_const "k2"
+    load_map_element
+    load_field .v
+    add_int
+    return
+}
+
+function json_auto_derive.null_to_json_result() -> baml.json.json {
+    load_type null
+    load_const null
+    call baml.json.from
+    return
+}
+
+function json_auto_derive.optional_class_override_non_null_val() -> int {
+    load_const "{\"b\":{\"y\":7}}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.AOptFrom
+    load_var j
+    call baml.json.to
+    load_field .b
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _5
+    load_field .y
+    jump L2
+
+  L1:
+    load_const 1
+    unary_op -
+
+  L2:
+    return
+}
+
+function json_auto_derive.optional_class_override_null_val() -> int {
+    load_const "{\"b\":null}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.AOptFrom
+    load_var j
+    call baml.json.to
+    load_field .b
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _5
+    load_field .y
+    jump L2
+
+  L1:
+    load_const 1
+    unary_op -
+
+  L2:
+    return
+}
+
+function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
+    load_const "{\"x\":42}"
+    call baml.json.parse
+    store_var j1
+    load_type json_auto_derive.C5
+    load_var j1
+    call baml.json.to
+    store_var c1
+    load_const "{\"x\":null}"
+    call baml.json.parse
+    store_var j2
+    load_type json_auto_derive.C5
+    load_var j2
+    call baml.json.to
+    store_var c2
+    load_var c1
+    load_field .x
+    store_var_load_var _10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _10
+    store_var v1
+    jump L2
+
+  L1:
+    load_const 1
+    unary_op -
+    store_var v1
+
+  L2:
+    load_var c2
+    load_field .x
+    store_var_load_var _14
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _14
+    store_var v2
+    jump L5
+
+  L4:
+    load_const 1
+    unary_op -
+    store_var v2
+
+  L5:
+    load_var2 5 7
+    add_int
+    return
+}
+
+function json_auto_derive.primitive_field_from_json_val() -> int {
+    load_const "{\"x\":42}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.C3
+    load_var j
+    call baml.json.to
+    load_field .x
+    return
+}
+
+function json_auto_derive.primitive_field_to_json_str() -> string {
+    load_type json_auto_derive.C1
+    load_const 42
+    init_instance user.json_auto_derive.C1 .x
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.recursive_class_from_json_sum() -> int {
+    load_type json_auto_derive.Tree
+    load_const 1
+    load_const 2
+    load_type json_auto_derive.Tree
+    alloc_array 0
+    init_instance user.json_auto_derive.Tree .value, .children
+    load_type json_auto_derive.Tree
+    alloc_array 1
+    init_instance user.json_auto_derive.Tree .value, .children
+    call baml.json.from
+    call baml.json.stringify
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.Tree
+    load_var j
+    call baml.json.to
+    store_var parsed
+    load_var parsed
+    load_field .value
+    load_var parsed
+    load_field .children
+    load_const 0
+    load_array_element
+    load_field .value
+    add_int
+    return
+}
+
+function json_auto_derive.recursive_class_to_json_str() -> string {
+    load_type json_auto_derive.Tree
+    load_const 1
+    load_const 2
+    load_type json_auto_derive.Tree
+    alloc_array 0
+    init_instance user.json_auto_derive.Tree .value, .children
+    load_type json_auto_derive.Tree
+    alloc_array 1
+    init_instance user.json_auto_derive.Tree .value, .children
+    call baml.json.from
+    call baml.json.stringify
+    return
+}
+
+function json_auto_derive.round_trip_with_overrides_both_directions_val() -> string {
+    load_const "hunter2"
+    init_instance user.json_auto_derive.SecretBoth .data
+    load_type baml.ToJson
+    load_const "to_json"
+    virtual_call nargs=1 ntypeargs=0
+    store_var json_val
+    load_var json_val
+    call baml.json.stringify
+    call baml.json.parse
+    call user.json_auto_derive.SecretBoth.baml.FromJson.from_json
+    load_field .data
+    return
+}
+
+function json_auto_derive.simple_class_to_json_roundtrip_name() -> string {
+    load_type json_auto_derive.User
+    load_const "Ada"
+    load_const 30
+    init_instance user.json_auto_derive.User .name, .age
+    call baml.json.from
+    store_var j
+    load_type json_auto_derive.User
+    load_var j
+    call baml.json.to
+    load_field .name
+    return
+}
+
+function json_auto_derive.top_level_from_json_call_concrete_class_name() -> string {
+    load_const "{\"name\":\"Ada\",\"age\":30}"
+    call baml.json.parse
+    store_var j
+    load_type json_auto_derive.UserTL
+    load_var j
+    call baml.json.from_json
+    load_field .name
+    return
+}
+
+function json_auto_derive.top_level_from_json_call_primitive_val() -> int {
+    load_const "42"
+    call baml.json.parse
+    store_var j
+    load_type int
+    load_var j
+    call baml.json.from_json
+    return
+}
+
+function json_auto_derive.user_to_json_override_result() -> baml.json.json {
+    load_const "hunter2"
+    init_instance user.json_auto_derive.Secret .value
+    load_type baml.ToJson
+    load_const "to_json"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}

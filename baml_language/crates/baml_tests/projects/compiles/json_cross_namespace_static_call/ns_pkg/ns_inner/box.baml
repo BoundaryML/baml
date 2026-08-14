@@ -1,20 +1,21 @@
 // Generic class `Box<T>` in nested namespace `pkg.inner`, referenced from
-// the root namespace via `root.pkg.inner.Box<...>`.  Defines a per-field
-// auto-derive-shaped `from_json` so the static-method receiver path has
-// something to dispatch to.
+// the root namespace via `root.pkg.inner.Box<...>`. `Box<int>.from_json(j)`
+// desugars to `baml.json.to<Box<int>>(j)` (the `<int>` parses as the call's
+// type args and is applied to the receiver class).
 class Box<T> {
     value T
-
-    function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-        Box<T> { value: baml.json.from_json<T>(baml.json.field(j, "value")) }
-    }
 }
 
-// Same shape as `Box<T>` but with NO user `from_json`, so the multi-segment
-// static call dispatches to the AUTO-DERIVED `from_json` body emitted by
-// `auto_derive_json`.  Confirms the cross-namespace + receiver-type-arg
-// fix (`builder.rs` `Expr::MemberAccess` `base_is_value` heuristic) flows
-// the receiver's `<T>` through the synthesizer's frame as well.
+// Same shape as `Box<T>`; both exercise the generic `MemberAccess`-form
+// receiver of the `from_json` sugar, threading the receiver's `<int>`.
 class AutoBox<T> {
     value T
+}
+
+// Non-generic class decoded via the qualified PATH form
+// `root.pkg.inner.Plain.from_json(j)` — with no type-args this parses as a flat
+// `Expr::Path`, exercising the Path branch of the sugar's receiver-type lookup
+// (distinct from the generic `MemberAccess` form above).
+class Plain {
+    n int
 }

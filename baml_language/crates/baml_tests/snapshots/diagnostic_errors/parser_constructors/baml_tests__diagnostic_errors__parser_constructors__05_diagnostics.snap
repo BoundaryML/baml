@@ -1,20 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35720
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] Error: Duplicate class `Point`
-   ╭─[ array_constructor.baml:1:7 ]
-   │
+  [validation] E0011
+
+  × duplicate class `Point`
+   ╭─[class_constructor.baml:1:7]
  1 │ class Point {
-   │       ──┬──  
-   │         ╰──── first defined as class here
-   │
-   ├─[ class_constructor.baml:1:7 ]
-   │
- 1 │ class Point {
-   │       ──┬──  
-   │         ╰──── duplicate class definition
-   │ 
-   │ Note: Error code: E0011
-───╯
+   ·       ──┬──
+   ·         ╰── duplicate class definition
+   ╰────
+  ╰─▶   ☞ first defined as class here
+         ╭─[array_constructor.baml:1:7]
+       1 │ class Point {
+         ·       ─────
+         ╰────

@@ -43,6 +43,7 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
                 BuiltinKind::Io => "io",
                 BuiltinKind::Vm => "vm",
                 BuiltinKind::Intrinsic => "intrinsic",
+                BuiltinKind::AwaitAny => "await_any",
             };
             writeln!(f, "fn {} = builtin({kind_str})", func.item_ref)
         }
@@ -156,22 +157,20 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
             write_rvalue(f, value)?;
             write!(f, ";")
         }
+        StatementKind::VirtualFieldStore {
+            iface,
+            receiver,
+            field_index,
+            field,
+            value,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface} = ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
-        }
-        StatementKind::Unwatch(local) => {
-            write!(f, "unwatch({local});")
-        }
-        StatementKind::NotifyBlock { name, level } => {
-            write!(f, "notify_block({name}, level={level});")
-        }
-        StatementKind::WatchOptions { local, filter } => {
-            write!(f, "{local}.$watch.options(")?;
-            write_operand(f, filter)?;
-            write!(f, ");")
-        }
-        StatementKind::WatchNotify(local) => {
-            write!(f, "{local}.$watch.notify();")
         }
         StatementKind::VizEnter(idx) => {
             write!(f, "viz_enter({idx});")
@@ -188,7 +187,6 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
                 IntrinsicOp::Log(LogLevel::Error) => "log_error",
-                IntrinsicOp::SendEvent => "send_event",
             };
             write!(f, "intrinsic {op_str}(")?;
             for (i, arg) in args.iter().enumerate() {
@@ -218,6 +216,17 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write!(f, "branch ")?;
             write_operand(f, condition)?;
             write!(f, " -> [{then_block}, {else_block}];")
+        }
+        Terminator::NarrowBind {
+            source,
+            ty_template,
+            destination,
+            then_block,
+            else_block,
+        } => {
+            write!(f, "{destination} = narrow_bind ")?;
+            write_operand(f, source)?;
+            write!(f, " as {ty_template:?} -> [{then_block}, {else_block}];")
         }
         Terminator::Switch {
             discriminant,
@@ -256,6 +265,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             callee,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -273,12 +283,52 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 write!(f, ">")?;
             }
             write!(f, "(")?;
-            for (i, arg) in args.iter().skip(*ntypeargs).enumerate() {
-                if i > 0 {
+            let mut wrote_arg = false;
+            for arg in args.iter().skip(*ntypeargs) {
+                if wrote_arg {
                     write!(f, ", ")?;
                 }
                 write_operand(f, arg)?;
+                wrote_arg = true;
             }
+            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
+            write!(f, ") -> [{target}")?;
+            if let Some(u) = unwind {
+                write!(f, ", unwind: {u}")?;
+            }
+            write!(f, "];")
+        }
+        Terminator::VirtualCall {
+            iface,
+            method,
+            args,
+            ntypeargs,
+            runtime_id,
+            destination,
+            target,
+            unwind,
+        } => {
+            write!(f, "{destination} = virtual_call {method} as {iface}")?;
+            if *ntypeargs > 0 {
+                write!(f, "<")?;
+                for (i, arg) in args.iter().take(*ntypeargs).enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write_operand(f, arg)?;
+                }
+                write!(f, ">")?;
+            }
+            write!(f, "(")?;
+            let mut wrote_arg = false;
+            for arg in args.iter().skip(*ntypeargs) {
+                if wrote_arg {
+                    write!(f, ", ")?;
+                }
+                write_operand(f, arg)?;
+                wrote_arg = true;
+            }
+            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -288,22 +338,53 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Unreachable => {
             write!(f, "unreachable;")
         }
-        Terminator::DispatchFuture {
+        Terminator::SysOp {
             callee,
             args,
-            future,
-            resume,
+            runtime_id,
+            destination,
+            target,
+            unwind,
         } => {
-            write!(f, "{future} = dispatch_future ")?;
+            write!(f, "{destination} = sys_op ")?;
             write_operand(f, callee)?;
             write!(f, "(")?;
-            for (i, arg) in args.iter().enumerate() {
-                if i > 0 {
+            let mut wrote_arg = false;
+            for arg in args {
+                if wrote_arg {
                     write!(f, ", ")?;
                 }
                 write_operand(f, arg)?;
+                wrote_arg = true;
             }
-            write!(f, ") -> {resume};")
+            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
+            write!(f, ") -> {target}")?;
+            if let Some(u) = unwind {
+                write!(f, " unwind {u}")?;
+            }
+            write!(f, ";")
+        }
+        Terminator::Spawn {
+            closure,
+            name,
+            config,
+            future_ty,
+            future,
+            resume,
+        } => {
+            write!(
+                f,
+                "{future} = spawn<{}, {}> ",
+                future_ty.returns, future_ty.throws
+            )?;
+            write_operand(f, closure)?;
+            write!(f, " name=")?;
+            write_operand(f, name)?;
+            if let Some(config) = config {
+                write!(f, " config=")?;
+                write_operand(f, config)?;
+            }
+            write!(f, " -> {resume};")
         }
         Terminator::Await {
             future,
@@ -317,8 +398,27 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             }
             write!(f, "];")
         }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            target,
+            unwind,
+        } => {
+            write!(f, "{destination} = await_any ")?;
+            write_operand(f, futures)?;
+            write!(f, " -> [{target}")?;
+            if let Some(u) = unwind {
+                write!(f, ", unwind: {u}")?;
+            }
+            write!(f, "];")
+        }
         Terminator::Throw { value } => {
             write!(f, "throw ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
+        Terminator::Rethrow { value } => {
+            write!(f, "rethrow ")?;
             write_operand(f, value)?;
             write!(f, ";")
         }
@@ -342,9 +442,33 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
     }
 }
 
+fn write_runtime_id_arg(
+    f: &mut impl Write,
+    wrote_arg: bool,
+    runtime_id: Option<&Operand>,
+) -> fmt::Result {
+    if let Some(runtime_id) = runtime_id {
+        if wrote_arg {
+            write!(f, ", ")?;
+        }
+        write!(f, "$id = ")?;
+        write_operand(f, runtime_id)?;
+    }
+    Ok(())
+}
+
 fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
     match rvalue {
         Rvalue::Use(operand) => write_operand(f, operand),
+        Rvalue::VirtualFieldAccess {
+            iface,
+            receiver,
+            field_index,
+            field,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface}")
+        }
         Rvalue::BinaryOp { op, left, right } => {
             write_operand(f, left)?;
             write!(f, " {op} ")?;
@@ -354,7 +478,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write!(f, "{op}")?;
             write_operand(f, operand)
         }
-        Rvalue::Array(elements) => {
+        Rvalue::Array(element_template, elements) => {
             write!(f, "[")?;
             for (i, elem) in elements.iter().enumerate() {
                 if i > 0 {
@@ -362,10 +486,12 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                 }
                 write_operand(f, elem)?;
             }
-            write!(f, "]")
+            // Show the emitted element-type template so MIR snapshots can catch a
+            // wrong array element type (not just the later bytecode `load_type`).
+            write!(f, "]: {element_template}[]")
         }
         Rvalue::Uint8Array(bytes) => write!(f, "b\"<{} bytes>\"", bytes.len()),
-        Rvalue::Map(entries) => {
+        Rvalue::Map(key_template, value_template, entries) => {
             write!(f, "{{ ")?;
             for (i, (key, value)) in entries.iter().enumerate() {
                 if i > 0 {
@@ -375,7 +501,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                 write!(f, ": ")?;
                 write_operand(f, value)?;
             }
-            write!(f, " }}")
+            write!(f, " }}: map<{key_template}, {value_template}>")
         }
         Rvalue::Aggregate { kind, fields } => {
             match kind {
@@ -391,7 +517,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                             if i > 0 {
                                 write!(f, ", ")?;
                             }
-                            write!(f, "{t:?}")?;
+                            write!(f, "{t}")?;
                         }
                         write!(f, ">")?;
                     }
@@ -426,6 +552,11 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, operand)?;
             write!(f, ", {ty_template})")
         }
+        Rvalue::IsTypeTag { operand, tag } => {
+            write!(f, "is_type_tag(")?;
+            write_operand(f, operand)?;
+            write!(f, ", {})", type_tag_name(*tag))
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -449,10 +580,65 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, receiver)?;
             write!(f, ")")
         }
+        Rvalue::MakeVirtualBoundMethod {
+            iface,
+            method,
+            receiver,
+            type_args,
+        } => {
+            write!(f, "make_virtual_bound_method {iface:?}.{method}")?;
+            if !type_args.is_empty() {
+                write!(f, "<{type_args:?}>")?;
+            }
+            write!(f, "(")?;
+            write_operand(f, receiver)?;
+            write!(f, ")")
+        }
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }
+        Rvalue::MakeGenericFunction {
+            item,
+            type_arg_templates,
+        } => {
+            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
+            write!(f, "make_generic_function {item}<{}>", args.join(", "))
+        }
+        Rvalue::MakeGenericFunctionFromValue {
+            value,
+            type_arg_templates,
+        } => {
+            write!(f, "make_generic_function_from_value(")?;
+            write_operand(f, value)?;
+            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
+            write!(f, ")<{}>", args.join(", "))
+        }
     }
+}
+
+/// Symbolic name for a `baml_type::typetag` constant in `is_type_tag` renders.
+/// Class tags (`CLASS_BASE + n`) and anything unrecognized print numerically.
+/// The full tag set is named for robustness, though the only MIR producer
+/// today (`emit_is_type_tag_branch`) emits `LIST`/`MAP`.
+fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
+    use baml_type::typetag as t;
+    std::borrow::Cow::Borrowed(match tag {
+        t::INT => "INT",
+        t::STRING => "STRING",
+        t::BOOL => "BOOL",
+        t::NULL => "NULL",
+        t::FLOAT => "FLOAT",
+        t::ENUM => "ENUM",
+        t::LIST => "LIST",
+        t::MAP => "MAP",
+        t::FUNCTION => "FUNCTION",
+        t::FUTURE => "FUTURE",
+        t::TYPE => "TYPE",
+        t::COLLECTOR => "COLLECTOR",
+        t::UINT8ARRAY => "UINT8ARRAY",
+        t::BIGINT => "BIGINT",
+        other => return std::borrow::Cow::Owned(other.to_string()),
+    })
 }
 
 fn write_operand(f: &mut impl Write, operand: &Operand) -> fmt::Result {
@@ -466,11 +652,18 @@ fn write_operand(f: &mut impl Write, operand: &Operand) -> fmt::Result {
 fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
     match constant {
         Constant::Int(n) => write!(f, "const {n}_i64"),
+        Constant::Bigint(n) => write!(f, "const {n}n"),
         Constant::Float(n) => write!(f, "const {n}_f64"),
         Constant::String(s) => write!(f, "const {s:?}"),
         Constant::Bool(b) => write!(f, "const {b}"),
         Constant::Null => write!(f, "const null"),
+        Constant::OmittedArg => write!(f, "const <omitted>"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
+        Constant::GlobalItem(qn) => write!(f, "const item {qn}"),
+        Constant::GenericFunction { item, type_args } => {
+            let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
+            write!(f, "const fn {item}<{}>", args.join(", "))
+        }
         Constant::EnumVariant { enum_ref, variant } => write!(f, "const {enum_ref}.{variant}"),
     }
 }
@@ -485,5 +678,79 @@ impl fmt::Display for MirFunction {
         let mut buf = String::new();
         write_function(&mut buf, self).map_err(|_| fmt::Error)?;
         f.write_str(&buf)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{BlockId, Place};
+
+    fn render_terminator(terminator: &Terminator) -> String {
+        let mut output = String::new();
+        write_terminator(&mut output, terminator).expect("terminator renders");
+        output
+    }
+
+    fn local_copy(local: usize) -> Operand {
+        Operand::copy_local(Local(local))
+    }
+
+    #[test]
+    fn call_runtime_id_without_visible_args_has_no_leading_comma() {
+        let terminator = Terminator::Call {
+            callee: local_copy(1),
+            args: Vec::new(),
+            ntypeargs: 0,
+            runtime_id: Some(local_copy(9)),
+            destination: Place::local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        };
+
+        assert_eq!(
+            render_terminator(&terminator),
+            "_0 = call copy _1($id = copy _9) -> [bb1];"
+        );
+    }
+
+    #[test]
+    fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
+        let terminator = Terminator::VirtualCall {
+            iface: baml_type::TyTemplateInterface::new(
+                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
+                Vec::new(),
+                Vec::new(),
+            ),
+            method: "eq".to_string(),
+            args: Vec::new(),
+            ntypeargs: 0,
+            runtime_id: Some(local_copy(9)),
+            destination: Place::local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        };
+
+        assert_eq!(
+            render_terminator(&terminator),
+            "_0 = virtual_call eq as baml.ops.Equals($id = copy _9) -> [bb1];"
+        );
+    }
+
+    #[test]
+    fn sys_op_runtime_id_without_visible_args_has_no_leading_comma() {
+        let terminator = Terminator::SysOp {
+            callee: local_copy(1),
+            args: Vec::new(),
+            runtime_id: Some(local_copy(9)),
+            destination: Place::local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        };
+
+        assert_eq!(
+            render_terminator(&terminator),
+            "_0 = sys_op copy _1($id = copy _9) -> bb1;"
+        );
     }
 }

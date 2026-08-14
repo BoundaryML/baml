@@ -10,14 +10,23 @@ Run with:
     uv run pytest tests/ -v
 """
 
-import contextlib
-import json
 import os
-import tempfile
+import signal
+import subprocess
+import sys
 
 import pytest
 
-from baml_core import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version, call_function, call_function_sync
+from baml_bridge import (
+    BamlRuntime,
+    FunctionResult,
+    HostSpanManager,
+    get_bridge_runtime_version,
+    get_toolchain_version,
+    get_version,
+    call_function,
+    call_function_sync,
+)
 
 
 # ============================================================================
@@ -60,6 +69,25 @@ function ReturnNull() -> null {
 function ReturnFloat(f: float) -> float {
     f
 }
+
+function ClassifyAmbiguousEmptyList(value: int[] | string[]) -> string {
+    match (value) {
+        let ints: int[] => "ints",
+        let strings: string[] => "strings",
+    }
+}
+
+function MakeAdder(offset: int) -> (value: int) -> int throws never {
+    return (value: int) -> int { offset + value }
+}
+
+function MakeCounter(start: int) -> () -> int throws never {
+    let current = start;
+    return () -> int {
+        current += 1;
+        current
+    }
+}
 """
 
 
@@ -71,8 +99,40 @@ function ReturnFloat(f: float) -> float {
 def make_runtime(baml_source: str) -> BamlRuntime:
     """Create a BamlRuntime from a single BAML source string."""
     return BamlRuntime.initialize_runtime(
-        ".", {"main.baml": baml_source}, sdk_root="__bridge_python_tests__"
+        ".", {"main.baml": baml_source}
     )
+
+
+def test_unhandled_spawn_error_uses_host_default():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """\
+from baml_bridge import BamlRuntime, call_function_sync, shutdown_runtime
+
+source = '''
+function bad() -> int throws string { throw "boom" }
+function main() -> int {
+    spawn { bad() };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    1
+}
+'''
+runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
+assert call_function_sync(runtime, "main", {}).result() == 1
+shutdown_runtime()
+raise SystemExit(42)
+""",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    expected_returncode = signal.SIGTERM if os.name == "nt" else 1
+    assert result.returncode == expected_returncode
+    assert "boom" in result.stderr
 
 
 # ============================================================================
@@ -100,15 +160,47 @@ class TestBasics:
         bad_baml = 'function Bad() -> int { "not an int" }'
         with pytest.raises(Exception):
             BamlRuntime.initialize_runtime(
-                ".", {"bad.baml": bad_baml}, sdk_root="__bridge_python_tests__"
+                ".", {"bad.baml": bad_baml}
             )
 
     def test_initialize_runtime_empty(self):
         """initialize_runtime succeeds with empty source (no functions)."""
         rt = BamlRuntime.initialize_runtime(
-            ".", {"empty.baml": ""}, sdk_root="__bridge_python_tests__"
+            ".", {"empty.baml": ""}
         )
         assert rt is not None
+
+    def test_generated_bytecode_version_skew_fails_before_deserialization(self):
+        """Generated SDK imports report bridge skew instead of a bytecode panic."""
+        generated_toolchain = "999.0.0"
+        embedded_baml_toml = f"""\
+[package]
+name = "version-skew-test"
+
+[__baml_codegen]
+metadata_version = 1
+
+[__baml_codegen.toolchain]
+version = "{generated_toolchain}"
+"""
+
+        with pytest.raises(RuntimeError) as exc_info:
+            BamlRuntime.initialize_runtime_from_bytecode(
+                b"\x00", embedded_baml_toml
+            )
+
+        message = str(exc_info.value)
+        assert message.startswith("BAML startup failed: version skew error.")
+        assert f"generated using BAML toolchain {generated_toolchain}" in message
+        assert f"baml-bridge is installed at {get_bridge_runtime_version()}" in message
+        assert (
+            "expects baml_sdk to be generated using BAML toolchain "
+            f"{get_toolchain_version()}" in message
+        )
+        assert f"`baml toolchain pin {get_toolchain_version()}`" in message
+        assert "install `baml-bridge` (the Python package)" in message
+        assert "then re-run `baml generate`" in message
+        assert "Failed to deserialize BAML bytecode" not in message
 
 
 # ============================================================================
@@ -175,6 +267,25 @@ class TestCallFunctionSync:
         result = call_function_sync(rt,"ReturnFloat", {"f": 3.14})
         assert abs(result.result() - 3.14) < 0.001
 
+    def test_raw_empty_list_uses_dynamic_union_default(self):
+        """A raw Python [] selects the first matching list arm."""
+        rt = make_runtime(EXPR_FUNCS_BAML)
+        result = call_function_sync(rt, "ClassifyAmbiguousEmptyList", {"value": []})
+        assert result.result() == "ints"
+
+    def test_returned_closure_accepts_args_and_decodes_results(self):
+        rt = make_runtime(EXPR_FUNCS_BAML)
+        add_ten = call_function_sync(rt, "MakeAdder", {"offset": 10}).result()
+        assert callable(add_ten)
+        assert add_ten(5) == 15
+        assert add_ten(value=7) == 17
+
+    def test_returned_closure_is_reusable_and_retains_captures(self):
+        rt = make_runtime(EXPR_FUNCS_BAML)
+        next_value = call_function_sync(rt, "MakeCounter", {"start": 40}).result()
+        assert next_value() == 41
+        assert next_value() == 42
+
     def test_missing_argument_raises(self):
         """Missing required argument raises an error.
 
@@ -239,195 +350,3 @@ class TestHostSpanManager:
     def test_context_depth_is_zero(self):
         hsm = HostSpanManager()
         assert hsm.context_depth() == 0
-
-
-# ============================================================================
-# TEST: Tracing — event publishing via global EventStore
-# ============================================================================
-
-
-class TestTracing:
-    """
-    Tracing tests. These verify that the global EventStore + publisher
-    thread properly records events from both host-language @trace decorators
-    and engine function calls.
-    """
-
-    @pytest.fixture(autouse=True)
-    def _reset_ctx_manager_singleton(self):
-        """``CtxManager`` is a process-global singleton that caches the
-        ``BamlRuntime`` (and therefore the event sink) from its first
-        instantiation. Tests in this class build a fresh runtime wired to
-        a per-test ``BAML_TRACE_FILE``; without resetting the singleton,
-        the second test onward reuses the first test's sink — which points
-        at a temp file that has since been ``unlink``'d."""
-        import baml_core.ctx_manager as cm
-
-        cm.prev_ctx_manager = None
-        yield
-
-    @staticmethod
-    @contextlib.contextmanager
-    def _trace_file():
-        """Context manager that sets BAML_TRACE_FILE to a temp file.
-
-        Saves and restores the original BAML_TRACE_FILE so that an
-        externally-set value (e.g. ``BAML_TRACE_FILE=debug.jsonl pytest``)
-        is never lost.
-        """
-        orig = os.environ.get("BAML_TRACE_FILE")
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".jsonl", delete=False
-        ) as f:
-            trace_file = f.name
-        try:
-            os.environ["BAML_TRACE_FILE"] = trace_file
-            yield trace_file
-        finally:
-            if orig is not None:
-                os.environ["BAML_TRACE_FILE"] = orig
-            else:
-                os.environ.pop("BAML_TRACE_FILE", None)
-            try:
-                os.unlink(trace_file)
-            except OSError:
-                pass
-
-    def test_trace_decorator_sync(self):
-        """@trace decorator records function start/end events."""
-        from baml_core import BamlCtxManager
-
-        # ``BAML_TRACE_FILE`` must be set before ``make_runtime`` runs, since
-        # the runtime wires its event sink to whatever the env var pointed at
-        # during ``initialize_runtime``. Creating the runtime outside the
-        # ``_trace_file`` scope would pin the sink to stderr and leave the
-        # JSONL assertion below reading an empty file.
-        with self._trace_file() as trace_file:
-            rt = make_runtime(EXPR_FUNCS_BAML)
-            ctx = BamlCtxManager(rt)
-
-            @ctx.trace_fn
-            def traced_function(x: int) -> int:
-                return x * 2
-
-            result = traced_function(21)
-            assert result == 42
-
-            ctx.flush()
-
-            with open(trace_file) as f:
-                lines = [line.strip() for line in f if line.strip()]
-
-            assert len(lines) >= 2, f"Expected at least 2 events, got {len(lines)}"
-            events = [json.loads(line) for line in lines]
-
-            types = [e["content"]["type"] for e in events]
-            assert "function_start" in types
-            assert "function_end" in types
-
-    @pytest.mark.asyncio
-    async def test_trace_decorator_async(self):
-        """@trace decorator works with async functions."""
-        from baml_core import BamlCtxManager
-
-        with self._trace_file() as trace_file:
-            rt = make_runtime(EXPR_FUNCS_BAML)
-            ctx = BamlCtxManager(rt)
-
-            @ctx.trace_fn
-            async def traced_async_fn(s: str) -> str:
-                return f"traced: {s}"
-
-            result = await traced_async_fn("hello")
-            assert result == "traced: hello"
-
-            ctx.flush()
-
-            with open(trace_file) as f:
-                lines = [line.strip() for line in f if line.strip()]
-
-            assert len(lines) >= 2, f"Expected at least 2 events, got {len(lines)}"
-            events = [json.loads(line) for line in lines]
-            types = [e["content"]["type"] for e in events]
-            assert "function_start" in types
-            assert "function_end" in types
-
-    def test_nested_trace_callstack(self):
-        """Nested @trace calls build a proper call stack."""
-        from baml_core import BamlCtxManager
-
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        ctx = BamlCtxManager(rt)
-
-        call_stack_depths = []
-
-        @ctx.trace_fn
-        def outer():
-            call_stack_depths.append(ctx.get().context_depth())
-            inner()
-            return "outer"
-
-        @ctx.trace_fn
-        def inner():
-            call_stack_depths.append(ctx.get().context_depth())
-            return "inner"
-
-        outer()
-
-        # outer should be at depth 1, inner at depth 2
-        assert call_stack_depths == [
-            1,
-            2,
-        ], f"Expected [1, 2] but got {call_stack_depths}"
-
-    def test_flush_trace_events(self):
-        """Flushing writes trace events to the JSONL file."""
-        from baml_core import BamlCtxManager
-
-        with self._trace_file() as trace_file:
-            rt = make_runtime(EXPR_FUNCS_BAML)
-            ctx = BamlCtxManager(rt)
-
-            @ctx.trace_fn
-            def traced_fn():
-                return 42
-
-            traced_fn()
-            flush_events()
-
-            with open(trace_file) as f:
-                content = f.read()
-
-            assert len(content) > 0, "Trace file should not be empty after flush"
-
-    def test_tag_propagation(self):
-        """Tags set on the current span are emitted as SetTags events."""
-        from baml_core import BamlCtxManager
-
-        with self._trace_file() as trace_file:
-            rt = make_runtime(EXPR_FUNCS_BAML)
-            ctx = BamlCtxManager(rt)
-
-            @ctx.trace_fn
-            def tagged_fn():
-                ctx.upsert_tags(env="test", version="1.0")
-                return "done"
-
-            tagged_fn()
-            ctx.flush()
-
-            with open(trace_file) as f:
-                lines = [line.strip() for line in f if line.strip()]
-
-            events = [json.loads(line) for line in lines]
-
-            intermediate_events = [
-                e for e in events if e["content"]["type"] == "intermediate"
-            ]
-            assert len(intermediate_events) >= 1, (
-                f"Expected at least 1 SetTags event, got {len(intermediate_events)}"
-            )
-
-            set_tags = intermediate_events[0]["content"]["data"]["SetTags"]
-            assert set_tags["env"] == "test"
-            assert set_tags["version"] == "1.0"

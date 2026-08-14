@@ -12,12 +12,11 @@ enum Test {
 
 //----
 //- diagnostics
-// Error: Enum variants cannot have type annotations
-//    ╭─[ enum_invalid_value_expr.baml:2:7 ]
-//    │
+// E0010
+//
+//   × invalid syntax
+//    ╭─[enum_invalid_value_expr.baml:2:7]
 //  2 │     A int | string
-//    │       ──────┬─────  
-//    │             ╰─────── Enum variants cannot have type annotations
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
+//    ·       ──────┬─────
+//    ·             ╰── enum variants cannot have type annotations
+//    ╰────

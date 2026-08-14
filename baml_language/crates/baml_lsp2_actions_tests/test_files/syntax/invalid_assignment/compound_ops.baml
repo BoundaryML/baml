@@ -35,21 +35,38 @@ function CompoundAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: operator `Add` cannot be applied to `int` and `true`
-//     ╭─[ invalid_assignment_compound_ops.baml:23:2 ]
-//     │
+// E0004
+//
+//   × operator `+` cannot be applied to `int` and `"five"`
+//     ╭─[invalid_assignment_compound_ops.baml:15:7]
+//  15 │     c += "five";
+//     ·          ──────
+//     ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `string` and `100`
+//     ╭─[invalid_assignment_compound_ops.baml:19:7]
+//  19 │     d += 100;
+//     ·          ───
+//     ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `int` and `true`
+//     ╭─[invalid_assignment_compound_ops.baml:23:7]
 //  23 │     e += true;
-//     │     ┬  
-//     │     ╰── operator `Add` cannot be applied to `int` and `true`
-//     │ 
-//     │ Note: Error code: E0004
-// ────╯
-// Error: operator `Add` cannot be applied to `bool` and `1`
-//     ╭─[ invalid_assignment_compound_ops.baml:27:2 ]
-//     │
+//     ·          ────
+//     ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `bool` and `1`
+//     ╭─[invalid_assignment_compound_ops.baml:27:7]
 //  27 │     f += 1;
-//     │     ┬  
-//     │     ╰── operator `Add` cannot be applied to `bool` and `1`
-//     │ 
-//     │ Note: Error code: E0004
-// ────╯
+//     ·          ─
+//     ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `float` and `"add"`
+//     ╭─[invalid_assignment_compound_ops.baml:31:7]
+//  31 │     g += "add";
+//     ·          ─────
+//     ╰────

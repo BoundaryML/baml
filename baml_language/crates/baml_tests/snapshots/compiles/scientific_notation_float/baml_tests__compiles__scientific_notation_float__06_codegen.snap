@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 22382
+---
+function user.DecimalMantissa() -> float {
+    load_const 1500.0
+    return
+}
+
+function user.DecimalMantissaNegativeExponent() -> float {
+    load_const 0.0015
+    return
+}
+
+function user.IntegerMantissa() -> float {
+    load_const 10000000000.0
+    return
+}
+
+function user.NegativeExponent() -> float {
+    load_const 0.001
+    return
+}
+
+function user.PositiveExponent() -> float {
+    load_const 200000.0
+    return
+}
+
+function user.UppercaseExponent() -> float {
+    load_const 1000.0
+    return
+}

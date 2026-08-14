@@ -60,9 +60,7 @@ function RootAliasParam(cfg: ConfigAlias) -> string {
 // Throw class: bare Error must be root.Error
 function RootThrowClass(x: int) -> string {
     match (x) {
-        0 => {
-            throw Error { code: 500, message: "root error" }
-        },
+        0 => throw Error { code: 500, message: "root error" },
         _ => "ok",
     }
 }
@@ -70,9 +68,7 @@ function RootThrowClass(x: int) -> string {
 // Throw enum: bare Status.Failed must be root.Status.Failed
 function RootThrowEnum(x: int) -> string {
     match (x) {
-        0 => {
-            throw Status.Failed
-        },
+        0 => throw Status.Failed,
         _ => "ok",
     }
 }

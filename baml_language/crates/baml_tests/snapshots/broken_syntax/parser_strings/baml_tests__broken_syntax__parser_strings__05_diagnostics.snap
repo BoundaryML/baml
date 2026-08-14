@@ -1,615 +1,558 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 2499
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] Error: `@alias` expects exactly one string argument
-   ╭─[ nested_quotes.baml:4:27 ]
-   │
+  [type] E0002
+
+  × unresolved type: said
+   ╭─[nested_quotes.baml:1:1]
+ 1 │ // Test nested quote handling in strings
+   · ▲
+   ╰────
+
+  [hir] E0037
+
+  × `@alias` expects exactly one string argument
+   ╭─[nested_quotes.baml:4:27]
  4 │   double_in_single string @alias('She said "hello"')
-   │                           ───┬───  
-   │                              ╰───── invalid builtin declaration
-   │ 
-   │ Note: Error code: E0037
-───╯
+   ·                           ───┬───
+   ·                              ╰── invalid builtin declaration
+   ╰────
 
-  [parse] Error: Expected ')', found error
-   ╭─[ nested_quotes.baml:4:34 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:4:34]
  4 │   double_in_single string @alias('She said "hello"')
-   │                                  ┬  
-   │                                  ╰── Expected ')', found error
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                  ┬
+   ·                                  ╰── expected `attribute argument`, found `error`
+   ╰────
 
-  [parse] Error: Expected Unexpected token in class body, found error
-   ╭─[ nested_quotes.baml:4:34 ]
-   │
+  [type] E0002
+
+  × unresolved type: said
+   ╭─[nested_quotes.baml:4:39]
  4 │   double_in_single string @alias('She said "hello"')
-   │                                  ┬  
-   │                                  ╰── Expected Unexpected token in class body, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                       ────
+   ╰────
 
-  [parse] Error: Expected attribute argument, found error
-   ╭─[ nested_quotes.baml:4:34 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:4:44]
  4 │   double_in_single string @alias('She said "hello"')
-   │                                  ┬  
-   │                                  ╰── Expected attribute argument, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                            ┬
+   ·                                            ╰── expected `Unexpected token in class body`, found `'"'`
+   ╰────
 
-  [type] Error: unresolved type: said
-   ╭─[ nested_quotes.baml:4:38 ]
-   │
- 4 │   double_in_single string @alias('She said "hello"')
-   │                                      ──┬──  
-   │                                        ╰──── unresolved type: said
-   │ 
-   │ Note: Error code: E0002
-───╯
+  [parse] E0010
 
-  [parse] Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:4:44 ]
-   │
- 4 │   double_in_single string @alias('She said "hello"')
-   │                                            ┬  
-   │                                            ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [parse] Error: field 'The' is missing a type annotation
-   ╭─[ nested_quotes.baml:5:37 ]
-   │
+  × invalid syntax
+   ╭─[nested_quotes.baml:5:37]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                     ─┬─  
-   │                                      ╰─── field 'The' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                     ─┬─
+   ·                                      ╰── field 'The' is missing a type annotation
+   ╰────
 
-  [parse] Error: Expected Unexpected token in class body, found '\'
-   ╭─[ nested_quotes.baml:5:41 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:5:41]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                         ┬  
-   │                                         ╰── Expected Unexpected token in class body, found '\'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                         ┬
+   ·                                         ╰── expected `Unexpected token in class body`, found `'\'`
+   ╰────
 
-  [parse] Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:5:42 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:5:42]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                          ┬  
-   │                                          ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                          ┬
+   ·                                          ╰── expected `Unexpected token in class body`, found `'"'`
+   ╰────
 
-  [parse] Error: field 'quote' is missing a type annotation
-   ╭─[ nested_quotes.baml:5:43 ]
-   │
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[nested_quotes.baml:5:43]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                           ──┬──  
-   │                                             ╰──── field 'quote' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                           ──┬──
+   ·                                             ╰── field 'quote' is missing a type annotation
+   ╰────
 
-  [parse] Error: Expected Unexpected token in class body, found '\'
-   ╭─[ nested_quotes.baml:5:48 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:5:48]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                                ┬  
-   │                                                ╰── Expected Unexpected token in class body, found '\'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                                ┬
+   ·                                                ╰── expected `Unexpected token in class body`, found `'\'`
+   ╰────
 
-  [parse] Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:5:49 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:5:49]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                                 ┬  
-   │                                                 ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                                 ┬
+   ·                                                 ╰── expected `Unexpected token in class body`, found `'"'`
+   ╰────
 
-  [type] Error: unresolved type: here
-   ╭─[ nested_quotes.baml:5:53 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:5:51]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                                     ──┬──  
-   │                                                       ╰──── unresolved type: here
-   │ 
-   │ Note: Error code: E0002
-───╯
+   ·                                                   ─┬
+   ·                                                    ╰── expected `Unexpected token in class body`, found `is`
+   ╰────
 
-  [parse] Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:5:58 ]
-   │
- 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                                          ┬  
-   │                                                          ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
+  [parse] E0010
 
-  [parse] Error: Expected Unexpected token in class body, found ')'
-   ╭─[ nested_quotes.baml:5:59 ]
-   │
- 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                                           ┬  
-   │                                                           ╰── Expected Unexpected token in class body, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
+  × invalid syntax
+   ╭─[nested_quotes.baml:6:40]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                        ─┬
+   ·                                         ╰── field 'It' is missing a type annotation
+   ╰────
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ nested_quotes.baml:8:2 ]
-    │
-  8 │ ╭─▶ }
-    ┆ ┆   
- 17 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  [parse] E0010
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ nested_quotes.baml:11:47 ]
-    │
- 11 │ ╭─▶ function FormatMessage(name: string) -> string {
-    ┆ ┆   
- 17 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  × unexpected token
+   ╭─[nested_quotes.baml:6:42]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                          ┬
+   ·                                          ╰── expected `Unexpected token in class body`, found `error`
+   ╰────
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ raw_strings.baml:11:2 ]
-    │
- 11 │ ╭─▶ }
-    ┆ ┆   
- 21 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  [parse] E0010
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ raw_strings.baml:13:46 ]
-    │
- 13 │ ╭─▶ function ProcessText(input: string) -> string {
-    ┆ ┆   
- 21 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  × invalid syntax
+   ╭─[nested_quotes.baml:6:43]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                           ┬
+   ·                                           ╰── field 's' is missing a type annotation
+   ╰────
 
-  [hir] Error: function is missing a name
-    ╭─[ unicode_strings.baml:22:2 ]
-    │
- 22 │ ╭─▶ }
-    ┆ ┆   
- 25 │ ├─▶ function 处理文本(输入: string) -> string {
-    │ │                                                 
-    │ ╰───────────────────────────────────────────────── expected a name here
-    │     
-    │     Note: Error code: E0107
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected function name, found error
-    ╭─[ unicode_strings.baml:25:10 ]
-    │
+  × unexpected token
+   ╭─[nested_quotes.baml:6:45]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                             ┬
+   ·                                             ╰── expected `Unexpected token in class body`, found `'\'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:6:46]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                              ┬
+   ·                                              ╰── expected `Unexpected token in class body`, found `'"'`
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[nested_quotes.baml:6:47]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                               ───┬──
+   ·                                                  ╰── field 'really' is missing a type annotation
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:6:53]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                                     ┬
+   ·                                                     ╰── expected `Unexpected token in class body`, found `'\'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:6:54]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                                      ┬
+   ·                                                      ╰── expected `Unexpected token in class body`, found `'"'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:6:56]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                                        ┬
+   ·                                                        ╰── expected `Unexpected token in class body`, found `error`
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[nested_quotes.baml:6:57]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                                         ───┬───
+   ·                                                            ╰── field 'complex' is missing a type annotation
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:6:64]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                                                ┬
+   ·                                                                ╰── expected `Unexpected token in class body`, found `error`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:6:65]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                                                 ┬
+   ·                                                                 ╰── expected `Unexpected token in class body`, found `'"'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[nested_quotes.baml:6:66]
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   ·                                                                  ┬
+   ·                                                                  ╰── expected `Unexpected token in class body`, found `')'`
+   ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+    ╭─[nested_quotes.baml:12:11]
+ 12 │   client: GPT4
+    ·           ────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+    ╭─[raw_strings.baml:14:11]
+ 14 │   client: GPT4
+    ·           ────
+    ╰────
+
+  [hir] E0107
+
+  × function is missing a name
+    ╭─[unicode_strings.baml:25:1]
  25 │ function 处理文本(输入: string) -> string {
-    │          ┬─    
-    │          ╰───── Expected function name, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ─────────┬────────
+    ·          ╰── expected a name here
+    ╰────
 
-  [parse] Error: Expected ')', found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:10]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected ')', found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ─┬
+    ·           ╰── expected `function name`, found `error`
+    ╰────
 
-  [parse] Error: Expected function body, found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected function body, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ─┬
+    ·                    ╰── expected `parameter name`, found `error`
+    ╰────
 
-  [parse] Error: Expected parameter name, found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:16]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected parameter name, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                     ─┬
+    ·                      ╰── expected `top-level declaration`, found `error`
+    ╰────
 
-  [parse] Error: Expected return type (->), found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:17]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected return type (->), found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                       ┬
+    ·                       ╰── expected `top-level declaration`, found `':'`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:19]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                         ───┬──
+    ·                            ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected type annotation, found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:25]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected type annotation, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                               ┬
+    ·                               ╰── expected `top-level declaration`, found `')'`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:25:16 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:27]
  25 │ function 处理文本(输入: string) -> string {
-    │                     ┬─  
-    │                     ╰─── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                 ─┬
+    ·                                  ╰── expected `top-level declaration`, found `'->'`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found ':'
-    ╭─[ unicode_strings.baml:25:17 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:30]
  25 │ function 处理文本(输入: string) -> string {
-    │                       ┬  
-    │                       ╰── Expected top-level declaration, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                    ───┬──
+    ·                                       ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:25:19 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:25:37]
  25 │ function 处理文本(输入: string) -> string {
-    │                         ───┬──  
-    │                            ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                           ┬
+    ·                                           ╰── expected `top-level declaration`, found `'{'`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found ')'
-    ╭─[ unicode_strings.baml:25:25 ]
-    │
- 25 │ function 处理文本(输入: string) -> string {
-    │                               ┬  
-    │                               ╰── Expected top-level declaration, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [hir] E0010
 
-  [parse] Error: Expected top-level declaration, found '->'
-    ╭─[ unicode_strings.baml:25:27 ]
-    │
- 25 │ function 处理文本(输入: string) -> string {
-    │                                 ─┬  
-    │                                  ╰── Expected top-level declaration, found '->'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[unicode_strings.baml:26:3]
+ 26 │   client: GPT4
+    ·   ───┬──
+    ·      ╰── replace with `client Name = <expr>;`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:25:30 ]
-    │
- 25 │ function 处理文本(输入: string) -> string {
-    │                                    ───┬──  
-    │                                       ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found '{'
-    ╭─[ unicode_strings.baml:25:37 ]
-    │
- 25 │ function 处理文本(输入: string) -> string {
-    │                                           ┬  
-    │                                           ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:26:9]
+ 26 │   client: GPT4
+    ·         ┬
+    ·         ╰── expected `client name`, found `':'`
+    ╰────
 
-  [hir] Error: client `GPT4` is missing a required config block
-    ╭─[ unicode_strings.baml:25:38 ]
-    │
- 25 │ ╭─▶ function 处理文本(输入: string) -> string {
- 26 │ ├─▶   client GPT4
-    │ │                   
-    │ ╰─────────────────── expected a config block
-    │     
-    │     Note: Error code: E0103
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected config block, found identifier
-    ╭─[ unicode_strings.baml:27:3 ]
-    │
- 27 │   prompt #"
-    │   ───┬──  
-    │      ╰──── Expected config block, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:26:11]
+ 26 │   client: GPT4
+    ·           ──┬─
+    ·             ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:27:3 ]
-    │
- 27 │   prompt #"
-    │   ───┬──  
-    │      ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found '#'
-    ╭─[ unicode_strings.baml:27:10 ]
-    │
- 27 │   prompt #"
-    │          ┬  
-    │          ╰── Expected top-level declaration, found '#'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:27:3]
+ 27 │   prompt: `
+    ·   ───┬──
+    ·      ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found '"'
-    ╭─[ unicode_strings.baml:27:11 ]
-    │
- 27 │   prompt #"
-    │           ┬  
-    │           ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:28:5 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │     ───┬───  
-    │        ╰───── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:27:9]
+ 27 │   prompt: `
+    ·         ┬
+    ·         ╰── expected `top-level declaration`, found `':'`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:28:13 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │             ─┬─  
-    │              ╰─── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:28:17 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │                 ──┬─  
-    │                   ╰─── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:27:11]
+ 27 │   prompt: `
+    ·           ┬
+    ·           ╰── expected `top-level declaration`, found `'`'`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found ':'
-    ╭─[ unicode_strings.baml:28:21 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │                     ┬  
-    │                     ╰── Expected top-level declaration, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found '{'
-    ╭─[ unicode_strings.baml:28:23 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │                       ┬  
-    │                       ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:28:5]
+ 28 │     Process the text: ${输入}
+    ·     ───┬───
+    ·        ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found '{'
-    ╭─[ unicode_strings.baml:28:24 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │                        ┬   
-    │                        ╰─── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:28:26 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │                          ┬─   
-    │                          ╰──── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:28:13]
+ 28 │     Process the text: ${输入}
+    ·             ─┬─
+    ·              ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:28:27 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │                            ┬─  
-    │                            ╰─── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found '}'
-    ╭─[ unicode_strings.baml:28:29 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │                               ┬  
-    │                               ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:28:17]
+ 28 │     Process the text: ${输入}
+    ·                 ──┬─
+    ·                   ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found '}'
-    ╭─[ unicode_strings.baml:28:30 ]
-    │
- 28 │     Process the text: {{ 输入 }}
-    │                                ┬  
-    │                                ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:5 ]
-    │
+  × unexpected token
+    ╭─[unicode_strings.baml:28:21]
+ 28 │     Process the text: ${输入}
+    ·                     ┬
+    ·                     ╰── expected `top-level declaration`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:28:23]
+ 28 │     Process the text: ${输入}
+    ·                       ┬
+    ·                       ╰── expected `top-level declaration`, found `'$'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:28:24]
+ 28 │     Process the text: ${输入}
+    ·                        ┬
+    ·                        ╰── expected `top-level declaration`, found `'{'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:28:25]
+ 28 │     Process the text: ${输入}
+    ·                         ─┬
+    ·                          ╰── expected `top-level declaration`, found `error`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:28:26]
+ 28 │     Process the text: ${输入}
+    ·                           ─┬
+    ·                            ╰── expected `top-level declaration`, found `error`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:28:27]
+ 28 │     Process the text: ${输入}
+    ·                             ┬
+    ·                             ╰── expected `top-level declaration`, found `'}'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:29:5]
  29 │     Return result with emojis: ✅ or ❌
-    │     ───┬──  
-    │        ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·     ───┬──
+    ·        ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:12 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:29:12]
  29 │     Return result with emojis: ✅ or ❌
-    │            ───┬──  
-    │               ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·            ───┬──
+    ·               ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:19 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:29:19]
  29 │     Return result with emojis: ✅ or ❌
-    │                   ──┬─  
-    │                     ╰─── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ──┬─
+    ·                     ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:24 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:29:24]
  29 │     Return result with emojis: ✅ or ❌
-    │                        ───┬──  
-    │                           ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                        ───┬──
+    ·                           ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found ':'
-    ╭─[ unicode_strings.baml:29:30 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:29:30]
  29 │     Return result with emojis: ✅ or ❌
-    │                              ┬   
-    │                              ╰─── Expected top-level declaration, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                              ┬
+    ·                              ╰── expected `top-level declaration`, found `':'`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:29:32 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:29:32]
  29 │     Return result with emojis: ✅ or ❌
-    │                                ┬─  
-    │                                ╰─── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                ─┬
+    ·                                 ╰── expected `top-level declaration`, found `error`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:34 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:29:34]
  29 │     Return result with emojis: ✅ or ❌
-    │                                   ─┬   
-    │                                    ╰─── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                   ─┬
+    ·                                    ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:29:37 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:29:37]
  29 │     Return result with emojis: ✅ or ❌
-    │                                      ┬─  
-    │                                      ╰─── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                      ─┬
+    ·                                       ╰── expected `top-level declaration`, found `error`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found '"'
-    ╭─[ unicode_strings.baml:30:3 ]
-    │
- 30 │   "#
-    │   ┬  
-    │   ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found '#'
-    ╭─[ unicode_strings.baml:30:4 ]
-    │
- 30 │   "#
-    │    ┬  
-    │    ╰── Expected top-level declaration, found '#'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  × unexpected token
+    ╭─[unicode_strings.baml:30:3]
+ 30 │   `
+    ·   ┬
+    ·   ╰── expected `top-level declaration`, found `'`'`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found '}'
-    ╭─[ unicode_strings.baml:31:1 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:31:1]
  31 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ┬
+    · ╰── expected `top-level declaration`, found `'}'`
+    ╰────

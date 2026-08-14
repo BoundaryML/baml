@@ -93,20 +93,22 @@ function NestedGenericReturn(
 
 // ===== Return type: deeply nested function type exceeding limit =====
 function DeepFnReturn(
-) -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> {
+) -> (
+    x: int,
+) -> (
+    (
+        y: int,
+    ) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never
+) throws never
+{
     1
 }
 
 // ===== Deeply nested param types =====
 function DeepParamTypes(
     nested: map<string, map<string, map<string, int[]>>>,
-    callback: (x: int) -> (y: int) -> (z: int) -> string,
+    callback: (x: int) -> ((y: int) -> ((z: int) -> string throws never) throws never),
 ) -> string {
-    "done"
-}
-
-// ===== Params with constrained types exceeding limit =====
-function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
     "done"
 }
 
@@ -116,7 +118,9 @@ function TriviaFunc( // 6 open paren trailing
     // 7 param leading
     x: int, // 11 type trailing
     // 12 close paren leading
-) -> int // 17 return type trailing
+) -> // 15 arrow trailing
+    // 16 return type leading
+    int // 17 return type trailing
 { // 19 body open trailing
     x
 } // 20 body close trailing
@@ -129,7 +133,7 @@ function TriviaFuncBlock( /* 6 open paren trailing */
     /* 7 param leading */
     x: /* 9 colon trailing *//* 10 type leading */int, /* 11 type trailing */
     /* 12 close paren leading */
-) -> /* 15 arrow trailing *//* 16 return type leading */int /* 17 return type trailing */ { /* 19 body open trailing */
+) -> /* 15 arrow trailing */ /* 16 return type leading */ int /* 17 return type trailing */ { /* 19 body open trailing */
     x
 } /* 20 body close trailing */
 
@@ -166,7 +170,9 @@ function TriviaWrapParams( // 5 trailing
     third_parameter: bool, // 23 trailing
     // 24 leading
     fourth_parameter: float, // 28 trailing
-) -> string // 33 trailing
+) -> // 31 trailing
+    // 32 leading
+    string // 33 trailing
 { // 35 trailing
     "result"
 } // 36 trailing
@@ -184,7 +190,7 @@ function TriviaWrapParamsBlock( /* 5 trailing */
     third_parameter: /* 20 trailing *//* 21 leading */bool/* 22 trailing */, /* 23 trailing */
     /* 24 leading */
     fourth_parameter: /* 26 trailing *//* 27 leading */float, /* 28 trailing */
-) -> /* 31 trailing *//* 32 leading */string /* 33 trailing */ { /* 35 trailing */
+) -> /* 31 trailing */ /* 32 leading */ string /* 33 trailing */ { /* 35 trailing */
     "result"
 } /* 36 trailing */
 
@@ -193,7 +199,8 @@ function TriviaWrapParamsBlock( /* 5 trailing */
 // ===== Trivia on wrapping return type (line comments) =====
 function TriviaWrapReturnType(
     x: int,
-) -> int // 2 first trailing
+) -> // 1 first member leading
+    int // 2 first trailing
     // 3 pipe leading
     | string // 6 second trailing
     // 7 pipe leading
@@ -207,7 +214,7 @@ function TriviaWrapReturnType(
 // ===== Trivia on wrapping return type (block comments) =====
 function TriviaWrapReturnTypeBlock(
     x: int,
-) -> /* 1 first member leading */int /* 2 first trailing */
+) -> /* 1 first member leading */ int /* 2 first trailing */
     /* 3 pipe leading */
     |/* 4 pipe trailing *//* 5 second leading */string /* 6 second trailing */
     /* 7 pipe leading */
@@ -227,7 +234,9 @@ function TriviaEverythingLong_NameAndParamsAndReturn( // 5 trailing
     first_long_param: map<string, int>, // 11 trailing
     // 12 leading
     second_long_param: (int | string | bool)[], // 16 trailing
-) -> map<string, int | string | bool | float | null> // 21 trailing
+) -> // 19 trailing
+    // 20 leading
+    map<string, int | string | bool | float | null> // 21 trailing
 { // 23 trailing
     { "a": 1 }
 } // 24 trailing
@@ -241,7 +250,7 @@ function TriviaEverythingLong_NameAndParamsAndReturnBlock( /* 5 trailing */
     first_long_param: /* 8 trailing *//* 9 leading */map<string, int>/* 10 trailing */, /* 11 trailing */
     /* 12 leading */
     second_long_param: /* 14 trailing *//* 15 leading */(int | string | bool)[], /* 16 trailing */
-) -> /* 19 trailing *//* 20 leading */map<string, int | string | bool | float | null> /* 21 trailing */ { /* 23 trailing */
+) -> /* 19 trailing */ /* 20 leading */ map<string, int | string | bool | float | null> /* 21 trailing */ { /* 23 trailing */
     { "a": 1 }
 } /* 24 trailing */
 
@@ -352,29 +361,29 @@ function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
 // ===== LLM function basic =====
 function LlmBasic(name: string) -> string {
     client: GPT4
-    prompt: #"Say hello to {{name}}"#
+    prompt: `Say hello to ${name}`
 }
 
 // ===== LLM function with multi-line prompt =====
 function LlmMultiLine(text: string) -> string {
     client: GPT4
-    prompt: #"
+    prompt: `
         Analyze the following text:
-        {{ text }}
+        ${text}
         Return a summary.
-    "#
+    `
 }
 
 // ===== LLM function with string client =====
 function LlmStringClient(text: string) -> string {
     client: "openai/gpt-4o"
-    prompt: #"Summarize: {{ text }}"#
+    prompt: `Summarize: ${text}`
 }
 
 // ===== LLM function prompt before client (order test) =====
 function LlmReversedOrder(text: string) -> string {
     client: GPT4
-    prompt: #"Summarize: {{ text }}"#
+    prompt: `Summarize: ${text}`
 }
 
 // ===== LLM function with wrapping signature =====
@@ -385,10 +394,10 @@ function LlmWithLongSignature(
     user_query: string,
 ) -> string {
     client: GPT4
-    prompt: #"
-        Context: {{ first_context }} {{ second_context }} {{ third_context }}
-        Query: {{ user_query }}
-    "#
+    prompt: `
+        Context: ${first_context} ${second_context} ${third_context}
+        Query: ${user_query}
+    `
 }
 
 // ===== Extraneous whitespace on function =====

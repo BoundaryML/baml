@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-function user.$init_test_32(registry: testing.TestCollector) -> ?  [expr] {
-  { registry.register_test("a" Add 1, () -> void { {  } null }, null); registry.register_test(42, () -> void { {  } null }, null); registry.register_test_set("int_name", (testset: testing.TestCollector) -> void { { for i in [1, 2, 3] { testset.register_test(5 Add i, () -> { {  } null }, null) } } null }, null) } null
-}

@@ -187,7 +187,15 @@ function class_destructure_or_pattern_must_bind_same_names(v: Person | int) -> i
 
 function class_destructure_or_pattern_same_binding_conflicting_types(v: Person | Admin) -> int {
     match (v) {
-        Person { age } | Admin { age } => 1,
+        Person { age } | Admin { age } => age,
+    }
+}
+
+function class_destructure_or_pattern_same_binding_conflicting_types_reversed(
+    v: Person | Admin,
+) -> int {
+    match (v) {
+        Admin { age } | Person { age } => age,
     }
 }
 
@@ -218,7 +226,7 @@ function class_destructure_unknown_renamed_field_span() -> int {
 }
 
 function lambda_class_destructure_field_pattern_type_mismatch_span() -> int {
-    let f: (Person) -> int = (p: Person) -> int {
+    let f: (Person) -> int throws never = (p: Person) -> int {
         let Person { age: string } = p;
         1
     };

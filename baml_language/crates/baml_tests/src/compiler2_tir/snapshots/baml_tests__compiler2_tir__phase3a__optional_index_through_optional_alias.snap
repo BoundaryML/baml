@@ -2,10 +2,10 @@
 source: crates/baml_tests/src/compiler2_tir/phase3a.rs
 expression: "render_tir(&db, file)"
 ---
-type user.MaybeInts = int[]?
-function user.f(xs: user.MaybeInts) -> int? throws never {
-  { : int?
-    xs?.[0] : int?
+type user.MaybeInts = int[] | null
+function user.f(xs: user.MaybeInts) -> int | null throws never {
+  { : int | null
+    xs?.[0] : int | null
   }
 }
-type user.MaybeInts$stream = null | int[]
+type user.MaybeInts$stream = int[] | null

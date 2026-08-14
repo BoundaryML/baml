@@ -35,12 +35,10 @@ function PanicArmAfterExhaustion(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//     ╭─[ catch_catch_throw_set_reachability.baml:17:12 ]
-//     │
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_catch_throw_set_reachability.baml:17:12]
 //  17 │     int => "unreachable"
-//     │            ──────┬──────  
-//     │                  ╰──────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
+//     ·            ─────────────
+//     ╰────

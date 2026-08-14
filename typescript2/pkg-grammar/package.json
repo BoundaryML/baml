@@ -1,0 +1,37 @@
+{
+  "name": "@b/pkg-grammar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Canonical TextMate grammar for the BAML language (single source of truth, consumed by app-vscode-ext and app-promptfiddle, and published to npm as @boundaryml/baml-grammar via the boundaryml/textMate-baml mirror).",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./baml.tmLanguage.json": "./baml.tmLanguage.json",
+    "./language-configuration.json": "./language-configuration.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "*.tmLanguage.json",
+    "language-configuration.json",
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsx scripts/build.ts && tsx scripts/emit-sublime.ts && node scripts/sync.mjs",
+    "sync": "node scripts/sync.mjs",
+    "check": "node scripts/sync.mjs --check",
+    "assemble": "node scripts/assemble-mirror.mjs",
+    "preview": "vite",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "@shikijs/types": "^3.0.0",
+    "shiki": "^3.0.0",
+    "tmlanguage-generator": "^0.6.8",
+    "tsx": "^4.19.2",
+    "vite": "^6.0.0",
+    "vitest": "^4.0.16"
+  }
+}

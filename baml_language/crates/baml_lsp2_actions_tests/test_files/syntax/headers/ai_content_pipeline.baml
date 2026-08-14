@@ -62,111 +62,95 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 
 //----
 //- diagnostics
-// Error: unresolved name: GetEmails
-//    ╭─[ headers_ai_content_pipeline.baml:6:18 ]
-//    │
+// E0003
+//
+//   × unresolved name: `GetEmails`
+//    ╭─[headers_ai_content_pipeline.baml:6:18]
 //  6 │     let emails = GetEmails();
-//    │                  ────┬────  
-//    │                      ╰────── unresolved name: GetEmails
-//    │ 
-//    │ Note: Error code: E0003
-// ───╯
-// Error: unresolved name: GetPosts
-//    ╭─[ headers_ai_content_pipeline.baml:7:17 ]
-//    │
+//    ·                  ─────────
+//    ╰────
+// E0003
+//
+//   × unresolved name: `GetPosts`
+//    ╭─[headers_ai_content_pipeline.baml:7:17]
 //  7 │     let posts = GetPosts();
-//    │                 ────┬───  
-//    │                     ╰───── unresolved name: GetPosts
-//    │ 
-//    │ Note: Error code: E0003
-// ───╯
-// Error: unresolved name: ProcessVideo
-//     ╭─[ headers_ai_content_pipeline.baml:10:21 ]
-//     │
+//    ·                 ────────
+//    ╰────
+// E0003
+//
+//   × unresolved name: `ProcessVideo`
+//     ╭─[headers_ai_content_pipeline.baml:10:21]
 //  10 │     let processed = ProcessVideo(video_id, zoom_meeting_id);
-//     │                     ──────┬─────  
-//     │                           ╰─────── unresolved name: ProcessVideo
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: GetVideo
-//     ╭─[ headers_ai_content_pipeline.baml:11:17 ]
-//     │
+//     ·                     ────────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `GetVideo`
+//     ╭─[headers_ai_content_pipeline.baml:11:17]
 //  11 │     let video = GetVideo(video_id);
-//     │                 ────┬───  
-//     │                     ╰───── unresolved name: GetVideo
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: SummarizeVideo
-//     ╭─[ headers_ai_content_pipeline.baml:21:17 ]
-//     │
+//     ·                 ────────
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[headers_ai_content_pipeline.baml:17:23]
+//  17 │     let summary = if (transcript) {
+//     ·                       ─────┬────
+//     ·                            ╰── expected `bool`, found `string | null`
+//     ╰────
+// E0003
+//
+//   × unresolved name: `SummarizeVideo`
+//     ╭─[headers_ai_content_pipeline.baml:21:17]
 //  21 │         let s = SummarizeVideo(transcript, title);
-//     │                 ───────┬──────  
-//     │                        ╰──────── unresolved name: SummarizeVideo
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: LabelSummaryCategory
-//     ╭─[ headers_ai_content_pipeline.baml:24:24 ]
-//     │
+//     ·                 ──────────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `LabelSummaryCategory`
+//     ╭─[headers_ai_content_pipeline.baml:24:24]
 //  24 │         let category = LabelSummaryCategory(s);
-//     │                        ──────────┬─────────  
-//     │                                  ╰─────────── unresolved name: LabelSummaryCategory
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: SaveSummary
-//     ╭─[ headers_ai_content_pipeline.baml:27:29 ]
-//     │
+//     ·                        ────────────────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `SaveSummary`
+//     ╭─[headers_ai_content_pipeline.baml:27:29]
 //  27 │         let saved_summary = SaveSummary(video_id, s);
-//     │                             ─────┬─────  
-//     │                                  ╰─────── unresolved name: SaveSummary
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: GetStructure
-//     ╭─[ headers_ai_content_pipeline.baml:40:25 ]
-//     │
+//     ·                             ───────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `GetStructure`
+//     ╭─[headers_ai_content_pipeline.baml:40:25]
 //  40 │         let structure = GetStructure(kind);
-//     │                         ──────┬─────  
-//     │                               ╰─────── unresolved name: GetStructure
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: GenerateContent
-//     ╭─[ headers_ai_content_pipeline.baml:41:21 ]
-//     │
+//     ·                         ────────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `GenerateContent`
+//     ╭─[headers_ai_content_pipeline.baml:41:21]
 //  41 │         let draft = GenerateContent(kind, video_id, summary);
-//     │                     ───────┬───────  
-//     │                            ╰───────── unresolved name: GenerateContent
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: SaveDraft
-//     ╭─[ headers_ai_content_pipeline.baml:44:27 ]
-//     │
+//     ·                     ───────────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `SaveDraft`
+//     ╭─[headers_ai_content_pipeline.baml:44:27]
 //  44 │         let saved_draft = SaveDraft(video_id, draft);
-//     │                           ────┬────  
-//     │                               ╰────── unresolved name: SaveDraft
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: CreatePR
-//     ╭─[ headers_ai_content_pipeline.baml:52:18 ]
-//     │
+//     ·                           ─────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `CreatePR`
+//     ╭─[headers_ai_content_pipeline.baml:52:18]
 //  52 │         let pr = CreatePR(video_id, summary);
-//     │                  ────┬───  
-//     │                      ╰───── unresolved name: CreatePR
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: unresolved name: pr_status
-//     ╭─[ headers_ai_content_pipeline.baml:53:9 ]
-//     │
+//     ·                  ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `pr_status`
+//     ╭─[headers_ai_content_pipeline.baml:53:9]
 //  53 │         pr_status
-//     │         ────┬────  
-//     │             ╰────── unresolved name: pr_status
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
+//     ·         ─────────
+//     ╰────

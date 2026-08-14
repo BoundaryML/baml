@@ -2,9 +2,28 @@
 
 use std::fmt;
 
-use ariadne;
+use borsh::{BorshDeserialize, BorshSerialize};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
+
+/// Borsh adapters for `num_bigint::BigInt`, which has no native borsh impl.
+/// Encoded as a length-prefixed little-endian two's-complement byte string —
+/// `BigInt::to_signed_bytes_le` / `from_signed_bytes_le` are the canonical
+/// binary form and round-trip without loss.
+pub mod borsh_bigint {
+    use borsh::{BorshDeserialize, BorshSerialize};
+    use num_bigint::BigInt;
+
+    pub fn serialize<W: std::io::Write>(value: &BigInt, writer: &mut W) -> std::io::Result<()> {
+        let bytes = value.to_signed_bytes_le();
+        BorshSerialize::serialize(&bytes, writer)
+    }
+
+    pub fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<BigInt> {
+        let bytes = Vec::<u8>::deserialize_reader(reader)?;
+        Ok(BigInt::from_signed_bytes_le(&bytes))
+    }
+}
 
 /// Unique identifier for a source file.
 ///
@@ -32,7 +51,7 @@ use text_size::{TextRange, TextSize};
 ///
 /// - **Roslyn** (C#): synthetic `SyntaxTree`s constructed with a virtual file path.
 /// - **Clang**: bit 31 of `SourceLocation` distinguishes file vs macro-expansion locs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, BorshSerialize, BorshDeserialize)]
 pub struct FileId(u32);
 
 impl FileId {
@@ -55,23 +74,6 @@ impl FileId {
         FileId(u32::MAX)
     }
 
-    /// Create a synthetic `FileId` for the stream expansion of `origin`.
-    ///
-    /// Sets tag `0x1` on the origin's index bits. Deterministic: same origin
-    /// always produces the same synthetic id.
-    pub fn stream_expansion(origin: FileId) -> FileId {
-        debug_assert!(
-            origin.0 & 0xF000_0000 == 0,
-            "cannot expand a non-origin FileId"
-        );
-        FileId(origin.0 | 0x1000_0000)
-    }
-
-    /// Returns `true` if this `FileId` refers to a synthetic stream expansion file.
-    pub fn is_stream_expansion(self) -> bool {
-        self.0 & 0xF000_0000 == 0x1000_0000
-    }
-
     pub fn as_u32(self) -> u32 {
         self.0
     }
@@ -90,6 +92,40 @@ pub struct Span {
     pub range: TextRange,
 }
 
+// `TextRange` (from the `text-size` crate) doesn't impl `BorshSerialize` /
+// `BorshDeserialize`, so we write the impls by hand as `(start_u32, end_u32)`
+// — the same shape `text-size`'s serde impl uses.
+impl BorshSerialize for Span {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.file_id, writer)?;
+        let start: u32 = self.range.start().into();
+        let end: u32 = self.range.end().into();
+        BorshSerialize::serialize(&start, writer)?;
+        BorshSerialize::serialize(&end, writer)?;
+        Ok(())
+    }
+}
+
+impl BorshDeserialize for Span {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let file_id = FileId::deserialize_reader(reader)?;
+        let start = u32::deserialize_reader(reader)?;
+        let end = u32::deserialize_reader(reader)?;
+        // `TextRange::new` panics on `end < start`. A malformed envelope
+        // should surface as a clean borsh error rather than a thread crash.
+        if start > end {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid Span range: start ({start}) > end ({end})"),
+            ));
+        }
+        Ok(Span {
+            file_id,
+            range: TextRange::new(TextSize::new(start), TextSize::new(end)),
+        })
+    }
+}
+
 impl Default for Span {
     /// Creates a sentinel span that doesn't refer to any real file.
     ///
@@ -104,13 +140,6 @@ impl Span {
         Span { file_id, range }
     }
 
-    pub fn at_offset(file_id: FileId, offset: TextSize) -> Self {
-        Span {
-            file_id,
-            range: TextRange::empty(offset),
-        }
-    }
-
     /// Create a fake span for testing or when no real span is available.
     ///
     /// Uses a sentinel `FileId` (`u32::MAX`) that's unlikely to conflict with real files.
@@ -119,22 +148,6 @@ impl Span {
             file_id: FileId::sentinel(),
             range: TextRange::empty(TextSize::new(0)),
         }
-    }
-}
-
-impl ariadne::Span for Span {
-    type SourceId = FileId;
-    fn source(&self) -> &Self::SourceId {
-        &self.file_id
-    }
-    fn start(&self) -> usize {
-        let range = self.range.start().into()..self.range.end().into();
-        range.start()
-    }
-
-    fn end(&self) -> usize {
-        let range = self.range.start().into()..self.range.end().into();
-        range.end()
     }
 }
 
@@ -167,7 +180,7 @@ impl TypePath {
         Self(vec![name])
     }
 
-    /// Build a `TypePath` from a compile-time dotted literal like `"baml.llm.Client"`.
+    /// Build a `TypePath` from a compile-time dotted literal like `"ai.Prompt"`.
     /// Use only at synthetic construction sites; runtime input should come from
     /// already-segmented data (e.g., parser tokens).
     pub fn from_dotted(s: &str) -> Self {
@@ -203,7 +216,9 @@ impl fmt::Display for TypePath {
 }
 
 /// The types of media we support
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
 pub enum MediaKind {
     Image,
     Audio,
@@ -224,6 +239,57 @@ impl MediaKind {
             MediaKind::Generic => "media",
         }
     }
+
+    /// The stdlib wrapper class (`baml.media.*`) that carries this media kind
+    /// as a nominal value; `None` for `Generic`, which has no wrapper class.
+    ///
+    /// Single source of truth for the kind ↔ wrapper-class mapping, together
+    /// with [`MediaKind::from_wrapper_class_name`]. Consumers must resolve
+    /// wrapper class names through these instead of local string matches.
+    pub const fn wrapper_class_name(self) -> Option<&'static str> {
+        match self {
+            MediaKind::Image => Some("baml.media.Image"),
+            MediaKind::Audio => Some("baml.media.Audio"),
+            MediaKind::Video => Some("baml.media.Video"),
+            MediaKind::Pdf => Some("baml.media.Pdf"),
+            MediaKind::Generic => None,
+        }
+    }
+
+    /// Inverse of [`MediaKind::wrapper_class_name`]: the media kind carried by
+    /// a stdlib media wrapper class, or `None` for any other class name.
+    pub fn from_wrapper_class_name(name: &str) -> Option<Self> {
+        match name {
+            "baml.media.Image" => Some(MediaKind::Image),
+            "baml.media.Audio" => Some(MediaKind::Audio),
+            "baml.media.Video" => Some(MediaKind::Video),
+            "baml.media.Pdf" => Some(MediaKind::Pdf),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod media_kind_wrapper_tests {
+    use super::MediaKind;
+
+    #[test]
+    fn wrapper_class_name_round_trips() {
+        for kind in [
+            MediaKind::Image,
+            MediaKind::Audio,
+            MediaKind::Video,
+            MediaKind::Pdf,
+        ] {
+            let name = kind
+                .wrapper_class_name()
+                .expect("concrete kind has a wrapper");
+            assert_eq!(MediaKind::from_wrapper_class_name(name), Some(kind));
+        }
+        assert_eq!(MediaKind::Generic.wrapper_class_name(), None);
+        assert_eq!(MediaKind::from_wrapper_class_name("baml.media.File"), None);
+        assert_eq!(MediaKind::from_wrapper_class_name("user.Image"), None);
+    }
 }
 
 impl fmt::Display for MediaKind {
@@ -237,9 +303,16 @@ impl fmt::Display for MediaKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
 pub enum Literal {
     Int(i64),
+    Bigint(
+        #[borsh(
+            serialize_with = "borsh_bigint::serialize",
+            deserialize_with = "borsh_bigint::deserialize"
+        )]
+        num_bigint::BigInt,
+    ),
     Float(String),
     String(String),
     Bool(bool),
@@ -250,6 +323,7 @@ impl fmt::Display for Literal {
         match self {
             Literal::String(s) => write!(f, "{s:?}"),
             Literal::Int(i) => write!(f, "{i}"),
+            Literal::Bigint(n) => write!(f, "{n}n"),
             Literal::Float(s) => write!(f, "{s}"),
             Literal::Bool(b) => write!(f, "{b}"),
         }
@@ -259,16 +333,6 @@ impl fmt::Display for Literal {
 /// Module identifier (for multi-file support)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(u32);
-
-impl ModuleId {
-    pub fn new(id: u32) -> Self {
-        ModuleId(id)
-    }
-
-    pub fn as_u32(self) -> u32 {
-        self.0
-    }
-}
 
 /// Severity level for diagnostics
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

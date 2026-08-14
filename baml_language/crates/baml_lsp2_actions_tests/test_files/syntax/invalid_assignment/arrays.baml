@@ -42,4 +42,67 @@ function ArrayAssignments() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_arrays.baml:18:7]
+//  18 │     d = ["a", "b"];
+//     ·          ─┬─
+//     ·           ╰── expected `int`, found `"a"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_arrays.baml:18:12]
+//  18 │     d = ["a", "b"];
+//     ·               ─┬─
+//     ·                ╰── expected `int`, found `"b"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_arrays.baml:22:7]
+//  22 │     e = [1, 2];
+//     ·          ┬
+//     ·          ╰── expected `string`, found `1`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_arrays.baml:22:10]
+//  22 │     e = [1, 2];
+//     ·             ┬
+//     ·             ╰── expected `string`, found `2`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_arrays.baml:26:6]
+//  26 │     f = [1, 2, 3];
+//     ·         ────┬────
+//     ·             ╰── expected `int`, found `int[]`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_arrays.baml:30:6]
+//  30 │     g = 42;
+//     ·         ─┬
+//     ·          ╰── expected `int[]`, found `42`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_arrays.baml:34:6]
+//  34 │     h = "array";
+//     ·         ───┬───
+//     ·            ╰── expected `int[]`, found `"array"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_arrays.baml:38:6]
+//  38 │     i = [4, 5, 6];
+//     ·         ────┬────
+//     ·             ╰── expected `string`, found `int[]`
+//     ╰────

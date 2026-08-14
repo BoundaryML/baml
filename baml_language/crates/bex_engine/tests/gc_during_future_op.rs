@@ -23,13 +23,8 @@ use sys_native::SysOpsExt;
 fn make_engine(source: &str) -> Arc<BexEngine> {
     let snapshot = compile_for_engine(source);
     Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     )
 }
 
@@ -48,10 +43,10 @@ async fn no_deadlock_between_gc_and_concurrent_schedule_future() {
     // behind the VM's permit holding.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
-            baml.sys.sleep(0);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
             1
         }
     "#;
@@ -112,9 +107,9 @@ async fn gc_during_await_completes_promptly() {
     // pre-fix could land behind a queued GC.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(50);
-            baml.sys.sleep(50);
-            baml.sys.sleep(50);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
             42
         }
     "#;

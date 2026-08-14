@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0012
+
+  × duplicate method `Box.value`
+   ╭─[main.baml:2:14]
+ 2 │     function value(self) -> int {
+   ·              ──┬──
+   ·                ╰── first defined as method here
+   ╰────
+   ╭─[main.baml:6:14]
+ 6 │     function value(self) -> string {
+   ·              ──┬──
+   ·                ╰── duplicate method definition
+   ╰────

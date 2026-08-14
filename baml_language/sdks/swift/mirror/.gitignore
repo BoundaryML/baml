@@ -1,0 +1,4 @@
+.build/
+.swiftpm/
+Binaries/
+.DS_Store

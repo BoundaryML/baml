@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0007
+
+  × type `int[]` has no member `len`
+    ╭─[main.baml:14:13]
+ 14 │     consume([1, 2, 3].len())
+    ·             ───────────────
+    ╰────
+
+  [type] E0007
+
+  × type `int[]` has no member `len`
+    ╭─[main.baml:25:14]
+ 25 │     identity([1, 2, 3].len())
+    ·              ───────────────
+    ╰────

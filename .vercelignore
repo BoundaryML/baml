@@ -1,0 +1,53 @@
+# Vercel direct deploy uploads from the monorepo root so the project's
+# configured Root Directory (`typescript2/app-website`) is applied once.
+# Keep the upload to source files only; dependencies and generated artifacts
+# are rebuilt or restored from Vercel's build cache.
+
+.git
+.github
+.vercel
+
+**/node_modules
+**/.next
+**/.next-dev
+**/.turbo
+**/.cache
+**/dist
+**/build
+**/coverage
+**/.DS_Store
+**/.venv
+
+# Rust build output can be very large locally.
+**/target
+# Prebuilt native SDK binaries (100MB+ each); not used by any web build.
+**/*.node
+**/*.abi3.so
+
+# Entire trees the website build never reads (other products).
+# Keep /engine and /typescript: this root ignore file is shared by legacy
+# Vercel projects, and the old promptfiddle build compiles engine WASM from
+# typescript/apps/fiddle-web-app/vercel-build.sh.
+/jetbrains
+/languages
+/integ-tests
+/fern
+/docs
+/examples
+# NOTE: typescript2/pkg-playground/wasm is intentionally NOT ignored here. It is
+# gitignored (so it never reaches GitHub), but we DO want the locally-prebuilt
+# bridge_wasm uploaded with `vercel deploy` so the build skips the ~15 min
+# rustup/cargo recompile (vercel-build.sh detects it and skips). This only
+# affects CLI deploys; GitHub-triggered builds don't use .vercelignore and still
+# compile the wasm from source.
+
+# Local/editor state and secrets.
+**/.env
+**/.env.*
+!.env.example
+**/*.log
+**/tsconfig.tsbuildinfo
+
+# Tooling caches.
+**/.claude
+**/.codeboarding

@@ -2,285 +2,236 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] Error: Or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
-    ╭─[ patterns_new.baml:10:10 ]
-    │
+  [hir] E0094
+
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
+    ╭─[patterns_new.baml:10:10]
  10 │         (let x) | (let y) => 1
-    │          ───────┬───────  
-    │                 ╰───────── alternatives bind different names
-    │ 
-    │ Note: Error code: E0094
-────╯
+    ·          ───────┬───────
+    ·                 ╰── alternatives bind different names
+    ╰────
 
-  [hir] Error: Or-pattern alternatives must bind the same names. Inconsistent across branches: x, y, z
-    ╭─[ patterns_new.baml:16:16 ]
-    │
- 16 │ ╭─▶     match (v) {
- 17 │ ├─▶         let x | let y | let z => 1
-    │ │                                        
-    │ ╰──────────────────────────────────────── alternatives bind different names
-    │     
-    │     Note: Error code: E0094
-────╯
+  [hir] E0094
 
-  [hir] Error: Or-pattern alternatives must bind the same names. Inconsistent across branches: x
-    ╭─[ patterns_new.baml:24:10 ]
-    │
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: x, y, z
+    ╭─[patterns_new.baml:17:9]
+ 17 │         let x | let y | let z => 1
+    ·         ──────────┬──────────
+    ·                   ╰── alternatives bind different names
+    ╰────
+
+  [hir] E0094
+
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: x
+    ╭─[patterns_new.baml:24:10]
  24 │         (let x) | _ => 1
-    │          ─────┬────  
-    │               ╰────── alternatives bind different names
-    │ 
-    │ Note: Error code: E0094
-────╯
+    ·          ─────┬────
+    ·               ╰── alternatives bind different names
+    ╰────
 
-  [hir] Error: Or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
-    ╭─[ patterns_new.baml:31:10 ]
-    │
+  [hir] E0094
+
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
+    ╭─[patterns_new.baml:31:10]
  31 │         (let x: int) | (let y: string) => 1
-    │          ──────────────┬─────────────  
-    │                        ╰─────────────── alternatives bind different names
-    │ 
-    │ Note: Error code: E0094
-────╯
+    ·          ──────────────┬─────────────
+    ·                        ╰── alternatives bind different names
+    ╰────
 
-  [type] Error: Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
-    ╭─[ patterns_new.baml:41:25 ]
-    │
+  [type] E0001
+
+  × or-pattern binding `x` has conflicting types: int and string
+    ╭─[patterns_new.baml:41:9]
  41 │         (let x: int) | (let x: string) => 1
-    │                         ──────┬──────  
-    │                               ╰──────── Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·         ──────────────────────────────
+    ╰────
 
-  [type] Error: Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
-    ╭─[ patterns_new.baml:53:32 ]
-    │
+  [type] E0001
+
+  × or-pattern binding `a` has conflicting types: int and string
+    ╭─[patterns_new.baml:53:9]
  53 │         (let a: let b: int) | (let a: let b: string) => 1
-    │                                ──────────┬─────────  
-    │                                          ╰─────────── Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·         ────────────────────────────────────────────
+    ╰────
 
-  [type] Error: Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
-    ╭─[ patterns_new.baml:53:38 ]
-    │
+  [type] E0001
+
+  × or-pattern binding `b` has conflicting types: int and string
+    ╭─[patterns_new.baml:53:9]
  53 │         (let a: let b: int) | (let a: let b: string) => 1
-    │                                      ───────┬──────  
-    │                                             ╰──────── Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·         ────────────────────────────────────────────
+    ╰────
 
-  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
-    ╭─[ patterns_new.baml:67:8 ]
-    │
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[patterns_new.baml:67:9]
  67 │     let [] = xs;
-    │        ─┬─  
-    │         ╰─── refutable pattern in let binding; refutable patterns belong in `match`
-    │ 
-    │ Note: Error code: E0111
-────╯
+    ·         ──
+    ╰────
 
-  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
-    ╭─[ patterns_new.baml:73:8 ]
-    │
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[patterns_new.baml:73:9]
  73 │     let [let first, ..] = xs;
-    │        ────────┬───────  
-    │                ╰───────── refutable pattern in let binding; refutable patterns belong in `match`
-    │ 
-    │ Note: Error code: E0111
-────╯
+    ·         ───────────────
+    ╰────
 
-  [type] Error: refutable pattern in for-let binding; refutable patterns belong in `match`
-    ╭─[ patterns_new.baml:80:13 ]
-    │
+  [type] E0111
+
+  × refutable pattern in for-let binding; refutable patterns belong in `match`
+    ╭─[patterns_new.baml:80:14]
  80 │     for (let [let first, ..] in rows) {
-    │             ────────┬───────  
-    │                     ╰───────── refutable pattern in for-let binding; refutable patterns belong in `match`
-    │ 
-    │ Note: Error code: E0111
-────╯
+    ·              ───────────────
+    ╰────
 
-  [type] Error: refutable pattern in for-let binding; refutable patterns belong in `match`
-    ╭─[ patterns_new.baml:89:10 ]
-    │
+  [type] E0111
+
+  × refutable pattern in for-let binding; refutable patterns belong in `match`
+    ╭─[patterns_new.baml:89:10]
  89 │     for (let Team { scores: [let first, ..] } in teams) {
-    │          ──────────────────┬─────────────────  
-    │                            ╰─────────────────── refutable pattern in for-let binding; refutable patterns belong in `match`
-    │ 
-    │ Note: Error code: E0111
-────╯
+    ·          ────────────────────────────────────
+    ╰────
 
-  [type] Error: unreachable arm
-     ╭─[ patterns_new.baml:107:34 ]
-     │
- 107 │         Bag { contents: int } => 2
-     │                                  ┬  
-     │                                  ╰── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+  [type] E0063
 
-  [type] Error: non-exhaustive match on `user.Mixed`; missing: user.Mixed { value: int }
-     ╭─[ patterns_new.baml:121:70 ]
-     │
- 121 │ ╭─▶ function class_destructure_field_union_missing_int(m: Mixed) -> int {
-     ┆ ┆   
- 125 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.Mixed`; missing: user.Mixed { value: int }
-     │     
-     │     Note: Error code: E0062
-─────╯
+  × unreachable arm
+     ╭─[patterns_new.baml:120:34]
+ 120 │         Bag { contents: int } => 2
+     ·                                  ─
+     ╰────
 
-  [type] Error: non-exhaustive match on `user.Pair`; missing: user.Pair { kind: true, payload: string }, user.Pair { kind: false, payload: string }
-     ╭─[ patterns_new.baml:136:81 ]
-     │
- 136 │ ╭─▶ function class_destructure_two_field_union_missing_combination(p: Pair) -> int {
-     ┆ ┆   
- 141 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.Pair`; missing: user.Pair { kind: true, payload: string }, user.Pair { kind: false, payload: string }
-     │     
-     │     Note: Error code: E0062
-─────╯
+  [type] E0062
 
-  [type] Error: non-exhaustive match on `user.Color3`; missing: user.Color3.Red
-     ╭─[ patterns_new.baml:157:62 ]
-     │
- 157 │ ╭─▶ function enum_with_single_missing_variant(c: Color3) -> int {
-     ┆ ┆   
- 161 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.Color3`; missing: user.Color3.Red
-     │     
-     │     Note: Error code: E0062
-─────╯
+  × non-exhaustive match on type Mixed; missing: Mixed { value: int }
+     ╭─[patterns_new.baml:135:5]
+ 135 │ ╭─▶     match (m) {
+ 136 │ │           Mixed { value: float } => 1,
+ 137 │ │           Mixed { value: bool } => 2
+ 138 │ ╰─▶     }
+     ╰────
 
-  [type] Error: non-exhaustive match on `user.Direction4`; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
-     ╭─[ patterns_new.baml:173:69 ]
-     │
- 173 │ ╭─▶ function enum_with_multiple_missing_variants(d: Direction4) -> int {
-     ┆ ┆   
- 176 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.Direction4`; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
-     │     
-     │     Note: Error code: E0062
-─────╯
+  [type] E0062
 
-  [type] Error: non-exhaustive match on `user.ExcessiveEnum`; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth, user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
-     ╭─[ patterns_new.baml:195:73 ]
-     │
- 195 │ ╭─▶ function enum_with_excessive_missing_variants(e: ExcessiveEnum) -> int {
-     ┆ ┆   
- 198 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.ExcessiveEnum`; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth, user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
-     │     
-     │     Note: Error code: E0062
-─────╯
+  × non-exhaustive match on type Pair; missing: Pair { kind: bool, payload: string }
+     ╭─[patterns_new.baml:150:5]
+ 150 │ ╭─▶     match (p) {
+ 151 │ │           Pair { kind: int, payload: int } => 1,
+ 152 │ │           Pair { kind: int, payload: string } => 2,
+ 153 │ │           Pair { kind: bool, payload: int } => 3
+ 154 │ ╰─▶     }
+     ╰────
 
-  [type] Error: non-exhaustive match on `user.Flagged`; missing: user.Flagged { flag: true, note: _ }
-     ╭─[ patterns_new.baml:209:70 ]
-     │
- 209 │ ╭─▶ function class_field_bool_narrowing_missing_true(f: Flagged) -> int {
-     ┆ ┆   
- 213 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.Flagged`; missing: user.Flagged { flag: true, note: _ }
-     │     
-     │     Note: Error code: E0062
-─────╯
+  [type] E0062
 
-  [type] Error: non-exhaustive match on `user.Box2`; missing: user.Box2 { first: false, second: [..] }
-     ╭─[ patterns_new.baml:224:69 ]
-     │
- 224 │ ╭─▶ function nested_class_optional_missing_combination(b: Box2) -> int {
-     ┆ ┆   
- 229 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.Box2`; missing: user.Box2 { first: false, second: [..] }
-     │     
-     │     Note: Error code: E0062
-─────╯
+  × non-exhaustive match on type Color3; missing: user.Color3.Red
+     ╭─[patterns_new.baml:171:5]
+ 171 │ ╭─▶     match (c) {
+ 172 │ │           Color3.Green => 1,
+ 173 │ │           Color3.Blue => 2
+ 174 │ ╰─▶     }
+     ╰────
 
-  [type] Error: non-exhaustive match on `int`; missing: _
-     ╭─[ patterns_new.baml:233:53 ]
-     │
- 233 │ ╭─▶ function int_literal_non_exhaustive(n: int) -> int {
-     ┆ ┆   
- 236 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `int`; missing: _
-     │     
-     │     Note: Error code: E0062
-─────╯
+  [type] E0062
 
-  [type] Error: non-exhaustive match on `user.IntPair`; missing: user.IntPair { a: 0, b: _ }, user.IntPair { a: 1, b: _ }, user.IntPair { a: _, b: _ }
-     ╭─[ patterns_new.baml:250:66 ]
-     │
- 250 │ ╭─▶ function or_pattern_two_field_non_exhaustive(p: IntPair) -> int {
-     ┆ ┆   
- 253 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.IntPair`; missing: user.IntPair { a: 0, b: _ }, user.IntPair { a: 1, b: _ }, user.IntPair { a: _, b: _ }
-     │     
-     │     Note: Error code: E0062
-─────╯
+  × non-exhaustive match on type Direction4; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
+     ╭─[patterns_new.baml:187:5]
+ 187 │ ╭─▶     match (d) {
+ 188 │ │           Direction4.North => 1
+ 189 │ ╰─▶     }
+     ╰────
 
-  [type] Error: non-exhaustive match on `int?`; missing: int
-     ╭─[ patterns_new.baml:259:66 ]
-     │
- 259 │ ╭─▶ function or_pattern_optional_int_non_exhaustive(x: int?) -> int {
-     ┆ ┆   
- 263 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `int?`; missing: int
-     │     
-     │     Note: Error code: E0062
-─────╯
+  [type] E0062
 
-  [type] Error: non-exhaustive match on `bool[]`; missing: [false, .., true]
-     ╭─[ patterns_new.baml:273:68 ]
-     │
- 273 │ ╭─▶ function slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int {
-     ┆ ┆   
- 278 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `bool[]`; missing: [false, .., true]
-     │     
-     │     Note: Error code: E0062
-─────╯
+  × non-exhaustive match on type ExcessiveEnum; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth,
+  │ user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
+     ╭─[patterns_new.baml:209:5]
+ 209 │ ╭─▶     match (e) {
+ 210 │ │           ExcessiveEnum.First => 1
+ 211 │ ╰─▶     }
+     ╰────
 
-  [type] Error: unreachable arm
-     ╭─[ patterns_new.baml:285:23 ]
-     │
- 285 │         [true, ..] => 2,
-     │                       ┬  
-     │                       ╰── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+  [type] E0062
 
-  [type] Error: unreachable arm
-     ╭─[ patterns_new.baml:294:23 ]
-     │
- 294 │         [.., true] => 2,
-     │                       ┬  
-     │                       ╰── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+  × non-exhaustive match on type Flagged; missing: Flagged { flag: true, note: _ }
+     ╭─[patterns_new.baml:223:5]
+ 223 │ ╭─▶     match (f) {
+ 224 │ │           Flagged { flag: false, note: "zero" } => 1,
+ 225 │ │           Flagged { flag: false, note: string } => 2
+ 226 │ ╰─▶     }
+     ╰────
 
-  [type] Error: unreachable arm
-     ╭─[ patterns_new.baml:304:26 ]
-     │
- 304 │         [false, true] => 2,
-     │                          ┬  
-     │                          ╰── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+  [type] E0062
+
+  × non-exhaustive match on type Box2; missing: Box2 { first: false, second: [..] }
+     ╭─[patterns_new.baml:238:5]
+ 238 │ ╭─▶     match (b) {
+ 239 │ │           Box2 { first: true, second: null } => 1,
+ 240 │ │           Box2 { first: true, second: int[] } => 2,
+ 241 │ │           Box2 { first: false, second: null } => 3
+ 242 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type int; missing: _
+     ╭─[patterns_new.baml:247:5]
+ 247 │ ╭─▶     match (n) {
+ 248 │ │           1 => 1
+ 249 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type IntPair; missing: IntPair { a: 0, b: _ }, IntPair { a: 1, b: _ }, IntPair { a: _, b: _ }
+     ╭─[patterns_new.baml:264:5]
+ 264 │ ╭─▶     match (p) {
+ 265 │ │           IntPair { a: 0 | 1, b: 2 | 3 } => 1
+ 266 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type int | null; missing: int
+     ╭─[patterns_new.baml:273:5]
+ 273 │ ╭─▶     match (x) {
+ 274 │ │           null => 0,
+ 275 │ │           0 | 1 => 1
+ 276 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type bool[]; missing: [false, .., true]
+     ╭─[patterns_new.baml:287:5]
+ 287 │ ╭─▶     match (xs) {
+ 288 │ │           [] => 0,
+ 289 │ │           [true, ..] => 1,
+ 290 │ │           [.., false] => 2
+ 291 │ ╰─▶     }
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[patterns_new.baml:298:23]
+ 298 │         [true, ..] => 2,
+     ·                       ─
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[patterns_new.baml:307:23]
+ 307 │         [.., true] => 2,
+     ·                       ─
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[patterns_new.baml:317:26]
+ 317 │         [false, true] => 2,
+     ·                          ─
+     ╰────

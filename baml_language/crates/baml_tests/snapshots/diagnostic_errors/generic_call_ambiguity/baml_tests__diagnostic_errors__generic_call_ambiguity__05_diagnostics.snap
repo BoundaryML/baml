@@ -1,24 +1,21 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 31895
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected int, got bool
-    ╭─[ array_compare.baml:24:6 ]
-    │
- 24 │     [f < x, y()]
-    │      ──┬──  
-    │        ╰──── type mismatch: expected int, got bool
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] Error: type mismatch: expected "assistant", got "a"
-    ╭─[ generic_call.baml:23:28 ]
-    │
+  × mismatched types
+    ╭─[array_compare.baml:24:6]
+ 24 │     [f < x, y()]
+    ·      ──┬──
+    ·        ╰── expected `int`, found `bool`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[generic_call.baml:23:28]
  23 │     f<"assistant", string>("a", "b")
-    │                            ─┬─  
-    │                             ╰─── type mismatch: expected "assistant", got "a"
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                            ─┬─
+    ·                             ╰── expected `"assistant"`, found `"a"`
+    ╰────

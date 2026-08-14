@@ -11,7 +11,7 @@ class Person<[CURSOR] {
 // hover at hover_class.baml:1:13
 // ```baml
 // class Person {
-//     name: string
-//     age: int
+//     name: string,
+//     age: int,
 // }
 // ```

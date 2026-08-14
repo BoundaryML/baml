@@ -5,13 +5,27 @@ fn user.f(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: null
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+        switch copy _1 [1: bb3, 2: bb2, otherwise: bb1];
     }
 
     bb1: {
-        unreachable;
+        _0 = const "other";
+        goto -> bb4;
+    }
+
+    bb2: {
+        _0 = const "two";
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const "one";
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
     }
 }

@@ -1,4 +1,4 @@
-// throws whole enum, body throws all variants — no diagnostic
+// Throws tracks enum variants exactly; declaring the enum does not cover thrown variants.
 
 enum Errors {
   AuthError
@@ -16,21 +16,15 @@ function ThrowsEnumExact(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.InternalError, user.Errors.NotFoundError
-//    ╭─[ throw_throws_enum_exact_match.baml:9:50 ]
-//    │
-//  9 │ function ThrowsEnumExact(x: int) -> string throws Errors {
-//    │                                                  ───┬───  
-//    │                                                     ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.InternalError, user.Errors.NotFoundError
-//    │ 
-//    │ Note: Error code: E0096
-// ───╯
-// Warning: extraneous throws declaration: user.Errors
-//    ╭─[ throw_throws_enum_exact_match.baml:9:50 ]
-//    │
-//  9 │ function ThrowsEnumExact(x: int) -> string throws Errors {
-//    │                                                  ───┬───  
-//    │                                                     ╰───── extraneous throws declaration: user.Errors
-//    │ 
-//    │ Note: Error code: E0097
-// ───╯
+// E0097
+//
+//   ⚠ extraneous throws declaration: Errors
+//     ╭─[throw_throws_enum_exact_match.baml:9:58]
+//   9 │ ╭─▶ function ThrowsEnumExact(x: int) -> string throws Errors {
+//  10 │ │     match (x) {
+//  11 │ │       0 => throw Errors.AuthError,
+//  12 │ │       1 => throw Errors.NotFoundError,
+//  13 │ │       _ => throw Errors.InternalError
+//  14 │ │     }
+//  15 │ ╰─▶ }
+//     ╰────

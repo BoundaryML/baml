@@ -5,25 +5,13 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
-function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
-}
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
-}
 class user.WithLists {
   strings: string[]
   ints: int[]
   classes: user.Inner[]
 }
-function user.WithLists.to_json(self: user.WithLists) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "strings": self.strings.to_json(), "ints": self.ints.to_json(), "classes": self.classes.to_json() } : map<string, baml.json.json>
-}
-function user.WithLists.from_json(j: baml.json.json) -> user.WithLists throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithLists { strings: baml.json.from_json<string[]>(baml.json.field(j, "strings")), ints: baml.json.from_json<int[]>(baml.json.field(j, "ints")), classes: baml.json.from_json<Inner[]>(baml.json.field(j, "classes")) } : user.WithLists
-}
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 class user.WithLists$stream {
   strings: string[]

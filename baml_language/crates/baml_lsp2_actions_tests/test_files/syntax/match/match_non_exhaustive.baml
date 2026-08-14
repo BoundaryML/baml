@@ -20,25 +20,20 @@ function MissingMultipleVariants(c: Color) -> string {
 
 //----
 //- diagnostics
-// Error: non-exhaustive match on `user.Color`; missing: user.Color.Blue
-//     ╭─[ match_match_non_exhaustive.baml:8:49 ]
-//     │
-//   8 │ ╭─▶ function MissingOneVariant(c: Color) -> string {
-//     ┆ ┆   
-//  12 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── non-exhaustive match on `user.Color`; missing: user.Color.Blue
-//     │     
-//     │     Note: Error code: E0062
-// ────╯
-// Error: non-exhaustive match on `user.Color`; missing: user.Color.Green, user.Color.Blue
-//     ╭─[ match_match_non_exhaustive.baml:15:55 ]
-//     │
-//  15 │ ╭─▶ function MissingMultipleVariants(c: Color) -> string {
-//     ┆ ┆   
-//  18 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── non-exhaustive match on `user.Color`; missing: user.Color.Green, user.Color.Blue
-//     │     
-//     │     Note: Error code: E0062
-// ────╯
+// E0062
+//
+//   × non-exhaustive match on type Color; missing: user.Color.Blue
+//     ╭─[match_match_non_exhaustive.baml:9:3]
+//   9 │ ╭─▶   match (c) {
+//  10 │ │       Color.Red => "red",
+//  11 │ │       Color.Green => "green"
+//  12 │ ╰─▶   }
+//     ╰────
+// E0062
+//
+//   × non-exhaustive match on type Color; missing: user.Color.Green, user.Color.Blue
+//     ╭─[match_match_non_exhaustive.baml:16:3]
+//  16 │ ╭─▶   match (c) {
+//  17 │ │       Color.Red => "red"
+//  18 │ ╰─▶   }
+//     ╰────

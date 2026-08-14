@@ -1,10 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10979
 ---
 function user.MakeWrapper() -> Wrapper {
-    alloc_instance user.Wrapper
     load_const null
-    init_field .data
+    init_instance user.Wrapper .data
     return
 }
 
@@ -17,31 +17,41 @@ function user.MatchJson(j: baml.json.json) -> string {
 
   L0:
     load_var j
-    is_type bool
+    store_var _3
+    load_var _3
+    narrow_bind bool, slot=2
     pop_jump_if_false L1
     jump L10
 
   L1:
     load_var j
-    is_type int
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=3
     pop_jump_if_false L2
     jump L9
 
   L2:
     load_var j
-    is_type float
+    store_var _5
+    load_var _5
+    narrow_bind float, slot=4
     pop_jump_if_false L3
     jump L8
 
   L3:
     load_var j
-    is_type string
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=5
     pop_jump_if_false L4
     jump L7
 
   L4:
     load_var j
-    is_type baml.json.json[]
+    store_var _7
+    load_var _7
+    narrow_bind baml.json.json[], slot=6
     pop_jump_if_false L5
     jump L6
 
@@ -80,6 +90,7 @@ function user.ReturnArray() -> baml.json.json {
     load_const 1
     load_const 2
     load_const 3
+    load_type baml.json.json
     alloc_array 3
     return
 }
@@ -102,6 +113,8 @@ function user.ReturnInt() -> baml.json.json {
 function user.ReturnMap() -> baml.json.json {
     load_const "value"
     load_const "key"
+    load_type string
+    load_type baml.json.json
     alloc_map 1
     return
 }
@@ -113,31 +126,5 @@ function user.ReturnNull() -> baml.json.json {
 
 function user.ReturnString() -> baml.json.json {
     load_const "hello"
-    return
-}
-
-function user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
-    load_var j
-    load_const "data"
-    call baml.json.field
-    store_var _3
-    load_type baml.json.json
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Wrapper
-    load_var _2
-    init_field .data
-    return
-}
-
-function user.Wrapper.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .data
-    load_const "to_json"
-    load_map_element
-    call_indirect
-    load_const "data"
-    alloc_map 1
     return
 }

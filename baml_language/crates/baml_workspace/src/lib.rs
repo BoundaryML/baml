@@ -22,15 +22,18 @@
 //! - `ty_project` provides high-level `ProjectDatabase` and operations
 //! - The `Program` singleton (compiler settings) lives in the semantic crate
 
-use std::{
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicU32},
-};
+use std::path::PathBuf;
 
-use baml_base::{FileId, SourceFile};
+use baml_base::SourceFile;
 
 mod discovery;
 pub use discovery::discover_baml_files;
+
+mod project_resolution;
+pub use project_resolution::{
+    BAML_SRC_DIR, BAML_TOML, find_baml_project_root, find_baml_project_root_from_ancestors,
+    project_search_dir, project_source_root, resolve_project_search_start,
+};
 
 /// Database trait for workspace/project context.
 ///
@@ -40,6 +43,90 @@ pub use discovery::discover_baml_files;
 pub trait Db: salsa::Database {
     /// Returns the project being analyzed.
     fn project(&self) -> Project;
+
+    /// Per-file throw-analysis facts seeded from a previous compile.
+    ///
+    /// When present, `throw_inference::file_throw_facts` returns the seeded
+    /// facts for a file instead of re-walking its body — the bytecode
+    /// cache's per-file reuse sets this for files whose content is
+    /// unchanged (facts are a pure function of file content + name
+    /// resolution, and the cache's dirty-set analysis re-walks any file
+    /// whose resolution-relevant surroundings changed). Defaults to `None`:
+    /// every other database compiles honestly.
+    fn seeded_throw_facts(&self) -> Option<SeededThrowFacts> {
+        None
+    }
+
+    /// The stdlib packages' resolved typed interfaces from a previous compile,
+    /// keyed by package name.
+    ///
+    /// When present, `package_interface::package_interface` returns the seeded
+    /// interface for a stdlib package instead of re-deriving it from source —
+    /// removing the cold-typecheck floor a fresh process otherwise pays to
+    /// re-normalize every stdlib signature/class/alias before it can typecheck
+    /// user code. The stdlib is a compiler-build constant (no user file can
+    /// contribute to a stdlib package), so the CLI caches this once per compiler
+    /// build under `bex_cache::stdlib_interface_key` and seeds it back on every
+    /// compile. Defaults to `None`: every other database compiles honestly.
+    fn seeded_stdlib_interface(&self) -> Option<SeededStdlibInterface> {
+        None
+    }
+
+    /// Per-function `callable_throws` values from a previous compile, keyed by
+    /// (source path, item-tree `LocalItemId`).
+    ///
+    /// When present, `callable::callable_throws` returns the seeded `Ty` for a
+    /// clean function instead of inferring its body — the bytecode cache sets
+    /// this for functions the per-file reuse plan proved unchanged (both their
+    /// own body and their transitive throw contributors are stable, per the
+    /// throws-taint closure). Cutting `callable_throws` removes the last cold
+    /// `infer_scope_types` pull a dirty file otherwise forces on its clean
+    /// callees. Defaults to `None`: every other database infers honestly.
+    fn seeded_callable_throws(&self) -> Option<SeededCallableThrows> {
+        None
+    }
+}
+
+/// Input: per-file `FunctionThrowFacts` from a previous compile, keyed by
+/// the full source-file path string (`SourceFile::path` display form).
+#[salsa::input]
+pub struct SeededThrowFacts {
+    #[returns(ref)]
+    pub by_path:
+        std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+}
+
+/// Input: exact per-function `callable_throws` results from a previous compile,
+/// keyed by source-file path string (`SourceFile::path` display form) then by
+/// item-tree `LocalItemId::as_u32`.
+///
+/// Holds a typed `baml_type::Ty` — not opaque bytes like [`SeededStdlibInterface`]
+/// — because `Ty` is a low-crate type this workspace crate can already name
+/// (same as [`SeededThrowFacts`]). The `LocalItemId` key is a content-derived,
+/// process-independent item-tree index, so a byte-identical file's functions map
+/// to the same keys across compiles. `callable_throws` reads it through a
+/// *tracked* dependency (present-from-construction, empty until seeded), so a
+/// later seed on a reused database invalidates the memo.
+#[salsa::input]
+pub struct SeededCallableThrows {
+    #[returns(ref)]
+    pub by_path: std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
+}
+
+/// Input: the stdlib packages' resolved `PackageInterface`s from a previous
+/// compile, keyed by package name; each value is `borsh(PackageInterface)`.
+///
+/// The value is opaque bytes rather than the typed interface because
+/// `PackageInterface` lives in `baml_compiler2_hir_ty`, which depends on this
+/// crate — naming it here would be a dependency cycle. `baml_compiler2_hir_ty`
+/// deserializes the relevant package's bytes on a seed hit. Per-package (not
+/// whole-map) bytes keep the short-circuit's deserialize cost to one package
+/// per query call. This mirrors [`SeededThrowFacts`], which holds a type its
+/// low crate can name; `PackageInterface` has no such low-crate home.
+#[salsa::input]
+pub struct SeededStdlibInterface {
+    #[returns(ref)]
+    pub by_package: std::collections::BTreeMap<String, Vec<u8>>,
 }
 
 /// Input: the project root configuration
@@ -72,25 +159,3 @@ pub struct Compiler2ExtraFiles {
     #[returns(ref)]
     pub files: Vec<SourceFile>,
 }
-
-/// Helper to create a source file in the database
-pub fn create_source_file(
-    db: &dyn salsa::Database,
-    path: PathBuf,
-    text: String,
-    file_id: FileId,
-) -> SourceFile {
-    SourceFile::new(db, text, path, file_id)
-}
-
-/// Minimal test database for compilation tests.
-#[salsa::db]
-#[derive(Clone)]
-pub struct TestDatabase {
-    pub storage: salsa::Storage<Self>,
-    pub next_file_id: Arc<AtomicU32>,
-    pub project: Option<Project>,
-}
-
-#[salsa::db]
-impl salsa::Database for TestDatabase {}

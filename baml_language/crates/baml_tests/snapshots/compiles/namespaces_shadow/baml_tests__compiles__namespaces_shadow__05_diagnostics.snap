@@ -1,14 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13373
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] Warning: Namespace `foo` (from `ns_foo/`) shadows root-level class `foo`
-   ╭─[ main.baml:3:7 ]
-   │
+  [validation] E0099
+
+  ⚠ namespace `foo` (from `ns_foo/`) shadows root-level class `foo`
+   ╭─[main.baml:3:7]
  3 │ class foo {
-   │       ─┬─  
-   │        ╰─── this class is shadowed by namespace `foo`
-   │ 
-   │ Note: Error code: E0099
-───╯
+   ·       ─┬─
+   ·        ╰── this class is shadowed by namespace `foo`
+   ╰────

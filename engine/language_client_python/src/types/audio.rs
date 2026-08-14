@@ -4,7 +4,6 @@ use pyo3::{
     types::{PyTuple, PyType},
     Bound, PyAny, PyObject, Python,
 };
-use pythonize::{depythonize, pythonize};
 
 use super::media_repr::{self, UserFacingBamlMedia};
 use crate::errors::BamlError;
@@ -93,7 +92,8 @@ impl BamlAudioPy {
 
     #[staticmethod]
     fn baml_deserialize(data: Bound<'_, PyAny>) -> PyResult<Self> {
-        let data: UserFacingBamlMedia = depythonize(&data)?;
+        let data: UserFacingBamlMedia = serde_json::from_value(crate::serde_py::py_to_json(&data)?)
+            .map_err(BamlError::from_anyhow)?;
         Ok(Self {
             inner: data.into_baml_media(baml_types::BamlMediaType::Audio),
         })
@@ -102,7 +102,7 @@ impl BamlAudioPy {
     pub fn baml_serialize(&self, py: Python<'_>) -> PyResult<PyObject> {
         let s: UserFacingBamlMedia = (&self.inner).try_into().map_err(BamlError::from_anyhow)?;
         let s = serde_json::to_value(&s).map_err(BamlError::from_anyhow)?;
-        Ok(pythonize(py, &s)?.into())
+        Ok(crate::serde_py::json_to_py(py, &s)?.into())
     }
 
     pub fn __eq__(&self, other: &Self) -> bool {

@@ -1,10 +1,3 @@
-generator lang_python {
-  output_type "python/pydantic"
-  output_dir "../python"
-  version "0.68.0"
-  naming_convention "preserve-case"
-}
-
 class ETA {
     thing string
 }
@@ -29,21 +22,19 @@ class Foo {
 
 //----
 //- diagnostics
-// Error: Expected Unexpected token in class body, found if
-//     ╭─[ class_generator_keywords1.baml:13:5 ]
-//     │
-//  13 │     if string
-//     │     ─┬  
-//     │      ╰── Expected Unexpected token in class body, found if
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: field 'string' is missing a type annotation
-//     ╭─[ class_generator_keywords1.baml:13:8 ]
-//     │
-//  13 │     if string
-//     │        ───┬──  
-//     │           ╰──── field 'string' is missing a type annotation
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
+// E0010
+//
+//   × unexpected token
+//    ╭─[class_generator_keywords1.baml:6:5]
+//  6 │     if string
+//    ·     ─┬
+//    ·      ╰── expected `Unexpected token in class body`, found `if`
+//    ╰────
+// E0010
+//
+//   × invalid syntax
+//    ╭─[class_generator_keywords1.baml:6:8]
+//  6 │     if string
+//    ·        ───┬──
+//    ·           ╰── field 'string' is missing a type annotation
+//    ╰────

@@ -24,7 +24,7 @@ where
     /// May also be a subtype of the expected type.
     pub ty: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
 }
-impl<'s, 'v, 't, N: TypeIdent> DeserializerMeta<'s, 'v, 't, N> {
+impl<'t, N: TypeIdent> DeserializerMeta<'_, '_, 't, N> {
     pub fn new(
         ty: TyWithMeta<impl Into<TyResolvedRef<'t, N>>, &'t TypeAnnotations<'t, N>>,
     ) -> Self {
@@ -32,18 +32,6 @@ impl<'s, 'v, 't, N: TypeIdent> DeserializerMeta<'s, 'v, 't, N> {
             flags: DeserializerConditions::new(),
             ty: ty.map_ty(Into::into),
         }
-    }
-    #[allow(clippy::must_use_candidate)]
-    #[must_use]
-    pub fn with_flags(mut self, flags: impl IntoIterator<Item = Flag<'s, 'v, 't, N>>) -> Self {
-        self.flags.flags.extend(flags);
-        self
-    }
-    #[allow(clippy::must_use_candidate)]
-    #[must_use]
-    pub fn with_flag(mut self, flag: Flag<'s, 'v, 't, N>) -> Self {
-        self.flags.flags.push(flag);
-        self
     }
 }
 
@@ -62,6 +50,10 @@ impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, '_, '_, N> {
         match &self.value {
             BamlValue::String(s) => f.debug_tuple("String").field(&s.value).finish(),
             BamlValue::Int(i) => f.debug_tuple("Int").field(&i.value).finish(),
+            BamlValue::Bigint(bi) => f
+                .debug_tuple("Bigint")
+                .field(&bi.value.to_string())
+                .finish(),
             BamlValue::Float(fl) => f.debug_tuple("Float").field(&fl.value).finish(),
             BamlValue::Bool(b) => f.debug_tuple("Bool").field(&b.value).finish(),
             BamlValue::Array(arr) => f
@@ -105,14 +97,6 @@ impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, '_, '_, N> {
 }
 
 impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
-    #[cfg(test)]
-    pub fn as_list(&self) -> Option<&[BamlValueWithFlags<'s, 'v, 't, N>]> {
-        match &self.value {
-            BamlValue::Array(arr) => Some(&arr.value),
-            _ => None,
-        }
-    }
-
     pub fn is_composite(&self) -> bool {
         matches!(
             &self.value,
@@ -166,75 +150,8 @@ impl ParsingErrorToUiJson for ParsingError {
     }
 }
 
-impl<N: TypeIdent> BamlValueWithFlags<'_, '_, '_, N> {
-    pub fn explanation_json(&self) -> Vec<serde_json::Value> {
-        let mut expl = vec![];
-        self.explanation_impl(vec!["<root>".to_string()], &mut expl);
-        expl.into_iter().map(|e| e.to_ui_json()).collect::<Vec<_>>()
-    }
-
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn explanation_impl(&self, scope: Vec<String>, expls: &mut Vec<ParsingError>) {
-        let causes = self.meta.flags.explanation();
-        if !causes.is_empty() {
-            let reason = match &self.value {
-                BamlValue::String(_) => "error while parsing string".to_string(),
-                BamlValue::Int(_) => "error while parsing int".to_string(),
-                BamlValue::Float(_) => "error while parsing float".to_string(),
-                BamlValue::Bool(_) => "error while parsing bool".to_string(),
-                BamlValue::Array(_) => "error while parsing list".to_string(),
-                BamlValue::Map(_) => "error while parsing map".to_string(),
-                BamlValue::Enum(e) => format!("error while parsing {} enum value", e.name),
-                BamlValue::Class(c) => format!("error while parsing class {}", c.name),
-                BamlValue::Null(_) => "error while parsing null".to_string(),
-                BamlValue::Media(_) => "error while parsing media".to_string(),
-                BamlValue::StreamState(_) => "error while parsing stream state".to_string(),
-            };
-            expls.push(ParsingError {
-                scope: scope.clone(),
-                reason,
-                causes,
-            });
-        }
-        // Recurse into nested values
-        match &self.value {
-            BamlValue::Array(arr) => {
-                for (i, value) in arr.value.iter().enumerate() {
-                    let mut scope = scope.clone();
-                    scope.push(format!("parsed:{i}"));
-                    value.explanation_impl(scope, expls);
-                }
-            }
-            BamlValue::Map(map) => {
-                for (k, v) in &map.value {
-                    let mut scope = scope.clone();
-                    scope.push(format!("parsed:{k}"));
-                    v.explanation_impl(scope, expls);
-                }
-            }
-            BamlValue::Class(cls) => {
-                for (k, v) in &cls.value {
-                    let mut scope = scope.clone();
-                    scope.push(k.to_string());
-                    v.explanation_impl(scope, expls);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
 #[allow(clippy::must_use_candidate)]
 impl<'s, 'v, 't, T, N: TypeIdent> ValueWithFlags<'s, 'v, 't, T, N> {
-    #[must_use]
-    pub fn with_target(
-        mut self,
-        target: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
-    ) -> Self {
-        self.meta.ty = target;
-        self
-    }
-
     #[must_use]
     pub fn with_flag(mut self, flag: Flag<'s, 'v, 't, N>) -> Self {
         self.meta.flags.add_flag(flag);
@@ -257,6 +174,7 @@ impl<N: TypeIdent> BamlValueWithFlags<'_, '_, '_, N> {
         match &self.value {
             BamlValue::String(..) => Cow::Borrowed("String"),
             BamlValue::Int(..) => Cow::Borrowed("Int"),
+            BamlValue::Bigint(..) => Cow::Borrowed("Bigint"),
             BamlValue::Float(..) => Cow::Borrowed("Float"),
             BamlValue::Bool(..) => Cow::Borrowed("Bool"),
             BamlValue::Array(arr) => {
@@ -290,6 +208,9 @@ impl<N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'_, '_, '_, N> {
             }
             BamlValue::Int(i) => {
                 write!(f, "{}", i.value)?;
+            }
+            BamlValue::Bigint(bi) => {
+                write!(f, "{}", bi.value)?;
             }
             BamlValue::Float(fl) => {
                 write!(f, "{}", bex_vm_types::format_float(fl.value))?;

@@ -1,66 +1,24 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11274
 ---
 function user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
-    load_type int
+    load_type pkg.inner.AutoBox<int>
     load_var j
-    call user.pkg.inner.AutoBox.from_json
+    call baml.json.to
+    return
+}
+
+function user.decode_plain(j: baml.json.json) -> pkg.inner.Plain {
+    load_type pkg.inner.Plain
+    load_var j
+    call baml.json.to
     return
 }
 
 function user.decode_root(j: baml.json.json) -> pkg.inner.Box<int> {
-    load_type int
+    load_type pkg.inner.Box<int>
     load_var j
-    call user.pkg.inner.Box.from_json
-    return
-}
-
-function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<void> {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type #0
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_type #0
-    alloc_instance<1> user.pkg.inner.AutoBox
-    load_var _2
-    init_field .value
-    return
-}
-
-function user.pkg.inner.AutoBox.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .value
-    call baml.json.to_json
-    load_const "value"
-    alloc_map 1
-    return
-}
-
-function user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type #0
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_type #0
-    alloc_instance<1> user.pkg.inner.Box
-    load_var _2
-    init_field .value
-    return
-}
-
-function user.pkg.inner.Box.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .value
-    call baml.json.to_json
-    load_const "value"
-    alloc_map 1
+    call baml.json.to
     return
 }

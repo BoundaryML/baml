@@ -1,0 +1,366 @@
+==================
+regular strings with escapes
+==================
+
+function f() -> string {
+  let a = "hello world";
+  let b = "escaped \" quote and \\ backslash";
+  "https://google.com"
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (string))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (string))
+      (expression_statement
+        (string)))))
+
+==================
+byte strings
+==================
+
+function f() -> int {
+  let data = b"\x48\x65\x6c";
+  let empty = b"";
+  b"abc".length()
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (byte_string))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (byte_string))
+      (expression_statement
+        (call_expression
+          (member_expression
+            (byte_string)
+            (property_identifier))
+          (arguments))))))
+
+==================
+raw strings: one hash with jinja content
+==================
+
+function f() -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    {# comment #}
+    {% for m in convo %}
+    {{ _.role(m.role) }}
+    {% endfor %}
+  "#
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (string))
+      (prompt_field
+        (property_identifier)
+        (raw_string
+          (raw_string_content))))))
+
+==================
+raw strings: nested hash levels
+==================
+
+function Describe() -> string {
+  let raw = ##"raw #"quoted"# text"##;
+  let deeper = ###"has "## inside"###;
+  #"inline "raw" string,,"#
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (raw_string
+          (raw_string_content
+            (quote)
+            (quote))))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (raw_string
+          (raw_string_content
+            (quote))))
+      (expression_statement
+        (raw_string
+          (raw_string_content
+            (quote)
+            (quote)))))))
+
+==================
+raw strings: five hash delimiter
+==================
+
+function f() -> string {
+  #####"Complex ####"nested"#### content here"#####
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (raw_string
+          (raw_string_content
+            (quote)
+            (quote)))))))
+
+==================
+raw string as attribute argument
+==================
+
+class TestClassAlias {
+  key string @alias("key-dash")
+  @description(#"
+     This is a description for key
+   "#)
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier))
+        (attribute
+          (attribute_name
+            (identifier))
+          (attribute_arguments
+            (string)))
+        (attribute
+          (attribute_name
+            (identifier))
+          (attribute_arguments
+            (raw_string
+              (raw_string_content))))))))
+
+==================
+backtick strings: plain, escapes, multi-tick
+==================
+
+function f() -> string {
+  let a = `hello world`;
+  let b = `before \` after \${name}`;
+  let c = ``inline `code` here``;
+  ```nested ``double`` ticks```
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (backtick_string
+          (string_content)))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (backtick_string
+          (string_content)
+          (escape_sequence)
+          (string_content)
+          (escape_sequence)
+          (string_content)))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (backtick_string
+          (string_content)
+          (string_content)
+          (string_content)
+          (string_content)
+          (string_content)))
+      (expression_statement
+        (backtick_string
+          (string_content)
+          (string_content)
+          (string_content)
+          (string_content)
+          (string_content))))))
+
+==================
+backtick strings: interpolation with expressions and block bodies
+==================
+
+function f(name: string, items: int[]) -> string {
+  let a = `Hello, ${name}!`;
+  `head: ${ let first = items[0]; first }`
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier)))
+      (parameter
+        (identifier)
+        (array_type
+          (type_path
+            (identifier)))))
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (backtick_string
+          (string_content)
+          (interpolation
+            (expression_statement
+              (identifier)))
+          (string_content)))
+      (expression_statement
+        (backtick_string
+          (string_content)
+          (interpolation
+            (let_declaration
+              (type_pattern
+                (type_path
+                  (identifier)))
+              (index_expression
+                (identifier)
+                (number)))
+            (expression_statement
+              (identifier))))))))
+
+==================
+backtick strings: block control tags
+==================
+
+function f(xs: string[], n: int) -> string {
+  let a = `${for (let x in xs)}- ${x}
+${endfor}`;
+  `${if (n > 0)}pos${else if (n < 0)}neg${else}zero${endif}`
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (array_type
+          (type_path
+            (identifier))))
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (backtick_string
+          (interpolation
+            (template_for_open
+              (type_pattern
+                (type_path
+                  (identifier)))
+              (identifier)))
+          (string_content)
+          (interpolation
+            (expression_statement
+              (identifier)))
+          (string_content)
+          (interpolation
+            (template_endfor))))
+      (expression_statement
+        (backtick_string
+          (interpolation
+            (template_if_open
+              (parenthesized_expression
+                (binary_expression
+                  (identifier)
+                  (number)))))
+          (string_content)
+          (interpolation
+            (template_else_if
+              (parenthesized_expression
+                (binary_expression
+                  (identifier)
+                  (number)))))
+          (string_content)
+          (interpolation
+            (template_else))
+          (string_content)
+          (interpolation
+            (template_endif)))))))

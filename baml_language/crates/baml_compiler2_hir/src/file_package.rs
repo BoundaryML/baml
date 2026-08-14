@@ -7,7 +7,7 @@
 use baml_base::{Name, SourceFile};
 
 /// Package/namespace info for a file.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct PackageInfo {
     /// Package name: "user", "baml", or "env".
     pub package: Name,
@@ -31,6 +31,13 @@ fn extract_ns_name(component: &str) -> Option<Name> {
 }
 
 /// Determine which package a file belongs to based on its path.
+///
+/// Salsa-tracked (keyed on `file`) so the path parsing — `to_string_lossy`,
+/// `strip_prefix`, component iteration, and the `Vec<Name>` allocation — runs
+/// once per file instead of on every call. This is called from ~100 sites
+/// across every compiler phase (often in per-class/per-function loops), so
+/// memoizing it removes a pervasive, repeated path-parsing cost.
+#[salsa::tracked]
 pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
     let path = file.path(db);
     let path_str = path.to_string_lossy();

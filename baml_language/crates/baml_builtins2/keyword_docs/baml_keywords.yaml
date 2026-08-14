@@ -1,0 +1,1044 @@
+class:
+  summary: "Defines a structured data type with named fields."
+  syntax: |
+    class MyClass {
+      field1 string
+      field2: int
+      implements Printable {}
+    }
+  details: |
+    Class fields can be written as `field Type` or `field: Type`. Fields can have default values, docstrings, attributes, methods, and `implements` blocks for interface contracts. Interface fields use the colon form.
+
+field:
+  summary: "Declares data members on classes and required data members on interfaces."
+  syntax: |
+    interface HasId {
+      id: string
+    }
+
+    class User {
+      id string
+      display_name: string
+      implements HasId {}
+    }
+  details: |
+    Class fields may use `name Type` or `name: Type`. Interface fields use `name: Type` and are satisfied by same-named class fields or by field mappings inside an `implements` block, such as `id as user_id`. A class value is constructed with an object literal like `User { id: "u1", display_name: "Ada" }`; BAML does not use `new` constructors.
+
+fields:
+  summary: "Alias topic for fields."
+  syntax: |
+    class User {
+      id string
+      name: string
+    }
+  details: |
+    See `baml describe field` for class fields, interface fields, and object literal construction.
+
+interface:
+  summary: "Defines a structural contract of fields, methods, and associated types."
+  syntax: |
+    interface Named {
+      type Key = string
+      id: Self.Key
+      name: string
+      function label(self) -> string
+      function display(self) -> string {
+        return self.name
+      }
+    }
+
+    class Dog {
+      id: string
+      name: string
+      implements Named {
+        function label(self) -> string {
+          return self.name
+        }
+      }
+    }
+  details: |
+    Interface fields use `name: Type` syntax. Interfaces can declare associated types with `type Name`, optionally with `extends Bound` and/or `= Default`; use `Self.Name` inside the interface body to refer to the implementing type's binding. A method without a body is required; a method with a body is a default method that implementors inherit unless they override it. Interfaces compose with `requires`, not `extends`.
+
+interfaces:
+  summary: "Concept page for BAML interfaces and interface-related syntax."
+  syntax: |
+    interface Iterator {
+      type Item
+      function next(self) -> Self.Item?
+    }
+
+    class IntIterator {
+      implements Iterator {
+        type Item = int
+        function next(self) -> Self.Item? {
+          return null
+        }
+      }
+    }
+
+    function take_one<I extends Iterator<Item = int>>(it: I) -> I.Item? {
+      return it.next()
+    }
+  details: |
+    Interfaces are contracts implemented by classes or concrete types. Declare associated types in the interface, bind them inside `implements` blocks with `type Name = Concrete`, constrain them in type positions with `Interface<Name = Type>`, and project them with `T.Name`, `Self.Name`, or `(Concrete as Interface).Name`. Useful related lookups: `baml describe implements`, `baml describe associated`, `baml describe type`, `baml describe Self`, `baml describe generics`, `baml describe projection`, `baml describe as`, `baml describe extends`, and `baml describe default`.
+
+enum:
+  summary: "Defines a type with a fixed set of named variants."
+  syntax: |
+    enum Color {
+      Red,
+      Green,
+      Blue,
+    }
+
+alias:
+  summary: "Overrides the serialized and parsed name of a class, enum, field, or enum variant. Expects exactly one string argument."
+  syntax: |
+    class User {
+      user_id string @alias("id")
+      @@alias("user")
+    }
+  details: |
+    `@alias("name")` applies to fields and enum variants. `@@alias("name")` applies to classes and enums. Each declaration accepts at most one alias, and the argument must be a string literal.
+
+description:
+  summary: "Attaches a human-readable description to a class, enum, field, or enum variant. Expects exactly one string argument."
+  syntax: |
+    class User {
+      name string @description("The user's display name")
+      @@description("A user returned by the API")
+    }
+  details: |
+    `@description("text")` applies to fields and enum variants. `@@description("text")` applies to classes and enums. Each declaration accepts at most one description, and the argument must be a string literal.
+
+skip:
+  summary: "Excludes a field or enum variant from generated schemas. Takes no arguments."
+  syntax: |
+    class InternalRecord {
+      public_value string
+      internal_value string @skip
+    }
+  details: |
+    `@skip` takes no arguments and may appear at most once on a declaration.
+
+function:
+  summary: "Declares a named callable with typed parameters and a return type."
+  syntax: |
+    function greet(name: string) -> string {
+      "Hello, " + name
+    }
+
+method:
+  summary: "Declares a function member on a class or interface."
+  syntax: |
+    interface Named {
+      function label(self) -> string
+      function display(self) -> string {
+        return self.label()
+      }
+    }
+
+    class User {
+      name: string
+
+      implements Named {}
+
+      function label(self) -> string {
+        return self.name
+      }
+    }
+  details: |
+    Methods are written with `function` inside a class, interface, or `implements` block. The receiver parameter is `self`; method calls use `value.method(args)`. In interfaces, a method without a body is required and a method with a body is a default method. A same-named class method can satisfy an empty `implements I {}` block when its signature matches the interface method.
+
+methods:
+  summary: "Alias topic for methods."
+  syntax: |
+    class Counter {
+      value: int
+      function next(self) -> int {
+        return self.value + 1
+      }
+    }
+  details: |
+    See `baml describe method` for class methods, interface methods, default methods, and `self`.
+
+client:
+  summary: "Configures an LLM client with a provider, model, and options."
+  syntax: |
+    client MyClient {
+      provider openai
+      options {
+        model "gpt-4o"
+        temperature 0.7
+      }
+    }
+
+provider:
+  summary: "Selects the provider implementation used by this LLM client."
+  syntax: |
+    client<llm> MyClient {
+      provider openai
+    }
+
+options:
+  summary: "Contains provider-specific client configuration such as the model, credentials, and HTTP settings."
+  syntax: |
+    client<llm> MyClient {
+      provider openai
+      options {
+        model "gpt-4o"
+      }
+    }
+
+client_option:
+  summary: "A provider-specific configuration property for this LLM client."
+  details: |
+    Available option names and value types depend on the selected provider.
+
+model:
+  summary: "A provider configuration property that selects the model used for requests."
+  syntax: |
+    options {
+      model "gpt-4o"
+    }
+
+http:
+  summary: "A provider configuration property that groups HTTP transport and timeout settings."
+  syntax: |
+    options {
+      http {
+        request_timeout_ms 30000
+      }
+    }
+
+request_timeout_ms:
+  summary: "A provider configuration property that sets the request timeout in milliseconds. Use `0` for no timeout."
+  syntax: |
+    http {
+      request_timeout_ms 30000
+    }
+
+google-ai:
+  summary: "Uses Gemini models through the Google AI Studio API, or delegates to Vertex AI when configured for Google Cloud."
+  syntax: |
+    client<llm> Gemini {
+      provider google-ai
+      options {
+        model "gemini-3.5-flash"
+        api_key env.GOOGLE_API_KEY
+      }
+    }
+  details: |
+    `google-ai` allows calling an LLM hosted in Google AI Studio (not to be confused
+    with LLMs hosted in GCP, aka Google Cloud Vertex AI - use `vertex-ai` for that).
+
+    To use this, you must set the API key (either `options.api_key` or `GOOGLE_API_KEY`).
+
+    You may also set `options.enterprise = true` (or
+    `GOOGLE_GENAI_USE_ENTERPRISE=true`, or `GOOGLE_GENAI_USE_VERTEXAI=true`) to make `google-ai`
+    become a passthrough to the `vertex-ai` backend (see `baml describe vertex-ai`),
+    just like Google's ADK.
+
+
+vertex-ai:
+  summary: "Uses models hosted on Google Cloud Vertex AI with Google Cloud authentication."
+  syntax: |
+    client<llm> GeminiOnVertex {
+      provider vertex-ai
+      options {
+        model "gemini-3.1-pro-preview"
+        project_id "my-gcp-project"
+        location "global"
+      }
+    }
+  details: |
+    `vertex-ai` allows calling an LLM hosted in GCP (aka Google Cloud Vertex AI).
+
+    To use this, you must set the project ID (either `options.project_id` or
+    `GOOGLE_CLOUD_PROJECT`) and the location (either `options.location` or
+    `GOOGLE_CLOUD_LOCATION`). Credentials will be loaded from Application Default Credentials (either `gcloud auth application-default login` or
+    via GCE metadata defaults), a file path in `credentials`, or inline JSON in
+    `credentials_content`.
+
+    If you want to use Google AI Studio for your LLM provider, see `baml
+    describe google-ai`.
+
+generator:
+  summary: "Configures code generation for a target language."
+  syntax: |
+    # baml.toml
+    [generator.python_client]
+    output_type = "python/pydantic"
+    output_dir = "."
+    naming_convention = "preserve-case"
+  details: |
+    Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `..`; BAML creates a `baml_sdk` directory inside it (`baml_client` for C#).
+
+    Accepted `output_type` values:
+
+    - `"python/pydantic"` — Python with Pydantic v2 models
+    - `"python/pydantic/v1"` — Python with Pydantic v1 models
+    - `"typescript/node"` — TypeScript for Node.js
+    - `"typescript/web"` — TypeScript for web/WASM
+    - `"swift"` — Swift
+    - `"go"` — Go
+    - `"rust"` — Rust
+    - `"java"` — Java
+    - `"cpp"` — C++17
+    - `"csharp"` — C#
+
+    `naming_convention` accepts `"preserve-case"` or `"language"`. Go requires `"language"` and also requires `sdk_import_path`.
+
+test:
+  summary: "Defines a named executable test using ordinary BAML expressions."
+  syntax: |
+    test "extracts a resume" {
+      let resume = ExtractResume("John Doe, Software Engineer")
+      assert.equal(resume.name, "John Doe")
+    }
+  details: |
+    A test is named with a string and its body can call functions, bind values, and make assertions directly. Pick a runner with an optional `with` clause: `test "name" with <runner> { ... }`.
+
+    Top-level tests have canonical IDs such as `root::extracts a resume`; tests declared in a namespace start with that namespace, such as `root.payments::refunds`. Tests inside a testset add each enclosing quoted name with `::`.
+
+    Run `baml test --list` to discover canonical IDs. `baml test -i <selector>` and `-x <selector>` match them; plain selectors are substring matches, while selectors containing `*` are anchored globs. Run `baml test --help` for selector and profile configuration.
+
+testset:
+  summary: "Groups related tests, optionally sharing setup, under a quoted name."
+  syntax: |
+    testset "math suite" {
+      let answer = 42
+      test "adds" {
+        assert.equal(answer, 42)
+      }
+      test "is positive" {
+        assert.is_true(answer > 0)
+      }
+    }
+  details: |
+    A testset is named with a string (`testset "name" { ... }`), not a bare identifier. Its body holds `let` setup bindings plus nested `test` (and further `testset`) blocks; setup bindings are visible to the nested tests. Pick a runner with an optional `with` clause: `testset "name" with <runner> { ... }`. This is unrelated to the old config-block style — there are no `functions`/`cases` keys.
+
+    Every leaf gets a canonical ID beginning with `root` (or `root.<namespace>`) and using `::` for testset nesting. For example, the first test above is `root::math suite::adds`. Run `baml test --list` to discover IDs and `baml test --help` for selectors and profiles.
+
+retry_policy:
+  summary: "Configures automatic retry behavior for LLM calls."
+  syntax: |
+    retry_policy MyPolicy {
+      max_retries 3
+      strategy {
+        type exponential_backoff
+      }
+    }
+
+type:
+  summary: "Creates a type alias, and declares associated type members inside interfaces."
+  syntax: |
+    type UserId = string
+    type Result = string | int
+    type MaybeInt = int?
+    interface Iterator {
+      type Item
+      type Error extends string = string
+    }
+    class IntIterator {
+      implements Iterator {
+        type Item = int
+      }
+    }
+  details: |
+    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`.
+
+void:
+  summary: "The return type of a function that produces no value."
+  syntax: |
+    function log_message(message: string) -> void {
+      log.info(message)
+    }
+
+never:
+  summary: "The bottom type of an expression that never returns normally."
+  syntax: |
+    function fail(message: string) -> never {
+      throw baml.errors.InvalidArgument { message: message }
+    }
+  details: |
+    `never` is also the empty throws-set: a function declared with `throws never` cannot return an ordinary error.
+
+unknown:
+  summary: "The top type for a value whose concrete type is not known statically."
+  syntax: |
+    function inspect(value: unknown) -> string {
+      return string.from(value)
+    }
+  details: |
+    Narrow an `unknown` value with pattern matching or an `is` test before using type-specific fields or methods.
+
+types:
+  summary: "Concept page for BAML type syntax, aliases, generic bounds, and associated type bindings."
+  syntax: |
+    type UserId = string
+    class Box<T extends Named> {
+      value: T
+    }
+    type NamedIterator = Iterator<Item = string>
+    type Item = (TextCursor as Iterator).Item
+  details: |
+    Use `type` for aliases, `T extends Bound` for generic bounds, `Interface<Assoc = Type>` to constrain an associated type in a type position, and `(Concrete as Interface).Assoc` when a concrete type implements multiple interface instantiations.
+
+generic:
+  summary: "Explains generic type parameters, bounds, and inference."
+  syntax: |
+    interface Slot<T> {
+      value: T
+    }
+
+    class Box<T extends Named> {
+      value: T
+    }
+
+    function first<I extends Iterator<Item = int>>(it: I) -> I.Item? {
+      return it.next()
+    }
+  details: |
+    Declare generic parameters with `<T>` on interfaces, classes, functions, and out-of-body `implements` blocks. Add bounds with `T extends Bound`; the bound can be an interface, a concrete type expression, a union, a function type, or an interface with associated type bindings such as `Iterator<Item = int>`. Function calls usually infer generic arguments from the arguments, so `first(iter)` is normally enough; explicit type arguments are only needed when inference cannot choose. BAML does not use `T: Bound` for generic bounds.
+
+generics:
+  summary: "Concept page for generic type parameters and bounds."
+  syntax: |
+    interface Slot<T> {
+      value: T
+    }
+
+    class Box<T extends Named> {
+      value: T
+    }
+
+    implements<T extends Named> Printable for Box<T> {
+      function display(self) -> string {
+        return self.value.name
+      }
+    }
+  details: |
+    Generics are declared where the parameter is introduced: `class Box<T>`, `interface Slot<T>`, `function get<T>(value: T) -> T`, and top-level `implements<T extends Bound> Interface for Wrapper<T> { ... }`. In an `implements<T>` block, the binder goes immediately after `implements`, before the interface target; each bound parameter must be used in the `for` type so the implementation can be matched. Use `T extends Interface<Assoc = Type>` for bounds with associated type constraints.
+
+bounds:
+  summary: "Explains type bounds written with `extends`."
+  syntax: |
+    class Box<T extends Named> {
+      value: T
+    }
+
+    class PairBox<T extends int | string> {
+      value: T
+    }
+
+    function read<I extends Iterator<Item = string>>(it: I) -> I.Item? {
+      return it.next()
+    }
+  details: |
+    A bound constrains what type arguments are allowed and exposes members from the bound inside the generic body. Use `requires` for interface-to-interface prerequisites; use `extends` for generic parameter bounds and associated type bounds.
+
+if:
+  summary: "Conditional branching — executes a block if the condition is true."
+  syntax: |
+    if x > 0 {
+      "positive"
+    } else if x == 0 {
+      "zero"
+    } else {
+      "negative"
+    }
+
+else:
+  summary: "The alternative branch of an `if` expression."
+  syntax: |
+    if condition {
+      // true branch
+    } else {
+      // false branch
+    }
+
+for:
+  summary: "Iterates over elements of an array."
+  syntax: |
+    for (let item in items) {
+      process(item)
+    }
+  details: |
+    The loop header is parenthesized and the binding is introduced with `let`: `for (let item in items) { ... }`. At top level, `for` is also used by out-of-body interface implementations: `implements Interface for Type { ... }`.
+
+while:
+  summary: "Repeats a block as long as the condition is true."
+  syntax: |
+    while count < 10 {
+      count = count + 1
+    }
+
+let:
+  summary: "Binds a value to a name. Use `let` for all variable declarations."
+  syntax: |
+    let name = "Alice"
+    let count = items.length()
+
+const:
+  summary: "Declares a compile-time constant binding."
+  syntax: |
+    const DEFAULT_LIMIT = 100
+
+in:
+  summary: "Used with `for` loops to iterate over a collection."
+  syntax: |
+    for (let item in [1, 2, 3]) {
+      item
+    }
+
+break:
+  summary: "Exits the innermost `for` or `while` loop immediately."
+  syntax: |
+    for (let item in items) {
+      if item == target {
+        break
+      }
+    }
+
+continue:
+  summary: "Skips the rest of the current loop iteration and continues with the next."
+  syntax: |
+    for (let item in items) {
+      if item.is_empty() {
+        continue
+      }
+      process(item)
+    }
+
+return:
+  summary: "Returns a value from the current function."
+  syntax: |
+    function add(a: int, b: int) -> int {
+      return a + b
+    }
+
+throw:
+  summary: "Raises an error value, unwinding to the nearest `catch`."
+  syntax: |
+    throw baml.errors.InvalidArgument {
+      message: "value must be positive"
+    }
+
+throws:
+  summary: "Declares that a function may raise an error of the given type."
+  syntax: |
+    function parse(text: string) -> int throws ParseError {
+      // ...
+    }
+
+catch:
+  summary: "Handles selected error types thrown by a preceding expression."
+  syntax: |
+    let result = risky_call() catch (e) {
+      errors.Timeout => default_value,
+      errors.NotFound => other_value,
+    }
+  details: |
+    `expr catch (e) { ErrorType => handler, ... }` binds the caught error to `e` and dispatches on its type. Only the listed error types are handled; any other error keeps propagating, so `catch` need not be exhaustive. Chain a `catch_all` to handle the rest.
+
+catch_all:
+  summary: "Handles every error type a preceding expression can throw (exhaustive over errors, not panics)."
+  syntax: |
+    let result = risky_call() catch_all (e) {
+      _ => fallback_value,
+    }
+  details: |
+    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` if a throw type is left unhandled. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
+
+catch_all_panics:
+  summary: "Handles every panic raised by a preceding expression."
+  syntax: |
+    let result = risky_call() catch_all_panics (panic) {
+      _ => fallback_value,
+    }
+  details: |
+    Use `catch_all` for ordinary declared errors. `catch_all_panics` is the explicit boundary for runtime panics.
+
+defer:
+  summary: "Schedules a block to run when the enclosing block exits, in LIFO order."
+  syntax: |
+    function process(path: string) -> string {
+      let handle = FileHandle { path: path }
+      defer {
+        handle.cleanup()
+      }
+      return handle.read()
+    }
+  details: |
+    `defer { ... }` registers a block that runs on every exit of the enclosing block — normal completion, `return`, `break`/`continue`, and error unwinding — so it is the standard way to release a resource exactly once on all paths. Several defers in the same scope run in LIFO order: the last one declared runs first. The body reads the live enclosing scope at exit; it is not a closure that captures values at the `defer` site. A `throw` inside the body is allowed, but a `return`/`break`/`continue` that would escape the body is rejected. See `baml describe cleanup` for the per-instance finalizer that `defer` commonly invokes.
+
+cleanup:
+  summary: "Magic finalizer method, recognized by name, that runs at most once per instance."
+  syntax: |
+    class FileHandle {
+      path: string
+
+      function cleanup(self) -> void {
+        // release the underlying resource here
+      }
+    }
+  details: |
+    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return, and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
+
+match:
+  summary: "Pattern matching — branches based on the shape or type of a value."
+  syntax: |
+    match (value) {
+      let x: string => handle_string(x),
+      let x: int    => handle_int(x),
+      _             => fallback,
+    }
+  details: |
+    The scrutinee is parenthesized: `match (value) { ... }`. Each arm is `pattern => expr`. Patterns include literals (`0`, `"ok"`), a binding with a type (`let x: int`) which both matches and narrows, the wildcard `_`, and optional guards (`let n: int if n > 0 => ...`). Use `let x: T => ...`, not `x is T => ...`, for type-based arms. Arms must be exhaustive, and a `_` arm is only allowed when earlier arms leave something uncovered.
+
+is:
+  summary: "Tests whether a value matches a type or pattern."
+  syntax: |
+    if x is string {
+      // x is narrowed to string here
+    }
+
+as:
+  summary: "Projects a value or type through an interface, and maps interface fields to class fields."
+  syntax: |
+    // Field mapping inside an implements block.
+    interface HasId {
+      type Id
+      id: Id
+    }
+
+    class User {
+      implements HasId {
+        type Id = string
+        id as user_id
+      }
+      full_name: string
+      user_id: string
+    }
+
+    function label(user: User) -> string {
+      return user.as<HasId>.id
+    }
+
+    // Associated type projection in a type position.
+    type UserId = (User as HasId).Id
+  details: |
+    Use `value.as<Interface>` when a class implements multiple interfaces with the same member name or when you need the interface view. Use `(Type as Interface).Assoc` for qualified associated type projection in a type position; do not write `Type.as<Interface>` as a type. Inside an `implements` block, `interface_field as class_field` maps an interface field to a differently named class field.
+
+projection:
+  summary: "Explains interface value projections and associated type projections."
+  syntax: |
+    function label(user: User) -> string {
+      return user.as<Named>.name
+    }
+
+    function head<S extends Stream>(stream: S) -> (S as Iterator).Item? {
+      return stream.next()
+    }
+
+    type Parsed = (IntParser as Parser).Output
+  details: |
+    `value.as<Interface>` selects an interface view for member access. `T.Assoc`, `Self.Assoc`, and `(T as Interface).Assoc` project associated types in type positions; use the qualified `(T as Interface).Assoc` form when multiple required interfaces define the same associated type name. `Type.as<Interface>` is not type syntax.
+
+requires:
+  summary: "Declares that an interface depends on other interfaces."
+  syntax: |
+    interface Named {
+      name: string
+    }
+    interface Aged {
+      age: int
+    }
+    interface HasKey {
+      type Key
+      key: Self.Key
+    }
+    interface Person requires Named, Aged, HasKey<Key = string> {
+      function introduce(self) -> string
+    }
+  details: |
+    `requires` is interface composition, not inheritance. Required interfaces may include associated type bindings, as in `requires HasKey<Key = string>`. Implementors of a required interface must also implement the required parent interfaces; cycles are rejected. Use `requires`, not `extends`, between interfaces.
+
+implements:
+  summary: "Declares that a class or type implements an interface contract."
+  syntax: |
+    class Dog {
+      name: string
+      implements Named {}
+    }
+
+    implements<T extends Named> Printable for Box<T> {
+      function display(self) -> string {
+        return self.value.name
+      }
+    }
+  details: |
+    A class-body `implements I { ... }` block can map fields with `field as class_field`, bind associated types with `type Name = Concrete`, and define required or override methods. A top-level `implements I for T { ... }` block adds an out-of-body implementation. For blanket implementations, declare the implementation's own type parameters immediately after `implements`, as in `implements<T extends Named> Printable for Box<T> { ... }`; those parameters must appear in the `for` type. Associated type bindings are not allowed in the `implements` target itself; write `implements Iterator { type Item = int }`, not `implements Iterator<Item = int>`.
+
+blanket:
+  summary: "Explains generic out-of-body implementations such as `implements<T> I for Box<T>`."
+  syntax: |
+    interface Named {
+      name: string
+    }
+
+    interface Printable {
+      function print(self) -> string
+    }
+
+    class Box<T> {
+      value: T
+    }
+
+    implements<T extends Named> Printable for Box<T> {
+      function print(self) -> string {
+        return self.value.name
+      }
+    }
+  details: |
+    A blanket implementation is a generic `implements` rule that applies to every type matching the `for` target and bounds. The binder goes immediately after `implements`, before the interface target: `implements<T extends Bound> Interface for Wrapper<T> { ... }`. Each implementation generic parameter must appear in the `for` type, and associated type bindings go inside the block with `type Name = ...`.
+
+blanket_impl:
+  summary: "Alias topic for blanket implementations."
+  syntax: |
+    implements<T extends Named> Printable for Box<T> {
+      function print(self) -> string {
+        return self.value.name
+      }
+    }
+  details: |
+    See `baml describe blanket`.
+
+blanket-impl:
+  summary: "Alias topic for blanket implementations."
+  syntax: |
+    implements<T extends Named> Printable for Box<T> {
+      function print(self) -> string {
+        return self.value.name
+      }
+    }
+  details: |
+    See `baml describe blanket`.
+
+implement:
+  summary: "Accepted singular spelling of `implements`; prefer `implements`."
+  syntax: |
+    interface Label {
+      function label(self) -> string
+    }
+
+    implement Label for int {
+      function label(self) -> string {
+        return "${self}"
+      }
+    }
+  details: |
+    The formatter prints the canonical spelling as `implements`.
+
+impl:
+  summary: "Rust-style shorthand is not BAML syntax; use `implements`."
+  syntax: |
+    implements Label for int {
+      function label(self) -> string {
+        return "${self}"
+      }
+    }
+  details: |
+    BAML accepts `implements` and the singular `implement`; it does not use `impl`.
+
+associated:
+  summary: "Explains associated types on interfaces."
+  syntax: |
+    interface Parser {
+      type Output
+      function parse(self, input: string) -> Self.Output
+    }
+
+    class IntParser {
+      implements Parser {
+        type Output = int
+        function parse(self, input: string) -> Self.Output {
+          return 42
+        }
+      }
+    }
+
+    function parse_one<P extends Parser>(parser: P) -> P.Output {
+      return parser.parse("42")
+    }
+  details: |
+    Associated types are declared inside interfaces with `type Name`, optionally with `extends Bound` and/or `= Default`. Implementors bind them inside `implements` blocks with `type Name = Concrete`. In type positions, use `Interface<Name = Type>` to require a binding, `T.Name` or `Self.Name` to project from a bound type, and `(T as Interface).Name` to disambiguate when multiple required interfaces define the same associated type. Generic bounds use `T extends Interface<Name = Type>`, not `T: Interface<Name = Type>`.
+
+associated_type:
+  summary: "Alias topic for associated types."
+  syntax: |
+    interface Iterator {
+      type Item
+    }
+    type Item = (IntIterator as Iterator).Item
+  details: |
+    See `baml describe associated` for the full associated type guide.
+
+associated-type:
+  summary: "Alias topic for associated types."
+  syntax: |
+    interface Iterator {
+      type Item
+    }
+    type Item = (IntIterator as Iterator).Item
+  details: |
+    See `baml describe associated` for the full associated type guide.
+
+associated_types:
+  summary: "Alias topic for associated types."
+  syntax: |
+    interface Iterator {
+      type Item
+    }
+    type Item = (IntIterator as Iterator).Item
+  details: |
+    See `baml describe associated` for the full associated type guide.
+
+associated-types:
+  summary: "Alias topic for associated types."
+  syntax: |
+    interface Iterator {
+      type Item
+    }
+    type Item = (IntIterator as Iterator).Item
+  details: |
+    See `baml describe associated` for the full associated type guide.
+
+extends:
+  summary: "Adds a type bound; it is not interface inheritance."
+  syntax: |
+    class Box<T extends Named> {
+      value: T
+    }
+
+    function take<I extends Iterator<Item = int>>(it: I) -> I.Item? {
+      return it.next()
+    }
+
+    interface Graph {
+      type Edge extends Named
+    }
+  details: |
+    Use `extends` in generic parameter bounds and associated type bounds. Do not write `interface Child extends Parent`; interfaces compose with `requires`.
+
+Self:
+  summary: "The implementing receiver type inside interface methods and associated type projections."
+  syntax: |
+    interface Iterator {
+      type Item
+      function next(self) -> Self.Item?
+    }
+  details: |
+    `Self.Item` projects an associated type from the concrete implementor or the current interface-bound receiver. Use `(T as Interface).Item` when the projection would otherwise be ambiguous.
+
+self:
+  summary: "The receiver parameter for instance methods."
+  syntax: |
+    interface Greeter {
+      function greet(self) -> string
+    }
+
+    class Person {
+      name: string
+      implements Greeter {
+        function greet(self) -> string {
+          return self.name
+        }
+      }
+    }
+  details: |
+    `self` is the value receiver in class and interface methods. Use capital `Self` only in type positions, such as `Self.Item` for an associated type projection.
+
+default:
+  summary: "Calls an interface default method body from inside an `implements` override."
+  syntax: |
+    interface Greeter {
+      function greet(self) -> string {
+        return "hello"
+      }
+    }
+
+    class LoudGreeter {
+      implements Greeter {
+        function greet(self) -> string {
+          return default.greet().to_upper_case()
+        }
+      }
+    }
+  details: |
+    `default.method(...)` is only meaningful inside an `implements` block. It deliberately invokes the interface's default implementation instead of the class override.
+
+check:
+  summary: "Explains how to ask the CLI to validate a project."
+  syntax: |
+    baml check --project .
+    baml run --list --project .
+  details: |
+    `baml check` compiles the project and reports compiler errors without running anything — the most direct way to validate. Other commands (`baml run`, `baml run --list`, `baml fmt`, `baml test`) also load and check the project before their main work. Use `baml run --list` when you additionally want the compiled function signatures.
+
+playground:
+  summary: "Serves the BAML playground web UI for a project and opens it in a browser."
+  syntax: |
+    baml playground                      # current project, first free port from 4265
+    baml playground --project ./my-app   # explicit project directory
+    baml playground --file ./one.baml    # standalone single file
+    baml playground --port 4265          # pin the port (errors if taken)
+    baml playground --no-open            # don't launch a browser (automatic in SSH/headless sessions)
+  details: |
+    `baml playground` starts a loopback-only web server hosting the playground UI
+    and an LSP backend for the loaded project. It binds the first free port from
+    4265 (scanning up to 4364) unless `--port` pins one, prints the URL to stdout,
+    and opens a browser unless `--no-open` is set or the session is headless
+    (SSH, or no display on Linux).
+
+    On a remote machine, forward the port and open the printed URL locally:
+
+      ssh -L 4265:localhost:4265 user@host
+
+    See also: `baml describe check`.
+
+spawn:
+  summary: "Launches a concurrent task that runs in the background."
+  syntax: |
+    let future = spawn {
+      expensive_computation()
+    }
+    let result = await future
+
+await:
+  summary: "Waits for a spawned future to complete and returns its result."
+  syntax: |
+    let future = spawn { compute() }
+    let result = await future
+
+with:
+  summary: "Optional clause that attaches a runner to a test/testset or options to a spawn."
+  syntax: |
+    test "uses a quorum runner" with testing.Quorum(5, 3) {
+      assert.is_true(true)
+    }
+
+    testset "suite" with my_runner {
+      test "case" { assert.is_true(true) }
+    }
+
+    let task = spawn with baml.spawn.options(group = g) {
+      do_work()
+    }
+  details: |
+    `with` is a contextual keyword, not a general operator — it is only special right after a `test`/`testset` name (selecting the test runner expression) or after `spawn` (passing `baml.spawn.options(...)`). Everywhere else `with` is an ordinary identifier and may be used as a variable or field name.
+
+# ── Cross-language SDKs (baml generate) ──────────────────────────────────────
+
+baml_sdk:
+  summary: "Call your BAML functions from another language via a generated SDK."
+  syntax: |
+    # 1. declare a generator in baml.toml
+    [generator.app]
+    output_type = "python/pydantic"   # python/pydantic | python/pydantic/v1 | typescript/node
+    output_dir  = "../app"
+    naming_convention = "preserve-case"   # preserve-case | language
+
+    # 2. generate the typed client
+    baml generate
+  details: |
+    `baml generate` reads every [generator.<name>] section in baml.toml and emits
+    a typed `baml_sdk` package into each output_dir. Install the runtime for your
+    language, import the generated package, and call your functions with native
+    types. Per-language install + usage:
+
+      baml describe python
+      baml describe typescript
+
+python:
+  summary: "Use BAML from Python via a generated Pydantic v2 SDK."
+  syntax: |
+    pip install baml_bridge                  # the runtime (Python 3.10+)
+
+    # baml.toml — declare a generator:
+    [generator.app]
+    output_type = "python/pydantic"        # or "python/pydantic/v1"
+    output_dir  = "../app"
+    naming_convention = "preserve-case"
+
+    baml generate                          # emits the `baml_sdk` package into output_dir
+  details: |
+    You install `baml_bridge` (the runtime); you import `baml_sdk` (the generated
+    code). Functions become top-level Python functions; classes/enums become
+    Pydantic models:
+
+      import baml_sdk                       # initializes the BAML runtime
+      from baml_sdk import ClassifyTicket
+      ticket = ClassifyTicket("login is broken")   # typed in, typed Pydantic out
+
+    See also: `baml describe baml_sdk`, `baml describe typescript`.
+
+typescript:
+  summary: "Use BAML from TypeScript / Node.js via a generated SDK."
+  syntax: |
+    npm install @boundaryml/baml-bridge   # the runtime
+
+    # baml.toml — declare a generator:
+    [generator.app]
+    output_type = "typescript/node"
+    output_dir  = "../app"
+    naming_convention = "preserve-case"
+
+    baml generate                            # emits the `baml_sdk` package into output_dir
+  details: |
+    Import the generated package (its index initializes the runtime), then call
+    the exported functions with native TypeScript types (LLM calls are async):
+
+      import "./app/baml_sdk/index.js";
+      import { ClassifyTicket } from "./app/baml_sdk/index.js";
+      const ticket = await ClassifyTicket("login is broken");
+
+    See also: `baml describe baml_sdk`, `baml describe python`.
+
+# ── Pattern matching (alias topics for `match`) ──────────────────────────────
+
+patterns:
+  summary: "Where patterns appear: match arms, the `is` operator, and `if let`."
+  syntax: |
+    // match — over values and/or types; first matching arm wins, must be exhaustive
+    match (v) {
+      0 => "zero",                          // literal value, no binding
+      1 | 2 | 3 => "small",                 // or-pattern
+      let n: int if n < 0 => "neg",         // typed binding + guard
+      Rect { w: let w, h: let h } => w * h, // class destructure, bind fields
+      [let first, ..] => first,             // array: head + rest
+      let c: Circle => c.r,                 // typed binding (matches + narrows)
+      _ => "other",                         // wildcard
+    }
+
+    // is — returns bool and narrows inside the branch
+    if (v is Circle) { /* v is Circle here */ }
+
+    // if let — bind one pattern, else fall through
+    if let r: Rect = v { r.w } else if let c: Circle = v { c.r } else { 0 }
+  details: |
+    Pattern forms: literals (`0`, `"ok"`); `let x` (bind), `let x: T` (bind +
+    narrow), `_` (wildcard); class destructure `T { field: <pattern> }`; array
+    `[a, ..]` / `[.., z]`; or-patterns `A | B` (bindings must line up); guards
+    `<pattern> if cond`. `match` must be exhaustive — a `_` arm is allowed only
+    when earlier arms leave a gap. Same topic: `baml describe match`.
+
+pattern:
+  summary: "Pattern matching — see `baml describe patterns` (or `match`)."
+  syntax: |
+    match (v) { let x: T => ..., A { f: let y } => y, _ => ... }
+    if (v is T) { ... }
+    if let x: T = v { ... } else { ... }
+  details: |
+    Full guide: `baml describe patterns`. Match-arm reference: `baml describe match`.

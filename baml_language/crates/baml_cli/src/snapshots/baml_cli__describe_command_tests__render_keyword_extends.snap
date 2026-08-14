@@ -1,0 +1,20 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+extends — Adds a type bound; it is not interface inheritance.
+
+Syntax:
+  class Box<T extends Named> {
+    value: T
+  }
+  
+  function take<I extends Iterator<Item = int>>(it: I) -> I.Item? {
+    return it.next()
+  }
+  
+  interface Graph {
+    type Edge extends Named
+  }
+
+Use `extends` in generic parameter bounds and associated type bounds. Do not write `interface Child extends Parent`; interfaces compose with `requires`.

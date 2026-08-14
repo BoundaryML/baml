@@ -11,6 +11,7 @@ crate-type = [ "cdylib", "rlib" ]
 # Rust unit/doc tests cannot run — the test binary references Python C API
 # symbols at startup (via #[pyclass]) and there's no libpython to load.
 # All testing is done via `uv run pytest tests/`.
+doc = false
 test = false
 doctest = false
 
@@ -19,14 +20,18 @@ default = [ "bundle-http", "aws-crypto" ]
 bundle-http = [ "bridge_cffi/bundle-http" ]
 aws-crypto = [ "bundle-http", "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
 ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
-extension-module = [ "pyo3/extension-module" ]
+# Do not add a Cargo `extension-module` feature here. PyO3 0.28 expects
+# maturin to set PYO3_BUILD_EXTENSION_MODULE only while packaging; making it a
+# normal feature lets `cargo test --all-features` disable libpython linking.
 
 [dependencies]
+baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
+indexmap = { workspace = true }
 log = { workspace = true }
 prost = { workspace = true }
 pyo3 = { workspace = true, features = [ "abi3-py310", "indexmap", "multiple-pymethods" ] }

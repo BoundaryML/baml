@@ -1,0 +1,6 @@
+---
+source: sdk_tests/harness/llm_recordings/tests/recordings.rs
+expression: bytes.clone()
+extension: sse
+snapshot_kind: binary
+---

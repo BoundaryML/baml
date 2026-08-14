@@ -5,20 +5,14 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
-function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
-}
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
-}
 type user.SimpleAlias = string
 type user.ClassAlias = user.Inner
 type user.UnionAlias = int | user.Inner
-type user.OptionalAlias = user.Inner?
+type user.OptionalAlias = user.Inner | null
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 type user.SimpleAlias$stream = string
 type user.ClassAlias$stream = user.Inner$stream
 type user.UnionAlias$stream = int | user.Inner$stream
-type user.OptionalAlias$stream = null | user.Inner$stream
+type user.OptionalAlias$stream = user.Inner$stream | null

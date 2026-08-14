@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.AliasBounded {
+  value: T
+}
+class user.AliasBounded$stream {
+  value: T | null
+}
+type user.TagAlias = Tagged
+type user.TagAlias$stream = Tagged
+type user.TagChain = user.TagAlias
+type user.TagChain$stream = user.TagAlias$stream
+type user.TagPinned = Tagged<Label = int>
+type user.TagPinned$stream = Tagged<Label = int>
+function user.bare_alias_bound(t: T, v: unknown) -> bool  [expr] {
+  {  } v is T.Label
+}
+function user.chained_alias_bound(t: T) -> int  [expr] {
+  {  } 0
+}
+function user.id(self: ?) -> int  [missing]
+function user.pinning_alias_bound(t: T) -> int  [expr] {
+  {  } 0
+}

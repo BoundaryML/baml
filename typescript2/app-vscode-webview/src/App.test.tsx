@@ -12,10 +12,11 @@ describe('App', () => {
       await screen.findByText(/Select a function to run|Connecting to playground server/);
     });
 
-    it('shows functions area (empty or list)', async () => {
+    it('shows the sidebar sections and empty editor state', async () => {
       render(<App />);
 
-      expect(await screen.findByText('No functions yet')).toBeInTheDocument();
+      expect(await screen.findByText('Functions')).toBeInTheDocument();
+      expect(screen.getByText('Tests')).toBeInTheDocument();
       expect(screen.getByText('Select a function to run')).toBeInTheDocument();
     });
 

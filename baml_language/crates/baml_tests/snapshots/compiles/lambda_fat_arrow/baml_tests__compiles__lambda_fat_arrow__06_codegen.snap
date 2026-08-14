@@ -1,16 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14020
 ---
 function user.test_annotated() -> int {
     load_const 21
     make_closure .<lambda(test_annotated, 0)>, 0
-    call_indirect
-    return
-}
-
-function user.test_generic() -> int {
-    load_const 42
-    make_closure .<lambda(test_generic, 0)>, 0
     call_indirect
     return
 }
@@ -50,10 +44,8 @@ function user.test_mixed() -> int {
     load_const 0
     make_closure .<lambda(test_mixed, 1)>, 0
     call_indirect
-    store_var _5
     load_var _3
-    load_var _5
-    bin_op +
+    add_int
     return
 }
 
@@ -62,6 +54,13 @@ function user.test_multi_param() -> int {
     load_const 22
     make_closure .<lambda(test_multi_param, 0)>, 0
     call_indirect
+    return
+}
+
+function user.test_top_level_fat_arrow(x: int) -> int {
+    load_var x
+    load_const 1
+    add_int
     return
 }
 

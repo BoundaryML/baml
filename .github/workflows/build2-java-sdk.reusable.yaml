@@ -1,0 +1,270 @@
+name: BAML SDK Release - Build Java
+
+# Builds the `com.boundaryml:baml-bridge` Maven artifact family, one native jar
+# per target plus the platform-neutral main/sources/javadoc jars. Mirrors the
+# family contract used by the python + bridge_cffi reusable workflows:
+#
+#   - inputs are the frozen release plan (`release_plan_json`) + the exact
+#     commit (`source_sha`); the bare `version` input is gone. The Maven version
+#     is the plan's `registry_versions.maven` (currently an identity encoding:
+#     canary → `0.15.0`, nightly → `0.15.0-nightly.YYYYMMDD.a`), injected via
+#     `-PbamlVersion`.
+#   - the 8-target build matrix is generated from the repository platform
+#     contract (`release/platforms.json`) `java` artifact key, not a hand-copied
+#     list. Experimental targets (musl, windows-arm64) carry `experimental: true`
+#     there, which drives `continue-on-error` so they never block the release.
+#
+# Per target the cdylib is built NATIVELY (each target's `runner` is native-arch,
+# like the toolchain matrix), so `cargo build --target <triple>` needs no cross C
+# toolchain except musl, which builds inside `cross` containers (like
+# build2-bridge-cffi — the container carries the full musl toolchain). `bridge_java` is the JVM
+# analog of `bridge_cffi`: it loads into the user's JVM, so it is built
+# `--profile release-bridge-java` (`panic = "unwind"`) — an engine panic must
+# unwind into the bridge's `catch_unwind` -> `BamlPanic` boundary, not SIGABRT
+# the JVM. The built cdylib is packaged into a `natives-<platform>` classifier
+# jar by the `baml_bridge` Gradle project (`nativeJar` task,
+# `-PbamlNativePlatform`/`-PbamlNativeLib`); see sdks/java/baml_bridge/PUBLISHING.md.
+#
+# musl note: the runtime `NativeLibraryLoader` resolves only the bare
+# `<os>-<arch>` token, so musl jars carry a distinct `<os>-<arch>-musl`
+# classifier (they can't share the gnu classifier) and are experimental until a
+# real musl (Alpine) dlopen smoke proves a consumer loads them; they publish for
+# explicit-classifier consumers meanwhile.
+#
+# The publish step is a separate job (`publish-maven` in release-baml-language.yml)
+# so the Central Portal credentials + signing key stay in the top-level workflow
+# identity, matching how PyPI/npm/crates.io publishing lives there.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        default: ""
+        required: false
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        default: ""
+        required: false
+  # Manual standalone trigger for validating this reusable workflow before it is
+  # wired into the release graph (with no inputs it builds a canary-stamped set).
+  workflow_dispatch:
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-java-sdk
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The java build matrix is generated from the platform contract
+  # (`release/platforms.json`) so the target set + per-target runner live in one
+  # machine-readable place. `libc` rides along so the musl setup step can key on
+  # it; `experimental` is emitted only when true (drives continue-on-error).
+  matrix:
+    name: Compute target matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      include: ${{ steps.gen.outputs.include }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Generate the java build matrix from the platform contract
+        id: gen
+        run: |
+          set -euo pipefail
+          # One entry per target whose `java` artifact is present. Each entry is
+          # the fields the build job reads: target + runner (as `os`) + the
+          # `<os>-<arch>` classifier `platform` + `libc` (for the musl setup) +
+          # the true-valued `experimental` flag.
+          include="$(jq -c '[.targets[]
+            | select(.artifacts.java != null)
+            | .artifacts.java as $j
+            | {target: .triple, os: $j.runner, platform: $j.platform, libc: .libc}
+              + ({experimental: $j.experimental} | with_entries(select(.value == true)))]' release/platforms.json)"
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+          jq . <<<"$include"
+
+  build-natives:
+    name: ${{ matrix._.platform }}
+    needs: matrix
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        _: ${{ fromJson(needs.matrix.outputs.include) }}
+    runs-on: ${{ matrix._.os }}
+    # Experimental targets are built when possible but never block the release.
+    continue-on-error: ${{ matrix._.experimental || false }}
+    env:
+      # Let aws-lc-sys use its prebuilt NASM objects on Windows x86-64 if the
+      # runner has no NASM installed (consulted only there; harmless elsewhere).
+      AWS_LC_SYS_PREBUILT_NASM: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
+            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          else
+            scripts/baml-language-version plan --channel canary --out release-plan.json
+          fi
+          scripts/baml-language-version stamp --plan release-plan.json
+
+      # mise supplies the JDK (temurin) + gradle for the nativeJar packaging.
+      - name: Setup mise (JDK + gradle)
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: java gradle
+
+      # setup-rust supplies the pinned toolchain + this target's std. No cross:
+      # the runner is native-arch, so a plain `cargo build --target` links with
+      # the host cc (plus musl-gcc below for musl). protoc is skipped —
+      # bridge_ctypes vendors it.
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix._.target }}
+          workspace: baml_language
+          prefix-key: v5-rust-baml-java-${{ matrix._.target }}
+          cache-on-failure: true
+          enable-cross: false
+          skip-protoc: true
+
+      - name: Install cross (musl targets)
+        # musl builds run inside `cross` containers (mirroring
+        # build2-bridge-cffi): the container image carries the full musl
+        # toolchain, so the JNI cdylib links against musl libc cleanly —
+        # the native-runner musl-cross toolchain lacks libgcc_s.so.1 for
+        # the cdylib link (rehearsal run 29862339596). `Cross.toml` at the
+        # workspace root forwards RUSTFLAGS into the container.
+        if: ${{ matrix._.libc == 'musl' }}
+        run: |
+          set -euo pipefail
+          cargo install cross --locked --version 0.2.5
+          echo 'CARGO=cross' >> "$GITHUB_ENV"
+
+      - name: Build bridge_java cdylib
+        working-directory: baml_language
+        env:
+          TARGET: ${{ matrix._.target }}
+        run: |
+          set -euo pipefail
+          # `bridge_java` is `crate-type = ["cdylib"]`; the cdylib is the release
+          # artifact. `release-bridge-java` = release + panic = "unwind".
+          #
+          # musl targets default to `+crt-static`, and rustc cannot emit a cdylib
+          # under a static CRT — it silently drops the crate type. Disable
+          # `crt-static` so the build yields a real musl `.so`. Scoped to musl so
+          # the other targets keep their `.cargo/config.toml` rustflags (the
+          # Windows `/STACK` link-arg), which a blanket RUSTFLAGS would clobber.
+          if [[ "$TARGET" == *-musl ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
+          fi
+          "${CARGO:-cargo}" build -p bridge_java --profile release-bridge-java --target "$TARGET"
+
+      - name: Package natives-<platform> jar
+        working-directory: baml_language/sdks/java/baml_bridge
+        env:
+          BAML_TARGET: ${{ matrix._.target }}
+          BAML_NATIVE_PLATFORM: ${{ matrix._.platform }}
+        run: |
+          set -euo pipefail
+          # Paths are relative to this working directory
+          # (baml_language/sdks/java/baml_bridge): the release plan is 4 levels up
+          # at the repo root, the target dir 3 levels up. Relative paths keep the
+          # step portable to the Windows (Git Bash) runners, where a
+          # $GITHUB_WORKSPACE absolute path (D:\a\...) confuses bash path tests.
+          version="$(jq -r .registry_versions.maven ../../../../release-plan.json)"
+          case "$BAML_TARGET" in
+            *windows*) libfile="bridge_java.dll" ;;
+            *apple*)   libfile="libbridge_java.dylib" ;;
+            *)         libfile="libbridge_java.so" ;;
+          esac
+          native_lib="../../../target/${BAML_TARGET}/release-bridge-java/${libfile}"
+          if [[ ! -f "$native_lib" ]]; then
+            echo "::error::expected cdylib ${native_lib} not found"
+            ls -la "../../../target/${BAML_TARGET}/release-bridge-java" || true
+            exit 1
+          fi
+          gradle --no-daemon nativeJar \
+            -PbamlVersion="$version" \
+            -PbamlNativePlatform="$BAML_NATIVE_PLATFORM" \
+            -PbamlNativeLib="$native_lib"
+          ls -la build/libs
+
+      - name: Upload natives jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-sdk-natives-${{ matrix._.platform }}
+          path: baml_language/sdks/java/baml_bridge/build/libs/*natives*.jar
+          if-no-files-found: error
+
+  build-main:
+    name: main + sources + javadoc
+    needs: matrix
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
+            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          else
+            scripts/baml-language-version plan --channel canary --out release-plan.json
+          fi
+          scripts/baml-language-version stamp --plan release-plan.json
+
+      - name: Setup mise (JDK + gradle)
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: java gradle
+
+      - name: Build + test main/sources/javadoc jars
+        working-directory: baml_language/sdks/java/baml_bridge
+        run: |
+          set -euo pipefail
+          # Release plan is 4 levels up at the repo root (relative path — this job
+          # is linux-only, but keep it consistent with the natives step).
+          version="$(jq -r .registry_versions.maven ../../../../release-plan.json)"
+          # `build` runs the pure-Java tests (the native smoke self-skips via
+          # JUnit assumeTrue when no cdylib is present); sourcesJar/javadocJar are
+          # named explicitly so the release always carries the two Central-
+          # required jars regardless of the `assemble` wiring.
+          gradle --no-daemon build sourcesJar javadocJar \
+            -PbamlVersion="$version"
+          ls -la build/libs
+
+      - name: Upload main/sources/javadoc jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-sdk-main
+          path: |
+            baml_language/sdks/java/baml_bridge/build/libs/baml-bridge*.jar
+          if-no-files-found: error

@@ -1,38 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7713
 ---
-function user.Box.from_json(j: baml.json.json) -> Box<void> {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type #0
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_type #0
-    alloc_instance<1> user.Box
-    load_var _2
-    init_field .value
-    return
-}
-
-function user.Box.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .value
-    call baml.json.to_json
-    load_const "value"
-    alloc_map 1
-    return
-}
-
-function user.Box.unwrap(self: null) -> void {
+function user.Box.unwrap(self: Box<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function user.Calculator.compute(self: null, a: int, b: int) -> int {
+function user.Calculator.compute(self: Calculator, a: int, b: int) -> int {
     load_var self
     load_field .op
     load_const "add"
@@ -41,86 +17,21 @@ function user.Calculator.compute(self: null, a: int, b: int) -> int {
     jump L1
 
   L0:
-    load_var a
-    load_var b
+    load_var2 2 3
     mul_int
     jump L2
 
   L1:
-    load_var a
-    load_var b
+    load_var2 2 3
     add_int
 
   L2:
     return
 }
 
-function user.Calculator.from_json(j: baml.json.json) -> Calculator {
-    load_var j
-    load_const "op"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Calculator
-    load_var _2
-    init_field .op
-    return
-}
-
-function user.Calculator.to_json(self: null) -> baml.json.json {
+function user.Counter.increment(self: Counter) -> int {
     load_var self
-    load_field .op
-    call baml.String.to_json
-    load_const "op"
-    alloc_map 1
-    return
-}
-
-function user.Config.from_json(j: baml.json.json) -> Config {
-    load_var j
-    load_const "encoder"
-    call baml.json.field
-    store_var _3
-    load_type Encoder
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Config
-    load_var _2
-    init_field .encoder
-    return
-}
-
-function user.Config.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .encoder
-    call user.Encoder.to_json
-    load_const "encoder"
-    alloc_map 1
-    return
-}
-
-function user.Counter.from_json(j: baml.json.json) -> Counter {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Counter
-    load_var _2
-    init_field .value
-    return
-}
-
-function user.Counter.increment(self: null) -> int {
-    load_var self
-    load_var self
+    copy 0
     load_field .value
     load_const 1
     bin_op +
@@ -130,41 +41,7 @@ function user.Counter.increment(self: null) -> int {
     return
 }
 
-function user.Counter.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .value
-    call baml.Int.to_json
-    load_const "value"
-    alloc_map 1
-    return
-}
-
-function user.Employee.from_json(j: baml.json.json) -> Employee {
-    load_var j
-    load_const "first"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "last"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.Employee
-    load_var _2
-    init_field .first
-    load_var _5
-    init_field .last
-    return
-}
-
-function user.Employee.full_name(self: null) -> string {
+function user.Employee.full_name(self: Employee) -> string {
     load_var self
     load_field .first
     load_const " "
@@ -175,7 +52,7 @@ function user.Employee.full_name(self: null) -> string {
     return
 }
 
-function user.Employee.greet(self: null, greeting: string) -> string {
+function user.Employee.greet(self: Employee, greeting: string) -> string {
     load_var greeting
     load_const ", "
     bin_op +
@@ -185,24 +62,7 @@ function user.Employee.greet(self: null, greeting: string) -> string {
     return
 }
 
-function user.Employee.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .first
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .last
-    call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "first"
-    load_const "last"
-    alloc_map 2
-    return
-}
-
-function user.Encoder.encode(self: null, data: string) -> string {
+function user.Encoder.encode(self: Encoder, data: string) -> string {
     load_const "["
     load_var self
     load_field .charset
@@ -214,31 +74,7 @@ function user.Encoder.encode(self: null, data: string) -> string {
     return
 }
 
-function user.Encoder.from_json(j: baml.json.json) -> Encoder {
-    load_var j
-    load_const "charset"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Encoder
-    load_var _2
-    init_field .charset
-    return
-}
-
-function user.Encoder.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .charset
-    call baml.String.to_json
-    load_const "charset"
-    alloc_map 1
-    return
-}
-
-function user.Formatter.format(self: null, text: string) -> string {
+function user.Formatter.format(self: Formatter, text: string) -> string {
     load_var self
     load_field .prefix
     load_var text
@@ -246,64 +82,13 @@ function user.Formatter.format(self: null, text: string) -> string {
     return
 }
 
-function user.Formatter.from_json(j: baml.json.json) -> Formatter {
-    load_var j
-    load_const "prefix"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Formatter
-    load_var _2
-    init_field .prefix
-    return
-}
-
-function user.Formatter.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .prefix
-    call baml.String.to_json
-    load_const "prefix"
-    alloc_map 1
-    return
-}
-
-function user.RangeCheck.from_json(j: baml.json.json) -> RangeCheck {
-    load_var j
-    load_const "min"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "max"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.RangeCheck
-    load_var _2
-    init_field .min
-    load_var _5
-    init_field .max
-    return
-}
-
-function user.RangeCheck.is_valid(self: null, n: int) -> bool {
-    load_var n
-    load_var self
+function user.RangeCheck.is_valid(self: RangeCheck, n: int) -> bool {
+    load_var2 2 1
     load_field .min
-    cmp_op >=
+    cmp_int_op >=
     jump_if_false L0
     pop 1
-    load_var n
-    load_var self
+    load_var2 2 1
     load_field .max
     cmp_int_op <=
 
@@ -311,34 +96,18 @@ function user.RangeCheck.is_valid(self: null, n: int) -> bool {
     return
 }
 
-function user.RangeCheck.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .min
-    call baml.Int.to_json
-    store_var _2
-    load_var self
-    load_field .max
-    call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "min"
-    load_const "max"
-    alloc_map 2
-    return
-}
-
 function user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
-    load_var a
-    load_var b
+    load_var2 2 3
     load_var f
     call_indirect
     return
 }
 
 function user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
-    load_var items
-    load_var f
+    load_type Employee
+    load_type string
+    load_type unknown
+    load_var2 1 2
     call baml.Array.map
     return
 }
@@ -347,11 +116,9 @@ function user.test_bound_in_lambda() -> string {
     load_var ?1
     make_cell
     store_var ?1
-    alloc_instance user.Employee
     load_const "Alice"
-    init_field .first
     load_const "Smith"
-    init_field .last
+    init_instance user.Employee .first, .last
     store_deref ?1
     load_var emp
     make_closure .<lambda(test_bound_in_lambda, 0)>, 1
@@ -364,28 +131,33 @@ function user.test_bound_in_lambda() -> string {
 }
 
 function user.test_bound_mapper() -> string[] {
+    load_type string
+    load_type string
+    load_type never
     load_const "hello"
     load_const "world"
+    load_type string
     alloc_array 2
-    alloc_instance user.Formatter
     load_const ">> "
-    init_field .prefix
+    init_instance user.Formatter .prefix
     make_bound_method user.Formatter.format
     call baml.Array.map
     return
 }
 
 function user.test_bound_validator() -> bool[] {
+    load_type int
+    load_type bool
+    load_type never
     load_const 5
     load_const 15
     load_const 25
     load_const 75
+    load_type int
     alloc_array 4
-    alloc_instance user.RangeCheck
     load_const 10
-    init_field .min
     load_const 50
-    init_field .max
+    init_instance user.RangeCheck .min, .max
     make_bound_method user.RangeCheck.is_valid
     call baml.Array.map
     return
@@ -401,18 +173,17 @@ function user.test_field_chain_bind(cfg: Config) -> string {
 }
 
 function user.test_generic_bind() -> int {
-    alloc_instance user.Box
     load_const 42
-    init_field .value
+    load_type int
+    init_instance<1> user.Box .value
     make_bound_method user.Box.unwrap
     call_indirect
     return
 }
 
 function user.test_mutation_after_bind() -> int {
-    alloc_instance user.Counter
     load_const 0
-    init_field .value
+    init_instance user.Counter .value
     store_var c
     load_var c
     make_bound_method user.Counter.increment
@@ -426,12 +197,10 @@ function user.test_mutation_after_bind() -> int {
 }
 
 function user.test_repeated_bound_calls() -> int {
-    alloc_instance user.Counter
     load_const 0
-    init_field .value
+    init_instance user.Counter .value
     make_bound_method user.Counter.increment
-    store_var inc
-    load_var inc
+    store_var_load_var inc
     call_indirect
     pop 1
     load_var inc
@@ -443,53 +212,53 @@ function user.test_repeated_bound_calls() -> int {
 }
 
 function user.test_strategy() -> int[] {
-    alloc_instance user.Calculator
+    load_type never
     load_const "add"
-    init_field .op
+    init_instance user.Calculator .op
     make_bound_method user.Calculator.compute
     load_const 3
     load_const 4
     call user.apply
     store_var _5
-    alloc_instance user.Calculator
+    load_type never
     load_const "mul"
-    init_field .op
+    init_instance user.Calculator .op
     make_bound_method user.Calculator.compute
     load_const 3
     load_const 4
     call user.apply
-    store_var _7
-    load_var _5
-    load_var _7
+    store_var _8
+    load_var2 1 2
+    load_type int
     alloc_array 2
     return
 }
 
 function user.test_unbound_higher_order() -> string[] {
-    alloc_instance user.Employee
+    load_type never
     load_const "Alice"
-    init_field .first
     load_const "Smith"
-    init_field .last
+    init_instance user.Employee .first, .last
+    load_type Employee
     alloc_array 1
-    load_global user.Employee.full_name
+    load_const user.Employee.full_name
     call user.apply_to_each
     return
 }
 
 function user.test_unbound_in_map() -> string[] {
-    alloc_instance user.Employee
+    load_type Employee
+    load_type string
+    load_type never
     load_const "Alice"
-    init_field .first
     load_const "Smith"
-    init_field .last
-    alloc_instance user.Employee
+    init_instance user.Employee .first, .last
     load_const "Bob"
-    init_field .first
     load_const "Jones"
-    init_field .last
+    init_instance user.Employee .first, .last
+    load_type Employee
     alloc_array 2
-    load_global user.Employee.full_name
+    load_const user.Employee.full_name
     call baml.Array.map
     return
 }

@@ -1,24 +1,19 @@
 //! Unified tests for shell operations.
+//!
+//! Platform-specific and timing-sensitive tests:
+//!   shell_with_pipe        — Unix-only (`tr`), has insta bytecode snapshot.
+//!   shell_stderr           — Unix-only `>&2` redirect.
+//!   exec_failing           — platform-split binary (`false` vs `cmd`).
+//!   exec_with_args         — platform-split (`printf` vs `cmd`).
+//!   exec_stderr            — platform-split redirection syntax.
+//!   exec_with_cwd          — platform-split (`pwd` vs `cmd /c cd`).
+//!   exec_with_stdin        — platform-split (`cat` vs `findstr`).
+//!   exec_with_timeout      — timing-dependent; assert is_err().
+//!   shell_with_options     — platform-split (`pwd` vs `cmd /c cd`).
+//!   shell_stderr_bytes     — Unix-only `>&2` redirect, byte-prefix assertion.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
-
-// === shell() tests ===
-
-#[tokio::test]
-async fn shell_echo() {
-    let output = baml_test!(
-        r#"
-            function main() -> string {
-                baml.sys.shell("echo hello_from_shell", null).stdout.to_string()
-            }
-        "#
-    );
-    assert!(output.result.is_ok());
-    if let Ok(BexExternalValue::String(stdout)) = &output.result {
-        assert!(stdout.contains("hello_from_shell"));
-    }
-}
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
@@ -35,65 +30,16 @@ async fn shell_with_pipe() {
     function main() -> string {
         load_const "echo 'hello world' | tr 'a-z' 'A-Z'"
         load_const null
-        dispatch_future baml.sys.shell
-        await
+        sys_op baml.sys.shell
         load_field .stdout
-        call baml.Uint8Array.to_string
+        call baml.Uint8Array.baml.ToString.to_string
         return
     }
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("HELLO WORLD\n".to_string()))
+        Ok(BexExternalValue::String("HELLO WORLD\n".to_string().into()))
     );
-}
-
-#[tokio::test]
-async fn shell_failing_command() {
-    let output = baml_test!(
-        r#"
-            function main() -> int {
-                baml.sys.shell("exit 1", null).exit_code
-            }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
-}
-
-#[tokio::test]
-async fn shell_nonexistent_command() {
-    let output = baml_test!(
-        r#"
-            function main() -> int {
-                baml.sys.shell("nonexistent_command_12345", null).exit_code
-            }
-        "#
-    );
-    // Should succeed (shell itself spawns fine) with a non-zero exit code.
-    // Unix shells return 127, cmd returns 9009, PowerShell returns 1.
-    assert!(output.result.is_ok());
-    if let Ok(BexExternalValue::Int(code)) = &output.result {
-        assert_ne!(
-            *code, 0,
-            "nonexistent command should have non-zero exit code"
-        );
-    }
-}
-
-#[tokio::test]
-async fn shell_with_variable() {
-    let output = baml_test!(
-        r#"
-            function main() -> string {
-                let cmd = "echo dynamic_value";
-                baml.sys.shell(cmd, null).stdout.to_string()
-            }
-        "#
-    );
-    assert!(output.result.is_ok());
-    if let Ok(BexExternalValue::String(stdout)) = &output.result {
-        assert!(stdout.contains("dynamic_value"));
-    }
 }
 
 #[tokio::test]
@@ -113,43 +59,7 @@ async fn shell_stderr() {
     }
 }
 
-#[tokio::test]
-async fn shell_ok_method() {
-    let output = baml_test!(
-        r#"
-            function main() -> bool {
-                baml.sys.shell("echo hi", null).ok()
-            }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-
-    let output2 = baml_test!(
-        r#"
-            function main() -> bool {
-                baml.sys.shell("exit 1", null).ok()
-            }
-        "#
-    );
-    assert_eq!(output2.result, Ok(BexExternalValue::Bool(false)));
-}
-
 // === exec() tests ===
-
-#[tokio::test]
-async fn exec_echo() {
-    let output = baml_test!(
-        r#"
-            function main() -> string {
-                baml.sys.exec("echo", ["Hello From Exec!"], null).stdout.to_string()
-            }
-        "#
-    );
-    assert!(output.result.is_ok());
-    if let Ok(BexExternalValue::String(stdout)) = &output.result {
-        assert!(stdout.contains("Hello From Exec!"));
-    }
-}
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
@@ -191,7 +101,7 @@ async fn exec_with_args() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello world".to_string()))
+        Ok(BexExternalValue::String("hello world".to_string().into()))
     );
 }
 
@@ -289,7 +199,9 @@ async fn exec_with_stdin() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello from stdin".to_string()))
+        Ok(BexExternalValue::String(
+            "hello from stdin".to_string().into()
+        ))
     );
 }
 
@@ -337,6 +249,122 @@ async fn exec_with_timeout() {
     assert!(output.result.is_err());
 }
 
+// === start_process() streaming tests ===
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_yields_stdout_before_exit() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'first\n'; while :; do :; done"],
+                    baml.sys.ProcessOptions { timeout_ms: 2000 },
+                );
+                defer { process.close() }
+
+                let first = match (process.stdout.next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                };
+                process.kill();
+                let exit = process.wait();
+                first == "first" && !exit.ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_iterates_lines_and_final_unterminated_line() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'one\ntwo'"],
+                    null,
+                );
+                defer { process.close() }
+
+                let lines = process.stdout.collect();
+                let exit = process.wait();
+                if (!exit.ok()) {
+                    return "bad exit";
+                }
+                lines.join("|")
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("one|two".to_string().into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_supports_incremental_stdin() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "cat",
+                    [],
+                    baml.sys.ProcessOptions { keep_stdin_open: true },
+                );
+                defer { process.close() }
+
+                process.write_stdin("one\n");
+                let one = process.stdout._next() ?? "";
+                process.write_stdin("two\n");
+                let two = process.stdout._next() ?? "";
+                process.close_stdin();
+                let exit = process.wait();
+                if (!exit.ok()) {
+                    return "bad exit";
+                }
+                one + "|" + two
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("one|two".to_string().into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stdout_read_honors_process_timeout() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "while :; do :; done"],
+                    baml.sys.ProcessOptions { timeout_ms: 25 },
+                );
+                defer { process.close() }
+
+                process.stdout.next() catch (e) {
+                    let timeout: baml.errors.Timeout => { return true; },
+                    _ => { return false; },
+                };
+                false
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
 async fn shell_with_options() {
@@ -374,25 +402,6 @@ async fn shell_with_options() {
 }
 
 // === stdout / stderr as uint8array field tests ===
-
-#[tokio::test]
-async fn shell_stdout_bytes() {
-    let output = baml_test!(
-        r#"
-            function main() -> uint8array {
-                baml.sys.shell("echo hello", null).stdout
-            }
-        "#
-    );
-    assert!(output.result.is_ok());
-    if let Ok(BexExternalValue::Uint8Array(bytes)) = &output.result {
-        // "hello" should appear in the output bytes
-        let stdout = String::from_utf8_lossy(bytes);
-        assert!(stdout.contains("hello"));
-    } else {
-        panic!("expected Uint8Array, got {:?}", output.result);
-    }
-}
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]

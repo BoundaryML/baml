@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19734
 ---
 function user.Calculate() -> int {
     load_const 3
@@ -8,13 +9,13 @@ function user.Calculate() -> int {
     store_var b
     load_const 3
     load_var b
-    bin_op +
+    add_int
     load_var b
     load_const 2
-    bin_op /
+    div_int
     load_const 1
-    bin_op -
-    bin_op *
+    sub_int
+    mul_int
     return
 }
 
@@ -34,130 +35,6 @@ function user.IndexAccess(users: IndexUser[]) -> string {
     return
 }
 
-function user.IndexUser.from_json(j: baml.json.json) -> IndexUser {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "age"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    load_var j
-    load_const "tags"
-    call baml.json.field
-    store_var _9
-    load_type string[]
-    load_var _9
-    call baml.json.from_json
-    store_var _8
-    alloc_instance user.IndexUser
-    load_var _2
-    init_field .name
-    load_var _5
-    init_field .age
-    load_var _8
-    init_field .tags
-    return
-}
-
-function user.IndexUser.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .name
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .age
-    call baml.Int.to_json
-    store_var _5
-    load_var self
-    load_field .tags
-    call baml.Array.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
-    load_const "name"
-    load_const "age"
-    load_const "tags"
-    alloc_map 3
-    return
-}
-
-function user.Profile.from_json(j: baml.json.json) -> Profile {
-    load_var j
-    load_const "bio"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "settings"
-    call baml.json.field
-    store_var _6
-    load_type Settings
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    alloc_instance user.Profile
-    load_var _2
-    init_field .bio
-    load_var _5
-    init_field .settings
-    return
-}
-
-function user.Profile.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .bio
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .settings
-    call user.Settings.to_json
-    store_var _5
-    load_var _2
-    load_var _5
-    load_const "bio"
-    load_const "settings"
-    alloc_map 2
-    return
-}
-
-function user.Settings.from_json(j: baml.json.json) -> Settings {
-    load_var j
-    load_const "theme"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    alloc_instance user.Settings
-    load_var _2
-    init_field .theme
-    return
-}
-
-function user.Settings.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .theme
-    call baml.String.to_json
-    load_const "theme"
-    alloc_map 1
-    return
-}
-
 function user.TestPrecedence() -> bool {
     load_const true
     jump_if_false L0
@@ -171,63 +48,5 @@ function user.TestPrecedence() -> bool {
     load_const false
 
   L1:
-    return
-}
-
-function user.User.from_json(j: baml.json.json) -> User {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    store_var _2
-    load_var j
-    load_const "profile"
-    call baml.json.field
-    store_var _6
-    load_type Profile
-    load_var _6
-    call baml.json.from_json
-    store_var _5
-    load_var j
-    load_const "tags"
-    call baml.json.field
-    store_var _9
-    load_type string[]
-    load_var _9
-    call baml.json.from_json
-    store_var _8
-    alloc_instance user.User
-    load_var _2
-    init_field .name
-    load_var _5
-    init_field .profile
-    load_var _8
-    init_field .tags
-    return
-}
-
-function user.User.to_json(self: null) -> baml.json.json {
-    load_var self
-    load_field .name
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .profile
-    call user.Profile.to_json
-    store_var _5
-    load_var self
-    load_field .tags
-    call baml.Array.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
-    load_const "name"
-    load_const "profile"
-    load_const "tags"
-    alloc_map 3
     return
 }

@@ -69,12 +69,12 @@ function raw_quad_backslash() -> string { #"\\\\"# }
     async fn quoted_string_escape_sequences_decode_to_exact_bytes() {
         // Exact-value checks (not just length) — a length of 3 could match
         // by accident with a different decoding bug.
-        assert_eq!(run_str!("escaped_newline"), "a\nb");
-        assert_eq!(run_str!("lone_newline"), "\n");
-        assert_eq!(run_str!("escaped_tab"), "a\tb");
-        assert_eq!(run_str!("escaped_cr"), "a\rb");
-        assert_eq!(run_str!("escaped_backslash"), "a\\b");
-        assert_eq!(run_str!("escaped_quote"), "a\"b");
+        assert_eq!(run_str!("escaped_newline").as_str(), "a\nb");
+        assert_eq!(run_str!("lone_newline").as_str(), "\n");
+        assert_eq!(run_str!("escaped_tab").as_str(), "a\tb");
+        assert_eq!(run_str!("escaped_cr").as_str(), "a\rb");
+        assert_eq!(run_str!("escaped_backslash").as_str(), "a\\b");
+        assert_eq!(run_str!("escaped_quote").as_str(), "a\"b");
     }
 
     #[tokio::test]
@@ -103,8 +103,8 @@ function raw_quad_backslash() -> string { #"\\\\"# }
     async fn raw_strings_do_not_decode_escapes() {
         // Raw strings are the documented workaround; they must keep
         // backslashes and quotes verbatim or the workaround breaks too.
-        assert_eq!(run_str!("raw_keeps_backslash_n"), "a\\nb");
-        assert_eq!(run_str!("raw_keeps_quote"), "\"");
+        assert_eq!(run_str!("raw_keeps_backslash_n").as_str(), "a\\nb");
+        assert_eq!(run_str!("raw_keeps_quote").as_str(), "\"");
     }
 
     // ── Escaped backslash at string boundary ────────────────────────────
@@ -112,11 +112,11 @@ function raw_quad_backslash() -> string { #"\\\\"# }
     #[tokio::test]
     async fn escaped_backslash_at_string_boundary() {
         // "\\" must parse as a single backslash character.
-        assert_eq!(run_str!("lone_backslash"), "\\");
+        assert_eq!(run_str!("lone_backslash").as_str(), "\\");
         // "\\\\" must parse as two backslashes.
-        assert_eq!(run_str!("double_backslash"), "\\\\");
+        assert_eq!(run_str!("double_backslash").as_str(), "\\\\");
         // "a\\\\" must parse as 'a' followed by two backslashes.
-        assert_eq!(run_str!("trailing_double_backslash"), "a\\\\");
+        assert_eq!(run_str!("trailing_double_backslash").as_str(), "a\\\\");
     }
 
     #[tokio::test]
@@ -129,7 +129,7 @@ function raw_quad_backslash() -> string { #"\\\\"# }
     #[tokio::test]
     async fn replace_all_with_backslash_arguments() {
         // replace_all("\\", "/") should replace each backslash with a forward slash.
-        assert_eq!(run_str!("replace_backslash"), "a/b/c");
+        assert_eq!(run_str!("replace_backslash").as_str(), "a/b/c");
     }
 
     // ── Raw strings preserve backslash sequences verbatim ───────────────
@@ -137,9 +137,9 @@ function raw_quad_backslash() -> string { #"\\\\"# }
     #[tokio::test]
     async fn raw_strings_preserve_backslash_sequences() {
         // #"\\"# contains two literal characters: \ and \
-        assert_eq!(run_str!("raw_double_backslash"), "\\\\");
+        assert_eq!(run_str!("raw_double_backslash").as_str(), "\\\\");
         // #"\\\\"# contains four literal characters: \ \ \ \
-        assert_eq!(run_str!("raw_quad_backslash"), "\\\\\\\\");
+        assert_eq!(run_str!("raw_quad_backslash").as_str(), "\\\\\\\\");
     }
 
     // ── Negative tests: invalid strings must still produce errors ───────
@@ -166,9 +166,7 @@ function raw_quad_backslash() -> string { #"\\\\"# }
 
         for (source, label) in &cases {
             let db = setup_test_db(source);
-            let project = db.get_project().expect("project must be set");
-            let all_files = db.get_source_files();
-            let diagnostics = collect_diagnostics(&db, project, &all_files);
+            let diagnostics = collect_diagnostics(&db);
             let has_error = diagnostics
                 .iter()
                 .any(|d| matches!(d.severity, Severity::Error));

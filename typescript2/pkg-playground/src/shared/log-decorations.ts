@@ -9,9 +9,14 @@ export function truncateMessage(msg: string, maxLen: number = 60): string {
 /** Map log level string to our LogLevel type. */
 export function normalizeLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
-    case 'error': return 'error';
-    case 'warn': case 'warning': return 'warn';
-    case 'debug': return 'debug';
-    default: return 'info';
+    case 'error':
+      return 'error';
+    case 'warn':
+    case 'warning':
+      return 'warn';
+    case 'debug':
+      return 'debug';
+    default:
+      return 'info';
   }
 }

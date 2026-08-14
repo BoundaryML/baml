@@ -23,7 +23,6 @@ derive_more.workspace = true
 dunce.workspace = true
 either.workspace = true
 env_logger.workspace = true
-eventsource-stream.workspace = true
 futures.workspace = true
 http.workspace = true
 http-body.workspace = true

@@ -2,166 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.AlsoMayFail(x: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
-
-    bb0: {
-        switch copy _1 [0: bb3, otherwise: bb1];
-    }
-
-    bb1: {
-        _0 = const "also ok";
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-
-    bb3: {
-        throw const "secondary error";
-    }
-}
-
-fn user.CatchAndRethrow(x: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
-    let _2: unknown // e
-    let _3: string
-
-    bb0: {
-        _0 = call const fn user.MayFail(copy _1) -> [bb1, unwind: bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        throw_if_panic copy _2 -> bb3;
-    }
-
-    bb3: {
-        _3 = copy _2;
-        throw copy _3;
-    }
-}
-
-fn user.CatchWithFallback(x: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
-    let _2: unknown
-    let _3: bool
-    let _4: bool
-
-    bb0: {
-        _0 = call const fn user.MayFailIntOrString(copy _1) -> [bb6, unwind: bb1];
-    }
-
-    bb1: {
-        _3 = is_type(copy _2, string);
-        branch copy _3 -> [bb5, bb2];
-    }
-
-    bb2: {
-        _4 = is_type(copy _2, int);
-        branch copy _4 -> [bb4, bb3];
-    }
-
-    bb3: {
-        throw copy _2;
-    }
-
-    bb4: {
-        _0 = const "caught int fallback";
-        goto -> bb6;
-    }
-
-    bb5: {
-        _0 = const "caught string";
-        goto -> bb6;
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn user.CatchWithTypedArm(x: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
-    let _2: unknown // e
-    let _3: bool
-
-    bb0: {
-        _0 = call const fn user.MayFail(copy _1) -> [bb4, unwind: bb1];
-    }
-
-    bb1: {
-        _3 = is_type(copy _2, string);
-        branch copy _3 -> [bb3, bb2];
-    }
-
-    bb2: {
-        throw copy _2;
-    }
-
-    bb3: {
-        _0 = const "caught string";
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.ChainedCatchClauses(x: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
-    let _2: unknown
-    let _3: bool
-    let _4: bool
-
-    bb0: {
-        _0 = call const fn user.MayFailIntOrString(copy _1) -> [bb6, unwind: bb1];
-    }
-
-    bb1: {
-        _3 = is_type(copy _2, string);
-        branch copy _3 -> [bb5, bb2];
-    }
-
-    bb2: {
-        _4 = is_type(copy _2, int);
-        branch copy _4 -> [bb4, bb3];
-    }
-
-    bb3: {
-        throw copy _2;
-    }
-
-    bb4: {
-        _0 = const "second handler";
-        goto -> bb6;
-    }
-
-    bb5: {
-        _0 = const "first handler";
-        goto -> bb6;
-    }
-
-    bb6: {
-        return;
-    }
-}
-
 fn user.MayFail(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -212,6 +52,154 @@ fn user.MayFailIntOrString(x: int) -> string {
     }
 }
 
+fn user.AlsoMayFail(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "also ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const "secondary error";
+    }
+}
+
+fn user.SingleCatchWildcard(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown // e
+
+    bb0: {
+        _0 = call const fn user.MayFail(copy _1) -> [bb3, unwind: bb1];
+    }
+
+    bb1: {
+        throw_if_panic copy _2 -> bb2;
+    }
+
+    bb2: {
+        _0 = const "caught";
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.SingleCatchTyped(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown // e
+    let _3: bool
+
+    bb0: {
+        _0 = call const fn user.MayFail(copy _1) -> [bb4, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _2, string);
+        branch copy _3 -> [bb3, bb2];
+    }
+
+    bb2: {
+        rethrow copy _2;
+    }
+
+    bb3: {
+        _0 = const "caught string";
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.CatchWithFallback(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown
+    let _3: bool
+    let _4: bool
+
+    bb0: {
+        _0 = call const fn user.MayFailIntOrString(copy _1) -> [bb6, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _2, string);
+        branch copy _3 -> [bb5, bb2];
+    }
+
+    bb2: {
+        _4 = is_type(copy _2, int);
+        branch copy _4 -> [bb4, bb3];
+    }
+
+    bb3: {
+        rethrow copy _2;
+    }
+
+    bb4: {
+        _0 = const "caught int fallback";
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = const "caught string";
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.CatchWithTypedArm(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown // e
+    let _3: bool
+
+    bb0: {
+        _0 = call const fn user.MayFail(copy _1) -> [bb4, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _2, string);
+        branch copy _3 -> [bb3, bb2];
+    }
+
+    bb2: {
+        rethrow copy _2;
+    }
+
+    bb3: {
+        _0 = const "caught string";
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn user.MultipleCatchArms(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -235,7 +223,7 @@ fn user.MultipleCatchArms(x: int) -> string {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -292,57 +280,26 @@ fn user.NestedCatch(x: int) -> string {
     }
 }
 
-fn user.SingleCatchTyped(x: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
-    let _2: unknown // e
-    let _3: bool
-
-    bb0: {
-        _0 = call const fn user.MayFail(copy _1) -> [bb4, unwind: bb1];
-    }
-
-    bb1: {
-        _3 = is_type(copy _2, string);
-        branch copy _3 -> [bb3, bb2];
-    }
-
-    bb2: {
-        throw copy _2;
-    }
-
-    bb3: {
-        _0 = const "caught string";
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.SingleCatchWildcard(x: int) -> string {
+fn user.CatchAndRethrow(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: unknown // e
 
     bb0: {
-        _0 = call const fn user.MayFail(copy _1) -> [bb3, unwind: bb1];
+        _0 = call const fn user.MayFail(copy _1) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        throw_if_panic copy _2 -> bb2;
+        return;
     }
 
     bb2: {
-        _0 = const "caught";
-        goto -> bb3;
+        throw_if_panic copy _2 -> bb3;
     }
 
     bb3: {
-        return;
+        rethrow copy _2;
     }
 }
 
@@ -353,5 +310,46 @@ fn user.ThrowStatement(x: int) -> string {
 
     bb0: {
         throw const "error";
+    }
+}
+
+fn user.ChainedCatchClauses(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown
+    let _3: bool
+    let _4: bool
+
+    bb0: {
+        _0 = call const fn user.MayFailIntOrString(copy _1) -> [bb6, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _2, string);
+        branch copy _3 -> [bb5, bb2];
+    }
+
+    bb2: {
+        _4 = is_type(copy _2, int);
+        branch copy _4 -> [bb4, bb3];
+    }
+
+    bb3: {
+        rethrow copy _2;
+    }
+
+    bb4: {
+        _0 = const "second handler";
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = const "first handler";
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
     }
 }

@@ -1,0 +1,255 @@
+---
+title: Tool use with Llama API (and reasoning)
+description: How to do tool-calling or function-calling with Llama API (with reasoning)
+slug: llama-api-tool-calling
+date: April 29, 2025
+tags: ['tutorials']
+author:
+  name: Vaibhav Gupta
+  imageUrl: /profile-vbv.jpeg
+  linkedin: https://www.linkedin.com/in/vaigup
+---
+
+Meta's released a new [API](https://docs.llmapi.com/) for their [Llama models](https://ai.meta.com/blog/llama-4-multimodal-intelligence/).
+
+We'll show you how to get improved tool-calling / function-calling with BAML (our prompting framework) ([github](https://github.com/boundaryml/baml)).
+BAML lets you write prompts for structured extraction using a simple syntax.
+
+We'll additionally show how to make the default Llama models do tool-calling / function-calling WITH reasoning.
+
+### Solving a reasoning problem with a schema
+Imagine we are trying to figure out the employee hierarchy chart for a company with this:
+
+```
+George is the CEO of the company. Kelly is the VP of Sales. Asif is the global head of product development. Mohammed manages the shopping cart experience. Tim manages sales in South. Stefan is responsible for sales in the f100 company. Carol is in charge of user experience"
+```
+
+Here is an interactive example that you can run to see how Llama 4 can solve this reasoning problem!
+<BamlBlock name="1" bamlCode={`
+client LlamaClient {
+    provider openai-generic
+    options {
+      // Note no /v1
+      base_url "https://api.llmapi.com"
+      model "llama4-scout"
+      api_key env.LLAMA_API_KEY
+    }
+}
+
+class Employee {
+    name string
+    title string
+    subordinates Employee[]
+}
+
+function ExtractHierarchy(message: string) -> Employee {
+    client LlamaClient
+    prompt #"
+      Extract the information.
+
+      {{ ctx.output_format }}
+
+      {{ _.role("user") }}
+      {{ message }}
+    "#
+}
+
+test TestName {
+    functions [ExtractHierarchy]
+    args {
+      message #"
+        George is the CEO of the company. Kelly is the VP of Sales. Asif is the global head of product development. Mohammed manages the shopping cart experience. Tim manages sales in South. Stefan is responsible for sales in the f100 company. Carol is in charge of user experience
+      "#
+    }
+}
+`}
+
+ />
+
+ You can run this in python like this:
+
+```python
+from baml_client import b
+response = b.ExtractHierarchy(message="""
+George is the CEO of the company.
+Kelly is the VP of Sales. Asif is the global head of product development.
+Mohammed manages the shopping cart experience.
+Tim manages sales in South.
+Stefan is responsible for sales in the f100 company.
+Carol is in charge of user experience""")
+
+print(response) # fully type-safe and validated!
+```
+
+### Tool calling with Llama 4 and BAML
+In BAML you can also use several tools. Here's another example
+
+<BamlBlock name="2" bamlCode={`
+class ItemSearch {
+    query string @description("search query for the item")
+    maxCost float @description("maximum cost filter")
+    type string @description("item category filter")
+}
+
+class BookAppointment {
+    clientName string
+    serviceRequested string @description("type of service requested")
+    datePreferred string @description("As an ISO8601 timestamp")
+    timeDuration int @description("duration in minutes")
+}
+
+function ChooseOneTool(user_message: string) -> ItemSearch | BookAppointment {
+    client LlamaClient
+    prompt #"
+     Choose the right schema that contains all the information in this message:
+      ---
+      {{ user_message }}
+      ---
+
+      {# special macro to print the output schema. #}
+      {{ ctx.output_format }}
+    "#
+}
+
+test TestOneFunc {
+    functions [ChooseOneTool]
+    args {
+      user_message #"
+        Find me running shoes under $100 in the sports category
+      "#
+    }
+}
+
+test TestOneFunc2 {
+    functions [ChooseOneTool]
+    args {
+      user_message #"
+        I need to schedule a haircut appointment for John Smith next Tuesday at 2pm for 30 minutes
+      "#
+    }
+}
+
+client LlamaClient {
+    provider openai-generic
+    options {
+      base_url "https://api.llmapi.com"
+      model "llama4-scout"
+      api_key env.LLAMA_API_KEY
+    }
+}
+`}
+
+ />
+ You can call this in python like this (we also support other languages!):
+
+```python
+from baml_client import b
+from baml_client.types import ProductSearch, ScheduleAppointment
+response = b.ChooseOneTool(user_message="Find me running shoes under $100 in the sports category")
+print(response)
+
+if isinstance(response, ItemSearch):
+    print(f"Item Search called:")
+    print(f"Query: {response.query}")
+    print(f"Max Price: ${response.maxPrice}")
+    print(f"Category: {response.category}")
+elif isinstance(response, BookAppointment):
+    print(f"Book Appointment called:")
+    print(f"Customer: {response.clientName}")
+    print(f"Service: {response.serviceRequested}")
+    print(f"Date: {response.datePreferred}")
+    print(f"Duration: {response.timeDuration} minutes")
+```
+
+
+### Tool calling with Llama 4 and BAML with reasoning
+In BAML you can also use several tools. Here's another example
+
+<BamlBlock name="3" bamlCode={`
+class ItemSearch {
+    query string @description("search query for the item")
+    maxCost float @description("maximum cost filter")
+    type string @description("item category filter")
+}
+
+class BookAppointment {
+    clientName string
+    serviceRequested string @description("type of service requested")
+    datePreferred string @description("As an ISO8601 timestamp")
+    timeDuration int @description("duration in minutes")
+}
+
+function ChooseOneTool(user_message: string) -> ItemSearch | BookAppointment {
+    client LlamaClient
+    prompt #"
+     Choose the right schema that contains all the information in this message:
+      ---
+      {{ user_message }}
+      ---
+
+      {# special macro to print the output schema. #}
+      {{ ctx.output_format }}
+      Before answering, list clues that may help.
+      - ...
+      - ...
+      ... 
+
+      { .. } // schema
+    "#
+}
+
+test TestOneFunc {
+    functions [ChooseOneTool]
+    args {
+      user_message #"
+        Find me running shoes under $100 in the sports category
+      "#
+    }
+}
+
+test TestOneFunc2 {
+    functions [ChooseOneTool]
+    args {
+      user_message #"
+        I need to schedule a haircut appointment for John Smith next Tuesday at 2pm for 30 minutes
+      "#
+    }
+}
+
+client LlamaClient {
+    provider openai-generic
+    options {
+      base_url "https://api.llmapi.com"
+      model "llama4-scout"
+      api_key env.LLAMA_API_KEY
+    }
+}
+`}
+
+ />
+
+The calling code has no changes! BAML will automatically pull out only the tool call part of the API response. Try pressing play.
+
+```python
+from baml_client import b
+from baml_client.types import ProductSearch, ScheduleAppointment
+response = b.ChooseOneTool(user_message="Find me running shoes under $100 in the sports category")
+print(response)
+
+if isinstance(response, ItemSearch):
+    print(f"Item Search called:")
+    print(f"Query: {response.query}")
+    print(f"Max Price: ${response.maxPrice}")
+    print(f"Category: {response.category}")
+elif isinstance(response, BookAppointment):
+    print(f"Book Appointment called:")
+    print(f"Customer: {response.clientName}")
+    print(f"Service: {response.serviceRequested}")
+    print(f"Date: {response.datePreferred}")
+    print(f"Duration: {response.timeDuration} minutes")
+```
+
+
+BAML is fully open-source and free to use, and it works with many other languages (Ruby, TS, Python, etc).
+
+Check out the [docs](https://docs.boundaryml.com) for more!

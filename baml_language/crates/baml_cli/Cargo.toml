@@ -17,32 +17,61 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_builtins2 = { workspace = true }
+baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
+baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
 baml_lsp2_actions = { workspace = true }
 baml_lsp_server = { workspace = true }
 baml_project = { workspace = true }
+baml_release = { workspace = true }
+baml_surface = { workspace = true }
+baml_type = { workspace = true }
+baml_version = { workspace = true }
 baml_workspace = { workspace = true }
+bex_cache = { workspace = true }
 bex_engine = { workspace = true }
-bex_events = { workspace = true }
-bex_events_native = { workspace = true }
 bex_vm_types = { workspace = true }
-codegen_python = { workspace = true }
+sdkgen_cpp = { workspace = true }
+sdkgen_csharp = { workspace = true }
+sdkgen_go = { workspace = true }
+sdkgen_java = { workspace = true }
+sdkgen_python_pydantic2 = { workspace = true }
+sdkgen_rust = { workspace = true }
+sdkgen_swift = { workspace = true }
+sdkgen_typescript_shared = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
-clap = { workspace = true, features = [ "color", "env" ] }
-clap-cargo = { workspace = true }
+base64 = { workspace = true }
+borsh = { workspace = true }
+clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
+console = { workspace = true }
 ctrlc = { workspace = true }
+flate2 = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
+indicatif = { workspace = true }
+libsui = { workspace = true }
+mimalloc = { workspace = true }
+mime_guess = { workspace = true }
+rayon = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
+serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 strsim = { workspace = true }
+tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
+toml_edit = { workspace = true }
+uuid = { workspace = true }
+webbrowser = { workspace = true }
 
 [features]
-default = [ "native-tls", "aws-crypto" ]
+default = [ "aws-crypto" ]
 aws-crypto = [ "baml_lsp_server/aws-crypto", "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
 ring-crypto = [ "baml_lsp_server/ring-crypto", "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
 native-tls = [ "baml_lsp_server/native-tls" ]
@@ -55,16 +84,6 @@ skip-integ-tests = [  ]
 baml_tests = { workspace = true }
 insta = { workspace = true }
 tempfile = { workspace = true }
-
-# assert_cmd = "2"
-# console_log = "1"
-# dissimilar = "1.0.4"
-# expect-test = "1.1.0"
-# indoc.workspace = true
-# either = "1.8.1"
-# rstest = "0.22.0"
-# walkdir = "2.5.0"
-# wasm-logger = "0.2.0"
 
 [[bin]]
 name = "baml-cli"

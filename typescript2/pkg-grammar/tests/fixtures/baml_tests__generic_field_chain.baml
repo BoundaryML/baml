@@ -1,0 +1,29 @@
+// Test: generic type substitution preserved through chained field access.
+// Issue #3: class_field_ty() should apply concrete type arguments, not return
+// the raw unsubstituted type from the generic class definition.
+
+class Box<T> {
+  value T
+}
+
+class User {
+  name string
+  age int
+}
+
+// box.value should be typed as User (not Unknown/type-var),
+// so box.value.name should be typed as string.
+function test_generic_chain(box: Box<User>) -> string {
+  box.value.name
+}
+
+// Nested generics: Box<Box<User>>.value.value.name
+function test_nested_generic_chain(box: Box<Box<User>>) -> string {
+  box.value.value.name
+}
+
+// Generic in lambda capture: lambda captures a Box<User> and accesses value.name
+function test_generic_capture(box: Box<User>) -> string {
+  let get_name = () -> string { box.value.name }
+  get_name()
+}

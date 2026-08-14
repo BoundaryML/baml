@@ -51,7 +51,6 @@ async fn cancel_before_call_returns_cancelled() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -82,7 +81,7 @@ async fn cancel_before_call_returns_cancelled() {
 async fn cancel_during_sleep_returns_promptly() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(10000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
             42
         }
     "#;
@@ -92,7 +91,6 @@ async fn cancel_during_sleep_returns_promptly() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -167,7 +165,6 @@ async fn cancel_during_http_returns_promptly() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -216,7 +213,7 @@ async fn cancel_during_http_returns_promptly() {
 async fn selective_cancellation_only_affects_target() {
     let source = r#"
         function slow() -> int {
-            baml.sys.sleep(5000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n));
             1
         }
 
@@ -230,7 +227,6 @@ async fn selective_cancellation_only_affects_target() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -296,10 +292,10 @@ async fn selective_cancellation_only_affects_target() {
 async fn cancel_interrupts_sequential_sleeps() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(100);
-            baml.sys.sleep(100);
-            baml.sys.sleep(10000);
-            baml.sys.sleep(10000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
             42
         }
     "#;
@@ -309,7 +305,6 @@ async fn cancel_interrupts_sequential_sleeps() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -358,7 +353,7 @@ async fn cancel_interrupts_sequential_sleeps() {
 async fn non_cancelled_token_completes_normally() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(50);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
             42
         }
     "#;
@@ -368,7 +363,6 @@ async fn non_cancelled_token_completes_normally() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -395,7 +389,7 @@ async fn non_cancelled_token_completes_normally() {
 async fn cancel_is_idempotent() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(10000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
             42
         }
     "#;
@@ -405,7 +399,6 @@ async fn cancel_is_idempotent() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -454,7 +447,7 @@ async fn cancel_function_call_by_id_actually_cancels() {
     // ~1s.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(10000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
             42
         }
     "#;
@@ -464,7 +457,6 @@ async fn cancel_function_call_by_id_actually_cancels() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -502,20 +494,15 @@ async fn cancel_function_call_by_id_actually_cancels() {
         "cancel_function_call took too long: {elapsed:?} (expected < 2s)"
     );
 
-    // After completion, the entry is gone — a second cancel returns NotFound.
-    assert!(matches!(
-        engine.cancel_function_call(call_id),
-        Err(EngineError::FunctionCallNotFound { .. })
-    ));
+    // After completion, the entry is gone; a second cancel reserves the same
+    // ID as already-cancelled for any future call that tries to use it.
+    assert!(engine.cancel_function_call(call_id).is_ok());
 }
 
 #[tokio::test]
-async fn duplicate_call_id_is_rejected() {
-    // Two concurrent calls with the same `CallId` should fail-fast on the
-    // second. The first holds the registry slot via `ActiveCallGuard`.
+async fn cancel_function_call_by_id_before_registration_pre_cancels() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(500);
             7
         }
     "#;
@@ -525,7 +512,71 @@ async fn duplicate_call_id_is_rejected() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let call_id = sys_types::CallId::next();
+    engine
+        .cancel_function_call(call_id)
+        .expect("unknown call_id should be reserved as pre-cancelled");
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(call_id).build(),
+            true,
+        )
+        .await;
+
+    assert_cancelled(&result);
+}
+
+#[tokio::test]
+async fn shutdown_ignores_pre_cancelled_call_that_never_started() {
+    let source = r#"
+        function main() -> int {
+            7
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    engine
+        .cancel_function_call(sys_types::CallId::next())
+        .expect("unknown call_id should be reserved as pre-cancelled");
+
+    tokio::time::timeout(std::time::Duration::from_secs(1), engine.shutdown())
+        .await
+        .expect("shutdown should not wait for a call that never started");
+}
+
+#[tokio::test]
+async fn duplicate_call_id_is_rejected() {
+    // Two concurrent calls with the same `CallId` should fail-fast on the
+    // second. The first holds the registry slot via `ActiveCallGuard`.
+    let source = r#"
+        function main() -> int {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(500n));
+            7
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -590,7 +641,9 @@ async fn cancelled_panic_shape_equivalence() {
 
     fn extract_instance(v: &BexExternalValue) -> (&str, &IndexMap<String, BexExternalValue>) {
         match v {
-            BexExternalValue::Instance { class_name, fields } => (class_name.as_str(), fields),
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => (class_name.as_str(), fields),
             other => panic!("expected Instance, got {other:?}"),
         }
     }
@@ -603,7 +656,7 @@ async fn cancelled_panic_shape_equivalence() {
 
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(5000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n));
             42
         }
     "#;
@@ -612,7 +665,6 @@ async fn cancelled_panic_shape_equivalence() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -655,4 +707,281 @@ async fn cancelled_panic_shape_equivalence() {
             .unwrap_or_else(|| panic!("VM panic missing field {s_key}"));
         assert_eq!(s_val, v_val, "field {s_key} differs");
     }
+}
+
+// ============================================================================
+// BEP-034 spawn options — `spawn with baml.spawn.options(cancel = tok)`
+// ============================================================================
+
+/// Firing a BAML-surface `CancelToken` passed via
+/// `baml.spawn.options(cancel = ...)` cancels the spawned child; awaiting it
+/// re-throws `Cancelled`, and it returns well before the 10s sleep would.
+#[tokio::test]
+async fn spawn_with_options_cancel_token_propagates() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
+                42
+            };
+            let _ = tok.cancel();
+            await f
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let start = std::time::Instant::now();
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert_cancelled(&result);
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(2),
+        "cancel via options(cancel=) took too long: {:?}",
+        start.elapsed()
+    );
+}
+
+/// `Cancelled` delivered to a token-cancelled spawn is catchable at the
+/// awaiter — the `catch` arm runs and produces the fallback value.
+#[tokio::test]
+async fn spawn_with_options_cancel_token_is_catchable() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
+                42
+            };
+            let _ = tok.cancel();
+            (await f) catch (e) { baml.panics.Cancelled => 0 }
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed (Cancelled caught)");
+
+    assert_eq!(result, BexExternalValue::Int(0));
+}
+
+/// A spawn configured with `options(cancel = tok)` whose token is never fired
+/// completes normally — the option must not perturb the happy path.
+#[tokio::test]
+async fn spawn_with_options_uncancelled_completes_normally() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok) { 42 };
+            await f
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed");
+
+    assert_eq!(result, BexExternalValue::Int(42));
+}
+
+/// `CancelToken.any([a, b])` composes inputs: firing one input cancels a spawn
+/// configured with the composite token. The awaiter catches `Cancelled` and
+/// returns the fallback; if composition were broken the 10s sleep would run to
+/// completion and yield 42 instead.
+#[tokio::test]
+async fn spawn_with_options_cancel_token_any_composes() {
+    let source = r#"
+        function main() -> int {
+            let a = baml.spawn.CancelToken.new();
+            let b = baml.spawn.CancelToken.new();
+            let combined = baml.spawn.CancelToken.any([a, b]);
+            let f = spawn with baml.spawn.options(cancel = combined) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
+                42
+            };
+            let _ = a.cancel();
+            (await f) catch (e) { baml.panics.Cancelled => 0 }
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let start = std::time::Instant::now();
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed (Cancelled caught)");
+
+    assert_eq!(result, BexExternalValue::Int(0));
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(2),
+        "any-composed cancel took too long: {:?}",
+        start.elapsed()
+    );
+}
+
+// ============================================================================
+// BEP-034 spawn options — `detach = true`
+// ============================================================================
+
+/// `detach = true` does not perturb normal completion.
+#[tokio::test]
+async fn spawn_with_options_detach_completes_normally() {
+    let source = r#"
+        function main() -> int {
+            let f = spawn with baml.spawn.options(detach = true) { 42 };
+            await f
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed");
+
+    assert_eq!(result, BexExternalValue::Int(42));
+}
+
+/// A `detach = true` spawn still honors an explicit `cancel` token: detach only
+/// drops the *parent* token from the effective token, so a user token linked
+/// via `options(cancel = ...)` still cancels it.
+#[tokio::test]
+async fn spawn_with_options_detach_still_honors_cancel_token() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok, detach = true) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
+                42
+            };
+            let _ = tok.cancel();
+            (await f) catch (e) { baml.panics.Cancelled => 0 }
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let start = std::time::Instant::now();
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed (Cancelled caught)");
+
+    assert_eq!(result, BexExternalValue::Int(0));
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(2),
+        "detached cancel-token took too long: {:?}",
+        start.elapsed()
+    );
+}
+
+/// `spawn ... with` accepts only a `baml.spawn.options(...)` config: any other
+/// expression is a compile error (BEP-034 spawn options, v1). `compile_for_engine`
+/// panics on diagnostics, so a rejected program unwinds here.
+#[test]
+fn spawn_with_non_options_is_rejected() {
+    let bad = r#"
+        function helper() -> int { 1 }
+        function main() -> int {
+            let f = spawn with helper() { 1 };
+            await f
+        }
+    "#;
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {})); // suppress the diagnostic backtrace
+    let compiled = std::panic::catch_unwind(|| compile_for_engine(bad));
+    std::panic::set_hook(prev);
+    assert!(
+        compiled.is_err(),
+        "`spawn with helper()` should fail to compile (with accepts only baml.spawn.options(...))"
+    );
 }

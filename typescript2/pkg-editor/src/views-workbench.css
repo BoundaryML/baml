@@ -1,0 +1,276 @@
+/*
+ * Layout CSS for the monaco-vscode-api ViewsService workbench.
+ * Based on monaco-languageclient examples: resources/styles/views.css
+ *
+ * This is required for the sidebar + editor layout to work correctly
+ * when using defaultHtmlAugmentationInstructions / defaultViewsInit.
+ */
+
+/* The wrapper <div is="app"> created by defaultHtmlAugmentationInstructions
+   needs to fill its parent so #workbench-container height: 100% resolves. */
+div[is="app"] {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+:root {
+  --baml-workbench-titlebar-height: 35px;
+  --baml-workbench-activitybar-width: 48px;
+  --baml-workbench-sidebar-width: 200px;
+  --baml-workbench-editor-gutter-width: 48px;
+  --baml-workbench-statusbar-height: 22px;
+}
+
+.baml-editor-skeleton {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.baml-editor-loading-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.baml-editor-skeleton-titlebar {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 var(--baml-workbench-titlebar-height);
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid;
+}
+
+.baml-editor-skeleton-window-title {
+  width: 132px;
+  height: 9px;
+  border-radius: 2px;
+  opacity: 0.2;
+}
+
+.baml-editor-skeleton-main {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.baml-editor-skeleton-activitybar {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 var(--baml-workbench-activitybar-width);
+  flex-direction: column;
+  width: var(--baml-workbench-activitybar-width);
+  border-right: 1px solid;
+}
+
+.baml-editor-skeleton-activity-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--baml-workbench-activitybar-width);
+  height: 48px;
+}
+
+.baml-editor-skeleton-activity-indicator {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 0;
+  width: 2px;
+}
+
+.baml-editor-skeleton-activity-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  opacity: 0.45;
+}
+
+.baml-editor-skeleton-sidebar {
+  box-sizing: border-box;
+  flex: 0 0 var(--baml-workbench-sidebar-width);
+  width: var(--baml-workbench-sidebar-width);
+  padding: 10px 0;
+  border-right: 1px solid;
+}
+
+.baml-editor-skeleton-sidebar-title-row {
+  padding: 0 12px;
+  margin-bottom: 10px;
+}
+
+.baml-editor-skeleton-sidebar-title,
+.baml-editor-skeleton-sidebar-file {
+  height: 9px;
+  border-radius: 2px;
+}
+
+.baml-editor-skeleton-sidebar-title {
+  width: 80px;
+  opacity: 0.2;
+}
+
+.baml-editor-skeleton-sidebar-row {
+  padding: 2px 12px 2px 20px;
+}
+
+.baml-editor-skeleton-sidebar-file {
+  opacity: 0.15;
+}
+
+.baml-editor-skeleton-editor {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.baml-editor-skeleton-gutter {
+  flex: 0 0 var(--baml-workbench-editor-gutter-width);
+  width: var(--baml-workbench-editor-gutter-width);
+  padding-top: 12px;
+}
+
+.baml-editor-skeleton-gutter-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 21px;
+  padding-right: 12px;
+}
+
+.baml-editor-skeleton-line-number {
+  width: 10px;
+  height: 8px;
+  border-radius: 2px;
+  opacity: 0.25;
+}
+
+.baml-editor-skeleton-code {
+  flex: 1 1 auto;
+  padding: 12px 0 0 8px;
+}
+
+.baml-editor-skeleton-line {
+  display: flex;
+  align-items: center;
+  height: 21px;
+}
+
+.baml-editor-skeleton-token {
+  height: 10px;
+  margin-right: 8px;
+  border-radius: 2px;
+  opacity: 0.35;
+}
+
+.baml-editor-skeleton-statusbar {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 var(--baml-workbench-statusbar-height);
+  gap: 14px;
+  align-items: center;
+  padding: 0 8px;
+  border-top: 1px solid;
+}
+
+.baml-editor-skeleton-status-item {
+  height: 7px;
+  border-radius: 2px;
+  opacity: 0.35;
+}
+
+#sidebarDiv,
+#sidebarRightDiv {
+  display: flex;
+  flex: none;
+}
+
+#sidebar {
+  width: var(--baml-workbench-sidebar-width);
+}
+
+#editorsDiv {
+  flex: 1;
+  min-width: 0;
+}
+
+#editors {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+}
+
+#sidebar-right {
+  max-width: 500px;
+}
+
+#auxiliaryBar-left,
+#auxiliaryBar {
+  max-width: 300px;
+}
+
+/* Hide parts we don't need — they take vertical space from our split layout */
+#panel {
+  display: none;
+}
+
+#titleBar {
+  position: relative;
+  flex: none;
+}
+
+#banner {
+  display: none;
+}
+
+#statusBar {
+  flex: none;
+}
+
+.monaco-workbench
+  .activitybar
+  .action-item.checked
+  .active-item-indicator::before,
+.monaco-workbench
+  .activitybar
+  .action-item:focus
+  .active-item-indicator::before {
+  border-left-color: var(--vscode-activityBar-activeBorder) !important;
+}
+
+#workbench-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+#workbench-top {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* VS Code's tree stylesheet sizes twisties as content-box: 16px content plus 6px right padding. */
+#workbench-container .monaco-tl-twistie {
+  box-sizing: content-box;
+}
+
+/*
+ * The Quick Open dialog (Cmd+P) centers itself within the workbench container,
+ * which is only the left portion of the page. Override to center it on the
+ * full viewport so it doesn't look off-center.
+ */
+.quick-input-widget {
+  left: 50vw !important;
+  transform: translateX(-50%);
+}

@@ -27,72 +27,51 @@ enum TestEnum {
 
 //----
 //- diagnostics
-// Error: Expected ')', found identifier
-//     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
-//     │
+// E0010
+//
+//   × unexpected token
+//     ╭─[enum_enum_unquoted_description.baml:13:10]
 //  13 │     User is confused
-//     │          ─┬  
-//     │           ╰── Expected ')', found identifier
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Unexpected token in enum body, found ')'
-//     ╭─[ enum_enum_unquoted_description.baml:14:3 ]
-//     │
+//     ·          ─┬
+//     ·           ╰── expected `')'`, found `is`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[enum_enum_unquoted_description.baml:14:3]
 //  14 │   )
-//     │   ┬  
-//     │   ╰── Expected Unexpected token in enum body, found ')'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected ')', found identifier
-//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
-//     │
+//     ·   ┬
+//     ·   ╰── expected `Unexpected token in enum body`, found `')'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[enum_enum_unquoted_description.baml:16:10]
 //  16 │     User is excited
-//     │          ─┬  
-//     │           ╰── Expected ')', found identifier
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Unexpected token in enum body, found ')'
-//     ╭─[ enum_enum_unquoted_description.baml:17:3 ]
-//     │
+//     ·          ─┬
+//     ·           ╰── expected `')'`, found `is`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[enum_enum_unquoted_description.baml:17:3]
 //  17 │   )
-//     │   ┬  
-//     │   ╰── Expected Unexpected token in enum body, found ')'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Duplicate variant `TestEnum.is`
-//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
-//     │
+//     ·   ┬
+//     ·   ╰── expected `Unexpected token in enum body`, found `')'`
+//     ╰────
+// E0037
+//
+//   × `@description` argument must be a string literal, got `User`
+//     ╭─[enum_enum_unquoted_description.baml:13:5]
 //  13 │     User is confused
-//     │          ─┬  
-//     │           ╰── first defined as variant here
-//     │ 
+//     ·     ──┬─
+//     ·       ╰── invalid builtin declaration
+//     ╰────
+// E0037
+//
+//   × `@description` argument must be a string literal, got `User`
+//     ╭─[enum_enum_unquoted_description.baml:16:5]
 //  16 │     User is excited
-//     │          ─┬  
-//     │           ╰── duplicate variant definition
-//     │ 
-//     │ Note: Error code: E0012
-// ────╯
-// Error: `@description` argument must be a string literal, got `User`
-//     ╭─[ enum_enum_unquoted_description.baml:12:25 ]
-//     │
-//  12 │ ╭─▶   Confused @description(
-//  13 │ ├─▶     User is confused
-//     │ │                          
-//     │ ╰────────────────────────── invalid builtin declaration
-//     │     
-//     │     Note: Error code: E0037
-// ────╯
-// Error: `@description` argument must be a string literal, got `User`
-//     ╭─[ enum_enum_unquoted_description.baml:15:37 ]
-//     │
-//  15 │ ╭─▶   Excited @alias("k5") @description(
-//  16 │ ├─▶     User is excited
-//     │ │                         
-//     │ ╰───────────────────────── invalid builtin declaration
-//     │     
-//     │     Note: Error code: E0037
-// ────╯
+//     ·     ──┬─
+//     ·       ╰── invalid builtin declaration
+//     ╰────

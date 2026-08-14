@@ -9,10 +9,10 @@ pub enum BuiltinPipeline {
 
 /// A single extracted `$rust_function` or `$rust_io_function` builtin.
 pub struct NativeBuiltin {
-    /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.math.trunc"`
+    /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.argv"`
     pub path: String,
     /// Rust function name derived from path (dots → underscores, lowercased):
-    /// e.g. `"baml_array_length"`, `"baml_deep_copy"`, `"baml_math_trunc"`
+    /// e.g. `"baml_array_length"`, `"baml_deep_copy"`, `"baml_sys_argv"`
     pub fn_name: String,
     /// Non-self/receiver parameters only.
     pub params: Vec<Param>,
@@ -27,10 +27,19 @@ pub struct NativeBuiltin {
     /// When true, the trait method returns `NativeCallResult` directly instead of
     /// `Result<T, VmRustFnError>`. Set by `//baml:may_yield` directive.
     pub may_yield: bool,
+    /// When true, the builtin is treated as fallible (the trait method returns
+    /// `Result<T, VmRustFnError>`) even if it declares `throws never`. Set by the
+    /// `//baml:fallible` directive — for builtins that can raise a *panic*
+    /// (e.g. `AllocFailure`) rather than a catchable `throws` error.
+    pub fallible: bool,
     /// Which pipeline this builtin belongs to.
     pub pipeline: BuiltinPipeline,
-    /// Error categories from `throws` clause (IO only). E.g. `["Io", "Timeout"]`.
-    pub throws: Vec<String>,
+    /// The `throws` clause:
+    /// - `None` — no clause declared (a compiler error for builtins).
+    /// - `Some([])` — `throws never`: declares the builtin throws nothing.
+    /// - `Some([cats])` — error categories, e.g. `["Io", "Timeout"]`; the
+    ///   builtin is fallible.
+    pub throws: Option<Vec<String>>,
     /// Virtual path of the `.baml` source file (e.g. `"<builtin>/baml/ns_fs/fs.baml"`).
     pub source_file: String,
 }
@@ -38,7 +47,7 @@ pub struct NativeBuiltin {
 impl NativeBuiltin {
     /// Derive the `SysOp` enum variant name from the path.
     /// `"baml.fs.open"` → `"BamlFsOpen"`, `"baml.fs.File.read"` → `"BamlFsFileRead"`,
-    /// `"baml.env.get"` → `"BamlEnvGet"`, `"baml.llm.render_prompt"` → `"BamlLlmRenderPrompt"`.
+    /// `"baml.env.get"` → `"BamlEnvGet"`, `"ai.Prompt.text"` → `"AiPromptText"`.
     pub fn sys_op_variant_name(&self) -> String {
         self.path
             .split('.')
@@ -76,6 +85,16 @@ pub struct Param {
 pub struct Receiver {
     /// The class name (e.g. `"Array"`, `"Map"`, `"String"`, `"Pdf"`).
     pub class_name: String,
+    /// Dotted namespace of the class, relative to the `baml` package
+    /// (e.g. `"time"`, `"media"`, `""` for a root-level class). Used to build
+    /// the `view::<ns>::<Class>` path when the receiver is passed as a view.
+    pub namespace: String,
+    /// Whether the class is backed by `Object::Instance` with declared fields
+    /// (i.e. it has a generated `view::` struct). True for classes like
+    /// `time.Instant` / media classes; false for dedicated-variant types
+    /// (`Array`/`Map`/`String`/`Uint8Array`), opaque classes (`Future`), and
+    /// primitives — those keep a type-erased `&Value` receiver.
+    pub instance_backed: bool,
     /// Generic type parameters of the class (e.g. `["T"]` for `Array<T>`).
     pub class_generics: Vec<String>,
     pub receiver_type: ReceiverType,
@@ -107,6 +126,7 @@ impl ReceiverType {
 pub enum BamlType {
     String,
     Int,
+    Bigint,
     Float,
     Bool,
     Null,

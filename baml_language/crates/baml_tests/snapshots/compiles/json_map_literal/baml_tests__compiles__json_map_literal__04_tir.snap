@@ -1,9 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== TIR2 ===
-function user.NestedMapLiteral() -> baml.json.json throws never {
-  { : map<string, int | int[] | map<string, null>>
-    map { "a": 1, "b": [2, 3], "c": map { "nested": null } } : map<string, int | int[] | map<string, null>>
-  }
-}

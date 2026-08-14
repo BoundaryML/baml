@@ -1,6 +1,7 @@
 //! Instruction set and bytecode representation.
 
 use baml_base::Span;
+use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 
@@ -12,7 +13,7 @@ use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 ///
 /// Maps a contiguous range of integer values to jump offsets.
 /// Values outside the range or "holes" jump to the default offset.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct JumpTableData {
     /// Minimum discriminant value (maps to index 0).
     pub min: i64,
@@ -61,18 +62,6 @@ impl JumpTableData {
             self.names[index] = Some(name);
         }
     }
-
-    /// Lookup the offset for a value.
-    /// Returns None if value is out of range or is a hole.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    pub fn lookup(&self, value: i64) -> Option<isize> {
-        if value < self.min {
-            return None;
-        }
-        // Safety: value >= min, so index is non-negative.
-        let index = (value - self.min) as usize;
-        self.offsets.get(index).copied().flatten()
-    }
 }
 
 // ============================================================================
@@ -97,7 +86,7 @@ impl JumpTableData {
 ///   Optimized at Compile Time"
 /// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
 /// - Proposed for LLVM (issue #96971), Roslyn (#66604), Go (#34381)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct MatchHashTable {
     /// Multiplicative hash constant, found at compile time.
     pub multiply: u64,
@@ -116,12 +105,40 @@ pub struct MatchHashTable {
 }
 
 /// Single entry in a [`MatchHashTable`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct MatchHashEntry {
     /// The type tag expected at this slot (for verification).
     pub expected_tag: i64,
     /// Dense arm index `[0, K-1]` — fed into the subsequent jump table.
     pub dense_index: u8,
+}
+
+/// One field copy performed by `Instruction::InitSpread`.
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct FieldCopy {
+    /// Field index read from the source instance.
+    pub source: usize,
+    /// Field index written to the destination instance.
+    pub dest: usize,
+}
+
+/// A compact field-copy program for class/object spread initialization.
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct FieldCopySet {
+    /// Ordered field copies. Runtime reads all source values before writing so
+    /// overlapping source/destination objects behave like a simultaneous copy.
+    pub fields: Vec<FieldCopy>,
+}
+
+/// A compact class initialization program used by `Instruction::InitInstance`.
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct ClassInitPlan {
+    /// Class object allocated by the instruction.
+    pub class_obj: ObjectIndex,
+    /// Number of class-level type args stacked after the field values.
+    pub ntypeargs: u16,
+    /// Destination field indices initialized from stacked values, in value order.
+    pub fields: Vec<usize>,
 }
 
 /// Individual bytecode instruction.
@@ -153,7 +170,7 @@ pub struct MatchHashEntry {
 /// Instead store the state or complex structure in the `Vm` struct (in `bex_vm` crate) and
 /// find a way to reference it with very simple instructions.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum Instruction {
     /// Loads a constant from the bytecode's constant pool.
     ///
@@ -172,6 +189,14 @@ pub enum Instruction {
     /// Format: `STORE_VAR i` where `i` is the relative index of the variable in
     /// `Vm::stack` array.
     StoreVar(usize),
+
+    /// Stores the stack top in the frame's local variable slots and leaves it on the stack.
+    ///
+    /// Equivalent to `STORE_VAR i; LOAD_VAR i`, but without the redundant local reload.
+    ///
+    /// Format: `STORE_VAR_LOAD_VAR i` where `i` is the relative index of the variable
+    /// in `Vm::stack` array.
+    StoreVarLoadVar(usize),
 
     /// Load a global variable from the `Vm::globals` array.
     ///
@@ -210,11 +235,50 @@ pub enum Instruction {
     /// object's fields array.
     StoreField(usize),
 
+    /// Read an *interface* field from a receiver whose concrete type is not known
+    /// statically — the field analogue of [`Self::VirtualCall`].
+    ///
+    /// `LoadField` cannot serve here: its operand is a physical slot in the
+    /// receiver's own layout, and two classes implementing the same interface link
+    /// the same interface field to different slots. So the operand is instead the
+    /// field's index in the *interface's* declaration order, and the VM maps it to a
+    /// slot through the resolved impl's
+    /// [`field_links`](crate::types::RuntimeImplRule::field_links).
+    ///
+    /// Stack: `[receiver, iface_type]` -> `[value]`
+    ///
+    /// Pops `iface_type` (an `Object::Type` holding the — possibly parameterized —
+    /// interface) and the receiver, reads `Self` from the receiver's runtime concrete
+    /// type, resolves `<Self as iface_type>` to its single `implements` rule
+    /// (coherence), and pushes `receiver.fields[rule.field_links[i]]`.
+    ///
+    /// The interface arrives via `LoadType`, which substitutes the *caller's* frame
+    /// type args — so a symbolic view (`Slot<T>` inside a generic function) reaches
+    /// the resolver realized, selecting the right block when one class implements the
+    /// same interface family at several instantiations with different links. That is
+    /// the discrimination a receiver-only type test cannot make.
+    VirtualLoadField(usize),
+
+    /// Write an *interface* field on a statically-unknown receiver — the store
+    /// counterpart of [`Self::VirtualLoadField`], with the same operand meaning and
+    /// the same resolution.
+    ///
+    /// Stack: `[receiver, value, iface_type]` -> `[]`
+    VirtualStoreField(usize),
+
     /// Initialize a field during construction: pops the value, stores it in the field,
     /// and keeps the instance on the stack (unlike `StoreField` which pops both).
     ///
     /// Format: `INIT_FIELD i` where `i` is the index of the field.
     InitField(usize),
+
+    /// Initialize destination fields from a spread source instance during construction.
+    ///
+    /// Stack effect: `[..., dest, source] -> [..., dest]`.
+    ///
+    /// Format: `INIT_SPREAD i` where `i` indexes into
+    /// [`Bytecode::field_copy_sets`].
+    InitSpread(usize),
 
     /// Pop N values from the top of `Vm::stack` (the evaluation stack).
     ///
@@ -281,10 +345,57 @@ pub enum Instruction {
     /// `[left: Float, right: Float] → [Float]` — throws `DivisionByZero` if right == 0.0
     DivFloat,
 
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — raises `VmPanic::AllocFailure` if the result would exceed
+    /// `MAX_BIGINT_BITS`.
+    AddBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — raises `VmPanic::AllocFailure` if the result would exceed
+    /// `MAX_BIGINT_BITS`.
+    SubBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — the VM pre-checks `lb.bits() + rb.bits() > MAX_BIGINT_BITS` and
+    /// raises `VmPanic::AllocFailure` before computing the product.
+    MulBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]` — throws `DivisionByZero` if right == 0n
+    DivBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]` — throws `DivisionByZero` if right == 0n
+    ModBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise AND uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
+    BitAndBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise OR uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
+    BitOrBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise XOR uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
+    BitXorBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    ///
+    /// The right operand is the shift count. The VM raises
+    /// `VmPanic::NegativeBitShift` (`baml.panics.NegativeBitShift`) for a
+    /// negative count, and `VmPanic::AllocFailure` (`baml.panics.AllocFailure`)
+    /// when the count does not fit in a `usize` or the resulting value would
+    /// exceed `MAX_BIGINT_BITS`.
+    ShlBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    ///
+    /// The right operand is the shift count. The VM raises
+    /// `VmPanic::NegativeBitShift` (`baml.panics.NegativeBitShift`) for a
+    /// negative count. Non-negative counts that do not fit in a `usize`
+    /// saturate to `0n` (or `-1n` for negative left operands, matching
+    /// arithmetic right shift).
+    ShrBigint,
+
     /// `[left: Int, right: Int] → [Bool]`
     CmpIntOp(CmpOp),
     /// `[left: Float, right: Float] → [Bool]`
     CmpFloatOp(CmpOp),
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Bool]`
+    CmpBigintOp(CmpOp),
 
     /// Performs a unary operation.
     ///
@@ -310,6 +421,12 @@ pub enum Instruction {
     /// Format: `LOAD_ARRAY_ELEMENT` where the stack contains [array, index] and
     /// the result is the element at that index.
     LoadArrayElement,
+
+    /// Pops a container (Array, `Uint8Array`, Map, or String) from the stack
+    /// and pushes its length as an int.
+    ///
+    /// Format: `CONTAINER_LEN` — stack: \[container\] → \[int\]
+    ContainerLen,
 
     /// Loads a value from a map at a given key.
     ///
@@ -341,20 +458,49 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// Builds an initialized class instance from pre-stacked field values.
+    ///
+    /// Format: `INIT_INSTANCE plan_idx`, where `plan_idx` indexes
+    /// [`Bytecode::class_init_plans`]. The stack contains field values in plan
+    /// order, followed by any class-level type args. The instruction consumes
+    /// those values and pushes the initialized instance.
+    InitInstance(usize),
+
     /// Builds a variant of an enum and allocates it on the heap.
     ///
     /// Format: `ALLOC_VARIANT i` where `i` is the index of the enum in the
     /// `Vm::objects` array.
     AllocVariant(ObjectIndex),
 
-    /// Dispatch a statically-known global `sys_op` and create a pending future.
+    /// BEP-034 phase D′: invoke a statically-known global sys-op and
+    /// push its return value back on the stack in a single VM↔engine
+    /// round trip.
     ///
-    /// Format: `DISPATCH_FUTURE g` where `g` is the global index of the
-    /// `sys_op` function.
+    /// Format: `SYS_OP g` where `g` is the global index of the sys-op
+    /// function. Arguments are popped from the eval stack (arity from
+    /// the callee's metadata, same as `ScheduleFuture`).
     ///
-    /// Arguments are pushed onto the eval stack. The callee is read from
-    /// `Vm::globals[g]`, and arity is read from function metadata.
-    DispatchFuture(GlobalIndex),
+    /// Yields `VmExecState::SysOp { operation, args }`. The engine runs
+    /// the operation, races it against the active cancel token, and
+    /// pushes the resulting value back on the stack before resuming.
+    /// No `Object::Future` is allocated and no `FutureManager` entry is
+    /// created — sys-ops are not user-observable futures in BAML, so
+    /// the schedule + await pair is pure overhead.
+    SysOp(GlobalIndex),
+    SysOpWithRuntimeId(GlobalIndex),
+
+    /// BEP-034 `spawn { body }`. Pops `[closure, name, config, returns,
+    /// throws]` from the stack (in reverse push order), allocates an
+    /// `UnscheduledFuture` into the TLAB, and yields
+    /// `VmExecState::Spawn(ptr)` so the engine routes the closure to a fresh
+    /// `BexThread`.
+    ///
+    /// `returns` / `throws` are the `Object::Type` values a preceding pair of
+    /// `LoadType`s pushed — the `Future<T, E>` this spawn is typed at, already
+    /// resolved against the frame's type args. They travel with the request so
+    /// the engine can type the heap `Future` it allocates, which is what makes
+    /// a future's generic parameters visible to reflection and `is`/`match`.
+    Spawn,
 
     /// Awaits the future on top of the stack.
     ///
@@ -363,20 +509,16 @@ pub enum Instruction {
     /// control flow to the embedder and doesn't care about anything else.
     Await,
 
-    /// Creates a watched var and tracks its state.
+    /// BEP-034 `baml.future.__await_any`. Awaits the *first* of an array of
+    /// futures (the single array operand on top of the stack) to settle, and
+    /// pushes the `int` index of the first-settled future in input order.
     ///
-    /// Format: `WATCH i` where `i` is the relative index of the variable in the
-    /// `Vm::stack` array.
-    Watch(usize),
-
-    /// Unregisters a watched variable when it goes out of scope.
-    ///
-    /// Format: `UNWATCH i` where `i` is the relative index of the variable in the
-    /// `Vm::stack` array.
-    Unwatch(usize),
-
-    /// Manually triggers notifications for a watched variable.
-    Notify(usize),
+    /// Like `Await`, the VM yields `VmExecState::AwaitAny(ids)` to the engine
+    /// when none of the inputs have settled yet; the engine parks until the
+    /// first wakes, then re-executes this opcode, which now finds a settled
+    /// future and pushes its index. The combinators (`race`, `any`) are pure
+    /// BAML built on top of this.
+    AwaitAny,
 
     /// Call a statically-known global function.
     ///
@@ -403,6 +545,15 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// `Call` plus a caller-provided `boundary.LocalId` operand on top of the
+    /// stack. Ordinary call arity is unchanged; the VM pops the id first,
+    /// consumes it, installs the callee runtime-id/capture policy, then enters
+    /// the callee.
+    CallWithRuntimeId {
+        callee: GlobalIndex,
+        ntypeargs: u16,
+    },
+
     /// Call a function value from the eval stack.
     ///
     /// Format: `CALL_INDIRECT`.
@@ -412,34 +563,63 @@ pub enum Instruction {
     /// Arity is read from the runtime callee function object.
     CallIndirect,
 
+    /// `CallIndirect` plus a caller-provided `boundary.LocalId` operand above
+    /// the callee value.
+    CallIndirectWithRuntimeId,
+
+    /// Virtual interface-method call: resolve the callee at runtime from the
+    /// receiver's concrete `Self` type, then call it. The callee is *not* a
+    /// statically-known function — it is `<Self as I>::method`, where `Self` is
+    /// read from the receiver and `(Self, I)` uniquely identify one `implements`
+    /// block (coherence). Open-world: handles user / cross-package / runtime
+    /// types that a compile-time type-tag switch cannot enumerate.
+    ///
+    /// Stack layout (top-of-stack on the right), mirroring `Call`'s
+    /// type-args-below-value-args order:
+    ///
+    /// ```text
+    /// [m_targ_0, ..., m_targ_{ntypeargs-1}, val_arg_0 (receiver), ..., val_arg_{nargs-1}, iface_type, method_name]
+    /// ```
+    ///
+    /// The VM pops `method_name` (a `String`) and `iface_type` (an `Object::Type`
+    /// holding the — possibly parameterized — interface), then the `ntypeargs`
+    /// method-level type args (sitting below the value args, as in `Call`),
+    /// leaving the `nargs` value args (receiver first). It reads `Self` from the
+    /// receiver's runtime concrete type, resolves `<Self as iface_type>::method_name`,
+    /// and calls it like `Call`, seeding `frame.type_args` with the resolved impl's
+    /// type args (its own generics, or the interface's args + associated types for
+    /// an inherited default) followed by these method-level type args. `nargs` is
+    /// the resolved method's arity.
+    VirtualCall {
+        /// Number of value arguments (including the receiver as the first).
+        nargs: u16,
+        /// Number of leading method-level type arguments (`Object::Type` values),
+        /// below the value args. Zero for a non-generic method.
+        ntypeargs: u16,
+    },
+
+    /// `VirtualCall` plus a caller-provided `boundary.LocalId` operand above
+    /// the method-name value.
+    VirtualCallWithRuntimeId {
+        nargs: u16,
+        ntypeargs: u16,
+    },
+
     /// Throw the value on top of the stack.
     ///
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
     Throw,
+
+    /// Re-throw a caught value on top of the stack.
+    ///
+    /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
+    Rethrow,
 
     /// Return from a function.
     ///
     /// No arguments needed, result is stored in the eval stack and the VM
     /// simply has to clean up the call stack and continue execution.
     Return,
-
-    /// Notifies about entering or exiting a block.
-    ///
-    /// Format: `NOTIFY_BLOCK block_index` where `block_index` is the index
-    /// into the current function's `block_notifications` array.
-    NotifyBlock(usize),
-
-    /// Enter a visualization node.
-    ///
-    /// Format: `VIZ_ENTER i` where `i` is the index into the current
-    /// function's `viz_nodes` array.
-    VizEnter(usize),
-
-    /// Exit a visualization node.
-    ///
-    /// Format: `VIZ_EXIT i` where `i` is the index into the current
-    /// function's `viz_nodes` array.
-    VizExit(usize),
 
     /// Jump through a table based on integer discriminant.
     ///
@@ -473,16 +653,23 @@ pub enum Instruction {
 
     /// Check if the value on top of the stack matches the type identified by
     /// the constant at index `i`. The constant is either:
-    /// - `Value::Object(class_ptr)` — class identity check (`inst.class == class_ptr`)
-    /// - `Value::Int(tag)` — type tag check (`value_type_tag(value) == tag`)
+    /// - `Value::object(class_ptr)` — class identity check (`inst.class == class_ptr`)
+    /// - `Value::int(tag)` — type tag check (`value_type_tag(value) == tag`)
     ///
     /// Pops the value, pushes `Bool` result.
     IsType(usize),
 
+    /// Pops and tests the top value, stores it in `destination` on success,
+    /// and pushes the `Bool` result.
+    NarrowBind {
+        ty: usize,
+        destination: usize,
+    },
+
     /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
     /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
     ///
-    /// Pushes `Value::Object(Object::Type(ty))`.
+    /// Pushes `Value::object(Object::Type(ty))`.
     ///
     /// For fully-concrete templates (no `TypeArgRef`), no substitution walk
     /// is performed — the concrete `Ty` is cloned directly.
@@ -563,6 +750,50 @@ pub enum Instruction {
     /// Stack: `[receiver]` -> `[bound_method]`
     MakeBoundMethod(GlobalIndex),
 
+    /// Create a bound method for an *interface* method by resolving the receiver's
+    /// impl at runtime — the value analogue of `VirtualCall` (`let f = x.eq` where
+    /// `x`'s concrete type is statically unknown). Pops the method name, the
+    /// interface type (`Object::Type`), `ntypeargs` method-level type args, and the
+    /// receiver; resolves the receiver's concrete `Self` to its `implements` rule
+    /// (coherence guarantees at most one) and pushes an `Object::BoundMethod` over
+    /// the resolved method, carrying the callee's complete frame type args — the
+    /// impl's realized frame followed by the method-level args (a generic method's
+    /// own type args must be captured here or they are lost; the receiver cannot
+    /// express them).
+    ///
+    /// Stack: `[receiver, type_args…, iface_type, method_name]` -> `[bound_method]`
+    MakeVirtualBoundMethod {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
+
+    /// Create a generic-function value (`foo<T>`) from a base function's global
+    /// index, popping `ntypeargs` `Object::Type` values from the stack into its
+    /// `type_args`. Used for param-dependent instantiations; the fully-concrete
+    /// case is a pooled, interned constant loaded via `LoadConst`.
+    ///
+    /// Stack: `[type_args...]` -> `[generic_function]`
+    MakeGenericFunction {
+        /// Global index of the base function.
+        function: GlobalIndex,
+        /// Number of `Object::Type` values on the stack to pop into `type_args`.
+        ntypeargs: u16,
+    },
+
+    /// Specialize a *runtime callable value* with explicit type arguments
+    /// (`g<int>` where `g` is a local/captured function value, not a function
+    /// reference resolvable at compile time). Pops the callable value, then
+    /// `ntypeargs` `Object::Type` values, and pushes a `Closure` wrapping the
+    /// callable with those types as `captured_type_args` — so calling it seeds
+    /// `frame.type_args` exactly like the pooled `GenericFunction` path.
+    ///
+    /// Stack: `[type_args..., callable]` -> `[closure]`
+    MakeGenericFunctionFromValue {
+        /// Number of `Object::Type` values on the stack to pop into `type_args`.
+        ntypeargs: u16,
+    },
+
     /// Wrap the top-of-stack value in a `Cell` object.
     ///
     /// Stack: `[value]` -> `[cell]`
@@ -618,6 +849,17 @@ pub enum Instruction {
     /// can emit a `CustomEvent` with full span context. Execution resumes
     /// after the engine processes the event.
     SendEvent,
+
+    // ── Operand-movement superinstructions (CPython-style) ────────────────
+    // Combine two adjacent local-movement ops into one dispatch. Pure
+    // replace-in-place at emit time (like `StoreVarLoadVar`), confined to the
+    // current basic block, so jump targets and block addresses are unaffected.
+    /// Fused `LoadVar(a); LoadVar(b)` — push `local[a]`, then `local[b]`.
+    /// (`CPython` `LOAD_FAST_LOAD_FAST`.)
+    LoadVar2(usize, usize),
+    /// Fused `StoreVar(a); StoreVar(b)` — pop into `local[a]`, then `local[b]`.
+    /// (`CPython` `STORE_FAST_STORE_FAST`.)
+    StoreVar2(usize, usize),
 }
 
 /// Compact bytecode opcodes.
@@ -625,7 +867,8 @@ pub enum Instruction {
 /// Each variant maps to a 1-byte opcode in the `CompactCode.code` stream.
 /// The operand format is determined by the opcode — see `OpCode::encoded_size()`.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[borsh(use_discriminant = true)]
 pub enum OpCode {
     // ── Unit ops (no operands, 1 byte) ─────────────────────────
     Return = 0,
@@ -642,6 +885,7 @@ pub enum OpCode {
     Unreachable,
     MakeCell,
     SendEvent,
+    ContainerLen,
 
     // ── Expanded arithmetic (no operands, 1 byte) ──────────────
     Add,
@@ -675,6 +919,16 @@ pub enum OpCode {
     SubFloat,
     MulFloat,
     DivFloat,
+    AddBigint,
+    SubBigint,
+    MulBigint,
+    DivBigint,
+    ModBigint,
+    BitAndBigint,
+    BitOrBigint,
+    BitXorBigint,
+    ShlBigint,
+    ShrBigint,
 
     // ── Specialized comparison (no operands, 1 byte) ───────────
     CmpIntEq,
@@ -689,6 +943,12 @@ pub enum OpCode {
     CmpFloatLtEq,
     CmpFloatGt,
     CmpFloatGtEq,
+    CmpBigintEq,
+    CmpBigintNotEq,
+    CmpBigintLt,
+    CmpBigintLtEq,
+    CmpBigintGt,
+    CmpBigintGtEq,
 
     // ── Expanded unary (no operands, 1 byte) ───────────────────
     Not,
@@ -704,25 +964,23 @@ pub enum OpCode {
     LoadConst,
     LoadVar,
     StoreVar,
+    StoreVarLoadVar,
     LoadGlobal,
     StoreGlobal,
     LoadField,
     StoreField,
     InitField,
+    InitSpread,
     Pop,
     Copy,
     AllocArray,
     AllocMap,
     AllocInstance,
+    InitInstance,
     AllocVariant,
-    DispatchFuture,
-    Watch,
-    Unwatch,
-    Notify,
+    SysOp,
+    Spawn,
     Call,
-    NotifyBlock,
-    VizEnter,
-    VizExit,
     IsType,
     DenseTag,
     LoadType,
@@ -741,6 +999,50 @@ pub enum OpCode {
     // ── Two operands (9 bytes) ─────────────────────────────────
     JumpTable,   // u32 table_idx + i32 default_offset
     MakeClosure, // u32 object_idx (capture_count is popped from the stack)
+
+    // ── u32 + u16 (7 bytes) ────────────────────────────────────
+    MakeGenericFunction, // u32 function global + u16 ntypeargs
+
+    // ── u16 (3 bytes) ──────────────────────────────────────────
+    MakeGenericFunctionFromValue, // u16 ntypeargs (callable popped from stack)
+
+    // ── Operand-movement superinstructions: two u32 operands (9 bytes) ──
+    LoadVar2,
+    StoreVar2,
+
+    // ── Unit op appended out of group order to preserve discriminants ──
+    // BEP-034 `baml.future.__await_any`: no operands (1 byte), like `Await`.
+    AwaitAny,
+
+    // ── Appended out of group order to preserve discriminants ──
+    // Virtual interface-method call: u16 nargs + u16 ntypeargs (5 bytes). The
+    // interface type (`Object::Type`) and method-name string are pushed above the
+    // args and popped first; the callee is resolved at runtime from the receiver's
+    // `Self`.
+    VirtualCall,
+
+    // ── Phase 6 ID-aware call forms, appended to preserve discriminants ──
+    CallWithRuntimeId,
+    CallIndirectWithRuntimeId,
+    VirtualCallWithRuntimeId,
+    SysOpWithRuntimeId,
+
+    // ── Phase 5 trace-origin marker, appended to preserve discriminants ──
+    Rethrow,
+
+    // ── Appended to preserve discriminants ──
+    // Virtual interface-method *value* (the value analogue of `VirtualCall`):
+    // no operands (1 byte); receiver, interface type, and method name are popped
+    // from the stack and the resolved bound method is pushed.
+    MakeVirtualBoundMethod,
+
+    // Atomic type test plus local binding: u32 type constant + u32 destination.
+    NarrowBind,
+
+    // Virtual interface-*field* access (the field analogue of `VirtualCall`):
+    // u32 interface-field index; receiver and interface type come off the stack.
+    VirtualLoadField,
+    VirtualStoreField,
 }
 
 impl OpCode {
@@ -751,17 +1053,22 @@ impl OpCode {
             Self::Return
             | Self::Await
             | Self::Throw
+            | Self::Rethrow
             | Self::LoadArrayElement
             | Self::LoadMapElement
             | Self::StoreArrayElement
             | Self::StoreMapElement
             | Self::CallIndirect
+            | Self::CallIndirectWithRuntimeId
             | Self::Discriminant
             | Self::TypeTag
             | Self::ThrowIfPanic
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
+            | Self::ContainerLen
+            | Self::Spawn
+            | Self::AwaitAny
             | Self::Add
             | Self::Sub
             | Self::Mul
@@ -787,6 +1094,16 @@ impl OpCode {
             | Self::SubFloat
             | Self::MulFloat
             | Self::DivFloat
+            | Self::AddBigint
+            | Self::SubBigint
+            | Self::MulBigint
+            | Self::DivBigint
+            | Self::ModBigint
+            | Self::BitAndBigint
+            | Self::BitOrBigint
+            | Self::BitXorBigint
+            | Self::ShlBigint
+            | Self::ShrBigint
             | Self::CmpIntEq
             | Self::CmpIntNotEq
             | Self::CmpIntLt
@@ -799,6 +1116,12 @@ impl OpCode {
             | Self::CmpFloatLtEq
             | Self::CmpFloatGt
             | Self::CmpFloatGtEq
+            | Self::CmpBigintEq
+            | Self::CmpBigintNotEq
+            | Self::CmpBigintLt
+            | Self::CmpBigintLtEq
+            | Self::CmpBigintGt
+            | Self::CmpBigintGtEq
             | Self::Not
             | Self::Neg
             | Self::LoadNull
@@ -812,23 +1135,21 @@ impl OpCode {
             Self::LoadConst
             | Self::LoadVar
             | Self::StoreVar
+            | Self::StoreVarLoadVar
             | Self::LoadGlobal
             | Self::StoreGlobal
             | Self::LoadField
             | Self::StoreField
             | Self::InitField
+            | Self::InitSpread
             | Self::Pop
             | Self::Copy
             | Self::AllocArray
             | Self::AllocMap
+            | Self::InitInstance
             | Self::AllocVariant
-            | Self::DispatchFuture
-            | Self::Watch
-            | Self::Unwatch
-            | Self::Notify
-            | Self::NotifyBlock
-            | Self::VizEnter
-            | Self::VizExit
+            | Self::SysOp
+            | Self::SysOpWithRuntimeId
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
@@ -840,16 +1161,29 @@ impl OpCode {
             | Self::CaptureRef
             | Self::Jump
             | Self::PopJumpIfFalse
-            | Self::JumpIfFalse => 5,
+            | Self::JumpIfFalse
+            | Self::VirtualCall
+            | Self::VirtualLoadField
+            | Self::VirtualStoreField
+            | Self::VirtualCallWithRuntimeId => 5,
+
+            // 3-byte: opcode + u16
+            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance | Self::Call => 7,
+            Self::AllocInstance
+            | Self::Call
+            | Self::CallWithRuntimeId
+            | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
 
             // 9-byte: opcode + u32 + i32
             Self::JumpTable => 9,
+
+            // 9-byte: opcode + u32 + u32 (operand-movement superinstructions)
+            Self::LoadVar2 | Self::StoreVar2 | Self::NarrowBind => 9,
         }
     }
 }
@@ -861,18 +1195,23 @@ impl TryFrom<u8> for OpCode {
         match byte {
             x if x == Self::Return as u8 => Ok(Self::Return),
             x if x == Self::Await as u8 => Ok(Self::Await),
+            x if x == Self::AwaitAny as u8 => Ok(Self::AwaitAny),
             x if x == Self::Throw as u8 => Ok(Self::Throw),
+            x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
+            x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
             x if x == Self::StoreMapElement as u8 => Ok(Self::StoreMapElement),
             x if x == Self::CallIndirect as u8 => Ok(Self::CallIndirect),
+            x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
             x if x == Self::SendEvent as u8 => Ok(Self::SendEvent),
+            x if x == Self::ContainerLen as u8 => Ok(Self::ContainerLen),
             x if x == Self::Add as u8 => Ok(Self::Add),
             x if x == Self::Sub as u8 => Ok(Self::Sub),
             x if x == Self::Mul as u8 => Ok(Self::Mul),
@@ -898,6 +1237,16 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::SubFloat as u8 => Ok(Self::SubFloat),
             x if x == Self::MulFloat as u8 => Ok(Self::MulFloat),
             x if x == Self::DivFloat as u8 => Ok(Self::DivFloat),
+            x if x == Self::AddBigint as u8 => Ok(Self::AddBigint),
+            x if x == Self::SubBigint as u8 => Ok(Self::SubBigint),
+            x if x == Self::MulBigint as u8 => Ok(Self::MulBigint),
+            x if x == Self::DivBigint as u8 => Ok(Self::DivBigint),
+            x if x == Self::ModBigint as u8 => Ok(Self::ModBigint),
+            x if x == Self::BitAndBigint as u8 => Ok(Self::BitAndBigint),
+            x if x == Self::BitOrBigint as u8 => Ok(Self::BitOrBigint),
+            x if x == Self::BitXorBigint as u8 => Ok(Self::BitXorBigint),
+            x if x == Self::ShlBigint as u8 => Ok(Self::ShlBigint),
+            x if x == Self::ShrBigint as u8 => Ok(Self::ShrBigint),
             x if x == Self::CmpIntEq as u8 => Ok(Self::CmpIntEq),
             x if x == Self::CmpIntNotEq as u8 => Ok(Self::CmpIntNotEq),
             x if x == Self::CmpIntLt as u8 => Ok(Self::CmpIntLt),
@@ -910,6 +1259,12 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CmpFloatLtEq as u8 => Ok(Self::CmpFloatLtEq),
             x if x == Self::CmpFloatGt as u8 => Ok(Self::CmpFloatGt),
             x if x == Self::CmpFloatGtEq as u8 => Ok(Self::CmpFloatGtEq),
+            x if x == Self::CmpBigintEq as u8 => Ok(Self::CmpBigintEq),
+            x if x == Self::CmpBigintNotEq as u8 => Ok(Self::CmpBigintNotEq),
+            x if x == Self::CmpBigintLt as u8 => Ok(Self::CmpBigintLt),
+            x if x == Self::CmpBigintLtEq as u8 => Ok(Self::CmpBigintLtEq),
+            x if x == Self::CmpBigintGt as u8 => Ok(Self::CmpBigintGt),
+            x if x == Self::CmpBigintGtEq as u8 => Ok(Self::CmpBigintGtEq),
             x if x == Self::Not as u8 => Ok(Self::Not),
             x if x == Self::Neg as u8 => Ok(Self::Neg),
             x if x == Self::LoadNull as u8 => Ok(Self::LoadNull),
@@ -919,25 +1274,24 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LoadConst as u8 => Ok(Self::LoadConst),
             x if x == Self::LoadVar as u8 => Ok(Self::LoadVar),
             x if x == Self::StoreVar as u8 => Ok(Self::StoreVar),
+            x if x == Self::StoreVarLoadVar as u8 => Ok(Self::StoreVarLoadVar),
             x if x == Self::LoadGlobal as u8 => Ok(Self::LoadGlobal),
             x if x == Self::StoreGlobal as u8 => Ok(Self::StoreGlobal),
             x if x == Self::LoadField as u8 => Ok(Self::LoadField),
             x if x == Self::StoreField as u8 => Ok(Self::StoreField),
             x if x == Self::InitField as u8 => Ok(Self::InitField),
+            x if x == Self::InitSpread as u8 => Ok(Self::InitSpread),
             x if x == Self::Pop as u8 => Ok(Self::Pop),
             x if x == Self::Copy as u8 => Ok(Self::Copy),
             x if x == Self::AllocArray as u8 => Ok(Self::AllocArray),
             x if x == Self::AllocMap as u8 => Ok(Self::AllocMap),
             x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
+            x if x == Self::InitInstance as u8 => Ok(Self::InitInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
-            x if x == Self::DispatchFuture as u8 => Ok(Self::DispatchFuture),
-            x if x == Self::Watch as u8 => Ok(Self::Watch),
-            x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
-            x if x == Self::Notify as u8 => Ok(Self::Notify),
+            x if x == Self::SysOp as u8 => Ok(Self::SysOp),
+            x if x == Self::SysOpWithRuntimeId as u8 => Ok(Self::SysOpWithRuntimeId),
+            x if x == Self::Spawn as u8 => Ok(Self::Spawn),
             x if x == Self::Call as u8 => Ok(Self::Call),
-            x if x == Self::NotifyBlock as u8 => Ok(Self::NotifyBlock),
-            x if x == Self::VizEnter as u8 => Ok(Self::VizEnter),
-            x if x == Self::VizExit as u8 => Ok(Self::VizExit),
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
             x if x == Self::LoadType as u8 => Ok(Self::LoadType),
@@ -952,6 +1306,18 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::JumpIfFalse as u8 => Ok(Self::JumpIfFalse),
             x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
             x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
+            x if x == Self::MakeGenericFunction as u8 => Ok(Self::MakeGenericFunction),
+            x if x == Self::MakeGenericFunctionFromValue as u8 => {
+                Ok(Self::MakeGenericFunctionFromValue)
+            }
+            x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
+            x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
+            x if x == Self::VirtualLoadField as u8 => Ok(Self::VirtualLoadField),
+            x if x == Self::VirtualStoreField as u8 => Ok(Self::VirtualStoreField),
+            x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
+            x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
+            x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
+            x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
             _ => Err(byte),
         }
     }
@@ -962,18 +1328,27 @@ impl std::fmt::Display for OpCode {
         let name = match self {
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
+            Self::AwaitAny => "AWAIT_ANY",
+            Self::VirtualLoadField => "VIRTUAL_LOAD_FIELD",
+            Self::VirtualStoreField => "VIRTUAL_STORE_FIELD",
+            Self::VirtualCall => "VIRTUAL_CALL",
+            Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
             Self::Throw => "THROW",
+            Self::Rethrow => "RETHROW",
+            Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
             Self::StoreMapElement => "STORE_MAP_ELEMENT",
             Self::CallIndirect => "CALL_INDIRECT",
+            Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
             Self::SendEvent => "SEND_EVENT",
+            Self::ContainerLen => "CONTAINER_LEN",
             Self::Add => "ADD",
             Self::Sub => "SUB",
             Self::Mul => "MUL",
@@ -999,6 +1374,16 @@ impl std::fmt::Display for OpCode {
             Self::SubFloat => "SUB_FLOAT",
             Self::MulFloat => "MUL_FLOAT",
             Self::DivFloat => "DIV_FLOAT",
+            Self::AddBigint => "ADD_BIGINT",
+            Self::SubBigint => "SUB_BIGINT",
+            Self::MulBigint => "MUL_BIGINT",
+            Self::DivBigint => "DIV_BIGINT",
+            Self::ModBigint => "MOD_BIGINT",
+            Self::BitAndBigint => "BIT_AND_BIGINT",
+            Self::BitOrBigint => "BIT_OR_BIGINT",
+            Self::BitXorBigint => "BIT_XOR_BIGINT",
+            Self::ShlBigint => "SHL_BIGINT",
+            Self::ShrBigint => "SHR_BIGINT",
             Self::CmpIntEq => "CMP_INT_EQ",
             Self::CmpIntNotEq => "CMP_INT_NOT_EQ",
             Self::CmpIntLt => "CMP_INT_LT",
@@ -1011,6 +1396,12 @@ impl std::fmt::Display for OpCode {
             Self::CmpFloatLtEq => "CMP_FLOAT_LT_EQ",
             Self::CmpFloatGt => "CMP_FLOAT_GT",
             Self::CmpFloatGtEq => "CMP_FLOAT_GT_EQ",
+            Self::CmpBigintEq => "CMP_BIGINT_EQ",
+            Self::CmpBigintNotEq => "CMP_BIGINT_NOT_EQ",
+            Self::CmpBigintLt => "CMP_BIGINT_LT",
+            Self::CmpBigintLtEq => "CMP_BIGINT_LT_EQ",
+            Self::CmpBigintGt => "CMP_BIGINT_GT",
+            Self::CmpBigintGtEq => "CMP_BIGINT_GT_EQ",
             Self::Not => "NOT",
             Self::Neg => "NEG",
             Self::LoadNull => "LOAD_NULL",
@@ -1020,25 +1411,25 @@ impl std::fmt::Display for OpCode {
             Self::LoadConst => "LOAD_CONST",
             Self::LoadVar => "LOAD_VAR",
             Self::StoreVar => "STORE_VAR",
+            Self::StoreVarLoadVar => "STORE_VAR_LOAD_VAR",
             Self::LoadGlobal => "LOAD_GLOBAL",
             Self::StoreGlobal => "STORE_GLOBAL",
             Self::LoadField => "LOAD_FIELD",
             Self::StoreField => "STORE_FIELD",
             Self::InitField => "INIT_FIELD",
+            Self::InitSpread => "INIT_SPREAD",
             Self::Pop => "POP",
             Self::Copy => "COPY",
             Self::AllocArray => "ALLOC_ARRAY",
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
+            Self::InitInstance => "INIT_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
-            Self::DispatchFuture => "DISPATCH_FUTURE",
-            Self::Watch => "WATCH",
-            Self::Unwatch => "UNWATCH",
-            Self::Notify => "NOTIFY",
+            Self::SysOp => "SYS_OP",
+            Self::SysOpWithRuntimeId => "SYS_OP_WITH_RUNTIME_ID",
+            Self::Spawn => "SPAWN",
             Self::Call => "CALL",
-            Self::NotifyBlock => "NOTIFY_BLOCK",
-            Self::VizEnter => "VIZ_ENTER",
-            Self::VizExit => "VIZ_EXIT",
+            Self::CallWithRuntimeId => "CALL_WITH_RUNTIME_ID",
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
@@ -1053,6 +1444,11 @@ impl std::fmt::Display for OpCode {
             Self::JumpIfFalse => "JUMP_IF_FALSE",
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
+            Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
+            Self::MakeGenericFunctionFromValue => "MAKE_GENERIC_FUNCTION_FROM_VALUE",
+            Self::LoadVar2 => "LOAD_VAR2",
+            Self::StoreVar2 => "STORE_VAR2",
+            Self::NarrowBind => "NARROW_BIND",
         };
         f.write_str(name)
     }
@@ -1091,87 +1487,7 @@ pub fn read_i8(code: &[u8], pc: &mut usize) -> i8 {
     val
 }
 
-/// Block notification metadata stored in the Function struct.
-/// The `function_name` field is populated at runtime from the Function containing this notification.
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct BlockNotification {
-    pub function_name: String, // Populated at runtime from Function::name
-    pub block_name: String,
-    pub level: usize,
-    pub block_type: BlockNotificationType,
-    pub is_enter: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BlockNotificationType {
-    Statement,
-    If,
-    While,
-    For,
-    Function,
-}
-
-/// Visualization node metadata stored in the Function struct.
-/// Used for control flow visualization (branches, loops, scopes).
-#[derive(Clone, Debug, PartialEq)]
-pub struct VizNodeMeta {
-    /// Unique node ID within this function.
-    pub node_id: u32,
-    /// Encoded log filter key for this node.
-    pub log_filter_key: String,
-    /// Parent node's log filter key (None for root).
-    pub parent_log_filter_key: Option<String>,
-    /// Type of this visualization node.
-    pub node_type: VizNodeType,
-    /// Human-readable label for this node.
-    pub label: String,
-    /// Header level (only for `HeaderContextEnter`).
-    pub header_level: Option<u8>,
-}
-
-/// Type of visualization node.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum VizNodeType {
-    /// Root of a function's control flow.
-    FunctionRoot,
-    /// Header context from `//# header` annotation.
-    HeaderContextEnter,
-    /// Group of branches (if-else chain).
-    BranchGroup,
-    /// Single branch arm (if/else if/else).
-    BranchArm,
-    /// Loop construct (while/for).
-    Loop,
-    /// Other block scope.
-    OtherScope,
-}
-
-/// Delta type for viz execution events.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum VizExecDelta {
-    /// Entering a visualization node.
-    Enter,
-    /// Exiting a visualization node.
-    Exit,
-}
-
-/// Visualization execution event emitted when entering/exiting a viz node.
-#[derive(Clone, Debug, PartialEq)]
-pub struct VizExecEvent {
-    /// Enter or exit.
-    pub delta: VizExecDelta,
-    /// Node ID within the function.
-    pub node_id: u32,
-    /// Type of the node.
-    pub node_type: VizNodeType,
-    /// Human-readable label.
-    pub label: String,
-    /// Header level (for `HeaderContextEnter`).
-    pub header_level: Option<u8>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum BinOp {
     Add,
     Sub,
@@ -1185,7 +1501,7 @@ pub enum BinOp {
     Shr,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum CmpOp {
     Eq,
     NotEq,
@@ -1195,7 +1511,7 @@ pub enum CmpOp {
     GtEq,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum UnaryOp {
     Not,
     Neg,
@@ -1246,11 +1562,15 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadConst(i) => write!(f, "LOAD_CONST {i}"),
             Instruction::LoadVar(i) => write!(f, "LOAD_VAR {i}"),
             Instruction::StoreVar(i) => write!(f, "STORE_VAR {i}"),
+            Instruction::StoreVarLoadVar(i) => write!(f, "STORE_VAR_LOAD_VAR {i}"),
             Instruction::LoadGlobal(i) => write!(f, "LOAD_GLOBAL {i}"),
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
+            Instruction::VirtualLoadField(i) => write!(f, "VIRTUAL_LOAD_FIELD {i}"),
+            Instruction::VirtualStoreField(i) => write!(f, "VIRTUAL_STORE_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
             Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
+            Instruction::InitSpread(i) => write!(f, "INIT_SPREAD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
             Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
@@ -1267,8 +1587,19 @@ impl std::fmt::Display for Instruction {
             Instruction::SubFloat => f.write_str("SUB_FLOAT"),
             Instruction::MulFloat => f.write_str("MUL_FLOAT"),
             Instruction::DivFloat => f.write_str("DIV_FLOAT"),
+            Instruction::AddBigint => f.write_str("ADD_BIGINT"),
+            Instruction::SubBigint => f.write_str("SUB_BIGINT"),
+            Instruction::MulBigint => f.write_str("MUL_BIGINT"),
+            Instruction::DivBigint => f.write_str("DIV_BIGINT"),
+            Instruction::ModBigint => f.write_str("MOD_BIGINT"),
+            Instruction::BitAndBigint => f.write_str("BIT_AND_BIGINT"),
+            Instruction::BitOrBigint => f.write_str("BIT_OR_BIGINT"),
+            Instruction::BitXorBigint => f.write_str("BIT_XOR_BIGINT"),
+            Instruction::ShlBigint => f.write_str("SHL_BIGINT"),
+            Instruction::ShrBigint => f.write_str("SHR_BIGINT"),
             Instruction::CmpIntOp(op) => write!(f, "CMP_INT_OP {op}"),
             Instruction::CmpFloatOp(op) => write!(f, "CMP_FLOAT_OP {op}"),
+            Instruction::CmpBigintOp(op) => write!(f, "CMP_BIGINT_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
@@ -1281,31 +1612,58 @@ impl std::fmt::Display for Instruction {
             } => {
                 write!(f, "ALLOC_INSTANCE {class_obj} ntypeargs={ntypeargs}")
             }
+            Instruction::InitInstance(i) => write!(f, "INIT_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
-            Instruction::DispatchFuture(callee) => write!(f, "DISPATCH_FUTURE {callee}"),
+            Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
+            Instruction::SysOpWithRuntimeId(callee) => {
+                write!(f, "SYS_OP_WITH_RUNTIME_ID {callee}")
+            }
+            Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
+            Instruction::AwaitAny => f.write_str("AWAIT_ANY"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
             }
+            Instruction::CallWithRuntimeId { callee, ntypeargs } => {
+                write!(f, "CALL_WITH_RUNTIME_ID {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::MakeGenericFunction {
+                function,
+                ntypeargs,
+            } => {
+                write!(f, "MAKE_GENERIC_FUNCTION {function} ntypeargs={ntypeargs}")
+            }
+            Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+                write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
+            }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
+            Instruction::CallIndirectWithRuntimeId => f.write_str("CALL_INDIRECT_WITH_RUNTIME_ID"),
+            Instruction::VirtualCall { nargs, ntypeargs } => {
+                write!(f, "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs}")
+            }
+            Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+                write!(
+                    f,
+                    "VIRTUAL_CALL_WITH_RUNTIME_ID nargs={nargs} ntypeargs={ntypeargs}"
+                )
+            }
             Instruction::Throw => f.write_str("THROW"),
+            Instruction::Rethrow => f.write_str("RETHROW"),
+            Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
+            }
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
-            Instruction::Watch(i) => write!(f, "WATCH {i}"),
-            Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
-            Instruction::NotifyBlock(block_index) => {
-                write!(f, "NOTIFY_BLOCK {block_index}")
-            }
-            Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
-            Instruction::VizEnter(i) => write!(f, "VIZ_ENTER {i}"),
-            Instruction::VizExit(i) => write!(f, "VIZ_EXIT {i}"),
             Instruction::JumpTable(table_idx) => {
                 write!(f, "JUMP_TABLE {table_idx}")
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
+            Instruction::NarrowBind { ty, destination } => {
+                write!(f, "NARROW_BIND {ty} {destination}")
+            }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
@@ -1337,6 +1695,9 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreCapture(idx) => write!(f, "STORE_CAPTURE {idx}"),
             Instruction::CaptureRef(idx) => write!(f, "CAPTURE_REF {idx}"),
             Instruction::SendEvent => f.write_str("SEND_EVENT"),
+            Instruction::ContainerLen => f.write_str("CONTAINER_LEN"),
+            Instruction::LoadVar2(a, b) => write!(f, "LOAD_VAR2 {a} {b}"),
+            Instruction::StoreVar2(a, b) => write!(f, "STORE_VAR2 {a} {b}"),
         }
     }
 }
@@ -1345,13 +1706,13 @@ impl std::fmt::Display for Instruction {
 ///
 /// Populated by the compiler at emit time so that debug display doesn't
 /// need to resolve names from the `ObjectPool` or runtime stack.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum OperandMeta {
-    /// `LoadVar`, `StoreVar`, `Watch`, `Unwatch`, `Notify` — variable name.
+    /// `LoadVar`, `StoreVar` — variable name.
     Var(String),
     /// `LoadField`, `StoreField` — field name.
     Field(String),
-    /// `Call`, `DispatchFuture` — function name.
+    /// `Call`, `SysOp` — function name.
     Callable(String),
     /// `LoadGlobal`, `StoreGlobal` — display value.
     Global(String),
@@ -1379,7 +1740,7 @@ impl OperandMeta {
 ///
 /// Parallel to `Bytecode::instructions`. Contains resolved operand names for
 /// debug display.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct InstructionMeta {
     /// Resolved operand name (if applicable to the instruction type).
     pub operand: Option<OperandMeta>,
@@ -1388,7 +1749,7 @@ pub struct InstructionMeta {
 /// Run-length encoded source mapping entry.
 ///
 /// Each entry applies from `pc` (inclusive) until the next entry.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct LineTableEntry {
     /// Bytecode program counter where this entry begins.
     pub pc: usize,
@@ -1403,7 +1764,7 @@ pub struct LineTableEntry {
 }
 
 /// Debug metadata for a named local variable and its lexical scope.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct DebugLocalScope {
     /// Stack slot used by this local.
     pub slot: usize,
@@ -1426,7 +1787,7 @@ pub struct DebugLocalScope {
 /// handler. The handler bytecode is responsible for filtering: a
 /// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
 /// programmer didn't explicitly name.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).
     pub start_pc: usize,
@@ -1437,22 +1798,58 @@ pub struct ExceptionTableEntry {
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
     /// Frame-local slot for the stack trace value.
-    /// `usize::MAX` means no stack trace binding (catch (e) without second param).
+    /// `u32::MAX` means no stack trace binding (catch (e) without second param).
     pub stack_trace_slot: usize,
 }
 
 impl ExceptionTableEntry {
-    pub const NO_STACK_TRACE: usize = usize::MAX;
+    pub const NO_STACK_TRACE: usize = u32::MAX as usize;
 
     pub fn has_stack_trace_slot(&self) -> bool {
         self.stack_trace_slot != Self::NO_STACK_TRACE
     }
 }
 
+/// One handler-body PC range, for the BEP-042 cause-chain pre-walk.
+///
+/// A throw whose PC lies in `[start_pc, end_pc)` happened *during handling of*
+/// the error caught by the owning catch (or while unwinding through a defer
+/// pad). That caught error's materialized `ErrorContext` lives in
+/// `stack_trace_slot` and becomes the new error's `cause`.
+///
+/// One catch contributes one entry *per handler-body block*. A handler body is
+/// the union of blocks captured at lowering; layout can fragment it across
+/// non-contiguous PCs, so per-block ranges keep the coverage exact — unlike a
+/// single `[handler_pc, max_end)` span, which over-covers the gaps between
+/// fragments (and would mis-chain a throw in code laid out there).
+///
+/// `handler_pc` identifies the owning catch and keys nesting depth: among all
+/// entries covering a PC, the one with the largest `handler_pc` is the
+/// innermost (narrowest) handler and wins.
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
+pub struct HandlerContextEntry {
+    /// First instruction of this handler-body block (inclusive).
+    pub start_pc: usize,
+    /// One past the last instruction of this handler-body block (exclusive).
+    pub end_pc: usize,
+    /// Handler block PC of the owning catch — the nesting key.
+    pub handler_pc: usize,
+    /// Frame-local slot holding the owning catch's `ErrorContext`.
+    /// `ExceptionTableEntry::NO_STACK_TRACE` means the catch bound no `ctx`, so
+    /// there is no context object to chain — the pre-walk stops with `null`.
+    pub stack_trace_slot: usize,
+}
+
+impl HandlerContextEntry {
+    pub fn has_stack_trace_slot(&self) -> bool {
+        self.stack_trace_slot != ExceptionTableEntry::NO_STACK_TRACE
+    }
+}
+
 /// Compact jump table: maps discriminant values to i32 byte offsets
 /// (relative to the end of the `JumpTable` instruction in the compact stream).
 /// Parallel to `Bytecode::jump_tables` but with translated offsets.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct CompactJumpTable {
     /// Minimum discriminant value (maps to index 0), same as `JumpTableData::min`.
     pub min: i64,
@@ -1479,7 +1876,7 @@ impl CompactJumpTable {
 /// A re-encoding of `Vec<Instruction>` as `Vec<u8>` with 1-byte opcodes and
 /// fixed u32 operands. Produced by `Bytecode::lower_to_compact()` at engine
 /// load time. The line table and exception table are translated to byte-offset PCs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct CompactCode {
     /// The encoded instruction stream.
     pub code: Vec<u8>,
@@ -1487,6 +1884,9 @@ pub struct CompactCode {
     pub line_table: Vec<LineTableEntry>,
     /// Exception table with PCs translated to byte offsets.
     pub exception_table: Vec<ExceptionTableEntry>,
+    /// Handler-body ranges (BEP-042 cause chain) with PCs translated to byte
+    /// offsets. Parallel to `Bytecode::handler_context_table`.
+    pub handler_context_table: Vec<HandlerContextEntry>,
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
@@ -1516,12 +1916,23 @@ impl CompactCode {
             .iter()
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
+
+    /// The innermost handler-body range (byte-offset) covering `pc`, or `None`.
+    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
+    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// Innermost = largest `handler_pc` among covering ranges.
+    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_context_table
+            .iter()
+            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
+            .max_by_key(|e| e.handler_pc)
+    }
 }
 
 /// Executable bytecode.
 ///
 /// Contains the instructions to run and all the associated constants.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Bytecode {
     /// Sequence of instructions.
     pub instructions: Vec<Instruction>,
@@ -1530,12 +1941,20 @@ pub struct Bytecode {
     /// Contains `ObjectIndex` for object references.
     pub constants: Vec<ConstValue>,
 
-    /// Resolved constants (runtime, populated at load time).
+    /// Resolved constants, populated from `constants` at load time.
     /// Contains `HeapPtr` for object references. Used by `LoadConst`.
+    /// Set to `null` for types.
+    #[borsh(skip)]
     pub resolved_constants: Vec<crate::Value>,
 
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
     pub jump_tables: Vec<JumpTableData>,
+
+    /// Field-copy programs used by `InitSpread`.
+    pub field_copy_sets: Vec<FieldCopySet>,
+
+    /// Class initialization programs used by `InitInstance`.
+    pub class_init_plans: Vec<ClassInitPlan>,
 
     /// Perfect hash tables for sparse `TypeTag` switch dispatch.
     /// Indexed by `DenseTag` instruction operand.
@@ -1557,8 +1976,15 @@ pub struct Bytecode {
     /// to find a handler covering the faulting instruction.
     pub exception_table: Vec<ExceptionTableEntry>,
 
+    /// Handler-body PC ranges for the BEP-042 cause chain. One entry per
+    /// handler-body block (a catch arm body, or a defer pad body). The cause
+    /// pre-walk scans this table — *not* the exception table — to decide
+    /// whether a throw happened "during handling of" another error.
+    pub handler_context_table: Vec<HandlerContextEntry>,
+
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
+    #[borsh(skip)]
     pub compact: Option<CompactCode>,
 }
 
@@ -1575,10 +2001,13 @@ impl Bytecode {
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         }
     }
@@ -1611,26 +2040,15 @@ impl Bytecode {
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
-    /// Resolve constants from `ConstValue` to Value using a resolver function.
-    /// Called at load time to convert `ObjectIndex` to `HeapPtr`.
-    pub fn resolve_constants<F>(&mut self, resolve: F)
-    where
-        F: Fn(crate::ObjectIndex) -> crate::HeapPtr,
-    {
-        self.resolved_constants = self
-            .constants
+    /// The innermost handler-body range covering `pc`, or `None`.
+    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
+    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// Innermost = largest `handler_pc` among covering ranges.
+    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_context_table
             .iter()
-            .map(|cv| match cv {
-                // TyTemplate constants are NOT pre-resolved: `LoadType` reads
-                // them directly from `constants` at execution time.
-                ConstValue::Type(_) => crate::Value::Null,
-                // ClassWithTypeArgs constants are NOT pre-resolved: `IsType`
-                // reads them directly from `constants` at execution time and
-                // resolves `class_obj` to a `HeapPtr` via `idx_to_ptr`.
-                ConstValue::ClassWithTypeArgs { .. } => crate::Value::Null,
-                other => other.to_value(&resolve),
-            })
-            .collect();
+            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
+            .max_by_key(|e| e.handler_pc)
     }
 
     /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.
@@ -1678,17 +2096,22 @@ impl Bytecode {
                 Instruction::Return
                 | Instruction::Await
                 | Instruction::Throw
+                | Instruction::Rethrow
                 | Instruction::LoadArrayElement
                 | Instruction::LoadMapElement
                 | Instruction::StoreArrayElement
                 | Instruction::StoreMapElement
                 | Instruction::CallIndirect
+                | Instruction::CallIndirectWithRuntimeId
                 | Instruction::Discriminant
                 | Instruction::TypeTag
                 | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
-                | Instruction::SendEvent => {}
+                | Instruction::SendEvent
+                | Instruction::ContainerLen
+                | Instruction::Spawn
+                | Instruction::AwaitAny => {}
 
                 // ── Expanded sub-enum ops: no operands ──────────────
                 Instruction::BinOp(_)
@@ -1703,8 +2126,19 @@ impl Bytecode {
                 | Instruction::SubFloat
                 | Instruction::MulFloat
                 | Instruction::DivFloat
+                | Instruction::AddBigint
+                | Instruction::SubBigint
+                | Instruction::MulBigint
+                | Instruction::DivBigint
+                | Instruction::ModBigint
+                | Instruction::BitAndBigint
+                | Instruction::BitOrBigint
+                | Instruction::BitXorBigint
+                | Instruction::ShlBigint
+                | Instruction::ShrBigint
                 | Instruction::CmpIntOp(_)
-                | Instruction::CmpFloatOp(_) => {}
+                | Instruction::CmpFloatOp(_)
+                | Instruction::CmpBigintOp(_) => {}
 
                 // ── Constant specialization ──────────────────────────
                 Instruction::LoadConst(idx) => {
@@ -1734,19 +2168,18 @@ impl Bytecode {
                 // ── Single usize operand → u32 ─────────────────────
                 Instruction::LoadVar(v)
                 | Instruction::StoreVar(v)
+                | Instruction::StoreVarLoadVar(v)
                 | Instruction::LoadField(v)
+                | Instruction::VirtualLoadField(v)
+                | Instruction::VirtualStoreField(v)
                 | Instruction::StoreField(v)
                 | Instruction::InitField(v)
+                | Instruction::InitSpread(v)
+                | Instruction::InitInstance(v)
                 | Instruction::Pop(v)
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
                 | Instruction::AllocMap(v)
-                | Instruction::Watch(v)
-                | Instruction::Unwatch(v)
-                | Instruction::Notify(v)
-                | Instruction::NotifyBlock(v)
-                | Instruction::VizEnter(v)
-                | Instruction::VizExit(v)
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
@@ -1763,7 +2196,8 @@ impl Bytecode {
                 // ── GlobalIndex operand → u32 ───────────────────────
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
-                | Instruction::DispatchFuture(g)
+                | Instruction::SysOp(g)
+                | Instruction::SysOpWithRuntimeId(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -1773,12 +2207,39 @@ impl Bytecode {
                 }
 
                 // ── Call: u32 callee + u16 ntypeargs ─────────────────
-                Instruction::Call { callee, ntypeargs } => {
+                Instruction::Call { callee, ntypeargs }
+                | Instruction::CallWithRuntimeId { callee, ntypeargs } => {
                     code.extend_from_slice(
                         &u32::try_from(callee.into_raw())
                             .expect("global index fits u32")
                             .to_le_bytes(),
                     );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
+                // ── MakeGenericFunction: u32 function + u16 ntypeargs ─
+                Instruction::MakeGenericFunction {
+                    function,
+                    ntypeargs,
+                } => {
+                    code.extend_from_slice(
+                        &u32::try_from(function.into_raw())
+                            .expect("global index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
+                // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
+                Instruction::MakeGenericFunctionFromValue { ntypeargs }
+                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
+                // ── VirtualCall: u16 nargs, u16 ntypeargs ────────────
+                Instruction::VirtualCall { nargs, ntypeargs }
+                | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+                    code.extend_from_slice(&nargs.to_le_bytes());
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
@@ -1860,6 +2321,28 @@ impl Bytecode {
                             .to_le_bytes(),
                     );
                 }
+
+                // ── Operand-movement superinstructions: two u32 operands ──
+                Instruction::LoadVar2(a, b) | Instruction::StoreVar2(a, b) => {
+                    code.extend_from_slice(
+                        &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
+                    );
+                }
+                Instruction::NarrowBind { ty, destination } => {
+                    code.extend_from_slice(
+                        &u32::try_from(*ty)
+                            .expect("type constant fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*destination)
+                            .expect("destination slot fits u32")
+                            .to_le_bytes(),
+                    );
+                }
             }
         }
 
@@ -1886,6 +2369,23 @@ impl Bytecode {
                 end_pc: index_to_offset[entry.end_pc],
                 handler_pc: index_to_offset[entry.handler_pc],
                 error_slot: entry.error_slot,
+                stack_trace_slot: entry.stack_trace_slot,
+            })
+            .collect();
+
+        let handler_context_table = self
+            .handler_context_table
+            .iter()
+            .map(|entry| HandlerContextEntry {
+                start_pc: index_to_offset[entry.start_pc],
+                // `end_pc` may equal `instructions.len()` when a handler-body
+                // block runs to the end of the function; map that to the total
+                // byte length.
+                end_pc: index_to_offset
+                    .get(entry.end_pc)
+                    .copied()
+                    .unwrap_or(code.len()),
+                handler_pc: index_to_offset[entry.handler_pc],
                 stack_trace_slot: entry.stack_trace_slot,
             })
             .collect();
@@ -1941,6 +2441,7 @@ impl Bytecode {
             code,
             line_table,
             exception_table,
+            handler_context_table,
             jump_tables,
         }
     }
@@ -1954,18 +2455,25 @@ impl Bytecode {
         match instr {
             Instruction::Return => OpCode::Return,
             Instruction::Await => OpCode::Await,
+            Instruction::AwaitAny => OpCode::AwaitAny,
             Instruction::Throw => OpCode::Throw,
+            Instruction::Rethrow => OpCode::Rethrow,
+            Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
             Instruction::StoreMapElement => OpCode::StoreMapElement,
             Instruction::CallIndirect => OpCode::CallIndirect,
+            Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
             Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,
             Instruction::SendEvent => OpCode::SendEvent,
+            Instruction::ContainerLen => OpCode::ContainerLen,
+            Instruction::LoadVar2(..) => OpCode::LoadVar2,
+            Instruction::StoreVar2(..) => OpCode::StoreVar2,
 
             // Expanded sub-enum variants
             Instruction::BinOp(op) => match op {
@@ -2005,26 +2513,29 @@ impl Bytecode {
             // Single-operand variants
             Instruction::LoadVar(_) => OpCode::LoadVar,
             Instruction::StoreVar(_) => OpCode::StoreVar,
+            Instruction::StoreVarLoadVar(_) => OpCode::StoreVarLoadVar,
             Instruction::LoadGlobal(_) => OpCode::LoadGlobal,
             Instruction::StoreGlobal(_) => OpCode::StoreGlobal,
             Instruction::LoadField(_) => OpCode::LoadField,
+            Instruction::VirtualLoadField(_) => OpCode::VirtualLoadField,
+            Instruction::VirtualStoreField(_) => OpCode::VirtualStoreField,
             Instruction::StoreField(_) => OpCode::StoreField,
             Instruction::InitField(_) => OpCode::InitField,
+            Instruction::InitSpread(_) => OpCode::InitSpread,
             Instruction::Pop(_) => OpCode::Pop,
             Instruction::Copy(_) => OpCode::Copy,
             Instruction::AllocArray(_) => OpCode::AllocArray,
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
+            Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
-            Instruction::DispatchFuture(_) => OpCode::DispatchFuture,
-            Instruction::Watch(_) => OpCode::Watch,
-            Instruction::Unwatch(_) => OpCode::Unwatch,
-            Instruction::Notify(_) => OpCode::Notify,
+            Instruction::SysOp(_) => OpCode::SysOp,
+            Instruction::SysOpWithRuntimeId(_) => OpCode::SysOpWithRuntimeId,
+            Instruction::Spawn => OpCode::Spawn,
             Instruction::Call { .. } => OpCode::Call,
-            Instruction::NotifyBlock(_) => OpCode::NotifyBlock,
-            Instruction::VizEnter(_) => OpCode::VizEnter,
-            Instruction::VizExit(_) => OpCode::VizExit,
+            Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
             Instruction::IsType(_) => OpCode::IsType,
+            Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
@@ -2044,6 +2555,16 @@ impl Bytecode {
             Instruction::SubFloat => OpCode::SubFloat,
             Instruction::MulFloat => OpCode::MulFloat,
             Instruction::DivFloat => OpCode::DivFloat,
+            Instruction::AddBigint => OpCode::AddBigint,
+            Instruction::SubBigint => OpCode::SubBigint,
+            Instruction::MulBigint => OpCode::MulBigint,
+            Instruction::DivBigint => OpCode::DivBigint,
+            Instruction::ModBigint => OpCode::ModBigint,
+            Instruction::BitAndBigint => OpCode::BitAndBigint,
+            Instruction::BitOrBigint => OpCode::BitOrBigint,
+            Instruction::BitXorBigint => OpCode::BitXorBigint,
+            Instruction::ShlBigint => OpCode::ShlBigint,
+            Instruction::ShrBigint => OpCode::ShrBigint,
             Instruction::CmpIntOp(op) => match op {
                 CmpOp::Eq => OpCode::CmpIntEq,
                 CmpOp::NotEq => OpCode::CmpIntNotEq,
@@ -2060,6 +2581,14 @@ impl Bytecode {
                 CmpOp::Gt => OpCode::CmpFloatGt,
                 CmpOp::GtEq => OpCode::CmpFloatGtEq,
             },
+            Instruction::CmpBigintOp(op) => match op {
+                CmpOp::Eq => OpCode::CmpBigintEq,
+                CmpOp::NotEq => OpCode::CmpBigintNotEq,
+                CmpOp::Lt => OpCode::CmpBigintLt,
+                CmpOp::LtEq => OpCode::CmpBigintLtEq,
+                CmpOp::Gt => OpCode::CmpBigintGt,
+                CmpOp::GtEq => OpCode::CmpBigintGtEq,
+            },
 
             // Jump variants
             Instruction::Jump(_) => OpCode::Jump,
@@ -2069,6 +2598,12 @@ impl Bytecode {
             // Two-operand variants
             Instruction::JumpTable(_) => OpCode::JumpTable,
             Instruction::MakeClosure { .. } => OpCode::MakeClosure,
+            Instruction::MakeGenericFunction { .. } => OpCode::MakeGenericFunction,
+            Instruction::MakeGenericFunctionFromValue { .. } => {
+                OpCode::MakeGenericFunctionFromValue
+            }
+            Instruction::VirtualCall { .. } => OpCode::VirtualCall,
+            Instruction::VirtualCallWithRuntimeId { .. } => OpCode::VirtualCallWithRuntimeId,
         }
     }
 }
@@ -2096,10 +2631,13 @@ mod compact_tests {
             constants,
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta,
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         }
     }
@@ -2116,6 +2654,60 @@ mod compact_tests {
         assert_eq!(compact.code[0], OpCode::LoadIntSmall as u8);
         assert_eq!(compact.code[1], 42u8);
         assert_eq!(compact.code[2], OpCode::Return as u8);
+    }
+
+    #[test]
+    fn encode_virtual_field_ops() {
+        let bc = make_bytecode(
+            vec![
+                Instruction::VirtualLoadField(3),
+                Instruction::VirtualStoreField(258),
+                Instruction::Return,
+            ],
+            Vec::new(),
+        );
+        let compact = bc.lower_to_compact();
+        // Both are opcode + u32, like `LoadField`.
+        assert_eq!(compact.code.len(), 5 + 5 + 1);
+        assert_eq!(compact.code[0], OpCode::VirtualLoadField as u8);
+        assert_eq!(
+            u32::from_le_bytes(compact.code[1..5].try_into().unwrap()),
+            3
+        );
+        assert_eq!(compact.code[5], OpCode::VirtualStoreField as u8);
+        assert_eq!(
+            u32::from_le_bytes(compact.code[6..10].try_into().unwrap()),
+            258,
+        );
+        assert_eq!(compact.code[10], OpCode::Return as u8);
+    }
+
+    /// A wrong `encoded_size` silently desynchronizes the instruction stream: the
+    /// decoder reads the next opcode from the middle of an operand. The offset
+    /// table is built from `encoded_size` while the bytes are written by
+    /// `lower_to_compact`, so the two must agree for every opcode.
+    #[test]
+    fn encoded_size_matches_emitted_bytes_for_every_opcode() {
+        for (instruction, expected) in [
+            (Instruction::VirtualLoadField(1), OpCode::VirtualLoadField),
+            (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
+            (Instruction::LoadField(1), OpCode::LoadField),
+            (Instruction::StoreField(1), OpCode::StoreField),
+        ] {
+            let bc = make_bytecode(vec![instruction], Vec::new());
+            let op = bc.instruction_to_opcode(&instruction);
+            assert_eq!(op, expected, "opcode mapping for {instruction:?}");
+            assert_eq!(
+                bc.lower_to_compact().code.len(),
+                op.encoded_size(),
+                "encoded_size disagrees with emitted bytes for {instruction:?}",
+            );
+            assert_eq!(
+                OpCode::try_from(op as u8).expect("opcode round-trips"),
+                op,
+                "opcode byte round-trip for {instruction:?}",
+            );
+        }
     }
 
     #[test]
@@ -2164,6 +2756,23 @@ mod compact_tests {
         let compact = bc.lower_to_compact();
         assert_eq!(compact.code.len(), 1);
         assert_eq!(compact.code[0], OpCode::Add as u8);
+    }
+
+    #[test]
+    fn encode_init_instance_operand() {
+        let bc = make_bytecode(vec![Instruction::InitInstance(7)], vec![]);
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), 5);
+        assert_eq!(compact.code[0], OpCode::InitInstance as u8);
+        let plan_idx = u32::from_le_bytes([
+            compact.code[1],
+            compact.code[2],
+            compact.code[3],
+            compact.code[4],
+        ]);
+        assert_eq!(plan_idx, 7);
+        assert_eq!(Instruction::InitInstance(7).to_string(), "INIT_INSTANCE 7");
+        assert_eq!(OpCode::try_from(compact.code[0]), Ok(OpCode::InitInstance));
     }
 
     #[test]
@@ -2230,6 +2839,8 @@ mod compact_tests {
             constants: vec![ConstValue::Int(1)],
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: vec![
                 LineTableEntry {
@@ -2249,6 +2860,7 @@ mod compact_tests {
             ],
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         };
         let compact = bc.lower_to_compact();
@@ -2267,6 +2879,8 @@ mod compact_tests {
             constants: vec![ConstValue::Int(0)],
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: vec![InstructionMeta { operand: None }; 3],
@@ -2277,6 +2891,12 @@ mod compact_tests {
                 error_slot: 0,
                 stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
             }],
+            handler_context_table: vec![HandlerContextEntry {
+                start_pc: 2,
+                end_pc: 3, // one past the last instruction → mapped to total byte length
+                handler_pc: 2,
+                stack_trace_slot: 0,
+            }],
             compact: None,
         };
         let compact = bc.lower_to_compact();
@@ -2284,5 +2904,10 @@ mod compact_tests {
         assert_eq!(entry.start_pc, 0); // instruction 0 → byte 0
         assert_eq!(entry.end_pc, 3); // instruction 2 → byte 3 (2-byte LoadIntSmall + 1-byte Return)
         assert_eq!(entry.handler_pc, 3); // instruction 2 → byte 3
+
+        let hc = &compact.handler_context_table[0];
+        assert_eq!(hc.start_pc, 3); // instruction 2 → byte 3
+        assert_eq!(hc.end_pc, 4); // instruction 3 (end) → total byte length 4
+        assert_eq!(hc.handler_pc, 3);
     }
 }

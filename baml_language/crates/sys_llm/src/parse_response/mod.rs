@@ -5,6 +5,63 @@ mod openai;
 
 use crate::LlmProvider;
 
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LlmOutput {
+    pub parts: Vec<LlmOutputPart>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum LlmOutputPart {
+    Text {
+        text: String,
+    },
+    Media {
+        media: std::sync::Arc<baml_builtins2::MediaValue>,
+        #[allow(dead_code)]
+        provider_id: Option<String>,
+        #[allow(dead_code)]
+        metadata: serde_json::Value,
+    },
+}
+
+impl LlmOutput {
+    pub(crate) fn from_text(text: String) -> Self {
+        let mut output = Self::default();
+        output.push_text(text);
+        output
+    }
+
+    pub(crate) fn push_text(&mut self, text: String) {
+        if !text.is_empty() {
+            self.parts.push(LlmOutputPart::Text { text });
+        }
+    }
+
+    pub(crate) fn push_media(
+        &mut self,
+        media: std::sync::Arc<baml_builtins2::MediaValue>,
+        provider_id: Option<String>,
+        metadata: serde_json::Value,
+    ) {
+        self.parts.push(LlmOutputPart::Media {
+            media,
+            provider_id,
+            metadata,
+        });
+    }
+
+    pub(crate) fn text_content(&self) -> String {
+        self.parts
+            .iter()
+            .filter_map(|part| match part {
+                LlmOutputPart::Text { text } => Some(text.as_str()),
+                LlmOutputPart::Media { .. } => None,
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ParseResponseError {
     #[error("failed to deserialize {provider} response: {source}. Body:\n{content}")]
@@ -40,6 +97,8 @@ pub(crate) enum ParseResponseError {
 pub(crate) struct LlmProviderResponse {
     /// Text content extracted from the LLM response.
     pub content: String,
+    /// Structured provider-native output parts, preserving text/media order.
+    pub output: LlmOutput,
     /// Model identifier returned by the provider (absent for Google/Vertex).
     pub model: Option<String>,
     /// Normalized finish reason.
@@ -95,6 +154,7 @@ pub(crate) fn parse_response(
         LlmProvider::AwsBedrock => bedrock::parse_bedrock_response(body),
 
         LlmProvider::OpenAiResponses => openai::responses::parse_openai_responses_response(body),
+        LlmProvider::AiGatewayImages => openai::images::parse_openai_images_response(body),
         LlmProvider::GoogleAi => google::parse_google_response(body),
         LlmProvider::VertexAi => google::parse_vertex_response(body),
         LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Err(

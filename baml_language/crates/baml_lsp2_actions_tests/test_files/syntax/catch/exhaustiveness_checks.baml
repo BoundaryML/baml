@@ -32,45 +32,18 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//     ╭─[ catch_exhaustiveness_checks.baml:17:9 ]
-//     │
-//  17 │ ╭─▶     _ => match (pet) {
-//     ┆ ┆   
-//  21 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── unreachable arm
-//     │     
-//     │     Note: Error code: E0063
-// ────╯
-// Error: unreachable arm
-//     ╭─[ catch_exhaustiveness_checks.baml:20:12 ]
-//     │
+// E0063
+//
+//   × unreachable arm
+//     ╭─[catch_exhaustiveness_checks.baml:20:12]
 //  20 │       _ => "unreachable"
-//     │            ──────┬──────  
-//     │                  ╰──────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
-//     │
+//     ·            ─────────────
+//     ╰────
+// E0062
+//
+//   × non-exhaustive match on type Cat | Dog; missing: Dog { type: _ }
+//     ╭─[catch_exhaustiveness_checks.baml:27:10]
 //  27 │ ╭─▶     _ => match (pet) {
-//     ┆ ┆   
-//  29 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── unreachable arm
-//     │     
-//     │     Note: Error code: E0063
-// ────╯
-// Error: non-exhaustive match on `user.Pet`; missing: user.Dog { type: _ }
-//     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
-//     │
-//  27 │ ╭─▶     _ => match (pet) {
-//     ┆ ┆   
-//  29 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── non-exhaustive match on `user.Pet`; missing: user.Dog { type: _ }
-//     │     
-//     │     Note: Error code: E0062
-// ────╯
+//  28 │ │         let c: Cat => "cat"
+//  29 │ ╰─▶     }
+//     ╰────

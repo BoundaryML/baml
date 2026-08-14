@@ -30,8 +30,11 @@ export function installWasmPanicHook(): void {
     const firstArg = args[0];
     if (typeof firstArg === 'string') {
       // Rust panics via console_error_panic_hook typically start with "panicked at"
-      if (firstArg.includes('panicked at') || firstArg.includes('wasm-bindgen')) {
-        const message = args.map(a => String(a)).join(' ');
+      if (
+        firstArg.includes('panicked at') ||
+        firstArg.includes('wasm-bindgen')
+      ) {
+        const message = args.map((a) => String(a)).join(' ');
         registry.set_message(message);
         // Notify immediately when panic is detected
         if (panicCallback) {

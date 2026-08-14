@@ -1,296 +1,225 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 1435
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] Error: class is missing a name
-   ╭─[ invalid_syntax.baml:1:1 ]
-   │
- 1 │ class 123Invalid {  // Invalid class name
-   │ ──┬──  
-   │   ╰──── expected a name here
-   │ 
-   │ Note: Error code: E0107
-───╯
+  [hir] E0107
 
-  [parse] Error: Expected '{', found integer
-   ╭─[ invalid_syntax.baml:1:7 ]
-   │
+  × class is missing a name
+   ╭─[invalid_syntax.baml:1:1]
  1 │ class 123Invalid {  // Invalid class name
-   │       ─┬─  
-   │        ╰─── Expected '{', found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
+   · ──┬──
+   ·   ╰── expected a name here
+   ╰────
 
-  [parse] Error: Expected class name, found integer
-   ╭─[ invalid_syntax.baml:1:7 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[invalid_syntax.baml:1:7]
  1 │ class 123Invalid {  // Invalid class name
-   │       ─┬─  
-   │        ╰─── Expected class name, found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·       ─┬─
+   ·        ╰── expected `class name`, found `integer`
+   ╰────
 
-  [parse] Error: Expected top-level declaration, found integer
-   ╭─[ invalid_syntax.baml:1:7 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[invalid_syntax.baml:1:10]
  1 │ class 123Invalid {  // Invalid class name
-   │       ─┬─  
-   │        ╰─── Expected top-level declaration, found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·          ───┬───
+   ·             ╰── expected `top-level declaration`, found `identifier`
+   ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-   ╭─[ invalid_syntax.baml:1:10 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[invalid_syntax.baml:1:18]
  1 │ class 123Invalid {  // Invalid class name
-   │          ───┬───  
-   │             ╰───── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                  ┬
+   ·                  ╰── expected `top-level declaration`, found `'{'`
+   ╰────
 
-  [parse] Error: Expected top-level declaration, found '{'
-   ╭─[ invalid_syntax.baml:1:18 ]
-   │
- 1 │ class 123Invalid {  // Invalid class name
-   │                  ┬  
-   │                  ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found identifier
-   ╭─[ invalid_syntax.baml:2:3 ]
-   │
+  × unexpected token
+   ╭─[invalid_syntax.baml:2:3]
  2 │   field string
-   │   ──┬──  
-   │     ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·   ──┬──
+   ·     ╰── expected `top-level declaration`, found `identifier`
+   ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-   ╭─[ invalid_syntax.baml:2:9 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[invalid_syntax.baml:2:9]
  2 │   field string
-   │         ───┬──  
-   │            ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·         ───┬──
+   ·            ╰── expected `top-level declaration`, found `identifier`
+   ╰────
 
-  [parse] Error: Expected top-level declaration, found '}'
-   ╭─[ invalid_syntax.baml:3:1 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[invalid_syntax.baml:3:1]
  3 │ }
-   │ ┬  
-   │ ╰── Expected top-level declaration, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   · ┬
+   · ╰── expected `top-level declaration`, found `'}'`
+   ╰────
 
-  [hir] Error: could not parse type expression for return type of `Foo`
-    ╭─[ invalid_syntax.baml:10:18 ]
-    │
+  [hir] E0108
+
+  × could not parse type expression for return type of `Foo`
+    ╭─[invalid_syntax.baml:10:18]
  10 │ function Foo() -> {  // Missing return type
-    │                  │ 
-    │                  ╰─ unparseable type
-    │ 
-    │ Note: Error code: E0108
-────╯
+    ·                  ▲
+    ·                  ╰── unparseable type
+    ╰────
 
-  [parse] Error: Expected type, found '{'
-    ╭─[ invalid_syntax.baml:10:19 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[invalid_syntax.baml:10:19]
  10 │ function Foo() -> {  // Missing return type
-    │                   ┬  
-    │                   ╰── Expected type, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ┬
+    ·                   ╰── expected `type`, found `'{'`
+    ╰────
 
-  [type] Error: unresolved name: GPT4
-    ╭─[ invalid_syntax.baml:11:10 ]
-    │
- 11 │   client GPT4
-    │          ──┬─  
-    │            ╰─── unresolved name: GPT4
-    │ 
-    │ Note: Error code: E0003
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected '}', found class
-   ╭─[ missing_braces.baml:5:1 ]
-   │
+  × unexpected token
+    ╭─[invalid_syntax.baml:11:9]
+ 11 │   client: GPT4
+    ·         ┬
+    ·         ╰── expected `expression`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[missing_braces.baml:5:1]
  5 │ class Another {  // Should still parse this class
-   │ ──┬──  
-   │   ╰──── Expected '}', found class
-   │ 
-   │ Note: Error code: E0010
-───╯
+   · ──┬──
+   ·   ╰── expected `'}'`, found `class`
+   ╰────
 
-  [type] Error: unresolved type: str
-   ╭─[ partial_input.baml:3:9 ]
-   │
+  [type] E0002
+
+  × unresolved type: str
+   ╭─[partial_input.baml:1:1]
+ 1 │ // Test parser recovery with partial/incomplete input
+   · ▲
+   ╰────
+
+  [type] E0002
+
+  × unresolved type: str
+   ╭─[partial_input.baml:3:10]
  3 │   field1 str  // Incomplete type name
-   │         ──┬─  
-   │           ╰─── unresolved type: str
-   │ 
-   │ Note: Error code: E0002
-───╯
+   ·          ───
+   ╰────
 
-  [parse] Error: field 'field2' is missing a type annotation
-   ╭─[ partial_input.baml:4:3 ]
-   │
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[partial_input.baml:4:3]
  4 │   field2  // Missing type entirely
-   │   ───┬──  
-   │      ╰──── field 'field2' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·   ───┬──
+   ·      ╰── field 'field2' is missing a type annotation
+   ╰────
 
-  [parse] Error: Attribute is missing a name
-   ╭─[ partial_input.baml:5:17 ]
-   │
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[partial_input.baml:5:17]
  5 │   field3 string @  // Incomplete attribute
-   │                 ┬  
-   │                 ╰── Attribute is missing a name
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                 ┬
+   ·                 ╰── attribute is missing a name
+   ╰────
 
-  [hir] Error: `@alias` argument must be a string literal, got `// Unclosed attribute
-  field5`
-   ╭─[ partial_input.baml:6:24 ]
-   │
- 6 │ ╭─▶   field4 string @alias(  // Unclosed attribute
- 7 │ ├─▶   field5 string  // This should break as `field5` is treated as part of the attribute
-   │ │                                                                                           
-   │ ╰─────────────────────────────────────────────────────────────────────────────────────────── invalid builtin declaration
-   │     
-   │     Note: Error code: E0037
-───╯
+  [hir] E0037
 
-  [parse] Error: Expected ')', found identifier
-   ╭─[ partial_input.baml:7:10 ]
-   │
+  × `@alias` argument must be a string literal, got `// Unclosed attribute
+  │   field5`
+   ╭─[partial_input.baml:7:3]
  7 │   field5 string  // This should break as `field5` is treated as part of the attribute
-   │          ───┬──  
-   │             ╰──── Expected ')', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·   ───┬──
+   ·      ╰── invalid builtin declaration
+   ╰────
 
-  [parse] Error: field 'string' is missing a type annotation
-   ╭─[ partial_input.baml:7:10 ]
-   │
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[partial_input.baml:7:10]
  7 │   field5 string  // This should break as `field5` is treated as part of the attribute
-   │          ───┬──  
-   │             ╰──── field 'string' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·          ───┬──
+   ·             ╰── field 'string' is missing a type annotation
+   ╰────
 
-  [parse] Error: Expected ')', found function
-    ╭─[ partial_input.baml:13:1 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[partial_input.baml:7:10]
+ 7 │   field5 string  // This should break as `field5` is treated as part of the attribute
+   ·          ───┬──
+   ·             ╰── expected `')'`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[partial_input.baml:13:1]
  13 │ function NextFunction() -> string {  // Should still parse this
-    │ ────┬───  
-    │     ╰───── Expected ')', found function
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ────┬───
+    ·     ╰── expected `')'`, found `function`
+    ╰────
 
-  [parse] Error: Expected function body, found function
-    ╭─[ partial_input.baml:13:1 ]
-    │
- 13 │ function NextFunction() -> string {  // Should still parse this
-    │ ────┬───  
-    │     ╰───── Expected function body, found function
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected return type (->), found function
-    ╭─[ partial_input.baml:13:1 ]
-    │
- 13 │ function NextFunction() -> string {  // Should still parse this
-    │ ────┬───  
-    │     ╰───── Expected return type (->), found function
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected '{', found identifier
-    ╭─[ partial_input.baml:19:3 ]
-    │
+  × unexpected token
+    ╭─[partial_input.baml:19:3]
  19 │   VALUE2
-    │   ───┬──  
-    │      ╰──── Expected '{', found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·   ───┬──
+    ·      ╰── expected `'{'`, found `identifier`
+    ╰────
 
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ partial_input.baml:19:3 ]
-    │
- 19 │   VALUE2
-    │   ───┬──  
-    │      ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] Error: Expected top-level declaration, found '}'
-    ╭─[ partial_input.baml:20:1 ]
-    │
+  × unexpected token
+    ╭─[partial_input.baml:20:1]
  20 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ┬
+    · ╰── expected `top-level declaration`, found `'}'`
+    ╰────
 
-  [parse] Error: Expected ')', found identifier
-   ╭─[ unclosed_string.baml:4:25 ]
-   │
+  [type] E0002
+
+  × unresolved type: closed
+   ╭─[unclosed_string.baml:1:1]
+ 1 │ class Test {
+   · ▲
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[unclosed_string.baml:4:25]
  4 │   field3 string @alias("another closed string")  // Should still parse this
-   │                         ───┬───  
-   │                            ╰───── Expected ')', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                         ───┬───
+   ·                            ╰── expected `')'`, found `identifier`
+   ╰────
 
-  [type] Error: unresolved type: closed
-   ╭─[ unclosed_string.baml:4:32 ]
-   │
+  [type] E0002
+
+  × unresolved type: closed
+   ╭─[unclosed_string.baml:4:33]
  4 │   field3 string @alias("another closed string")  // Should still parse this
-   │                                ───┬───  
-   │                                   ╰───── unresolved type: closed
-   │ 
-   │ Note: Error code: E0002
-───╯
+   ·                                 ──────
+   ╰────
 
-  [parse] Error: Expected '}', found EOF
-   ╭─[ unclosed_string.baml:5:2 ]
-   │
- 5 │ }
-   │  ┬  
-   │  ╰── Expected '}', found EOF
-   │ 
-   │ Note: Error code: E0010
-───╯
+  [parse] E0010
 
-  [parse] Error: Expected Unclosed string literal, found EOF
-   ╭─[ unclosed_string.baml:5:2 ]
-   │
+  × unexpected token
+   ╭─[unclosed_string.baml:5:2]
  5 │ }
-   │  ┬  
-   │  ╰── Expected Unclosed string literal, found EOF
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·  ▲
+   ·  ╰── expected `Unclosed string literal`, found `EOF`
+   ╰────

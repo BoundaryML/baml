@@ -146,19 +146,6 @@ impl MediaValue {
         })
     }
 
-    /// Read content without taking the lock. Use only when no concurrent writes can occur.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure no other thread is calling `write_content` or
-    /// `read_content_unguarded` concurrently. Safe to use from a single thread
-    /// or when external synchronization guarantees no writers.
-    #[allow(unsafe_code)]
-    pub unsafe fn read_content_unguarded<T>(&self, f: impl FnOnce(&MediaContent) -> T) -> T {
-        let content = unsafe { &*self.content.get() };
-        f(content)
-    }
-
     pub fn read_content<T>(&self, f: impl FnOnce(&MediaContent) -> T) -> T {
         let _guard = self.content_rw_lock.read().unwrap();
         #[allow(unsafe_code)]

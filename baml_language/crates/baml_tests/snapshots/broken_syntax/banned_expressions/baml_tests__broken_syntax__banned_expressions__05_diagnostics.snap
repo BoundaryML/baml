@@ -1,46 +1,103 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 131
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] Error: Expected expression, found let
-   ╭─[ banned_expressions.baml:3:11 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[banned_expressions.baml:3:11]
  3 │   let a = let b = 42
-   │           ─┬─  
-   │            ╰─── Expected expression, found let
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·           ─┬─
+   ·            ╰── expected `expression`, found `let`
+   ╰────
 
-  [type] Error: unresolved name: b
-   ╭─[ banned_expressions.baml:3:15 ]
-   │
- 3 │   let a = let b = 42
-   │               ┬  
-   │               ╰── unresolved name: b
-   │ 
-   │ Note: Error code: E0003
-───╯
+  [type] E0001
 
-  [type] Error: unresolved name: a
-   ╭─[ banned_expressions.baml:4:3 ]
-   │
- 4 │   a
-   │   ┬  
-   │   ╰── unresolved name: a
-   │ 
-   │ Note: Error code: E0003
-───╯
-
-  [type] Error: missing return: expected `int`
-    ╭─[ banned_expressions.baml:8:22 ]
-    │
+  × mismatched types
+    ╭─[banned_expressions.baml:8:23]
   8 │ ╭─▶ function Bar() -> int {
-    ┆ ┆   
+  9 │ │     let b = 42
  10 │ ├─▶ }
-    │ │       
-    │ ╰─────── missing return: expected `int`
-    │     
-    │     Note: Error code: E0029
-────╯
+    · ╰──── expected `int`, found `void`
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:22:4]
+ 22 │   (x = 5)
+    ·    ──┬──
+    ·      ╰── assignment not allowed here
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:28:4]
+ 28 │   (x += 5)
+    ·    ───┬──
+    ·       ╰── assignment not allowed here
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:34:12]
+ 34 │   let y = (x = 5);
+    ·            ──┬──
+    ·              ╰── assignment not allowed here
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:64:17]
+ 64 │   let result = (user?.profile?.name = "new_name");
+    ·                 ────────────────┬───────────────
+    ·                                 ╰── assignment not allowed here
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:70:17]
+ 70 │   let result = (items?.[0] = 42);
+    ·                 ───────┬───────
+    ·                        ╰── assignment not allowed here
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:76:17]
+ 76 │   let result = (user?.id += 1);
+    ·                 ──────┬──────
+    ·                       ╰── assignment not allowed here
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:82:4]
+ 82 │   (user?.profile?.name = "updated")
+    ·    ───────────────┬───────────────
+    ·                   ╰── assignment not allowed here
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:87:17]
+ 87 │   let result = (node?.children?.[0].value = 99);
+    ·                 ───────────────┬──────────────
+    ·                                ╰── assignment not allowed here
+    ╰────
+
+  [hir] E0010
+
+  × assignment is not allowed in expression position; assignment is a statement
+    ╭─[banned_expressions.baml:93:17]
+ 93 │   let result = (node?.labels?.["main"].value = 50);
+    ·                 ────────────────┬────────────────
+    ·                                 ╰── assignment not allowed here
+    ╰────

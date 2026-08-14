@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8239
 ---
 function $init() -> null {
     call $init_let_0
@@ -8,175 +9,172 @@ function $init() -> null {
     return
 }
 
-function user.CommentAfterArrow() -> string {
+function user.CommentAfterArrow(client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
     load_type string
-    load_global user.TestClient
-    load_const "CommentAfterArrow"
-    alloc_map 0
-    call baml.llm.call_llm_function
-    return
-}
-
-function user.CommentAfterArrow$build_request() -> baml.http.Request {
-    load_global user.TestClient
-    load_const "CommentAfterArrow"
-    alloc_map 0
-    call baml.llm.build_request
-    return
-}
-
-function user.CommentAfterArrow$build_request_stream() -> baml.http.Request {
-    load_global user.TestClient
-    load_const "CommentAfterArrow"
-    alloc_map 0
-    call baml.llm.build_request_stream
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.CommentAfterArrow$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
     return
 }
 
 function user.CommentAfterArrow$parse(json: string) -> string {
-    load_const "CommentAfterArrow"
-    load_var json
-    call baml.llm.parse
-    return
-}
-
-function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> {
-    load_var sse
-    load_const "CommentAfterArrow"
-    load_const null
-    call_indirect
-    return
-}
-
-function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst {
-    load_global user.TestClient
-    load_const "CommentAfterArrow"
-    alloc_map 0
-    call baml.llm.render_prompt
-    return
-}
-
-function user.CommentAfterArrow$stream() -> baml.llm.Stream<string, null | string> {
-    load_global user.TestClient
-    load_const "CommentAfterArrow"
-    alloc_map 0
-    call baml.llm.stream_llm_function
-    return
-}
-
-function user.FunctionWithComments(a: string, b: int) -> string {
     load_type string
-    load_global user.TestClient
-    load_const "FunctionWithComments"
-    load_var a
-    load_var b
-    load_const "a"
-    load_const "b"
-    alloc_map 2
-    call baml.llm.call_llm_function
+    load_var json
+    call baml.sap.parse
     return
 }
 
-function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http.Request {
-    load_global user.TestClient
-    load_const "FunctionWithComments"
-    load_var a
-    load_var b
-    load_const "a"
-    load_const "b"
-    alloc_map 2
-    call baml.llm.build_request
+function user.CommentAfterArrow$render_prompt() -> ai.Prompt {
+    call user.CommentAfterArrow$spec
+    store_var _1
+    load_type string
+    call ai.wire.render_output_format
+    store_var _2
+    load_type string
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
     return
 }
 
-function user.FunctionWithComments$build_request_stream(a: string, b: int) -> baml.http.Request {
+function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_const "CommentAfterArrow"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(CommentAfterArrow$spec, 0)>, 0
+    load_var _3
     load_global user.TestClient
-    load_const "FunctionWithComments"
-    load_var a
-    load_var b
-    load_const "a"
-    load_const "b"
-    alloc_map 2
-    call baml.llm.build_request_stream
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.CommentAfterArrow$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.CommentAfterArrow$spec
+    store_var _3
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function user.FunctionWithComments(a: string, b: int, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _6
+    load_var2 1 2
+    call user.FunctionWithComments$spec
+    store_var _8
+    load_var2 5 6
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var _5
+    load_field .value
     return
 }
 
 function user.FunctionWithComments$parse(json: string) -> string {
-    load_const "FunctionWithComments"
+    load_type string
     load_var json
-    call baml.llm.parse
+    call baml.sap.parse
     return
 }
 
-function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> {
-    load_var sse
-    load_const "FunctionWithComments"
-    load_const null
-    call_indirect
+function user.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt {
+    load_var2 1 2
+    call user.FunctionWithComments$spec
+    store_var _3
+    load_type string
+    call ai.wire.render_output_format
+    store_var _4
+    load_type string
+    load_var2 3 4
+    call ai.FunctionSpec.prompt
     return
 }
 
-function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.PromptAst {
-    load_global user.TestClient
+function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _5
     load_const "FunctionWithComments"
-    load_var a
-    load_var b
+    load_var2 1 2
     load_const "a"
     load_const "b"
+    load_type string
+    load_type unknown
     alloc_map 2
-    call baml.llm.render_prompt
-    return
-}
-
-function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream<string, null | string> {
+    make_closure .<lambda(FunctionWithComments$spec, 0)>, 0
+    load_var _5
     load_global user.TestClient
-    load_const "FunctionWithComments"
-    load_var a
-    load_var b
-    load_const "a"
-    load_const "b"
-    alloc_map 2
-    call baml.llm.stream_llm_function
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.TestClient$new() -> null {
-    alloc_instance baml.llm.PrimitiveClient
-    load_const "TestClient"
-    init_field .name
-    load_const "openai"
-    init_field .provider
-    alloc_instance baml.llm.PrimitiveClientOptions
+function user.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const null
-    init_field .model
-    load_const null
-    init_field .base_url
-    load_const null
-    init_field .allowed_role_metadata
-    load_const null
-    init_field .finish_reason_allow_list
-    load_const null
-    init_field .finish_reason_deny_list
-    load_const null
-    init_field .supports_streaming
-    load_const null
-    init_field .default_role
-    load_const null
-    init_field .allowed_roles
-    load_const null
-    init_field .remap_roles
-    load_const null
-    init_field .api_key
-    load_const null
-    init_field .provider_options
-    load_const null
-    init_field .media_url_handler
-    alloc_map 0
-    init_field .headers
-    alloc_map 0
-    init_field .query_params
-    alloc_map 0
-    init_field .request_body
-    init_field .options
+    store_var client
+
+  L0:
+    load_var2 1 2
+    call user.FunctionWithComments$spec
+    store_var _5
+    load_type string | null
+    load_type string
+    load_var2 4 3
+    call ai.stream.from_spec
     return
 }

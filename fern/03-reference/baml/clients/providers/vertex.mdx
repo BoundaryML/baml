@@ -12,7 +12,7 @@ Example using a Vertex API Key (Express Mode):
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-2.5-pro
+    model gemini-3.1-pro-preview
     location us-central1 // or "global"
     project_id my-project-id
     query_params {
@@ -41,7 +41,7 @@ When using a Vertex API Key, set the `key` query parameter and specify your `pro
 client<llm> VertexApiKeyClient {
   provider vertex-ai
   options {
-    model gemini-2.5-pro
+    model gemini-3.1-pro-preview
     location us-central1 // you can also use "global"
     project_id my-project-id
     query_params {
@@ -71,7 +71,7 @@ credentials](https://cloud.google.com/docs/authentication/application-default-cr
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-2.5-pro
+    model gemini-3.1-pro-preview
     location us-central1
     project_id my-project-id
     // we will by default try to use this form of authentication.
@@ -190,7 +190,7 @@ Try setting `location: global` in your client options:
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-2.5-pro
+    model gemini-3.1-pro-preview
     location global
     project_id my-project-id
   }
@@ -282,7 +282,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
     client<llm> Vertex {
       provider vertex-ai
       options {
-        model gemini-2.5-pro
+        model gemini-3.1-pro-preview
         location us-central1
         // credentials can be a block string containing service account credentials in JSON format
         credentials #"
@@ -313,7 +313,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
   client<llm> Vertex {
     provider vertex-ai
     options {
-      model gemini-2.5-pro
+      model gemini-3.1-pro-preview
       location us-central1
       credentials "path/to/credentials.json"
     }
@@ -326,7 +326,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
     client<llm> Vertex {
       provider vertex-ai
       options {
-        model gemini-2.5-pro
+        model gemini-3.1-pro-preview
         location us-central1
         // credentials can be a block string containing service account credentials in JSON format
         credentials {
@@ -369,7 +369,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
     client<llm> Vertex {
       provider vertex-ai
       options {
-        model gemini-2.5-pro
+        model gemini-3.1-pro-preview
         location us-central1
         // credentials_content is a block string containing service account credentials in JSON format
         credentials_content #"
@@ -405,9 +405,9 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
 
 | Model | Input(s) | Optimized for |
 | --- | ---  | --- |
-| `gemini-2.5-pro`  | Audio, images, videos, and text | Complex reasoning tasks such as code and text generation, text editing, problem solving, data extraction and generation |
-| `gemini-2.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
-| `gemini-1.0-pro` | Text | Natural language tasks, multi-turn text and code chat, and code generation |
+| `gemini-3.1-pro-preview`  | Audio, images, videos, and text | Complex reasoning tasks such as code and text generation, text editing, problem solving, data extraction and generation |
+| `gemini-3.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
+| `gemini-3.1-flash-lite` | Audio, images, videos, and text | High-volume, cost-sensitive and low-latency tasks |
 
 See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
 </ParamField>
@@ -420,7 +420,7 @@ Example:
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-2.5-pro
+    model gemini-3.1-pro-preview
     project_id my-project-id
     location us-central1
     // Additional headers
@@ -440,7 +440,7 @@ Example (use a Vertex API Key with Express Mode):
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-2.5-pro
+    model gemini-3.1-pro-preview
     project_id my-project-id
     location us-central1
     query_params {
@@ -481,7 +481,7 @@ Consult the specific provider's documentation for more information.
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-2.5-pro
+    model gemini-3.1-pro-preview
     project_id my-project-id
     location us-central1
 
@@ -504,7 +504,7 @@ client<llm> MyClient {
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model gemini-2.5-pro
+    model gemini-3.1-pro-preview
     project_id my-project-id
     location us-central1
 
@@ -524,7 +524,7 @@ client<llm> MyClient {
   client<llm> GeminiThinking {
     provider vertex-ai
     options {
-      model gemini-2.5-pro
+      model gemini-3.1-pro-preview
       project_id my-project-id
       location us-central1
       generationConfig {

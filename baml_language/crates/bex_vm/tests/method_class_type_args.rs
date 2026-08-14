@@ -4,7 +4,7 @@
 //! - `Object::Instance` carrying `class_type_args` (8.1)
 //! - `AllocInstance { ntypeargs }` populating `class_type_args` from the stack (8.2)
 //! - A method-like function body reading `TypeArgRef(0)` when the frame has
-//!   been seeded with `[Ty::int()]` (simulating the 8.5 path) (8.5)
+//!   been seeded with `[RuntimeTy::int()]` (simulating the 8.5 path) (8.5)
 //!
 //! The tests inject synthetic bytecode directly into a compiled `Program`
 //! (produced by `compile_source`) so no compiler pipeline is required.
@@ -12,10 +12,10 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{Name, Ty, TyAttr, TyTemplate, TypeName};
+use baml_type::{Name, RealizedTy, TyAttr, TyTemplate, TypeName};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
-    ConstValue, Instruction, Object, ObjectIndex, Value,
+    ConstValue, FunctionCaptureProps, Instruction, Object, ObjectIndex, Value,
     bytecode::Bytecode,
     types::{Class, Function, FunctionKind, FunctionOrigin, Program},
 };
@@ -41,6 +41,8 @@ fn inject_function(
     let func = Function {
         name: fn_name.to_string(),
         source_file: String::new(),
+        docstring: None,
+        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode,
@@ -48,18 +50,22 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        block_notifications: vec![],
-        viz_nodes: vec![],
-        return_type: Ty::int(),
-        stream_return_type: Ty::Null {
-            attr: TyAttr::default(),
+        return_type: baml_type::TyTemplate::Int {
+            attr: baml_type::TyAttr::default(),
         },
         param_names: vec![],
         param_types: vec![],
-        throws_type: None,
+        param_has_default: vec![false; arity],
+        display_type_params: vec![],
+        display_param_types: vec![],
+        display_return_type: "int".to_string(),
+        throws_type: baml_type::TyTemplate::Never {
+            attr: baml_type::TyAttr::default(),
+        },
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
-        trace: false,
+        capture: FunctionCaptureProps::disabled(),
+        function_id: 0,
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
     let global_slot = program.globals.len();
@@ -107,9 +113,11 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         alias: None,
         type_tag: 100,
         ty_attr: TyAttr::default(),
+        has_cleanup: false,
+        generic_param_count: 0,
     })));
 
-    // Function: push Ty::int() as a type arg, then AllocInstance with ntypeargs=1.
+    // Function: push RuntimeTy::int() as a type arg, then AllocInstance with ntypeargs=1.
     let fn_name = "user.test_alloc_typearg";
     inject_function(
         &mut program,
@@ -123,20 +131,22 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
             },
             Instruction::Return,
         ],
-        vec![ConstValue::Type(TyTemplate::Concrete(Ty::int()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::int(),
+        ))],
     );
 
     let (result, vm) = run_fn(program, fn_name);
 
-    let Value::Object(inst_ptr) = result else {
+    let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(inst_ptr) {
         Object::Instance(inst) => {
             assert_eq!(
-                inst.class_type_args,
-                vec![Ty::int()],
-                "Instance::class_type_args should equal [Ty::int()]"
+                inst.class_type_args.to_vec(),
+                vec![RealizedTy::int()],
+                "Instance::class_type_args should equal [RealizedTy::int()]"
             );
         }
         other => panic!("expected Object::Instance, got {other:?}"),
@@ -155,6 +165,8 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         alias: None,
         type_tag: 101,
         ty_attr: TyAttr::default(),
+        has_cleanup: false,
+        generic_param_count: 0,
     })));
 
     let fn_name = "user.test_mono_alloc";
@@ -173,7 +185,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     );
 
     let (result, vm) = run_fn(program, fn_name);
-    let Value::Object(inst_ptr) = result else {
+    let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(inst_ptr) {
@@ -189,11 +201,11 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
 
 // ─── 8.5 ── frame.type_args seeded from receiver class_type_args ─────────────
 
-/// Manually seed `frame.type_args = [Ty::int()]` on a method frame and verify
+/// Manually seed `frame.type_args = [RuntimeTy::int()]` on a method frame and verify
 /// that `LoadType(TypeArgRef(0))` returns `Object::Type(int)`.
 ///
 /// This simulates what `execute_call_from_locals_offset` does in Phase 8.5
-/// when a `BoundMethod` callee has a receiver with `class_type_args = [Ty::int()]`.
+/// when a `BoundMethod` callee has a receiver with `class_type_args = [RuntimeTy::int()]`.
 #[test]
 fn method_frame_type_args_seeded_with_class_type_args() {
     let mut program = compile_source(STUB_SOURCE);
@@ -219,7 +231,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![Ty::int()]; // receiver.class_type_args = [int]
+            bf.type_args = vec![RealizedTy::int()]; // receiver.class_type_args = [int]
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -233,14 +245,14 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         }
     };
 
-    let Value::Object(ptr) = result else {
+    let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(ptr) {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                Ty::int(),
+                RealizedTy::int(),
                 "TypeArgRef(0) with class_type_args=[int] should yield int"
             );
         }
@@ -248,7 +260,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
     }
 }
 
-/// Seed `frame.type_args = [Ty::string()]` and confirm `TypeArgRef(0)` yields string.
+/// Seed `frame.type_args = [RuntimeTy::string()]` and confirm `TypeArgRef(0)` yields string.
 #[test]
 fn method_frame_type_args_seeded_string() {
     let mut program = compile_source(STUB_SOURCE);
@@ -271,7 +283,7 @@ fn method_frame_type_args_seeded_string() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![Ty::string()];
+            bf.type_args = vec![RealizedTy::string()];
         }
     }
 
@@ -283,17 +295,48 @@ fn method_frame_type_args_seeded_string() {
         }
     };
 
-    let Value::Object(ptr) = result else {
+    let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object")
     };
     match vm.get_object(ptr) {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                Ty::string(),
+                RealizedTy::string(),
                 "TypeArgRef(0) with class_type_args=[string] should yield string"
             );
         }
         other => panic!("expected Object::Type, got {other:?}"),
+    }
+}
+
+// ─── Regression ── `map`/`flat_map` tag the result with `U`, not the receiver `T`
+
+/// `[int].map(x -> string)` must stamp the result array's runtime `element_ty`
+/// with the closure return type `U` (= `string`), NOT the receiver element type
+/// `T` (= `int`). MIR prepends the receiver's class type args ahead of the
+/// method's own `<U, E>`, so the frame's type args are `[T, U, E]`; the result
+/// element type is the second-to-last (`U`), not `.first()` (`T`).
+#[test]
+fn map_result_element_ty_is_closure_return_not_receiver() {
+    let program = compile_source(
+        r#"
+function f() -> string[] {
+    [1, 2].map((x: int) -> string { "s" })
+}
+"#,
+    );
+    let (result, vm) = run_fn(program, "user.f");
+    let ptr = result
+        .as_object_ptr()
+        .expect("map result should be an array object");
+    match vm.get_object(ptr) {
+        Object::Array(arr) => assert!(
+            matches!(&*arr.element_ty, RealizedTy::String { .. }),
+            "map result element_ty should be `string` (closure return `U`), not `{:?}` \
+             (the receiver `T`)",
+            arr.element_ty
+        ),
+        other => panic!("expected Object::Array result, got {other:?}"),
     }
 }

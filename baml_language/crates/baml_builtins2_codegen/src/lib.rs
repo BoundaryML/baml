@@ -3,16 +3,19 @@ mod codegen_errors;
 mod codegen_io;
 mod codegen_panics;
 mod extract;
+mod rust_ident;
 mod types;
 
-pub use codegen::generate_native_trait;
+pub use codegen::{generate_native_trait, generate_native_trait_for};
 pub use codegen_errors::generate_error_enums;
 pub use codegen_io::{
     generate_io_adapter, generate_io_structs, generate_io_traits, generate_runtime_io,
     generate_sys_op_enum,
 };
 pub use codegen_panics::generate_panic_enums;
-pub use extract::{ExtractNativeBuiltinsError, extract_native_builtins};
+pub use extract::{
+    ExtractNativeBuiltinsError, extract_native_builtins, extract_native_builtins_for,
+};
 pub use types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
     ReceiverType,

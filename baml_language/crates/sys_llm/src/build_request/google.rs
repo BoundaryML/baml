@@ -93,7 +93,7 @@ pub(crate) fn build_request(
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
-        url: resolve_url(client, provider)?,
+        url: resolve_url(client, provider),
         headers,
         body: body_str,
     })
@@ -103,10 +103,11 @@ pub(crate) fn build_request(
 // URL construction
 // ============================================================================
 
-fn resolve_url(
-    client: &crate::baml_std::PrimitiveClient,
-    provider: LlmProvider,
-) -> Result<String, super::BuildRequestError> {
+/// Default base URL for the `google-ai` provider (the Gemini API).
+pub(crate) const GOOGLE_AI_DEFAULT_BASE_URL: &str =
+    "https://generativelanguage.googleapis.com/v1beta";
+
+fn resolve_url(client: &crate::baml_std::PrimitiveClient, provider: LlmProvider) -> String {
     match provider {
         // Google AI: {base_url}/models/{model}:generateContent
         LlmProvider::GoogleAi => {
@@ -114,19 +115,19 @@ fn resolve_url(
                 .options
                 .base_url
                 .as_deref()
-                .unwrap_or("https://generativelanguage.googleapis.com/v1beta");
-            Ok(format!("{base}/models/{}:generateContent", client.model))
+                .unwrap_or(GOOGLE_AI_DEFAULT_BASE_URL);
+            format!("{base}/models/{}:generateContent", client.model)
         }
         // Vertex AI: {base_url}/{model}:generateContent
         // base_url is either explicit, or constructed from location + project_id.
-        // If project_id is not yet known, a placeholder is used and resolved
-        // during auth (see auth_request/vertex.rs).
+        // If location / project_id are not yet known, placeholders are used and
+        // resolved during auth (see auth_request/vertex.rs).
         LlmProvider::VertexAi => {
             let base = match client.options.base_url.as_deref() {
                 Some(url) => url.to_string(),
-                None => resolve_vertex_base_url(client)?,
+                _ => resolve_vertex_base_url(client),
             };
-            Ok(format!("{base}/{}:generateContent", client.model))
+            format!("{base}/{}:generateContent", client.model)
         }
         _ => unreachable!("resolve_url called with non-Google provider"),
     }
@@ -136,29 +137,36 @@ fn resolve_url(
 /// Resolved during auth when credentials are available.
 pub(crate) const VERTEX_PROJECT_ID_PLACEHOLDER: &str = "__BAML_VERTEX_PROJECT_ID__";
 
+/// Placeholder used when `location` is not yet known at URL construction time.
+/// Resolved during auth from the `GOOGLE_CLOUD_LOCATION` env var.
+///
+/// Lowercase, unlike the project-id placeholder: location appears in the URL
+/// HOST, which `url::Url` normalizes to lowercase when query params are
+/// appended — an uppercase placeholder would dodge the auth-time replacement.
+pub(crate) const VERTEX_LOCATION_PLACEHOLDER: &str = "__baml_vertex_location__";
+
 /// Extract Vertex AI URL components: `(domain, location, project_id)`.
 ///
-/// `location` is required (the old engine errors with "must specify a GCP region").
-/// `project_id` may use a placeholder that gets resolved during auth.
-fn vertex_url_components(
-    client: &crate::baml_std::PrimitiveClient,
-) -> Result<(String, String, String), super::BuildRequestError> {
-    let vertex_opts = match &client.provider_options {
-        Some(crate::baml_std::ProviderOptions::VertexAi(opts)) => Some(opts),
-        _ => None,
-    };
+/// `location` and `project_id` may use placeholders that get resolved during
+/// auth (from `GOOGLE_CLOUD_LOCATION` and the credential/project chain).
+fn vertex_url_components(client: &crate::baml_std::PrimitiveClient) -> (String, String, String) {
+    let vertex_opts = client
+        .provider_options
+        .as_ref()
+        .and_then(crate::baml_std::ProviderOptions::vertex_ai);
 
+    // An explicitly-set value is honored as-is, empty included: only an *unset*
+    // (`None`) option falls back to the placeholder, which auth then resolves
+    // from GOOGLE_CLOUD_LOCATION / the credential + GOOGLE_CLOUD_PROJECT chain
+    // (or returns a BuildRequestError if still unresolved). See auth_vertex.
     let location = vertex_opts
+        .as_ref()
         .and_then(|o| o.location.as_deref())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| super::BuildRequestError::InvalidOption {
-            key: "location".to_string(),
-            reason: "vertex-ai requires either base_url or location (e.g. us-central1)".to_string(),
-        })?;
+        .unwrap_or(VERTEX_LOCATION_PLACEHOLDER);
 
     let project_id = vertex_opts
+        .as_ref()
         .and_then(|o| o.project_id.as_deref())
-        .filter(|s| !s.is_empty())
         .unwrap_or(VERTEX_PROJECT_ID_PLACEHOLDER);
 
     let domain = if location == "global" {
@@ -167,36 +175,34 @@ fn vertex_url_components(
         format!("{location}-aiplatform.googleapis.com")
     };
 
-    Ok((domain, location.to_string(), project_id.to_string()))
+    (domain, location.to_string(), project_id.to_string())
 }
 
 /// Build the Vertex AI base URL from `location` and `project_id` in provider options.
-fn resolve_vertex_base_url(
-    client: &crate::baml_std::PrimitiveClient,
-) -> Result<String, super::BuildRequestError> {
-    let (domain, location, project_id) = vertex_url_components(client)?;
-    Ok(format!(
+fn resolve_vertex_base_url(client: &crate::baml_std::PrimitiveClient) -> String {
+    let (domain, location, project_id) = vertex_url_components(client);
+    format!(
         "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models"
-    ))
+    )
 }
 
 /// Build the Vertex AI URL for Anthropic `rawPredict` requests.
 ///
 /// Anthropic models on Vertex AI use a different publisher path:
 /// `publishers/anthropic/models` instead of `publishers/google/models`.
-pub(super) fn resolve_vertex_raw_predict_url(
-    client: &crate::baml_std::PrimitiveClient,
-) -> Result<String, super::BuildRequestError> {
-    // If user provides a base_url, use it as-is (they're responsible for the path)
+pub(super) fn resolve_vertex_raw_predict_url(client: &crate::baml_std::PrimitiveClient) -> String {
+    // If the user provides a base_url, use it as-is (they're responsible for
+    // the path). Provider defaults are selected only after routing, so a
+    // google-ai client routed to Vertex does not carry the Google AI default.
     if let Some(url) = client.options.base_url.as_deref() {
-        return Ok(format!("{url}/{}:rawPredict", client.model));
+        return format!("{url}/{}:rawPredict", client.model);
     }
 
-    let (domain, location, project_id) = vertex_url_components(client)?;
-    Ok(format!(
+    let (domain, location, project_id) = vertex_url_components(client);
+    format!(
         "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/anthropic/models/{}:rawPredict",
         client.model
-    ))
+    )
 }
 
 // ============================================================================
@@ -307,7 +313,7 @@ mod tests {
 
     use baml_base::MediaKind;
     use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-    use bex_external_types::BexExternalValue;
+    use bex_external_types::{AsBexExternalValue, BexExternalValue};
     use indexmap::IndexMap;
 
     use super::*;
@@ -413,6 +419,67 @@ mod tests {
     }
 
     #[test]
+    fn vertex_ai_url_without_location_uses_placeholder() {
+        // No location option: the URL carries a placeholder (host + path) that
+        // auth resolves from GOOGLE_CLOUD_LOCATION.
+        let mut client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                ..Default::default()
+            },
+        );
+        client.provider_options = Some(crate::baml_std::ProviderOptions::VertexAi(
+            crate::baml_std::VertexAiOptions {
+                location: None,
+                project_id: Some("my-project".to_string()),
+                credentials: None,
+                credentials_content: None,
+            },
+        ));
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, &prompt, LlmProvider::VertexAi).unwrap();
+        assert_eq!(
+            result.url,
+            format!(
+                "https://{VERTEX_LOCATION_PLACEHOLDER}-aiplatform.googleapis.com/v1/projects/my-project/locations/{VERTEX_LOCATION_PLACEHOLDER}/publishers/google/models/gemini-2.0-flash:generateContent"
+            )
+        );
+    }
+
+    #[test]
+    fn vertex_ai_url_honors_explicitly_empty_location_and_project() {
+        // An explicitly-set empty string is honored as-is, NOT rerouted to the
+        // placeholder / env fallback. The resulting URL is intentionally broken
+        // (empty host label + empty path segment) so the misconfiguration
+        // surfaces instead of being silently masked.
+        let mut client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                ..Default::default()
+            },
+        );
+        client.provider_options = Some(crate::baml_std::ProviderOptions::VertexAi(
+            crate::baml_std::VertexAiOptions {
+                location: Some(String::new()),
+                project_id: Some(String::new()),
+                credentials: None,
+                credentials_content: None,
+            },
+        ));
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, &prompt, LlmProvider::VertexAi).unwrap();
+        assert_eq!(
+            result.url,
+            "https://-aiplatform.googleapis.com/v1/projects//locations//publishers/google/models/gemini-2.0-flash:generateContent"
+        );
+        // Crucially: no placeholder leaked in, so auth won't resolve from env.
+        assert!(!result.url.contains(VERTEX_LOCATION_PLACEHOLDER));
+        assert!(!result.url.contains(VERTEX_PROJECT_ID_PLACEHOLDER));
+    }
+
+    #[test]
     fn vertex_anthropic_url_uses_anthropic_publisher() {
         // When no base_url is provided, the URL should use publishers/anthropic, not publishers/google
         let mut client = make_client(
@@ -433,7 +500,7 @@ mod tests {
         ));
 
         // Test the URL building directly (no auth required)
-        let url = resolve_vertex_raw_predict_url(&client).unwrap();
+        let url = resolve_vertex_raw_predict_url(&client);
 
         assert!(
             url.contains("publishers/anthropic/models"),
@@ -443,6 +510,31 @@ mod tests {
             !url.contains("publishers/google/models"),
             "Claude on Vertex should NOT use publishers/google, got: {url}"
         );
+        assert_eq!(
+            url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-20250514:rawPredict"
+        );
+    }
+
+    #[test]
+    fn google_ai_enterprise_applies_vertex_defaults_before_building_anthropic_url() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                provider_options: crate::baml_std::GoogleAiOptions {
+                    enterprise: Some(true),
+                    location: Some("us-central1".to_string()),
+                    project_id: Some("my-project".to_string()),
+                    ..Default::default()
+                }
+                .into_bex_external_value(),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(client.options.base_url, None);
+        let url = resolve_vertex_raw_predict_url(&client);
         assert_eq!(
             url,
             "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-20250514:rawPredict"
@@ -463,7 +555,7 @@ mod tests {
             },
         );
 
-        let url = resolve_vertex_raw_predict_url(&client).unwrap();
+        let url = resolve_vertex_raw_predict_url(&client);
 
         assert_eq!(
             url,
@@ -660,8 +752,8 @@ mod tests {
                 request_body: IndexMap::from([(
                     "generationConfig".to_string(),
                     BexExternalValue::Map {
-                        key_type: baml_type::Ty::string(),
-                        value_type: baml_type::Ty::unknown(),
+                        key_type: baml_type::RuntimeTy::string(),
+                        value_type: baml_type::RuntimeTy::unknown(),
                         entries: IndexMap::from([
                             ("temperature".to_string(), BexExternalValue::Float(0.7)),
                             ("maxOutputTokens".to_string(), BexExternalValue::Int(1024)),

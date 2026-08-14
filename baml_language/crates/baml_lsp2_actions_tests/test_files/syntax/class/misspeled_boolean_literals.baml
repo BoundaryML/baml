@@ -18,21 +18,31 @@ class TestLiterals {
 
 //----
 //- diagnostics
-// Error: unresolved type: True
-//    ╭─[ class_misspeled_boolean_literals.baml:3:4 ]
-//    │
+// E0002
+//
+//   × unresolved type: True
+//    ╭─[class_misspeled_boolean_literals.baml:3:17]
 //  3 │   b "boolean" | True | False
-//    │    ────────────┬────────────  
-//    │                ╰────────────── unresolved type: True
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: False
-//    ╭─[ class_misspeled_boolean_literals.baml:3:4 ]
-//    │
+//    ·                 ────
+//    ╰────
+// E0002
+//
+//   × unresolved type: False
+//    ╭─[class_misspeled_boolean_literals.baml:3:24]
 //  3 │   b "boolean" | True | False
-//    │    ────────────┬────────────  
-//    │                ╰────────────── unresolved type: False
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
+//    ·                        ─────
+//    ╰────
+// E0002
+//
+//   × unresolved type: True
+//    ╭─[class_misspeled_boolean_literals.baml:1:1]
+//  1 │ class TestLiterals {
+//    · ▲
+//    ╰────
+// E0002
+//
+//   × unresolved type: False
+//    ╭─[class_misspeled_boolean_literals.baml:1:1]
+//  1 │ class TestLiterals {
+//    · ▲
+//    ╰────

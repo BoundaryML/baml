@@ -37,14 +37,19 @@ const registry = new Map<string, FC<ResultRendererProps>>();
  * Register a React component to render results of a given BAML type.
  * Example: registerResultRenderer('baml.http.Request', HttpRequestCurlRenderer);
  */
-export function registerResultRenderer(type: string, Component: FC<ResultRendererProps>): void {
+export function registerResultRenderer(
+  type: string,
+  Component: FC<ResultRendererProps>,
+): void {
   registry.set(type, Component);
 }
 
 /**
  * Get the renderer component for a BAML type, or undefined if none registered.
  */
-export function getResultRenderer(type: string): FC<ResultRendererProps> | undefined {
+export function getResultRenderer(
+  type: string,
+): FC<ResultRendererProps> | undefined {
   return registry.get(type);
 }
 
@@ -52,6 +57,9 @@ export function getResultRenderer(type: string): FC<ResultRendererProps> | undef
  * Return all currently registered (type, Component) pairs.
  * Used by ResultDisplay to resolve renderers.
  */
-export function getRegisteredResultRenderers(): Map<string, FC<ResultRendererProps>> {
+export function getRegisteredResultRenderers(): Map<
+  string,
+  FC<ResultRendererProps>
+> {
   return new Map(registry);
 }

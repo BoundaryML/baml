@@ -9,6 +9,8 @@
 //! **No union simplification in PPIR.** Deferred to TIR.
 
 pub mod expand;
+pub mod item_data;
+pub mod resolve;
 pub mod ty;
 
 use std::sync::Arc;
@@ -17,11 +19,10 @@ use baml_base::{Name, SourceFile, attr::TyAttrValue};
 use baml_compiler2_ast as ast;
 use baml_compiler2_hir::{
     contributions::FileSymbolContributions,
-    item_tree::ItemTree,
+    item_tree::{ItemTree, ItemTreeSourceMap},
     namespace::{NameConflict, NamespaceId, NamespaceItems},
     package::{PackageId, PackageItems, PackageItemsExtra},
-    scope::ScopeId,
-    semantic_index::{FileSemanticIndex, ScopeBindings},
+    semantic_index::FileSemanticIndex,
 };
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -42,16 +43,6 @@ pub struct PpirExpansionItems<'db> {
     #[tracked]
     #[returns(ref)]
     pub items: Vec<ast::Item>,
-    /// Stream-expanded return types for LLM functions in this file.
-    /// Each entry maps `(qualified_function_name, stream_expanded_type_expr)`.
-    ///
-    /// This is the streaming counterpart of `Function.return_type` in
-    /// [`bex_vm_types::Function`]: where `return_type` holds the original
-    /// declared type (e.g. `MyClass`), entries here hold the stream-expanded
-    /// version (e.g. `null | MyClass$stream`).
-    #[tracked]
-    #[returns(ref)]
-    pub stream_return_types: Vec<(SmolStr, ast::TypeExpr)>,
 }
 
 // -- Block attributes ---------------------------------------------------------
@@ -64,9 +55,9 @@ pub fn collect_block_attrs(
     let mut result = FxHashMap::default();
     for file in project.files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
-        let cst = baml_compiler_parser::syntax_tree(db, *file);
-        let (items, _) = ast::lower_file(&cst);
-        for item in &items {
+        // Reuse the memoized CST → AST lowering instead of re-lowering here.
+        let items = &baml_compiler2_hir::file_ast(db, *file).items;
+        for item in items {
             let (name, item_attrs) = match item {
                 ast::Item::Class(c) => (&c.name, &c.attributes),
                 ast::Item::Enum(e) => (&e.name, &e.attributes),
@@ -95,18 +86,16 @@ pub fn collect_alias_bodies(
     let mut result = FxHashMap::default();
     for file in project.files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
-        let cst = baml_compiler_parser::syntax_tree(db, *file);
-        let (items, _) = ast::lower_file(&cst);
-        for item in &items {
+        // Reuse the memoized CST → AST lowering instead of re-lowering here.
+        let items = &baml_compiler2_hir::file_ast(db, *file).items;
+        for item in items {
             if let ast::Item::TypeAlias(a) = item {
-                let ty = a
-                    .type_expr
-                    .as_ref()
-                    .map(|s| PpirTy::from_type_expr(&s.expr))
-                    .unwrap_or(PpirTy::CannotBeStreamed {
+                let ty = a.type_expr.as_ref().map(PpirTy::from_type_expr).unwrap_or(
+                    PpirTy::CannotBeStreamed {
                         origin: ty::CannotBeStreamedOrigin::Unknown,
                         attrs: PpirTypeAttrs::default(),
-                    });
+                    },
+                );
                 let mut full_path = vec![pkg_info.package.clone()];
                 full_path.extend(pkg_info.namespace_path.iter().cloned());
                 full_path.push(a.name.clone());
@@ -115,6 +104,61 @@ pub fn collect_alias_bodies(
         }
     }
     result
+}
+
+// -- Project-wide expansion maps (memoized) -----------------------------------
+
+/// The whole-project maps consumed by [`ppir_expansion_items`] when building a
+/// file's `*$stream` companions.
+///
+/// Both maps are derived by scanning **every** file in the project (see
+/// [`collect_block_attrs`] / [`collect_alias_bodies`]). `ppir_expansion_items`
+/// is a per-file query, so computing these inline made expansion `O(files²)`:
+/// each of N files re-lowered all N files. Wrapping them in a single
+/// project-keyed [`salsa::tracked`] query ([`project_expansion_maps`]) computes
+/// them once and shares the result across every file's expansion.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ProjectExpansionMaps {
+    /// `@@` block attributes per type, keyed by fully-qualified path.
+    pub block_attrs: FxHashMap<Vec<Name>, Vec<Name>>,
+    /// Type alias bodies keyed by fully-qualified path.
+    pub alias_bodies: FxHashMap<Vec<Name>, PpirTy>,
+}
+
+/// # Safety
+///
+/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
+/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
+/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ProjectExpansionMaps {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Compute the project-wide [`ProjectExpansionMaps`] once, memoized by Salsa.
+#[salsa::tracked(returns(ref))]
+pub fn project_expansion_maps(
+    db: &dyn crate::Db,
+    project: baml_workspace::Project,
+) -> ProjectExpansionMaps {
+    ProjectExpansionMaps {
+        block_attrs: collect_block_attrs(db, project),
+        alias_bodies: collect_alias_bodies(db, project),
+    }
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -148,8 +192,8 @@ fn make_raw_attr_no_args(name: &str) -> ast::RawAttribute {
 /// Compute synthetic `*$stream` AST items for a single file in one pass.
 #[salsa::tracked]
 pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems<'_> {
-    let cst = baml_compiler_parser::syntax_tree(db, file);
-    let (items, _) = ast::lower_file(&cst);
+    // Reuse the memoized CST → AST lowering instead of re-lowering here.
+    let items = &baml_compiler2_hir::file_ast(db, file).items;
 
     // Get HIR classification for the file's package (original types only)
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -160,17 +204,19 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
     // Build cross-package items map for resolving foreign type references
     let all_package_items = build_all_package_items(db);
 
-    // Get @@ block attributes and alias bodies
+    // Get @@ block attributes and alias bodies. Memoized once per project so
+    // this per-file query doesn't re-scan (and re-lower) every file on every
+    // file — which made expansion O(files²).
     let project = db.project();
-    let block_attrs = collect_block_attrs(db, project);
-    let alias_bodies = collect_alias_bodies(db, project);
+    let expansion_maps = project_expansion_maps(db, project);
+    let block_attrs = &expansion_maps.block_attrs;
+    let alias_bodies = &expansion_maps.alias_bodies;
 
     let mut synthetic_items = Vec::new();
-    let mut stream_return_types: Vec<(SmolStr, ast::TypeExpr)> = Vec::new();
     let mut seen_class_names = FxHashSet::default();
     let mut seen_alias_names = FxHashSet::default();
 
-    for item in &items {
+    for item in items {
         match item {
             ast::Item::Class(c) => {
                 if c.name.ends_with("$stream") {
@@ -183,11 +229,17 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // Clone the original class and rename it
                 let mut stream_class = c.clone();
                 stream_class.name = SmolStr::new(format!("{}$stream", c.name));
-                // $stream classes don't have methods. Generic params are
-                // preserved so that field types referencing them (e.g. `v: T`)
-                // round-trip through TIR as `Ty::TypeVar` instead of collapsing
-                // to `Ty::Unknown`.
+                // A $stream class does not *inherit* its base's methods — neither direct ones
+                // nor those an in-body `implements` block contributes (a method valid for the
+                // base need not be for its stream companion). A stream class participates in an
+                // interface only if the user *explicitly* implements it (`implement Foo for
+                // Bar$stream { ... }`, a separate out-of-body impl that is untouched here).
+                // Dropping the cloned in-body `implements` blocks also drops the interface
+                // obligations that would otherwise require those methods. Generic params are
+                // preserved so that field types referencing them (e.g. `v: T`) round-trip
+                // through TIR as `Ty::TypeVar` instead of collapsing to `Ty::Unknown`.
                 stream_class.methods.clear();
+                stream_class.implements.clear();
                 // Use a dummy span so the synthetic class doesn't shadow the
                 // original in offset-based scope lookup (scope_at_offset
                 // iterates in reverse and would find this scope first if it
@@ -197,21 +249,14 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 // Transform each field in-place
                 stream_class.fields.retain_mut(|field| {
-                    let ppir_ty = field
-                        .type_expr
-                        .as_ref()
-                        .map(|s| PpirTy::from_type_expr(&s.expr))
-                        .unwrap_or(PpirTy::CannotBeStreamed {
-                            origin: ty::CannotBeStreamedOrigin::Unknown,
-                            attrs: PpirTypeAttrs::default(),
-                        });
+                    let ppir_ty = PpirTy::from_type_expr(&field.type_expr);
                     let ctx = ExpandCtx {
                         package_name: &package_name,
                         namespace_path: &pkg_info.namespace_path,
                         package_items,
                         all_package_items: &all_package_items,
-                        block_attrs: &block_attrs,
-                        alias_bodies: &alias_bodies,
+                        block_attrs,
+                        alias_bodies,
                     };
                     let (stream_type, sap_attrs) = stream_expand(&ppir_ty, &ctx);
 
@@ -236,22 +281,17 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     }
 
                     // Preserve non-stream type attributes from the original outermost TypeExpr
-                    if let Some(orig_spanned) = &field.type_expr {
-                        for attr in orig_spanned.expr.attrs() {
-                            if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
-                                type_expr.attrs_mut().push(attr.clone());
-                            }
+                    for attr in field.type_expr.attrs() {
+                        if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
+                            type_expr.attrs_mut().push(attr.clone());
                         }
                     }
 
                     // Replace the field's type expr (preserves field.name, field.attributes, field.span, etc.)
-                    field.type_expr = Some(ast::SpannedTypeExpr {
-                        expr: type_expr,
-                        span: field
-                            .type_expr
-                            .as_ref()
-                            .map_or(TextRange::default(), |s| s.span),
-                    });
+                    field.type_expr = ast::TypeExpr {
+                        span: field.type_expr.span,
+                        ..type_expr
+                    };
 
                     // Strip stream.* from field-level attributes (preserve @alias, @description, @skip, etc.)
                     field.attributes.retain(|a| !a.name.starts_with("stream."));
@@ -283,22 +323,20 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     continue;
                 }
 
-                let ty = a
-                    .type_expr
-                    .as_ref()
-                    .map(|s| PpirTy::from_type_expr(&s.expr))
-                    .unwrap_or(PpirTy::CannotBeStreamed {
+                let ty = a.type_expr.as_ref().map(PpirTy::from_type_expr).unwrap_or(
+                    PpirTy::CannotBeStreamed {
                         origin: ty::CannotBeStreamedOrigin::Unknown,
                         attrs: PpirTypeAttrs::default(),
-                    });
+                    },
+                );
 
                 let ctx = ExpandCtx {
                     package_name: &package_name,
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,
-                    block_attrs: &block_attrs,
-                    alias_bodies: &alias_bodies,
+                    block_attrs,
+                    alias_bodies,
                 };
                 let expanded_body = expand_partial(&ty, &ctx);
 
@@ -313,180 +351,204 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 // Preserve non-stream type attributes from original alias body
                 if let Some(orig_spanned) = &a.type_expr {
-                    for attr in orig_spanned.expr.attrs() {
+                    for attr in orig_spanned.attrs() {
                         if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
                             new_type_expr.attrs_mut().push(attr.clone());
                         }
                     }
                 }
 
-                stream_alias.type_expr = Some(ast::SpannedTypeExpr {
-                    expr: new_type_expr,
+                stream_alias.type_expr = Some(ast::TypeExpr {
                     span: a
                         .type_expr
                         .as_ref()
                         .map_or(TextRange::default(), |s| s.span),
+                    ..new_type_expr
                 });
 
                 synthetic_items.push(ast::Item::TypeAlias(stream_alias));
             }
+            // LLM `$stream` companions, single-path StreamingClient design:
+            // `Fn$stream(args, client)` = one-turn streaming over the
+            // function's own spec, returning the typed partial stream
+            // `ai.stream.Stream<Out$stream, Out>`. Synthesized here (not with the
+            // AST-level companions) because the body's explicit type args
+            // need the stream-expanded return type, which only PPIR can
+            // compute. Tools-bearing functions get no `$stream`: streaming
+            // does not run the tool loop yet (`LlmBodyDef::has_tools` is the
+            // conservative compile-time signal; `ai.from_spec` re-checks
+            // the toolbox at runtime for the dynamic cases).
             ast::Item::Function(func) => {
-                // Only LLM functions get $parse_stream companions.
-                if !matches!(&func.declarative_meta, Some(ast::DeclarativeMeta::Llm(_))) {
+                let Some(ast::DeclarativeMeta::Llm(llm)) = &func.declarative_meta else {
+                    continue;
+                };
+                if !llm.companion_bodies.iter().any(|(t, _)| t == "spec") {
+                    continue;
+                }
+                if llm.has_tools {
                     continue;
                 }
                 // Skip companions (contain $) to avoid recursive generation.
                 if func.name.contains('$') {
                     continue;
                 }
-                // Skip functions without return types.
                 let Some(ref return_type_spanned) = func.return_type else {
                     continue;
                 };
 
                 // Compute the stream-expanded return type.
-                let ppir_ty = PpirTy::from_type_expr(&return_type_spanned.expr);
+                let ppir_ty = PpirTy::from_type_expr(return_type_spanned);
                 let ctx = ExpandCtx {
                     package_name: &package_name,
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,
-                    block_attrs: &block_attrs,
-                    alias_bodies: &alias_bodies,
+                    block_attrs,
+                    alias_bodies,
                 };
                 let (stream_type, _sap_attrs) = stream_expand(&ppir_ty, &ctx);
                 let stream_type_expr = stream_type.to_type_expr();
-
-                // Store the stream-expanded return type for this function.
-                let qualified_name = if pkg_info.namespace_path.is_empty() {
-                    SmolStr::new(format!("{package_name}.{}", func.name))
-                } else {
-                    let ns = pkg_info
-                        .namespace_path
-                        .iter()
-                        .map(Name::as_str)
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    SmolStr::new(format!("{package_name}.{ns}.{}", func.name))
-                };
-                stream_return_types.push((qualified_name, stream_type_expr.clone()));
-
-                // Extract client name from parent's LLM metadata.
-                let client_name = match &func.declarative_meta {
-                    Some(ast::DeclarativeMeta::Llm(llm)) => {
-                        llm.client.as_ref().map(|n| n.as_str().to_string())
-                    }
-                    _ => None,
-                };
 
                 // Share the parent function's span — same as AST-level companions.
                 let span = func.span;
                 let name_span = func.name_span;
 
-                // Return type: baml.llm.Stream<ORIGINAL_RETURN_TYPE, STREAM_EXPANDED_TYPE>
-                let original_return_type_expr = return_type_spanned.expr.clone();
-                let stream_return_type = ast::SpannedTypeExpr {
-                    expr: ast::TypeExpr::Path {
-                        segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
-                        generic_args: vec![original_return_type_expr, stream_type_expr],
-                        attrs: vec![],
-                    },
-                    span,
-                };
-
-                // --- $stream companion ---
-                // Calls baml.llm.stream_llm_function(CLIENT, "FuncName", map { args })
-                {
-                    let param_names: Vec<Name> =
-                        func.params.iter().map(|p| p.name.clone()).collect();
-                    let (body, source_map) = ast::synthesize_llm_builtin_call(
-                        "stream_llm_function",
-                        func.name.as_str(),
-                        &param_names,
-                        client_name.as_deref(),
-                        Vec::new(),
-                        span,
-                    );
-                    let companion = ast::FunctionDef {
-                        name: SmolStr::new(format!("{}$stream", func.name)),
-                        generic_params: func.generic_params.clone(),
-                        params: func.params.clone(),
-                        return_type: Some(stream_return_type.clone()),
-                        throws: None,
-                        body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
-                        declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
-                        attributes: vec![],
-                        docstring: func.docstring.clone(),
-                        span,
-                        name_span,
-                    };
-                    synthetic_items.push(ast::Item::Function(companion));
+                // The `<STREAM_EXPANDED, ORIGINAL>` pair: the return type
+                // `ai.stream.Stream<TS, TF>` and the body's explicit call-site
+                // type args on `ai.stream.from_spec`, so the stdlib reifies both types
+                // from its own frame (`reflect.type_of<TStream/TFinal>()`).
+                let companion_type_args = vec![stream_type_expr, return_type_spanned.clone()];
+                let return_type = ast::TypeExprKind::Path {
+                    // The canonical host-facing stream lives with the rest of
+                    // the AI streaming contract.
+                    segments: vec![Name::new("ai"), Name::new("stream"), Name::new("Stream")],
+                    generic_args: companion_type_args.clone(),
+                    associated_type_bindings: vec![],
+                    attrs: vec![],
                 }
+                .at(span);
 
-                // --- $parse_stream companion ---
-                // Requires a client (calls CLIENT.__make_stream).
-                if let Some(ref client_name) = client_name {
-                    let sse_param = ast::Param {
-                        name: Name::new("sse"),
-                        type_expr: Some(ast::SpannedTypeExpr {
-                            expr: ast::TypeExpr::Path {
+                // Params: the parent's own params plus its injected trailing
+                // `client` override, retyped to the streaming capability
+                // (`ai.StreamingClient? = null`) so passing a non-streaming
+                // client fails at the call site. The parent's `null` default
+                // is reused (the defaults arena is cloned as-is).
+                let params: Vec<ast::Param> = func
+                    .params
+                    .iter()
+                    .cloned()
+                    .map(|mut p| {
+                        if p.name.as_str() == "client" {
+                            let capability = ast::TypeExprKind::Path {
                                 segments: vec![
-                                    Name::new("baml"),
-                                    Name::new("http"),
-                                    Name::new("SseStream"),
+                                    Name::new("ai"),
+                                    Name::new("stream"),
+                                    Name::new("StreamingClient"),
                                 ],
                                 generic_args: vec![],
+                                associated_type_bindings: vec![],
                                 attrs: vec![],
-                            },
-                            span,
-                        }),
-                        span,
-                        name_span,
-                    };
+                            }
+                            .at(span);
+                            p.type_expr = Some(
+                                ast::TypeExprKind::Optional {
+                                    inner: Box::new(capability),
+                                    attrs: vec![],
+                                }
+                                .at(span),
+                            );
+                        }
+                        p
+                    })
+                    .collect();
 
-                    let (body, source_map) =
-                        ast::synthesize_llm_make_stream_call(func.name.as_str(), client_name, span);
+                let param_names: Vec<Name> = func
+                    .params
+                    .iter()
+                    .filter(|p| p.name.as_str() != "client")
+                    .map(|p| p.name.clone())
+                    .collect();
+                let spec_type_args = func
+                    .generic_params
+                    .iter()
+                    .map(|param| {
+                        ast::TypeExprKind::Path {
+                            segments: vec![param.name.clone()],
+                            generic_args: vec![],
+                            associated_type_bindings: vec![],
+                            attrs: vec![],
+                        }
+                        .at(span)
+                    })
+                    .collect();
+                let (body, source_map) = ast::synthesize_spec_stream_body(
+                    func.name.as_str(),
+                    &param_names,
+                    spec_type_args,
+                    companion_type_args,
+                    span,
+                );
 
-                    let companion = ast::FunctionDef {
-                        name: SmolStr::new(format!("{}$parse_stream", func.name)),
-                        generic_params: func.generic_params.clone(),
-                        params: vec![sse_param],
-                        return_type: Some(stream_return_type),
-                        throws: None,
-                        body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
-                        declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
-                        attributes: vec![],
-                        docstring: func.docstring.clone(),
-                        span,
-                        name_span,
-                    };
-                    synthetic_items.push(ast::Item::Function(companion));
-                }
+                let companion = ast::FunctionDef {
+                    name: SmolStr::new(format!("{}$stream", func.name)),
+                    generic_params: func.generic_params.clone(),
+                    params,
+                    defaults: func.defaults.clone(),
+                    return_type: Some(return_type),
+                    throws: None,
+                    body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
+                    declarative_meta: None,
+                    metadata: ast::FunctionMetadata::user_facing(ast::FunctionOrigin::Companion),
+                    is_tagged_template_tag: func.is_tagged_template_tag,
+                    attributes: vec![],
+                    docstring: func.docstring.clone(),
+                    span,
+                    name_span,
+                };
+                synthetic_items.push(ast::Item::Function(companion));
             }
             _ => {}
         }
     }
 
-    PpirExpansionItems::new(db, synthetic_items, stream_return_types)
+    PpirExpansionItems::new(db, synthetic_items)
 }
 
 // -- Canonical queries (original + *$stream) ----------------------------------
 
 /// Canonical semantic index: original AST items + PPIR synthetic *$stream items.
+///
+/// When a file has no synthetic `*$stream` items, the post-expansion index is
+/// byte-for-byte the pre-expansion one (same AST items from `file_ast`, same
+/// builder, same file range), so this delegates to HIR's already-computed index
+/// instead of rebuilding scopes/bindings/contributions a second time.
+pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> &FileSemanticIndex<'_> {
+    let expansion = ppir_expansion_items(db, file);
+    if expansion.items(db).is_empty() {
+        return baml_compiler2_hir::file_semantic_index(db, file);
+    }
+    file_semantic_index_expanded(db, file)
+}
+
+/// The merged (original + `*$stream`) index for files that actually have
+/// synthetic items. Callers must go through [`file_semantic_index`].
 #[salsa::tracked(returns(ref), no_eq)]
-pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
+fn file_semantic_index_expanded(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let (mut items, _) = ast::lower_file_with_file_id(&tree, file.file_id(db));
+    // Reuse the memoized CST → AST lowering instead of re-lowering here.
+    let ast_result = baml_compiler2_hir::file_ast(db, file);
+    let mut items = ast_result.items.clone();
 
     // Merge synthetic *$stream items
     let expansion = ppir_expansion_items(db, file);
     items.extend(expansion.items(db).iter().cloned());
 
     // Re-run HIR builder on merged items
-    baml_compiler2_hir::SemanticIndexBuilder::new(db, file).build(&items, file_range)
+    baml_compiler2_hir::SemanticIndexBuilder::new(db, file)
+        .with_lowering_diagnostics(ast_result.diagnostics.clone())
+        .with_env_var_refs(ast_result.env_var_refs.clone())
+        .build(&items, file_range)
 }
 
 /// Canonical symbol contributions (original + *$stream types).
@@ -499,15 +561,36 @@ pub fn file_symbol_contributions(
 }
 
 /// Canonical item tree (original + *$stream types).
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+///
+/// `pub(crate)`: the raw `ItemTree` is the substrate the `item_data` firewall
+/// queries are built on. Consumers use the enumeration
+/// (`file_classes`/`file_functions`/…) and lookup (`class_data`/
+/// `function_data`/…) queries, never the tree itself — that is what gives
+/// per-item invalidation instead of per-file.
+pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
+}
+
+/// Canonical item-tree source map (original + *$stream types).
+///
+/// `pub(crate)`: spans are served by the per-item `*_source_map` firewall
+/// queries in `item_data`.
+pub(crate) fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
+    let index = file_semantic_index(db, file);
+    Arc::clone(&index.item_tree_source_map)
 }
 
 /// Canonical function body — uses PPIR's item tree (includes synthetic companions).
 ///
 /// TIR should call this instead of `baml_compiler2_hir::body::function_body`
 /// so that PPIR-synthesized functions (like `$parse_stream`) are found.
+///
+/// Salsa-tracked (mirroring HIR's `function_body`): MIR lowering fetches the
+/// callee's body at every direct-call site, and the untracked version cloned
+/// the entire `ExprBody` arena out of the item tree on every one of those
+/// calls. Tracking it caches the `Arc<FunctionBody>` so repeat calls are O(1).
+#[salsa::tracked]
 pub fn function_body<'db>(
     db: &'db dyn Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -544,6 +627,165 @@ pub fn function_body_source_map<'db>(
     }
 }
 
+/// Canonical body for any body owner (rust-analyzer's `DefWithBodyId`
+/// pattern). Functions go through PPIR's item tree so synthetic companions
+/// are found; PPIR never synthesizes lets, so HIR's `let_body` is canonical
+/// for them.
+pub fn body<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> baml_compiler2_hir::body::OwnerBody {
+    use baml_compiler2_hir::body::{BodyOwnerId, OwnerBody};
+    match owner {
+        BodyOwnerId::Function(function) => OwnerBody::Function(function_body(db, function)),
+        BodyOwnerId::Let(let_binding) => {
+            OwnerBody::Let(baml_compiler2_hir::body::let_body(db, let_binding))
+        }
+        BodyOwnerId::ParameterDefaults(function) => {
+            OwnerBody::ParameterDefaults(function_parameter_defaults(db, function))
+        }
+    }
+}
+
+/// Canonical body source map for any body owner (spans only).
+pub fn body_source_map<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Option<ast::AstSourceMap> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => function_body_source_map(db, function),
+        BodyOwnerId::Let(let_binding) => {
+            baml_compiler2_hir::body::let_body_source_map(db, let_binding)
+        }
+        BodyOwnerId::ParameterDefaults(function) => Some(
+            function_parameter_defaults(db, function)
+                .defaults
+                .source_map
+                .clone(),
+        ),
+    }
+}
+
+/// The scope opened for a body owner's body.
+pub fn body_scope<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => item_data::function_scope(db, function),
+        BodyOwnerId::Let(let_binding) => item_data::let_scope(db, let_binding),
+        // Defaults are keyed under the FUNCTION's scope (the semantic
+        // index walks them there, `ExprMetadataScope::ParameterDefault`).
+        BodyOwnerId::ParameterDefaults(function) => item_data::function_scope(db, function),
+    }
+}
+
+/// Every body owner in `file`: functions (methods and synthetic companions
+/// included), then top-level lets, each group in source order.
+pub fn file_body_owners(
+    db: &dyn Db,
+    file: baml_base::SourceFile,
+) -> Vec<baml_compiler2_hir::body::BodyOwnerId<'_>> {
+    let functions = item_data::file_functions(db, file)
+        .iter()
+        .copied()
+        .map(Into::into);
+    let lets = item_data::file_lets(db, file)
+        .iter()
+        .copied()
+        .map(Into::into);
+    functions.chain(lets).collect()
+}
+
+/// Canonical per-body type references for a function (rust-analyzer's
+/// bodies-own-their-type-refs shape): every type expression written inside
+/// the body, lowered once into a span-free store. Salsa-tracked over PPIR's
+/// canonical body, so downstream type queries depend on structure only.
+#[salsa::tracked]
+pub fn function_body_type_refs<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let body = function_body(db, function);
+    let refs = match body.as_ref() {
+        baml_compiler2_hir::body::FunctionBody::Expr(expr_body) => {
+            baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).0
+        }
+        _ => baml_compiler2_hir::body_type_refs::BodyTypeRefs::default(),
+    };
+    Arc::new(refs)
+}
+
+/// The span map for a body's collected type references (the `.1` the
+/// tracked ref query drops; recomputed on demand - the check layer's
+/// annotation-diagnostic anchors resolve through it).
+pub fn body_type_ref_spans(
+    db: &dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'_>,
+) -> Option<baml_compiler2_hir::type_ref::TypeRefSourceMap> {
+    use baml_compiler2_hir::body::{BodyOwnerId, FunctionBody, LetBody};
+    match owner {
+        BodyOwnerId::Function(function) => match function_body(db, function).as_ref() {
+            FunctionBody::Expr(expr_body) => {
+                Some(baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).1)
+            }
+            _ => None,
+        },
+        BodyOwnerId::Let(let_binding) => {
+            match baml_compiler2_hir::body::let_body(db, let_binding).as_ref() {
+                LetBody::Expr(expr_body) => {
+                    Some(baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).1)
+                }
+                LetBody::Missing => None,
+            }
+        }
+        BodyOwnerId::ParameterDefaults(_) => None,
+    }
+}
+
+/// Per-body type references for a top-level let's initializer.
+#[salsa::tracked]
+pub fn let_body_type_refs<'db>(
+    db: &'db dyn Db,
+    let_binding: baml_compiler2_hir::loc::LetLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let body = baml_compiler2_hir::body::let_body(db, let_binding);
+    let refs = match body.as_ref() {
+        baml_compiler2_hir::body::LetBody::Expr(expr_body) => {
+            baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).0
+        }
+        baml_compiler2_hir::body::LetBody::Missing => {
+            baml_compiler2_hir::body_type_refs::BodyTypeRefs::default()
+        }
+    };
+    Arc::new(refs)
+}
+
+/// Per-body type references for any body owner.
+pub fn body_type_refs<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => function_body_type_refs(db, function),
+        BodyOwnerId::Let(let_binding) => let_body_type_refs(db, let_binding),
+        BodyOwnerId::ParameterDefaults(function) => parameter_defaults_type_refs(db, function),
+    }
+}
+
+/// Per-body type references for a function's parameter-default arena.
+#[salsa::tracked]
+pub fn parameter_defaults_type_refs<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let defaults = function_parameter_defaults(db, function);
+    Arc::new(baml_compiler2_hir::body_type_refs::collect_body_type_refs(&defaults.defaults.exprs).0)
+}
+
 /// Canonical function signature — uses PPIR's item tree.
 pub fn function_signature<'db>(
     db: &'db dyn Db,
@@ -559,33 +801,24 @@ pub fn function_signature<'db>(
         .map(|p| {
             let type_expr = p
                 .type_expr
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or(ast::TypeExpr::Unknown { attrs: vec![] });
-            (p.name.clone(), type_expr)
+                .clone()
+                .unwrap_or(ast::TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+            baml_compiler2_hir::signature::SignatureParam {
+                name: p.name.clone(),
+                ty: type_expr,
+                has_default: p.default.is_some(),
+            }
         })
         .collect();
 
-    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
+    let return_type = func_data.return_type.clone();
 
     Arc::new(baml_compiler2_hir::signature::FunctionSignature {
         name: func_data.name.clone(),
         params,
         return_type,
-        throws: func_data.throws.as_ref().map(|te| te.expr.clone()),
+        throws: func_data.throws.clone(),
     })
-}
-
-fn enclosing_class_generic_params(
-    item_tree: &ItemTree,
-    function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
-) -> Vec<Name> {
-    item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
-        .unwrap_or_default()
 }
 
 /// Canonical elaborated callable signature — uses PPIR's item tree.
@@ -603,27 +836,57 @@ pub fn elaborated_function_signature<'db>(
         .map(|p| {
             let type_expr = p
                 .type_expr
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or(ast::TypeExpr::Unknown { attrs: vec![] });
-            (p.name.clone(), type_expr)
+                .clone()
+                .unwrap_or(ast::TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+            baml_compiler2_hir::signature::SignatureParam {
+                name: p.name.clone(),
+                ty: type_expr,
+                has_default: p.default.is_some(),
+            }
         })
         .collect();
 
-    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
-    let throws = func_data.throws.as_ref().map(|te| te.expr.clone());
-    let reserved_effect_param_names = enclosing_class_generic_params(&item_tree, function.id(db));
+    let return_type = func_data.return_type.clone();
+    let throws = func_data.throws.clone();
+    let reserved_effect_param_names: Vec<Name> = item_tree
+        .enclosing_type_generic_params(function.id(db))
+        .iter()
+        .map(|param| param.name.clone())
+        .collect();
 
     Arc::new(
         baml_compiler2_hir::signature::elaborate_function_signature_parts(
             func_data.name.clone(),
-            func_data.generic_params.clone(),
+            func_data
+                .generic_params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect(),
             &reserved_effect_param_names,
             params,
             return_type,
             throws,
         ),
     )
+}
+
+/// Canonical function parameter defaults — uses PPIR's item tree.
+pub fn function_parameter_defaults<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::signature::FunctionParameterDefaults> {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
+
+    Arc::new(baml_compiler2_hir::signature::FunctionParameterDefaults {
+        params: func_data
+            .params
+            .iter()
+            .map(|param| param.default.clone())
+            .collect(),
+        defaults: func_data.defaults.clone(),
+    })
 }
 
 /// Canonical function signature source map — uses PPIR's item tree.
@@ -654,27 +917,6 @@ pub fn elaborated_function_signature_source_map<'db>(
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> baml_compiler2_hir::signature::SignatureSourceMap {
     function_signature_source_map(db, function)
-}
-
-/// Returns the `ScopeBindings` for a given scope (canonical index).
-pub fn scope_bindings_query<'db>(db: &'db dyn Db, scope_id: ScopeId<'db>) -> ScopeBindings {
-    let file = scope_id.file(db);
-    let index = file_semantic_index(db, file);
-    let local_id = scope_id.file_scope_id(db);
-    index.scope_bindings[local_id.index() as usize].clone()
-}
-
-/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
-///
-/// Uses the canonical (PPIR) semantic index, which includes *$stream synthetic items.
-/// Returns `None` if `expr_id` was not recorded as a multi-segment path.
-pub fn path_resolution_query(
-    db: &dyn Db,
-    file: baml_base::SourceFile,
-    expr_id: baml_compiler2_ast::ExprId,
-) -> Option<baml_compiler2_hir::PathResolution> {
-    let index = file_semantic_index(db, file);
-    index.path_resolution(expr_id).cloned()
 }
 
 /// Canonical namespace items (original + *$stream types).
@@ -769,13 +1011,17 @@ pub fn namespace_items<'db>(
 pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
-    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    // Consumers observe the insertion order of `namespaces`, so namespace
+    // discovery must not inherit `HashSet`'s per-process randomized order.
+    let mut ns_paths: Vec<Vec<Name>> = Vec::new();
     for file in baml_compiler2_hir::compiler2_all_files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         if pkg_info.package == *package_name {
-            ns_paths.insert(pkg_info.namespace_path.clone());
+            ns_paths.push(pkg_info.namespace_path.clone());
         }
     }
+    ns_paths.sort();
+    ns_paths.dedup();
 
     let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
@@ -797,5 +1043,9 @@ pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> Packag
         }))
     };
 
-    PackageItems { namespaces, extra }
+    PackageItems {
+        package: package_name,
+        namespaces,
+        extra,
+    }
 }

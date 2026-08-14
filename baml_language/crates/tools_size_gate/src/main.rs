@@ -7,8 +7,11 @@
 )]
 
 mod baseline;
+mod ceilings;
 mod compare;
 mod config;
+mod fetch;
+mod human_size;
 mod measure;
 mod output;
 
@@ -19,6 +22,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use baseline::{PlatformBaseline, baseline_path, current_git_sha, now_iso8601};
+use ceilings::sync_ceilings;
 use clap::{Parser, Subcommand, ValueEnum};
 use compare::check_policy;
 use config::{Config, host_triple};
@@ -85,6 +89,54 @@ enum Command {
         #[arg(long)]
         run_url: Option<String>,
     },
+
+    /// Adopt CI-measured sizes as the new baseline — WITHOUT rebuilding.
+    ///
+    /// With `--branch` (the default), fetches the latest CI `size-gate`
+    /// reports for that branch via `gh` and adopts them — the one command to
+    /// run when a PR trips the gate (no local rebuild, all platforms at once,
+    /// exact CI sizes). With explicit report files, adopts those instead
+    /// (used by the daily refresh workflow, which already downloaded them).
+    ///
+    /// Writes `.ci/size-gate/<platform>.toml` from each report's measured
+    /// sizes and rewrites the per-platform ceilings in `.cargo/size-gate.toml`
+    /// to `--margin-pct` above them as human-readable KiB/MiB/GiB values.
+    /// Idempotent: when the sizes already match, nothing is written.
+    Bake {
+        /// JSON report files produced by `check --format json`. When omitted,
+        /// reports are fetched from `--branch` instead.
+        files: Vec<PathBuf>,
+
+        /// Adopt the latest CI-measured sizes from this branch (via `gh`).
+        /// Ignored when explicit report `files` are given. Defaults to the
+        /// `canary` default branch when no files are provided.
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Repo to fetch from as `owner/name`. Defaults to the current
+        /// checkout's `origin` remote.
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// Where to download fetched reports. Defaults to a temp directory.
+        #[arg(long)]
+        download_dir: Option<PathBuf>,
+
+        /// Write a JSON provenance summary (run id, head sha, violations,
+        /// changed) to this path — consumed by the refresh workflow.
+        #[arg(long)]
+        summary_out: Option<PathBuf>,
+
+        /// How far above each recorded size to set the absolute ceiling.
+        /// Defaults to 3% — matching the `max_delta_pct` regression guard.
+        #[arg(long, default_value = "3.0")]
+        margin_pct: f64,
+
+        /// Git SHA the reports were produced from, recorded in each baseline
+        /// file. Defaults to the fetched run's head SHA, else the current HEAD.
+        #[arg(long)]
+        git_sha: Option<String>,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -107,6 +159,23 @@ fn main() {
         Command::Check => cmd_check(&args),
         Command::Diff => cmd_diff(&args),
         Command::Agg { files, run_url } => cmd_agg(files, run_url.as_deref()),
+        Command::Bake {
+            files,
+            branch,
+            repo,
+            download_dir,
+            summary_out,
+            margin_pct,
+            git_sha,
+        } => cmd_bake(BakeArgs {
+            files,
+            branch: branch.as_deref(),
+            repo: repo.as_deref(),
+            download_dir: download_dir.as_deref(),
+            summary_out: summary_out.as_deref(),
+            margin_pct: *margin_pct,
+            git_sha: git_sha.as_deref(),
+        }),
     };
 
     match result {
@@ -148,10 +217,9 @@ fn relevant_artifacts(config: &Config, filter: Option<&[String]>) -> BTreeMap<St
         }
 
         let platform = Config::platform_for_artifact(artifact);
-        let is_wasm = artifact.wasm || artifact.target.as_deref() == Some("wasm32-unknown-unknown");
 
         // Only include artifacts buildable on this host
-        if !is_wasm && platform != host {
+        if !artifact.is_wasm() && platform != host {
             continue;
         }
 
@@ -179,14 +247,12 @@ fn build_and_measure(
             eprintln!("measuring {name} (platform: {platform})");
 
             let artifact_path = if args.no_build {
-                locate_artifact_public(workspace_root, artifact_config)?
+                locate_artifact_public(workspace_root, name, artifact_config)?
             } else {
-                build_artifact(workspace_root, artifact_config)?
+                build_artifact(workspace_root, name, artifact_config)?
             };
 
-            let is_wasm = artifact_config.wasm
-                || artifact_config.target.as_deref() == Some("wasm32-unknown-unknown");
-            let measurement = measure_artifact(&artifact_path, is_wasm)
+            let measurement = measure_artifact(&artifact_path, artifact_config.should_strip())
                 .with_context(|| format!("failed to measure {name}"))?;
 
             eprintln!(
@@ -301,6 +367,142 @@ fn cmd_agg(files: &[PathBuf], run_url: Option<&str>) -> Result<i32> {
     }
 }
 
+/// Resolved inputs for `cmd_bake`. Cheap to copy (all fields are borrows
+/// or scalars), so pass it by value.
+#[derive(Clone, Copy)]
+struct BakeArgs<'a> {
+    files: &'a [PathBuf],
+    branch: Option<&'a str>,
+    repo: Option<&'a str>,
+    download_dir: Option<&'a Path>,
+    summary_out: Option<&'a Path>,
+    margin_pct: f64,
+    git_sha: Option<&'a str>,
+}
+
+/// Adopt CI report measurements as the new baseline without rebuilding.
+fn cmd_bake(args: BakeArgs) -> Result<i32> {
+    let workspace_root = find_workspace_root()?;
+    let config = Config::load(&workspace_root)?;
+
+    // Source the reports: explicit files (CI / advanced use) or fetch the
+    // latest CI run for a branch (the default developer path).
+    let (files, run_id, head_sha) = if args.files.is_empty() {
+        let branch = args.branch.unwrap_or("canary");
+        let dir = args
+            .download_dir
+            .map(Path::to_path_buf)
+            .unwrap_or_else(default_download_dir);
+        eprintln!("fetching latest size-gate reports from `{branch}`...");
+        let fetched = fetch::fetch_branch_reports(branch, args.repo, &dir)?;
+        eprintln!("adopting run {} ({})", fetched.run_id, fetched.head_sha);
+        (fetched.files, Some(fetched.run_id), Some(fetched.head_sha))
+    } else {
+        (args.files.to_vec(), None, None)
+    };
+
+    // Collect every artifact measurement out of the reports, grouped by
+    // platform. A baseline file is per-platform, so several artifacts from
+    // the same platform's report land in the same file.
+    let mut by_platform: BTreeMap<String, BTreeMap<String, ArtifactMeasurement>> = BTreeMap::new();
+    let mut violations = 0u32;
+    for path in &files {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read report: {}", path.display()))?;
+        let report: JsonReport = serde_json::from_str(&content)
+            .with_context(|| format!("failed to parse JSON report: {}", path.display()))?;
+        if !report.ok {
+            violations += 1;
+        }
+        for artifact in &report.artifacts {
+            let measurement = ArtifactMeasurement {
+                file_bytes: artifact.file_bytes,
+                stripped_bytes: artifact.stripped_bytes,
+                gzip_bytes: artifact.gzip_bytes,
+                sections: BTreeMap::new(),
+            };
+            by_platform
+                .entry(artifact.platform.clone())
+                .or_default()
+                .insert(artifact.artifact.clone(), measurement);
+        }
+    }
+
+    if by_platform.is_empty() {
+        anyhow::bail!("reports contained no artifacts to bake");
+    }
+
+    let git_sha = args
+        .git_sha
+        .map(str::to_owned)
+        .or_else(|| head_sha.clone())
+        .or_else(|| current_git_sha(&workspace_root));
+    let timestamp = now_iso8601();
+
+    // Write each platform baseline, preserving any artifact already in the
+    // file that this batch of reports didn't cover. Skip the write entirely
+    // when the measured sizes are unchanged — bumping `recorded_at`/`git_sha`
+    // on every run would churn a no-op baseline-refresh PR daily.
+    let mut changed = false;
+    for (platform, artifacts) in &by_platform {
+        let path = baseline_path(&workspace_root, &config.baseline_dir, platform);
+        let existing = PlatformBaseline::load(&path)?;
+        let mut merged = match &existing {
+            Some(existing) => existing.artifacts.clone(),
+            None => BTreeMap::new(),
+        };
+        for (name, measurement) in artifacts {
+            merged.insert(name.clone(), measurement.clone());
+        }
+
+        if existing
+            .as_ref()
+            .is_some_and(|baseline| baseline.measurements_match(&merged))
+        {
+            eprintln!("baseline unchanged: {}", path.display());
+            continue;
+        }
+
+        let baseline = PlatformBaseline {
+            version: 1,
+            recorded_at: timestamp.clone(),
+            git_sha: git_sha.clone(),
+            artifacts: merged,
+        };
+        baseline.save(&path)?;
+        changed = true;
+        eprintln!("wrote baseline: {}", path.display());
+    }
+
+    // Re-peg the absolute ceilings to the freshly recorded sizes. This is a
+    // no-op on disk (no diff) when the ceilings already sit margin% above.
+    let ceilings_changed = sync_ceilings(&workspace_root, &config, &by_platform, args.margin_pct)?;
+    changed = changed || ceilings_changed;
+
+    if let Some(path) = args.summary_out {
+        let summary = serde_json::json!({
+            "run_id": run_id,
+            "head_sha": head_sha.or(git_sha),
+            "violations": violations,
+            "changed": changed,
+        });
+        std::fs::write(path, serde_json::to_string_pretty(&summary)?)
+            .with_context(|| format!("failed to write summary: {}", path.display()))?;
+    }
+
+    if changed {
+        eprintln!("baseline updated.");
+    } else {
+        eprintln!("baseline already up to date — nothing to change.");
+    }
+    Ok(EXIT_OK)
+}
+
+/// Default location for fetched reports when `--download-dir` is unset.
+fn default_download_dir() -> PathBuf {
+    std::env::temp_dir().join("baml-size-gate-reports")
+}
+
 fn cmd_diff(args: &Args) -> Result<i32> {
     let workspace_root = find_workspace_root()?;
     let config = Config::load(&workspace_root)?;
@@ -334,8 +536,14 @@ fn build_report_rows(
         for (name, measurement) in measurements {
             let baseline_measurement = platform_baseline.and_then(|b| b.artifacts.get(name));
 
+            let gate = config
+                .artifacts
+                .get(name)
+                .map(|c| c.gate)
+                .unwrap_or_default();
             let violations = if let Some(artifact_config) = config.artifacts.get(name) {
-                check_policy(measurement, baseline_measurement, &artifact_config.policy)
+                let policy = artifact_config.effective_policy(platform);
+                check_policy(measurement, baseline_measurement, &policy, gate)
             } else {
                 Vec::new()
             };
@@ -347,6 +555,7 @@ fn build_report_rows(
                 baseline: baseline_measurement.cloned(),
                 violations,
                 platform_file_exists,
+                gate,
             });
         }
     }

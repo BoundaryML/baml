@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-function user.$init_test_32(registry: testing.TestCollector) -> ?  [expr] {
-  { registry.register_test_set("basic group", (testset: testing.TestCollector) -> void { { testset.register_test("first", () -> { {  } assert.is_true(true) }, null); testset.register_test("second", () -> { {  } assert.is_true(true) }, null) } null }, null) } null
-}

@@ -4,11 +4,15 @@
 //! reqwest directly for SSE streaming. Each `BamlWasmRuntime` gets its own
 //! `WasmHttp` instance, so there are no globals.
 
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
+use bex_events::run::{HeaderObservation, InMemoryRunStore};
 use js_sys::{Function, Object, Promise, Reflect};
 use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceHttp};
-use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -27,13 +31,23 @@ pub(crate) struct WasmHttp {
     fetch_fn: crate::send_wrapper::SendWrapper<Function>,
     /// Registry for HTTP response bodies for this instance.
     registry: Arc<WasmRegistry>,
+    run_store: Arc<InMemoryRunStore>,
+    notification_callback: crate::send_wrapper::SendWrapper<Function>,
+    next_fetch_id: AtomicU64,
 }
 
 impl WasmHttp {
-    pub(crate) fn new(fetch_fn: Function) -> Self {
+    pub(crate) fn new(
+        fetch_fn: Function,
+        run_store: Arc<InMemoryRunStore>,
+        notification_callback: crate::send_wrapper::SendWrapper<Function>,
+    ) -> Self {
         Self {
             fetch_fn: crate::send_wrapper::SendWrapper::new(fetch_fn),
             registry: Arc::new(WasmRegistry::new()),
+            run_store,
+            notification_callback,
+            next_fetch_id: AtomicU64::new(1),
         }
     }
 
@@ -49,10 +63,28 @@ impl WasmHttp {
     ) -> SysOpOutput<io::owned::http::Response> {
         let fetch_fn = self.fetch_fn().clone();
         let registry = Arc::clone(&self.registry);
+        let run_store = self.run_store.clone();
+        let notification_callback = self.notification_callback.clone();
+        let fetch_id = self.next_fetch_id.fetch_add(1, Ordering::Relaxed);
+        let host_call_id = crate::wasm_host_call_id(call_id);
+        if let Some(host_call_id) = &host_call_id
+            && let Some(patch) = self.run_store.ingest_fetch_started(
+                host_call_id,
+                fetch_id,
+                request.method.clone(),
+                request.url.clone(),
+                header_observations(&request.headers),
+                Some(request.body.len()),
+            )
+        {
+            crate::send_run_patch(&self.notification_callback, &patch);
+        }
 
-        SysOpOutput::Async(Box::pin(SendFuture(async move {
-            let headers_json = serde_json::to_string(&request.headers)
-                .map_err(|e| OpErrorKind::Other(format!("Failed to serialize headers: {e}")))?;
+        SysOpOutput::async_op(SendFuture(async move {
+            let headers_json =
+                serde_json::to_string(&request.headers).map_err(|e| VmBamlError::DevOther {
+                    message: format!("Failed to serialize headers: {e}"),
+                })?;
 
             let promise = fetch_fn
                 .call5(
@@ -66,56 +98,117 @@ impl WasmHttp {
                 )
                 .map_err(|e| {
                     let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
-                    OpErrorKind::Other(format!("Failed to call fetch function: {msg}"))
+                    VmBamlError::Io {
+                        message: format!("Failed to call fetch function: {msg}"),
+                    }
                 })?;
 
-            let promise: Promise = promise.dyn_into().map_err(|_| {
-                OpErrorKind::Other("Fetch function did not return a Promise".into())
+            let promise: Promise = promise.dyn_into().map_err(|_| VmBamlError::Io {
+                message: "Fetch function did not return a Promise".into(),
             })?;
 
-            let result = JsFuture::from(promise).await.map_err(|e| {
-                let msg = e
-                    .as_string()
-                    .or_else(|| {
-                        e.dyn_ref::<js_sys::Error>()
-                            .map(|err| String::from(err.message()))
-                    })
-                    .unwrap_or_else(|| format!("{e:?}"));
-                OpErrorKind::Other(format!("HTTP request failed: {msg}"))
+            let result = match JsFuture::from(promise).await {
+                Ok(result) => result,
+                Err(e) => {
+                    let msg = e
+                        .as_string()
+                        .or_else(|| {
+                            e.dyn_ref::<js_sys::Error>()
+                                .map(|err| String::from(err.message()))
+                        })
+                        .unwrap_or_else(|| format!("{e:?}"));
+                    if let Some(host_call_id) = &host_call_id
+                        && let Some(patch) = run_store.ingest_fetch_updated(
+                            host_call_id,
+                            fetch_id,
+                            None,
+                            None,
+                            Vec::new(),
+                            None,
+                            Some(msg.clone()),
+                        )
+                    {
+                        crate::send_run_patch(&notification_callback, &patch);
+                    }
+                    return Err(VmRustFnError::from(VmBamlError::Io {
+                        message: format!("HTTP request failed: {msg}"),
+                    }));
+                }
+            };
+
+            let obj: Object = result.dyn_into().map_err(|_| VmBamlError::Io {
+                message: "Fetch response is not an object".into(),
             })?;
 
-            let obj: Object = result
-                .dyn_into()
-                .map_err(|_| OpErrorKind::Other("Fetch response is not an object".into()))?;
-
-            #[allow(clippy::cast_possible_truncation)]
-            let status = Reflect::get(&obj, &"status".into())
-                .map_err(|_| OpErrorKind::Other("Response missing 'status' field".into()))?
+            let status_f64 = Reflect::get(&obj, &"status".into())
+                .map_err(|_| VmBamlError::Io {
+                    message: "Response missing 'status' field".into(),
+                })?
                 .as_f64()
-                .ok_or_else(|| OpErrorKind::Other("Response 'status' is not a number".into()))?
-                as i64;
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "Response 'status' is not a number".into(),
+                })?;
+            // `as i64` for f64 is saturating: NaN → 0, +inf → i64::MAX,
+            // -inf → i64::MIN, fractionals → truncated toward zero. None
+            // of those make sense for an HTTP status code, and downstream
+            // consumers (`sys_llm`'s 2xx success check, auth's
+            // `u16::try_from`) would misclassify them as success / 0.
+            // `FromPrimitive::from_f64` returns `None` exactly when the
+            // value is non-finite, out of `i64` range, or non-integer —
+            // the precise set we want to reject.
+            let status =
+                <i64 as num_traits::FromPrimitive>::from_f64(status_f64).ok_or_else(|| {
+                    VmBamlError::Io {
+                        message: format!(
+                            "Response 'status' must be a finite integer, got {status_f64}"
+                        ),
+                    }
+                })?;
 
             let headers_str = Reflect::get(&obj, &"headersJson".into())
-                .map_err(|_| OpErrorKind::Other("Response missing 'headersJson' field".into()))?
+                .map_err(|_| VmBamlError::Io {
+                    message: "Response missing 'headersJson' field".into(),
+                })?
                 .as_string()
-                .ok_or_else(|| {
-                    OpErrorKind::Other("Response 'headersJson' is not a string".into())
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "Response 'headersJson' is not a string".into(),
                 })?;
 
             let final_url = Reflect::get(&obj, &"url".into())
-                .map_err(|_| OpErrorKind::Other("Response missing 'url' field".into()))?
+                .map_err(|_| VmBamlError::Io {
+                    message: "Response missing 'url' field".into(),
+                })?
                 .as_string()
-                .ok_or_else(|| OpErrorKind::Other("Response 'url' is not a string".into()))?;
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "Response 'url' is not a string".into(),
+                })?;
 
             let body_promise = Reflect::get(&obj, &"bodyPromise".into())
-                .map_err(|_| OpErrorKind::Other("Response missing 'bodyPromise' field".into()))?
+                .map_err(|_| VmBamlError::Io {
+                    message: "Response missing 'bodyPromise' field".into(),
+                })?
                 .dyn_into::<Promise>()
-                .map_err(|_| {
-                    OpErrorKind::Other("Response 'bodyPromise' is not a Promise".into())
+                .map_err(|_| VmBamlError::Io {
+                    message: "Response 'bodyPromise' is not a Promise".into(),
                 })?;
 
             let headers: indexmap::IndexMap<String, String> = serde_json::from_str(&headers_str)
-                .map_err(|e| OpErrorKind::Other(format!("Failed to parse headersJson: {e}")))?;
+                .map_err(|e| VmBamlError::ParseError {
+                    message: format!("Failed to parse headersJson: {e}"),
+                })?;
+            if let Some(host_call_id) = &host_call_id
+                && let Some(patch) = run_store.ingest_fetch_updated(
+                    host_call_id,
+                    fetch_id,
+                    Some(status),
+                    None,
+                    header_observations(&headers),
+                    None,
+                    None,
+                )
+            {
+                crate::send_run_patch(&notification_callback, &patch);
+            }
 
             let key = registry.store_body_promise(body_promise);
             let body: Arc<dyn std::any::Any + Send + Sync> =
@@ -127,7 +220,7 @@ impl WasmHttp {
                 url: final_url,
                 _body: body,
             })
-        })))
+        }))
     }
 }
 
@@ -145,17 +238,19 @@ impl IoClassHttpResponse for WasmHttp {
             .downcast_ref::<WasmResponseBody>()
             .map(|b| b.key);
         let Some(key) = body else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Response body handle is not a WasmResponseBody".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Response body handle is not a WasmResponseBody".into(),
+            });
         };
 
-        SysOpOutput::Async(Box::pin(SendFuture(async move {
-            let promise = registry.take_body_promise(key).ok_or_else(|| {
-                OpErrorKind::Other(
-                    "Response body has already been consumed or handle is invalid".into(),
-                )
-            })?;
+        SysOpOutput::async_op(SendFuture(async move {
+            let promise =
+                registry
+                    .take_body_promise(key)
+                    .ok_or_else(|| VmBamlError::InvalidArgument {
+                        message: "Response body has already been consumed or handle is invalid"
+                            .into(),
+                    })?;
             let value = JsFuture::from(promise).await.map_err(|e| {
                 let msg = e
                     .as_string()
@@ -164,12 +259,17 @@ impl IoClassHttpResponse for WasmHttp {
                             .map(|err| String::from(err.message()))
                     })
                     .unwrap_or_else(|| format!("{e:?}"));
-                OpErrorKind::Other(format!("Failed to read response body: {msg}"))
+                VmBamlError::Io {
+                    message: format!("Failed to read response body: {msg}"),
+                }
             })?;
-            value.as_string().ok_or_else(|| {
-                OpErrorKind::Other("Response body did not resolve to a string".into())
-            })
-        })))
+            value
+                .as_string()
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "Response body did not resolve to a string".into(),
+                })
+                .map_err(VmRustFnError::from)
+        }))
     }
 
     fn bytes(
@@ -185,17 +285,19 @@ impl IoClassHttpResponse for WasmHttp {
             .downcast_ref::<WasmResponseBody>()
             .map(|b| b.key);
         let Some(key) = body else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Response body handle is not a WasmResponseBody".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Response body handle is not a WasmResponseBody".into(),
+            });
         };
 
-        SysOpOutput::Async(Box::pin(SendFuture(async move {
-            let promise = registry.take_body_promise(key).ok_or_else(|| {
-                OpErrorKind::Other(
-                    "Response body has already been consumed or handle is invalid".into(),
-                )
-            })?;
+        SysOpOutput::async_op(SendFuture(async move {
+            let promise =
+                registry
+                    .take_body_promise(key)
+                    .ok_or_else(|| VmBamlError::InvalidArgument {
+                        message: "Response body has already been consumed or handle is invalid"
+                            .into(),
+                    })?;
             let value = JsFuture::from(promise).await.map_err(|e| {
                 let msg = e
                     .as_string()
@@ -204,18 +306,132 @@ impl IoClassHttpResponse for WasmHttp {
                             .map(|err| String::from(err.message()))
                     })
                     .unwrap_or_else(|| format!("{e:?}"));
-                OpErrorKind::Other(format!("Failed to read response body: {msg}"))
+                VmBamlError::Io {
+                    message: format!("Failed to read response body: {msg}"),
+                }
             })?;
             if let Some(arr) = value.dyn_ref::<js_sys::Uint8Array>() {
                 Ok(arr.to_vec())
             } else if let Some(buf) = value.dyn_ref::<js_sys::ArrayBuffer>() {
                 Ok(js_sys::Uint8Array::new(buf).to_vec())
             } else {
-                Err(OpErrorKind::Other(
-                    "Response body did not resolve to a Uint8Array or ArrayBuffer".into(),
-                ))
+                Err(VmBamlError::Io {
+                    message: "Response body did not resolve to a Uint8Array or ArrayBuffer".into(),
+                })
             }
-        })))
+            .map_err(VmRustFnError::from)
+        }))
+    }
+
+    fn new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _body: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: io::owned::http::Response,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: io::owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+// The HTTP server primitives are native-only; a browser cannot bind a listener.
+impl io::IoClassHttpTlsConfig for WasmHttp {
+    fn _new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _cert_pem: Vec<u8>,
+        _key_pem: Vec<u8>,
+        _allow_tls1_2: bool,
+        _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::TlsConfig> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+// The HTTP server primitives are native-only; a browser cannot bind a listener.
+impl io::IoClassHttpServer for WasmHttp {
+    fn bind(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Server> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _serve(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _server: io::owned::http::Server,
+        _handler: sys_types::Handle,
+        _tls_config: Option<io::owned::http::TlsConfig>,
+        _allow_http1: bool,
+        _allow_http2: bool,
+        _max_body_size: i64,
+        _max_connections: i64,
+        _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -233,9 +449,9 @@ impl io::IoClassHttpSseStream for WasmHttp {
             .downcast::<WasmSseStreamHandle>()
             .ok();
         let Some(handle) = handle else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "SSE stream handle is not a WasmSseStreamHandle".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "SSE stream handle is not a WasmSseStreamHandle".into(),
+            });
         };
 
         if handle.is_done() {
@@ -251,7 +467,9 @@ impl io::IoClassHttpSseStream for WasmHttp {
                 };
             }
             DrainResult::Error(e) => {
-                return SysOpOutput::err(OpErrorKind::Other(format!("SSE stream error: {e}")));
+                return SysOpOutput::err(VmBamlError::Io {
+                    message: format!("SSE stream error: {e}"),
+                });
             }
             DrainResult::Done => {
                 return SysOpOutput::ok(None);
@@ -264,7 +482,7 @@ impl io::IoClassHttpSseStream for WasmHttp {
         // No events ready — await the next one. We use poll_fn to borrow
         // the receiver only during poll (not across await points), so there
         // is no take/return pattern that could break on re-entrant calls.
-        SysOpOutput::Async(Box::pin(SendFuture(async move {
+        SysOpOutput::async_op(SendFuture(async move {
             use futures::stream::StreamExt;
 
             let event = futures::future::poll_fn(|cx| {
@@ -283,7 +501,9 @@ impl io::IoClassHttpSseStream for WasmHttp {
                     match drain_receiver(&handle) {
                         DrainResult::Events(more) => events.extend(more),
                         DrainResult::Error(e) => {
-                            return Err(OpErrorKind::Other(format!("SSE stream error: {e}")));
+                            return Err(VmRustFnError::from(VmBamlError::Io {
+                                message: format!("SSE stream error: {e}"),
+                            }));
                         }
                         DrainResult::Done | DrainResult::Empty => {}
                     }
@@ -291,14 +511,17 @@ impl io::IoClassHttpSseStream for WasmHttp {
                 }
                 Some(Err(e)) => {
                     handle.mark_done();
-                    Err(OpErrorKind::Other(format!("SSE stream error: {e}")))
+                    Err(VmBamlError::Io {
+                        message: format!("SSE stream error: {e}"),
+                    })
                 }
                 None => {
                     handle.mark_done();
                     Ok(None)
                 }
             }
-        })))
+            .map_err(VmRustFnError::from)
+        }))
     }
 
     fn close(
@@ -362,7 +585,7 @@ fn drain_receiver(handle: &WasmSseStreamHandle) -> DrainResult {
 }
 
 /// Serialize a batch of SSE events to JSON.
-fn serialize_sse_events(events: Vec<sys_types::sse::SseEvent>) -> Result<String, OpErrorKind> {
+fn serialize_sse_events(events: Vec<sys_types::sse::SseEvent>) -> Result<String, VmBamlError> {
     let json_events: Vec<serde_json::Value> = events
         .into_iter()
         .map(|e| {
@@ -373,8 +596,9 @@ fn serialize_sse_events(events: Vec<sys_types::sse::SseEvent>) -> Result<String,
             })
         })
         .collect();
-    serde_json::to_string(&json_events)
-        .map_err(|e| OpErrorKind::Other(format!("Failed to serialize SSE events: {e}")))
+    serde_json::to_string(&json_events).map_err(|e| VmBamlError::DevOther {
+        message: format!("Failed to serialize SSE events: {e}"),
+    })
 }
 
 /// Background task that reads from a byte stream, parses SSE events, and sends
@@ -419,11 +643,17 @@ async fn sse_background_task(
 }
 
 impl IoNamespaceHttp for WasmHttp {
-    fn fetch(
+    // `timeout_nanos` is accepted for parity with the native ops but not yet
+    // honored: the browser `fetch` backend behind reqwest's wasm client has no
+    // straightforward per-request timeout hook. A `null` BAML timeout (the
+    // default) is unbounded regardless, so omitting it only affects explicit
+    // deadlines on the playground/wasm path.
+    fn _fetch(
         &self,
         _heap: &Arc<BexHeap>,
         call_id: CallId,
         url: String,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         let req = io::owned::http::Request {
@@ -435,11 +665,12 @@ impl IoNamespaceHttp for WasmHttp {
         self.do_send(call_id, req)
     }
 
-    fn send(
+    fn _send(
         &self,
         _heap: &Arc<BexHeap>,
         call_id: CallId,
         request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.do_send(call_id, request)
@@ -452,9 +683,11 @@ impl IoNamespaceHttp for WasmHttp {
         request: io::owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
-        SysOpOutput::Async(Box::pin(SendFuture(async move {
+        SysOpOutput::async_op(SendFuture(async move {
             let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", request.method))
+                VmBamlError::InvalidArgument {
+                    message: format!("Invalid HTTP method '{}': {e}", request.method),
+                }
             })?;
 
             let client = reqwest::Client::new();
@@ -468,10 +701,9 @@ impl IoNamespaceHttp for WasmHttp {
                 builder = builder.body(request.body.clone());
             }
 
-            let response = builder
-                .send()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("SSE connection failed: {e}")))?;
+            let response = builder.send().await.map_err(|e| VmBamlError::Io {
+                message: format!("SSE connection failed: {e}"),
+            })?;
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
@@ -479,9 +711,9 @@ impl IoNamespaceHttp for WasmHttp {
                     .text()
                     .await
                     .unwrap_or_else(|_| "<could not read body>".to_string());
-                return Err(OpErrorKind::Other(format!(
-                    "SSE request failed with status {status}: {body}"
-                )));
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: format!("SSE request failed with status {status}: {body}"),
+                }));
             }
 
             let url = response.url().to_string();
@@ -498,6 +730,13 @@ impl IoNamespaceHttp for WasmHttp {
                 url,
                 _handle: handle,
             })
-        })))
+        }))
     }
+}
+
+fn header_observations(headers: &indexmap::IndexMap<String, String>) -> Vec<HeaderObservation> {
+    headers
+        .iter()
+        .map(|(name, value)| HeaderObservation::observe(name, value))
+        .collect()
 }

@@ -151,6 +151,34 @@ fn describe_enum() {
 }
 
 #[test]
+fn describe_interface() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "interfaces.baml",
+        r#"
+interface Named {
+    name: string
+    function label(self) -> string
+}
+
+class Person {
+    name: string
+    implements Named {
+        function label(self) -> string {
+            return self.name
+        }
+    }
+}
+"#,
+    );
+    let project = builder.build();
+
+    let descs = project.describe("Named");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
 fn describe_function() {
     let project = make_project();
     let descs = project.describe("ExtractPoint");
@@ -202,9 +230,10 @@ fn user_only_describe_still_does_not_search_builtins() {
 }
 
 #[test]
-fn list_symbols_compiler2_visible_includes_selected_builtins() {
+fn search_symbols_compiler2_visible_includes_selected_builtins() {
     let project = make_project();
-    let symbols = project.list_symbols_compiler2_visible();
+    let files = baml_compiler2_hir::compiler2_all_files(&project.db);
+    let symbols = crate::search::search_symbols(&project.db, &files, "");
 
     assert!(symbols.iter().any(|sym| sym.name == "String"));
     assert!(symbols.iter().any(|sym| sym.name == "Array"));
