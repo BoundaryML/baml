@@ -36,10 +36,15 @@ env:
   RUST_BACKTRACE: full
 
 jobs:
-  baseline:
-    name: "B-1545 investigation (non-required) / baseline ${{ matrix.trial }}"
+  rayon-serial:
+    name: "B-1545 investigation (non-required) / Rayon serial ${{ matrix.trial }}"
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 35
+    env:
+      # Controlled experiment after the production-exact baseline reproduced
+      # invalid frees on Rayon MIR-lowering workers. This is the only execution
+      # factor changed from the baseline runs.
+      RAYON_NUM_THREADS: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -137,7 +142,7 @@ jobs:
           cargo metadata --format-version 1 > "$RUNNER_TEMP/b1545-diagnostics/cargo-metadata.json"
         working-directory: baml_language
 
-      - name: "Run tests with nextest (production baseline)"
+      - name: "Run tests with nextest (production invocation, Rayon serial)"
         run: |
           set -euo pipefail
 
@@ -212,7 +217,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: "b1545-macos-baseline-${{ matrix.trial }}-${{ github.run_attempt }}"
+          name: "b1545-macos-rayon-serial-${{ matrix.trial }}-${{ github.run_attempt }}"
           path: ${{ runner.temp }}/b1545-diagnostics/
           if-no-files-found: error
           retention-days: 14
@@ -229,7 +234,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: "sccache-stats-test-macos-baseline-${{ matrix.trial }}-${{ github.run_attempt }}"
+          name: "sccache-stats-test-macos-rayon-serial-${{ matrix.trial }}-${{ github.run_attempt }}"
           path: sccache-stats-test-macos.json
           if-no-files-found: ignore
 
@@ -242,6 +247,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: "cargo-timings-test-macos-baseline-${{ matrix.trial }}-${{ github.run_attempt }}"
+          name: "cargo-timings-test-macos-rayon-serial-${{ matrix.trial }}-${{ github.run_attempt }}"
           path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
           if-no-files-found: ignore
