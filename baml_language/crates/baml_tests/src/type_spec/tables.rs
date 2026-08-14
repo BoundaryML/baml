@@ -534,6 +534,321 @@ function sc_sealed() -> baml.reflect.class.Type throws never {
 }
 
 #[test]
+fn scoped_runtime_types_shadow_and_erase_at_block_exit() {
+    use baml_compiler2_hir_ty::diagnostics::TirTypeError;
+
+    let source = r#"
+class ScopeT {}
+function scope_id<X>(value: X) -> X throws never { value }
+function scope_use(runtime_t: type) -> ScopeT throws never {
+    let escaped = {
+        type ScopeT = unreflect(runtime_t)
+        scope_id<ScopeT>(1)
+    }
+    scope_id<ScopeT>(ScopeT {})
+}
+function scope_lambda(runtime_t: type) -> ((int) -> unknown throws never) throws never {
+    {
+        type LambdaT = unreflect(runtime_t)
+        (x: int) -> { scope_id<LambdaT>(x) }
+    }
+}
+function scope_branch(runtime_t: type, choose: bool) -> ScopeT throws never {
+    let branch_value = if choose {
+        type ScopeT = unreflect(runtime_t)
+        scope_id<ScopeT>(2)
+    } else {
+        null
+    }
+    scope_id<ScopeT>(ScopeT {})
+}
+function scope_bad() -> null throws never {
+    type Bad = unreflect(42)
+    null
+}
+function scope_shape_bad(runtime_t: type) -> null throws never {
+    type ShapeT = unreflect(runtime_t)
+    let impossible: ShapeT[] = 42
+    null
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut saw_inner = false;
+    let mut saw_outer = false;
+    let mut saw_branch = false;
+    let mut saw_erased_block = false;
+    let mut saw_lambda_erasure = false;
+    let mut saw_bad_operand = false;
+    let mut saw_static_shape_error = false;
+    let mut runtime_checks = 0;
+    let mut diagnostics = Vec::new();
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        diagnostics.extend(result.diagnostics.iter().map(|diag| diag.error.clone()));
+        runtime_checks += result.runtime_checks.len();
+        for check in &result.runtime_checks {
+            assert!(matches!(
+                check,
+                baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
+                    if matches!(
+                        expected.kind(),
+                        baml_type::interned::TyKind::TypeVar(param, _)
+                            if param.index() & 0x8000_0000 != 0
+                    )
+            ));
+        }
+        saw_bad_operand |= result.diagnostics.iter().any(|diag| {
+            matches!(
+                &diag.error,
+                TirTypeError::TypeMismatch { expected, got }
+                    if expected.render_canonical() == "type" && got.render_canonical() == "42"
+            )
+        });
+        saw_static_shape_error |= result.diagnostics.iter().any(|diag| {
+            matches!(
+                &diag.error,
+                TirTypeError::TypeMismatch { expected, got }
+                    if expected.render_canonical() == "ShapeT[]"
+                        && got.render_canonical() == "42"
+            )
+        });
+
+        let binding = result
+            .type_bindings
+            .values()
+            .find(|binding| binding.name.as_str() == "ScopeT");
+        for (&call, plan) in &result.call_plans {
+            let snippet = &source[source_map.expr_span(call)];
+            if snippet == "scope_id<ScopeT>(1)" {
+                let binding = binding.expect("ScopeT binding recorded");
+                saw_inner = true;
+                assert!(binding.parameter.index() & 0x8000_0000 != 0);
+                assert!(matches!(
+                    plan.type_args.as_slice(),
+                    [ty] if matches!(ty.kind(), baml_type::interned::TyKind::TypeVar(param, _)
+                        if param == &binding.parameter)
+                ));
+            }
+            if snippet == "scope_id<ScopeT>(2)" {
+                let binding = binding.expect("branch ScopeT binding recorded");
+                saw_branch = true;
+                assert!(matches!(
+                    plan.type_args.as_slice(),
+                    [ty] if matches!(ty.kind(), baml_type::interned::TyKind::TypeVar(param, _)
+                        if param == &binding.parameter)
+                ));
+            }
+            if snippet == "scope_id<ScopeT>(ScopeT {})" {
+                saw_outer = true;
+                assert!(matches!(
+                    plan.type_args.as_slice(),
+                    [ty] if ty.to_plain().render_canonical() == "user.ScopeT"
+                ));
+            }
+        }
+
+        let mut binding_blocks: Vec<_> = result
+            .type_of_expr
+            .iter()
+            .filter_map(|(&expr, ty)| {
+                let snippet = &source[source_map.expr_span(expr)];
+                snippet
+                    .contains("type ScopeT = unreflect(runtime_t)")
+                    .then_some((snippet.len(), ty))
+            })
+            .collect();
+        binding_blocks.sort_by_key(|(len, _)| *len);
+        if let Some((_, ty)) = binding_blocks.first() {
+            saw_erased_block = true;
+            assert_eq!(ty.to_plain().render_canonical(), "unknown");
+        }
+
+        let mut lambda_binding_blocks: Vec<_> = result
+            .type_of_expr
+            .iter()
+            .filter_map(|(&expr, ty)| {
+                let snippet = &source[source_map.expr_span(expr)];
+                snippet
+                    .contains("type LambdaT = unreflect(runtime_t)")
+                    .then_some((snippet.len(), ty))
+            })
+            .collect();
+        lambda_binding_blocks.sort_by_key(|(len, _)| *len);
+        if let Some((_, ty)) = lambda_binding_blocks.first() {
+            saw_lambda_erasure = true;
+            assert!(matches!(
+                ty.kind(),
+                baml_type::interned::TyKind::Function { ret, .. }
+                    if ret.to_plain().render_canonical() == "unknown"
+            ));
+        }
+    }
+    assert!(saw_inner && saw_outer && saw_branch && saw_erased_block && saw_lambda_erasure);
+    assert_eq!(runtime_checks, 3, "each scoped dependent check is durable");
+    assert!(
+        saw_bad_operand,
+        "type-binding operand must be checked below `type`"
+    );
+    assert!(
+        saw_static_shape_error,
+        "a runtime-dependent type must retain its statically known shape"
+    );
+    assert_eq!(
+        diagnostics.len(),
+        2,
+        "valid scoped bindings must not create static-only errors: {diagnostics:?}"
+    );
+}
+
+#[test]
+fn unreflect_patterns_are_distinct_non_covering_and_effect_scoped() {
+    use baml_compiler2_hir_ty::diagnostics::TirTypeError;
+
+    let source = r#"
+class ScopeEffect {}
+function scope_effect_type() -> type throws ScopeEffect { throw ScopeEffect {} }
+function pat_open(t: type, x: int) -> string {
+    match (x) {
+        unreflect(t) => "left",
+        unreflect(t) => "right",
+    }
+}
+function pat_closed(t: type, x: int) -> string {
+    match (x) {
+        unreflect(t) => "left",
+        unreflect(t) => "right",
+        _ => "fallback",
+    }
+}
+function pat_bad(x: int) -> bool { x is unreflect(42) }
+function pat_effect(x: int) -> bool { x is unreflect(scope_effect_type()) }
+function pat_default(flag: bool = 1 is unreflect(scope_effect_type())) -> null { null }
+function pat_catch() -> bool {
+    { throw ScopeEffect {} } catch (e) {
+        ScopeEffect => 1 is unreflect(scope_effect_type())
+    }
+}
+function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
+    (x: int) -> { x is unreflect(scope_effect_type()) }
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut non_exhaustive = 0;
+    let mut unreachable = 0;
+    let mut pattern_types = 0;
+    let mut saw_bad_operand = false;
+    let mut saw_direct_effect = false;
+    let mut saw_catch_effect = false;
+    let mut saw_lambda_effect = false;
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        let owner_name = match owner {
+            baml_compiler2_hir::body::BodyOwnerId::Function(function)
+            | baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(function) => {
+                baml_compiler2_ppir::item_data::function_data(&db, function)
+                    .name
+                    .as_str()
+            }
+            baml_compiler2_hir::body::BodyOwnerId::Let(_) => "<let>",
+        };
+        if owner_name == "pat_catch" {
+            saw_catch_effect = result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+        }
+        non_exhaustive += result
+            .diagnostics
+            .iter()
+            .filter(|diag| matches!(&diag.error, TirTypeError::NonExhaustiveMatch { .. }))
+            .count();
+        unreachable += result
+            .diagnostics
+            .iter()
+            .filter(|diag| matches!(&diag.error, TirTypeError::UnreachableArm))
+            .count();
+        saw_bad_operand |= result.diagnostics.iter().any(|diag| {
+            matches!(
+                &diag.error,
+                TirTypeError::TypeMismatch { expected, got }
+                    if expected.render_canonical() == "type" && got.render_canonical() == "42"
+            )
+        });
+        let inferred_body = baml_compiler2_ppir::body(&db, owner);
+        let inferred_body = inferred_body.expr_body().expect("expression body");
+        for (pat, ty) in &result.type_of_pat {
+            if matches!(
+                inferred_body.patterns[*pat],
+                baml_compiler2_ast::Pattern::Unreflect(_)
+            ) {
+                pattern_types += 1;
+                assert!(
+                    matches!(ty.to_plain().render_canonical().as_str(), "int" | "1"),
+                    "runtime pattern did not preserve its scrutinee type: {ty:?}"
+                );
+            }
+        }
+        for (&expr, ty) in &result.type_of_expr {
+            let snippet = &source[source_map.expr_span(expr)];
+            if snippet == "x is unreflect(scope_effect_type())" {
+                saw_direct_effect |=
+                    result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+            }
+            if snippet.starts_with("(x: int) ->") {
+                saw_lambda_effect |= matches!(
+                    ty.kind(),
+                    baml_type::interned::TyKind::Function { throws, .. }
+                        if throws.to_plain().render_canonical() == "user.ScopeEffect"
+                ) && result.throws.to_plain().render_canonical() == "never";
+            }
+        }
+    }
+    let default_function = baml_compiler2_ppir::item_data::file_functions(&db, file)
+        .iter()
+        .copied()
+        .find(|function| {
+            baml_compiler2_ppir::item_data::function_data(&db, *function)
+                .name
+                .as_str()
+                == "pat_default"
+        })
+        .expect("pat_default function");
+    let default_owner = baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(default_function);
+    let default_result = infer_body(&db, default_owner);
+    let saw_default_effect =
+        default_result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+    let default_body = baml_compiler2_ppir::body(&db, default_owner);
+    let default_body = default_body.expr_body().expect("default expression body");
+    for (pat, ty) in &default_result.type_of_pat {
+        if matches!(
+            default_body.patterns[*pat],
+            baml_compiler2_ast::Pattern::Unreflect(_)
+        ) {
+            pattern_types += 1;
+            assert_eq!(ty.to_plain().render_canonical(), "1");
+        }
+    }
+    assert_eq!(non_exhaustive, 1, "runtime patterns do not prove coverage");
+    assert_eq!(unreachable, 0, "distinct runtime predicates stay reachable");
+    assert_eq!(
+        pattern_types, 9,
+        "every runtime pattern preserves scrutinee type"
+    );
+    assert!(
+        saw_bad_operand
+            && saw_direct_effect
+            && saw_default_effect
+            && saw_catch_effect
+            && saw_lambda_effect
+    );
+}
+
+#[test]
 fn records_function_adapter() {
     let source = r#"
 function ea_flex(a: int, b: int = 2) -> int throws never {

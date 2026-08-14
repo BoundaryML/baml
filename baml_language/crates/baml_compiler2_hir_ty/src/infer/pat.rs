@@ -432,13 +432,23 @@ impl<'db> InferenceContext<'db> {
                     .unwrap_or_else(Ty::error);
                 self.type_pattern_outcome(pat, scrut, &pat_ty)
             }
-            // Full runtime-type validation and a distinct non-covering
-            // usefulness constructor land in Slice 5. Phase A still walks
-            // the hidden operand and keeps the scrutinee's static type.
             Pattern::Unreflect(operand) => {
-                self.infer_expr(body, *operand, &Expectation::None);
+                self.validate_runtime_type_operand(body, *operand);
+                let mut identity = self.body_owner_identity;
+                for byte in pat.into_raw().into_u32().to_le_bytes() {
+                    identity ^= u32::from(byte);
+                    identity = identity.wrapping_mul(0x0100_0193);
+                }
+                let parameter = baml_type::ParamTy::new(
+                    0xc000_0000 | (identity & 0x3fff_ffff),
+                    baml_type::Name::new(format!("$unreflect${identity:08x}")),
+                );
+                let constructor = Ty::intern(TyKind::TypeVar(parameter, TyAttr::default()));
                 PatternOutcome {
-                    dpat: DPat::single(Ty::error().to_plain(), scrut.to_plain()),
+                    // Each runtime predicate is possible but cannot cover a
+                    // static alphabet. Its statement-independent rigid
+                    // singleton also keeps two source patterns distinct.
+                    dpat: DPat::single(constructor.to_plain(), scrut.to_plain()),
                     matched_ty: scrut.clone(),
                     recorded_ty: None,
                     covers_type: false,

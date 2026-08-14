@@ -29,6 +29,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::BodyOwnerId,
     body_type_refs::{BodyTypeArgRef, BodyTypeRefs},
+    contributions::Definition,
     scope::FileScopeId,
     semantic_index::{
         BindingId, BindingKind, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex,
@@ -519,6 +520,17 @@ pub enum RuntimeCheck {
     Bound { argument: Ty, bound: InterfaceRef },
 }
 
+/// One lexical `type T = unreflect(value)` binding. The parameter is rigid and
+/// statement-identity-based; `occurrence_ty` is the static replacement used
+/// when the binding leaves its block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopedTypeBinding {
+    pub name: baml_type::Name,
+    pub parameter: baml_type::ParamTy,
+    pub operand: ExprId,
+    pub occurrence_ty: Ty,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParamBinding {
     Provided {
@@ -916,6 +928,15 @@ pub struct InferenceResult<'db> {
     /// CALL expression. S16: MIR's argument emission and `LoadType`
     /// operands read this instead of re-planning.
     pub call_plans: FxHashMap<ExprId, CallPlan>,
+    /// Durable lexical runtime-type bindings, keyed by the statement that
+    /// evaluates and installs them. MIR consumes this identity instead of
+    /// rebuilding a synthetic parameter from syntax.
+    pub type_bindings: FxHashMap<StmtId, ScopedTypeBinding>,
+    /// Checks whose expected shape depends on a lexical runtime-type binding.
+    /// Static inference records the actual expression type but cannot decide
+    /// the relation until the binding's operand has produced a runtime type;
+    /// MIR emits that gate from this ledger.
+    pub runtime_checks: Vec<RuntimeCheck>,
     /// Coercion steps per expression (r-a's `expr_adjustments` shape).
     /// S16: MIR synthesizes the recorded adapters instead of re-deciding.
     pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment]>>,
@@ -940,6 +961,8 @@ impl Default for InferenceResult<'_> {
             member_resolutions: FxHashMap::default(),
             path_resolutions: FxHashMap::default(),
             call_plans: FxHashMap::default(),
+            type_bindings: FxHashMap::default(),
+            runtime_checks: Vec::new(),
             expr_adjustments: FxHashMap::default(),
             desugared_callees: rustc_hash::FxHashSet::default(),
         }
@@ -1171,6 +1194,7 @@ fn infer_body_impl<'db>(
         return_ty,
         type_refs,
         plain_bounds,
+        stable_body_owner_identity(db, owner),
     );
     ctx.declared_throws = declared_throws;
     ctx.declared_throws_open = declared_throws_open;
@@ -1206,6 +1230,34 @@ fn infer_body_impl<'db>(
         ctx.infer_expr_body(expr_body);
     }
     ctx.finish()
+}
+
+/// Architecture-stable owner key for lexical synthetic parameters. This is
+/// deliberately derived from source identity rather than Salsa intern IDs.
+fn stable_body_owner_identity(db: &dyn baml_compiler2_ppir::Db, owner: BodyOwnerId<'_>) -> u32 {
+    let mut hash = 0x811c_9dc5_u32;
+    let mut write = |bytes: &[u8]| {
+        for byte in bytes {
+            hash ^= u32::from(*byte);
+            hash = hash.wrapping_mul(0x0100_0193);
+        }
+    };
+    write(owner.file(db).path(db).to_string_lossy().as_bytes());
+    match owner {
+        BodyOwnerId::Function(function) => {
+            write(&[0]);
+            write(&function.id(db).as_u32().to_le_bytes());
+        }
+        BodyOwnerId::Let(let_binding) => {
+            write(&[1]);
+            write(&let_binding.id(db).as_u32().to_le_bytes());
+        }
+        BodyOwnerId::ParameterDefaults(function) => {
+            write(&[2]);
+            write(&function.id(db).as_u32().to_le_bytes());
+        }
+    }
+    hash
 }
 
 /// Which bounded-var classes a finish-fixpoint round may commit: the
@@ -1325,6 +1377,13 @@ struct InferenceContext<'db> {
     /// Lowering for body-position type annotations, carrying the owner's
     /// generic frame.
     lower: LowerCtx<'db>,
+    /// Active lexical runtime type names, innermost last. The declaration
+    /// lowering context remains immutable; body-owned type lowering forks it
+    /// with these rigid parameters.
+    scoped_type_bindings: Vec<ScopedTypeBinding>,
+    /// Stable hash of the body owner, combined with `StmtId` for scoped rigid
+    /// parameter identity.
+    body_owner_identity: u32,
     /// The owner's parameter types, from its lowered signature, indexed by
     /// declaration position.
     param_tys: Vec<Ty>,
@@ -1459,6 +1518,7 @@ impl<'db> InferenceContext<'db> {
         return_ty: Option<Ty>,
         type_refs: Arc<BodyTypeRefs>,
         bounds: FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>,
+        body_owner_identity: u32,
     ) -> InferenceContext<'db> {
         InferenceContext {
             db,
@@ -1469,6 +1529,8 @@ impl<'db> InferenceContext<'db> {
             lambda_params: FxHashMap::default(),
             flow: FxHashMap::default(),
             lower,
+            scoped_type_bindings: Vec::new(),
+            body_owner_identity,
             param_tys,
             type_refs,
             return_ty,
@@ -1563,6 +1625,45 @@ impl<'db> InferenceContext<'db> {
     /// `Sub(actual, expected)`, discharged eagerly. Definite failures are
     /// recorded against the checked expression, never dropped.
     fn check_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
+        // A lexical `type T = unreflect(value)` is rigid for identity and
+        // name resolution, but its actual runtime shape is unavailable to
+        // static inference. Preserve the check structurally for MIR instead
+        // of either accepting it blindly or diagnosing every concrete value
+        // against the opaque parameter. The expression still infers without
+        // an expectation so its own diagnostics/effects and actual type are
+        // retained.
+        let depends_on_scoped_type = self
+            .scoped_type_bindings
+            .iter()
+            .any(|binding| ty_mentions_param(expected, &binding.parameter));
+        if depends_on_scoped_type {
+            let ty = self.infer_expr(body, expr, &Expectation::None);
+            // Erasing only the dynamic leaves a static skeleton: `list<T>`
+            // still rejects an `int`, while a `list<int>` advances to the
+            // runtime gate for its element relation. This is the same
+            // dependent-only discipline used by call-site runtime slots.
+            let static_expected =
+                self.scoped_type_bindings
+                    .iter()
+                    .fold(expected.clone(), |expected, binding| {
+                        replace_rigid_param(&expected, &binding.parameter, &binding.occurrence_ty)
+                    });
+            let saved_anchor = self.obligation_anchor.replace(expr);
+            let fits_static_shape = self.sub(&ty, &static_expected);
+            self.obligation_anchor = saved_anchor;
+            if fits_static_shape {
+                self.result.runtime_checks.push(RuntimeCheck::Argument {
+                    arg: expr,
+                    expected: expected.clone(),
+                });
+                self.record_function_adapter(expr, &ty, expected);
+            } else {
+                self.result
+                    .type_mismatches
+                    .insert(expr, (expected.clone(), ty.clone()));
+            }
+            return ty;
+        }
         let ty = self.infer_expr(body, expr, &Expectation::has_type(expected.clone()));
         let saved_anchor = self.obligation_anchor.replace(expr);
         let fits = self.sub(&ty, expected);
@@ -1663,6 +1764,7 @@ impl<'db> InferenceContext<'db> {
                 self.infer_index(body, expr, *base, *index, true)
             }
             Expr::Block { stmts, tail_expr } => {
+                let type_scope = self.scoped_type_bindings.len();
                 let entry_diverges = self.diverges;
                 let mut first_unreachable: Option<usize> = None;
                 for (index, stmt) in stmts.iter().enumerate() {
@@ -1710,7 +1812,7 @@ impl<'db> InferenceContext<'db> {
                         unreachable_count: 1,
                     });
                 }
-                match tail_expr {
+                let ty = match tail_expr {
                     Some(tail) => self.infer_expr(body, *tail, expected),
                     // A tail-less block that always diverged is never;
                     // otherwise it is void.
@@ -1720,7 +1822,8 @@ impl<'db> InferenceContext<'db> {
                         Ty::never()
                     }
                     None => Ty::void(),
-                }
+                };
+                self.finish_scoped_type_bindings(type_scope, ty)
             }
             Expr::If {
                 condition,
@@ -1837,7 +1940,11 @@ impl<'db> InferenceContext<'db> {
                     .get(&expr)
                     .copied()
                     .map(|target_ref| {
-                        let lowered = self.lower.lower_type_ref(&self.type_refs.store, target_ref);
+                        let lowered = self.lower_scoped_type_ref_at(
+                            &self.type_refs.store,
+                            target_ref,
+                            crate::lower::TypePosition::Existential,
+                        );
                         self.reject_expr_position_holes(&lowered, expr)
                     })
                     .unwrap_or_else(Ty::error);
@@ -2274,6 +2381,9 @@ impl<'db> InferenceContext<'db> {
             Stmt::Expr(expr) => {
                 self.infer_expr(body, *expr, &Expectation::None);
             }
+            Stmt::TypeBinding { name, value } => {
+                self.bind_scoped_runtime_type(body, stmt, name.clone(), *value);
+            }
             Stmt::Let {
                 pattern,
                 initializer,
@@ -2441,6 +2551,80 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+    }
+
+    fn bind_scoped_runtime_type(
+        &mut self,
+        body: &ExprBody,
+        stmt: StmtId,
+        name: baml_type::Name,
+        operand: ExprId,
+    ) {
+        // The RHS is evaluated before the new name enters scope.
+        self.validate_runtime_type_operand(body, operand);
+        let mut identity = self.body_owner_identity;
+        for byte in stmt.into_raw().into_u32().to_le_bytes() {
+            identity ^= u32::from(byte);
+            identity = identity.wrapping_mul(0x0100_0193);
+        }
+        let binding = ScopedTypeBinding {
+            name: name.clone(),
+            parameter: baml_type::ParamTy::new(0x8000_0000 | (identity & 0x7fff_ffff), name),
+            operand,
+            occurrence_ty: Ty::intern(TyKind::Unknown {
+                attr: TyAttr::default(),
+            }),
+        };
+        self.result.type_bindings.insert(stmt, binding.clone());
+        self.scoped_type_bindings.push(binding);
+    }
+
+    /// Erase every binding introduced by this block from values that can flow
+    /// out, then restore the lexical overlay checkpoint. Interior expression
+    /// and pattern tables intentionally retain the rigid identity for MIR.
+    fn finish_scoped_type_bindings(&mut self, checkpoint: usize, mut block_ty: Ty) -> Ty {
+        for binding in self.scoped_type_bindings[checkpoint..].iter().rev() {
+            block_ty = replace_rigid_param(&block_ty, &binding.parameter, &binding.occurrence_ty);
+            for ty in self.flow.values_mut() {
+                *ty = replace_rigid_param(ty, &binding.parameter, &binding.occurrence_ty);
+            }
+        }
+        self.scoped_type_bindings.truncate(checkpoint);
+        block_ty
+    }
+
+    fn scoped_type_params(&self) -> Vec<baml_type::ParamTy> {
+        self.scoped_type_bindings
+            .iter()
+            .map(|binding| binding.parameter.clone())
+            .collect()
+    }
+
+    fn scoped_type_param(&self, name: &baml_type::Name) -> Option<&baml_type::ParamTy> {
+        self.scoped_type_bindings
+            .iter()
+            .rev()
+            .find(|binding| &binding.name == name)
+            .map(|binding| &binding.parameter)
+    }
+
+    fn lower_scoped_type_ref_at(
+        &self,
+        store: &baml_compiler2_hir::type_ref::TypeRefStore,
+        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        position: crate::lower::TypePosition,
+    ) -> Ty {
+        self.lower.lower_type_ref_with_overlay(
+            store,
+            type_ref,
+            position,
+            &self.scoped_type_params(),
+        )
+    }
+
+    fn lower_scoped_type_path(&self, segments: &[baml_type::Name]) -> Ty {
+        self.lower
+            .lower_type_path_with_overlay(segments, &self.scoped_type_params())
     }
 
     /// The `let` rule: with an annotation, the initializer is CHECKED
@@ -3996,30 +4180,32 @@ impl<'db> InferenceContext<'db> {
             let BodyTypeArgRef::Runtime { operand } = slot else {
                 continue;
             };
-            let got = self.infer_expr(body, *operand, &Expectation::None);
-            let pending_type = matches!(got.kind(), TyKind::Class(name, _, _)
-                if name.package().as_str() == "baml"
-                    && name.namespace().iter().map(baml_type::Name::as_str)
-                        .eq(["reflect", "class"])
-                    && name.name().as_str() == "PendingType");
-            if pending_type
-                || got.has_error()
-                || got.has_infer()
-                || matches!(got.kind(), TyKind::Unknown { .. })
-            {
-                continue;
-            }
-            let expected = Ty::intern(TyKind::Type {
-                attr: TyAttr::default(),
-            });
-            let saved_anchor = self.obligation_anchor.replace(*operand);
-            let fits = self.sub(&got, &expected);
-            self.obligation_anchor = saved_anchor;
-            if !fits {
-                self.result
-                    .type_mismatches
-                    .insert(*operand, (expected, got));
-            }
+            self.validate_runtime_type_operand(body, *operand);
+        }
+    }
+
+    fn validate_runtime_type_operand(&mut self, body: &ExprBody, operand: ExprId) {
+        let got = self.infer_expr(body, operand, &Expectation::None);
+        let pending_type = matches!(got.kind(), TyKind::Class(name, _, _)
+            if name.package().as_str() == "baml"
+                && name.namespace().iter().map(baml_type::Name::as_str)
+                    .eq(["reflect", "class"])
+                && name.name().as_str() == "PendingType");
+        if pending_type
+            || got.has_error()
+            || got.has_infer()
+            || matches!(got.kind(), TyKind::Unknown { .. })
+        {
+            return;
+        }
+        let expected = Ty::intern(TyKind::Type {
+            attr: TyAttr::default(),
+        });
+        let saved_anchor = self.obligation_anchor.replace(operand);
+        let fits = self.sub(&got, &expected);
+        self.obligation_anchor = saved_anchor;
+        if !fits {
+            self.result.type_mismatches.insert(operand, (expected, got));
         }
     }
 
@@ -5494,7 +5680,7 @@ impl<'db> InferenceContext<'db> {
         if segments.len() < 2 {
             return None;
         }
-        let ty = self.lower.lower_type_path(segments);
+        let ty = self.lower_scoped_type_path(segments);
         let TyKind::EnumVariant(qtn, variant, _) = ty.kind() else {
             return None;
         };
@@ -5537,7 +5723,7 @@ impl<'db> InferenceContext<'db> {
         {
             return None;
         }
-        let written = self.lower.lower_type_path(prefix);
+        let written = self.lower_scoped_type_path(prefix);
         let target = if !written.has_error() {
             written
         } else if let (OwnArgs::Call(call), Some((class, _))) = (own, self.static_class_for(prefix))
@@ -5605,6 +5791,12 @@ impl<'db> InferenceContext<'db> {
         prefix: &[baml_type::Name],
     ) -> Option<(baml_compiler2_hir::loc::ClassLoc<'db>, Option<Vec<Ty>>)> {
         use baml_compiler2_hir::contributions::Definition;
+        if prefix
+            .first()
+            .is_some_and(|name| self.scoped_type_param(name).is_some())
+        {
+            return None;
+        }
         if let Some(Definition::Class(class)) = self.lower.resolve_type_definition(prefix) {
             return Some((class, None));
         }
@@ -5652,9 +5844,9 @@ impl<'db> InferenceContext<'db> {
                     baml_type::MediaKind::Pdf,
                     baml_type::TyAttr::default(),
                 )),
-                _ => self.lower.lower_type_path(prefix),
+                _ => self.lower_scoped_type_path(prefix),
             },
-            _ => self.lower.lower_type_path(prefix),
+            _ => self.lower_scoped_type_path(prefix),
         };
         if ty.has_error() {
             return None;
@@ -5678,7 +5870,12 @@ impl<'db> InferenceContext<'db> {
         baml_compiler2_hir::loc::InterfaceLoc<'db>,
         baml_compiler2_hir::loc::FunctionLoc<'db>,
     )> {
-        use baml_compiler2_hir::contributions::Definition;
+        if prefix
+            .first()
+            .is_some_and(|name| self.scoped_type_param(name).is_some())
+        {
+            return None;
+        }
         let Some(Definition::Interface(interface)) = self.lower.resolve_type_definition(prefix)
         else {
             return None;
@@ -6058,8 +6255,7 @@ impl<'db> InferenceContext<'db> {
                 BodyTypeArgRef::Static(type_ref) => {
                     let computed = self.computed_generic_argument_name(*type_ref);
                     let lowered =
-                        self.lower
-                            .lower_type_ref_at(&self.type_refs.store, *type_ref, position);
+                        self.lower_scoped_type_ref_at(&self.type_refs.store, *type_ref, position);
                     if let Some(name) = computed {
                         self.specialize_computed_generic_diagnostic(*type_ref, site, &name);
                     }
@@ -6189,6 +6385,7 @@ impl<'db> InferenceContext<'db> {
         let is_value = self.local_binding_names().contains(name)
             || self.lower.resolve_value(segments).is_some();
         let is_type = self.lower.resolve_type_definition(segments).is_some()
+            || self.scoped_type_param(name).is_some()
             || self
                 .lower
                 .generic_params()
@@ -6254,9 +6451,13 @@ impl<'db> InferenceContext<'db> {
         fields: &[(baml_type::Name, ExprId)],
         spreads: &[baml_compiler2_ast::SpreadField],
     ) -> Ty {
-        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
-            self.lower.resolve_type_definition(&type_name.0)
-        else {
+        let definition = type_name
+            .0
+            .first()
+            .is_none_or(|name| self.scoped_type_param(name).is_none())
+            .then(|| self.lower.resolve_type_definition(&type_name.0))
+            .flatten();
+        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
             // A WRITTEN constructor head that resolves nowhere reports
             // as an unresolved type with near-match suggestions
             // (`ValidationIssu { .. }` suggests the class).
@@ -6957,7 +7158,11 @@ impl<'db> InferenceContext<'db> {
         if let Some(cached) = self.annotation_cache.get(&type_ref) {
             return cached.clone();
         }
-        let lowered = self.lower.lower_type_ref(&self.type_refs.store, type_ref);
+        let lowered = self.lower_scoped_type_ref_at(
+            &self.type_refs.store,
+            type_ref,
+            crate::lower::TypePosition::Existential,
+        );
         // Written-type well-formedness (rustc's wfcheck at body
         // annotations): generic arguments must satisfy their heads'
         // declared bounds. Hole-carrying annotations skip - their holes
@@ -8538,6 +8743,29 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+        for check in &mut result.runtime_checks {
+            match check {
+                RuntimeCheck::Argument { expected, .. } => {
+                    *expected = self.finalize_ty(expected);
+                }
+                RuntimeCheck::Bound { argument, bound } => {
+                    *argument = self.finalize_ty(argument);
+                    *bound = InterfaceRef::new(
+                        bound.name.clone(),
+                        bound
+                            .generics
+                            .iter()
+                            .map(|ty| self.finalize_ty(ty))
+                            .collect(),
+                        bound
+                            .associated_types
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), self.finalize_ty(ty)))
+                            .collect(),
+                    );
+                }
+            }
+        }
         for adjustments in result.expr_adjustments.values_mut() {
             for adjustment in adjustments.iter_mut() {
                 adjustment.target = self.finalize_ty(&adjustment.target);
@@ -9378,6 +9606,19 @@ fn substitute_static_call_params(
     Ty::intern(
         ty.kind()
             .map_children(|child| substitute_static_call_params(child, args, runtime_params)),
+    )
+}
+
+fn replace_rigid_param(ty: &Ty, param: &baml_type::ParamTy, replacement: &Ty) -> Ty {
+    if matches!(ty.kind(), TyKind::TypeVar(candidate, _) if candidate == param) {
+        return replacement.clone();
+    }
+    if !ty.has_typevar() {
+        return ty.clone();
+    }
+    Ty::intern(
+        ty.kind()
+            .map_children(|child| replace_rigid_param(child, param, replacement)),
     )
 }
 

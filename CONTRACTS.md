@@ -24,7 +24,7 @@ that code exists.
 | [x] | R-01 | 3 | Value roots `reflect`, `type`, and `json` fall back to package `baml` only after ordinary resolution fails, preserving the full path. |
 | [x] | T-01 | 2, 5 | Runtime type operands and type-binding values are ordinary hidden expression edges for throw-fact traversal. |
 | [ ] | B-01 | 2, 4 | Runtime slots and loc-free callables are isolated per body/default run and survive only in durable result tables. |
-| [ ] | B-02 | 5 | Inference-time type lowering sees declared generics plus the active scoped overlay. |
+| [x] | B-02 | 5 | Inference-time type lowering sees declared generics plus the active scoped overlay. |
 | [x] | B-03 | 4 | Only the special `Session.eval` result slot defaults an uninferable generic to `unknown`; ordinary slots keep current errors. |
 | [ ] | B-04 | 3, 4 | Mounted owner/function generics and bounds instantiate normally, synthetic effect parameters do not affect user arity, and bound receivers seed owner substitutions. |
 | [x] | B-05 | 2, 4 | Written type arguments retain ordered static/runtime provenance; runtime operands use a bound-or-`unknown` occurrence type and never become solver variables. |
@@ -34,8 +34,8 @@ that code exists.
 | [ ] | B-09 | 4, 7 | Exact `baml.reflect.Package.get_function<F>` extraction uses its special type position and MIR consumes the solved plan without re-lowering syntax. |
 | [x] | B-10 | 4 | Argument binding enriches one call plan without erasing type slots; optional and ordinary calls use the same write path. |
 | [x] | B-11 | 4 | Uncontracted render/build helpers seed schema `T` from a named, non-generic LLM function return type. |
-| [ ] | B-12 | 2, 5 | Default and forward-reference traversal visits hidden operands exactly once and default inference cannot leak per-body external-call state. |
-| [ ] | B-13 | 5 | A runtime type binding installs a statement-identity rigid parameter, validates its value, and cannot escape its lexical block. |
+| [x] | B-12 | 2, 5 | Default and forward-reference traversal visits hidden operands exactly once and default inference cannot leak per-body external-call state. |
+| [x] | B-13 | 5 | A runtime type binding installs a statement-identity rigid parameter, validates its value, and cannot escape its lexical block. |
 | [x] | B-14 | 4 | Sealed reflection-kind classes cannot be object-constructed in inferred or expected-type paths. |
 | [ ] | B-15 | 3, 6 | Source-less mounted free functions, types, variants, and UFCS methods resolve exclusively from `PackageInterface`, after real-name resolution. |
 | [ ] | B-16 | 3, 6 | Mounted fields and bound/unbound methods specialize receiver generics and preserve direct-method or interface-slot dispatch identity. |
@@ -43,8 +43,8 @@ that code exists.
 | [x] | B-18 | 4 | Streaming calls reject runtime type-argument slots. |
 | [x] | B-19 | 4 | `from_json` reconstruction runs only for an all-static type-argument plan. |
 | [x] | B-20 | 3 | Expression inference uses the same shadow-preserving `baml.reflect/type/json` fallback as type lowering. |
-| [ ] | B-21 | 5 | An `unreflect` pattern checks its operand as `type`, preserves the scrutinee type, has unique possible-but-non-covering usefulness identity, and binds nothing. |
-| [ ] | B-22 | 2, 5 | Inference and throw analysis share canonical hidden-child traversal for runtime operands and type-binding values. |
+| [x] | B-21 | 5 | An `unreflect` pattern checks its operand as `type`, preserves the scrutinee type, has unique possible-but-non-covering usefulness identity, and binds nothing. |
+| [x] | B-22 | 2, 5 | Inference and throw analysis share canonical hidden-child traversal for runtime operands and type-binding values. |
 | [x] | N-01 | 1 | Static Mint identity hashes canonical plain `NormalTy` with fixed FNV-1a-64 and architecture-stable numeric encoding, never an intern handle. |
 | [x] | N-02 | 1 | The sealed builtin reflection-kind classes have outer category `type`. |
 | [x] | N-03 | 1 | Exactly the sealed builtin reflection-kind classes subtype primitive `type`; user classes cannot opt in. |

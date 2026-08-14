@@ -267,6 +267,62 @@ impl<'db> LowerCtx<'db> {
         ty
     }
 
+    /// Lower one body-owned type through a lexical rigid-parameter overlay.
+    /// The declaration frame on this context remains immutable and reusable;
+    /// diagnostics produced by the short-lived fork are merged back into this
+    /// context's sink.
+    pub fn lower_type_ref_with_overlay(
+        &self,
+        store: &TypeRefStore,
+        id: TypeRefId,
+        position: TypePosition,
+        overlay: &[ParamTy],
+    ) -> Ty {
+        if overlay.is_empty() {
+            return self.lower_type_ref_at(store, id, position);
+        }
+        let fork = self.fork_with_overlay(overlay);
+        let ty = fork.lower_type_ref_at(store, id, position);
+        self.merge_fork_diagnostics(&fork);
+        ty
+    }
+
+    /// [`Self::lower_type_path`] through the same body-local overlay.
+    pub fn lower_type_path_with_overlay(&self, segments: &[Name], overlay: &[ParamTy]) -> Ty {
+        if overlay.is_empty() {
+            return self.lower_type_path(segments);
+        }
+        let fork = self.fork_with_overlay(overlay);
+        let ty = fork.lower_type_path(segments);
+        self.merge_fork_diagnostics(&fork);
+        ty
+    }
+
+    fn fork_with_overlay(&self, overlay: &[ParamTy]) -> LowerCtx<'db> {
+        let mut generic_params = self.generic_params.clone();
+        generic_params.extend_from_slice(overlay);
+        LowerCtx {
+            diags: self
+                .diags
+                .as_ref()
+                .map(|_| std::cell::RefCell::new(Vec::new())),
+            current_ref: std::cell::Cell::new(None),
+            db: self.db,
+            package_items: self.package_items,
+            ns_context: self.ns_context.clone(),
+            generic_params,
+            self_ty: self.self_ty.clone(),
+            self_impl_target: self.self_impl_target.clone(),
+            bounds: self.bounds.clone(),
+        }
+    }
+
+    fn merge_fork_diagnostics(&self, fork: &LowerCtx<'db>) {
+        if let Some(diags) = &self.diags {
+            diags.borrow_mut().extend(fork.take_diagnostics());
+        }
+    }
+
     fn lower_type_ref_inner(
         &self,
         store: &TypeRefStore,
@@ -629,6 +685,52 @@ impl<'db> LowerCtx<'db> {
         let attr = TyAttr::default;
         let short = segments.last().expect("type paths are never empty");
 
+        // Lexical generic names (including a body-local overlay appended to
+        // the frame) shadow nominal type definitions. A multi-segment path
+        // rooted in such a name is an associated projection, never a package
+        // or namespace path with the same spelling.
+        let generic_head = self
+            .generic_params
+            .iter()
+            .rev()
+            .find(|param| param.name() == &segments[0]);
+        if segments.len() == 1
+            && let Some(param) = generic_head
+        {
+            return Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+        }
+        if segments.len() > 1
+            && args.is_empty()
+            && bindings.is_empty()
+            && let Some(param) = generic_head
+        {
+            let mut ty = Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+            for member in &segments[1..] {
+                if let Some(interface) = self.projection_interface_for(&ty, member) {
+                    ty = Ty::intern(TyKind::AssociatedTypeProjection {
+                        base: ty,
+                        interface,
+                        member: member.clone(),
+                        attr: attr(),
+                    });
+                    continue;
+                }
+                let lowered = crate::interfaces::lower_projection(
+                    self.db,
+                    &self.plain_bounds_env(),
+                    ty.to_plain(),
+                    None,
+                    member.clone(),
+                );
+                self.record_type_errors(lowered.diagnostics);
+                ty = Ty::from_plain(&lowered.ty);
+                if ty.has_error() {
+                    return ty;
+                }
+            }
+            return ty;
+        }
+
         if let Some(def) = self.resolve_type(segments) {
             return match def {
                 ResolvedTypeDefinition::Source(def) => {
@@ -642,16 +744,6 @@ impl<'db> LowerCtx<'db> {
 
         // Fallback 1: a single segment naming an in-scope generic param
         // (inner frames shadow outer: search in reverse).
-        if segments.len() == 1
-            && let Some(param) = self
-                .generic_params
-                .iter()
-                .rev()
-                .find(|param| param.name() == &segments[0])
-        {
-            return Ty::intern(TyKind::TypeVar(param.clone(), attr()));
-        }
-
         // Fallback 1b: bare `Self` under a concrete impl owner (r-a's
         // resolver-provided self type). Interface frames never reach
         // here - their `Self` is a param, caught by fallback 1.
