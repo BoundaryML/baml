@@ -130,6 +130,12 @@ impl GraphqlArgs {
         };
         session.warm_prep_seeds_only();
         session.prime();
+        let project_root = session
+            .db
+            .get_project()
+            .context("loaded BAML project has no database root")?
+            .root(&session.db)
+            .clone();
 
         let diagnostics = baml_project::collect_diagnostics(&session.db);
         let user_file_ids = session
@@ -150,7 +156,7 @@ impl GraphqlArgs {
         if !errors.is_empty() {
             let structured = errors
                 .into_iter()
-                .map(|diagnostic| diagnostic_json(&session.db, session.root(), diagnostic))
+                .map(|diagnostic| diagnostic_json(&session.db, &project_root, diagnostic))
                 .collect::<Vec<_>>();
             write_error_response(
                 "BAML_VALIDATION_FAILED",
@@ -166,7 +172,7 @@ impl GraphqlArgs {
 
         let snapshot = build_snapshot(
             &session.db,
-            session.root(),
+            &project_root,
             session.resolved.manifest.as_deref(),
         )?;
         let context = GraphqlContext { snapshot };
@@ -1330,11 +1336,32 @@ fn floor_char_boundary(source: &str, mut offset: usize) -> usize {
 }
 
 fn normalized_relative_path(path: &Path, root: &Path) -> String {
-    normalize_path(path.strip_prefix(root).unwrap_or(path))
+    if let Ok(relative) = path.strip_prefix(root) {
+        return normalize_path(relative);
+    }
+
+    let path = normalize_path(path);
+    let root = normalize_path(root);
+    let root = root.trim_end_matches('/');
+    let Some(prefix) = path.get(..root.len()) else {
+        return path;
+    };
+    let windows_path = root.as_bytes().get(1) == Some(&b':') || root.starts_with("//");
+    let same_root = prefix == root || (windows_path && prefix.eq_ignore_ascii_case(root));
+    if same_root && path.as_bytes().get(root.len()) == Some(&b'/') {
+        path[root.len() + 1..].to_string()
+    } else {
+        path
+    }
 }
 
 fn normalize_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    let path = path.to_string_lossy().replace('\\', "/");
+    if let Some(path) = path.strip_prefix("//?/UNC/") {
+        format!("//{path}")
+    } else {
+        path.strip_prefix("//?/").unwrap_or(&path).to_string()
+    }
 }
 
 fn diagnostic_json(
@@ -1420,6 +1447,17 @@ mod tests {
         assert_eq!(line_column("αβ\nvalue", 0), (1, 1));
         assert_eq!(line_column("αβ\nvalue", "α".len()), (1, 2));
         assert_eq!(line_column("αβ\nvalue", "αβ\n".len()), (2, 1));
+    }
+
+    #[test]
+    fn windows_verbatim_paths_are_project_relative() {
+        let path = Path::new(r"\\?\C:\work\project\baml_src\main.baml");
+        let root = Path::new(r"C:\work\project");
+        assert_eq!(normalized_relative_path(path, root), "baml_src/main.baml");
+
+        let unc_path = Path::new(r"\\?\UNC\server\share\project\main.baml");
+        let unc_root = Path::new(r"\\server\share\project");
+        assert_eq!(normalized_relative_path(unc_path, unc_root), "main.baml");
     }
 
     #[test]
