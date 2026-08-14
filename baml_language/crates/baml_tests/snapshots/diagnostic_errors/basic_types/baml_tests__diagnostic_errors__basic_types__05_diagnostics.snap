@@ -20,15 +20,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                                                                                        ╰── unknown attribute
     ╰────
 
-  [hir] E0098
-
-  × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
-    ╭─[classes.baml:21:5]
- 21 │     @@dynamic
-    ·     ────┬────
-    ·         ╰── removed attribute
-    ╰────
-
   [type] E0003
 
   × unresolved name: `GPT4`

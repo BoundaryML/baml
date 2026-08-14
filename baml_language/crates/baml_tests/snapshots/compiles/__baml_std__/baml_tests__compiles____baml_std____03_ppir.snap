@@ -2048,6 +2048,7 @@ function baml.reflect._compile(self: ?, source: string) -> baml.reflect.Package 
 function baml.reflect._finish(artifact: baml.reflect.Package, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package  [builtin]
 function baml.reflect._finish(self: ?, artifact: baml.reflect.Package) -> T  [builtin]
 function baml.reflect._new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session  [builtin]
+function baml.reflect.as_type(self: ?) -> type  [missing]
 function baml.reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
 function baml.reflect.classes(self: ?) -> map<string, baml.reflect.class.Type>  [builtin]
 function baml.reflect.compile(files: map<string, string>, packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Package  [expr] {

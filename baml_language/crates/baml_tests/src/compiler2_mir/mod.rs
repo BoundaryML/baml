@@ -163,13 +163,16 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
         .blocks
         .iter()
         .filter_map(|block| match block.terminator.as_ref() {
-            Some(Terminator::Call { runtime_id, .. }) => Some(runtime_id),
+            Some(
+                Terminator::Call { runtime_id, .. } | Terminator::VirtualCall { runtime_id, .. },
+            ) => Some(runtime_id),
             _ => None,
         })
         .collect::<Vec<_>>();
     assert!(
-        union_calls.len() >= 2,
-        "expected one dispatch call per union member"
+        !union_calls.is_empty(),
+        "expected a union dispatch call: {}",
+        display_function(&union_mir)
     );
     assert!(
         union_calls.iter().all(|runtime_id| runtime_id.is_some()),

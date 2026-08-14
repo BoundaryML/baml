@@ -7,13 +7,13 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: () -> void throws unknown
+    let _3: () -> void throws never
     let _4: void
-    let _5: () -> void throws unknown
+    let _5: () -> void throws never
     let _6: void
-    let _7: () -> void throws unknown
+    let _7: () -> void throws never
     let _8: void
-    let _9: () -> void throws unknown
+    let _9: () -> void throws never
 
     bb0: {
         _3 = make_closure lambda[0]();

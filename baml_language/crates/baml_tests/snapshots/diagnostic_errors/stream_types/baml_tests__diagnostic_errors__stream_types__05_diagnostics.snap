@@ -16,15 +16,6 @@ source: crates/baml_tests/src/generated_tests.rs
          ·       ─────
          ╰────
 
-  [hir] E0098
-
-  × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
-    ╭─[main.baml:87:5]
- 87 │     @@dynamic
-    ·     ────┬────
-    ·         ╰── removed attribute
-    ╰────
-
   [validation] E0011
 
   × name `Foo` defined 2 times as: class, type

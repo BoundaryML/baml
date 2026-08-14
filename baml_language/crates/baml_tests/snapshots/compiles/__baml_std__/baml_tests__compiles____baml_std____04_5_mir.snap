@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3073
 ---
 === MIR2 ===
 
@@ -7400,6 +7399,16 @@ fn baml.reflect.union.new = builtin(vm)
 fn baml.reflect.union.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.union.Type.member_types = builtin(vm)
+
+fn baml.reflect.TypeView.as_type(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
 
 fn baml.reflect.Package.current = builtin(intrinsic)
 

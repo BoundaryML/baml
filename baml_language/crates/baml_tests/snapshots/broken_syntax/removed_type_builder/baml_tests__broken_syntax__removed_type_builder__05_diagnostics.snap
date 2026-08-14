@@ -2,15 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] E0010
-
-  × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
-   ╭─[removed_type_builder.baml:8:10]
- 8 │   prompt #"Hi"#
-   ·          ───┬──
-   ·             ╰── use a backtick prompt instead
-   ╰────
-
   [parse] E0098
 
   × removed language feature
@@ -54,15 +45,6 @@ source: crates/baml_tests/src/generated_tests.rs
  69 │   dynamic enum DirectDynamicEnum {
     ·   ───┬───
     ·      ╰── `dynamic enum` definitions were removed; runtime type construction is `baml.reflect` (BEP-066)
-    ╰────
-
-  [hir] E0010
-
-  × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
-    ╭─[removed_type_builder.baml:80:10]
- 80 │   prompt #"Hello"#
-    ·          ────┬────
-    ·              ╰── use a backtick prompt instead
     ╰────
 
   [parse] E0098

@@ -29,7 +29,7 @@ function user.RuntimeClassify(input: string, client: ai.Client | null) -> #0 {
     call user.RuntimeClassify$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<#0, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<#0>>
+    load_type ai.Runner<#0, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

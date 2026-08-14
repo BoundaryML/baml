@@ -4,7 +4,8 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0062
 
-  × non-exhaustive match on type baml.reflect.TypeKind; missing: baml.reflect.function.Type {}
+  × non-exhaustive match on type baml.reflect.array.Type | baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.function.Type | baml.reflect.interface.Type | baml.reflect.literal.Type |
+  │ baml.reflect.map.Type | baml.reflect.primitive.Type | baml.reflect.union.Type; missing: baml.reflect.function.Type {}
     ╭─[main.baml:2:3]
   2 │ ╭─▶   match (t.kind()) {
   3 │ │       baml.reflect.class.Type => "class",

@@ -4,8 +4,8 @@
 // parsing (converted from the old compiles/type_builder_test project).
 
 function Fn(from_text: string) -> string {
-  client "openai/gpt-4o"
-  prompt #"Hi"#
+  client: "openai/gpt-4o"
+  prompt: `Hi`
 }
 
 // Old-style test with a `type_builder` block: one E0098 for the block.
@@ -76,8 +76,8 @@ test DirectDynamic {
 
 // `type_builder` inside an LLM function body.
 function LlmWithTypeBuilder(from_text: string) -> string {
-  client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  client: "openai/gpt-4o-mini"
+  prompt: `Hello`
   type_builder {
     class LlmInner {
       foo string

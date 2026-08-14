@@ -371,24 +371,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                                                                  ╰── unknown attribute
     ╰────
 
-  [hir] E0098
-
-  × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
-    ╭─[class_decls.baml:73:5]
- 73 │     @@dynamic
-    ·     ────┬────
-    ·         ╰── removed attribute
-    ╰────
-
-  [hir] E0098
-
-  × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
-    ╭─[class_decls.baml:79:5]
- 79 │     @@dynamic
-    ·     ────┬────
-    ·         ╰── removed attribute
-    ╰────
-
   [hir] E0015
 
   × unknown attribute `@stream.not_null`
@@ -1069,15 +1051,6 @@ source: crates/baml_tests/src/generated_tests.rs
  534 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
-
-  [hir] E0098
-
-  × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
-    ╭─[enum_decls.baml:62:5]
- 62 │     @@dynamic
-    ·     ────┬────
-    ·         ╰── removed attribute
-    ╰────
 
   [validation] E0011
 

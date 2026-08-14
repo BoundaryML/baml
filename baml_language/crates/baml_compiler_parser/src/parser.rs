@@ -8016,9 +8016,14 @@ impl<'a> Parser<'a> {
         if next.kind == TokenKind::Word {
             if let Some(after_word) = self.peek(2) {
                 if after_word.kind == TokenKind::LBrace {
-                    // Peek inside the brace: `test Name { functions`
+                    // Peek inside the brace: `test Name { functions` or
+                    // `test Name { type_builder`. The latter is legacy
+                    // BEP-066 syntax that must reach config-block recovery so
+                    // it produces the targeted removed-feature diagnostic.
                     if let Some(inside) = self.peek(3) {
-                        if inside.kind == TokenKind::Word && inside.text == "functions" {
+                        if inside.kind == TokenKind::Word
+                            && (inside.text == "functions" || inside.text == "type_builder")
+                        {
                             return false; // old-style config block
                         }
                     }
