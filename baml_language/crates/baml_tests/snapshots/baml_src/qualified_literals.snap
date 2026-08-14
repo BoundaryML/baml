@@ -29,25 +29,21 @@ function qualified_literals.first_x(points: qualified_literals.QualPoint[]) -> i
     load_const 0
     call baml.Array.at
     load_field .0
-    store_var _2
     jump L2
 
   L1:
     load_const null
-    store_var _2
 
   L2:
-    load_var _2
-    store_var _0
-    load_var _2
+    store_var_load_var _2
     load_const null
     cmp_op ==
     pop_jump_if_false L3
     load_const 1
     unary_op -
-    store_var _0
+    store_var _2
 
   L3:
-    load_var _0
+    load_var _2
     return
 }

@@ -24,7 +24,8 @@ pub mod unify;
 use std::sync::Arc;
 
 use baml_compiler2_ast::{
-    Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, traverse::BodyNode,
+    Expr, ExprBody, ExprId, ObjectExprField, PatId, Pattern, PropertySyntax, Stmt, StmtId,
+    traverse::BodyNode,
 };
 use baml_compiler2_hir::{
     body::BodyOwnerId,
@@ -1143,6 +1144,7 @@ fn infer_body_impl<'db>(
         // relies on).
         let defaults = baml_compiler2_ppir::function_parameter_defaults(db, function);
         if let Some(arena) = body.expr_body() {
+            ctx.register_property_shorthands(arena);
             for (index, default) in defaults.params.iter().enumerate() {
                 let Some(default) = default else { continue };
                 match ctx.param_tys.get(index).cloned() {
@@ -1367,9 +1369,10 @@ struct InferenceContext<'db> {
     /// result - TS short-circuit semantics, where intermediate links
     /// see the non-null type.
     chain_nullable: Vec<bool>,
-    /// Value exprs whose unresolved-name diagnostic was superseded by a
-    /// more specific one (object property shorthand).
-    suppressed_unresolved: rustc_hash::FxHashSet<ExprId>,
+    /// Shorthand value expressions and the exact property name they require.
+    /// Populated from the structural AST before inference so the ordinary path
+    /// resolver can select the specialized unresolved-name diagnostic.
+    property_shorthand_values: FxHashMap<ExprId, baml_type::Name>,
     /// BEP-042: loop depth at each active `defer` entry - a
     /// `break`/`continue` at the SAME depth (or any `return`) would
     /// escape the defer body and is rejected.
@@ -1438,7 +1441,7 @@ impl<'db> InferenceContext<'db> {
             body_owner: None,
             defaults_owner: false,
             chain_nullable: Vec::new(),
-            suppressed_unresolved: rustc_hash::FxHashSet::default(),
+            property_shorthand_values: FxHashMap::default(),
             defer_loop_floors: Vec::new(),
             loop_depth: 0,
             body_root: None,
@@ -1466,6 +1469,7 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn infer_expr_body(&mut self, body: &ExprBody) {
+        self.register_property_shorthands(body);
         self.body_root = body.root_expr;
         if let Some(root) = body.root_expr {
             match self.return_ty.clone() {
@@ -1504,6 +1508,39 @@ impl<'db> InferenceContext<'db> {
                 .pattern_ascription_ty(body, pat_id)
                 .unwrap_or_else(Ty::error);
             self.result.type_of_pat.insert(pat_id, ty);
+        }
+    }
+
+    fn register_property_shorthands(&mut self, body: &ExprBody) {
+        for (_, expr) in body.exprs.iter() {
+            match expr {
+                Expr::Map { entries } => {
+                    for entry in entries {
+                        if entry.syntax != PropertySyntax::Shorthand {
+                            continue;
+                        }
+                        let Expr::Path(segments) = &body.exprs[entry.value] else {
+                            debug_assert!(false, "map shorthand value must be a path");
+                            continue;
+                        };
+                        let [name] = segments.as_slice() else {
+                            debug_assert!(false, "map shorthand value must be a single name");
+                            continue;
+                        };
+                        self.property_shorthand_values
+                            .insert(entry.value, name.clone());
+                    }
+                }
+                Expr::Object { fields, .. } => {
+                    for field in fields {
+                        if field.syntax == PropertySyntax::Shorthand {
+                            self.property_shorthand_values
+                                .insert(field.value, field.name.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
@@ -2002,36 +2039,6 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             Expr::Map { entries } => {
-                // Property shorthand in an UNTYPED object (`{ options }`):
-                // an entry whose key literal spells its own single-segment
-                // value path. When that name resolves nowhere, the
-                // specialized diagnostic (with in-scope near-matches)
-                // supersedes the generic unresolved-name one.
-                for (key, value) in entries {
-                    let Expr::Literal(Literal::String(key_name)) = &body.exprs[*key] else {
-                        continue;
-                    };
-                    let Expr::Path(segments) = &body.exprs[*value] else {
-                        continue;
-                    };
-                    if segments.len() != 1 || segments[0].as_str() != key_name.as_str() {
-                        continue;
-                    }
-                    let locals = self.local_binding_names();
-                    if self.lower.resolve_value(segments).is_some()
-                        || locals.iter().any(|name| name == &segments[0])
-                    {
-                        continue;
-                    }
-                    let suggestions =
-                        crate::diagnostics::similar_name_suggestions(&segments[0], locals.iter());
-                    self.suppressed_unresolved.insert(*value);
-                    self.pending_diags.push(PendingDiag::UnresolvedShorthand {
-                        expr: *value,
-                        name: segments[0].clone(),
-                        suggestions,
-                    });
-                }
                 // With an expected map type, entries are CHECKED against
                 // its key/value (the Array arm's rule; r-a's
                 // expectation-driven literal typing) - `{"input": s}` in
@@ -2039,9 +2046,9 @@ impl<'db> InferenceContext<'db> {
                 // synthesized `map<string, string>` tripping invariance.
                 let expected_entry = self.expected_map_entry(expected);
                 if let Some((key_ty, value_ty)) = expected_entry {
-                    for (key, value) in entries {
-                        self.check_expr(body, *key, &key_ty);
-                        self.check_expr(body, *value, &value_ty);
+                    for entry in entries {
+                        self.check_expr(body, entry.key, &key_ty);
+                        self.check_expr(body, entry.value, &value_ty);
                     }
                     Ty::intern(TyKind::Map {
                         key: key_ty,
@@ -2062,9 +2069,9 @@ impl<'db> InferenceContext<'db> {
                 } else {
                     let (keys, values): (Vec<Ty>, Vec<Ty>) = entries
                         .iter()
-                        .map(|(key, value)| {
-                            let key_ty = self.infer_expr(body, *key, &Expectation::None);
-                            let value_ty = self.infer_expr(body, *value, &Expectation::None);
+                        .map(|entry| {
+                            let key_ty = self.infer_expr(body, entry.key, &Expectation::None);
+                            let value_ty = self.infer_expr(body, entry.value, &Expectation::None);
                             (self.widen_fresh(&key_ty), self.widen_fresh(&value_ty))
                         })
                         .unzip();
@@ -2119,8 +2126,8 @@ impl<'db> InferenceContext<'db> {
                     && matches!(type_name.0.as_slice(), [seg] if seg.as_str() == "map")
                 {
                     if let Some((key_ty, value_ty)) = self.expected_map_entry(expected) {
-                        for (_, value) in fields {
-                            self.check_expr(body, *value, &value_ty);
+                        for field in fields {
+                            self.check_expr(body, field.value, &value_ty);
                         }
                         Ty::intern(TyKind::Map {
                             key: key_ty,
@@ -2136,8 +2143,9 @@ impl<'db> InferenceContext<'db> {
                     } else {
                         let values: Vec<Ty> = fields
                             .iter()
-                            .map(|(_, value)| {
-                                let value_ty = self.infer_expr(body, *value, &Expectation::None);
+                            .map(|field| {
+                                let value_ty =
+                                    self.infer_expr(body, field.value, &Expectation::None);
                                 self.widen_fresh(&value_ty)
                             })
                             .collect();
@@ -4981,9 +4989,7 @@ impl<'db> InferenceContext<'db> {
         // A name that RESOLVES to a definition kind this road doesn't
         // type (clients, top-level lets outside their tier) is not
         // unresolved - it stays the silent sentinel it always was.
-        if self.lower.resolve_value(segments).is_none()
-            && !self.suppressed_unresolved.contains(&expr)
-        {
+        if self.lower.resolve_value(segments).is_none() {
             // When a proper prefix resolves (`baml.media.Image.missing`
             // has the valid type `baml.media.Image`), the segment AFTER
             // the longest valid prefix is what failed - report it alone,
@@ -5004,8 +5010,19 @@ impl<'db> InferenceContext<'db> {
                         .join("."),
                 )
             });
-            self.pending_diags
-                .push(PendingDiag::UnresolvedName { expr, name });
+            if let Some(shorthand_name) = self.property_shorthand_values.get(&expr).cloned() {
+                let locals = self.local_binding_names_at(expr);
+                let suggestions =
+                    crate::diagnostics::similar_name_suggestions(&shorthand_name, locals.iter());
+                self.pending_diags.push(PendingDiag::UnresolvedShorthand {
+                    expr,
+                    name: shorthand_name,
+                    suggestions,
+                });
+            } else {
+                self.pending_diags
+                    .push(PendingDiag::UnresolvedName { expr, name });
+            }
         }
         Ty::error()
     }
@@ -5646,7 +5663,7 @@ impl<'db> InferenceContext<'db> {
         body: &ExprBody,
         object: ExprId,
         type_name: &baml_base::TypePath,
-        fields: &[(baml_type::Name, ExprId)],
+        fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
     ) -> Ty {
         let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
@@ -5673,8 +5690,8 @@ impl<'db> InferenceContext<'db> {
                     suggestions: self.lower.type_suggestions(&segments),
                 });
             }
-            for (_, value) in fields {
-                self.infer_expr(body, *value, &Expectation::None);
+            for field in fields {
+                self.infer_expr(body, field.value, &Expectation::None);
             }
             for spread in spreads {
                 self.infer_expr(body, spread.expr, &Expectation::None);
@@ -5713,11 +5730,13 @@ impl<'db> InferenceContext<'db> {
                 });
             }
         }
-        for (name, value) in fields {
+        for field in fields {
+            let name = &field.name;
+            let value = field.value;
             match field_types.iter().find(|(field, _)| field == name) {
                 Some((_, field_ty)) => {
                     let field_ty = substitute_params(field_ty, &instantiation);
-                    self.check_expr(body, *value, &field_ty);
+                    self.check_expr(body, value, &field_ty);
                 }
                 None => {
                     // An INTERFACE field of an implemented interface is not
@@ -5736,19 +5755,16 @@ impl<'db> InferenceContext<'db> {
                         match field_types.iter().find(|(field, _)| *field == class_field) {
                             Some((_, field_ty)) => {
                                 let field_ty = substitute_params(field_ty, &instantiation);
-                                self.check_expr(body, *value, &field_ty);
+                                self.check_expr(body, value, &field_ty);
                             }
                             None => {
-                                self.infer_expr(body, *value, &Expectation::None);
+                                self.infer_expr(body, value, &Expectation::None);
                             }
                         }
                         continue;
                     }
-                    self.infer_expr(body, *value, &Expectation::None);
-                    let shorthand = matches!(
-                        &body.exprs[*value],
-                        Expr::Path(segments) if segments.len() == 1 && &segments[0] == name
-                    );
+                    self.infer_expr(body, value, &Expectation::None);
+                    let shorthand = field.syntax == PropertySyntax::Shorthand;
                     let class_name = crate::lower::qualify_def(
                         db,
                         baml_compiler2_hir::contributions::Definition::Class(class),
@@ -5756,7 +5772,7 @@ impl<'db> InferenceContext<'db> {
                     );
                     self.pending_diags.push(PendingDiag::UnknownObjectField {
                         object,
-                        value: *value,
+                        value,
                         class_name,
                         declared: field_types.iter().map(|(field, _)| field.clone()).collect(),
                         name: name.clone(),
@@ -8342,12 +8358,14 @@ impl<'db> InferenceContext<'db> {
         None
     }
 
-    /// Every value name visible at the CURRENT scope (params and let
-    /// bindings through the ancestor chain) - the near-match candidate
-    /// pool for shorthand suggestions.
-    fn local_binding_names(&self) -> Vec<baml_type::Name> {
+    /// Every local value name in the expression's lexical scope and its
+    /// ancestors - the near-match candidate pool for shorthand suggestions.
+    fn local_binding_names_at(&self, expr: ExprId) -> Vec<baml_type::Name> {
         let mut names = Vec::new();
-        let Some(scope) = self.current_scope else {
+        let Some(scope) = self
+            .metadata_key(expr)
+            .and_then(|key| self.index.expression_scope(key))
+        else {
             return names;
         };
         let index = self.index;

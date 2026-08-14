@@ -511,7 +511,7 @@ fn find_field_definition_usages(
                     // Check if any field key matches
                     let has_matching_key = fields
                         .iter()
-                        .any(|(name, _)| name.as_str() == field_name_text);
+                        .any(|field| field.name.as_str() == field_name_text);
                     if !has_matching_key {
                         continue;
                     }
