@@ -111,6 +111,116 @@ function crypto.$init_test_ns_crypto_aes_gcm_siv(registry: testing.TestCollector
     return
 }
 
+function crypto.$init_test_ns_crypto_chacha20poly1305(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_matches_rfc8439_vector"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_decrypts_rfc8439_vector"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "xchacha20poly1305_matches_draft_vector"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_takes_a_12_byte_nonce"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "xchacha20poly1305_takes_a_24_byte_nonce"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_round_trips_through_the_aead_interface"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "xchacha20poly1305_round_trips_through_the_aead_interface"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_ciphertext_is_plaintext_plus_a_tag"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_is_not_misuse_resistant"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_wrong_aad_is_rejected"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "xchacha20poly1305_tampered_ciphertext_is_rejected"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_key_from_another_cipher_does_not_open_it"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_wrong_key_length_is_invalid_argument"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha20poly1305_ciphertext_too_short_to_hold_a_tag_is_named"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.crypto"
+    load_const "chacha_random_key_draws_32_bytes"
+    make_closure .<lambda($init_test_ns_crypto_chacha20poly1305, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function crypto.$init_test_ns_crypto_sha2(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.crypto"

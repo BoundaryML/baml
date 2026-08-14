@@ -322,6 +322,15 @@ aes-gcm-siv = { version = "0.12", default-features = false, features = [
   "alloc",
   "zeroize",
 ] }
+# The other `baml.crypto` AEAD family. Same `aead` 0.6 generation as
+# `aes-gcm-siv` above, which is what lets both share one set of seal/open
+# helpers. `getrandom` off and `zeroize` on for the same reasons; the
+# `reduced-round` ChaCha8/ChaCha12 variants stay off, since they trade security
+# margin for speed and no RFC covers them.
+chacha20poly1305 = { version = "0.11", default-features = false, features = [
+  "alloc",
+  "zeroize",
+] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

@@ -40,6 +40,8 @@ class            baml.TypeValue                   <builtin>/baml/type_class.baml
 class            baml.Uint8Array                  <builtin>/baml/uint8array.baml:5
 class            baml.crypto.Aes256GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:24
 class            baml.crypto.Aes128GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:101
+class            baml.crypto.ChaCha20Poly1305     <builtin>/baml/ns_crypto/chacha20poly1305.baml:34
+class            baml.crypto.XChaCha20Poly1305    <builtin>/baml/ns_crypto/chacha20poly1305.baml:135
 class            baml.crypto.DecryptionFailure    <builtin>/baml/ns_crypto/errors.baml:10
 interface        baml.crypto.Hasher               <builtin>/baml/ns_crypto/interfaces.baml:2
 interface        baml.crypto.Aead                 <builtin>/baml/ns_crypto/interfaces.baml:35

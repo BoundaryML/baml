@@ -1174,6 +1174,46 @@ fn baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint
     }
 }
 
+fn baml.crypto.ChaCha20Poly1305.new = builtin(vm)
+
+fn baml.crypto.ChaCha20Poly1305.Aead.encrypt = builtin(vm)
+
+fn baml.crypto.ChaCha20Poly1305.Aead.decrypt = builtin(vm)
+
+fn baml.crypto.ChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    // Locals:
+    let _0: uint8array // _0 // return
+    let _1: baml.random.Rng // rng // param
+
+    bb0: {
+        _0 = virtual_call random as baml.random.Rng(copy _1, const 32_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.crypto.XChaCha20Poly1305.new = builtin(vm)
+
+fn baml.crypto.XChaCha20Poly1305.Aead.encrypt = builtin(vm)
+
+fn baml.crypto.XChaCha20Poly1305.Aead.decrypt = builtin(vm)
+
+fn baml.crypto.XChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    // Locals:
+    let _0: uint8array // _0 // return
+    let _1: baml.random.Rng // rng // param
+
+    bb0: {
+        _0 = virtual_call random as baml.random.Rng(copy _1, const 32_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.crypto.Hasher.update(_1: void, _2: void) -> void {
     // Locals:
     let _0: void // return
