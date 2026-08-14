@@ -34,7 +34,18 @@ pub fn build_control_flow_graph_from_ast(
     function_name: &str,
     body: &ast::ExprBody,
 ) -> ControlFlowGraph {
-    let Some(root_expr) = body.root_expr else {
+    build_control_flow_graph_from_expr(function_name, body, body.root_expr)
+}
+
+/// [`build_control_flow_graph_from_ast`] rooted at an arbitrary expression of
+/// `body`, for callables whose body is an expression *inside* another body —
+/// a lambda, which owns no `ExprBody` of its own.
+pub fn build_control_flow_graph_from_expr(
+    function_name: &str,
+    body: &ast::ExprBody,
+    root: Option<ast::ExprId>,
+) -> ControlFlowGraph {
+    let Some(root_expr) = root else {
         // No root expression — return a graph with just the root node.
         let mut graph = GraphAccumulator::default();
         let root_id = graph.allocate_id();
@@ -940,8 +951,8 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
         ast::Expr::Object {
             fields, spreads, ..
         } => {
-            for (_, field_expr) in fields {
-                collect_callee_names_expr(body, *field_expr, names);
+            for field in fields {
+                collect_callee_names_expr(body, field.value, names);
             }
             for spread in spreads {
                 collect_callee_names_expr(body, spread.expr, names);
@@ -953,9 +964,9 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::Map { entries } => {
-            for (key, value) in entries {
-                collect_callee_names_expr(body, *key, names);
-                collect_callee_names_expr(body, *value, names);
+            for entry in entries {
+                collect_callee_names_expr(body, entry.key, names);
+                collect_callee_names_expr(body, entry.value, names);
             }
         }
         ast::Expr::Block { stmts, tail_expr } => {
@@ -991,8 +1002,10 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         },
 
-        // Leaves (no nested expressions in this body's arena). Lambda bodies
-        // live in their own ExprBody, so they cannot be walked from here.
+        // Leaves for this walk. A lambda's body is an expression in this same
+        // arena, but it is deliberately not followed: a lambda is a separate
+        // callable, so the calls it makes are its own graph's edges, not this
+        // one's.
         ast::Expr::Literal(_)
         | ast::Expr::ByteStringLiteral(_)
         | ast::Expr::Null
@@ -1613,7 +1626,6 @@ mod tests {
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 initializer: Some(if_expr),
-                is_watched: false,
                 origin: ast::LetOrigin::Source,
                 else_branch: None,
             });
@@ -1654,7 +1666,6 @@ mod tests {
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 initializer: Some(if_expr),
-                is_watched: false,
                 origin: ast::LetOrigin::Source,
                 else_branch: None,
             });
@@ -1851,7 +1862,7 @@ mod tests {
             let obj = exprs.alloc(ast::Expr::Object {
                 type_name: TypePath::bare("MyResponse".into()),
                 type_args: vec![],
-                fields: vec![("ok".into(), field_val)],
+                fields: vec![ast::ObjectExprField::explicit("ok".into(), field_val)],
                 spreads: vec![],
             });
             let ret = stmts.alloc(ast::Stmt::Return(Some(obj)));
@@ -2030,7 +2041,7 @@ mod tests {
             let obj_false = exprs.alloc(ast::Expr::Object {
                 type_name: TypePath::bare("Result".into()),
                 type_args: vec![],
-                fields: vec![("err".into(), err_val)],
+                fields: vec![ast::ObjectExprField::explicit("err".into(), err_val)],
                 spreads: vec![],
             });
             let ret_false = stmts.alloc(ast::Stmt::Return(Some(obj_false)));
@@ -2070,7 +2081,7 @@ mod tests {
         let obj = exprs.alloc(ast::Expr::Object {
             type_name: TypePath::bare("Resp".into()),
             type_args: vec![],
-            fields: vec![("ok".into(), field_val)],
+            fields: vec![ast::ObjectExprField::explicit("ok".into(), field_val)],
             spreads: vec![],
         });
 

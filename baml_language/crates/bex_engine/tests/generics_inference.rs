@@ -630,6 +630,7 @@ async fn infer_identity_media_binds_concrete_media_type() {
 }
 
 #[tokio::test]
+#[ignore = "Declares `map<K, int[]>` (a type-variable map key), now forbidden — map keys must be `string` (a typevar could bind to a non-string). Un-ignore only if bounded string-keyed generic maps are supported."]
 async fn infer_nonempty_map_binds_key_despite_valueless_values() {
     // Regression: a NON-empty map whose values give no evidence (an empty array)
     // still carries key evidence — every wire entry is string-keyed — so the

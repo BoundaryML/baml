@@ -1,0 +1,22 @@
+{
+  "name": "@b/pkg-grammar-hljs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "highlight.js language definition for BAML (single source of truth, published to npm as @boundaryml/baml-highlightjs via the BoundaryML/baml-highlightjs mirror).",
+  "exports": {
+    ".": {
+      "import": "./src/baml.js"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "highlight.js": "^11.11.1",
+    "vitest": "^4.0.16"
+  }
+}

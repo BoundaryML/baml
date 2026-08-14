@@ -28,33 +28,30 @@ function qux() -> () {
 
 //----
 //- diagnostics
-// error: could not parse type expression for return type of `bar`
-//     ╭─[ for_loops.baml:11:19 ]
-//     │
+// E0108
+//
+//   × could not parse type expression for return type of `bar`
+//     ╭─[for_loops.baml:11:19]
 //  11 │ function bar() -> () {
-//     │                   ─┬
-//     │                    ╰── unparseable type
-//     │
-//     │ Note: Error code: E0108
-// ────╯
-// error: could not parse type expression for return type of `baz`
-//     ╭─[ for_loops.baml:17:19 ]
-//     │
+//     ·                   ─┬
+//     ·                    ╰── unparseable type
+//     ╰────
+// E0108
+//
+//   × could not parse type expression for return type of `baz`
+//     ╭─[for_loops.baml:17:19]
 //  17 │ function baz() -> () {
-//     │                   ─┬
-//     │                    ╰── unparseable type
-//     │
-//     │ Note: Error code: E0108
-// ────╯
-// error: could not parse type expression for return type of `qux`
-//     ╭─[ for_loops.baml:23:19 ]
-//     │
+//     ·                   ─┬
+//     ·                    ╰── unparseable type
+//     ╰────
+// E0108
+//
+//   × could not parse type expression for return type of `qux`
+//     ╭─[for_loops.baml:23:19]
 //  23 │ function qux() -> () {
-//     │                   ─┬
-//     │                    ╰── unparseable type
-//     │
-//     │ Note: Error code: E0108
-// ────╯
+//     ·                   ─┬
+//     ·                    ╰── unparseable type
+//     ╰────
 //
 //- inlay_hints
 // for_loops.baml:12:15 (Type) ": int"

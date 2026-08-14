@@ -5,6 +5,15 @@
 
 use std::io::Write as _;
 
+/// The compiler workload is dominated by small short-lived allocations
+/// (`Ty` trees, `Vec`s, `SmolStr`s): the system allocator measured ~35% of
+/// remaining single-threaded CPU in the cold-compile audit. Installing
+/// mimalloc as the global allocator substantially cuts cold `baml check` /
+/// `baml build` wall time. This affects allocation only, not any rendered
+/// bytes, so it is safe with respect to `BAML_CACHE_VERIFY`.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() {
     // TODO: baml_log is disabled for now
     // baml_log::init()?;
@@ -13,7 +22,7 @@ fn main() {
 
     let argv: Vec<String> = std::env::args().collect();
 
-    // Route every top-level error through the ariadne-style printer
+    // Route every top-level error through the graphical printer
     // (bold-red "Error:" header + cause chain) so plain bails look the
     // same as compiler diagnostics. Returning `Result<()>` from `main`
     // would defer to anyhow's Debug printer instead, which renders the

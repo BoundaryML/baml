@@ -1,6 +1,18 @@
-//! Unified tests for filesystem operations.
+//! Filesystem operation tests requiring host-side capabilities.
+//!
+//! Tests here need things BAML cannot express: asserting a compile-time type
+//! mismatch via `#[should_panic]`, and inspecting host state that `baml.fs`
+//! exposes no reader for — a file's mode bits, and whether a path is a link
+//! rather than what it resolves to.
+//!
+//! The `chmod` and `symlink` tests are Unix-only by design. Windows has no mode
+//! bits (only a read-only attribute), and creating a symlink there needs
+//! Developer Mode or `SeCreateSymbolicLinkPrivilege`, which CI does not grant.
+//! The platform-independent parts of both — argument validation and the errors
+//! for a missing or already-occupied path — are covered by `baml_src/ns_fs`.
 
 use baml_tests::baml_test;
+#[cfg(unix)]
 use bex_external_types::BexExternalValue;
 use indexmap::{IndexMap, indexmap};
 
@@ -16,85 +28,8 @@ fn tmp(files: IndexMap<&str, &str>) -> (tempfile::TempDir, String) {
     (tmp, root)
 }
 
-/// Replace the temp dir path with a stable placeholder.
-fn stabilize(s: &str, root: &str) -> String {
-    s.replace(root, "{TMPDIR}")
-}
-
 #[tokio::test]
-async fn fs_open_nonexistent_file() {
-    let (_tmp, root) = tmp(indexmap! {});
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> string {{
-                let file = baml.fs.open("{root}/nonexistent.txt", "r");
-                file.text()
-            }}
-        "#
-    ));
-
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
-    function main() -> string {
-        load_const "{TMPDIR}/nonexistent.txt"
-        load_const "r"
-        sys_op baml.fs.open
-        sys_op baml.fs.File.text
-        return
-    }
-    "#);
-    // Error message contains OS error text which may differ across platforms.
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn fs_file_write_on_readonly_errors() {
-    let (_tmp, root) = tmp(indexmap! { "readonly.txt" => "content" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> int {{
-                let file = baml.fs.open("{root}/readonly.txt", "r");
-                file.write("should fail")
-            }}
-        "#
-    ));
-
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
-    function main() -> int {
-        load_const "{TMPDIR}/readonly.txt"
-        load_const "r"
-        sys_op baml.fs.open
-        load_const "should fail"
-        sys_op baml.fs.File.write
-        return
-    }
-    "#);
-    // Sysop errors unwind through the VM exception machinery (same path a
-    // `throw` opcode takes), so an uncaught one surfaces as `UnhandledThrow`
-    // carrying the `baml.errors.*` instance the kind maps to — the write
-    // failure is a `VmBamlError::Io`, rendering as `baml.errors.Io`.
-    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
-    let bex_external_types::BexExternalValue::Instance {
-        class_name, fields, ..
-    } = value.as_ref()
-    else {
-        panic!("expected exception Instance, got: {value:?}");
-    };
-    assert_eq!(class_name, "baml.errors.Io");
-    let Some(BexExternalValue::String(message)) = fields.get("message") else {
-        panic!("expected `message` String field, got: {fields:?}");
-    };
-    assert!(
-        message.starts_with("Failed to write:"),
-        "unexpected error message: {message}"
-    );
-}
-
-#[tokio::test]
-#[should_panic(expected = "type mismatch")]
+#[should_panic(expected = "mismatched types")]
 async fn fs_file_invalid_mode() {
     let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
 
@@ -108,62 +43,6 @@ async fn fs_file_invalid_mode() {
             }}
         "#
     ));
-}
-
-#[tokio::test]
-async fn fs_remove_nonexistent_errors() {
-    let (_tmp, root) = tmp(indexmap! {});
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove("{root}/nope.txt")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn fs_remove_on_directory_points_at_remove_dir() {
-    // B-232: removing a directory with the file-only `remove` must fail with a
-    // message that points the user at `remove_dir`, not the opaque OS error
-    // (EISDIR on Linux / EPERM on macOS).
-    let (_tmp, root) = tmp(indexmap! {});
-    std::fs::create_dir(format!("{root}/a_dir")).unwrap();
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove("{root}/a_dir")
-            }}
-        "#
-    ));
-
-    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
-    let BexExternalValue::Instance {
-        class_name, fields, ..
-    } = value.as_ref()
-    else {
-        panic!("expected exception Instance, got: {value:?}");
-    };
-    assert_eq!(class_name, "baml.errors.Io");
-    let Some(BexExternalValue::String(message)) = fields.get("message") else {
-        panic!("expected `message` String field, got: {fields:?}");
-    };
-    // Pin the actual guidance: the message must explain it's a directory and
-    // name both removal APIs (checking the full phrase, since "remove_dir" alone
-    // is a substring of "remove_dir_all" and would be a vacuous assertion).
-    assert!(
-        message.contains("it is a directory")
-            && message.contains("baml.fs.remove_dir or baml.fs.remove_dir_all"),
-        "error should explain it's a directory and point at both removal APIs, got: {message}"
-    );
-    // The directory must still be there — the failed remove left it untouched.
-    assert!(std::path::Path::new(&format!("{root}/a_dir")).is_dir());
 }
 
 #[cfg(unix)]
@@ -191,327 +70,6 @@ async fn fs_remove_on_symlink_to_dir_removes_link() {
     // The symlink's target and its contents are untouched.
     assert!(std::path::Path::new(&format!("{root}/real_dir/keep.txt")).exists());
 }
-
-#[tokio::test]
-async fn fs_remove_dir_removes_empty_directory() {
-    let (_tmp, root) = tmp(indexmap! {});
-    std::fs::create_dir(format!("{root}/empty")).unwrap();
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove_dir("{root}/empty")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_ok(), "got: {:?}", output.result);
-    assert!(!std::path::Path::new(&format!("{root}/empty")).exists());
-}
-
-#[tokio::test]
-async fn fs_remove_dir_on_nonempty_errors() {
-    // remove_dir mirrors `rmdir`: it refuses a non-empty directory.
-    let (_tmp, root) = tmp(indexmap! {});
-    std::fs::create_dir(format!("{root}/full")).unwrap();
-    std::fs::write(format!("{root}/full/file.txt"), "x").unwrap();
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove_dir("{root}/full")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-    // The directory and its contents survive the failed removal.
-    assert!(std::path::Path::new(&format!("{root}/full/file.txt")).exists());
-}
-
-#[tokio::test]
-async fn fs_remove_dir_on_missing_errors() {
-    // Unlike remove_dir_all, remove_dir is NOT idempotent: a missing path errors.
-    let (_tmp, root) = tmp(indexmap! {});
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove_dir("{root}/missing")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn fs_remove_dir_on_file_errors() {
-    // remove_dir targets directories only: handed a regular file it errors and
-    // leaves the file in place.
-    let (_tmp, root) = tmp(indexmap! { "a_file.txt" => "x" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove_dir("{root}/a_file.txt")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-    assert!(std::path::Path::new(&format!("{root}/a_file.txt")).exists());
-}
-
-#[tokio::test]
-async fn fs_remove_dir_all_removes_tree() {
-    // remove_dir_all mirrors `rm -rf`: it removes a populated directory tree.
-    let (_tmp, root) = tmp(indexmap! {});
-    std::fs::create_dir_all(format!("{root}/tree/sub")).unwrap();
-    std::fs::write(format!("{root}/tree/a.txt"), "a").unwrap();
-    std::fs::write(format!("{root}/tree/sub/b.txt"), "b").unwrap();
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove_dir_all("{root}/tree")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_ok(), "got: {:?}", output.result);
-    assert!(!std::path::Path::new(&format!("{root}/tree")).exists());
-}
-
-#[tokio::test]
-async fn fs_remove_dir_all_idempotent_on_missing() {
-    // `force: true` semantics — removing a path that doesn't exist succeeds.
-    let (_tmp, root) = tmp(indexmap! {});
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove_dir_all("{root}/does_not_exist")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_ok(), "got: {:?}", output.result);
-}
-
-#[tokio::test]
-async fn fs_remove_dir_all_on_file_errors() {
-    // remove_dir_all targets directories: handed a regular file it errors here
-    // (native tokio::fs::remove_dir_all -> NotADirectory). The WASM backend
-    // rejects the same case in bridge_wasm's
-    // wasm_runtime_remove_dir_all_rejects_regular_file rather than deleting it.
-    let (_tmp, root) = tmp(indexmap! { "a_file.txt" => "x" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.remove_dir_all("{root}/a_file.txt")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-    // The file must survive the rejected removal — no accidental data loss.
-    assert!(std::path::Path::new(&format!("{root}/a_file.txt")).exists());
-}
-
-#[tokio::test]
-async fn fs_file_read_negative_n_errors() {
-    let (_tmp, root) = tmp(indexmap! { "data.txt" => "abc" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> string {{
-                let f = baml.fs.open("{root}/data.txt", "r");
-                f.read(-1)
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn fs_file_close_invalidates_handle() {
-    let (_tmp, root) = tmp(indexmap! { "data.txt" => "content" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> string {{
-                let f = baml.fs.open("{root}/data.txt", "r");
-                f.close();
-                f.text()
-            }}
-        "#
-    ));
-
-    assert!(
-        output.result.is_err(),
-        "Expected error reading after close, got: {:?}",
-        output.result
-    );
-}
-
-#[tokio::test]
-async fn fs_write_wrapper_closes_on_error() {
-    // Writing to a directory errors out; the wrapper must still release the
-    // underlying handle so the directory remains usable afterward.
-    let (_tmp, root) = tmp(indexmap! {});
-    std::fs::create_dir(format!("{root}/is_a_dir")).unwrap();
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> int {{
-                baml.fs.write("{root}/is_a_dir", "oops")
-            }}
-        "#
-    ));
-
-    assert!(
-        output.result.is_err(),
-        "Expected write-to-dir to fail: {:?}",
-        output.result
-    );
-    // If the wrapper leaked the handle, removing the dir on Windows would
-    // fail with a sharing violation; on Unix it's a soft check.
-    std::fs::remove_dir(format!("{root}/is_a_dir")).unwrap();
-}
-
-#[tokio::test]
-async fn fs_read_nonexistent_errors() {
-    let (_tmp, root) = tmp(indexmap! {});
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> string {{
-                baml.fs.read("{root}/missing.txt")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn fs_file_seek_negative_errors() {
-    let (_tmp, root) = tmp(indexmap! { "data.txt" => "content" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> string {{
-                let f = baml.fs.open("{root}/data.txt", "r+");
-                f.seek_from("start", -1);
-                f.text()
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn fs_read_dir_nonexistent_errors() {
-    let (_tmp, root) = tmp(indexmap! {});
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> baml.fs.DirEntry[] {{
-                baml.fs.read_dir("{root}/no_such_dir")
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn fs_read_dir_on_file_errors() {
-    // BEP-037: read_dir on a path that exists but isn't a directory must
-    // throw Io. Without this, callers couldn't distinguish "empty dir" from
-    // "you pointed at a file".
-    let (_tmp, root) = tmp(indexmap! { "not_a_dir.txt" => "x" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> baml.fs.DirEntry[] {{
-                baml.fs.read_dir("{root}/not_a_dir.txt")
-            }}
-        "#
-    ));
-
-    assert!(
-        output.result.is_err(),
-        "expected error reading_dir on a regular file, got: {:?}",
-        output.result
-    );
-}
-
-#[tokio::test]
-async fn fs_mkdir_non_recursive_errors_when_parent_missing() {
-    let (_tmp, root) = tmp(indexmap! {});
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.mkdir("{root}/no/parent", baml.fs.MkdirOptions {{ recursive: false }})
-            }}
-        "#
-    ));
-
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn fs_mkdir_non_recursive_errors_when_dir_exists() {
-    // BEP-037: non-recursive mkdir on a path that already exists must error.
-    let (_tmp, root) = tmp(indexmap! {});
-    std::fs::create_dir(format!("{root}/existing")).unwrap();
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.mkdir("{root}/existing", baml.fs.MkdirOptions {{ recursive: false }})
-            }}
-        "#
-    ));
-
-    assert!(
-        output.result.is_err(),
-        "expected error creating an already-existing dir, got: {:?}",
-        output.result
-    );
-}
-
-#[tokio::test]
-async fn fs_mkdir_recursive_errors_when_leaf_is_file() {
-    // BEP-037: even with recursive=true, mkdir must error if the leaf path
-    // exists as a regular file. Idempotency only applies when the leaf is
-    // already a directory.
-    let (_tmp, root) = tmp(indexmap! { "leaf.txt" => "im a file" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> null {{
-                baml.fs.mkdir("{root}/leaf.txt", baml.fs.MkdirOptions {{ recursive: true }})
-            }}
-        "#
-    ));
-
-    assert!(
-        output.result.is_err(),
-        "expected error: leaf path exists as a file, got: {:?}",
-        output.result
-    );
-}
-
-// ============================================================================
-// read_dir tests
-// ============================================================================
 
 #[cfg(unix)]
 #[tokio::test]
@@ -544,4 +102,148 @@ async fn fs_read_dir_reports_symlink_flag() {
         .expect("expected link.txt entry");
 
     assert_eq!(link["is_symlink"], BexExternalValue::Bool(true));
+}
+
+/// The mode is applied verbatim, not or'd into what the file already had:
+/// `0o600` then `0o644` must land on exactly those bits.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_chmod_sets_the_exact_mode() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
+    let path = format!("{root}/file.txt");
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.chmod("{path}", 0o600);
+                baml.fs.chmod("{path}", 0o644);
+                null
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_ok(), "got: {:?}", output.result);
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+    assert_eq!(mode & 0o7777, 0o644, "mode was {mode:#o}");
+}
+
+/// A mode the kernel would silently mask (here the `S_IFREG` bits of a `stat`
+/// result) is rejected before any syscall, so the file keeps its old mode.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_chmod_rejects_out_of_range_mode() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
+    let path = format!("{root}/file.txt");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                {{
+                    baml.fs.chmod("{path}", 0o100644);
+                    "no error thrown"
+                }} catch (e) {{
+                    baml.errors.InvalidArgument => e.message
+                }}
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::String(message)) = &output.result else {
+        panic!("expected string, got: {:?}", output.result);
+    };
+    assert!(
+        message.contains("0o100644"),
+        "message should name the rejected mode, got: {message}"
+    );
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+    assert_eq!(mode & 0o7777, 0o600, "mode was {mode:#o}");
+}
+
+/// The link is a real symlink (not a copy) and resolves to the target's bytes.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_symlink_creates_a_link_to_the_target() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "content" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                baml.fs.symlink("{root}/target.txt", "{root}/link.txt");
+                baml.fs.read("{root}/link.txt")
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("content".to_string().into()))
+    );
+    let link = format!("{root}/link.txt");
+    assert!(
+        std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        std::fs::read_link(&link).unwrap(),
+        std::path::Path::new(&format!("{root}/target.txt"))
+    );
+}
+
+/// A relative target is stored verbatim — the OS resolves it against the link's
+/// own directory, so the link keeps working regardless of the working directory.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_symlink_stores_a_relative_target_verbatim() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "content" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                baml.fs.symlink("target.txt", "{root}/link.txt");
+                baml.fs.read("{root}/link.txt")
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("content".to_string().into()))
+    );
+    assert_eq!(
+        std::fs::read_link(format!("{root}/link.txt")).unwrap(),
+        std::path::Path::new("target.txt")
+    );
+}
+
+/// Creating a link never clobbers what is already there.
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_symlink_onto_an_existing_path_errors() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "target", "taken.txt" => "keep me" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> bool {{
+                {{
+                    baml.fs.symlink("{root}/target.txt", "{root}/taken.txt");
+                    false
+                }} catch (e) {{
+                    baml.errors.Io => true
+                }}
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(
+        std::fs::read_to_string(format!("{root}/taken.txt")).unwrap(),
+        "keep me"
+    );
 }

@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+186..187 'g': throws never
+197..293 '{\n   ...  1\n}': 1
+227..232 'let f': (x: int) -> int throws "neg"
+235..284 '(x: in... } x }': (x: int) -> int throws "neg"
+251..284 '{ if (... } x }': int
+253..280 'if (x ...eg"; }': void
+257..258 'x': int
+257..262 'x < 0': bool
+261..262 '0': 0
+264..280 '{ thro...eg"; }': never
+272..277 '"neg"': "neg"
+281..282 'x': int
+290..291 '1': 1

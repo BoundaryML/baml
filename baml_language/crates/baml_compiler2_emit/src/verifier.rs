@@ -5,9 +5,9 @@
 
 use std::collections::HashSet;
 
-use baml_compiler2_mir::{BlockId, Local, MirFunctionBody, StatementKind, Terminator};
+use baml_compiler2_mir::{BlockId, MirFunctionBody, Terminator};
 
-use crate::analysis::{self, AnalysisResult, LocalClassification};
+use crate::analysis::{self, AnalysisResult};
 
 /// Verify MIR + analysis invariants required by bytecode emission.
 ///
@@ -77,56 +77,13 @@ pub(crate) fn verify_mir_emit_invariants(
             );
         }
     }
-
-    // Watched locals must always be real so Watch/Unwatch have stable slots.
-    for (idx, decl) in body.locals.iter().enumerate() {
-        if decl.is_watched {
-            let local = Local(idx);
-            assert!(
-                decl.name.is_some(),
-                "watched local {local} must have a user-visible name",
-            );
-            let class = analysis
-                .classifications
-                .get(&local)
-                .copied()
-                .unwrap_or_else(|| panic!("missing classification for watched local {local}"));
-            assert!(
-                class == LocalClassification::Real,
-                "watched local {local} classified as {class:?} (expected Real)",
-            );
-        }
-    }
-
-    // Watch-manipulation statements must only reference watched locals.
-    for block in &body.blocks {
-        for stmt in &block.statements {
-            let Some(local) = (match &stmt.kind {
-                StatementKind::Unwatch(local)
-                | StatementKind::WatchNotify(local)
-                | StatementKind::WatchOptions { local, .. } => Some(*local),
-                _ => None,
-            }) else {
-                continue;
-            };
-
-            let decl = body.local(local);
-            assert!(
-                decl.is_watched,
-                "watch statement references non-watched local {local}",
-            );
-            assert!(
-                decl.name.is_some(),
-                "watch statement references unnamed watched local {local}",
-            );
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Rvalue, Statement,
+        BasicBlock, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, Rvalue, Statement,
+        StatementKind,
     };
     use baml_type::RuntimeTy;
 
@@ -141,20 +98,6 @@ mod tests {
             },
             span: None,
             scope_span: None,
-            is_watched: false,
-            is_captured: false,
-        }
-    }
-
-    fn local_watched(name: &str) -> LocalDecl {
-        LocalDecl {
-            name: Some(baml_base::Name::new(name)),
-            ty: RuntimeTy::Int {
-                attr: baml_type::TyAttr::default(),
-            },
-            span: None,
-            scope_span: None,
-            is_watched: true,
             is_captured: false,
         }
     }
@@ -251,29 +194,6 @@ mod tests {
             ],
             entry: BlockId(0),
             locals: vec![local("ret")],
-            viz_nodes: vec![],
-        };
-        for (i, block) in body.blocks.iter_mut().enumerate() {
-            block.id = BlockId(i);
-        }
-        let arity = 0usize;
-        let analysis = AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
-        verify_mir_emit_invariants(&body, arity, &analysis);
-    }
-
-    #[test]
-    fn verifier_accepts_watched_locals_classified_real() {
-        let mut body = MirFunctionBody {
-            catch_regions: vec![],
-            blocks: vec![BasicBlock {
-                id: BlockId(0),
-                statements: vec![],
-                terminator: Some(Terminator::Return),
-                span: None,
-                terminator_span: None,
-            }],
-            entry: BlockId(0),
-            locals: vec![local("ret"), local_watched("x")],
             viz_nodes: vec![],
         };
         for (i, block) in body.blocks.iter_mut().enumerate() {

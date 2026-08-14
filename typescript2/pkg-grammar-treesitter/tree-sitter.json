@@ -1,0 +1,45 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "baml",
+      "camelcase": "Baml",
+      "title": "BAML",
+      "scope": "source.baml",
+      "path": ".",
+      "file-types": [
+        "baml"
+      ],
+      "highlights": [
+        "queries/highlights.scm"
+      ],
+      "injections": [
+        "queries/injections.scm"
+      ],
+      "injection-regex": "^baml$",
+      "class-name": "TreeSitterBaml"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "Apache-2.0",
+    "description": "Tree-sitter grammar for BAML, the AI agent programming language",
+    "authors": [
+      {
+        "name": "BoundaryML"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/BoundaryML/baml-treesitter"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "go": false,
+    "node": true,
+    "python": false,
+    "rust": true,
+    "swift": false,
+    "zig": false
+  }
+}

@@ -64,39 +64,31 @@ function Go3(x:int) -> int {
 
 //----
 //- diagnostics
-// error: unresolved name: a
-//    ╭─[ expr_unknown_name.baml:2:13 ]
-//    │
+// E0003
+//
+//   × unresolved name: `a`
+//    ╭─[expr_unknown_name.baml:2:13]
 //  2 │     let y = a;
-//    │             ┬  
-//    │             ╰── unresolved name: a
-//    │ 
-//    │ Note: Error code: E0003
-// ───╯
-// error: expected 1 argument(s), got 3
-//    ╭─[ expr_unknown_name.baml:9:5 ]
-//    │
+//    ·             ─
+//    ╰────
+// E0003
+//
+//   × unresolved name: `b`
+//    ╭─[expr_unknown_name.baml:9:12]
 //  9 │     Go(z,a,b)
-//    │     ────┬────  
-//    │         ╰────── expected 1 argument(s), got 3
-//    │ 
-//    │ Note: Error code: E0005
-// ───╯
-// error: unresolved name: b
-//    ╭─[ expr_unknown_name.baml:9:12 ]
-//    │
+//    ·            ─
+//    ╰────
+// E0005
+//
+//   × expected 1 argument(s), got 3
+//    ╭─[expr_unknown_name.baml:9:5]
 //  9 │     Go(z,a,b)
-//    │            ┬  
-//    │            ╰── unresolved name: b
-//    │ 
-//    │ Note: Error code: E0003
-// ───╯
-// error: unresolved name: Unknown
-//     ╭─[ expr_unknown_name.baml:13:5 ]
-//     │
+//    ·     ─────────
+//    ╰────
+// E0003
+//
+//   × unresolved name: `Unknown`
+//     ╭─[expr_unknown_name.baml:13:5]
 //  13 │     Unknown(x)
-//     │     ───┬───  
-//     │        ╰───── unresolved name: Unknown
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
+//     ·     ───────
+//     ╰────

@@ -1,15 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11274
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
 function user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
     load_type pkg.inner.AutoBox<int>
     load_var j

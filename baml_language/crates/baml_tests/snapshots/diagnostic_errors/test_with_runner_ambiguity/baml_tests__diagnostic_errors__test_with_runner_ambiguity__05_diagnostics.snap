@@ -2,22 +2,19 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved name: my_runner
-   ╭─[ main.baml:8:27 ]
-   │
- 8 │ test "simple runner" with my_runner {
-   │                           ────┬────  
-   │                               ╰────── unresolved name: my_runner
-   │ 
-   │ Note: Error code: E0003
-───╯
+  [type] E0003
 
-  [type] error: type mismatch: expected testing.TestRunner | null, got MyRunner
-    ╭─[ main.baml:23:32 ]
-    │
+  × unresolved name: `my_runner`
+   ╭─[main.baml:8:27]
+ 8 │ test "simple runner" with my_runner {
+   ·                           ─────────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:23:32]
  23 │ test "constructor runner" with MyRunner { threshold: 0.5 } {
-    │                                ─────────────┬─────────────  
-    │                                             ╰─────────────── type mismatch: expected testing.TestRunner | null, got MyRunner
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                                ─────────────┬─────────────
+    ·                                             ╰── expected `((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null`, found `MyRunner`
+    ╰────

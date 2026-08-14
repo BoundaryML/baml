@@ -1,98 +1,103 @@
 {
-  "name": "baml-language",
-  "displayName": "BAML",
-  "description": "BAML language support — syntax highlighting, hover, completions, diagnostics, go-to-definition",
-  "version": "0.14.1",
-  "publisher": "Boundary",
-  "private": true,
-  "type": "commonjs",
-  "engines": {
-    "vscode": ">=1.63.0"
-  },
-  "categories": [
-    "Programming Languages"
-  ],
-  "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguage:baml"
   ],
+  "categories": [
+    "Programming Languages"
+  ],
   "contributes": {
-    "languages": [
-      {
-        "id": "baml",
-        "aliases": ["BAML", "baml"],
-        "extensions": [".baml"],
-        "configuration": "./language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "baml",
-        "scopeName": "source.baml",
-        "path": "./syntaxes/baml.tmLanguage.json"
-      }
-    ],
     "commands": [
       {
+        "category": "BAML",
         "command": "baml.openPlayground",
-        "title": "Open Playground",
-        "category": "BAML"
+        "title": "Open Playground"
       },
       {
+        "category": "BAML",
         "command": "baml.openLogs",
-        "title": "Open Logs",
-        "category": "BAML"
+        "title": "Open Logs"
       },
       {
+        "category": "BAML",
         "command": "baml.restartLanguageServer",
-        "title": "Restart Language Server",
-        "category": "BAML"
+        "title": "Restart Language Server"
       },
       {
+        "category": "BAML",
         "command": "baml.stopLanguageServer",
-        "title": "Stop Language Server",
-        "category": "BAML"
+        "title": "Stop Language Server"
       },
       {
+        "category": "BAML",
         "command": "baml.startLanguageServer",
-        "title": "Start Language Server",
-        "category": "BAML"
+        "title": "Start Language Server"
       }
     ],
     "configuration": {
-      "type": "object",
-      "title": "BAML",
       "properties": {
         "baml.cliPath": {
-          "type": ["string", "null"],
           "default": null,
           "description": "Path to the baml wrapper. If not set, uses 'baml' on PATH.",
-          "scope": "machine-overridable"
+          "scope": "machine-overridable",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "baml.trace.server": {
-          "scope": "window",
-          "type": "string",
-          "enum": ["off", "messages", "verbose"],
           "default": "off",
-          "description": "Logging level between the VS Code extension and the language server."
+          "description": "Logging level between the VS Code extension and the language server.",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "scope": "window",
+          "type": "string"
+        }
+      },
+      "title": "BAML",
+      "type": "object"
+    },
+    "configurationDefaults": {
+      "[baml]": {
+        "editor.semanticHighlighting.enabled": true
+      },
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "namespace:baml": "#808080CC"
         }
       }
-    }
-  },
-  "scripts": {
-    "sync:grammar": "pnpm --filter @b/pkg-grammar build",
-    "predev": "pnpm run sync:grammar",
-    "dev": "tsup --watch --sourcemap",
-    "prebuild": "pnpm run sync:grammar",
-    "build": "pnpm run typecheck && tsup",
-    "build:cli": "cargo build -p baml_cli --manifest-path ../../baml_language/Cargo.toml",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest",
-    "test:run": "vitest run"
+    },
+    "grammars": [
+      {
+        "language": "baml",
+        "path": "./syntaxes/baml.tmLanguage.json",
+        "scopeName": "source.baml"
+      }
+    ],
+    "languages": [
+      {
+        "aliases": [
+          "BAML",
+          "baml"
+        ],
+        "configuration": "./language-configuration.json",
+        "extensions": [
+          ".baml"
+        ],
+        "icon": {
+          "dark": "./baml-lamb-dark.svg",
+          "light": "./baml-lamb-light.svg"
+        },
+        "id": "baml"
+      }
+    ]
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.0"
   },
+  "description": "BAML, the Programming Language for AI.",
   "devDependencies": {
     "@b/pkg-grammar": "workspace:*",
     "@types/node": "^22.0.0",
@@ -100,5 +105,27 @@
     "tsup": "^8.0.0",
     "typescript": "^5.7.0",
     "vitest": "^4.0.16"
-  }
+  },
+  "displayName": "BAML",
+  "engines": {
+    "vscode": ">=1.63.0"
+  },
+  "icon": "baml-logo.png",
+  "main": "./dist/extension.js",
+  "name": "baml-language",
+  "private": true,
+  "publisher": "Boundary",
+  "scripts": {
+    "build": "pnpm run typecheck && tsup",
+    "build:cli": "cargo build -p baml_cli --manifest-path ../../baml_language/Cargo.toml",
+    "dev": "tsup --watch --sourcemap",
+    "prebuild": "pnpm run sync:grammar",
+    "predev": "pnpm run sync:grammar",
+    "sync:grammar": "pnpm --filter @b/pkg-grammar build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "commonjs",
+  "version": "0.16.0"
 }

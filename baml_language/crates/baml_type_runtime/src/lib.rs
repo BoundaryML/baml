@@ -5,7 +5,7 @@
 //! vocabulary (`baml_type`), neither the compiler frontend nor the BEX engine —
 //! so that:
 //!
-//! - the TIR (`baml_compiler2_tir::generics`) uses them at *compile time* over
+//! - the compiler (`baml_compiler2_hir_ty`) uses them at *compile time* over
 //!   typed expressions, re-exporting them so its callers are unchanged; and
 //! - the runtime engine (`bex_engine`) uses them at the *inbound boundary* over
 //!   types synthesized from argument values, by widening its
@@ -20,9 +20,16 @@
 //!
 //! Only the *pure* helpers belong here. Anything needing the compiler database,
 //! `TypeExpr`, or `TirTypeError` (e.g. `lower_type_expr_with_generics`,
-//! `erase_unresolved_typevars`) stays in `baml_compiler2_tir::generics`.
+//! `erase_unresolved_typevars`) stays compiler-side.
 
-use baml_type::{Name, Ty, TyAttr};
+#[cfg(test)]
+use baml_type::Name;
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity: inference runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
+)]
+use baml_type::normalize::NoFacts;
+use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr, normalize::TypeContext};
 use rustc_hash::FxHashMap;
 
 // ── Inference options ─────────────────────────────────────────────────────────
@@ -37,7 +44,7 @@ struct InferOpts<'a> {
     allow_typevar_actuals: bool,
     /// A *rigid* type variable that must never be bound from an argument — the
     /// pinned `Self` of an interface method call. `None` = no rigid variable.
-    rigid: Option<&'a Name>,
+    rigid: Option<&'a ParamTy>,
 }
 
 impl InferOpts<'_> {
@@ -94,7 +101,7 @@ impl Variance {
 /// diagnostic (see `03c-impl-guide`).
 #[derive(Clone, Debug)]
 pub struct InferError {
-    pub var: Name,
+    pub var: ParamTy,
     pub message: String,
 }
 
@@ -105,7 +112,7 @@ pub struct InferError {
 /// conflicting occurrences across *different* arguments are caught.
 #[derive(Default)]
 pub struct InferenceConstraints {
-    vars: FxHashMap<Name, Vec<(Variance, Ty)>>,
+    vars: FxHashMap<ParamTy, Vec<(Variance, Ty)>>,
 }
 
 impl InferenceConstraints {
@@ -135,7 +142,7 @@ impl InferenceConstraints {
     /// This is the compile-time path: it preserves today's behavior and leans on
     /// the variance-aware downstream subtyping checks to reject the unsound
     /// joins. The runtime path uses [`solve`](Self::solve) instead.
-    fn solve_best_effort(&self) -> FxHashMap<Name, Ty> {
+    fn solve_best_effort(&self) -> FxHashMap<ParamTy, Ty> {
         let mut out = FxHashMap::default();
         for (name, occ) in &self.vars {
             let mut acc: Option<Ty> = None;
@@ -159,7 +166,7 @@ impl InferenceConstraints {
     /// `join(lowers) <: T <: meet(uppers)` and every equality member mutually
     /// equal and consistent with the bounds; otherwise the var has no solution
     /// and the whole inference fails. On success, returns the resolved bindings.
-    pub fn solve(&self) -> Result<FxHashMap<Name, Ty>, InferError> {
+    pub fn solve(&self) -> Result<FxHashMap<ParamTy, Ty>, InferError> {
         let mut out = FxHashMap::default();
         for (name, occ) in &self.vars {
             if let Some(ty) = solve_var(name, occ)? {
@@ -171,7 +178,11 @@ impl InferenceConstraints {
 }
 
 /// Resolve one `TypeVar`'s recorded occurrences to a single binding, or fail.
-fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferError> {
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity: this solver runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
+)]
+fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferError> {
     let mut lowers: Vec<&Ty> = Vec::new();
     let mut uppers: Vec<&Ty> = Vec::new();
     let mut equals: Vec<&Ty> = Vec::new();
@@ -185,20 +196,21 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
 
     let fail = |msg: String| {
         Err(InferError {
-            var: name.clone(),
+            var: param.clone(),
             message: msg,
         })
     };
 
-    // Invariant occurrences must be rigidly equal to one another.
+    // Invariant occurrences must be rigidly equal to one another (canonical
+    // equivalence: coercion-free, union-order-insensitive).
     let rigid: Option<Ty> = match equals.split_first() {
         None => None,
         Some((first, rest)) => {
             for other in rest {
-                if !ty_equal(first, other) {
+                if !NoFacts.equivalent(first, other) {
                     return fail(format!(
-                        "`{name}` would have to be both `{first}` and `{other}` at the same \
-                         time. Because `{name}` appears inside a list, map, or class type, it \
+                        "`{param}` would have to be both `{first}` and `{other}` at the same \
+                         time. Because `{param}` appears inside a list, map, or class type, it \
                          has to be exactly the same type in every argument."
                     ));
                 }
@@ -208,26 +220,26 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
     };
 
     let lower = join_all(&lowers);
-    let upper = meet_all(name, &uppers)?;
+    let upper = meet_all(param, &uppers)?;
 
     match rigid {
         Some(eq) => {
             // T == eq; every lower must be <: eq and eq <: every upper.
             if let Some(l) = &lower
-                && !l.is_subtype_of(&eq)
+                && !NoFacts.is_subtype(l, &eq)
             {
                 return fail(format!(
-                    "`{name}` would have to be both `{eq}` and `{l}` at the same time: one \
-                     argument fixes `{name}` to `{eq}` (where it appears inside a list, \
+                    "`{param}` would have to be both `{eq}` and `{l}` at the same time: one \
+                     argument fixes `{param}` to `{eq}` (where it appears inside a list, \
                      map, or class type), while another supplies a `{l}`."
                 ));
             }
             for u in &uppers {
-                if !eq.is_subtype_of(u) {
+                if !NoFacts.is_subtype(&eq, u) {
                     return fail(format!(
-                        "one argument fixes `{name}` to `{eq}` (where it appears inside a list, \
+                        "one argument fixes `{param}` to `{eq}` (where it appears inside a list, \
                          map, or class type), but a function argument only accepts `{u}` for \
-                         `{name}`, and a `{eq}` is not a `{u}`."
+                         `{param}`, and a `{eq}` is not a `{u}`."
                     ));
                 }
             }
@@ -235,11 +247,11 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
         }
         None => match (lower, upper) {
             (Some(l), Some(u)) => {
-                if !l.is_subtype_of(&u) {
+                if !NoFacts.is_subtype(&l, &u) {
                     return fail(format!(
-                        "`{name}` can't satisfy every argument at once: one argument supplies a \
-                         `{l}` for `{name}`, while a function argument only accepts `{u}` for \
-                         `{name}`, and a `{l}` is not a `{u}`."
+                        "`{param}` can't satisfy every argument at once: one argument supplies a \
+                         `{l}` for `{param}`, while a function argument only accepts `{u}` for \
+                         `{param}`, and a `{l}` is not a `{u}`."
                     ));
                 }
                 Ok(Some(l))
@@ -268,7 +280,7 @@ fn join_all(tys: &[&Ty]) -> Option<Ty> {
 /// Meet a set of upper bounds. Returns `None` if empty. Fails if the meet
 /// collapses to `Never` (irreconcilable contravariant occurrences, e.g. a `T`
 /// required to be `<: int` *and* `<: string`).
-fn meet_all(name: &Name, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
+fn meet_all(param: &ParamTy, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
     let mut acc: Option<Ty> = None;
     for ty in tys {
         acc = Some(match acc {
@@ -280,36 +292,34 @@ fn meet_all(name: &Name, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
         && matches!(m, Ty::Never { .. })
     {
         return Err(InferError {
-            var: name.clone(),
+            var: param.clone(),
             message: format!(
-                "`{name}` can't satisfy every argument at once: two function arguments \
-                 accept incompatible types for `{name}`, with no type in common."
+                "`{param}` can't satisfy every argument at once: two function arguments \
+                 accept incompatible types for `{param}`, with no type in common."
             ),
         });
     }
     Ok(acc)
 }
 
-/// The meet (greatest lower bound) of two types, using only the coercion-free
-/// [`Ty::is_subtype_of`]. For comparable types it is the narrower one; for
-/// unrelated types it is `Never` (no common subtype) — which the solver reads as
-/// an irreconcilable conflict.
+/// The meet (greatest lower bound) of two types, using the canonical coercion-free
+/// subtype relation. For comparable types it is the narrower one; for unrelated
+/// types it is `Never` (no common subtype) — which the solver reads as an
+/// irreconcilable conflict.
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity — see the `NoFacts` import note"
+)]
 fn meet_ty(a: &Ty, b: &Ty) -> Ty {
-    if a.is_subtype_of(b) {
+    if NoFacts.is_subtype(a, b) {
         a.clone()
-    } else if b.is_subtype_of(a) {
+    } else if NoFacts.is_subtype(b, a) {
         b.clone()
     } else {
         Ty::Never {
             attr: TyAttr::default(),
         }
     }
-}
-
-/// Coercion-free type equality used for invariant rigidity: two types are equal
-/// iff they are mutual subtypes.
-fn ty_equal(a: &Ty, b: &Ty) -> bool {
-    a.is_subtype_of(b) && b.is_subtype_of(a)
 }
 
 // ── Type variable inference ────────────────────────────────────────────────
@@ -326,7 +336,7 @@ fn collect(
     formal: &Ty,
     actual: &Ty,
     variance: Variance,
-    vars: &mut FxHashMap<Name, Vec<(Variance, Ty)>>,
+    vars: &mut FxHashMap<ParamTy, Vec<(Variance, Ty)>>,
     opts: InferOpts<'_>,
 ) {
     match (formal, actual) {
@@ -375,20 +385,32 @@ fn collect(
             let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
             collect(&formal_inner, &actual_inner, variance, vars, opts);
         }
-        // Equal-length union ↔ union positional zip. This is only sound when the
-        // formal carries NO *direct* `TypeVar` member: it matches structurally-
-        // parallel unions like `List<T> | int` ↔ `List<int> | int` (the `T` is
-        // nested inside a member, so the residual arm below would not see it).
-        // When the formal HAS a direct `TypeVar` member, positional zip is
-        // unsound — it binds by accidental member ordering (`T | int` ↔
-        // `int | string` would bind `T = int` instead of routing the unmatched
-        // `string` atom to `T`). Defer those to the residual/ambiguity arm below.
+        // Equal-length union ↔ union member pairing, for formals with NO
+        // *direct* `TypeVar` member (a nested one — `List<T> | int` — is what
+        // this arm serves; direct ones defer to the residual/ambiguity arm
+        // below). A union denotes a member *set*, and an actual's spelling
+        // reaches here in whatever order the source or a canonicalization
+        // produced — so each formal member binds against the single actual
+        // member its HEAD corresponds to (same class/interface name, same
+        // structural constructor), never by position: `Opt<T> | Non` must
+        // bind `T := Shape` from `Non | Opt<Shape>` exactly as it does from
+        // `Opt<Shape> | Non`. A formal member with zero correspondents is
+        // unwitnessed by this argument; one with several has no principled
+        // pairing — either way it binds nothing, leaving its vars to other
+        // arguments or the caller's unresolved-type-arg error rather than
+        // guessing by member order.
         (Ty::Union(f_members, _), Ty::Union(a_members, _))
             if f_members.len() == a_members.len()
                 && !f_members.iter().any(|m| matches!(m, Ty::TypeVar(_, _))) =>
         {
-            for (formal_member, actual_member) in f_members.iter().zip(a_members.iter()) {
-                collect(formal_member, actual_member, variance, vars, opts);
+            for formal_member in f_members {
+                let mut correspondents = a_members
+                    .iter()
+                    .filter(|a_member| heads_correspond(formal_member, a_member));
+                if let (Some(actual_member), None) = (correspondents.next(), correspondents.next())
+                {
+                    collect(formal_member, actual_member, variance, vars, opts);
+                }
             }
         }
         // A union formal carrying a `TypeVar` beside concrete members — e.g.
@@ -520,6 +542,26 @@ fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
     }
 }
 
+/// Whether a formal union member and an actual union member denote the same
+/// head constructor — the pairing key for order-insensitive union ↔ union
+/// inference. Nominal heads must name the same type; structural heads pair by
+/// constructor alone. Heads `collect` cannot descend into (primitives,
+/// literals, enums, variants — its catch-all no-op) never pair: collecting
+/// them binds nothing, so pairing one would only steal the slot from a
+/// genuine correspondent.
+fn heads_correspond(formal: &Ty, actual: &Ty) -> bool {
+    match (formal, actual) {
+        (Ty::Class(f, ..), Ty::Class(a, ..)) | (Ty::Interface(f, ..), Ty::Interface(a, ..)) => {
+            f == a
+        }
+        (Ty::List(..), Ty::List(..))
+        | (Ty::Map { .. }, Ty::Map { .. })
+        | (Ty::Function { .. }, Ty::Function { .. })
+        | (Ty::Future(..), Ty::Future(..)) => true,
+        _ => false,
+    }
+}
+
 /// Decompose an actual type into its union atoms: a `Union` contributes each of
 /// its members (one level); anything else is a single atom. Used by the
 /// union-with-`TypeVar`-member inference arm to subtract concrete siblings atom
@@ -533,19 +575,23 @@ fn union_atoms(actual: &Ty) -> Vec<Ty> {
 
 /// Whether a concrete (non-`TypeVar`) union-formal member already explains an
 /// actual `atom` — i.e. the atom is a *coercion-free* subtype of the sibling.
-/// Uses [`Ty::is_subtype_of`], which is intentionally free of numeric widening
+/// The canonical subtype relation is intentionally free of numeric widening
 /// (`int` is NOT covered by a `float` sibling) and admits only same-
 /// representation widenings (literal → primitive, union membership). This keeps
 /// the subtraction consistent with the TIR's runtime-tag-identity match
 /// dispatch (`builder.rs::atoms_overlap`).
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity — see the `NoFacts` import note"
+)]
 fn covers(concrete: &Ty, atom: &Ty) -> bool {
-    atom.is_subtype_of(concrete)
+    NoFacts.is_subtype(atom, concrete)
 }
 
 /// Merge a fresh best-effort solve into an existing bindings map, unioning with
 /// any binding already present — preserving the cross-call accumulation the old
 /// `&mut`-threaded unifier provided (callers invoke it once per argument).
-fn merge_best_effort(bindings: &mut FxHashMap<Name, Ty>, cons: &InferenceConstraints) {
+fn merge_best_effort(bindings: &mut FxHashMap<ParamTy, Ty>, cons: &InferenceConstraints) {
     for (name, ty) in cons.solve_best_effort() {
         bindings
             .entry(name)
@@ -554,13 +600,17 @@ fn merge_best_effort(bindings: &mut FxHashMap<Name, Ty>, cons: &InferenceConstra
     }
 }
 
-pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<ParamTy, Ty>) {
     let mut cons = InferenceConstraints::new();
     cons.record_with(formal, actual, InferOpts::COMPILE_TIME);
     merge_best_effort(bindings, &cons);
 }
 
-pub fn infer_bindings_allow_typevars(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+pub fn infer_bindings_allow_typevars(
+    formal: &Ty,
+    actual: &Ty,
+    bindings: &mut FxHashMap<ParamTy, Ty>,
+) {
     let mut cons = InferenceConstraints::new();
     cons.record_with(
         formal,
@@ -579,8 +629,8 @@ pub fn infer_bindings_allow_typevars(formal: &Ty, actual: &Ty, bindings: &mut Fx
 pub fn infer_bindings_rigid_self(
     formal: &Ty,
     actual: &Ty,
-    bindings: &mut FxHashMap<Name, Ty>,
-    rigid: Option<&Name>,
+    bindings: &mut FxHashMap<ParamTy, Ty>,
+    rigid: Option<&ParamTy>,
 ) {
     let mut cons = InferenceConstraints::new();
     cons.record_with(
@@ -605,7 +655,7 @@ pub fn infer_bindings_rigid_self(
 /// solve one argument at a time. Callers that want the variance-aware reject
 /// (`02d`/`02e`) should accumulate an [`InferenceConstraints`] across all
 /// arguments and call [`InferenceConstraints::solve`].
-pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<ParamTy, Ty>) {
     let mut cons = InferenceConstraints::new();
     cons.record(formal, actual);
     merge_best_effort(bindings, &cons);
@@ -616,42 +666,178 @@ pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<N
 /// Combine two types into a union, deduplicating members.
 ///
 /// Used when the same type variable is inferred from multiple arguments
-/// (e.g., `deep_equals(myInt, myString)` → `T` gets `int` then `string`).
+/// (e.g., `pair<T>(myInt, myString)` → `T` gets `int` then `string`).
 pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
     normalize_union_members([a.clone(), b.clone()], TyAttr::default())
 }
 
-/// Flatten nested unions, drop `Never`, deduplicate; collapse a single survivor
-/// to a bare type and an empty result to `Never`.
-pub fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAttr) -> Ty {
-    let mut normalized = Vec::new();
-    for member in members {
-        match member {
-            Ty::Never { .. } => {}
-            Ty::Union(inner, _) => {
-                for inner_member in inner {
-                    if !matches!(inner_member, Ty::Never { .. })
-                        && !normalized.contains(&inner_member)
-                    {
-                        normalized.push(inner_member);
-                    }
-                }
-            }
-            other if !normalized.contains(&other) => normalized.push(other),
-            _ => {}
+// ── Pure `Ty` walks (substitution, typevar queries, erasure) ──────────────────
+//
+// Moved from `baml_compiler2_tir::generics` (which re-exports them) during the
+// S16 TIR retirement: they are pure walks over the shared vocabulary with no
+// compiler-database dependence, exactly this crate's charter.
+pub use baml_type::unify::{bind_type_vars, normalize_union_members, substitute_ty};
+
+/// Deep any-node predicate over a type tree: does `pred` hold for `ty` itself
+/// or for any type nested inside it? The single traversal behind the
+/// `contains_*` family; the arms cover every child position a `Ty` can carry.
+/// A function type carries no generic binders of its own (function values are
+/// realized), so recursion enters its params/ret/throws with `pred` unchanged;
+/// a projection is entered through both its base (`T::Item`) and its
+/// qualifying interface's types.
+pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
+    if pred(ty) {
+        return true;
+    }
+    match ty {
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_ty_where(inner, pred),
+        Ty::Map {
+            key: k, value: v, ..
         }
+        | Ty::EvolvingMap(k, v, _) => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Future(value, error, _) => {
+            contains_ty_where(value, pred) || contains_ty_where(error, pred)
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| contains_ty_where(&param.ty, pred))
+                || contains_ty_where(ret, pred)
+                || contains_ty_where(throws, pred)
+        }
+        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().any(|t| contains_ty_where(t, pred))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_ty_where(ty, pred))
+        }
+        _ => false,
+    }
+}
+
+/// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
+pub fn contains_typevar(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
+}
+
+/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
+/// anywhere in its structure? An expression recorded with such a type already
+/// failed to compile at its own site; downstream consumers (e.g. call-site
+/// generic inference) use this to recognize an already-failed input and avoid
+/// cascading a second diagnostic off it.
+pub fn contains_error_recovery(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
+}
+
+/// Returns `true` if `ty` contains any type variable for which `pred` returns
+/// `true`. A general form of [`contains_typevar`] used by call validation to
+/// distinguish *rigid* type variables (the pinned `Self`, caller-scope generic
+/// params) — which must be checked — from genuinely-uninferred ones (callee
+/// generics, free inference/effect vars) — which are deferred.
+pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&ParamTy) -> bool) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(param, _) if pred(param)))
+}
+
+/// Replace selected type variables with `unknown` for runtime-facing metadata.
+///
+/// Bounded generic parameters are compile-time evidence, not concrete runtime
+/// type tags. MIR and bytecode metadata both need the same erasure behavior, so
+/// keep the recursive shape walk here beside the other generic utilities.
+pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool) -> Ty {
+    if !contains_typevar(ty) {
+        return ty.clone();
     }
 
-    match normalized.len() {
-        0 => Ty::Never { attr },
-        1 => normalized.pop().expect("length checked"),
-        _ => {
-            // TODO(TyAttr): This union is synthesized from multiple input types — there's no
-            // single "original attr" to preserve. If inputs carry different attrs, which one
-            // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
-            // attrs describe declaration sites rather than computed types.
-            Ty::Union(normalized, attr)
-        }
+    match ty {
+        Ty::TypeVar(name, attr) if should_erase(name) => Ty::BuiltinUnknown { attr: attr.clone() },
+        Ty::Class(qtn, args, attr) => Ty::Class(
+            qtn.clone(),
+            args.iter()
+                .map(|arg| erase_typevars_matching(arg, should_erase))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::Interface(qtn, args, associated_bindings, attr) => Ty::Interface(
+            qtn.clone(),
+            args.iter()
+                .map(|arg| erase_typevars_matching(arg, should_erase))
+                .collect(),
+            associated_bindings
+                .iter()
+                .map(|(name, ty)| (name.clone(), erase_typevars_matching(ty, should_erase)))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::List(inner, attr) => Ty::List(
+            Box::new(erase_typevars_matching(inner, should_erase)),
+            attr.clone(),
+        ),
+        Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
+            Box::new(erase_typevars_matching(inner, should_erase)),
+            attr.clone(),
+        ),
+        Ty::Map { key, value, attr } => Ty::Map {
+            key: Box::new(erase_typevars_matching(key, should_erase)),
+            value: Box::new(erase_typevars_matching(value, should_erase)),
+            attr: attr.clone(),
+        },
+        Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
+            Box::new(erase_typevars_matching(key, should_erase)),
+            Box::new(erase_typevars_matching(value, should_erase)),
+            attr.clone(),
+        ),
+        Ty::Union(members, attr) => Ty::Union(
+            members
+                .iter()
+                .map(|member| erase_typevars_matching(member, should_erase))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(erase_typevars_matching(value, should_erase)),
+            Box::new(erase_typevars_matching(error, should_erase)),
+            attr.clone(),
+        ),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(erase_typevars_matching(base, should_erase)),
+            interface: Box::new(interface.map_tys(|t| erase_typevars_matching(t, should_erase))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
+            params: params
+                .iter()
+                .map(|param| FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: erase_typevars_matching(&param.ty, should_erase),
+                    mode: param.mode,
+                })
+                .collect(),
+            ret: Box::new(erase_typevars_matching(ret, should_erase)),
+            throws: Box::new(erase_typevars_matching(throws, should_erase)),
+            attr: attr.clone(),
+        },
+        _ => ty.clone(),
     }
 }
 
@@ -665,8 +851,18 @@ mod tests {
         TyAttr::default()
     }
 
+    fn param(name: &str) -> ParamTy {
+        let index = match name {
+            "T" => 0,
+            "U" => 1,
+            "E" => 2,
+            _ => 0,
+        };
+        ParamTy::new(index, Name::new(name))
+    }
+
     fn tv(name: &str) -> Ty {
-        Ty::TypeVar(Name::new(name), a())
+        Ty::TypeVar(param(name), a())
     }
 
     fn int() -> Ty {
@@ -685,7 +881,7 @@ mod tests {
     fn binds_bare_typevar() {
         let mut b = FxHashMap::default();
         infer_bindings(&tv("T"), &int(), &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&int()));
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     #[test]
@@ -694,7 +890,7 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), string(), null()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&int()));
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     #[test]
@@ -703,7 +899,7 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), string(), null()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &string(), &mut b);
-        assert!(!b.contains_key(&Name::new("T")));
+        assert!(!b.contains_key(&param("T")));
     }
 
     #[test]
@@ -712,7 +908,7 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), string(), null()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &null(), &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&null()));
+        assert_eq!(b.get(&param("T")), Some(&null()));
     }
 
     #[test]
@@ -721,8 +917,8 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), tv("U"), string()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
-        assert!(!b.contains_key(&Name::new("T")));
-        assert!(!b.contains_key(&Name::new("U")));
+        assert!(!b.contains_key(&param("T")));
+        assert!(!b.contains_key(&param("U")));
     }
 
     fn boolt() -> Ty {
@@ -738,7 +934,7 @@ mod tests {
         let actual = Ty::Union(vec![int(), string()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&string()));
+        assert_eq!(b.get(&param("T")), Some(&string()));
     }
 
     #[test]
@@ -750,7 +946,7 @@ mod tests {
         let actual = Ty::Union(vec![int(), string()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&string()));
+        assert_eq!(b.get(&param("T")), Some(&string()));
     }
 
     #[test]
@@ -762,23 +958,60 @@ mod tests {
         let actual = Ty::Union(vec![int(), string(), boolt()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
-        assert!(!b.contains_key(&Name::new("T")));
-        assert!(!b.contains_key(&Name::new("U")));
+        assert!(!b.contains_key(&param("T")));
+        assert!(!b.contains_key(&param("U")));
     }
 
     #[test]
-    fn equal_len_union_without_direct_typevar_still_zips() {
-        // The equal-length positional-zip arm is preserved for unions whose
-        // TypeVar is *nested* inside a member: `List<T> | int` vs
-        // `List<int> | int` must still bind T = int (the residual arm only sees
-        // direct TypeVar members, so without the zip arm T would stay unbound).
+    fn equal_len_union_nested_typevar_binds_by_head() {
+        // The equal-length union arm serves unions whose TypeVar is *nested*
+        // inside a member: `List<T> | int` vs `List<int> | int` binds T = int
+        // (the residual arm only sees direct TypeVar members, so without this
+        // arm T would stay unbound).
         let list_tv = Ty::List(Box::new(tv("T")), a());
         let list_int = Ty::List(Box::new(int()), a());
         let formal = Ty::Union(vec![list_tv, int()], a());
         let actual = Ty::Union(vec![list_int, int()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&int()));
+        assert_eq!(b.get(&param("T")), Some(&int()));
+    }
+
+    fn opt_of(arg: Ty) -> Ty {
+        Ty::Class(baml_type::TypeName::local(Name::new("Opt")), vec![arg], a())
+    }
+
+    fn non() -> Ty {
+        Ty::Class(baml_type::TypeName::local(Name::new("Non")), vec![], a())
+    }
+
+    #[test]
+    fn union_members_pair_by_head_not_position() {
+        // A union denotes a member SET: `Opt<T> | Non` must bind T from a
+        // reordered actual spelling exactly as from the declaration-ordered
+        // one. Positional zip paired `Opt<T>` with `Non` and bound nothing —
+        // the R15 order-sensitivity a canonically sorted binding type exposed.
+        let formal = Ty::Union(vec![opt_of(tv("T")), non()], a());
+        let reordered = Ty::Union(vec![non(), opt_of(int())], a());
+        let mut b = FxHashMap::default();
+        infer_bindings(&formal, &reordered, &mut b);
+        assert_eq!(b.get(&param("T")), Some(&int()));
+
+        let declared = Ty::Union(vec![opt_of(int()), non()], a());
+        let mut b2 = FxHashMap::default();
+        infer_bindings(&formal, &declared, &mut b2);
+        assert_eq!(b2.get(&param("T")), Some(&int()));
+    }
+
+    #[test]
+    fn union_member_with_ambiguous_head_correspondent_binds_nothing() {
+        // Two same-head actual members have no principled pairing for one
+        // formal member — bind nothing rather than guess by order.
+        let formal = Ty::Union(vec![opt_of(tv("T")), non()], a());
+        let actual = Ty::Union(vec![opt_of(int()), opt_of(string())], a());
+        let mut b = FxHashMap::default();
+        infer_bindings(&formal, &actual, &mut b);
+        assert!(!b.contains_key(&param("T")));
     }
 
     #[test]
@@ -788,7 +1021,7 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), float], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&int()));
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     // ── §J variance soundness (02d / 02e) ─────────────────────────────────────
@@ -847,7 +1080,7 @@ mod tests {
     }
 
     /// Drive the checked solver over a list of `(formal, actual)` argument pairs.
-    fn solve_call(args: &[(Ty, Ty)]) -> Result<FxHashMap<Name, Ty>, InferError> {
+    fn solve_call(args: &[(Ty, Ty)]) -> Result<FxHashMap<ParamTy, Ty>, InferError> {
         let mut cons = InferenceConstraints::new();
         for (formal, actual) in args {
             cons.record(formal, actual);
@@ -855,8 +1088,8 @@ mod tests {
         cons.solve()
     }
 
-    fn get<'a>(b: &'a FxHashMap<Name, Ty>, name: &str) -> Option<&'a Ty> {
-        b.get(&Name::new(name))
+    fn get<'a>(b: &'a FxHashMap<ParamTy, Ty>, name: &str) -> Option<&'a Ty> {
+        b.get(&param(name))
     }
 
     /// Assert a binding is a union whose members are exactly `expected` (any order).

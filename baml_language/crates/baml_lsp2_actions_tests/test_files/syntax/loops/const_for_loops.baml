@@ -11,30 +11,27 @@ function ConstForLoops(items: int[]) -> int {
 
 //----
 //- diagnostics
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//    ╭─[ loops_const_for_loops.baml:2:3 ]
-//    │
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//    ╭─[loops_const_for_loops.baml:2:3]
 //  2 │   const sum = 0;
-//    │   ──┬──
-//    │     ╰──── `const` behaves like `let` for now
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//    ╭─[ loops_const_for_loops.baml:3:8 ]
-//    │
+//    ·   ──┬──
+//    ·     ╰── `const` behaves like `let` for now
+//    ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//    ╭─[loops_const_for_loops.baml:3:8]
 //  3 │   for (const i = 0; i < 3; i += 1) {
-//    │        ──┬──
-//    │          ╰──── `const` behaves like `let` for now
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//    ╭─[ loops_const_for_loops.baml:6:8 ]
-//    │
+//    ·        ──┬──
+//    ·          ╰── `const` behaves like `let` for now
+//    ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//    ╭─[loops_const_for_loops.baml:6:8]
 //  6 │   for (const item in items) {
-//    │        ──┬──
-//    │          ╰──── `const` behaves like `let` for now
-//    │
-//    │ Note: Error code: E0010
-// ───╯
+//    ·        ──┬──
+//    ·          ╰── `const` behaves like `let` for now
+//    ╰────

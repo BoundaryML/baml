@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
 
-use crate::{ExitCode, project_load::find_project_root_from};
+use crate::ExitCode;
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -33,20 +33,29 @@ pub(crate) enum AgentCommand {
 /// to avoid collisions in the agent skill registry, and is the only difference
 /// from the upstream skill files.
 #[derive(Args, Clone, Debug)]
-#[command(
-    after_long_help = "Note: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core')."
-)]
+#[command(after_long_help = "\
+Examples:
+  Install the latest skills:
+    baml agent install
+
+  Install skills in a specific project:
+    baml agent install --project ./my-project
+
+  Install skills from a local archive:
+    baml agent install --source ./skills.tar.gz")]
 pub(crate) struct AgentInstallArgs {
-    /// Directory where project-local agent skills should be installed.
-    ///
-    /// When omitted, BAML installs at the nearest ancestor with baml.toml,
-    /// then the git root, then the current directory.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub dir: Option<PathBuf>,
 
     /// Install skills from a tar.gz URL, local tar.gz archive, or local directory.
-    #[arg(long, value_name = "URL_OR_PATH")]
-    pub from: Option<String>,
+    #[arg(
+        long,
+        alias = "from",
+        value_name = "URL_OR_PATH",
+        help_heading = "Source options"
+    )]
+    pub source: Option<String>,
 }
 
 #[derive(Debug)]
@@ -93,20 +102,24 @@ impl AgentInstallArgs {
     }
 }
 
+#[derive(Debug)]
 struct LoadedSkills {
     skills: Vec<Skill>,
-    /// Head commit of the skill repo, present only when installing from the
-    /// default source (the repo's main branch). Custom `--from` sources have
-    /// no commit identity to record.
+    /// Commit of the skill repo the installed content came from, recovered
+    /// from the tarball's pax global header (`comment=<sha>`, written by
+    /// `git archive` and present in GitHub codeload tarballs). Present only
+    /// when installing from the default source; custom `--source` values have
+    /// no commit identity to record, and archives without the header (or with
+    /// a non-SHA comment) install fine with no recorded provenance.
     commit: Option<String>,
 }
 
 fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
-    if let Some(source) = &args.from {
+    if let Some(source) = &args.source {
         if is_http_url(source) {
             let archive = fetch_url_bytes(source)?;
             return Ok(LoadedSkills {
-                skills: skills_from_archive(&archive)?,
+                skills: skills_from_archive(&archive)?.skills,
                 commit: None,
             });
         }
@@ -126,20 +139,29 @@ fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
             )
         })?;
         return Ok(LoadedSkills {
-            skills: skills_from_archive(&archive)?,
+            skills: skills_from_archive(&archive)?.skills,
             commit: None,
         });
     }
 
-    // Default: install the current head of the skill repo. The commit is
-    // resolved first and the tarball downloaded at that exact commit, so the
-    // recorded provenance always matches the installed content.
-    let commit = baml_release::skills::fetch_latest_skill_commit(HTTP_TIMEOUT)
-        .context("failed to resolve the latest BAML agent skills commit")?;
-    let archive = fetch_url_bytes(&baml_release::skills::skill_archive_url(&commit))?;
+    // Default: download the main-branch tarball from codeload. Deliberately
+    // NOT the GitHub REST API: the tarball endpoint needs no credentials and
+    // is not subject to the unauthenticated 60-requests/hour API rate limit
+    // that used to hard-block installs. The tarball embeds the commit it was
+    // cut from in its pax global header, which becomes the recorded
+    // provenance; a mirror that omits the header just skips provenance.
+    let url = baml_release::skills::skill_archive_url("main");
+    let archive = fetch_url_bytes(&url).with_context(|| {
+        format!(
+            "could not download the BAML agent skills from {url}; if GitHub is \
+             unreachable, install from a local copy with \
+             `baml agent install --source <url-or-path>`"
+        )
+    })?;
+    let loaded = skills_from_archive(&archive)?;
     Ok(LoadedSkills {
-        skills: skills_from_archive(&archive)?,
-        commit: Some(commit),
+        skills: loaded.skills,
+        commit: loaded.commit,
     })
 }
 
@@ -169,9 +191,10 @@ fn record_installed_commit(commit: &str) {
     }
 }
 
-/// Installs from custom `--from` sources have no commit identity. Drop any
-/// previously recorded provenance so the wrapper doesn't report the custom
-/// content as up to date with (or behind) the official skill repo.
+/// Installs with no commit identity (custom `--source` values, or a default
+/// archive whose pax header carried no commit) drop any previously recorded
+/// provenance so the passive skill check doesn't report the installed content
+/// as up to date with (or behind) the official skill repo.
 fn clear_installed_commit() {
     if let Err(err) = baml_release::skills::clear_skills_state(&baml_release::skills::state_path())
     {
@@ -220,35 +243,101 @@ fn detect_install_root() -> Result<PathBuf> {
     let canonical = cwd
         .canonicalize()
         .with_context(|| format!("failed to resolve {}", cwd.display()))?;
-
-    if let Some(root) = find_project_root_from(Some(&canonical))? {
-        return Ok(root);
-    }
-
-    if let Ok(output) = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .current_dir(&canonical)
-        .output()
-    {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let root = stdout.trim();
-            if !root.is_empty() {
-                return Ok(PathBuf::from(root));
-            }
-        }
-    }
-
-    Ok(canonical)
+    Ok(detect_install_root_in(
+        &canonical,
+        git_toplevel(&canonical).as_deref(),
+        user_home_dir().as_deref(),
+    ))
 }
 
-fn skills_from_archive(archive: &[u8]) -> Result<Vec<Skill>> {
+/// Pick the install root for project-local agent skills.
+///
+/// Inside a git repo, the nearest baml.toml (else baml_src) owner wins, but
+/// the walk never leaves the repo; with no project marker the repo root is
+/// used, since that is where agent harnesses discover `.claude/skills/`.
+/// Outside a git repo the walk stops before the user's home directory —
+/// a stray `~/baml_src` must not pull installs into `$HOME` — or, when no
+/// home directory is known, doesn't leave the current directory at all; the
+/// fallback is always the current directory. All inputs must be
+/// pre-canonicalized.
+fn detect_install_root_in(cwd: &Path, git_toplevel: Option<&Path>, home: Option<&Path>) -> PathBuf {
+    // A toplevel that doesn't contain cwd (an exported GIT_DIR/GIT_WORK_TREE
+    // pointing at a dotfiles worktree in $HOME) is not the project being
+    // worked in; neither is one rooted at — or containing — the home
+    // directory itself, which would reopen the stray-~/baml_src hole this
+    // function exists to close. Ignore both rather than install there.
+    let git_toplevel = git_toplevel.filter(|toplevel| {
+        cwd.starts_with(toplevel) && !home.is_some_and(|home| home.starts_with(toplevel))
+    });
+    let ancestors: Vec<PathBuf> = match (git_toplevel, home) {
+        (Some(toplevel), _) => cwd
+            .ancestors()
+            .take_while(|dir| dir.starts_with(toplevel))
+            .map(Path::to_path_buf)
+            .collect(),
+        (None, Some(home)) => cwd
+            .ancestors()
+            .take_while(|dir| *dir != home)
+            .map(Path::to_path_buf)
+            .collect(),
+        // No git scope and no known home boundary: a walk could climb
+        // arbitrarily far and adopt a stray marker directory, so don't walk
+        // at all. Installing at cwd is always safe.
+        (None, None) => vec![cwd.to_path_buf()],
+    };
+    baml_workspace::find_baml_project_root_from_ancestors(
+        ancestors,
+        |dir| dir.join(baml_workspace::BAML_TOML).is_file(),
+        |dir| dir.join(baml_workspace::BAML_SRC_DIR).is_dir(),
+    )
+    .unwrap_or_else(|| match git_toplevel {
+        Some(toplevel) => toplevel.to_path_buf(),
+        None => cwd.to_path_buf(),
+    })
+}
+
+/// Canonicalized toplevel of the git repo containing `dir`, if any.
+fn git_toplevel(dir: &Path) -> Option<PathBuf> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(dir)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let root = stdout.trim();
+    if root.is_empty() {
+        return None;
+    }
+    PathBuf::from(root).canonicalize().ok()
+}
+
+/// The user's canonicalized home directory (`HOME`, or `USERPROFILE` on
+/// Windows). Not [`baml_release::baml_home`], which is `~/.baml` state
+/// storage and overridable via `BAML_HOME`.
+fn user_home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .and_then(|home| home.canonicalize().ok())
+}
+
+fn skills_from_archive(archive: &[u8]) -> Result<LoadedSkills> {
     let decoder = flate2::read::GzDecoder::new(Cursor::new(archive));
     let mut archive = tar::Archive::new(decoder);
     let mut raw = Vec::new();
+    let mut commit = None;
 
     for entry in archive.entries().context("failed to read skill archive")? {
         let mut entry = entry.context("failed to read skill archive entry")?;
+        if entry.header().entry_type() == tar::EntryType::XGlobalHeader {
+            if commit.is_none() {
+                commit = pax_comment_sha(&mut entry);
+            }
+            continue;
+        }
         if !entry.header().entry_type().is_file() {
             continue;
         }
@@ -269,7 +358,48 @@ fn skills_from_archive(archive: &[u8]) -> Result<Vec<Skill>> {
         raw.push(raw_skill(skill_path, content, path));
     }
 
-    normalize_skills(raw)
+    Ok(LoadedSkills {
+        skills: normalize_skills(raw)?,
+        commit,
+    })
+}
+
+/// Extract the commit SHA a codeload tarball was cut from: `git archive`
+/// records it as a `comment=<sha>` record in the pax global header entry.
+/// Returns `None` (rather than erroring) for archives without the header or
+/// with a comment that doesn't look like a git SHA, so custom mirrors and
+/// hand-rolled archives still install — they just record no provenance.
+fn pax_comment_sha(entry: &mut impl Read) -> Option<String> {
+    let mut body = Vec::new();
+    entry.take(4096).read_to_end(&mut body).ok()?;
+    let comment =
+        pax_records(&body).find_map(|(key, value)| (key == "comment").then_some(value))?;
+    let sha = comment.trim();
+    let looks_like_sha =
+        (7..=64).contains(&sha.len()) && sha.chars().all(|c| c.is_ascii_hexdigit());
+    looks_like_sha.then(|| sha.to_string())
+}
+
+/// Iterate `<len> <key>=<value>\n` records in a pax extended header body,
+/// skipping anything malformed.
+fn pax_records(body: &[u8]) -> impl Iterator<Item = (&str, &str)> {
+    let mut rest = body;
+    std::iter::from_fn(move || {
+        loop {
+            let text = std::str::from_utf8(rest).ok()?;
+            let (len_text, _) = text.split_once(' ')?;
+            let record_len: usize = len_text.parse().ok()?;
+            if record_len <= len_text.len() + 1 {
+                return None;
+            }
+            let record = text.get(..record_len)?;
+            rest = &rest[record_len..];
+            let content = &record[len_text.len() + 1..];
+            if let Some((key, value)) = content.trim_end_matches('\n').split_once('=') {
+                return Some((key, value));
+            }
+        }
+    })
 }
 
 fn skills_from_dir(root: &Path) -> Result<Vec<Skill>> {
@@ -335,6 +465,16 @@ fn normalize_skills(raw: Vec<RawSkill>) -> Result<Vec<Skill>> {
 
     let mut found = BTreeMap::<String, RawSkill>::new();
     for skill in raw {
+        // The archive directory lives inside the skills directory, so a
+        // skill claiming its name would collide with it on replacement
+        // (renaming skills/baml-old_skills into its own archive slot).
+        if skill.name == OLD_SKILLS_DIR {
+            anyhow::bail!(
+                "BAML agent skills source contains a skill named `{OLD_SKILLS_DIR}` at {}; \
+                 that name is reserved for archived previous skill versions",
+                skill.source_path.display()
+            );
+        }
         if let Some(previous) = found.insert(skill.name.clone(), skill) {
             anyhow::bail!(
                 "BAML agent skills source contains duplicate skill `{}` at {}",
@@ -427,13 +567,13 @@ fn split_frontmatter(content: &str) -> Result<(&str, &str)> {
     let rest = content
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))
-        .ok_or_else(|| anyhow!("SKILL.md is missing opening frontmatter marker"))?;
+        .ok_or_else(|| anyhow!("`SKILL.md` is missing opening frontmatter marker"))?;
     let Some((closing_start, closing_marker)) = ["\n---\n", "\r\n---\r\n"]
         .into_iter()
         .filter_map(|marker| rest.find(marker).map(|index| (index, marker)))
         .min_by_key(|(index, _)| *index)
     else {
-        anyhow::bail!("SKILL.md is missing closing frontmatter marker");
+        anyhow::bail!("`SKILL.md` is missing closing frontmatter marker");
     };
     Ok((
         &rest[..closing_start],
@@ -444,9 +584,9 @@ fn split_frontmatter(content: &str) -> Result<(&str, &str)> {
 fn validate_skill_name(content: &str, expected_name: &str) -> Result<()> {
     let (frontmatter, _) = split_frontmatter(content)?;
     let got = frontmatter_name(frontmatter)
-        .ok_or_else(|| anyhow!("SKILL.md frontmatter is missing `name`"))?;
+        .ok_or_else(|| anyhow!("`SKILL.md` frontmatter is missing `name`"))?;
     if got != expected_name {
-        anyhow::bail!("SKILL.md frontmatter name must be `{expected_name}`, got `{got}`");
+        anyhow::bail!("`SKILL.md` frontmatter name must be `{expected_name}`, got `{got}`");
     }
     Ok(())
 }
@@ -473,7 +613,7 @@ fn replace_frontmatter_name(frontmatter: &str, name: &str) -> Result<String> {
         }
     }
     if !replaced {
-        anyhow::bail!("SKILL.md frontmatter is missing `name`");
+        anyhow::bail!("`SKILL.md` frontmatter is missing `name`");
     }
     Ok(out)
 }
@@ -521,16 +661,37 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
     }
 }
 
+/// Directory (inside each skills dir) where the previous version of a skill
+/// is kept when an install replaces it. One slot per skill: each install
+/// overwrites the slot with the version it just replaced. The name doesn't
+/// clash with real skills because archived copies sit one level deeper than
+/// the `<skills>/<name>/SKILL.md` layout agent harnesses discover.
+const OLD_SKILLS_DIR: &str = "baml-old_skills";
+
 fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, skill: &Skill) -> Result<()> {
     let final_dir = skills_dir.join(&skill.name);
     let next_dir = tmp_dir.join(&skill.name);
-    let backup_dir = unique_backup_dir(skills_dir, &skill.name)?;
-    let mut has_backup = false;
+    let mut archive = None;
 
     if final_dir.exists() {
-        fs::rename(&final_dir, &backup_dir)
-            .with_context(|| format!("failed to stage existing {}", final_dir.display()))?;
-        has_backup = true;
+        let archive_dir = skills_dir.join(OLD_SKILLS_DIR).join(&skill.name);
+        if archive_dir.exists() {
+            fs::remove_dir_all(&archive_dir).with_context(|| {
+                format!("failed to clear old-skill slot {}", archive_dir.display())
+            })?;
+        }
+        if let Some(parent) = archive_dir.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
+        }
+        fs::rename(&final_dir, &archive_dir).with_context(|| {
+            format!(
+                "failed to archive existing {} into {}",
+                final_dir.display(),
+                archive_dir.display()
+            )
+        })?;
+        archive = Some(archive_dir);
     }
 
     if let Err(err) = fs::rename(&next_dir, &final_dir) {
@@ -539,18 +700,18 @@ fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, skill: &Skill) -> Result
             skill.name,
             final_dir.display()
         ));
-        if has_backup {
+        if let Some(archive_dir) = archive {
             if final_dir.exists() {
                 error = error.context(format!(
                     "previous {} skill remains at {}",
                     skill.name,
-                    backup_dir.display()
+                    archive_dir.display()
                 ));
-            } else if let Err(restore_err) = fs::rename(&backup_dir, &final_dir) {
+            } else if let Err(restore_err) = fs::rename(&archive_dir, &final_dir) {
                 error = error.context(format!(
                     "failed to restore previous {} skill from {} to {}: {restore_err}",
                     skill.name,
-                    backup_dir.display(),
+                    archive_dir.display(),
                     final_dir.display()
                 ));
             }
@@ -558,25 +719,7 @@ fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, skill: &Skill) -> Result
         return Err(error);
     }
 
-    if has_backup {
-        fs::remove_dir_all(&backup_dir)
-            .with_context(|| format!("failed to remove backup {}", backup_dir.display()))?;
-    }
-
     Ok(())
-}
-
-fn unique_backup_dir(skills_dir: &Path, skill_name: &str) -> Result<PathBuf> {
-    for attempt in 0..1000 {
-        let backup_dir = skills_dir.join(format!(
-            ".baml-agent-install-backup-{}-{skill_name}-{attempt}",
-            std::process::id()
-        ));
-        if !backup_dir.exists() {
-            return Ok(backup_dir);
-        }
-    }
-    anyhow::bail!("failed to find available backup directory for {skill_name}");
 }
 
 fn write_atomic(path: &Path, content: &str) -> Result<()> {
@@ -605,7 +748,7 @@ fn write_atomic(path: &Path, content: &str) -> Result<()> {
 /// The summary string (without a trailing newline).
 fn success_message(root: &Path) -> String {
     format!(
-        "Installed BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nNote: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core').\n\nRestart any already-running agent session to pick them up.",
+        "Installed BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nNote: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core'). Replaced skills are kept in baml-old_skills/ next to the new ones.\n\nRestart any already-running agent session to pick them up.",
         root.display()
     )
 }
@@ -636,7 +779,7 @@ mod tests {
     fn direct_archive_layout_is_loaded() {
         let content = skill("baml-core");
         let archive = make_archive(&[("skills/baml-core/SKILL.md", content.as_str())]);
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -649,7 +792,7 @@ mod tests {
             direct_skill_entries(&["baml-core", "baml-bridges", "baml-serving", "baml-testing"]);
         let archive = make_archive(&entry_refs(&entries));
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
         let names = skills
             .iter()
             .map(|skill| skill.name.as_str())
@@ -669,7 +812,7 @@ mod tests {
             ("skills/baml-core/._SKILL.md", &[0xff, 0xfe]),
         ]);
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -688,7 +831,7 @@ mod tests {
             .collect::<Vec<_>>();
         let archive = make_archive(&entry_refs(&entries));
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
         let core = skills
             .iter()
             .find(|skill| skill.name == "baml-core")
@@ -716,7 +859,7 @@ mod tests {
         let content = "---\r\nname: baml-core\r\ndescription: test\r\n---\r\n# Core\r\n";
         let archive = make_archive(&[("skills/baml-core/SKILL.md", content)]);
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -750,15 +893,228 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(unrelated).unwrap(), "keep");
         assert!(root.join(".claude/skills/baml-bridges/SKILL.md").is_file());
-        assert!(
-            fs::read_dir(root.join(".agents/skills"))
-                .unwrap()
-                .all(|entry| !entry
-                    .unwrap()
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(".baml-agent-install-backup-"))
+        // The replaced skill is archived, not deleted.
+        assert_eq!(
+            fs::read_to_string(root.join(".agents/skills/baml-old_skills/baml-core/SKILL.md"))
+                .unwrap(),
+            "stale"
         );
+        // A skill that wasn't previously installed leaves no archive slot.
+        assert!(
+            !root
+                .join(".agents/skills/baml-old_skills/baml-bridges")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn reserved_archive_name_is_rejected_in_direct_layout() {
+        let content = skill("baml-old_skills");
+        let archive = make_archive(&[("skills/baml-old_skills/SKILL.md", content.as_str())]);
+
+        let err = format!("{:#}", skills_from_archive(&archive).unwrap_err());
+        assert!(
+            err.contains("reserved for archived previous skill versions"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn reserved_archive_name_is_rejected_in_legacy_layout() {
+        // Legacy `old_skills` gets the baml- prefix and would land exactly on
+        // the archive directory name.
+        let content = "---\nname: old_skills\ndescription: test\n---\n# old\n";
+        let archive = make_archive(&[("plugins/baml/skills/old_skills/SKILL.md", content)]);
+
+        let err = format!("{:#}", skills_from_archive(&archive).unwrap_err());
+        assert!(
+            err.contains("reserved for archived previous skill versions"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn old_skill_archive_keeps_only_the_previous_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let install = |content: &str| {
+            install_skills(
+                root,
+                &[Skill {
+                    name: "baml-core".to_string(),
+                    content: content.to_string(),
+                }],
+            )
+            .unwrap();
+        };
+
+        install("v1");
+        install("v2");
+        install("v3");
+
+        for skills_dir in [".agents/skills", ".claude/skills"] {
+            let dir = root.join(skills_dir);
+            assert_eq!(
+                fs::read_to_string(dir.join("baml-core/SKILL.md")).unwrap(),
+                "v3"
+            );
+            // Single slot: only the immediately-previous version is kept.
+            assert_eq!(
+                fs::read_to_string(dir.join("baml-old_skills/baml-core/SKILL.md")).unwrap(),
+                "v2"
+            );
+        }
+    }
+
+    #[test]
+    fn archive_pax_global_header_comment_becomes_commit() {
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        let content = skill("baml-core");
+        let archive = make_archive_with_pax(
+            &[("skills/baml-core/SKILL.md", content.as_str())],
+            Some(sha),
+        );
+
+        let loaded = skills_from_archive(&archive).unwrap();
+
+        assert_eq!(loaded.commit.as_deref(), Some(sha));
+        assert_eq!(loaded.skills.len(), 1);
+    }
+
+    #[test]
+    fn archive_without_pax_header_has_no_commit() {
+        let content = skill("baml-core");
+        let archive = make_archive(&[("skills/baml-core/SKILL.md", content.as_str())]);
+
+        assert_eq!(skills_from_archive(&archive).unwrap().commit, None);
+    }
+
+    #[test]
+    fn archive_with_non_sha_pax_comment_has_no_commit() {
+        let content = skill("baml-core");
+        let archive = make_archive_with_pax(
+            &[("skills/baml-core/SKILL.md", content.as_str())],
+            Some("not a commit sha"),
+        );
+
+        assert_eq!(skills_from_archive(&archive).unwrap().commit, None);
+    }
+
+    #[test]
+    fn install_root_prefers_baml_toml_within_git_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let toplevel = tmp.path().canonicalize().unwrap();
+        let project = toplevel.join("services/x");
+        let cwd = project.join("deep");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(project.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&toplevel), None);
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_never_escapes_git_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let outer = tmp.path().canonicalize().unwrap();
+        // A baml_src above the repo must not pull the install outside it.
+        fs::create_dir_all(outer.join("baml_src")).unwrap();
+        let toplevel = outer.join("repo");
+        let cwd = toplevel.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&toplevel), None);
+
+        assert_eq!(root, toplevel);
+    }
+
+    #[test]
+    fn install_root_ignores_git_toplevel_that_is_not_an_ancestor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().canonicalize().unwrap();
+        // Dotfiles bare-repo pattern: exported GIT_DIR/GIT_WORK_TREE make git
+        // report a worktree (often $HOME) unrelated to the directory the user
+        // is actually in. The project markers next to cwd must still win.
+        let foreign_worktree = base.join("home");
+        let project = base.join("opt/project");
+        let cwd = project.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(&foreign_worktree).unwrap();
+        fs::write(project.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&foreign_worktree), Some(&foreign_worktree));
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_ignores_git_toplevel_at_or_above_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        // A repo rooted at $HOME (dotfiles-as-git-repo) must not turn the
+        // stray-marker hole back on: the home boundary still applies.
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+        let cwd = home.join("nomad");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&home), Some(&home));
+
+        assert_eq!(root, cwd);
+    }
+
+    #[test]
+    fn install_root_without_known_home_stays_at_cwd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().canonicalize().unwrap();
+        // No git scope and no home boundary: never adopt a marker above cwd.
+        fs::create_dir_all(base.join("baml_src")).unwrap();
+        let cwd = base.join("a/b");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, None);
+
+        assert_eq!(root, cwd);
+    }
+
+    #[test]
+    fn install_root_ignores_stray_baml_src_at_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        // Regression: a stray ~/baml_src used to make installs from ~/some/dir
+        // land the skills in $HOME.
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+        let cwd = home.join("nomad");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, Some(&home));
+
+        assert_eq!(root, cwd);
+    }
+
+    #[test]
+    fn install_root_accepts_baml_src_owner_below_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        let project = home.join("work");
+        let cwd = project.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(project.join("baml_src")).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, Some(&home));
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_in_home_itself_is_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+
+        let root = detect_install_root_in(&home, None, Some(&home));
+
+        assert_eq!(root, home);
     }
 
     #[test]
@@ -867,6 +1223,53 @@ mod tests {
             .map(|(path, content)| (*path, content.as_bytes()))
             .collect::<Vec<_>>();
         make_archive_bytes(&entries)
+    }
+
+    /// Like [`make_archive`], but prepends a pax global header carrying
+    /// `comment=<value>` the way `git archive` (and GitHub codeload) does.
+    fn make_archive_with_pax(entries: &[(&str, &str)], pax_comment: Option<&str>) -> Vec<u8> {
+        let mut archive_bytes = Vec::new();
+        {
+            let encoder =
+                flate2::write::GzEncoder::new(&mut archive_bytes, flate2::Compression::default());
+            let mut builder = tar::Builder::new(encoder);
+            if let Some(comment) = pax_comment {
+                let record_content = format!("comment={comment}\n");
+                let mut total = record_content.len();
+                // The pax length prefix counts itself: grow until stable.
+                loop {
+                    let with_prefix = total.to_string().len() + 1 + record_content.len();
+                    if with_prefix == total {
+                        break;
+                    }
+                    total = with_prefix;
+                }
+                let record = format!("{total} {record_content}");
+                let mut header = tar::Header::new_gnu();
+                header.set_entry_type(tar::EntryType::XGlobalHeader);
+                header.set_size(record.len() as u64);
+                header.set_mode(0o666);
+                header.set_cksum();
+                builder
+                    .append_data(&mut header, "pax_global_header", record.as_bytes())
+                    .unwrap();
+            }
+            for &(path, content) in entries {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(content.len() as u64);
+                header.set_mode(0o644);
+                header.set_cksum();
+                builder
+                    .append_data(
+                        &mut header,
+                        format!("baml-skill-main/{path}"),
+                        content.as_bytes(),
+                    )
+                    .unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        archive_bytes
     }
 
     fn make_archive_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {

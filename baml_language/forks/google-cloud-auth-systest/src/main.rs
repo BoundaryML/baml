@@ -38,7 +38,9 @@ impl NativeIo {
 #[async_trait]
 impl TokenIo for NativeIo {
     async fn env(&self, key: &str) -> Option<String> {
-        std::env::var(key).ok().filter(|s| !s.is_empty())
+        // Set-but-empty vars are passed through: the fork honors them so
+        // misconfiguration is visible, and the harness must not mask that.
+        std::env::var(key).ok()
     }
 
     async fn read_file(&self, path: &str) -> Option<String> {

@@ -50,7 +50,7 @@ jobs:
           # (stamped package.json + baml_node.<platform>.node); merge-multiple
           # reconstructs the full npm/ tree under the bridge dir.
           pattern: nodejs-sdk-*
-          path: baml_language/sdks/nodejs/bridge_nodejs/npm
+          path: baml_language/sdks/typescript/bridge_typescript/npm
           merge-multiple: true
       - name: Download umbrella dist
         uses: actions/download-artifact@v4
@@ -59,16 +59,15 @@ jobs:
           # platform-agnostic dist/ once (on the linux-gnu target). Restore it here
           # so `npm publish` of the umbrella includes the built JS/types.
           name: nodejs-umbrella-dist
-          path: baml_language/sdks/nodejs/bridge_nodejs/dist
+          path: baml_language/sdks/typescript/bridge_typescript/dist
       - name: Setup Node.js
-        # Mirror legacy release.yml publish-to-npm: the composite sets registry-url
-        # (writes the .npmrc that npm/pnpm OIDC trusted publishing keys off of) and
-        # provides pnpm. latest ships an npm new enough for OIDC (checked below).
-        uses: ./.github/actions/setup-node
+        # The publisher only uses npm. Avoid the repository composite here because
+        # it always enables pnpm caching, whose post-job save fails when this job
+        # intentionally does not install a pnpm store.
+        uses: actions/setup-node@v6
         with:
-          node-action-version: v6
           node-version: latest
-          install-dependencies: false
+          registry-url: "https://registry.npmjs.org"
       - name: Ensure npm CLI supports trusted publishing
         run: |
           set -euo pipefail
@@ -101,7 +100,7 @@ jobs:
           printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
           scripts/baml-language-version stamp --plan release-plan.json
       - name: Wire umbrella optionalDependencies
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
         run: |
           set -euo pipefail
           echo "Per-platform sub-packages downloaded from the build matrix:"
@@ -118,7 +117,7 @@ jobs:
           # --no-gh-release: GitHub releases are handled by publish-github-release.
           napi pre-publish -t npm --no-gh-release --skip-optional-publish
       - name: Publish to npm
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
         env:
           CHANNEL: ${{ inputs.channel }}
         run: |

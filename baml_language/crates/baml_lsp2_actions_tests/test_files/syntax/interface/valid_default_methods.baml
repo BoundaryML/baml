@@ -1,7 +1,7 @@
 // Valid: empty `implements` block inherits the interface's default method.
 
 interface Printable {
-  function display(self) -> string {
+  function display(self) -> string throws never {
     return "<printable>"
   }
 }

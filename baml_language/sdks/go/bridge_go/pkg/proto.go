@@ -24,14 +24,19 @@ import (
 // releases — the callables we registered for earlier kwargs, leaking them
 // for the life of the process. To avoid that, we track every key registered
 // during this encode and unregister them all if any kwarg fails.
-func encodeCallArgs(kwargs map[string]any) ([]byte, error) {
+func encodeCallArgs(kwargs map[string]any, functionName string, callID uint64) ([]byte, error) {
 	var registered []uint64
 	entries, err := encodeKwargs(kwargs, &registered)
 	if err != nil {
 		rollbackRegisteredHostValues(registered)
 		return nil, err
 	}
-	out, err := proto.Marshal(&pb.CallFunctionArgs{Kwargs: entries})
+	call := &pb.CallFunctionArgs{
+		Kwargs:     entries,
+		CallId:     callID,
+		CallTarget: &pb.CallFunctionArgs_FunctionName{FunctionName: functionName},
+	}
+	out, err := proto.Marshal(call)
 	if err != nil {
 		// Marshal failure is unusual (the messages are valid by
 		// construction), but treat it the same: the call won't reach the
@@ -208,13 +213,9 @@ func decodeResult(data []byte) (any, error) {
 	}
 }
 
-// thrownError builds a Go error from an `error`/`panic` envelope arm. It reads
-// the thrown value's class name and `message` field (the shape of the
-// synthesized baml.errors.* / baml.panics.* infra classes and most user error
-// types) plus the pre-rendered BAML traceback, and surfaces them as a single
-// generic `*BamlError`. The class name is recorded on the error so callers that
-// need to discriminate can do so without reconstructing typed Go subtypes —
-// see 33b for why the typed subtypes were dropped.
+// thrownError builds a Go error from an `error`/`panic` envelope arm. A
+// same-process `baml.errors.HostCallable` resolves its opaque handle back to
+// the exact Go error object; other values fall back to a generic `*BamlError`.
 func thrownError(kind string, value *pb.BamlOutboundValue, trace []string) error {
 	className := ""
 	message := ""
@@ -223,6 +224,19 @@ func thrownError(kind string, value *pb.BamlOutboundValue, trace []string) error
 		for _, f := range cv.GetFields() {
 			if f.GetKey() == "message" {
 				message = f.GetValue().GetStringValue()
+			}
+			if className == "baml.errors.HostCallable" && f.GetKey() == "_handle" {
+				handle := f.GetValue().GetHandleValue()
+				if handle.GetHandleType() == pb.BamlHandleType_HOST_VALUE_OPAQUE {
+					hostValues.mu.Lock()
+					opaque, ok := hostValues.table[handle.GetKey()]
+					hostValues.mu.Unlock()
+					if ok && opaque.IsValid() && opaque.CanInterface() {
+						if err, ok := opaque.Interface().(error); ok {
+							return err
+						}
+					}
+				}
 			}
 		}
 	}
@@ -298,7 +312,11 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return DynamicUnion{Variant: v.UnionVariantValue.ValueOptionName, Value: inner}, nil
+		return DynamicUnion{
+			Variant:             v.UnionVariantValue.ValueOptionName,
+			SelectedOptionIndex: v.UnionVariantValue.SelectedOptionIndex,
+			Value:               inner,
+		}, nil
 	case *pb.BamlOutboundValue_HandleValue:
 		return BamlHandle{
 			Key:        v.HandleValue.Key,

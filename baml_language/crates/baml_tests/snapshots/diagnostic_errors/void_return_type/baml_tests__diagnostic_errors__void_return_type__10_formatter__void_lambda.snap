@@ -3,16 +3,14 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // Void lambda with explicit annotation
 function test_void_lambda() -> int {
-    let f = () -> void {
-    };
+    let f = () -> void {};
     f();
     1
 }
 
 // ERROR: assigning void lambda result
 function test_void_lambda_assign() -> int {
-    let f = () -> void {
-    };
+    let f = () -> void {};
     let x = f();
     1
 }

@@ -1,18 +1,20 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
-import type { ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api';
+import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
 import {
-  capturedValueCardContentHeight,
   CAPTURED_VALUE_CARD_HEADER_HEIGHT,
   CAPTURED_VALUE_CARD_PADDING_Y,
   CAPTURED_VALUE_CARD_TEXT_HEIGHT,
+  capturedValueCardContentHeight,
+  capturedValueCardDiagnosticHeight,
 } from '../CapturedValueCard';
 import { depthScale } from './lod';
-import type { WorkflowNode, WorkflowEdge } from './types';
 import {
+  NODE_VALUE_PREVIEW_FOOTER_HEIGHT,
   NODE_VALUE_PREVIEW_GAP,
   NODE_VALUE_PREVIEW_MAX,
   NODE_VALUE_PREVIEW_WIDTH,
 } from './nodes/NodeOutputPreview';
+import type { WorkflowEdge, WorkflowNode } from './types';
 
 const elk = new ELK();
 
@@ -20,10 +22,10 @@ const elk = new ELK();
 // uses for routing. The visible card sits NODE_BUFFER px inside on each
 // side so arrow tips and selection rings have clearance.
 const NODE_SIZES: Record<string, { w: number; h: number }> = {
-  base: { w: 180, h: 50 },
-  llm: { w: 200, h: 60 },
-  diamond: { w: 180, h: 50 },
-  hexagon: { w: 180, h: 50 },
+  base: { h: 50, w: 180 },
+  diamond: { h: 50, w: 180 },
+  hexagon: { h: 50, w: 180 },
+  llm: { h: 60, w: 200 },
 };
 
 /**
@@ -65,51 +67,50 @@ function wrappingOptions(
 ): Record<string, string> {
   if (!wrap || childCount <= WRAP_CHILD_THRESHOLD) return {};
   return {
-    'org.eclipse.elk.layered.wrapping.strategy': 'SINGLE_EDGE',
-    // Aspect-ratio-driven cutting honours elk.aspectRatio below.
-    'org.eclipse.elk.layered.wrapping.cutting.strategy': 'ARD',
     'org.eclipse.elk.aspectRatio': String(WRAP_ASPECT_RATIO),
     // Tighten the corridor reserved for the wrap-around edges (default 10)
     // so stacked rows sit closer together.
     'org.eclipse.elk.layered.wrapping.additionalEdgeSpacing': '5',
+    // Aspect-ratio-driven cutting honours elk.aspectRatio below.
+    'org.eclipse.elk.layered.wrapping.cutting.strategy': 'ARD',
+    'org.eclipse.elk.layered.wrapping.strategy': 'SINGLE_EDGE',
   };
 }
 
 function nodeSize(node: WorkflowNode): { w: number; h: number } {
   const base = NODE_SIZES[node.type ?? 'base'] ?? NODE_SIZES.base;
-  const valuePreviewCount = node.data.valuePreviews?.length ?? 0;
+  const previewHeight = graphValuePreviewHeight(node);
   const visualSize = (() => {
-    if (valuePreviewCount > 0) {
-      const visibleValues = (node.data.valuePreviews ?? []).slice(
-        0,
-        NODE_VALUE_PREVIEW_MAX,
-      );
-      const previewHeight =
-        visibleValues.reduce(
-          (height, value) => height + capturedValueCardHeight(value),
-          0,
-        ) +
-        Math.max(0, visibleValues.length - 1) * NODE_VALUE_PREVIEW_GAP;
+    if (previewHeight > 0) {
       return {
-        w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
         h: base.h + previewHeight + 14,
+        w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
       };
     }
 
     if (node.data.errorMessage) {
       return {
+        h:
+          base.h +
+          capturedValueCardHeightForContent(
+            0,
+            capturedValueCardDiagnosticHeight(node.data.errorMessage),
+          ) +
+          14,
         w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
-        h: base.h + capturedValueCardHeightForContent(0, true) + 14,
       };
     }
 
     if (node.data.hasResult) {
       return {
-        w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
         h:
           base.h +
-          capturedValueCardHeightForContent(CAPTURED_VALUE_CARD_TEXT_HEIGHT, false) +
+          capturedValueCardHeightForContent(
+            CAPTURED_VALUE_CARD_TEXT_HEIGHT,
+            0,
+          ) +
           14,
+        w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
       };
     }
 
@@ -120,13 +121,13 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
   // that render a result/image/error preview, whose content doesn't shrink, so
   // the box stays sized to it. Groups auto-size from children. Buffer is fixed.
   const hasPreview =
-    valuePreviewCount > 0 || !!node.data.errorMessage || !!node.data.hasResult;
+    previewHeight > 0 || !!node.data.errorMessage || !!node.data.hasResult;
   const s = hasPreview
     ? 1
     : depthScale(typeof node.data.depth === 'number' ? node.data.depth : 0);
   return {
-    w: visualSize.w * s + 2 * NODE_BUFFER,
     h: visualSize.h * s + 2 * NODE_BUFFER,
+    w: visualSize.w * s + 2 * NODE_BUFFER,
   };
 }
 
@@ -135,20 +136,20 @@ function capturedValueCardHeight(
 ): number {
   return capturedValueCardHeightForContent(
     capturedValueCardContentHeight(value),
-    value.diagnostic != null,
+    capturedValueCardDiagnosticHeight(value.diagnostic),
   );
 }
 
 function capturedValueCardHeightForContent(
   contentHeight: number,
-  hasDiagnostic: boolean,
+  diagnosticHeight: number,
 ): number {
   return (
     CAPTURED_VALUE_CARD_HEADER_HEIGHT +
     CAPTURED_VALUE_CARD_PADDING_Y +
     contentHeight +
     (contentHeight > 0 ? 6 : 0) +
-    (hasDiagnostic ? 18 : 0)
+    diagnosticHeight
   );
 }
 
@@ -195,9 +196,9 @@ function buildElkNodes(
       };
       elkNode.labels = [
         {
+          height: 20,
           text: node.data.label,
           width: Math.max(80, previewHeight > 0 ? NODE_VALUE_PREVIEW_WIDTH : 0),
-          height: 20,
         },
       ];
       if (children.length > 0) {
@@ -239,12 +240,21 @@ function buildElkNodes(
   });
 }
 
-function graphValuePreviewHeight(node: WorkflowNode): number {
-  const values = (node.data.valuePreviews ?? []).slice(0, NODE_VALUE_PREVIEW_MAX);
+export function graphValuePreviewHeight(node: WorkflowNode): number {
+  const allValues = node.data.valuePreviews ?? [];
+  const values = allValues.slice(0, NODE_VALUE_PREVIEW_MAX);
   if (values.length === 0) return 0;
+  const footerHeight =
+    allValues.length > NODE_VALUE_PREVIEW_MAX
+      ? NODE_VALUE_PREVIEW_GAP + NODE_VALUE_PREVIEW_FOOTER_HEIGHT
+      : 0;
   return (
-    values.reduce((height, value) => height + capturedValueCardHeight(value), 0) +
-    Math.max(0, values.length - 1) * NODE_VALUE_PREVIEW_GAP
+    values.reduce(
+      (height, value) => height + capturedValueCardHeight(value),
+      0,
+    ) +
+    Math.max(0, values.length - 1) * NODE_VALUE_PREVIEW_GAP +
+    footerHeight
   );
 }
 
@@ -288,7 +298,7 @@ export async function layoutGraph(
   direction: 'horizontal' | 'vertical' = 'horizontal',
   wrap = true,
 ): Promise<{ nodes: WorkflowNode[]; edges: WorkflowEdge[] }> {
-  if (nodes.length === 0) return { nodes, edges };
+  if (nodes.length === 0) return { edges, nodes };
 
   const isHorizontal = direction === 'horizontal';
   const nodeIds = new Set(nodes.map((n) => n.id));
@@ -364,21 +374,21 @@ export async function layoutGraph(
   );
 
   const elkGraph: ElkNode = {
+    children: rootChildren,
+    edges: edgesByOwner.get('root') ?? [],
     id: 'root',
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': isHorizontal ? 'RIGHT' : 'DOWN',
+      'elk.edgeRouting': 'ORTHOGONAL',
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+      'spacing.edgeEdge': '15',
+      'spacing.edgeNode': '20',
       'spacing.nodeNode': '30',
       'spacing.nodeNodeBetweenLayers': '50',
-      'spacing.edgeNode': '20',
-      'spacing.edgeEdge': '15',
-      'elk.edgeRouting': 'ORTHOGONAL',
       // Wrap a long top-level chain (function with many sequential steps).
       ...wrappingOptions(rootChildren.length, wrap),
     },
-    children: rootChildren,
-    edges: edgesByOwner.get('root') ?? [],
   };
 
   const layouted = await elk.layout(elkGraph);
@@ -394,10 +404,10 @@ export async function layoutGraph(
     if (!elkNodes) return;
     for (const en of elkNodes) {
       positionMap.set(en.id, {
+        h: en.height ?? 0,
+        w: en.width ?? 0,
         x: en.x ?? 0,
         y: en.y ?? 0,
-        w: en.width ?? 0,
-        h: en.height ?? 0,
       });
       if (en.children) extractPositions(en.children);
     }
@@ -423,10 +433,10 @@ export async function layoutGraph(
     }
     const pos = positionMap.get(n.id);
     absPositions.set(n.id, {
+      h: pos?.h ?? 0,
+      w: pos?.w ?? 0,
       x: absX,
       y: absY,
-      w: pos?.w ?? 0,
-      h: pos?.h ?? 0,
     });
   }
 
@@ -505,9 +515,9 @@ export async function layoutGraph(
 
       return {
         ...edge,
+        data: { ...edge.data, points: deduped },
         sourceHandle,
         targetHandle,
-        data: { ...edge.data, points: deduped },
       };
     }
 
@@ -540,14 +550,14 @@ export async function layoutGraph(
       position: { x: pos.x, y: pos.y },
       style: {
         ...node.style,
-        width: pos.w,
         height: pos.h,
+        width: pos.w,
         ...(isGroup
           ? {}
-          : { padding: NODE_BUFFER, boxSizing: 'border-box' as const }),
+          : { boxSizing: 'border-box' as const, padding: NODE_BUFFER }),
       },
     };
   });
 
-  return { nodes: laidNodes, edges: laidEdges };
+  return { edges: laidEdges, nodes: laidNodes };
 }

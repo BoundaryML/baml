@@ -25,6 +25,8 @@ from .baml_py import (
     BamlPdf,
     BamlPyHandle,
     BamlVideo,
+    get_runtime as _get_runtime,
+    new_function_call,
     register_host_callable,
     release_host_callable,
 )
@@ -49,11 +51,16 @@ def _is_pydantic_model_class(cls: type) -> bool:
 
 
 # Media PyO3 types — kept as a tuple for `isinstance` dispatch in the
-# encoder and `_decode_class` unwrap (15b §line 21). The engine FQN
-# for each class is looked up via `get_type_map().py_type_to_baml_type(...)`
-# at encode time; the typemap seeds the PyO3 identity → `baml.media.*`
-# overrides at construction (25b2 §"reverse map overrides").
+# encoder and `_decode_class` unwrap (15b §line 21). Their sparse inbound
+# annotation is the exact primitive media kind; the class-shaped `_data`
+# payload remains an implementation shell around the native handle.
 _MEDIA_PYO3_TYPES = (BamlImage, BamlAudio, BamlVideo, BamlPdf)
+_MEDIA_WIRE_KINDS = {
+    BamlImage: baml_type_pb2.BAML_TY_MEDIA_KIND_IMAGE,
+    BamlAudio: baml_type_pb2.BAML_TY_MEDIA_KIND_AUDIO,
+    BamlVideo: baml_type_pb2.BAML_TY_MEDIA_KIND_VIDEO,
+    BamlPdf: baml_type_pb2.BAML_TY_MEDIA_KIND_PDF,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -254,11 +261,11 @@ def _set_inbound_value(
 
     # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
     # only field is `_data`, recursively encoded; the recursion lands on
-    # the `BamlPyHandle` branch above. The engine FQN comes from the
-    # typemap's reverse-map seeded overrides (25b2 §"reverse map").
+    # the `BamlPyHandle` branch above. The sparse annotation is the exact
+    # media type, not the implementation class used by the Python wrapper.
     if isinstance(value, _MEDIA_PYO3_TYPES):
         cv = inbound_value.class_value
-        cv.class_ty.name = get_type_map().py_type_to_baml_type(type(value))
+        inbound_value.value_type.media.kind = _MEDIA_WIRE_KINDS[type(value)]
         data_entry = cv.fields.add()
         data_entry.string_key = "_data"
         _set_inbound_value(
@@ -293,20 +300,17 @@ def _set_inbound_value(
 
     if _is_pydantic_model(value):
         cv = inbound_value.class_value
-        # Bind the class via `class_ty`. Pydantic generic subclasses (`Box[int]`)
-        # keep `__module__` from the base, but we still want the *base* `Box`'s
-        # FQN on the wire — `13b` §2.1. The Rust-side type checker already knows
-        # the declared parameter type from the function signature.
-        cv.class_ty.name = get_type_map().py_type_to_baml_type(
-            _base_class_for_fqn(type(value))
+        # Bind the class via sparse node-level `value_type`. A parameterized
+        # Pydantic generic (`Box[int]`) carries its exact concrete args. An
+        # unparameterized generic carries only nominal class identity (no
+        # args); the engine can refine that hint from one contextual class but
+        # will not use it to choose between multiple concrete instantiations.
+        instance_type_args = pydantic_instance_type_args(value)
+        inbound_value.value_type.class_ty.name = (
+            get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
         )
-        # For a *generic* instance (`Box[int]`), also carry its concrete class
-        # type args (the value-level type channel) so the engine can recover and
-        # type-check `Box<int>` against a declared generic param. Recovered from
-        # Pydantic's generic metadata, in declaration order; empty for
-        # non-generic instances (no metadata args).
-        for arg in pydantic_instance_type_args(value):
-            _fill_inner(cv.class_ty.type_args.add(), arg)
+        for arg in instance_type_args:
+            _fill_inner(inbound_value.value_type.class_ty.type_args.add(), arg)
         # Walk fields by attribute access (Pydantic v2's `__iter__`
         # yields `(name, value)` without recursive serialization).
         # `model_dump()` would flatten nested Pydantic instances into
@@ -491,6 +495,9 @@ def encode_call_args(
     kwargs: Dict[str, Any],
     call_id: int,
     type_args: Optional[List[Tuple[str, "baml_type_pb2.BamlTy"]]] = None,
+    *,
+    function_name: Optional[str] = None,
+    function_handle: Optional[int] = None,
 ) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
@@ -507,10 +514,16 @@ def encode_call_args(
     """
     if call_id == 0:
         raise ValueError("call_id must be a nonzero uint64")
+    if function_name is not None and function_handle is not None:
+        raise ValueError("exactly one BAML call target may be set")
     registered: List[int] = []
     try:
         args = baml_inbound_pb2.CallFunctionArgs()
         args.call_id = call_id
+        if function_name is not None:
+            args.function_name = function_name
+        elif function_handle is not None:
+            args.function_handle = function_handle
         for key, value in kwargs.items():
             _set_inbound_map_entry(
                 args.kwargs.add(), key, value, kwarg_name=key, registered=registered
@@ -617,7 +630,7 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any
         except BamlError:
             return typing.Any
     # enum_variant / interface / function / future / rust_type / meta_type /
-    # resource / prompt_ast / void / watch_accessor / type_var /
+    # resource / prompt_ast / void / type_var /
     # associated_type_projection / never — no concrete Python binding in a
     # generic-arg position; treat as an unbound wildcard.
     return typing.Any
@@ -772,7 +785,13 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
         # reads back as an empty class (`.name == ""`).
         class_fqn = handle.ty.class_ty.name
         cls = type_map.get_class(class_fqn)
-        return cls._from_pyhandle(pyhandle)
+        return cls._from_pyhandle(pyhandle, class_fqn)
+    if ht == HT.FUNCTION_REF:
+        ty = getattr(handle, "ty", None)
+        function_ty = (
+            ty.function if ty is not None else baml_type_pb2.BamlTyFunction()
+        )
+        return BamlClosure(pyhandle, function_ty)
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 
@@ -781,6 +800,52 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     # BamlPyHandle. The outer codegen class (if any) wraps it via
     # `_decode_class` → private-attr injection.
     return pyhandle
+
+
+class BamlClosure:
+    """A reusable, engine-owned BAML callable."""
+
+    __slots__ = ("_handle", "_required_names", "_optional_names")
+
+    def __init__(self, handle: BamlPyHandle, function_ty: Any):
+        mode = baml_type_pb2.BamlTyFunctionParamMode
+        self._handle = handle
+        self._required_names = [
+            param.name if param.HasField("name") else f"arg{index}"
+            for index, param in enumerate(function_ty.params)
+            if param.mode != mode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL
+        ]
+        self._optional_names = [
+            param.name if param.HasField("name") else f"arg{index}"
+            for index, param in enumerate(function_ty.params)
+            if param.mode == mode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL
+        ]
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if len(args) > len(self._required_names):
+            raise TypeError(
+                f"got {len(args)} positional arguments but this BAML closure "
+                f"accepts {len(self._required_names)}"
+            )
+        values = dict(zip(self._required_names, args))
+        allowed = set(self._required_names) | set(self._optional_names)
+        for name, value in kwargs.items():
+            if name not in allowed:
+                raise TypeError(f"unexpected keyword argument {name!r}")
+            if name in values:
+                raise TypeError(f"multiple values for argument {name!r}")
+            values[name] = value
+        call_id = new_function_call()
+        args_proto = encode_call_args(
+            values,
+            call_id,
+            function_handle=self._handle._key_for_call(),
+        )
+        result_bytes = _get_runtime().call_function_sync(args_proto)
+        return decode_call_result(result_bytes)
+
+    def __repr__(self) -> str:
+        return "<BamlClosure>"
 
 
 # Workspace bigint cap = 2^28 bits ⇒ at most (2^28)/4 hex digits (plus a

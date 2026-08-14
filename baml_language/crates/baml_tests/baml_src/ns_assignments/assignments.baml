@@ -56,7 +56,7 @@ test "block_expr" {
     };
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = 1;
-    assert.is_true(baml.deep_equals(a, expected))
+    assert.equal(a, expected)
 }
 
 test "mutable_var_in_function" {
@@ -64,7 +64,7 @@ test "mutable_var_in_function" {
     y = 5;
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = 5;
-    assert.is_true(baml.deep_equals(y, expected))
+    assert.equal(y, expected)
 }
 
 // ─── mutable parameters ───────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ function mutable_in_arg(x: int) -> int {
 }
 
 test "mutable_param" {
-    assert.is_true(baml.deep_equals(mutable_in_arg(42), 3))
+    assert.equal(mutable_in_arg(42), 3)
 }
 
 // A copy taken before a later mutation of `a` keeps the original value.
@@ -89,7 +89,7 @@ function cross_block_soundness(c: bool) -> int {
 }
 
 test "virtual_cross_block_soundness" {
-    assert.is_true(baml.deep_equals(cross_block_soundness(true), 1))
+    assert.equal(cross_block_soundness(true), 1)
 }
 
 // A copy of a parameter is unaffected by a later mutation of that parameter.
@@ -102,7 +102,7 @@ function cross_block_param_mutation(c: bool, p: int) -> int {
 }
 
 test "virtual_cross_block_param_mutation_soundness" {
-    assert.is_true(baml.deep_equals(cross_block_param_mutation(true, 42), 42))
+    assert.equal(cross_block_param_mutation(true, 42), 42)
 }
 
 function copy_of_mutable_param(x: int) -> int {
@@ -112,7 +112,7 @@ function copy_of_mutable_param(x: int) -> int {
 }
 
 test "copy_of_mutable_param_soundness" {
-    assert.is_true(baml.deep_equals(copy_of_mutable_param(42), 42))
+    assert.equal(copy_of_mutable_param(42), 42)
 }
 
 // Transitive copy (t = p; x = t) is still unaffected by a later mutation of p.
@@ -126,7 +126,7 @@ function cross_block_transitive_param_mutation(c: bool, p: int) -> int {
 }
 
 test "virtual_cross_block_transitive_param_mutation_soundness" {
-    assert.is_true(baml.deep_equals(cross_block_transitive_param_mutation(true, 42), 42))
+    assert.equal(cross_block_transitive_param_mutation(true, 42), 42)
 }
 
 // ─── compound field assignment ────────────────────────────────────────────────
@@ -134,37 +134,37 @@ test "virtual_cross_block_transitive_param_mutation_soundness" {
 test "field_assignment_add_assign" {
     let c = Counter { value: 10 };
     c.value += 5;
-    assert.is_true(baml.deep_equals(c.value, 15))
+    assert.equal(c.value, 15)
 }
 
 test "field_assignment_sub_assign" {
     let c = Counter { value: 20 };
     c.value -= 8;
-    assert.is_true(baml.deep_equals(c.value, 12))
+    assert.equal(c.value, 12)
 }
 
 test "field_assignment_mul_assign" {
     let c = Counter { value: 7 };
     c.value *= 3;
-    assert.is_true(baml.deep_equals(c.value, 21))
+    assert.equal(c.value, 21)
 }
 
 test "field_assignment_div_assign" {
     let c = Counter { value: 24 };
     c.value /= 4;
-    assert.is_true(baml.deep_equals(c.value, 6))
+    assert.equal(c.value, 6)
 }
 
 test "field_assignment_mod_assign" {
     let c = Counter { value: 17 };
     c.value %= 5;
-    assert.is_true(baml.deep_equals(c.value, 2))
+    assert.equal(c.value, 2)
 }
 
 test "field_assignment_simple" {
     let d = Data { value: 100, active: true };
     d.value = 42;
-    assert.is_true(baml.deep_equals(d.value, 42))
+    assert.equal(d.value, 42)
 }
 
 // 10 +5 ->15, *2 ->30, -10 ->20, /4 ->5
@@ -174,7 +174,7 @@ test "field_assignment_multiple_ops" {
     s.score *= 2;
     s.score -= 10;
     s.score /= 4;
-    assert.is_true(baml.deep_equals(s.score, 5))
+    assert.equal(s.score, 5)
 }
 
 // ─── nested field assignment ──────────────────────────────────────────────────
@@ -190,7 +190,7 @@ function nested_field_simple() -> int {
 }
 
 test "nested_field_assignment_simple" {
-    assert.is_true(baml.deep_equals(nested_field_simple(), 42))
+    assert.equal(nested_field_simple(), 42)
 }
 
 function nested_field_compound() -> int {
@@ -201,14 +201,14 @@ function nested_field_compound() -> int {
 }
 
 test "nested_field_assignment_compound" {
-    assert.is_true(baml.deep_equals(nested_field_compound(), 42))
+    assert.equal(nested_field_compound(), 42)
 }
 
 // Assigning a whole object to a field, then reading it back.
 test "field_assignment_object_field" {
     let o = Outer { inner: Inner { value: 10 } };
     o.inner = Inner { value: 20 };
-    assert.is_true(baml.deep_equals(o.inner.value, 20))
+    assert.equal(o.inner.value, 20)
 }
 
 // ─── array element field assignment ───────────────────────────────────────────
@@ -225,7 +225,7 @@ function array_element_field() -> int {
 }
 
 test "array_element_field_assignment" {
-    assert.is_true(baml.deep_equals(array_element_field(), 25))
+    assert.equal(array_element_field(), 25)
 }
 
 // ─── method-call result field assignment (with copy) ───────────────────────────
@@ -234,7 +234,7 @@ test "method_call_field_assignment_with_copy" {
     let f = Factory { counter: Counter { value: 10 } };
     let c = f.get_counter();
     c.value += 5;
-    assert.is_true(baml.deep_equals(c.value, 15))
+    assert.equal(c.value, 15)
 }
 
 // ─── method-call-result field assignment (commented out — runtime bug) ─────────
@@ -277,7 +277,7 @@ test "method_call_field_assignment_with_copy" {
 // }
 //
 // test "array_element_method_field_assignment" {
-//     assert.is_true(baml.deep_equals(array_element_method_field_assignment(), 35))
+//     assert.equal(array_element_method_field_assignment(), 35)
 // }
 
 // BUG: TypeError { expected: Object(Array), got: Object(Any) }
@@ -308,7 +308,7 @@ test "method_call_field_assignment_with_copy" {
 // }
 //
 // test "method_call_then_array_access_assignment" {
-//     assert.is_true(baml.deep_equals(method_call_then_array_access_assignment(), 25))
+//     assert.equal(method_call_then_array_access_assignment(), 25)
 // }
 
 // BUG: TypeError { expected: Object(Instance), got: Object(Any) }
@@ -338,7 +338,7 @@ test "method_call_field_assignment_with_copy" {
 // }
 //
 // test "method_call_field_assignment" {
-//     assert.is_true(baml.deep_equals(method_call_field_assignment(), 15))
+//     assert.equal(method_call_field_assignment(), 15)
 // }
 
 // ─── side effects preserved across reassignment ────────────────────────────────

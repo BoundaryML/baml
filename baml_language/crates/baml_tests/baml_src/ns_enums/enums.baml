@@ -30,13 +30,13 @@ function enums_assign_variant() -> EnumsShape {
 }
 
 test "return_enum_variant" {
-    assert.is_true(baml.deep_equals(enums_return_variant(), EnumsShape.Rectangle))
+    assert.equal(enums_return_variant(), EnumsShape.Rectangle)
 }
 
 test "assign_enum_variant" {
-    assert.is_true(baml.deep_equals(enums_assign_variant(), EnumsShape.Rectangle))
+    assert.equal(enums_assign_variant(), EnumsShape.Rectangle)
 }
 
 test "pass_enum_variant_to_function" {
-    assert.is_true(baml.deep_equals(enums_return_shape(EnumsShape.Rectangle), EnumsShape.Rectangle))
+    assert.equal(enums_return_shape(EnumsShape.Rectangle), EnumsShape.Rectangle)
 }

@@ -373,8 +373,7 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
             continue;
         }
 
-        // Skip empty comment lines that are just section separators
-        if trimmed == "//" && current_section.is_some() {
+        if trimmed == "//" && current_section != Some("diagnostics") {
             continue;
         }
 
@@ -468,7 +467,16 @@ fn save_section_with_comments(
     inlay_hints_comments: &mut Vec<String>,
     semantic_tokens_comments: &mut Vec<String>,
 ) {
-    let content_trimmed = content.trim().to_string();
+    let lines = content.lines().collect::<Vec<_>>();
+    let start = lines
+        .iter()
+        .position(|line| line.trim() != "//")
+        .unwrap_or(lines.len());
+    let end = lines
+        .iter()
+        .rposition(|line| line.trim() != "//")
+        .map_or(start, |index| index + 1);
+    let content_trimmed = lines[start..end].join("\n").trim().to_string();
     match section_name {
         "diagnostics" => {
             *diagnostics = content_trimmed;
@@ -566,6 +574,28 @@ class Person {
         assert!(parsed.expected_hovers.is_some());
         let hovers = parsed.expected_hovers.unwrap();
         assert!(hovers.contains("`Foo`"));
+    }
+
+    #[test]
+    fn test_parse_expectations_preserves_internal_blank_comments() {
+        let content = r#"class Foo {}
+
+//----
+//- diagnostics
+// E0010
+//
+//   x invalid syntax
+//
+//- on_hover expressions
+// <no-hover>"#;
+
+        let parsed = parse_test_file(content, "test.baml");
+
+        assert_eq!(
+            parsed.expected_diagnostics,
+            "// E0010\n//\n//   x invalid syntax"
+        );
+        assert_eq!(parsed.expected_hovers.as_deref(), Some("// <no-hover>"));
     }
 
     #[test]

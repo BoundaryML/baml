@@ -3,7 +3,7 @@
 // qualifier must be a known interface.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {
@@ -18,12 +18,10 @@ function bad(d: Dog) -> string {
 
 //----
 //- diagnostics
-// error: unresolved type: NotAnInterface
-//     ╭─[ interface_error_qualified_call_unknown_interface.baml:16:10 ]
-//     │
+// E0002
+//
+//   × unresolved type: NotAnInterface
+//     ╭─[interface_error_qualified_call_unknown_interface.baml:16:15]
 //  16 │   return d.as<NotAnInterface>.speak()
-//     │          ──────────┬─────────  
-//     │                    ╰─────────── unresolved type: NotAnInterface
-//     │ 
-//     │ Note: Error code: E0002
-// ────╯
+//     ·               ──────────────
+//     ╰────

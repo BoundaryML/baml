@@ -6,21 +6,17 @@ interface B requires A {}
 
 //----
 //- diagnostics
-// error: interface `requires` chain forms a cycle: A -> B -> A
-//    ╭─[ interface_extends_cycle.baml:3:11 ]
-//    │
+// E0118
+//
+//   × interface `requires` cycle: A → B → A
+//    ╭─[interface_extends_cycle.baml:3:11]
 //  3 │ interface A requires B {}
-//    │           ┬  
-//    │           ╰── cyclic `requires`
-//    │ 
-//    │ Note: Error code: E0118
-// ───╯
-// error: interface `requires` chain forms a cycle: B -> A -> B
-//    ╭─[ interface_extends_cycle.baml:5:11 ]
-//    │
+//    ·           ─
+//    ╰────
+// E0118
+//
+//   × interface `requires` cycle: B → A → B
+//    ╭─[interface_extends_cycle.baml:5:11]
 //  5 │ interface B requires A {}
-//    │           ┬  
-//    │           ╰── cyclic `requires`
-//    │ 
-//    │ Note: Error code: E0118
-// ───╯
+//    ·           ─
+//    ╰────

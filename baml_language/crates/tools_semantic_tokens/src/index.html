@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BAML semantic tokens</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --fg: #c9d1d9;
+        --border: #21262d;
+        --muted: #8b949e;
+        --control-bg: #161b22;
+        --hover-bg: #161b22;
+        --selected-bg: #0d2d52;
+        --selected-border: #388bfd;
+        --pad: 16px;
+        --font: 13px / 1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+      }
+      .stale-banner {
+        flex: 0 0 auto;
+        padding: 6px 16px;
+        font-size: 12px;
+        background: #6e3b00;
+        color: #ffd9a8;
+        border-bottom: 1px solid #b87333;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .stale-banner code {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 1px 5px;
+        border-radius: 3px;
+      }
+      header {
+        padding: 8px 16px;
+        font-size: 12px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .app-title { color: var(--fg); font-weight: 600; margin-right: auto; }
+      button {
+        border: 1px solid var(--border);
+        background: var(--control-bg);
+        color: var(--fg);
+        border-radius: 4px;
+        font: inherit;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      button:disabled { color: var(--muted); cursor: not-allowed; }
+      .status { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); }
+      .status.same { color: #7ee787; }
+      .status.different { color: #ffa657; }
+      .workspace {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+      }
+      .sidebar {
+        min-width: 0;
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: auto;
+      }
+      .sidebar-title {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+        position: sticky;
+        top: 0;
+        background: var(--bg);
+      }
+      .row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--fg);
+        text-align: left;
+        cursor: pointer;
+      }
+      .row:hover { background: var(--hover-bg); }
+      .row.selected { border-color: var(--selected-border); background: var(--selected-bg); }
+      .row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .badge {
+        min-width: 52px;
+        padding: 2px 6px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 11px;
+      }
+      .badge.same { color: #7ee787; }
+      .badge.different { color: #ffa657; }
+      .viewer { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+      .panes {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .panes.single { grid-template-columns: minmax(0, 1fr); }
+      .pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+      .pane + .pane { border-left: 1px solid var(--border); }
+      .pane-title {
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .pane-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--pad); }
+      .pane-body pre { margin: 0; white-space: pre; font: var(--font); }
+      textarea.editor {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin: 0;
+        padding: var(--pad);
+        border: 0;
+        resize: none;
+        background: transparent;
+        color: var(--fg);
+        font: var(--font);
+        outline: none;
+      }
+      .tok { border-radius: 2px; }
+      .tok:hover { outline: 1px solid rgba(255, 166, 87, 0.7); }
+      .tok.diff-changed { box-shadow: inset 0 -2px rgba(248, 81, 73, 0.85); }
+      .tok.diff-added { box-shadow: inset 0 -2px rgba(63, 185, 80, 0.85); }
+      .tok.diff-removed { box-shadow: inset 0 -2px rgba(210, 168, 255, 0.85); }
+      footer {
+        flex: 0 0 auto;
+        border-top: 1px solid var(--border);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+        padding: 10px 16px;
+        font-size: 12px;
+        max-height: 26vh;
+        overflow: auto;
+      }
+      .inspect .loc { color: var(--muted); margin-bottom: 6px; }
+      .inspect .ty { font-size: 14px; font-weight: 600; }
+      .inspect .pair { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
+      .inspect .pair .k { color: var(--muted); min-width: 64px; }
+      .inspect .muted { color: var(--muted); }
+      .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-content: flex-start; }
+      .legend .item { display: flex; align-items: center; gap: 6px; }
+      .legend .swatch { width: 11px; height: 11px; border-radius: 2px; border: 1px solid var(--border); }
+    </style>
+  </head>
+  <body>
+    <div id="staleBanner" class="stale-banner" hidden></div>
+    <header>
+      <div class="app-title">BAML semantic tokens</div>
+      <span id="status" class="status">No selection</span>
+      <button id="accept" type="button" disabled>Accept snapshot</button>
+    </header>
+    <div class="workspace">
+      <aside class="sidebar">
+        <div class="sidebar-title">Sources</div>
+        <div id="list"></div>
+      </aside>
+      <section class="viewer">
+        <div id="panes" class="panes"></div>
+        <footer>
+          <div id="inspect" class="inspect"></div>
+          <div id="legend" class="legend"></div>
+        </footer>
+      </section>
+    </div>
+    <script type="module">
+      // Token type -> color. Mirrors the intent of paint.rs::style_for, adapted
+      // to a GitHub-dark palette.
+      const COLORS = {
+        keyword: "#ff7b72", modifier: "#ff7b72",
+        type: "#ffa657", class: "#ffa657", enum: "#ffa657",
+        interface: "#ffa657", struct: "#ffa657", typeParameter: "#ffa657",
+        function: "#d2a8ff", method: "#d2a8ff", macro: "#d2a8ff",
+        namespace: "#39c5cf",
+        property: "#79c0ff", enumMember: "#79c0ff",
+        parameter: "#ff9492",
+        variable: "#c9d1d9", event: "#c9d1d9",
+        string: "#a5d6ff", regexp: "#a5d6ff",
+        escapeSequence: "#f0883e",
+        number: "#f2cc60",
+        comment: "#8b949e",
+        decorator: "#e3b341",
+        operator: "#8b949e",
+      };
+      const DEFAULT_COLOR = "#c9d1d9";
+      const SCRATCH = "__scratch__";
+      const STATE_KEY = "baml-semantic-tokens-viewer";
+      const DEFAULT_SCRATCH = `class User {
+  name string
+  age int
+}
+
+function greet(user User) -> string {
+  let greeting = "hello, "
+  greeting
+}
+`;
+
+      const listEl = document.getElementById("list");
+      const panesEl = document.getElementById("panes");
+      const statusEl = document.getElementById("status");
+      const acceptEl = document.getElementById("accept");
+      const inspectEl = document.getElementById("inspect");
+      const legendEl = document.getElementById("legend");
+
+      let fixtures = [];
+      let selected = null;
+      let detail = null; // { source, current, expected } for a fixture
+      let curMap = new Map();
+      let expMap = new Map();
+      let scratchText = DEFAULT_SCRATCH;
+      let scratchTokens = [];
+
+      const colorFor = (t) => COLORS[t] ?? DEFAULT_COLOR;
+      const esc = (s) =>
+        s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const key = (t) => `${t.line}:${t.col}:${t.len}`;
+      // A token is "the same" only if both type AND modifiers match.
+      const sig = (t) => `${t.type} [${(t.mods ?? []).join(",")}]`;
+
+      function readState() {
+        try { return JSON.parse(localStorage.getItem(STATE_KEY) ?? "{}"); }
+        catch { return {}; }
+      }
+      function writeState(patch) {
+        localStorage.setItem(STATE_KEY, JSON.stringify({ ...readState(), ...patch }));
+      }
+
+      async function getJson(url, init) {
+        const res = await fetch(url, init);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      // ── token diff annotation ────────────────────────────────────────────
+      function annotate(current, expected) {
+        const ek = new Map(expected.map((t) => [key(t), sig(t)]));
+        const ck = new Map(current.map((t) => [key(t), sig(t)]));
+        for (const t of current) {
+          const e = ek.get(key(t));
+          t.diff = e === undefined ? "added" : e !== sig(t) ? "changed" : null;
+        }
+        for (const t of expected) {
+          const c = ck.get(key(t));
+          t.diff = c === undefined ? "removed" : c !== sig(t) ? "changed" : null;
+        }
+      }
+
+      function renderTokens(source, tokens, side) {
+        let html = "";
+        let cursor = 0;
+        tokens.forEach((t, i) => {
+          if (t.start > cursor) html += esc(source.slice(cursor, t.start));
+          const cls = t.diff ? ` diff-${t.diff}` : "";
+          html +=
+            `<span class="tok${cls}" data-side="${side}" data-idx="${i}" ` +
+            `style="color:${colorFor(t.type)}">` +
+            esc(source.slice(t.start, Math.max(t.start, t.end))) +
+            `</span>`;
+          cursor = Math.max(cursor, t.end);
+        });
+        html += esc(source.slice(cursor));
+        return `<pre>${html}</pre>`;
+      }
+
+      // ── sidebar ──────────────────────────────────────────────────────────
+      function renderList() {
+        const makeRow = (dataName, label, badgeText, badgeClass, isSelected) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `row ${isSelected ? "selected" : ""}`.trim();
+          button.dataset.name = dataName;
+          button.title = label;
+
+          const nameEl = document.createElement("span");
+          nameEl.className = "row-name";
+          nameEl.textContent = label;
+
+          const badge = document.createElement("span");
+          badge.className = `badge ${badgeClass}`.trim();
+          badge.textContent = badgeText;
+
+          button.append(nameEl, badge);
+          return button;
+        };
+
+        listEl.replaceChildren(
+          makeRow(SCRATCH, "Scratchpad", "live", "", selected === SCRATCH),
+          ...fixtures.map((f) =>
+            makeRow(
+              f.name,
+              f.name,
+              f.diff_count === 0 ? "Same" : `Diff ${f.diff_count}`,
+              f.diff_count === 0 ? "same" : "different",
+              selected === f.name,
+            ),
+          ),
+        );
+      }
+
+      // ── inspector + legend ───────────────────────────────────────────────
+      function renderLegend() {
+        const seen = new Map();
+        for (const [name, color] of Object.entries(COLORS)) {
+          if (!seen.has(color)) seen.set(color, []);
+          seen.get(color).push(name);
+        }
+        legendEl.innerHTML = [...seen.entries()]
+          .map(
+            ([color, names]) =>
+              `<span class="item"><span class="swatch" style="background:${color}"></span>${names.join(" / ")}</span>`,
+          )
+          .join("");
+      }
+
+      function renderInspect(hovered) {
+        if (!hovered) {
+          inspectEl.innerHTML = `<span class="muted">Hover a token to inspect it.</span>`;
+          return;
+        }
+        const k = key(hovered);
+        const fmtMods = (m) => (m && m.length ? ` [${m.join(",")}]` : "");
+        const loc = `line ${hovered.line}, col ${hovered.col}, len ${hovered.len} — ${JSON.stringify(hovered.text)}`;
+        let body =
+          `<div class="ty" style="color:${colorFor(hovered.type)}">${esc(hovered.type)}${esc(fmtMods(hovered.mods))}</div>`;
+        if (selected !== SCRATCH) {
+          const c = curMap.get(k);
+          const e = expMap.get(k);
+          body =
+            `<div class="pair"><span class="k">current</span><span style="color:${colorFor(c?.type ?? "")}">${esc(c ? c.type + fmtMods(c.mods) : "—")}</span></div>` +
+            `<div class="pair"><span class="k">expected</span><span style="color:${colorFor(e?.type ?? "")}">${esc(e ? e.type + fmtMods(e.mods) : "—")}</span></div>`;
+        }
+        inspectEl.innerHTML = `<div class="loc">${esc(loc)}</div>${body}`;
+      }
+
+      // ── rendering modes ──────────────────────────────────────────────────
+      function paneActiveTokens(side) {
+        if (side === "scratch") return scratchTokens;
+        return side === "current" ? detail.current : detail.expected;
+      }
+
+      function attachHover() {
+        panesEl.querySelectorAll(".pane-body").forEach((el) => {
+          el.addEventListener("pointerover", (ev) => {
+            const span = ev.target.closest(".tok");
+            if (!span) return;
+            const tokens = paneActiveTokens(span.dataset.side);
+            renderInspect(tokens[Number(span.dataset.idx)]);
+          });
+        });
+      }
+
+      function showFixture() {
+        annotate(detail.current, detail.expected);
+        curMap = new Map(detail.current.map((t) => [key(t), t]));
+        expMap = new Map(detail.expected.map((t) => [key(t), t]));
+        panesEl.className = "panes";
+        panesEl.innerHTML =
+          `<section class="pane"><div class="pane-title">Current</div>` +
+          `<div class="pane-body">${renderTokens(detail.source, detail.current, "current")}</div></section>` +
+          `<section class="pane"><div class="pane-title">Expected snapshot</div>` +
+          `<div class="pane-body">${renderTokens(detail.source, detail.expected, "expected")}</div></section>`;
+        attachHover();
+        renderInspect(null);
+
+        const diff = detail.current.filter((t) => t.diff).length +
+          detail.expected.filter((t) => t.diff === "removed").length;
+        statusEl.textContent = diff === 0 ? "Same" : `Different (${diff})`;
+        statusEl.className = `status ${diff === 0 ? "same" : "different"}`;
+        acceptEl.disabled = diff === 0;
+      }
+
+      function showScratch() {
+        panesEl.className = "panes";
+        panesEl.innerHTML =
+          `<section class="pane"><div class="pane-title">Input</div>` +
+          `<textarea class="editor" id="editor" spellcheck="false"></textarea></section>` +
+          `<section class="pane"><div class="pane-title">Tokens</div>` +
+          `<div class="pane-body" id="scratchOut"></div></section>`;
+        const editor = document.getElementById("editor");
+        editor.value = scratchText;
+        editor.addEventListener("input", () => {
+          scratchText = editor.value;
+          writeState({ scratch: scratchText });
+          scheduleScratch();
+        });
+        attachHover();
+        renderInspect(null);
+        statusEl.textContent = "Scratchpad";
+        statusEl.className = "status";
+        acceptEl.disabled = true;
+        renderScratch();
+      }
+
+      let scratchTimer = null;
+      function scheduleScratch() {
+        clearTimeout(scratchTimer);
+        scratchTimer = setTimeout(renderScratch, 250);
+      }
+      let scratchRequestId = 0;
+      async function renderScratch() {
+        const source = scratchText;
+        const requestId = ++scratchRequestId;
+        try {
+          const res = await getJson("/api/tokens", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ source }),
+          });
+          if (requestId !== scratchRequestId || source !== scratchText) return;
+          scratchTokens = res.tokens.map((t) => ({ ...t, diff: null }));
+        } catch {
+          if (requestId !== scratchRequestId || source !== scratchText) return;
+          scratchTokens = [];
+        }
+        if (selected !== SCRATCH) return;
+        const out = document.getElementById("scratchOut");
+        if (out) out.innerHTML = renderTokens(source, scratchTokens, "scratch");
+      }
+
+      // ── selection ────────────────────────────────────────────────────────
+      async function select(name) {
+        selected = name;
+        writeState({ selected: name });
+        renderList();
+        if (name === SCRATCH) {
+          detail = null;
+          showScratch();
+          return;
+        }
+        try {
+          detail = await getJson(`/api/fixture?name=${encodeURIComponent(name)}`);
+        } catch (e) {
+          if (selected !== name) return;
+          detail = null;
+          curMap = new Map();
+          expMap = new Map();
+          panesEl.className = "panes single";
+          panesEl.innerHTML = `<div class="pane-body"><span class="muted">${esc(String(e))}</span></div>`;
+          statusEl.textContent = "Load failed";
+          statusEl.className = "status";
+          acceptEl.disabled = true;
+          renderInspect(null);
+          return;
+        }
+        if (selected !== name) return;
+        showFixture();
+      }
+
+      async function refreshFixtures() {
+        const res = await getJson("/api/fixtures");
+        fixtures = res.fixtures;
+        renderList();
+      }
+
+      acceptEl.addEventListener("click", async () => {
+        if (selected === SCRATCH || acceptEl.disabled) return;
+        acceptEl.disabled = true;
+        try {
+          await getJson("/api/accept", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: selected }),
+          });
+          await refreshFixtures();
+          await select(selected);
+        } catch (e) {
+          statusEl.textContent = `Accept failed: ${e}`;
+          acceptEl.disabled = selected === SCRATCH;
+        }
+      });
+
+      listEl.addEventListener("click", (ev) => {
+        const row = ev.target.closest("[data-name]");
+        if (row) select(row.dataset.name);
+      });
+
+      // ── self-restart: poll build id, reload when the server rebuilds ──────
+      const staleBanner = document.getElementById("staleBanner");
+      let myBuildId = null;
+      function showBanner(text) {
+        if (text) {
+          staleBanner.innerHTML = text;
+          staleBanner.hidden = false;
+        } else {
+          staleBanner.hidden = true;
+        }
+      }
+      async function pollStatus() {
+        try {
+          const s = await getJson("/api/status");
+          if (myBuildId === null) {
+            myBuildId = s.build_id;
+          } else if (s.build_id !== myBuildId) {
+            // The server rebuilt and restarted — reload to get fresh code.
+            location.reload();
+            return;
+          }
+          showBanner(
+            s.rebuilding ? "&#9881; Rebuilding viewer (source changed)…" : "",
+          );
+        } catch {
+          // Server is mid-restart; show a notice and keep polling until it's back.
+          showBanner("&#9881; Restarting viewer…");
+        }
+      }
+      setInterval(pollStatus, 1500);
+      void pollStatus();
+
+      // ── boot ─────────────────────────────────────────────────────────────
+      renderLegend();
+      const saved = readState();
+      if (typeof saved.scratch === "string") scratchText = saved.scratch;
+      await refreshFixtures();
+      const initial =
+        saved.selected === SCRATCH ||
+        fixtures.some((f) => f.name === saved.selected)
+          ? saved.selected
+          : (fixtures[0]?.name ?? SCRATCH);
+      await select(initial);
+    </script>
+  </body>
+</html>

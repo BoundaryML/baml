@@ -22,7 +22,7 @@ build() {
     cd "baml-baml-wrapper-__VERSION_ORIG__/baml_language"
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
-    cargo build --release --frozen --bin baml
+    cargo build --release --frozen --bin baml --features no-self-update
 }
 
 package() {

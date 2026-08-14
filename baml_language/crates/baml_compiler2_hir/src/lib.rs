@@ -13,6 +13,7 @@
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
 pub mod body;
+pub mod body_type_refs;
 mod builder;
 pub mod contributions;
 pub mod diagnostic;
@@ -25,16 +26,17 @@ pub mod package;
 pub mod scope;
 pub mod semantic_index;
 pub mod signature;
+pub mod type_ref;
 
 use std::sync::Arc;
 
 use baml_base::SourceFile;
 pub use builder::SemanticIndexBuilder;
-pub use semantic_index::PathResolution;
+pub use semantic_index::{ExprMetadataKey, ExprMetadataScope, PathResolution};
 
 use crate::{
     contributions::FileSymbolContributions,
-    item_tree::{ItemTree, ItemTreeSourceMap},
+    item_tree::ItemTree,
     semantic_index::{FileSemanticIndex, ScopeBindings},
 };
 
@@ -75,17 +77,99 @@ pub trait Db: baml_workspace::Db {
 /// compiler2-owned builtin stdlib is present, so there is only one builtin
 /// source of truth in the compiler2 package graph.
 pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
+    // Builtin stubs come FIRST: everything assigned by whole-project
+    // iteration order downstream (emit's `GlobalIndex`/`ObjectIndex` slots,
+    // MIR's `class_type_tags`) then gives the stdlib a stable prefix of every
+    // index space, independent of user code. That stability is what lets a
+    // precompiled stdlib `Program` slice (keyed only by compiler build) be
+    // spliced into any project's compile. User edits only ever shift *user*
+    // indices. Within each group the order is unchanged (sorted project
+    // files; fixed stub order), and no package receives contributions from
+    // both groups, so HIR per-package merge order is unaffected.
     let mut files: Vec<baml_base::SourceFile> = db
-        .project()
-        .files(db)
-        .iter()
-        .copied()
-        .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/"))
-        .collect();
-    if let Some(extra) = db.compiler2_extra_files() {
-        files.extend_from_slice(extra.files(db));
-    }
+        .compiler2_extra_files()
+        .map(|extra| extra.files(db).clone())
+        .unwrap_or_default();
+    files.extend(
+        db.project()
+            .files(db)
+            .iter()
+            .copied()
+            .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/")),
+    );
     files
+}
+
+// ── file_ast ──────────────────────────────────────────────────────────────────
+
+/// The CST → AST lowering output for one file: top-level items plus the
+/// lowering diagnostics and `env.*` references produced along the way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileAst {
+    pub items: Vec<baml_compiler2_ast::Item>,
+    pub diagnostics: Vec<baml_compiler2_ast::LoweringDiagnostic>,
+    pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
+}
+
+// Safety: `FileAst` holds only plain (non-`'db`) data, so storing it by value
+// in a Salsa slot is sound. This manual `Update` impl uses `PartialEq` so the
+// query gets early-cutoff (dependents skip re-running when the AST is
+// unchanged) rather than the always-`true` behavior of a no-eq value.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FileAst {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// CST → AST lowering for one file, computed once and shared.
+///
+/// Salsa-tracked because several different consumers need a file's AST items:
+/// both `file_semantic_index` queries (HIR + PPIR), `ppir_expansion_items`,
+/// PPIR's two project-wide expansion-map collectors, and the LSP check pass.
+/// Before this query existed each of them re-lowered the syntax tree from
+/// scratch; the repeated CST traversal was ~31% of cold-compile CPU on the
+/// test corpus (see `crates/tools_compile_profile/README.md`, July 2026 audit).
+#[salsa::tracked(returns(ref))]
+pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let path = file.path(db);
+    let package = file_package::file_package(db, file);
+    let test_owner = if package.namespace_path.is_empty() {
+        "root".to_string()
+    } else {
+        format!(
+            "root.{}",
+            package
+                .namespace_path
+                .iter()
+                .map(baml_base::Name::as_str)
+                .collect::<Vec<_>>()
+                .join(".")
+        )
+    };
+    let (items, diagnostics, env_var_refs) =
+        baml_compiler2_ast::lower_file_with_path_and_test_owner(
+            &tree,
+            Some(path.as_path()),
+            Some(&test_owner),
+        );
+    FileAst {
+        items,
+        diagnostics,
+        env_var_refs,
+    }
 }
 
 // ── file_semantic_index ───────────────────────────────────────────────────────
@@ -98,15 +182,14 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let path = file.path(db);
-    let (items, lowering_diags, env_var_refs) =
-        baml_compiler2_ast::lower_file_with_path(&tree, Some(path.as_path()));
+    // CST → AST lowering is shared via `file_ast` instead of being redone here.
+    let ast = file_ast(db, file);
 
     let builder = SemanticIndexBuilder::new(db, file);
     builder
-        .with_lowering_diagnostics(lowering_diags)
-        .with_env_var_refs(env_var_refs)
-        .build(&items, file_range)
+        .with_lowering_diagnostics(ast.diagnostics.clone())
+        .with_env_var_refs(ast.env_var_refs.clone())
+        .build(&ast.items, file_range)
 }
 
 // ── Projection helpers ────────────────────────────────────────────────────────
@@ -130,18 +213,14 @@ pub fn file_symbol_contributions(
 /// Returns the item tree for a file (clones the Arc — O(1)).
 ///
 /// Not tracked — the item tree is cached via `file_semantic_index`.
-/// This helper is for convenience in downstream queries.
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+///
+/// `pub(crate)`: the raw `ItemTree` is an implementation detail behind the
+/// PPIR item-data firewall (`baml_compiler2_ppir::item_data`). Consumers use
+/// the enumeration (`file_classes`/`file_functions`/…) and lookup
+/// (`class_data`/`function_data`/…) queries there, never the tree itself.
+pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
-}
-
-/// Returns the item tree source map for a file (clones the Arc — O(1)).
-///
-/// Not tracked — the source map is cached via `file_semantic_index`.
-pub fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
-    let index = file_semantic_index(db, file);
-    Arc::clone(&index.item_tree_source_map)
 }
 
 /// Returns the `ScopeBindings` for a given scope.
@@ -160,18 +239,4 @@ pub fn scope_bindings_query<'db>(
 /// Returns the env var references found in a file's expression bodies.
 pub fn file_env_var_refs(db: &dyn Db, file: SourceFile) -> &[baml_compiler2_ast::EnvVarRef] {
     &file_semantic_index(db, file).env_var_refs
-}
-
-/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
-///
-/// Not tracked — callers should use the cached `file_semantic_index` result.
-/// Returns `None` if `expr_id` was not recorded (i.e., single-segment paths
-/// or non-path expressions).
-pub fn path_resolution_query(
-    db: &dyn Db,
-    file: baml_base::SourceFile,
-    expr_id: baml_compiler2_ast::ExprId,
-) -> Option<PathResolution> {
-    let index = file_semantic_index(db, file);
-    index.path_resolution(expr_id).cloned()
 }

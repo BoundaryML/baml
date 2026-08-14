@@ -1,4 +1,4 @@
-//! Playground IO input resolution via WebSocket.
+//! Playground `baml.io` host: input resolution and stream output.
 //!
 //! When `baml.io.input(prompt)` is called during a playground function
 //! execution, we send an `InputRequest` to all connected playground
@@ -6,6 +6,11 @@
 //!
 //! If no playground client is connected (`receiver_count() == 0`),
 //! we return an IO error immediately.
+//!
+//! `print` / `println` / `eprint` / `eprintln` become `Output` payloads on the
+//! run, streamed to clients over the same channel. Process stdout is never
+//! written: under `baml lsp` it carries the JSON-RPC frames, and under
+//! `baml playground` the user is watching a browser tab, not the terminal.
 
 use std::{
     collections::HashMap,
@@ -16,7 +21,7 @@ use std::{
 };
 
 use bex_events::run::{
-    BoundaryId, HostCallId, InMemoryRunStore, RequestCommandOutcome, RunRequestState,
+    BoundaryId, HostCallId, InMemoryRunStore, OutputStream, RequestCommandOutcome, RunRequestState,
 };
 use bex_heap::BexHeap;
 use parking_lot::Mutex;
@@ -126,6 +131,26 @@ impl PlaygroundIoState {
             .broadcast_tx
             .send(WsOutMessage::InputResolved { id, call_id });
         RequestCommandOutcome::Accepted.as_wire_str()
+    }
+
+    /// Record a `baml.io` stream write and push it to connected clients.
+    ///
+    /// Process stdout is never touched. Under `baml lsp` it carries the
+    /// JSON-RPC frames, so a stray byte desynchronizes the client; under
+    /// `baml playground` the user is looking at a browser tab, not the
+    /// terminal.
+    ///
+    /// A write that cannot be attributed to a live run is dropped rather than
+    /// failed. Panicking a program over an unroutable debug print costs more
+    /// than the lost line.
+    pub fn write_output(&self, call_id: CallId, stream: OutputStream, text: String) {
+        if text.is_empty() {
+            return;
+        }
+        let host_call_id = HostCallId::Native(call_id);
+        if let Some(patch) = self.run_store.ingest_output(&host_call_id, stream, text) {
+            broadcast_run_patch(&self.broadcast_tx, &patch);
+        }
     }
 
     /// Drop pending input waiters for a cancelled host call and notify
@@ -243,48 +268,44 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
     fn print(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _s: String,
+        call_id: CallId,
+        s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        // Playground UI currently has no stdout channel; surface as Unsupported
-        // so user code can `catch` and fall back.
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
+        self.0.write_output(call_id, OutputStream::Stdout, s);
+        SysOpOutput::ok(())
     }
     fn println(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _s: String,
+        call_id: CallId,
+        mut s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
+        s.push('\n');
+        self.0.write_output(call_id, OutputStream::Stdout, s);
+        SysOpOutput::ok(())
     }
     fn eprint(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _s: String,
+        call_id: CallId,
+        s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
+        self.0.write_output(call_id, OutputStream::Stderr, s);
+        SysOpOutput::ok(())
     }
     fn eprintln(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _s: String,
+        call_id: CallId,
+        mut s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
+        s.push('\n');
+        self.0.write_output(call_id, OutputStream::Stderr, s);
+        SysOpOutput::ok(())
     }
 }
 
@@ -324,5 +345,83 @@ mod tests {
             state.resolve_for_run(start.boundary_id, 1, "answer".to_string()),
             RequestCommandOutcome::Missing.as_wire_str()
         );
+    }
+
+    fn start_run(run_store: &InMemoryRunStore, call_id: u64) -> (BoundaryId, HostCallId) {
+        let start = run_store.create_run(
+            BoundaryId::new_random(),
+            ExecutionRequest {
+                project_id: ProjectId("project".to_string()),
+                project_generation: ProjectGeneration(1),
+                target: RunTarget::Function {
+                    function_name: "main".to_string(),
+                },
+                args_summary: None,
+                options_summary: None,
+            },
+            RequestId(1),
+        );
+        let host = HostCallId::Native(CallId(call_id));
+        run_store.attach_host_call(start.boundary_id, host.clone());
+        (start.boundary_id, host)
+    }
+
+    fn output_payloads(
+        run_store: &InMemoryRunStore,
+        boundary_id: BoundaryId,
+    ) -> Vec<(String, String)> {
+        run_store
+            .snapshot(boundary_id)
+            .expect("run snapshot")
+            .payloads
+            .iter()
+            .filter_map(|payload| match &payload.kind {
+                bex_events::run::PayloadKind::Output(output) => {
+                    Some((output.stream.as_wire_str().to_string(), output.text.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn print_writes_are_recorded_verbatim_on_the_run() {
+        let (broadcast_tx, _rx) = broadcast::channel(8);
+        let run_store = Arc::new(InMemoryRunStore::default());
+        let state = Arc::new(PlaygroundIoState::new(broadcast_tx, run_store.clone()));
+        let (boundary_id, _host) = start_run(&run_store, 7);
+
+        // ANSI escapes must survive untouched, including a sequence split
+        // across two calls the way a `print`-per-token program emits them.
+        state.write_output(CallId(7), OutputStream::Stdout, "\u{1b}[3".to_string());
+        state.write_output(
+            CallId(7),
+            OutputStream::Stdout,
+            "1mred\u{1b}[0m".to_string(),
+        );
+        state.write_output(CallId(7), OutputStream::Stderr, "boom\n".to_string());
+
+        assert_eq!(
+            output_payloads(&run_store, boundary_id),
+            vec![
+                ("stdout".to_string(), "\u{1b}[3".to_string()),
+                ("stdout".to_string(), "1mred\u{1b}[0m".to_string()),
+                ("stderr".to_string(), "boom\n".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn print_from_an_unattached_call_is_dropped_not_failed() {
+        let (broadcast_tx, _rx) = broadcast::channel(8);
+        let run_store = Arc::new(InMemoryRunStore::default());
+        let state = Arc::new(PlaygroundIoState::new(broadcast_tx, run_store.clone()));
+        let (boundary_id, _host) = start_run(&run_store, 7);
+
+        // A call id that belongs to no run: the write disappears rather than
+        // taking the program down with it.
+        state.write_output(CallId(999), OutputStream::Stdout, "orphan".to_string());
+
+        assert!(output_payloads(&run_store, boundary_id).is_empty());
     }
 }

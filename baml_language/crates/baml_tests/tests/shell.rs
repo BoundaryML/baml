@@ -1,12 +1,7 @@
 //! Unified tests for shell operations.
 //!
-//! Tests converted to BAML (ns_shell/shell.baml):
-//!   shell_echo, shell_failing_command, shell_with_variable,
-//!   shell_ok_method, exec_echo, shell_stdout_bytes.
-//!
-//! Tests kept here (not convertible):
+//! Platform-specific and timing-sensitive tests:
 //!   shell_with_pipe        — Unix-only (`tr`), has insta bytecode snapshot.
-//!   shell_nonexistent_command — non-deterministic exit code (127/9009/1).
 //!   shell_stderr           — Unix-only `>&2` redirect.
 //!   exec_failing           — platform-split binary (`false` vs `cmd`).
 //!   exec_with_args         — platform-split (`printf` vs `cmd`).
@@ -45,26 +40,6 @@ async fn shell_with_pipe() {
         output.result,
         Ok(BexExternalValue::String("HELLO WORLD\n".to_string().into()))
     );
-}
-
-#[tokio::test]
-async fn shell_nonexistent_command() {
-    let output = baml_test!(
-        r#"
-            function main() -> int {
-                baml.sys.shell("nonexistent_command_12345", null).exit_code
-            }
-        "#
-    );
-    // Should succeed (shell itself spawns fine) with a non-zero exit code.
-    // Unix shells return 127, cmd returns 9009, PowerShell returns 1.
-    assert!(output.result.is_ok());
-    if let Ok(BexExternalValue::Int(code)) = &output.result {
-        assert_ne!(
-            *code, 0,
-            "nonexistent command should have non-zero exit code"
-        );
-    }
 }
 
 #[tokio::test]
@@ -274,6 +249,122 @@ async fn exec_with_timeout() {
     assert!(output.result.is_err());
 }
 
+// === start_process() streaming tests ===
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_yields_stdout_before_exit() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'first\n'; while :; do :; done"],
+                    baml.sys.ProcessOptions { timeout_ms: 2000 },
+                );
+                defer { process.close() }
+
+                let first = match (process.stdout.next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                };
+                process.kill();
+                let exit = process.wait();
+                first == "first" && !exit.ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_iterates_lines_and_final_unterminated_line() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'one\ntwo'"],
+                    null,
+                );
+                defer { process.close() }
+
+                let lines = process.stdout.collect();
+                let exit = process.wait();
+                if (!exit.ok()) {
+                    return "bad exit";
+                }
+                lines.join("|")
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("one|two".to_string().into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_supports_incremental_stdin() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "cat",
+                    [],
+                    baml.sys.ProcessOptions { keep_stdin_open: true },
+                );
+                defer { process.close() }
+
+                process.write_stdin("one\n");
+                let one = process.stdout._next() ?? "";
+                process.write_stdin("two\n");
+                let two = process.stdout._next() ?? "";
+                process.close_stdin();
+                let exit = process.wait();
+                if (!exit.ok()) {
+                    return "bad exit";
+                }
+                one + "|" + two
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("one|two".to_string().into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stdout_read_honors_process_timeout() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "while :; do :; done"],
+                    baml.sys.ProcessOptions { timeout_ms: 25 },
+                );
+                defer { process.close() }
+
+                process.stdout.next() catch (e) {
+                    let timeout: baml.errors.Timeout => { return true; },
+                    _ => { return false; },
+                };
+                false
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
 async fn shell_with_options() {
@@ -308,6 +399,27 @@ async fn shell_with_options() {
     if let Ok(BexExternalValue::String(stdout)) = &output.result {
         assert!(stdout.trim().to_lowercase().contains("temp"));
     }
+}
+
+// === pid() tests ===
+
+/// `baml.sys.pid` reports the ID of the process running the VM, not of any
+/// child it spawns. The test harness runs the engine in-process, so the only
+/// correct answer is this test binary's own PID.
+#[tokio::test]
+async fn pid_is_the_host_process() {
+    let output = baml_test!(
+        r#"
+            function main() -> int {
+                baml.sys.pid()
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Int(i64::from(std::process::id())))
+    );
 }
 
 // === stdout / stderr as uint8array field tests ===

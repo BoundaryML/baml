@@ -1,4 +1,8 @@
 //! Tests for baml.glob namespace.
+//!
+//! These tests require host-created symlinks and permission manipulation,
+//! which are not available from BAML. The assertion `output.result.is_err()`
+//! is a host-level observation with no BAML-side equivalent.
 
 use baml_tests::baml_test;
 use indexmap::indexmap;

@@ -30,6 +30,15 @@ fn collect_baml_files(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) 
     for entry in std::fs::read_dir(dir).expect("read_dir baml_src") {
         let path = entry.expect("dir entry").path();
         if path.is_dir() {
+            // Skip hidden dirs (e.g. a stray `.baml/cache` a CLI run may have
+            // left behind); the corpus is only the checked-in `.baml` sources.
+            if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with('.'))
+            {
+                continue;
+            }
             collect_baml_files(root, &path, out);
         } else if path.extension().and_then(|e| e.to_str()) == Some("baml") {
             let rel = path
@@ -56,6 +65,15 @@ fn compile_baml_src() -> Program {
         .map(|(path, content)| (path.as_str(), content.as_str()))
         .collect();
     baml_project::testing::compile_multi_file(&refs)
+}
+
+#[test]
+fn promptfiddle_demo_compiles() {
+    // This cross-workspace include is intentionally cursed: Prompt Fiddle owns
+    // the demo, while this existing test binary checks it without a second compiler build.
+    let source =
+        include_str!("../../../../typescript2/app-promptfiddle/src/playground/default.baml");
+    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", source)]);
 }
 
 /// Strip the `ns_` prefix from a directory segment if it names a valid namespace
@@ -107,12 +125,15 @@ fn bytecode() {
     // Group user (non-stdlib, non-auto-derived) functions by their namespace.
     let mut by_namespace: BTreeMap<String, Vec<(String, &Function)>> = BTreeMap::new();
     for (name, idx) in &program.function_indices {
-        if name.starts_with("baml.")
-            || name.starts_with("testing.")
-            || name.starts_with("assert.")
-            || name.starts_with("log.")
-            || name.starts_with("env.")
-        {
+        // Stdlib functions are not this suite's subject — it snapshots the
+        // BAML written in `baml_src/`. The package list comes from
+        // `baml_builtins2::ALL`, so adding a builtin package (ai, openai,
+        // anthropic, google, claude_code, ...) never floods these snapshots.
+        let is_stdlib = baml_builtins2::stdlib_package_names().iter().any(|pkg| {
+            let pkg: &str = pkg;
+            name.len() > pkg.len() && name.as_bytes()[pkg.len()] == b'.' && name.starts_with(pkg)
+        });
+        if is_stdlib || name.starts_with("env.") {
             continue;
         }
         let Some(Object::Function(func)) = program.objects.get(*idx) else {
@@ -145,6 +166,14 @@ fn bytecode() {
 /// Execute `baml test`
 #[test]
 fn baml_test() {
+    // Isolate the CLI's bytecode cache and home per run. Without this, the CLI
+    // writes `<project>/.baml/cache` straight into the source tree that the
+    // `bytecode`/`emit_determinism`/`link_units_oracle` tests scan
+    // concurrently, and successive runs share (and can corrupt) that cache.
+    let tmp = tempfile::tempdir().expect("tempdir for corpus cache");
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
     let status = std::process::Command::new("cargo")
         .args([
             "run",
@@ -155,6 +184,9 @@ fn baml_test() {
             "--from",
             concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src"),
         ])
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("BAML_HOME", &home)
+        .env("BAML_CACHE_DIR", tmp.path().join("cache"))
         .status()
         .expect("baml_cli test should not fail");
     assert!(status.success());

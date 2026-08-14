@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createRunStoreClient } from './run-store-client';
+import {
+  RunCommandError,
+  createRunStoreClient,
+  isProjectNotReadyError,
+} from './run-store-client';
 import type { RuntimePort } from './runtime-port';
 import type { Run, WorkerInMessage, WorkerOutMessage } from './worker-protocol';
 
@@ -319,6 +323,36 @@ describe('run-store-client', () => {
     });
 
     await expect(pending).resolves.toEqual(run);
+    client.dispose();
+  });
+
+  it('rejects commands with a structured RunCommandError carrying the code', async () => {
+    const port = new FakeRuntimePort();
+    const client = createRunStoreClient(port);
+
+    const pending = client.startRun({
+      project: 'project',
+      functionName: 'Extract',
+      argsBytes: new Uint8Array([1]),
+    });
+
+    port.emit({
+      type: 'commandError',
+      requestId: 1,
+      code: 'projectNotReady',
+      message: 'Cannot start run: rebuild pending',
+    });
+
+    const error = await pending.then(
+      () => undefined,
+      (rejection: unknown) => rejection,
+    );
+    expect(error).toBeInstanceOf(RunCommandError);
+    expect((error as RunCommandError).code).toBe('projectNotReady');
+    expect(isProjectNotReadyError(error)).toBe(true);
+    expect((error as RunCommandError).message).toBe(
+      'projectNotReady: Cannot start run: rebuild pending',
+    );
     client.dispose();
   });
 });

@@ -4,8 +4,8 @@ function Bar {
 }
 
 function Bar(a: string, b: int | bool) -> int {
-  client Bar
-  prompt #"fa"#
+  client: Bar
+  prompt: `fa`
 }
 
 // error: The function "Bar" cannot be re-defined because a function with that name already exists.
@@ -62,23 +62,11 @@ function Bar(a: string, b: int | bool) -> int {
 
 //----
 //- diagnostics
-// error: Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }
-//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
-//    │
+// E0010
+//
+//   × invalid syntax
+//    ╭─[functions_v2_duplicate_names.baml:1:14]
 //  1 │ function Bar {
-//    │              ┬
-//    │              ╰── Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
-//    ╭─[ functions_v2_duplicate_names.baml:6:47 ]
-//    │
-//  6 │ ╭─▶ function Bar(a: string, b: int | bool) -> int {
-//    ┆ ┆
-//  9 │ ├─▶ }
-//    │ │
-//    │ ╰─────── type mismatch: expected baml.llm.Client, got () -> unknown throws never
-//    │
-//    │     Note: Error code: E0001
-// ───╯
+//    ·              ┬
+//    ·              ╰── old-style function syntax; use `function Name(params...) -> ReturnType { ... }`
+//    ╰────

@@ -2,11 +2,11 @@
 // concrete receiver must project with `.as<Interface>` before calling.
 
 interface Serializer {
-  function encode(self) -> string
+  function encode(self) -> string throws never
 }
 
 interface BinarySerializer {
-  function encode(self) -> string
+  function encode(self) -> string throws never
 }
 
 class Hybrid {
@@ -24,12 +24,11 @@ function bad(h: Hybrid) -> string {
 
 //----
 //- diagnostics
-// error: method `encode` on class `Hybrid` is declared by multiple interfaces: `Serializer`, `BinarySerializer`; unqualified calls will be ambiguous — use obj.as<Serializer>.encode() or obj.as<BinarySerializer>.encode()
-//     ╭─[ interface_error_ambiguous_method_call.baml:22:10 ]
-//     │
+// E0121
+//
+//   × method `encode` on class `Hybrid` is declared by multiple interfaces: `Serializer`, `BinarySerializer`; unqualified calls will be ambiguous — use obj.as<Serializer>.encode() or
+//   │ obj.as<BinarySerializer>.encode()
+//     ╭─[interface_error_ambiguous_method_call.baml:22:10]
 //  22 │   return h.encode()
-//     │          ────┬───
-//     │              ╰───── method `encode` on class `Hybrid` is declared by multiple interfaces: `Serializer`, `BinarySerializer`; unqualified calls will be ambiguous — use obj.as<Serializer>.encode() or obj.as<BinarySerializer>.encode()
-//     │
-//     │ Note: Error code: E0121
-// ────╯
+//     ·          ────────
+//     ╰────

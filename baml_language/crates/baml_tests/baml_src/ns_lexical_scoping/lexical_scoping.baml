@@ -128,55 +128,55 @@ function rule2_pre_shadow_mutation_escapes_post_shadow_does_not() -> int {
 // ─── lexical_scoping_runtime_regressions (individual sub-tests) ──────────────
 
 test "same_scope_shadow" {
-    assert.is_true(baml.deep_equals(same_scope_shadow(), 2))
+    assert.equal(same_scope_shadow(), 2)
 }
 
 test "outer_restored" {
-    assert.is_true(baml.deep_equals(outer_restored(), 1))
+    assert.equal(outer_restored(), 1)
 }
 
 test "initializer_uses_previous" {
-    assert.is_true(baml.deep_equals(initializer_uses_previous(), 2))
+    assert.equal(initializer_uses_previous(), 2)
 }
 
 test "shadow_param" {
-    assert.is_true(baml.deep_equals(shadow_param(4), 5))
+    assert.equal(shadow_param(4), 5)
 }
 
 test "for_loop_restores_outer" {
-    assert.is_true(baml.deep_equals(for_loop_restores_outer(), 1))
+    assert.equal(for_loop_restores_outer(), 1)
 }
 
 test "nested_outer_restored" {
-    assert.is_true(baml.deep_equals(nested_outer_restored(), 1))
+    assert.equal(nested_outer_restored(), 1)
 }
 
 test "capture_before_after_shadow" {
-    assert.is_true(baml.deep_equals(capture_before_after_shadow(), 12))
+    assert.equal(capture_before_after_shadow(), 12)
 }
 
 test "rule1_while_no_leakage" {
-    assert.is_true(baml.deep_equals(rule1_while_no_leakage(), 1))
+    assert.equal(rule1_while_no_leakage(), 1)
 }
 
 test "rule1_while_observed_inner_shadow" {
-    assert.is_true(baml.deep_equals(rule1_while_observed_inner_shadow(), 100))
+    assert.equal(rule1_while_observed_inner_shadow(), 100)
 }
 
 test "rule2_block_outer_mutation_escapes" {
-    assert.is_true(baml.deep_equals(rule2_block_outer_mutation_escapes(), 2))
+    assert.equal(rule2_block_outer_mutation_escapes(), 2)
 }
 
 test "rule2_for_outer_mutation_escapes" {
-    assert.is_true(baml.deep_equals(rule2_for_outer_mutation_escapes(), 2))
+    assert.equal(rule2_for_outer_mutation_escapes(), 2)
 }
 
 test "rule3_block_shadow_then_assign_inner_does_not_escape" {
-    assert.is_true(baml.deep_equals(rule3_block_shadow_then_assign_inner_does_not_escape(), 1))
+    assert.equal(rule3_block_shadow_then_assign_inner_does_not_escape(), 1)
 }
 
 test "rule2_pre_shadow_mutation_escapes_post_shadow_does_not" {
-    assert.is_true(baml.deep_equals(rule2_pre_shadow_mutation_escapes_post_shadow_does_not(), 2))
+    assert.equal(rule2_pre_shadow_mutation_escapes_post_shadow_does_not(), 2)
 }
 
 // ─── declared_type_restored_across_scope ─────────────────────────────────────
@@ -275,7 +275,7 @@ function match_and_catch_main() -> int {
 }
 
 test "match_and_catch_pattern_bindings_restore_outer_locals" {
-    assert.is_true(baml.deep_equals(match_and_catch_main(), 32010))
+    assert.equal(match_and_catch_main(), 32010)
 }
 
 // ─── multi_clause_catch_uses_clause_local_binding ────────────────────────────
@@ -293,5 +293,29 @@ function multi_clause_catch_main() -> int {
 }
 
 test "multi_clause_catch_uses_clause_local_binding" {
-    assert.is_true(baml.deep_equals(multi_clause_catch_main(), 7))
+    assert.equal(multi_clause_catch_main(), 7)
+}
+
+function closure_parameter_in_for_iterable() -> int {
+    let sum = 0
+    for (let n in [1, 2, 3, 4].filter((x: int) -> bool { x > 2 })) {
+        sum += n
+    }
+    sum
+}
+
+test "closure_parameter_resolves_in_for_iterable" {
+    assert.equal(closure_parameter_in_for_iterable(), 7)
+}
+
+function closure_parameter_in_while_condition() -> int {
+    let i = 0
+    while (((x: int) -> bool { x < 3 })(i)) {
+        i += 1
+    }
+    i
+}
+
+test "closure_parameter_resolves_in_while_condition" {
+    assert.equal(closure_parameter_in_while_condition(), 3)
 }

@@ -1,0 +1,10 @@
+[package]
+name = "beps"
+
+[toolchain]
+version = "0.15.1-nightly.20260729.a"
+
+[generator.typescript]
+output_type = "typescript/node"
+output_dir = "."
+naming_convention = "preserve-case"

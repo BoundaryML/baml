@@ -19,10 +19,10 @@ use base64::Engine;
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
     baml_bridge::cffi::{
-        BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, BamlTyClass,
+        BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, BamlTy, BamlTyClass,
         InboundClassValue, InboundMapEntry, InboundValue,
-        baml_outbound_value::Value as OutboundValue, inbound_map_entry::Key as MapKeyVariant,
-        inbound_value::Value as InboundVariant,
+        baml_outbound_value::Value as OutboundValue, baml_ty::Ty as BamlTyVariant,
+        inbound_map_entry::Key as MapKeyVariant, inbound_value::Value as InboundVariant,
     },
 };
 // Sentinel `_handle` key used in test fixtures that synthesize a
@@ -261,12 +261,14 @@ fn runtime_with_dispatch(host_dispatch: &js_sys::Function) -> (BamlWasmRuntime, 
 /// Build playground run argument bytes with a `callback` `HOST_VALUE` handle + `x`.
 fn build_callback_args(callback_key: u64, x: i64) -> Vec<u8> {
     let cb_handle_value = InboundValue {
+        value_type: None,
         value: Some(InboundVariant::Handle(BamlHandle {
             key: callback_key,
             handle_type: BamlHandleType::HostValueCallable as i32,
         })),
     };
     let x_value = InboundValue {
+        value_type: None,
         value: Some(InboundVariant::IntValue(x)),
     };
     encode_run_args([
@@ -399,6 +401,7 @@ fn make_dispatch_double_to_string() -> js_sys::Function {
             let x = decode_first_int(&bytes);
             let s = format!("{}", x * 2);
             let inbound = InboundValue {
+                value_type: None,
                 value: Some(InboundVariant::StringValue(s)),
             };
             let payload = inbound.encode_to_vec();
@@ -427,6 +430,7 @@ fn make_dispatch_multiply_to_string(factor: i64) -> js_sys::Function {
             let x = decode_first_int(&bytes);
             let s = format!("{}", x * factor);
             let inbound = InboundValue {
+                value_type: None,
                 value: Some(InboundVariant::StringValue(s)),
             };
             let payload = inbound.encode_to_vec();
@@ -452,6 +456,7 @@ fn make_dispatch_error() -> js_sys::Function {
                 InboundMapEntry {
                     key: Some(MapKeyVariant::StringKey(key.to_string())),
                     value: Some(InboundValue {
+                        value_type: None,
                         value: Some(InboundVariant::StringValue(value.to_string())),
                     }),
                 }
@@ -459,6 +464,7 @@ fn make_dispatch_error() -> js_sys::Function {
             let handle_field = InboundMapEntry {
                 key: Some(MapKeyVariant::StringKey("_handle".to_string())),
                 value: Some(InboundValue {
+                    value_type: None,
                     value: Some(InboundVariant::Handle(BamlHandle {
                         key: UNRESOLVED_HOST_ERROR_KEY,
                         handle_type: BamlHandleType::HostValueOpaque as i32,
@@ -466,11 +472,13 @@ fn make_dispatch_error() -> js_sys::Function {
                 }),
             };
             let inbound = InboundValue {
-                value: Some(InboundVariant::ClassValue(InboundClassValue {
-                    class_ty: Some(BamlTyClass {
+                value_type: Some(BamlTy {
+                    ty: Some(BamlTyVariant::ClassTy(BamlTyClass {
                         name: "baml.errors.HostCallable".to_string(),
                         type_args: vec![],
-                    }),
+                    })),
+                }),
+                value: Some(InboundVariant::ClassValue(InboundClassValue {
                     fields: vec![
                         field("message", "test boom"),
                         field("class_name", "RuntimeError"),

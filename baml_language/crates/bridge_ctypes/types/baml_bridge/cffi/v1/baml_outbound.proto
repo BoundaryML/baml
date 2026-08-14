@@ -7,6 +7,9 @@ import "baml_bridge/cffi/v1/baml_handle.proto";
 import "baml_bridge/cffi/v1/baml_type.proto";
 
 option go_package = "./cffi";
+// C++ generates against the lite runtime (no descriptors/reflection);
+// ignored by every other generator in this repo (prost, protoc-gen-go).
+option optimize_for = LITE_RUNTIME;
 
 // -----------------------------------------------------------------------------
 // Outbound values — engine to host (type-rich)
@@ -129,16 +132,22 @@ message BamlValueEnum {
 }
 
 // A union value: the selected variant's value plus its `self_type` (the full
-// union type as a `BamlTy`). Hosts decode purely by recursing into `value` — the
-// `self_type` metadata is written for completeness but read by no host.
+// union type as a `BamlTy`) and the selected arm's canonical index.
 message BamlValueUnionVariant {
   // Optional union name; unions carry their full type in `self_type`.
   string name = 1;
   bool is_optional = 2;
   bool is_single_pattern = 3;
   BamlTy self_type = 4;
+  // Display-only arm name. Consumers must use `selected_option_index` for
+  // canonical selected-arm identity.
   string value_option_name = 5;
   BamlOutboundValue value = 6;
+  reserved 7;
+  // Zero-based position of the selected arm in `self_type`'s canonical union
+  // member order. Presence distinguishes the first arm from an absent
+  // discriminator. The selected type is derived from this index.
+  optional uint32 selected_option_index = 8;
 }
 
 // -----------------------------------------------------------------------------

@@ -130,6 +130,37 @@ impl<'db> Definition<'db> {
     pub fn kind_name(self) -> &'static str {
         self.kind().as_str()
     }
+
+    /// The declaration kind as written in BAML source.
+    ///
+    /// Some configuration declarations are lowered to top-level lets before
+    /// HIR. Keep that internal representation from leaking into source-level
+    /// namespace diagnostics.
+    pub fn source_kind(self, db: &'db dyn crate::Db) -> DefinitionKind {
+        let Definition::Let(loc) = self else {
+            return self.kind();
+        };
+        let item_tree = crate::file_item_tree(db, loc.file(db));
+        match item_tree.lets.get(&loc.id(db)).map(|item| item.origin) {
+            Some(baml_compiler2_ast::LetOrigin::Client) => DefinitionKind::Client,
+            Some(baml_compiler2_ast::LetOrigin::RetryPolicy) => DefinitionKind::RetryPolicy,
+            Some(baml_compiler2_ast::LetOrigin::Source) | None => DefinitionKind::Let,
+        }
+    }
+
+    pub fn source_kind_name(self, db: &'db dyn crate::Db) -> &'static str {
+        self.source_kind(db).as_str()
+    }
+
+    /// Whether this definition is outside BAML's user-facing language surface.
+    pub fn is_language_internal(self, db: &'db dyn crate::Db) -> bool {
+        let Definition::Function(loc) = self else {
+            return false;
+        };
+        crate::file_item_tree(db, loc.file(db))[loc.id(db)]
+            .metadata
+            .is_language_internal
+    }
 }
 
 /// A symbol contribution: name, definition, and the name's source span.

@@ -65,7 +65,7 @@ mod builder_tests {
         let green = builder.finish();
         let root = SyntaxNode::new_root(green);
         let type_expr = ast::TypeExpr::cast(root).expect("expected TYPE_EXPR");
-        assert_eq!(type_expr.integer_literal(), None);
+        assert!(type_expr.integer_literal().is_none());
     }
 
     #[test]
@@ -78,7 +78,11 @@ mod builder_tests {
         let green = builder.finish();
         let root = SyntaxNode::new_root(green);
         let type_expr = ast::TypeExpr::cast(root).expect("expected TYPE_EXPR");
-        assert_eq!(type_expr.integer_literal(), Some(-42));
+        let (negated, tok) = type_expr
+            .integer_literal()
+            .expect("expected signed literal");
+        assert!(negated);
+        assert_eq!(tok.text(), "42");
     }
 
     #[test]
@@ -92,7 +96,7 @@ mod builder_tests {
         let green = builder.finish();
         let root = SyntaxNode::new_root(green);
         let type_expr = ast::TypeExpr::cast(root).expect("expected TYPE_EXPR");
-        assert_eq!(type_expr.float_literal(), None);
+        assert!(type_expr.float_literal().is_none());
     }
 
     #[test]

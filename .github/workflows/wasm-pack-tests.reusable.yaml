@@ -69,7 +69,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "cargo:wasm-pack"
+          install_args: "github:rustwasm/wasm-pack"
 
       # NOTE: if you add a crate with wasm-gated tests, add a step here.
       - name: "Run wasm-pack tests (sys_llm)"

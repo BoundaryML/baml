@@ -17,12 +17,23 @@ function BasicIf() -> string {
 
 //----
 //- diagnostics
-// error: type mismatch: expected string, got int
-//     ╭─[ headers_basic_if.baml:14:5 ]
-//     │
-//  14 │     z
-//     │     ┬  
-//     │     ╰── type mismatch: expected string, got int
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+// E0001
+//
+//   × mismatched types
+//     ╭─[headers_basic_if.baml:2:30]
+//   2 │ ╭─▶ function BasicIf() -> string {
+//   3 │ │       let x = 1;
+//   4 │ │
+//   5 │ │       //# This is a named statement
+//   6 │ │       let z = if (true) {
+//   7 │ │           //# Then Statement
+//   8 │ │           12
+//   9 │ │       } else {
+//  10 │ │           //# Else Statement
+//  11 │ │           13
+//  12 │ │       };
+//  13 │ │
+//  14 │ │       z
+//  15 │ ├─▶ }
+//     · ╰──── expected `string`, found `int`
+//     ╰────

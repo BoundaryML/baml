@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19021
+---
+=== PPIR ===
+function user.annotatedLiteralUnion() -> int  [expr] {
+  { let x: 1 | 2 = 1; return x }
+}
+function user.arrayOfInts() -> int[]  [expr] {
+  { let x = [1, 2, 3]; return x }
+}
+function user.mapOfInts() -> map<string, int>  [expr] {
+  { let m = map { "a": 1, "b": 2 }; return m }
+}
+function user.nestedArray() -> int[][]  [expr] {
+  { let x = [[1, 2], [3, 4]]; return x }
+}

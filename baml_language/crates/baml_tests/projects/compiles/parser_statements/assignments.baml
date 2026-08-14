@@ -73,7 +73,7 @@ function let_mixed_semicolons() -> int {
 }
 
 // Edge case: call followed by parens on next line - parses as foo()(1) (chained call)
-function edge_call_then_parens(foo: () -> (int) -> int) -> int {
+function edge_call_then_parens(foo: () -> ((int) -> int throws never)) -> int {
   foo()
   (1)
   2

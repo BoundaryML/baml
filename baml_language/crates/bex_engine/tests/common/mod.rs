@@ -117,7 +117,7 @@ pub(crate) fn prompt_ast_to_string(value: &BexExternalValue) -> String {
     match value {
         BexExternalValue::Instance {
             class_name, fields, ..
-        } if class_name == "baml.llm.PromptAst" => {
+        } if class_name == "ai.Prompt" => {
             let data = fields
                 .get("_data")
                 .expect("PromptAst instance should contain _data");
@@ -160,61 +160,70 @@ pub(crate) fn prompt_ast_to_string(value: &BexExternalValue) -> String {
 /// `baml_types` should contain class/enum/type definitions.
 /// `return_type` is the function's return type (e.g. "Tree", "`RecAliasOne`", "int").
 ///
-/// Returns the full rendered prompt string (input arg + output format).
+/// Returns the full rendered prompt string (input arg + output format), as
+/// produced by the compiler-generated `<Fn>$render_prompt` companion.
 pub(crate) async fn render_output_format(baml_types: &str, return_type: &str) -> String {
-    render_output_format_with_opts(baml_types, return_type, "").await
+    let source = format!(
+        r##"
+{baml_types}
+
+function TestFunc(input: string) -> {return_type} {{
+    client: "openai/gpt-4o"
+    prompt: `
+        ${{input}}
+        ${{ctx.output_format}}
+    `
+}}
+
+function get_prompt() -> string {{
+    TestFunc$render_prompt("test").text()
+}}
+"##
+    );
+    render_stable(&source).await
 }
 
-/// Like `render_output_format` but with custom kwargs on `ctx.output_format(...)`.
+/// Like `render_output_format` but with custom kwargs on the output format.
 ///
-/// `kwargs` is inserted directly, e.g. `"prefix=null"` or `"map_style='angle'"`.
-/// Pass `""` for default behavior.
-///
-/// Runs the full pipeline 3 times (compile -> engine -> render -> extract) to
-/// verify that output format rendering is deterministic/stable across runs.
+/// `kwargs` is inserted into `ctx.output_format_with(...)` on the
+/// standalone `baml.prompt` tag path (the ai-world LLM-function prompt
+/// only binds plain `ctx.output_format`), e.g. `render_null_as = "omit"`.
 pub(crate) async fn render_output_format_with_opts(
     baml_types: &str,
     return_type: &str,
     kwargs: &str,
 ) -> String {
-    let output_format_call = if kwargs.is_empty() {
-        "ctx.output_format".to_string()
-    } else {
-        format!("ctx.output_format({kwargs})")
-    };
-
     let source = format!(
         r##"
-client TestClient {{
-    provider openai
-    options {{
-        model "gpt-4"
-    }}
-}}
-
 {baml_types}
 
-function TestFunc(input: string) -> {return_type} {{
-    client TestClient
-    prompt #"
-        {{{{ input }}}}
-        {{{{ {output_format_call} }}}}
-    "#
-}}
-
-function get_prompt() -> baml.llm.PromptAst {{
-    let args = {{ "input": "test" }};
-    baml.llm.render_prompt(TestClient, "TestFunc", args)
+function get_prompt() -> string {{
+    let cc = baml.prompt.ContextClient {{ name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }};
+    let rt = reflect.type_of<{return_type}>();
+    let render_ctx = baml.prompt.Context {{
+        client: cc,
+        tags: {{}},
+        output_format: baml.prompt.render_output_format(rt),
+        _output_format: baml.prompt.build_output_format(rt),
+    }};
+    let render = ai.prompt`test
+${{render_ctx.output_format_with({kwargs})}}`;
+    render(render_ctx).text()
 }}
 "##
     );
+    render_stable(&source).await
+}
 
+/// Run `get_prompt()` from `source` 3 times end-to-end (compile -> engine ->
+/// render) and assert the rendered output is stable across independent engine
+/// instances (i.e. deterministic — a `HashMap` where an `IndexMap` belongs would
+/// flake here).
+async fn render_stable(source: &str) -> String {
     let mut first_result: Option<String> = None;
 
-    // Run 3 times end-to-end to check that the rendered output is stable
-    // (i.e. deterministic across independent engine instances).
     for i in 0..3 {
-        let snapshot = compile_for_engine(&source);
+        let snapshot = compile_for_engine(source);
         let engine = Arc::new(
             BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
                 .expect("Failed to create engine"),
@@ -230,7 +239,10 @@ function get_prompt() -> baml.llm.PromptAst {{
             .await
             .expect("render_prompt failed");
 
-        let rendered = prompt_ast_to_string(&result);
+        let BexExternalValue::String(rendered) = result else {
+            panic!("expected get_prompt() to return a string, got {result:?}");
+        };
+        let rendered = rendered.to_string();
 
         match &first_result {
             None => first_result = Some(rendered),

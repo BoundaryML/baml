@@ -27,7 +27,7 @@ use crate::baml_bridge::cffi::{
     BamlTyEnumVariant, BamlTyFunction, BamlTyFunctionParam, BamlTyFunctionParamMode, BamlTyFuture,
     BamlTyInterface, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMediaKind, BamlTyOptional,
     BamlTyPrimitive, BamlTyPrimitiveKind, BamlTyTypeAlias, BamlTyTypeVar, BamlTyUnion,
-    BamlTyWatchAccessor, baml_ty::Ty as TyVariant, baml_ty_literal::Literal as TyLiteralVariant,
+    baml_ty::Ty as TyVariant, baml_ty_literal::Literal as TyLiteralVariant,
 };
 
 /// Encode a `RuntimeTy` into a wire `BamlTy`.
@@ -161,13 +161,9 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
             error: Some(Box::new(runtime_ty_to_proto_ty(error))),
         })),
-        RuntimeTy::WatchAccessor(inner, _) => {
-            TyVariant::WatchAccessor(Box::new(BamlTyWatchAccessor {
-                inner: Some(Box::new(runtime_ty_to_proto_ty(inner))),
-            }))
-        }
-        RuntimeTy::TypeVar(name, _) => TyVariant::TypeVar(BamlTyTypeVar {
-            name: name.as_str().to_string(),
+        RuntimeTy::TypeVar(param, _) => TyVariant::TypeVar(BamlTyTypeVar {
+            name: param.as_str().to_string(),
+            index: param.index(),
         }),
         RuntimeTy::AssociatedTypeProjection {
             base,
@@ -176,15 +172,15 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             ..
         } => TyVariant::AssociatedTypeProjection(Box::new(BamlTyAssociatedTypeProjection {
             base: Some(Box::new(runtime_ty_to_proto_ty(base))),
-            interface: interface.as_deref().map(|iface| {
-                Box::new(BamlTy {
-                    ty: Some(TyVariant::Interface(interface_to_proto(
-                        &iface.name,
-                        &iface.generics,
-                        &iface.associated_types,
-                    ))),
-                })
-            }),
+            // Always present on the Rust side; the wire field stays optional for
+            // backward compatibility but a projection always encodes its interface.
+            interface: Some(Box::new(BamlTy {
+                ty: Some(TyVariant::Interface(interface_to_proto(
+                    &interface.name,
+                    &interface.generics,
+                    &interface.associated_types,
+                ))),
+            })),
             member: member.as_str().to_string(),
         })),
 
@@ -240,7 +236,9 @@ fn function_param_mode(mode: baml_type::FunctionParamMode) -> BamlTyFunctionPara
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Name, RuntimeInterface, RuntimeTy, TyAttr, TypeName};
+    use baml_type::{
+        Freshness, Literal, Name, ParamTy, RuntimeInterface, RuntimeTy, TyAttr, TypeName,
+    };
 
     use super::runtime_ty_to_proto_ty;
     use crate::{
@@ -271,6 +269,31 @@ mod tests {
     }
 
     #[test]
+    fn roundtrip_preserves_type_var_index() {
+        assert_roundtrip(&RuntimeTy::TypeVar(
+            ParamTy::new(7, Name::new("T")),
+            TyAttr::default(),
+        ));
+    }
+
+    #[test]
+    fn roundtrip_preserves_every_literal_identity() {
+        for literal in [
+            Literal::String("draft".into()),
+            Literal::Int(42),
+            Literal::Bigint(42.into()),
+            Literal::Float("1.25".into()),
+            Literal::Bool(true),
+        ] {
+            assert_roundtrip(&RuntimeTy::Literal(
+                literal,
+                Freshness::Regular,
+                TyAttr::default(),
+            ));
+        }
+    }
+
+    #[test]
     fn roundtrip_interface_and_projection() {
         // Interface existential with generic args + an associated binding.
         assert_roundtrip(&RuntimeTy::Interface(
@@ -283,18 +306,22 @@ mod tests {
         // `BamlTy::Interface`, decoded back into a `RuntimeInterface`).
         assert_roundtrip(&RuntimeTy::AssociatedTypeProjection {
             base: Box::new(RuntimeTy::int()),
-            interface: Some(Box::new(RuntimeInterface {
+            interface: Box::new(RuntimeInterface {
                 name: TypeName::from_dotted_path("user.Iterator"),
                 generics: vec![RuntimeTy::int()],
                 associated_types: vec![(Name::new("Item"), RuntimeTy::string())],
-            })),
+            }),
             member: Name::new("Item"),
             attr: TyAttr::default(),
         });
-        // Projection with no constraint (`interface: None`).
+        // A projection through an unparameterized interface.
         assert_roundtrip(&RuntimeTy::AssociatedTypeProjection {
             base: Box::new(RuntimeTy::string()),
-            interface: None,
+            interface: Box::new(RuntimeInterface {
+                name: TypeName::from_dotted_path("user.HasOutput"),
+                generics: vec![],
+                associated_types: vec![],
+            }),
             member: Name::new("Output"),
             attr: TyAttr::default(),
         });

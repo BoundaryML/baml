@@ -1,0 +1,301 @@
+---
+title: Generating Structured Output from a Dynamic JSON schema
+description: Modify LLM response models at runtime.
+slug: dynamic-json-schemas
+date: Nov 27, 2024
+tags: ['tutorials']
+author:
+  name: Aaron Villalpando
+  imageUrl: /aaronv.jpg
+  linkedin: https://www.linkedin.com/in/aaron-villalpando-99284576/
+---
+
+Sometimes you want to load a JSON schema from a database and get an LLM to generate structured data following that schema. Examples of this include:
+
+- **Content Generation**: Creating structured blog posts, where each piece needs to follow a specific template stored as a schema
+- **Form Processing**: Extracting information from unstructured documents (like resumes or invoices) into standardized JSON formats defined in a database.
+- **Dynamic Reporting**: Creating reports where the structure/fields might change based on user preferences or business rules stored as schemas
+
+Instead of dealing with raw schema blobs in your codebase, you can use **[BAML's dynamic types](https://docs.boundaryml.com/guide/baml-advanced/dynamic-runtime-types)** to generate LLM outputs from JSON Schemas, with [higher reliability](https://www.boundaryml.com/blog/sota-function-calling?q=0) than Zod or Pydantic.
+
+**This approach works with all major LLM providers, including OpenAI compatible models, even small Open-Source models!**
+
+## Getting started
+
+For this tutorial we'll be writing **a prompt to extract a resume into a desired JSON Schema**, which we'll modify at runtime. Imagine this is part of an application where the user can decide the schema of the data they want to extract.
+
+
+This tutorial is written for Python, but the capabilities are also available in TypeScript and Ruby.
+
+
+[View the full source code](https://github.com/BoundaryML/baml-examples/tree/main/json-schema-to-baml).
+
+### Setup a new project, and add BAML
+BAML is where we will store our prompts (as LLM functions), which we'll then compile into a Python library to call them. BAML will handle parsing and validating the LLM output.
+
+For this we are using [uv](https://astral.sh/blog/uv-unified-python-packaging) for python environments:
+
+```bash
+uv init json-schema-to-baml
+cd json-schema-to-baml
+uv add pydantic baml-py python-dotenv[cli]
+```
+
+Install the [VSCode extension for BAML](https://marketplace.visualstudio.com/items?itemName=boundary.Baml-extension).
+
+### Initialize a BAML prompt
+```bash
+uv run baml-cli init
+```
+
+This will create a `baml_src` directory with some starter BAML files.
+
+**Create a new BAML LLM Function**
+
+A prompt is really a function with some input data, and a return type. What we want to do is to create such a function in BAML, but we're going to mark the return type `dynamic`!
+
+```baml baml_src/main.baml
+class DynamicContainer {
+  // we won't add any other fields -- we'll add them at runtime in Python!
+  @@dynamic
+}
+
+function ExtractDynamicTypes(resume: string) -> DynamicContainer {
+  // Set OPENAI_API_KEY to use this client.
+  client CustomGPT4oMini
+  // ctx.output_format is a special variable that tells the
+  // LLM what the schema of DynamicContainer is.
+  prompt #"
+    {{ ctx.output_format }}
+
+    {{ _.role('user') }}
+    Extract from this content:
+    {{ resume }}
+  "#
+}
+
+```
+
+### Generate the Python BAML client
+```bash
+uv run baml-cli generate
+```
+
+
+
+### Write a script to convert JSON Schemas to BAML Types
+
+To handle dynamic schemas, we'll create a utility class that converts JSON Schema definitions into BAML types. This converter will:
+1. Support basic types (strings, numbers, booleans)
+2. Handle nested objects and arrays
+3. Support enums and references
+4. Add descriptions and handle optional fields
+
+First, let's create a new file called `parse_json_schema.py`:
+
+```python
+from typing import Any, Dict
+from baml_client.type_builder import TypeBuilder, FieldType
+
+from pydantic import BaseModel
+
+class SchemaAdder:
+    def __init__(self, tb: TypeBuilder, schema: Dict[str, Any]):
+        self.tb = tb
+        self.schema = schema
+        self._ref_cache = {}
+
+    def _parse_object(self, json_schema: Dict[str, Any]) -> FieldType:
+        assert json_schema["type"] == "object"
+        name = json_schema.get("title")
+        if name is None:
+            raise ValueError("Title is required in JSON schema for object type")
+
+        required_fields = json_schema.get("required", [])
+        assert isinstance(required_fields, list)
+
+        new_cls = self.tb.add_class(name)
+        if properties := json_schema.get("properties"):
+            assert isinstance(properties, dict)
+            for field_name, field_schema in properties.items():
+                assert isinstance(field_schema, dict)
+                default_value = field_schema.get("default")
+                field_type = self.parse(field_schema)
+                if field_name not in required_fields:
+                    if default_value is None:
+                        field_type = field_type.optional()
+                property = new_cls.add_property(field_name, field_type)
+                if description := field_schema.get("description"):
+                    assert isinstance(description, str)
+                    if default_value is not None:
+                        description = (
+                            description.strip() + "\n" + f"Default: {default_value}"
+                        )
+                        description = description.strip()
+                    if len(description) > 0:
+                        property.description(description)
+        return new_cls.type()
+
+    def _parse_string(self, json_schema: Dict[str, Any]) -> FieldType:
+        assert json_schema["type"] == "string"
+        title = json_schema.get("title")
+
+        if enum := json_schema.get("enum"):
+            assert isinstance(enum, list)
+            if title is None:
+                # Treat as a union of literals
+                return self.tb.union([self.tb.literal_string(value) for value in enum])
+            new_enum = self.tb.add_enum(title)
+            for value in enum:
+                new_enum.add_value(value)
+            return new_enum.type()
+        return self.tb.string()
+
+    def _load_ref(self, ref: str) -> FieldType:
+        assert ref.startswith("#/"), f"Only local references are supported: {ref}"
+        _, left, right = ref.split("/", 2)
+
+        if ref not in self._ref_cache:
+            if refs := self.schema.get(left):
+                assert isinstance(refs, dict)
+                if right not in refs:
+                    raise ValueError(f"Reference {ref} not found in schema")
+                self._ref_cache[ref] = self.parse(refs[right])
+        return self._ref_cache[ref]
+
+    def parse(self, json_schema: Dict[str, Any]) -> FieldType:
+        if any_of := json_schema.get("anyOf"):
+            assert isinstance(any_of, list)
+            return self.tb.union([self.parse(sub_schema) for sub_schema in any_of])
+
+        if ref := json_schema.get("$ref"):
+            assert isinstance(ref, str)
+            return self._load_ref(ref)
+
+        type_ = json_schema.get("type")
+        if type_ is None:
+            raise ValueError(f"Type is required in JSON schema: {json_schema}")
+        parse_type = {
+            "string": lambda: self._parse_string(json_schema),
+            "number": lambda: self.tb.float(),
+            "integer": lambda: self.tb.int(),
+            "object": lambda: self._parse_object(json_schema),
+            "array": lambda: self.parse(json_schema["items"]).list(),
+            "boolean": lambda: self.tb.bool(),
+            "null": lambda: self.tb.null(),
+        }
+
+        if type_ not in parse_type:
+            raise ValueError(f"Unsupported type: {type_}")
+
+        field_type = parse_type[type_]()
+
+        return field_type
+
+
+def parse_json_schema(json_schema: Dict[str, Any], tb: TypeBuilder) -> FieldType:
+    parser = SchemaAdder(tb, json_schema)
+    return parser.parse(json_schema)
+
+```
+
+This includes support for:
+- References (`$ref`) for reusing type definitions
+- Enums for string fields with fixed values
+- Union types with `anyOf`
+- Arrays and nested objects
+- Optional fields and default values
+
+
+### Modify the output type of our BAML function to match our schema
+
+We'll use Pydantic to define our schema using `model_json_schema()`, but you can always just use a plain old json definition of it if you prefer.
+
+
+```python test_one.py
+from baml_client import b
+from parse_json_schema import parse_json_schema
+from baml_client.type_builder import TypeBuilder
+from enum import Enum
+from typing import Union, List
+
+from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
+
+
+class Education(BaseModel):
+    institution: str
+    degree: str
+    field_of_study: str
+    graduation_date: str
+    gpa: Union[float, None]
+
+class Resume(BaseModel):
+    personal_info: str
+    summary: str
+    education: List[Education]
+    skills: List[str]
+    languages: List[str]
+
+
+def parse(raw_text: str):
+    tb = TypeBuilder()
+    res = parse_json_schema(Resume.model_json_schema(), tb)
+    # DynamicContainer is the OutputType of the baml function ExtractDynamicTypes
+    tb.DynamicContainer.add_property("data", res)
+    response = b.ExtractDynamicTypes(raw_text, {"tb": tb})
+
+    # Sadly nothing in static analysis can help us here
+    # its a type defined at runtime!
+    data = response.data  # type: ignore
+
+    # This is guaranteed to be succeed thanks to BAML!
+    content = Resume.model_validate(data)
+    print(content)
+
+
+def test_one():
+    parse("""
+John Doe
+john.doe@example.com
+123 Anywhere St. Any City, ST 12345
+
+Objective: To obtain a position in the field of software engineering where I can apply my skills in software development and contribute to innovative projects.
+
+Work Experience:
+Software Engineer at XYZ Corp.
+
+Skills:
+Python, JavaScript, SQL, Git, Docker
+    """)
+
+
+if __name__ == "__main__":
+    test_one()
+
+```
+
+## Run the script:
+
+```bash
+uv run test_one.py
+```
+
+And now you're all set! You should see the following output in your terminal:
+
+<img src="/blog/json-schema/json-schema-terminal-log.png" width="800"/>
+
+
+## Conclusion
+In this article, we explored how to leverage JSON Schema to automatically generate BAML types and extract structured data from unstructured text. This approach combines the best of both worlds:
+
+1. **Type Safety**: By using Pydantic models, we get full type checking and validation at runtime
+2. **Schema Flexibility**: JSON Schema allows us to define complex nested structures that can be automatically converted to BAML types
+3. **Reliability**: BAML's resilient parser ensures that the LLM output always matches our schema
+
+This pattern is particularly useful when you already have defined schemas (like database models or API contracts) and want to extract matching structured data from text. The automatic conversion from JSON Schema to BAML types means you can keep your schemas in one place and automatically generate the necessary BAML code for extraction.
+
+
+
+
+You can find the complete implementation in the [GitHub repository](https://github.com/BoundaryML/baml-examples/tree/main/json-schema-to-baml).

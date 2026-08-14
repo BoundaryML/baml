@@ -201,6 +201,21 @@ async fn run_named_testset(
         .await
 }
 
+/// Helper: run every registered child through the stdlib's parallel test path.
+async fn run_all_tests(
+    engine: &Arc<BexEngine>,
+    registry: BexExternalValue,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    engine
+        .call_function(
+            "testing.TestRegistry.run_all",
+            vec![registry],
+            bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
 fn unwrap_union(value: &BexExternalValue) -> &BexExternalValue {
     match value {
         BexExternalValue::Union { value, .. } => unwrap_union(value),
@@ -256,7 +271,7 @@ async fn collect_tests_run_test_catches_typed_throwing_body() {
         .await
         .expect("collect_tests should succeed");
 
-    let report = run_named_test(&engine, registry, "throws become failure")
+    let report = run_named_test(&engine, registry, "root::throws become failure")
         .await
         .expect("run_test should normalize typed body throws into a report");
 
@@ -299,7 +314,7 @@ async fn collect_tests_run_test_catches_assertion_panic() {
         .await
         .expect("collect_tests should succeed");
 
-    let report = run_named_test(&engine, registry, "assertion becomes failure")
+    let report = run_named_test(&engine, registry, "root::assertion becomes failure")
         .await
         .expect("run_test should normalize assertion panic into a report");
 
@@ -330,17 +345,17 @@ async fn collect_tests_quorum_runner_passes_and_fails() {
         .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
-    expand_testset(&engine, registry.clone(), "suite")
+    expand_testset(&engine, registry.clone(), "root::suite")
         .await
         .expect("expand_set should succeed");
 
-    let pass_report = run_named_test(&engine, registry.clone(), "suite/three of five")
+    let pass_report = run_named_test(&engine, registry.clone(), "root::suite::three of five")
         .await
         .expect("quorum pass should return report");
     assert_eq!(outcome(&pass_report), "pass");
     assert_eq!(array_len_field(&pass_report, "runs"), 5);
 
-    let fail_report = run_named_test(&engine, registry, "suite/two of five")
+    let fail_report = run_named_test(&engine, registry, "root::suite::two of five")
         .await
         .expect("quorum fail should return report");
     assert_eq!(outcome(&fail_report), "fail");
@@ -364,11 +379,11 @@ async fn collect_tests_retry_stops_after_first_success() {
         .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
-    expand_testset(&engine, registry.clone(), "suite")
+    expand_testset(&engine, registry.clone(), "root::suite")
         .await
         .expect("expand_set should succeed");
 
-    let report = run_named_test(&engine, registry, "suite/eventually passes")
+    let report = run_named_test(&engine, registry, "root::suite::eventually passes")
         .await
         .expect("retry should return report");
     assert_eq!(outcome(&report), "pass");
@@ -397,14 +412,14 @@ async fn collect_tests_pass_rate_runner_uses_child_outcomes() {
         .await
         .expect("collect_tests should succeed");
 
-    let pass_report = run_named_testset(&engine, registry.clone(), "passes")
+    let pass_report = run_named_testset(&engine, registry.clone(), "root::passes")
         .await
         .expect("pass-rate pass should return report");
     assert_eq!(outcome(&pass_report), "pass", "{pass_report:?}");
     assert_eq!(int_field(&pass_report, "passed"), 2);
     assert_eq!(int_field(&pass_report, "failed"), 1);
 
-    let fail_report = run_named_testset(&engine, registry, "fails")
+    let fail_report = run_named_testset(&engine, registry, "root::fails")
         .await
         .expect("pass-rate fail should return report");
     assert_eq!(outcome(&fail_report), "fail", "{fail_report:?}");
@@ -427,7 +442,7 @@ async fn collect_tests_fail_fast_stops_after_first_failure() {
         .await
         .expect("collect_tests should succeed");
 
-    let report = run_named_testset(&engine, registry, "suite")
+    let report = run_named_testset(&engine, registry, "root::suite")
         .await
         .expect("fail-fast should return report");
     assert_eq!(outcome(&report), "fail", "{report:?}");
@@ -466,7 +481,7 @@ async fn collect_tests_sequential_runs_children_in_source_order() {
         .await
         .expect("collect_tests should succeed");
 
-    let report = run_named_testset(&engine, registry, "suite")
+    let report = run_named_testset(&engine, registry, "root::suite")
         .await
         .expect("sequential should return report");
     assert_eq!(outcome(&report), "pass", "{report:?}");
@@ -496,7 +511,7 @@ async fn collect_tests_testset_inline_for_loop_expands() {
 
     // Expanding the testset triggers the lambda body (the for loop).
     // With an inline array this should work fine.
-    let result = expand_testset(&engine, registry, "dynamic")
+    let result = expand_testset(&engine, registry, "root::dynamic")
         .await
         .expect("expand_set should succeed for inline for loop");
     assert!(
@@ -526,7 +541,7 @@ async fn collect_tests_testset_let_then_for_loop_expands() {
         .expect("collect_tests should succeed");
 
     // Expanding the testset triggers the lambda body (the let + for loop).
-    let result = expand_testset(&engine, registry, "dynamic")
+    let result = expand_testset(&engine, registry, "root::dynamic")
         .await
         .expect("expand_set should succeed for let+for testset");
     assert!(
@@ -553,13 +568,13 @@ async fn collect_tests_testset_let_array_index_in_name_and_body() {
         .await
         .expect("collect_tests should succeed");
 
-    let result = expand_testset(&engine, registry, "suite")
+    let result = expand_testset(&engine, registry, "root::suite")
         .await
         .expect("expand_set should succeed for simple let string");
     let repr = format!("{result:?}");
     assert!(
-        repr.contains("suite/case: a"),
-        "test name should be 'suite/case: a': {repr}"
+        repr.contains("root::suite::case: a"),
+        "test name should be 'root::suite::case: a': {repr}"
     );
 }
 
@@ -587,12 +602,12 @@ async fn collect_tests_testset_let_then_while_loop() {
         .expect("collect_tests should succeed");
 
     // Should have 3 tests registered (one per iteration: i=0,1,2)
-    let result = expand_testset(&engine, registry, "whileloop")
+    let result = expand_testset(&engine, registry, "root::whileloop")
         .await
         .expect("expand_set should succeed for let+while testset");
     let repr = format!("{result:?}");
     assert!(
-        repr.contains("whileloop/item"),
+        repr.contains("root::whileloop::item"),
         "expected tests registered from while loop: {repr}"
     );
 }
@@ -618,13 +633,13 @@ async fn collect_tests_testset_let_used_in_test_name_concat() {
         .await
         .expect("collect_tests should succeed");
 
-    let result = expand_testset(&engine, registry, "concat")
+    let result = expand_testset(&engine, registry, "root::concat")
         .await
         .expect("expand_set should succeed for let+concat testset");
     let repr = format!("{result:?}");
     assert!(
-        repr.contains("concat/hello_world"),
-        "expected 'concat/hello_world': {repr}"
+        repr.contains("root::concat::hello_world"),
+        "expected 'root::concat::hello_world': {repr}"
     );
 }
 
@@ -649,13 +664,13 @@ async fn collect_tests_testset_let_then_if_condition() {
         .expect("collect_tests should succeed");
 
     // The test "gated" should be registered since enabled=true
-    let result = expand_testset(&engine, registry, "ifcond")
+    let result = expand_testset(&engine, registry, "root::ifcond")
         .await
         .expect("expand_set should succeed for let+if testset");
     let repr = format!("{result:?}");
     assert!(
-        repr.contains("ifcond/gated"),
-        "expected test 'ifcond/gated' to be registered (enabled=true): {repr}"
+        repr.contains("root::ifcond::gated"),
+        "expected test 'root::ifcond::gated' to be registered (enabled=true): {repr}"
     );
 }
 
@@ -744,7 +759,7 @@ async fn collect_tests_testset_for_loop_with_nested_testset_variable_name() {
         .expect("collect_tests should succeed");
 
     // Expand the outer testset
-    let result = expand_testset(&engine, registry.clone(), "vibes").await;
+    let result = expand_testset(&engine, registry.clone(), "root::vibes").await;
     match &result {
         Ok(v) => {
             assert!(
@@ -779,7 +794,7 @@ async fn collect_tests_testset_for_loop_test_uses_loop_var() {
         .await
         .expect("collect_tests should succeed");
 
-    let result = expand_testset(&engine, registry, "suite").await;
+    let result = expand_testset(&engine, registry, "root::suite").await;
     match &result {
         Ok(v) => {
             assert!(
@@ -816,7 +831,7 @@ async fn collect_tests_top_level_testset_with_string_concat_name() {
         .await
         .expect("collect_tests should succeed");
 
-    let result = expand_testset(&engine, registry, "test").await;
+    let result = expand_testset(&engine, registry, "root::test").await;
     match &result {
         Ok(v) => {
             assert!(
@@ -842,17 +857,11 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
         }
 
         function ClassifySentiment(text: string) -> Sentiment {
-            client GPT4o
-            prompt #"classify {{ text }}"#
+            client: GPT4o
+            prompt: `classify ${text}`
         }
 
-        client<llm> GPT4o {
-            provider openai
-            options {
-                model "gpt-4o"
-                api_key env.OPENAI_API_KEY
-            }
-        }
+        client GPT4o = openai.OpenAiClient.new(model = "gpt-4o");
 
         testset "vibes" {
             let topics: string[] = ["happy", "sad"];
@@ -873,7 +882,7 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
         .await
         .expect("collect_tests should succeed");
 
-    let result = expand_testset(&engine, registry, "vibes").await;
+    let result = expand_testset(&engine, registry, "root::vibes").await;
     result.expect("expand_set for vibes should succeed");
 }
 
@@ -885,13 +894,7 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
     // NOTE: "vibes" is INSIDE "test" — the closing brace of "test" comes
     // AFTER "vibes". This is the exact structure from the user's file.
     let source = r##"
-        client<llm> GPT4o {
-            provider openai
-            options {
-                model "gpt-4o"
-                api_key env.OPENAI_API_KEY
-            }
-        }
+        client GPT4o = openai.OpenAiClient.new(model = "gpt-4o");
 
         class Sentiment {
             feeling string @description("The detected sentiment")
@@ -900,14 +903,12 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
         }
 
         function ClassifySentiment(text: string) -> Sentiment {
-            client GPT4o
-            prompt #"
-                {{ _.role('system') }}
+            client: GPT4o
+            prompt: `
                 Classify the sentiment of the following text.
-                {{ ctx.output_format }}
-                {{ _.role('assistant') }}
-                Text: {{ text }}
-            "#
+                ${ctx.output_format}
+                Text: ${text}
+            `
         }
 
         testset "test" {
@@ -952,13 +953,13 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
         }
 
         function ClassifySentiment2(text: string) -> string {
-            client GPT4o
-            prompt #"classify {{ text }}"#
+            client: GPT4o
+            prompt: `classify ${text}`
         }
 
         function GenerateTests(count: int, topic: string) -> string[] {
-            client GPT4o
-            prompt #"generate {{ count }} tests about {{ topic }}"#
+            client: GPT4o
+            prompt: `generate ${count} tests about ${topic}`
         }
     "##;
 
@@ -975,8 +976,8 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
         .await
         .expect("serialize before expansion should succeed");
 
-    // Step 3: Expand "test" testset (runs collector lambda with for loops + nested testsets)
-    expand_testset(&engine, registry.clone(), "test")
+    // Step 3: Expand "root::test" testset (runs collector lambda with for loops + nested testsets)
+    expand_testset(&engine, registry.clone(), "root::test")
         .await
         .expect("expand 'test' should succeed");
 
@@ -985,21 +986,21 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
         .await
         .expect("serialize after expanding 'test' should succeed");
 
-    // Step 5: Expand "test/vibes" (second-level nested testset)
-    expand_testset(&engine, registry.clone(), "test/vibes")
+    // Step 5: Expand "root::test::vibes" (second-level nested testset)
+    expand_testset(&engine, registry.clone(), "root::test::vibes")
         .await
-        .expect("expand 'test/vibes' should succeed");
+        .expect("expand 'root::test::vibes' should succeed");
 
     // Step 6: Expand third-level testsets.
-    // "test/vibes/happy" collector lambda calls GenerateTests(5, "happy") which
+    // "root::test::vibes::happy" collector lambda calls GenerateTests(5, "happy") which
     // is an LLM function. Without OPENAI_API_KEY, the expansion fails with a
     // runtime error — but crucially NOT "expected variant, got any" (which was
     // the bug). The expected error is about the missing env var.
     for name in &[
-        "test/happy",
-        "test/sad",
-        "test/vibes/happy",
-        "test/vibes/sad",
+        "root::test::happy",
+        "root::test::sad",
+        "root::test::vibes::happy",
+        "root::test::vibes::sad",
     ] {
         let result = expand_testset(&engine, registry.clone(), name).await;
         if let Err(e) = &result {
@@ -1044,7 +1045,7 @@ async fn collect_tests_expand_nested_testsets_full_depth() {
         .expect("collect_tests should succeed");
 
     // Expand outer
-    expand_testset(&engine, registry.clone(), "outer")
+    expand_testset(&engine, registry.clone(), "root::outer")
         .await
         .expect("expand 'outer' should succeed");
 
@@ -1053,15 +1054,16 @@ async fn collect_tests_expand_nested_testsets_full_depth() {
         .await
         .expect("serialize after outer expand should succeed");
 
-    // The inner testsets are registered with full path names ("outer/alpha", "outer/beta").
+    // The inner testsets are registered with canonical IDs
+    // ("root::outer::alpha", "root::outer::beta").
     // Expand them to exercise full-depth async expansion.
-    expand_testset(&engine, registry.clone(), "outer/alpha")
+    expand_testset(&engine, registry.clone(), "root::outer::alpha")
         .await
-        .expect("expand 'outer/alpha' should succeed");
+        .expect("expand 'root::outer::alpha' should succeed");
 
-    expand_testset(&engine, registry.clone(), "outer/beta")
+    expand_testset(&engine, registry.clone(), "root::outer::beta")
         .await
-        .expect("expand 'outer/beta' should succeed");
+        .expect("expand 'root::outer::beta' should succeed");
 
     // Final serialize
     let final_ser = serialize_registry(&engine, registry).await;
@@ -1091,10 +1093,73 @@ async fn test_body_let_local_resolves_to_binding() {
         .await
         .expect("collect_tests should succeed");
 
-    let report = run_named_test(&engine, registry, "t")
+    let report = run_named_test(&engine, registry, "root::t")
         .await
         .expect("run_test should not crash on a let-bound local");
     assert_outcome(&report, "pass");
+}
+
+/// Class spreads inside concurrently spawned test bodies must retain a valid
+/// frame-local region. `TestRegistry.run_all` spawns every child, and each
+/// child races its body against a timeout future.
+#[tokio::test]
+async fn collect_tests_run_all_parallel_class_spreads_keep_local_slots_in_bounds() {
+    let source = r#"
+        class Options {
+            value: int,
+            registry: string?,
+            hook: string?,
+            observers: string[],
+            dispatch: (int[]) -> int[] throws never,
+        }
+
+        function dispatch(values: int[]) -> int[] throws never {
+            values
+        }
+
+        function defaults(
+            value: int,
+            callback: (int[]) -> int[] throws never,
+            registry: string? = null,
+            hook: string? = null,
+            observers: string[] = [],
+        ) -> Options {
+            Options {
+                value: value,
+                registry: registry,
+                hook: hook,
+                observers: observers,
+                dispatch: callback,
+            }
+        }
+
+        test "spread 1" {
+            let options = Options { ...defaults(1, dispatch), value: 11 };
+            assert.equal(options.dispatch([options.value]), [11]);
+        }
+
+        test "spread 2" {
+            let options = Options { ...defaults(2, dispatch), value: 22 };
+            assert.equal(options.dispatch([options.value]), [22]);
+        }
+
+        test "spread 3" {
+            let options = Options { ...defaults(3, dispatch), value: 33 };
+            assert.equal(options.dispatch([options.value]), [33]);
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let report = run_all_tests(&engine, registry)
+        .await
+        .expect("parallel class-spread tests should keep local slots in bounds");
+    assert_eq!(outcome(&report), "pass");
+    assert_eq!(int_field(&report, "total"), 3);
 }
 
 /// Extract the `outcome` string from a `testing.TestReport` instance.
@@ -1135,12 +1200,12 @@ async fn test_bodies_reuse_same_let_name_without_conflict() {
         .await
         .expect("collect_tests should succeed");
 
-    let a = run_named_test(&engine, registry.clone(), "a")
+    let a = run_named_test(&engine, registry.clone(), "root::a")
         .await
         .expect("run_test a should succeed");
     assert_outcome(&a, "pass");
 
-    let b = run_named_test(&engine, registry, "b")
+    let b = run_named_test(&engine, registry, "root::b")
         .await
         .expect("run_test b should succeed");
     assert_outcome(&b, "pass");
@@ -1169,11 +1234,11 @@ async fn testset_let_capture_and_shadowing_resolve_correctly() {
         .expect("collect_tests should succeed");
 
     // Inner tests are registered under full path names once the set is expanded.
-    expand_testset(&engine, registry.clone(), "s")
+    expand_testset(&engine, registry.clone(), "root::s")
         .await
         .expect("expand_set should succeed");
 
-    for name in ["s/capture", "s/shadow", "s/ref_outer"] {
+    for name in ["root::s::capture", "root::s::shadow", "root::s::ref_outer"] {
         let report = run_named_test(&engine, registry.clone(), name)
             .await
             .unwrap_or_else(|e| panic!("run_test {name} should succeed: {e:?}"));

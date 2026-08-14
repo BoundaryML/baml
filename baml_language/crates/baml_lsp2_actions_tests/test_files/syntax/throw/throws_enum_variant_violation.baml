@@ -16,21 +16,14 @@ function ThrowsVariantViolation(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// error: declared throws is `Errors`, but this function may also throw `Errors.AuthError | Errors.NotFoundError`
-//     ╭─[ throw_throws_enum_variant_violation.baml:10:58 ]
-//     │
-//  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {
-//     │                                                          ───┬──
-//     │                                                             ╰──── declared throws is `Errors`, but this function may also throw `Errors.AuthError | Errors.NotFoundError`
-//     │
-//     │ Note: Error code: E0096
-// ────╯
-// warning: extraneous throws declaration: Errors
-//     ╭─[ throw_throws_enum_variant_violation.baml:10:58 ]
-//     │
-//  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {
-//     │                                                          ───┬──
-//     │                                                             ╰──── extraneous throws declaration: Errors
-//     │
-//     │ Note: Error code: E0097
-// ────╯
+// E0097
+//
+//   ⚠ extraneous throws declaration: Errors
+//     ╭─[throw_throws_enum_variant_violation.baml:10:65]
+//  10 │ ╭─▶ function ThrowsVariantViolation(x: int) -> string throws Errors {
+//  11 │ │     match (x) {
+//  12 │ │       0 => throw Errors.AuthError,
+//  13 │ │       _ => throw Errors.NotFoundError
+//  14 │ │     }
+//  15 │ ╰─▶ }
+//     ╰────

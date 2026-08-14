@@ -169,81 +169,56 @@ function block_expression_fn() -> int {
 // ─── Basic if/else ────────────────────────────────────────────────────────────
 
 test "if_else_true_branch" {
-    assert.is_true(baml.deep_equals(if (true) { 1 } else { 2 }, 1))
+    assert.equal(if (true) { 1 } else { 2 }, 1)
 }
 
 test "if_else_false_branch" {
-    assert.is_true(baml.deep_equals(if (false) { 1 } else { 2 }, 2))
+    assert.equal(if (false) { 1 } else { 2 }, 2)
 }
 
 test "if_else_comparison" {
-    assert.is_true(baml.deep_equals(if (1 < 2) { 10 } else { 20 }, 10))
+    assert.equal(if (1 < 2) { 10 } else { 20 }, 10)
 }
 
 test "if_else_equality" {
-    assert.is_true(baml.deep_equals(if (5 == 5) { 100 } else { 200 }, 100))
+    assert.equal(if (5 == 5) { 100 } else { 200 }, 100)
 }
 
 // `let x = if (true) { 42 } else { 0 }; x` — local read, so bind expected.
 test "if_else_assign_to_variable" {
     let x = if (true) { 42 } else { 0 };
     let expected = 42;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "if_else_with_local_in_branches" {
-    assert.is_true(baml.deep_equals(
-        if (true) {
-            let a = 1;
-            a
-        } else {
-            let b = 2;
-            b
-        },
-        1
-    ))
+    assert.equal(if (true) { let a = 1; a } else { let b = 2; b }, 1)
 }
 
 test "if_else_with_parameter" {
-    assert.is_true(baml.deep_equals(if_else_with_param_true(true), 1))
+    assert.equal(if_else_with_param_true(true), 1)
 }
 
 test "if_else_return_expr_with_locals" {
-    assert.is_true(baml.deep_equals(if_else_return_locals(true), 1))
+    assert.equal(if_else_return_locals(true), 1)
 }
 
 test "if_else_assignment_with_param" {
-    assert.is_true(baml.deep_equals(if_else_assignment_with_param(true), 1))
+    assert.equal(if_else_assignment_with_param(true), 1)
 }
 
 test "if_else_assignment_with_locals" {
-    assert.is_true(baml.deep_equals(if_else_assignment_with_locals_fn(true), 1))
+    assert.equal(if_else_assignment_with_locals_fn(true), 1)
 }
 
 // ─── Nested / else-if ────────────────────────────────────────────────────────
 
 test "if_else_nested" {
-    assert.is_true(baml.deep_equals(
-        if (true) {
-            if (false) { 1 } else { 2 }
-        } else {
-            3
-        },
-        2
-    ))
+    assert.equal(if (true) { if (false) { 1 } else { 2 } } else { 3 }, 2)
 }
 
 test "else_if_chain" {
-    assert.is_true(baml.deep_equals(
-        if (false) {
-            1
-        } else if (false) {
-            2
-        } else {
-            3
-        },
-        3
-    ))
+    assert.equal(if (false) { 1 } else if (false) { 2 } else { 3 }, 3)
 }
 
 // `let x = 5; if (x < 0) {...}` — `x` is a test-block local (boxed as
@@ -260,51 +235,51 @@ function else_if_with_comparisons_fn() -> int {
 }
 
 test "else_if_with_comparisons" {
-    assert.is_true(baml.deep_equals(else_if_with_comparisons_fn(), 1))
+    assert.equal(else_if_with_comparisons_fn(), 1)
 }
 
 test "else_if_with_parameter" {
-    assert.is_true(baml.deep_equals(else_if_with_param(false, true), 2))
+    assert.equal(else_if_with_param(false, true), 2)
 }
 
 test "else_if_assignment" {
-    assert.is_true(baml.deep_equals(else_if_assignment_fn(false, true), 2))
+    assert.equal(else_if_assignment_fn(false, true), 2)
 }
 
 test "else_if_return_expr_with_locals" {
-    assert.is_true(baml.deep_equals(else_if_return_locals(false, true), 2))
+    assert.equal(else_if_return_locals(false, true), 2)
 }
 
 test "else_if_assignment_with_locals" {
-    assert.is_true(baml.deep_equals(else_if_assignment_with_locals_fn(false, true), 2))
+    assert.equal(else_if_assignment_with_locals_fn(false, true), 2)
 }
 
 // ─── Complex conditions ───────────────────────────────────────────────────────
 
 test "if_else_function_call_in_branch" {
-    assert.is_true(baml.deep_equals(if (true) { if_else_identity(42) } else { 0 }, 42))
+    assert.equal(if (true) { if_else_identity(42) } else { 0 }, 42)
 }
 
 test "if_else_arithmetic_condition" {
-    assert.is_true(baml.deep_equals(if (1 + 1 == 2) { 100 } else { 0 }, 100))
+    assert.equal(if (1 + 1 == 2) { 100 } else { 0 }, 100)
 }
 
 test "if_else_logical_and" {
-    assert.is_true(baml.deep_equals(if (true && true) { 1 } else { 0 }, 1))
+    assert.equal(if (true && true) { 1 } else { 0 }, 1)
 }
 
 test "if_else_logical_or" {
-    assert.is_true(baml.deep_equals(if (false || true) { 1 } else { 0 }, 1))
+    assert.equal(if (false || true) { 1 } else { 0 }, 1)
 }
 
 // ─── If-else as expression ────────────────────────────────────────────────────
 
 test "if_else_in_arithmetic" {
-    assert.is_true(baml.deep_equals(1 + if (true) { 2 } else { 3 }, 3))
+    assert.equal(1 + if (true) { 2 } else { 3 }, 3)
 }
 
 test "if_else_as_function_arg" {
-    assert.is_true(baml.deep_equals(if_else_identity(if (false) { 10 } else { 20 }), 20))
+    assert.equal(if_else_identity(if (false) { 10 } else { 20 }), 20)
 }
 
 // `let tmp = if (false) { 10 } else { 20 }; identity(tmp)` — `tmp` is a
@@ -316,49 +291,43 @@ function if_else_assigned_then_passed_fn() -> int {
 }
 
 test "if_else_assigned_then_passed_to_call" {
-    assert.is_true(baml.deep_equals(if_else_assigned_then_passed_fn(), 20))
+    assert.equal(if_else_assigned_then_passed_fn(), 20)
 }
 
 test "parenthesized_if_else_in_arithmetic" {
-    assert.is_true(baml.deep_equals(
-        (if (true) { 1 } else { 2 }) + (if (false) { 3 } else { 4 }),
-        5
-    ))
+    assert.equal((if (true) { 1 } else { 2 }) + (if (false) { 3 } else { 4 }), 5)
 }
 
 test "chained_if_else_in_arithmetic" {
-    assert.is_true(baml.deep_equals(
-        if (true) { 1 } else { 2 } + if (false) { 3 } else { 4 },
-        5
-    ))
+    assert.equal(if (true) { 1 } else { 2 } + if (false) { 3 } else { 4 }, 5)
 }
 
 // ─── If without else ─────────────────────────────────────────────────────────
 
 test "if_without_else" {
-    assert.is_true(baml.deep_equals(if_without_else_fn(), 5))
+    assert.equal(if_without_else_fn(), 5)
 }
 
 test "if_without_else_with_local" {
-    assert.is_true(baml.deep_equals(if_without_else_with_local_fn(), 0))
+    assert.equal(if_without_else_with_local_fn(), 0)
 }
 
 test "consecutive_if_without_else" {
-    assert.is_true(baml.deep_equals(consecutive_if_without_else_fn(), 1))
+    assert.equal(consecutive_if_without_else_fn(), 1)
 }
 
 // ─── Block expressions ────────────────────────────────────────────────────────
 
 test "block_expression" {
-    assert.is_true(baml.deep_equals(block_expression_fn(), 1))
+    assert.equal(block_expression_fn(), 1)
 }
 
 // ─── If-else as statement (with side effects) ─────────────────────────────────
 
 test "if_else_statement" {
-    assert.is_true(baml.deep_equals(if_else_statement_fn(true), 1))
+    assert.equal(if_else_statement_fn(true), 1)
 }
 
 test "nested_block_with_if" {
-    assert.is_true(baml.deep_equals(nested_block_with_if_fn(), 10))
+    assert.equal(nested_block_with_if_fn(), 10)
 }

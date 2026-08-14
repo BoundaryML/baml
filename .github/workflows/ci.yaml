@@ -54,6 +54,10 @@ jobs:
       proto: ${{ steps.check_proto.outputs.changed }}
       # Flag for profiling-ring changes (bex_events) - triggers loom + miri
       prof: ${{ steps.check_prof.outputs.changed }}
+      # Flag for inputs that can change the shipping bridge_cffi binaries
+      bridge_cffi_release: ${{ steps.check_bridge_cffi_release.outputs.changed }}
+      # Flag for SDK test changes - triggers the SDK parity analysis pipeline
+      sdk_tests: ${{ steps.check_sdk_tests.outputs.changed }}
       # Flag that is raised when perf benchmarks (CodSpeed) should run: always
       # after merge (push to main/canary) and on manual dispatch; on PRs only
       # when the PR title/body or a commit message opts in.
@@ -79,18 +83,29 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
+            ':typescript2/app-promptfiddle/src/playground/default.baml' \
             ':scripts/baml-language-version' \
             ':scripts/baml-wrapper-version' \
             ':scripts/baml-release-manifests' \
             ':scripts/baml-package-manager-artifacts' \
+            ':scripts/baml-release-platforms' \
+            ':scripts/baml_release_platforms.py' \
+            ':scripts/baml-bridge-cffi-hygiene' \
+            ':scripts/tests/**' \
+            ':release/platforms.json' \
             ':scripts/install.sh' \
             ':scripts/install.ps1' \
             ':packaging/aur/**' \
             ':tools/pkg_boundaryml_com/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language.yml' \
+            ':.github/workflows/nightly-release.yml' \
+            ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
             ':.github/workflows/build2-python-sdk.reusable.yaml' \
             ':.github/workflows/build2-nodejs-sdk.reusable.yaml' \
+            ':.github/workflows/build2-web-sdk.reusable.yaml' \
+            ':.github/workflows/publish2-nodejs-sdk.yaml' \
+            ':.github/workflows/publish2-web-sdk.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
@@ -185,8 +200,6 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':fern/**' \
-            ':typescript/apps/ask-baml-client/**' \
-            ':typescript/apps/sage-backend/**' \
             ':.github/workflows/docs.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -218,7 +231,11 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':typescript2/pkg-grammar/**' \
+            ':typescript2/pkg-grammar-hljs/**' \
+            ':typescript2/pkg-grammar-treesitter/**' \
+            ':typescript2/pnpm-workspace.yaml' \
             ':typescript2/app-vscode-ext/syntaxes/**' \
+            ':typescript2/app-vscode-ext/language-configuration.json' \
             ':typescript2/app-vscode-ext/package.json' \
             ':typescript2/pnpm-lock.yaml' \
             ':.github/actions/setup-node2/**' \
@@ -249,6 +266,9 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/bridge_ctypes/**/*.proto' \
+            ':baml_language/crates/bridge_cffi/include/**' \
+            ':baml_language/sdks/swift/Sources/BamlBridge/Proto/**' \
+            ':baml_language/sdks/swift/Sources/CBamlBridge/include/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -272,6 +292,67 @@ jobs:
             ':baml_language/rust-toolchain.toml' \
             ':.github/workflows/ci.yaml' \
           ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if bridge_cffi release inputs changed
+        id: check_bridge_cffi_release
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':.github/workflows/ci.yaml' \
+            ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
+            ':.github/actions/setup-rust/**' \
+            ':scripts/baml-bridge-cffi-hygiene' \
+            ':scripts/tests/**' \
+            ':release/platforms.json' \
+            ':baml_language/Cargo.toml' \
+            ':baml_language/Cargo.lock' \
+            ':baml_language/Cross.toml' \
+            ':baml_language/rust-toolchain.toml' \
+            ':baml_language/crates/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if SDK tests changed
+        id: check_sdk_tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          paths=(
+            'baml_language/sdk_tests/**'
+            'baml_language/sdks/README.md'
+            'tools/sdk-parity-lint/**'
+            'mise.toml'
+            '.github/workflows/ci.yaml'
+          )
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            elif git diff --quiet "$PUSH_BEFORE" "$PUSH_AFTER" -- "${paths[@]}"; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- "${paths[@]}"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -360,7 +441,9 @@ jobs:
 
       # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
-        run: rustup toolchain install
+        run: |
+          rustup toolchain install
+          rustup toolchain install 1.97.1 --profile minimal --component rustc-dev
         working-directory: baml_language
 
       - uses: Swatinem/rust-cache@v2
@@ -373,12 +456,14 @@ jobs:
       # prek hooks invoke cargo (from rustup), mise tasks that shell out
       # to cargo, and python scripts that begin with `#!/usr/bin/env -S
       # uv run --script` (e.g. validate-markdown). We don't
-      # need go/ruby/node/etc here, just the prek binary itself + a
-      # python/uv pair for the hook scripts.
+      # need go/ruby/etc here, just the prek binary, a python/uv pair
+      # for hook scripts, node for the grammar check, and clang-format.
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "cargo:prek python uv"
+          # Temporarily omit Hawk while its CI check is disabled.
+          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
+          install_args: "cargo:prek python uv node clang-format"
 
       - name: "Cache prek"
         uses: actions/cache@v5
@@ -418,6 +503,9 @@ jobs:
       - name: "Validate baml_language release metadata"
         run: scripts/baml-language-version check
 
+      - name: "Test release contracts and workflow graph"
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
       - name: "Validate canary/nightly version computation"
         env:
           BAML_LANGUAGE_VERSION_DATE: "20260522"
@@ -446,7 +534,56 @@ jobs:
               raise SystemExit(f"unexpected nightly PyPI version: {pypi} != {expected_pypi}")
           PY
 
+          scripts/baml-language-version plan --channel nightly --out nightly-release-plan.json
+          scripts/baml-language-version stamp --plan nightly-release-plan.json
+          nuget="$(jq -r .registry_versions.nuget nightly-release-plan.json)"
+          maven="$(jq -r .registry_versions.maven nightly-release-plan.json)"
+          gradle_plugin="$(jq -r \
+            .registry_versions.gradle_plugin nightly-release-plan.json)"
+          swiftpm="$(jq -r .registry_versions.swiftpm nightly-release-plan.json)"
+          node_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript/package.json)"
+          web_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript_web/package.json)"
+          csharp_nuget="$(sed -n \
+            's#^    <Version>\([^<]*\)</Version>$#\1#p' \
+            baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)"
+          rust_crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' \
+            baml_language/sdks/rust/bridge_rust/Cargo.toml)"
+          go_toolchain="$(sed -n \
+            's/^const ToolchainVersion = "\(.*\)"$/\1/p' \
+            baml_language/sdks/go/baml_go/version.go)"
+          go_runtime="$(sed -n \
+            's/^const BridgeRuntimeVersion = "\(.*\)"$/\1/p' \
+            baml_language/sdks/go/baml_go/version.go)"
+          vsix="$(jq -r .version typescript2/app-vscode-ext/package.json)"
+          test "$node_npm" = "$nightly"
+          test "$web_npm" = "$node_npm"
+          test "$nuget" = "$nightly"
+          test "$csharp_nuget" = "$nuget"
+          test "$maven" = "$nightly"
+          test "$gradle_plugin" = "$nightly"
+          test "$swiftpm" = "$nightly"
+          test "$rust_crate" = "$nightly"
+          test "$go_toolchain" = "$nightly"
+          test "$go_runtime" = "v$nightly"
+          test "$vsix" = "$nightly"
+          for shipping_version in \
+            "$node_npm" "$web_npm" "$csharp_nuget" "$maven" \
+            "$gradle_plugin" "$swiftpm" "$rust_crate" "$go_toolchain" "$vsix"; do
+            test "$shipping_version" != "$canary"
+          done
+          test "$go_runtime" != "v$canary"
+
   # Call reusable workflows
+  bridge-cffi-release:
+    name: "Release bridge_cffi artifacts"
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.bridge_cffi_release == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/canary') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml
+    with:
+      source_sha: ${{ github.sha }}
+
   cargo-tests:
     name: "Cargo Tests"
     needs: determine_changes
@@ -502,9 +639,89 @@ jobs:
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
 
-      - name: "Run grammar snapshot tests"
+      - name: "Build grammar artifacts"
+        run: pnpm --filter @b/pkg-grammar build
+        working-directory: typescript2
+
+      - name: "Committed artifacts must match src/"
+        # build regenerates baml.tmLanguage.json (+ the app-vscode-ext copies
+        # via sync.mjs); any diff means someone edited src/ without committing
+        # the regenerated artifacts, or edited an artifact by hand.
+        run: git diff --exit-code -- typescript2/pkg-grammar typescript2/app-vscode-ext
+
+      - name: "Run grammar tests"
         run: pnpm --filter @b/pkg-grammar test
         working-directory: typescript2
+
+      - name: "Run highlight.js grammar tests"
+        # The hljs port validates against pkg-grammar's fixtures, so a grammar
+        # change that the port doesn't handle fails here (conformance gate).
+        run: pnpm --filter @b/pkg-grammar-hljs test
+        working-directory: typescript2
+
+      - name: "Run tree-sitter grammar tests"
+        # Generates the parser and runs the corpus + fixture parse gate.
+        run: pnpm --filter @b/pkg-grammar-treesitter test
+        working-directory: typescript2
+
+  linguist-compile-gate:
+    name: "Linguist grammar-compiler gate"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.grammar == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    steps:
+      - name: "Checkout Branch"
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      - name: "Build grammar artifacts"
+        run: pnpm --filter @b/pkg-grammar build
+        working-directory: typescript2
+
+      - name: "Checkout github-linguist/linguist"
+        env:
+          # GitHub's release process compiles every vendored grammar with this
+          # tool; running the same compile here means a grammar that passes CI
+          # cannot break .baml highlighting on github.com when Linguist next
+          # pulls the BoundaryML/textMate-baml mirror. Bump the ref alongside
+          # Linguist releases.
+          LINGUIST_REF: v9.6.0
+        run: |
+          git clone --depth 1 --branch "$LINGUIST_REF" \
+            https://github.com/github-linguist/linguist.git /tmp/linguist
+
+      - name: "Stage candidate grammar as the textMate-baml vendor dir"
+        run: |
+          set -euo pipefail
+          # Drop the registered entry for our vendor dir so the compiler treats
+          # the staged grammar as a fresh add (avoids duplicate-scope errors
+          # against the currently-vendored copy).
+          python3 - <<'EOF'
+          import re
+          path = "/tmp/linguist/grammars.yml"
+          with open(path) as f:
+              content = f.read()
+          content = re.sub(r"vendor/grammars/textMate-baml:\n(- [^\n]+\n)+", "", content)
+          with open(path, "w") as f:
+              f.write(content)
+          EOF
+          rm -rf /tmp/linguist/vendor/grammars/textMate-baml
+          mkdir -p /tmp/linguist/vendor/grammars/textMate-baml/grammars
+          cp typescript2/pkg-grammar/baml.tmLanguage.json \
+            /tmp/linguist/vendor/grammars/textMate-baml/grammars/
+
+      - name: "Compile with Linguist's grammar-compiler"
+        working-directory: /tmp/linguist
+        run: |
+          set -euo pipefail
+          export USER="${USER:-$(whoami)}"
+          # No -f: any regex that Linguist's Oniguruma->PCRE conversion cannot
+          # handle must fail this job, not surface at Linguist's next release.
+          script/grammar-compiler add vendor/grammars/textMate-baml
 
   miri-tests:
     name: "Miri (unsafe code verification)"
@@ -617,7 +834,7 @@ jobs:
           shared-key: "linux-cargo"
 
       # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
-      # `protoc` + `protoc-gen-go`; bridge_nodejs needs node + pnpm.
+      # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
       # The `cargo build -p bridge_ctypes` step uses cargo from rustup
       # (not mise), so we don't need `go` itself here either.
       - name: "Install mise"
@@ -641,33 +858,53 @@ jobs:
         run: ./build.sh
         working-directory: baml_language/sdks/go/bridge_go
 
-      # --ignore-workspace: install from bridge_nodejs's own pnpm-lock.yaml
+      # --ignore-workspace: install from bridge_typescript's own pnpm-lock.yaml
       # rather than the root workspace lockfile. The two resolve different
       # protobufjs-cli versions, and pbjs codegen output (committed under
       # typescript_src/proto/) must come from the version this package pins.
       # --ignore-scripts: skip dependency build scripts (esbuild's binary
       # fetch, protobufjs postinstall) — none are needed for pbjs/tsc/napi
       # codegen, and pnpm errors on unapproved build scripts otherwise.
-      # Same flags as sdk_tests/crates/typescript_node/setup.sh.
+      # Same flags as sdk_tests/crates/typescript/setup.sh.
       - name: "Install Node SDK dependencies"
         run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
 
-      # Node / TypeScript (protobufjs) — writes into sdks/nodejs/bridge_nodejs/typescript_src/proto/.
+      # Node / TypeScript (protobufjs) — writes into sdks/typescript/bridge_typescript/typescript_src/proto/.
       # build:debug also regenerates typescript2/pkg-proto/src/generated/ (ts-proto / buf).
-      - name: "Generate Node/TypeScript proto bindings (sdks/nodejs/bridge_nodejs)"
+      - name: "Generate Node/TypeScript proto bindings (sdks/typescript/bridge_typescript)"
         run: pnpm build:debug
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+
+      # Swift (protoc-gen-swift) — the plugin needs a Swift toolchain,
+      # which this Linux job doesn't have. The generated .pb.swift files
+      # are instead checked via the input-hash manifest that
+      # sdks/swift/scripts/generate-protos.sh writes alongside them:
+      # recompute the source protos' hashes here; if they differ from
+      # the committed manifest, the Swift bindings were not regenerated.
+      # The bundled ABI header is a verbatim copy of the canonical one
+      # (itself byte-enforced by bridge_cffi's header_generation test),
+      # so re-copy it and let the dirty-tree check below catch drift.
+      - name: "Sync-check Swift proto bindings + ABI header (sdks/swift)"
+        run: |
+          (cd baml_language/crates/bridge_ctypes/types \
+            && sha256sum baml_bridge/cffi/v1/*.proto) \
+            > baml_language/sdks/swift/Sources/BamlBridge/Proto/.generated-from
+          cp baml_language/crates/bridge_cffi/include/baml_cffi.h \
+             baml_language/sdks/swift/Sources/CBamlBridge/include/baml_cffi.h
 
       - name: "Check generated proto files are in sync"
         run: |
           # Check for both modified tracked files and untracked files across every
           # codegen output documented in baml_language/crates/bridge_ctypes/README.md.
           PATHS=(
-            baml_language/sdks/nodejs/bridge_nodejs
+            baml_language/sdks/typescript/bridge_typescript
             baml_language/crates/bridge_ctypes
             baml_language/sdks/go/bridge_go
             baml_language/sdks/python/src/baml_bridge/cffi
+            baml_language/sdks/rust/bridge_rust/src/wire
+            baml_language/sdks/swift/Sources/BamlBridge/Proto
+            baml_language/sdks/swift/Sources/CBamlBridge/include
             typescript2/pkg-proto
           )
           README="baml_language/crates/bridge_ctypes/README.md"
@@ -686,6 +923,49 @@ jobs:
             exit 1
           fi
           echo "All generated proto files are in sync."
+
+  sdk_parity_check:
+    name: "SDK parity lint"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: determine_changes
+    if: needs.determine_changes.outputs.sdk_tests == 'true'
+    timeout-minutes: 15
+    steps:
+      - name: "Checkout Branch"
+        uses: useblacksmith/checkout@v1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "ast-grep"
+
+      - name: "Install Rust toolchain"
+        working-directory: baml_language
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "sdk-parity-baml-cli"
+
+      - name: "Build local BAML CLI"
+        run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+
+      - name: "Run SDK parity analysis"
+        run: tools/sdk-parity-lint/run --repo-root . --baseline baml_language/sdk_tests/crates/parity_analysis.md --output baml_language/sdk_tests/crates/parity_analysis.new.md
+
+      - name: "Upload parity results"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-parity-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: baml_language/sdk_tests/crates/parity_analysis.new.md
+          if-no-files-found: ignore
+          retention-days: 14
 
   # Benchmarks are split into two jobs so the slow compile happens on a fast,
   # cheap machine while the actual measurement happens on a stable CodSpeed
@@ -953,14 +1233,17 @@ jobs:
     needs:
       - prek
       - release-metadata
+      - bridge-cffi-release
       - cargo-tests
       - wasm-pack-tests
       - docs
       - webview-tests
       - grammar-tests
+      - linguist-compile-gate
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - prof-concurrency
       - proto-sync
+      - sdk_parity_check
       # NOTE: size-gate is intentionally NOT a required gate. It is an
       # informational signal (PR comment + daily baseline auto-refresh), not
       # a merge blocker: a size bump must never block the merge queue or force
@@ -979,14 +1262,183 @@ jobs:
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| prek | ${{ needs.prek.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| bridge-cffi-release | ${{ needs.bridge-cffi-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| grammar-tests | ${{ needs.grammar-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| linguist-compile-gate | ${{ needs.linguist-compile-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| prof-concurrency | ${{ needs.prof-concurrency.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| sdk-parity-check | ${{ needs.sdk_parity_check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"
           exit 1
+
+  # Release entry point for pushes to canary. Two things happen here:
+  #
+  #   1. Every green canary commit gets its immutable `baml-language-source-<sha>`
+  #      tag. That tag is the ref every production release run is dispatched at,
+  #      and the release re-checks it before publishing, so it must exist for any
+  #      commit a release could later be cut from -- including commits the
+  #      scheduled nightly picks up hours or days later.
+  #   2. A CANARY release is dispatched, but only when this push bumps
+  #      [release].canary_version in baml_language/release.toml. Everything else
+  #      ships through nightly-release.yml, which cuts one nightly a night at
+  #      midnight Seattle time instead of one per merge.
+  #
+  # The release deliberately has no `workflow_run` trigger -- crates.io refuses
+  # to mint a Trusted Publishing token for `workflow_run` (and
+  # `pull_request_target`) runs, so a `workflow_run` release can never publish
+  # baml_bridge.
+  #
+  # Same required-gate set as ci-failure-alert above; keep the two lists in sync.
+  dispatch-release:
+    name: "Tag Release Source & Dispatch Canary Cut"
+    runs-on: ubuntu-latest
+    needs:
+      - prek
+      - release-metadata
+      - bridge-cffi-release
+      - cargo-tests
+      - wasm-pack-tests
+      - docs
+      - webview-tests
+      - grammar-tests
+      - linguist-compile-gate
+      # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
+      - prof-concurrency
+      - proto-sync
+      - sdk_parity_check
+    # `!failure() && !cancelled()` rather than `success()`, because that is what
+    # the old `workflow_run.conclusion == 'success'` gate meant: a skipped gate
+    # is not a failure. prof-concurrency and proto-sync are change-detected with
+    # no `|| ref == canary` escape hatch, so they are skipped on most canary
+    # pushes and `success()` would keep the release from ever firing.
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' && github.ref_name == 'canary' }}
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      # Tagging comes first, and needs no checkout: it is what makes a commit
+      # releasable days later, so a clone flake must not be able to stop it.
+      - name: Create immutable release workflow ref
+        id: release-workflow-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_ref="baml-language-source-$GITHUB_SHA"
+          ref_endpoint="repos/$GITHUB_REPOSITORY/git/ref/tags/$release_ref"
+
+          if ref_json="$(gh api "$ref_endpoint" 2>/dev/null)"; then
+            :
+          elif gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$release_ref" \
+            -f sha="$GITHUB_SHA" >/dev/null; then
+            ref_json="$(gh api "$ref_endpoint")"
+          else
+            # A rerun can race another attempt creating the same immutable tag.
+            # Re-read it and fail below unless it is the exact ref we intended.
+            ref_json="$(gh api "$ref_endpoint")"
+          fi
+
+          ref_type="$(jq -r '.object.type // ""' <<<"$ref_json")"
+          ref_sha="$(jq -r '.object.sha // ""' <<<"$ref_json")"
+          if [[ "$ref_type" != "commit" || "$ref_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::release ref $release_ref resolves to $ref_type $ref_sha, expected commit $GITHUB_SHA"
+            exit 1
+          fi
+
+          echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
+          echo "Release workflow ref: $release_ref ($ref_sha)"
+
+      - uses: useblacksmith/checkout@v1
+        with:
+          # HEAD^ is all the canary-cut check below needs. canary is
+          # squash-merge-only with linear history required, so every push is a
+          # single commit and HEAD^ is the whole push.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Decide whether this push cuts a canary release
+        id: canary-cut
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # A canary cut is *requested* by bumping [release].canary_version in
+          # baml_language/release.toml, and is skipped when that version is
+          # already released so a re-run cannot cut it twice. This is the only
+          # push-triggered release; nightly-release.yml owns everything else.
+          if ! git rev-parse HEAD^ >/dev/null 2>&1; then
+            echo "cut=false" >> "$GITHUB_OUTPUT"
+            echo "No parent commit to diff against; leaving this commit to the nightly."
+            exit 0
+          fi
+          if git diff --quiet HEAD^ HEAD -- baml_language/release.toml; then
+            echo "cut=false" >> "$GITHUB_OUTPUT"
+            echo "release.toml unchanged; the nightly schedule owns this commit."
+            exit 0
+          fi
+          canary_version="$(scripts/baml-language-version compute --channel canary)"
+          # The file changing is only a necessary condition -- compare the parsed
+          # value, since an edit to anything else in release.toml is not a
+          # release request. Point the tool's own parser at a tree holding the
+          # parent's file rather than re-implementing TOML parsing in shell.
+          previous_root="$(mktemp -d)"
+          trap 'rm -rf "$previous_root"' EXIT
+          mkdir -p "$previous_root/baml_language"
+          previous_version=""
+          if git show "HEAD^:baml_language/release.toml" \
+            > "$previous_root/baml_language/release.toml" 2>/dev/null; then
+            previous_version="$(BAML_LANGUAGE_VERSION_ROOT="$previous_root" \
+              scripts/baml-language-version show)"
+          fi
+          if [[ "$canary_version" == "$previous_version" ]]; then
+            echo "cut=false" >> "$GITHUB_OUTPUT"
+            echo "[release].canary_version is unchanged at $canary_version; the nightly schedule owns this commit."
+            exit 0
+          fi
+          # Ask for the release by name and read the STATUS: `gh release view`
+          # exits non-zero for a network or auth error just as it does for "not
+          # found", and treating those alike would re-cut a published version.
+          status="$(gh api -i "repos/$GH_REPO/releases/tags/baml-language-$canary_version" \
+            --silent 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          case "$status" in
+            200)
+              echo "cut=false" >> "$GITHUB_OUTPUT"
+              echo "baml-language-$canary_version is already released; not cutting it again."
+              exit 0
+              ;;
+            404)
+              ;;
+            *)
+              echo "::error::could not determine whether baml-language-$canary_version is released (HTTP ${status:-none})"
+              exit 1
+              ;;
+          esac
+          echo "cut=true" >> "$GITHUB_OUTPUT"
+          echo "release.toml bumped to an unreleased version; cutting canary $canary_version."
+
+      - name: Dispatch canary release for this commit
+        if: ${{ steps.canary-cut.outputs.cut == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_WORKFLOW_REF: ${{ steps.release-workflow-ref.outputs.ref }}
+        run: |
+          set -euo pipefail
+          # Load the workflow definition from the same immutable commit that the
+          # release checks out, even if canary advances while this CI run finishes.
+          gh workflow run release-baml-language.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$RELEASE_WORKFLOW_REF" \
+            -f channel=canary \
+            -f dry_run=false \
+            -f source_sha="$GITHUB_SHA" \
+            -f source_ci_run_id="$GITHUB_RUN_ID"

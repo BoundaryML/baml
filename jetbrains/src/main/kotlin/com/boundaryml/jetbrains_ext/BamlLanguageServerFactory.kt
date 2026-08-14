@@ -55,7 +55,7 @@ class BamlLanguageServerInstaller : LanguageServerInstallerBase() {
 
     override fun checkServerInstalled(indicator: ProgressIndicator): Boolean {
         log.info("checkServerInstalled")
-        super.progress("Checking if BAML CLI is installed...", indicator)
+        super.progress("Checking if BAML v0 CLI is installed...", indicator)
         val newCliVersion = service<BamlLanguageServerService>().getCurrentCliVersion()
         return cliDownloader.checkDownloadedCliExists(CliVersion.fromVersionString(newCliVersion))
     }
@@ -63,7 +63,7 @@ class BamlLanguageServerInstaller : LanguageServerInstallerBase() {
     override fun install(indicator: ProgressIndicator) {
         log.info("install")
         try {
-            super.progress("Installing BAML CLI...", indicator)
+            super.progress("Installing BAML v0 CLI...", indicator)
 
             val newCliVersion = service<BamlLanguageServerService>().getCurrentCliVersion()
             val download = runBlocking { cliDownloader.resolveCliPath(newCliVersion) }

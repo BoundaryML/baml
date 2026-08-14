@@ -1,0 +1,27 @@
+[package]
+name = "tools_semantic_tokens"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+
+[[bin]]
+name = "tools_semantic_tokens"
+path = "src/main.rs"
+
+[dependencies]
+baml_lsp2_actions = { workspace = true }
+baml_lsp2_actions_tests = { workspace = true }
+baml_project = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true, features = [ "json" ] }
+clap = { workspace = true, features = [ "derive" ] }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "macros", "net" ] }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

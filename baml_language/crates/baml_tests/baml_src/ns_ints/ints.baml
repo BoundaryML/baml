@@ -1,7 +1,7 @@
 // Tests for the `int` builtin class (BEP-043).
 //
 // Converted from crates/baml_tests/tests/ints.rs. Each Rust test becomes a
-// `test` block with the `main()` body inlined. Results use `baml.deep_equals`
+// `test` block with the `main()` body inlined. Results use `assert.equal`
 // for structural comparison.
 //
 // Pure expressions (no locals) are asserted inline. Tests that use a local
@@ -17,15 +17,15 @@
 // ─── abs ──────────────────────────────────────────────────────────────────────
 
 test "int_abs_positive" {
-    assert.is_true(baml.deep_equals((3).abs(), 3))
+    assert.equal((3).abs(), 3)
 }
 
 test "int_abs_negative" {
-    assert.is_true(baml.deep_equals((-7).abs(), 7))
+    assert.equal((-7).abs(), 7)
 }
 
 test "int_abs_zero" {
-    assert.is_true(baml.deep_equals((0).abs(), 0))
+    assert.equal((0).abs(), 0)
 }
 
 // int.min_value() is -2^62; its abs() is 2^62 which exceeds int.max_value().
@@ -39,103 +39,103 @@ test "int_abs_min_value_throws" {
 }
 
 test "int_abs_near_min_value_succeeds" {
-    assert.is_true(baml.deep_equals((-4611686018427387903).abs(), 4611686018427387903))
+    assert.equal((-4611686018427387903).abs(), 4611686018427387903)
 }
 
 // ─── min / max ────────────────────────────────────────────────────────────────
 
 test "int_min_basic" {
-    assert.is_true(baml.deep_equals((3).min(5), 3))
+    assert.equal((3).min(5), 3)
 }
 
 test "int_min_other_smaller" {
-    assert.is_true(baml.deep_equals((5).min(3), 3))
+    assert.equal((5).min(3), 3)
 }
 
 test "int_min_equal" {
-    assert.is_true(baml.deep_equals((3).min(3), 3))
+    assert.equal((3).min(3), 3)
 }
 
 test "int_min_negative" {
-    assert.is_true(baml.deep_equals((-2).min(0), -2))
+    assert.equal((-2).min(0), -2)
 }
 
 test "int_max_basic" {
-    assert.is_true(baml.deep_equals((3).max(5), 5))
+    assert.equal((3).max(5), 5)
 }
 
 test "int_max_other_smaller" {
-    assert.is_true(baml.deep_equals((5).max(3), 5))
+    assert.equal((5).max(3), 5)
 }
 
 test "int_max_negative" {
-    assert.is_true(baml.deep_equals((-5).max(-2), -2))
+    assert.equal((-5).max(-2), -2)
 }
 
 // ─── clamp ────────────────────────────────────────────────────────────────────
 
 test "int_clamp_in_range" {
-    assert.is_true(baml.deep_equals((5).clamp(0, 10), 5))
+    assert.equal((5).clamp(0, 10), 5)
 }
 
 test "int_clamp_below_min" {
-    assert.is_true(baml.deep_equals((-3).clamp(0, 10), 0))
+    assert.equal((-3).clamp(0, 10), 0)
 }
 
 test "int_clamp_above_max" {
-    assert.is_true(baml.deep_equals((15).clamp(0, 10), 10))
+    assert.equal((15).clamp(0, 10), 10)
 }
 
 test "int_clamp_at_min_boundary" {
-    assert.is_true(baml.deep_equals((0).clamp(0, 10), 0))
+    assert.equal((0).clamp(0, 10), 0)
 }
 
 test "int_clamp_at_max_boundary" {
-    assert.is_true(baml.deep_equals((10).clamp(0, 10), 10))
+    assert.equal((10).clamp(0, 10), 10)
 }
 
 // ─── max_value / min_value ────────────────────────────────────────────────────
 
 test "int_max_value_returns_i63_max" {
-    assert.is_true(baml.deep_equals(int.max_value(), 4611686018427387903))
+    assert.equal(int.max_value(), 4611686018427387903)
 }
 
 test "int_min_value_returns_i63_min" {
-    assert.is_true(baml.deep_equals(int.min_value(), -4611686018427387904))
+    assert.equal(int.min_value(), -4611686018427387904)
 }
 
 test "int_max_min_inverse" {
-    assert.is_true(baml.deep_equals(int.max_value() > int.min_value(), true))
+    assert.is_true(int.max_value() > int.min_value())
 }
 
 // ─── parse ────────────────────────────────────────────────────────────────────
 
 test "int_parse_basic" {
-    assert.is_true(baml.deep_equals(int.parse("42"), 42))
+    assert.equal(int.parse("42"), 42)
 }
 
 test "int_parse_zero" {
-    assert.is_true(baml.deep_equals(int.parse("0"), 0))
+    assert.equal(int.parse("0"), 0)
 }
 
 test "int_parse_negative" {
-    assert.is_true(baml.deep_equals(int.parse("-7"), -7))
+    assert.equal(int.parse("-7"), -7)
 }
 
 test "int_parse_explicit_plus_sign" {
-    assert.is_true(baml.deep_equals(int.parse("+42"), 42))
+    assert.equal(int.parse("+42"), 42)
 }
 
 test "int_parse_max_value" {
-    assert.is_true(baml.deep_equals(int.parse("4611686018427387903"), 4611686018427387903))
+    assert.equal(int.parse("4611686018427387903"), 4611686018427387903)
 }
 
 test "int_parse_min_value" {
-    assert.is_true(baml.deep_equals(int.parse("-4611686018427387904"), -4611686018427387904))
+    assert.equal(int.parse("-4611686018427387904"), -4611686018427387904)
 }
 
 test "int_parse_leading_zeros_ok" {
-    assert.is_true(baml.deep_equals(int.parse("007"), 7))
+    assert.equal(int.parse("007"), 7)
 }
 
 test "int_parse_empty_throws" {
@@ -211,7 +211,7 @@ test "int_parse_underscore_throws" {
 }
 
 test "int_parse_round_trip_via_to_string" {
-    assert.is_true(baml.deep_equals(int.parse("100") + int.parse("23"), 123))
+    assert.equal(int.parse("100") + int.parse("23"), 123)
 }
 
 // ─── random ───────────────────────────────────────────────────────────────────
@@ -330,27 +330,27 @@ test "int_random_lower_greater_than_upper_throws" {
 // ─── isqrt ────────────────────────────────────────────────────────────────────
 
 test "int_isqrt_perfect_square" {
-    assert.is_true(baml.deep_equals((16).isqrt(), 4))
+    assert.equal((16).isqrt(), 4)
 }
 
 test "int_isqrt_non_square_rounds_down" {
-    assert.is_true(baml.deep_equals((10).isqrt(), 3))
+    assert.equal((10).isqrt(), 3)
 }
 
 test "int_isqrt_zero" {
-    assert.is_true(baml.deep_equals((0).isqrt(), 0))
+    assert.equal((0).isqrt(), 0)
 }
 
 test "int_isqrt_one" {
-    assert.is_true(baml.deep_equals((1).isqrt(), 1))
+    assert.equal((1).isqrt(), 1)
 }
 
 test "int_isqrt_large" {
-    assert.is_true(baml.deep_equals((1000000000000).isqrt(), 1000000))
+    assert.equal((1000000000000).isqrt(), 1000000)
 }
 
 test "int_isqrt_max_value" {
-    assert.is_true(baml.deep_equals(int.max_value().isqrt(), 2147483647))
+    assert.equal(int.max_value().isqrt(), 2147483647)
 }
 
 test "int_isqrt_negative_throws" {
@@ -374,81 +374,81 @@ test "int_isqrt_min_value_throws" {
 // ─── pow ──────────────────────────────────────────────────────────────────────
 
 test "int_pow_basic" {
-    assert.is_true(baml.deep_equals((2).pow(10), 1024))
+    assert.equal((2).pow(10), 1024)
 }
 
 test "int_pow_zero_exponent" {
-    assert.is_true(baml.deep_equals((5).pow(0), 1))
+    assert.equal((5).pow(0), 1)
 }
 
 test "int_pow_zero_to_zero_is_one" {
-    assert.is_true(baml.deep_equals((0).pow(0), 1))
+    assert.equal((0).pow(0), 1)
 }
 
 test "int_pow_zero_to_positive_is_zero" {
-    assert.is_true(baml.deep_equals((0).pow(5), 0))
+    assert.equal((0).pow(5), 0)
 }
 
 test "int_pow_negative_exponent_returns_zero" {
-    assert.is_true(baml.deep_equals((2).pow(-1), 0))
+    assert.equal((2).pow(-1), 0)
 }
 
 test "int_pow_negative_base_odd_exp" {
-    assert.is_true(baml.deep_equals((-2).pow(3), -8))
+    assert.equal((-2).pow(3), -8)
 }
 
 test "int_pow_negative_base_even_exp" {
-    assert.is_true(baml.deep_equals((-2).pow(4), 16))
+    assert.equal((-2).pow(4), 16)
 }
 
 test "int_pow_one_anything" {
-    assert.is_true(baml.deep_equals((1).pow(1000000), 1))
+    assert.equal((1).pow(1000000), 1)
 }
 
 test "int_pow_negative_one_even" {
-    assert.is_true(baml.deep_equals((-1).pow(1000000), 1))
+    assert.equal((-1).pow(1000000), 1)
 }
 
 test "int_pow_negative_one_odd" {
-    assert.is_true(baml.deep_equals((-1).pow(1000001), -1))
+    assert.equal((-1).pow(1000001), -1)
 }
 
 // 2^33 = 8589934592, even — result should be 1.
 test "int_pow_negative_one_huge_even_exp" {
-    assert.is_true(baml.deep_equals((-1).pow(8589934592), 1))
+    assert.equal((-1).pow(8589934592), 1)
 }
 
 // Overflow: (10)^100 → saturates to int.max_value().
 test "int_pow_overflow_positive_saturates" {
-    assert.is_true(baml.deep_equals((10).pow(100), 4611686018427387903))
+    assert.equal((10).pow(100), 4611686018427387903)
 }
 
 // Overflow: (-10)^99 → saturates to int.min_value().
 test "int_pow_overflow_negative_odd_saturates_to_min" {
-    assert.is_true(baml.deep_equals((-10).pow(99), -4611686018427387904))
+    assert.equal((-10).pow(99), -4611686018427387904)
 }
 
 // Overflow: (-10)^100 → saturates to int.max_value().
 test "int_pow_overflow_negative_even_saturates_to_max" {
-    assert.is_true(baml.deep_equals((-10).pow(100), 4611686018427387903))
+    assert.equal((-10).pow(100), 4611686018427387903)
 }
 
 // ─── ilog ─────────────────────────────────────────────────────────────────────
 
 test "int_ilog_base_10" {
-    assert.is_true(baml.deep_equals((1000).ilog(10), 3))
+    assert.equal((1000).ilog(10), 3)
 }
 
 test "int_ilog_base_2_power_of_two" {
-    assert.is_true(baml.deep_equals((1024).ilog(2), 10))
+    assert.equal((1024).ilog(2), 10)
 }
 
 test "int_ilog_rounds_down" {
-    assert.is_true(baml.deep_equals((999).ilog(10), 2))
+    assert.equal((999).ilog(10), 2)
 }
 
 test "int_ilog_one_is_zero" {
-    assert.is_true(baml.deep_equals((1).ilog(10), 0))
+    assert.equal((1).ilog(10), 0)
 }
 
 test "int_ilog_self_zero_throws" {
@@ -499,74 +499,74 @@ test "int_ilog_base_negative_throws" {
 // ─── Bit operations ───────────────────────────────────────────────────────────
 
 test "int_leading_zeros_zero" {
-    assert.is_true(baml.deep_equals((0).leading_zeros(), 64))
+    assert.equal((0).leading_zeros(), 64)
 }
 
 test "int_leading_zeros_one" {
-    assert.is_true(baml.deep_equals((1).leading_zeros(), 63))
+    assert.equal((1).leading_zeros(), 63)
 }
 
 test "int_leading_zeros_negative_one_is_zero" {
-    assert.is_true(baml.deep_equals((-1).leading_zeros(), 0))
+    assert.equal((-1).leading_zeros(), 0)
 }
 
 // 2^32 = 4294967296: 31 leading zeros (bit 32 set out of 64).
 test "int_leading_zeros_large_power_of_two" {
-    assert.is_true(baml.deep_equals((4294967296).leading_zeros(), 31))
+    assert.equal((4294967296).leading_zeros(), 31)
 }
 
 test "int_leading_ones_zero" {
-    assert.is_true(baml.deep_equals((0).leading_ones(), 0))
+    assert.equal((0).leading_ones(), 0)
 }
 
 test "int_leading_ones_negative_one" {
-    assert.is_true(baml.deep_equals((-1).leading_ones(), 64))
+    assert.equal((-1).leading_ones(), 64)
 }
 
 test "int_trailing_zeros_zero" {
-    assert.is_true(baml.deep_equals((0).trailing_zeros(), 64))
+    assert.equal((0).trailing_zeros(), 64)
 }
 
 test "int_trailing_zeros_one" {
-    assert.is_true(baml.deep_equals((1).trailing_zeros(), 0))
+    assert.equal((1).trailing_zeros(), 0)
 }
 
 // 8 = 0b1000 → three trailing zeros.
 test "int_trailing_zeros_eight" {
-    assert.is_true(baml.deep_equals((8).trailing_zeros(), 3))
+    assert.equal((8).trailing_zeros(), 3)
 }
 
 test "int_trailing_ones_zero" {
-    assert.is_true(baml.deep_equals((0).trailing_ones(), 0))
+    assert.equal((0).trailing_ones(), 0)
 }
 
 // 7 = 0b111.
 test "int_trailing_ones_seven" {
-    assert.is_true(baml.deep_equals((7).trailing_ones(), 3))
+    assert.equal((7).trailing_ones(), 3)
 }
 
 test "int_trailing_ones_negative_one" {
-    assert.is_true(baml.deep_equals((-1).trailing_ones(), 64))
+    assert.equal((-1).trailing_ones(), 64)
 }
 
 test "int_count_zeros_of_zero" {
-    assert.is_true(baml.deep_equals((0).count_zeros(), 64))
+    assert.equal((0).count_zeros(), 64)
 }
 
 test "int_count_zeros_of_negative_one" {
-    assert.is_true(baml.deep_equals((-1).count_zeros(), 0))
+    assert.equal((-1).count_zeros(), 0)
 }
 
 test "int_count_ones_of_zero" {
-    assert.is_true(baml.deep_equals((0).count_ones(), 0))
+    assert.equal((0).count_ones(), 0)
 }
 
 test "int_count_ones_of_seven" {
-    assert.is_true(baml.deep_equals((7).count_ones(), 3))
+    assert.equal((7).count_ones(), 3)
 }
 
 test "int_count_ones_of_negative_one" {
-    assert.is_true(baml.deep_equals((-1).count_ones(), 64))
+    assert.equal((-1).count_ones(), 64)
 }
 
 // For any 64-bit integer, count_zeros + count_ones must equal 64.
@@ -577,7 +577,7 @@ function count_zeros_plus_ones(n: int) -> int {
 
 test "int_count_zeros_plus_count_ones_equals_64" {
     // 51966 = 0xCAFE — arbitrary mixed bit pattern
-    assert.is_true(baml.deep_equals(count_zeros_plus_ones(51966), 64))
+    assert.equal(count_zeros_plus_ones(51966), 64)
 }
 
 // ─── Operator overflow & boundary arithmetic ────────────────────────────────
@@ -593,20 +593,20 @@ function int_mul_(a: int, b: int) -> int { a * b }
 
 test "int_add_at_max_boundary_no_overflow" {
     // (MAX - 1) + 1 == MAX
-    assert.is_true(baml.deep_equals(int_add_(int.max_value() - 1, 1), int.max_value()))
+    assert.equal(int_add_(int.max_value() - 1, 1), int.max_value())
 }
 
 test "int_sub_at_min_boundary_no_overflow" {
     // (MIN + 1) - 1 == MIN
-    assert.is_true(baml.deep_equals(int_sub_(int.min_value() + 1, 1), int.min_value()))
+    assert.equal(int_sub_(int.min_value() + 1, 1), int.min_value())
 }
 
 test "int_mul_max_by_one_no_overflow" {
-    assert.is_true(baml.deep_equals(int_mul_(int.max_value(), 1), int.max_value()))
+    assert.equal(int_mul_(int.max_value(), 1), int.max_value())
 }
 
 test "int_mul_min_by_one_no_overflow" {
-    assert.is_true(baml.deep_equals(int_mul_(int.min_value(), 1), int.min_value()))
+    assert.equal(int_mul_(int.min_value(), 1), int.min_value())
 }
 
 // ─── regression: bare-literal method receiver (B-614) ─────────────────────────
@@ -617,9 +617,91 @@ test "int_mul_min_by_one_no_overflow" {
 // the literal itself. Kept at the end of the file so the test registry stays
 // append-only.
 test "int_abs_bare_literal" {
-    assert.is_true(baml.deep_equals(3.abs(), 3))
+    assert.equal(3.abs(), 3)
 }
 
 test "int_to_string_bare_literal" {
-    assert.is_true(baml.deep_equals(7.to_string(), "7"))
+    assert.equal(7.to_string(), "7")
+}
+
+// ─── literal bases and underscore separators ─────────────────────────────────
+// Hex (0x), octal (0o), and binary (0b) integer literals, with `_` digit
+// separators allowed everywhere Rust allows them. Value parsing/validation
+// lives in baml_base::num_lit; invalid forms are covered by the
+// diagnostic_errors/invalid_numeric_literals project.
+
+test "int_hex_literal" {
+    assert.equal(0xFF, 255)
+}
+
+test "int_hex_lowercase_digits" {
+    assert.equal(0xcafe, 51966)
+}
+
+test "int_hex_mixed_case_digits" {
+    assert.equal(0xCaFe, 51966)
+}
+
+test "int_octal_literal" {
+    assert.equal(0o755, 493)
+}
+
+test "int_binary_literal" {
+    assert.equal(0b1010, 10)
+}
+
+test "int_prefixed_zero" {
+    assert.equal(0x0, 0)
+    assert.equal(0o0, 0)
+    assert.equal(0b0, 0)
+}
+
+test "int_negative_prefixed" {
+    assert.equal(-0xFF, -255)
+    assert.equal(-0b1010, -10)
+    assert.equal(-0o755, -493)
+}
+
+test "int_underscore_separators" {
+    assert.equal(1_000_000, 1000000)
+}
+
+test "int_trailing_underscore" {
+    assert.equal(1_, 1)
+}
+
+test "int_hex_underscores" {
+    assert.equal(0xFF_FF, 65535)
+}
+
+test "int_binary_underscores" {
+    assert.equal(0b10_10, 10)
+}
+
+test "int_octal_underscores" {
+    assert.equal(0o7_5_5, 493)
+}
+
+test "int_underscore_after_prefix" {
+    assert.equal(0x_F, 15)
+}
+
+// int.max_value() is 2^62 - 1: the full positive i63 range is reachable in
+// hex.
+test "int_hex_max_value" {
+    assert.equal(int.max_value(), 0x3FFF_FFFF_FFFF_FFFF)
+}
+
+// Bitwise ops read naturally with hex/binary operands (previously the bit
+// patterns had to be spelled in decimal).
+test "int_hex_bitwise" {
+    assert.equal(0xCAFE & 0xFF, 0xFE)
+    assert.equal(0b1100 | 0b0011, 0b1111)
+    assert.equal(0b1100 ^ 0b1010, 0b0110)
+}
+
+// Maximal munch: a method call on a bare prefixed literal must not absorb
+// the dot (`0xFF.to_string()` is INTEGER_LITERAL DOT WORD).
+test "int_hex_bare_literal_method" {
+    assert.equal(0xFF.to_string(), "255")
 }

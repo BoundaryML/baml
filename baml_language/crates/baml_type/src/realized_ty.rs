@@ -39,6 +39,52 @@ impl RealizedTy {
             attr: TyAttr::default(),
         }
     }
+
+    /// `never` (the bottom type) with default attributes. The error type of a
+    /// future whose body statically cannot throw.
+    pub fn never() -> Self {
+        RealizedTy::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
+    // --- Compound constructors (default TyAttr) ---
+
+    /// `T[]` (list) with default attributes.
+    pub fn list(inner: RealizedTy) -> Self {
+        RealizedTy::List(Box::new(inner), TyAttr::default())
+    }
+
+    /// True if this is exactly the `null` type.
+    pub fn is_null(&self) -> bool {
+        matches!(self, RealizedTy::Null { .. })
+    }
+
+    /// True if this is a union that includes `null` — i.e. an optional type.
+    /// Mirrors [`crate::RuntimeTy::is_nullable_union`].
+    pub fn is_nullable_union(&self) -> bool {
+        matches!(self, RealizedTy::Union(members, _) if members.iter().any(RealizedTy::is_null))
+    }
+
+    /// Remove `null` from a nullable union, collapsing the result. Mirrors
+    /// [`crate::RuntimeTy::strip_null`].
+    pub fn strip_null(&self) -> RealizedTy {
+        match self {
+            RealizedTy::Union(members, attr) => {
+                let non_null: Vec<RealizedTy> =
+                    members.iter().filter(|m| !m.is_null()).cloned().collect();
+                match non_null.len() {
+                    0 => self.clone(),
+                    1 => non_null
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| unreachable!("len checked")),
+                    _ => RealizedTy::Union(non_null, attr.clone()),
+                }
+            }
+            _ => self.clone(),
+        }
+    }
 }
 
 impl std::fmt::Display for RealizedTy {
@@ -134,12 +180,12 @@ mod tests {
         // `AssociatedTypeProjection` is a type variable (the `typevar` axis), so
         // it has no realized form — the conversion rejects it at the top level.
         let ty = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::TypeVar(Name::new("T"), def())),
-            interface: Some(Box::new(Interface {
+            base: Box::new(Ty::type_var("T")),
+            interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],
                 associated_types: vec![],
-            })),
+            }),
             member: Name::new("Item"),
             attr: def(),
         };

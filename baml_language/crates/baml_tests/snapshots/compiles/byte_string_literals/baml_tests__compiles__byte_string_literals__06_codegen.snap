@@ -1,15 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5869
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
 function user.ByteStringBasic() -> int {
     load_const b"\x68\x65\x6c\x6c\x6f"
     call baml.deep_copy

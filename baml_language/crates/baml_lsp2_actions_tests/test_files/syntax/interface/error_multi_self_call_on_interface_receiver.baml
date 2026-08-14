@@ -1,7 +1,7 @@
 // BEP-044: methods with additional `Self` parameters need a concrete receiver.
 
 interface Equatable {
-  function same(self, other: Self) -> bool
+  function same(self, other: Self) -> bool throws never
 }
 
 class Box {
@@ -20,12 +20,10 @@ function bad(a: Equatable, b: Equatable) -> bool {
 
 //----
 //- diagnostics
-// error: method `same` on interface `Equatable` uses `Self` in its parameters and requires a concrete receiver
-//     ╭─[ interface_error_multi_self_call_on_interface_receiver.baml:18:10 ]
-//     │
+// E0001
+//
+//   × method `same` on interface `Equatable` uses `Self` in a parameter, so it requires a concrete receiver, not an interface-existential one
+//     ╭─[interface_error_multi_self_call_on_interface_receiver.baml:18:10]
 //  18 │   return a.same(b)
-//     │          ───┬──
-//     │             ╰──── method `same` on interface `Equatable` uses `Self` in its parameters and requires a concrete receiver
-//     │
-//     │ Note: Error code: E0001
-// ────╯
+//     ·          ──────
+//     ╰────

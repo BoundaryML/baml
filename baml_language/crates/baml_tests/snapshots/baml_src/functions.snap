@@ -1,78 +1,91 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function functions.$init_test_ns_functions_functions(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.functions"
     load_const "return_literal_int"
     make_closure .<lambda($init_test_ns_functions_functions, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "return_literal_bool"
     make_closure .<lambda($init_test_ns_functions_functions, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "return_literal_string"
     make_closure .<lambda($init_test_ns_functions_functions, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "return_function_call"
     make_closure .<lambda($init_test_ns_functions_functions, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "call_function_assign_to_variable"
     make_closure .<lambda($init_test_ns_functions_functions, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "mutable_variables"
     make_closure .<lambda($init_test_ns_functions_functions, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "call_with_arguments"
     make_closure .<lambda($init_test_ns_functions_functions, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "unused_variable_does_not_affect_result"
     make_closure .<lambda($init_test_ns_functions_functions, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "early_return"
     make_closure .<lambda($init_test_ns_functions_functions, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "early_return_from_nested_scopes"
     make_closure .<lambda($init_test_ns_functions_functions, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "recursion"
     make_closure .<lambda($init_test_ns_functions_functions, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.functions"
     load_const "function_as_value"
     make_closure .<lambda($init_test_ns_functions_functions, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -92,8 +105,7 @@ function functions.call_twice(f: (int, int) -> int throws never, x: int, y: int)
     load_var2 2 3
     load_var f
     call_indirect
-    store_var _5
-    load_var2 4 5
+    load_var _4
     add_int
     return
 }
@@ -202,7 +214,8 @@ function functions.fib_main() -> int {
 }
 
 function functions.function_as_value_main() -> int {
-    load_global user.functions.add
+    load_type never
+    load_const user.functions.add
     load_const 20
     load_const 1
     call user.functions.call_twice

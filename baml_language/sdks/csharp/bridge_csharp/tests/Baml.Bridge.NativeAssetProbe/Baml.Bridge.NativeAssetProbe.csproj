@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IsPackable>true</IsPackable>
+    <PackageId>Baml.Bridge.NativeAssetProbe</PackageId>
+    <PackageVersion>0.0.0-b1</PackageVersion>
+    <Authors>BoundaryML</Authors>
+    <Description>Repository-only native RID asset fixture for the BAML C# ABI gate.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+  <Target Name="RequireNativeProbeAsset" BeforeTargets="Pack">
+    <Error
+      Condition="'$(BamlNativeLibraryPath)' == ''"
+      Text="BamlNativeLibraryPath must identify the exact native probe artifact." />
+    <Error
+      Condition="!Exists('$(BamlNativeLibraryPath)')"
+      Text="BamlNativeLibraryPath does not exist: $(BamlNativeLibraryPath)" />
+  </Target>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None
+      Include="$(BamlNativeLibraryPath)"
+      Pack="true"
+      PackagePath="runtimes/linux-x64/native/libbridge_cffi.so"
+      Visible="false" />
+  </ItemGroup>
+</Project>

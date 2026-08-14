@@ -27,7 +27,7 @@ from baml_sdk.recursion import (
 )
 
 
-def test_round_trip_int_binary_tree():
+def test_recursion_round_trip_int_binary_tree():
     t = IntBinaryTree(
         value=1,
         left=IntBinaryTree(value=2, left=None, right=None),
@@ -36,14 +36,14 @@ def test_round_trip_int_binary_tree():
     assert round_trip_int_binary_tree(t=t) == t
 
 
-def test_round_trip_mutual_recursion():
+def test_recursion_round_trip_mutual_recursion():
     a = A(b=B(a=None))
     b = B(a=A(b=None))
     assert round_trip_a(a=a) == a
     assert round_trip_b(b=b) == b
 
 
-def test_round_trip_scc_t1_t2_t3():
+def test_recursion_round_trip_scc_t1_t2_t3():
     t1 = T1(via2=T2(via1=None, via3=None), via3=None)
     t2 = T2(via1=None, via3=T3(via1=None, via2=None))
     t3 = T3(via1=None, via2=None)
@@ -52,7 +52,7 @@ def test_round_trip_scc_t1_t2_t3():
     assert round_trip_t3(t=t3) == t3
 
 
-def test_round_trip_scc_t4_t5_t6():
+def test_recursion_round_trip_scc_t4_t5_t6():
     t4 = T4(via5=T5(via4=None, via6=None), via6=None)
     t5 = T5(via4=None, via6=T6(via4=None, via5=None))
     t6 = T6(via4=None, via5=None)

@@ -14,7 +14,7 @@
 //! `crates/python_pydantic2/setup.sh`, invoked by `cargo nextest run`
 //! via the setup-script binding in `.config/nextest.toml` (and run
 //! manually after `cargo test --no-run` for plain `cargo test`). This
-//! mirrors the typescript_node target's `pnpm install` placement,
+//! mirrors the TypeScript target's `pnpm install` placement,
 //! keeps codegen deps the only thing build.rs pulls in, and — most
 //! importantly — lets setup.sh pass `--reinstall-package baml_bridge`
 //! so the maturin-built `.so` is rebuilt on incremental Rust edits
@@ -35,7 +35,7 @@ use sdkgen_python_pydantic2::NamingConvention;
 
 use crate::{
     BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, symlink_customizable, watch_dir,
+    load_fixture, symlink_customizable, watch_dir, write_codegen_output,
 };
 
 /// uv-friendly pyproject template. Each fixture's pyproject gets a
@@ -124,28 +124,7 @@ fn codegen_fixture(
         )
     }));
     match codegen_result {
-        Ok(output) => {
-            for (rel, content) in output {
-                let path = baml_sdk.join(&rel);
-                if let Some(parent) = path.parent() {
-                    if let Err(e) = fs::create_dir_all(parent) {
-                        diagnostics.record(
-                            "codegen_write",
-                            fixture,
-                            format!("create_dir_all {}: {e}", parent.display()),
-                        );
-                        continue;
-                    }
-                }
-                if let Err(e) = fs::write(&path, content) {
-                    diagnostics.record(
-                        "codegen_write",
-                        fixture,
-                        format!("write {}: {e}", path.display()),
-                    );
-                }
-            }
-        }
+        Ok(output) => write_codegen_output(&baml_sdk, output, fixture, diagnostics),
         Err(_) => {
             diagnostics.record(
                 "codegen",
@@ -221,7 +200,13 @@ mod {fixture} {{
 
     #[test]
     fn pytest() {{
-        cmd("uv run pytest -v");
+        ::sdk_test_harness_runner::run_test_cmd_allowing_exit_codes(
+            "{fixture}",
+            "uv run pytest -v",
+            "{cache_subdir}",
+            "{cache_env_var}",
+            &[5],
+        );
     }}
 }}
 "#,

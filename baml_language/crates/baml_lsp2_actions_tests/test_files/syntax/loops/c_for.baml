@@ -101,48 +101,38 @@ function BreakContinue() -> int {
 
 //----
 //- diagnostics
-// error: unresolved name: i
-//     ╭─[ loops_c_for.baml:21:9 ]
-//     │
+// E0003
+//
+//   × unresolved name: `i`
+//     ╭─[loops_c_for.baml:21:9]
 //  21 │     for (; i <= 10; i += 1) {
-//     │            ┬
-//     │            ╰── unresolved name: i
-//     │
-//     │ Note: Error code: E0003
-// ────╯
-// error: unresolved name: i
-//     ╭─[ loops_c_for.baml:22:8 ]
-//     │
-//  22 │        s += i;
-//     │             ┬
-//     │             ╰── unresolved name: i
-//     │
-//     │ Note: Error code: E0003
-// ────╯
-// error: unresolved name: i
-//     ╭─[ loops_c_for.baml:21:18 ]
-//     │
+//     ·            ─
+//     ╰────
+// E0003
+//
+//   × unresolved name: `i`
+//     ╭─[loops_c_for.baml:21:18]
 //  21 │     for (; i <= 10; i += 1) {
-//     │                     ┬
-//     │                     ╰── unresolved name: i
-//     │
-//     │ Note: Error code: E0003
-// ────╯
-// error: unresolved name: x
-//     ╭─[ loops_c_for.baml:42:32 ]
-//     │
+//     ·                     ─
+//     ╰────
+// E0003
+//
+//   × unresolved name: `i`
+//     ╭─[loops_c_for.baml:22:8]
+//  22 │         s += i;
+//     ·              ─
+//     ╰────
+// E0003
+//
+//   × unresolved name: `x`
+//     ╭─[loops_c_for.baml:42:32]
 //  42 │     for (let i = 0; i <= 10; i += x) {
-//     │                                   ┬
-//     │                                   ╰── unresolved name: x
-//     │
-//     │ Note: Error code: E0003
-// ────╯
-// warning: unreachable code: 1 statement(s) after diverging statement
-//     ╭─[ loops_c_for.baml:52:3 ]
-//     │
-//  52 │        break;
-//     │        ───┬──
-//     │           ╰──── unreachable code: 1 statement(s) after diverging statement
-//     │
-//     │ Note: Error code: E0146
-// ────╯
+//     ·                                   ─
+//     ╰────
+// E0146
+//
+//   ⚠ unreachable code: 1 statement(s) after diverging statement
+//     ╭─[loops_c_for.baml:53:3]
+//  53 │         continue;
+//     ·         ─────────
+//     ╰────

@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Bitcount+Grid+Double:wght@400;700&display=swap');
+
+/* Styles for the /war-on-slop campaign page. Everything is scoped to the
+   `.war-on-slop` wrapper so the Bitcount display font and warm dot-grid
+   background apply only to the campaign content — the shared banner, navbar,
+   and footer keep the main site's Geist styling. Color utilities (text-wos-ink,
+   bg-wos-cream-hi, border-wos-line, text-wos-accent…) come from the namespaced
+   `wos-` theme tokens in app/globals.css. */
+
+.war-on-slop {
+  min-height: 100vh;
+  background-color: var(--color-wos-cream);
+  /* Warm cream background with a subtle dot-grid + gradient. */
+  background-image:
+    radial-gradient(circle at 1px 1px, #2a252009 1px, transparent 0),
+    linear-gradient(#fffdf6d1, #fbf7edd1);
+  background-size: 18px 18px, 100% 100%;
+  color: var(--color-wos-ink);
+  font-family: 'Bitcount Grid Double', ui-monospace, monospace;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+.war-on-slop h1,
+.war-on-slop h2,
+.war-on-slop h3 {
+  font-family: 'Bitcount Grid Double', ui-monospace, monospace;
+}
+
+/* Tweets / body copy read in a normal system sans, not the display font. */
+.war-on-slop .tweet-font,
+.war-on-slop .tweet-font * {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+/* Tailwind v4 doesn't ship the legacy `size-full` shorthand by default here. */
+.war-on-slop .size-full {
+  width: 100%;
+  height: 100%;
+}
+
+/* Sliding tweet carousel. Keyframe namespaced `wos-` to avoid colliding with
+   the main site's own `marquee` keyframe. */
+@keyframes wos-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.war-on-slop .marquee-track {
+  animation: wos-marquee 45s linear infinite;
+}
+
+/* second row scrolls the other way */
+.war-on-slop .marquee-track-rev {
+  animation: wos-marquee 45s linear infinite reverse;
+}
+
+.war-on-slop .marquee-track:hover,
+.war-on-slop .marquee-track-rev:hover {
+  animation-play-state: paused;
+}
+
+@keyframes wos-paper-plane-send {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  45% {
+    transform: translate(8px, -8px) rotate(8deg);
+    opacity: 1;
+  }
+  46% {
+    transform: translate(-10px, 10px) rotate(8deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.war-on-slop .animate-paper-plane-send {
+  animation: wos-paper-plane-send 900ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .war-on-slop {
+    scroll-behavior: auto;
+  }
+  .war-on-slop .marquee-track,
+  .war-on-slop .marquee-track-rev {
+    animation: none;
+  }
+  .war-on-slop .animate-paper-plane-send {
+    animation: none;
+  }
+}

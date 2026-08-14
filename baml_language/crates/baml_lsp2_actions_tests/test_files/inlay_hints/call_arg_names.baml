@@ -14,14 +14,14 @@ function bar() -> string {
 
 function baz() -> string {
   // lose parameter names
-  let g: (string, int) -> string = greet;
+  let g: (string, int) -> string throws never = greet;
 
   g("Charlie", 25)
 }
 
 function qux() -> string {
   // partially lose  and rename parameter
-  let g: (c: string, int) -> string = greet;
+  let g: (c: string, int) -> string throws never = greet;
 
   g("Delta", 30)
 }

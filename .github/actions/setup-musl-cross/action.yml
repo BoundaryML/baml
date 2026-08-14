@@ -1,0 +1,23 @@
+name: "Setup musl cross toolchain"
+description: "Install musl-gcc and point the target's C compiler + cargo linker at it, for building a musl target."
+
+inputs:
+  target:
+    description: "musl target triple (e.g. x86_64-unknown-linux-musl)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        # The cc/cargo env var names are the target triple with dashes as
+        # underscores (CC lower-cased, the cargo linker var upper-cased).
+        # Derived from the target so the platform contract stays shell-free.
+        sudo apt-get update
+        sudo apt-get install -y musl-tools
+        target="${{ inputs.target }}"
+        up="$(printf '%s' "$target" | tr '[:lower:]' '[:upper:]')"
+        echo "CC_${target//-/_}=musl-gcc" >> "$GITHUB_ENV"
+        echo "CARGO_TARGET_${up//-/_}_LINKER=musl-gcc" >> "$GITHUB_ENV"

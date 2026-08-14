@@ -2,11 +2,11 @@
 // to Container<Animal> even though Dog implements Animal.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 interface Container<T> {
-  function add(self, item: T) -> null
+  function add(self, item: T) -> null throws never
 }
 
 class Dog {
@@ -32,12 +32,11 @@ function bad() -> null {
 
 //----
 //- diagnostics
-// error: type mismatch: expected Container<Animal>, got DogBag
-//     ╭─[ interface_error_invariant_generic_assignment.baml:30:33 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[interface_error_invariant_generic_assignment.baml:30:33]
 //  30 │   return takes_animal_container(bag)
-//     │                                 ─┬─  
-//     │                                  ╰─── type mismatch: expected Container<Animal>, got DogBag
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·                                 ─┬─
+//     ·                                  ╰── expected `Container<Animal>`, found `DogBag`
+//     ╰────

@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_mir::{
-    BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
+    AggregateKind, BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
+    Terminator,
 };
 use baml_type::{Literal, RuntimeTy, TyTemplate};
 
@@ -455,6 +456,10 @@ fn simulate_statement_stack(
                 pull_semantics::walk_projection_store(&mut sink, destination, value).is_ok()
             }
         },
+        // Receiver, value and the interface type are pushed then all consumed by the
+        // opcode. Rather than simulate that, opt out of stack carry across it — the
+        // statement is materialized correctly by `emit_statement`.
+        StatementKind::VirtualFieldStore { .. } => false,
         StatementKind::Drop(place) => {
             let mut sink = StackCarryPullSink {
                 sim,
@@ -464,23 +469,11 @@ fn simulate_statement_stack(
             };
             pull_semantics::walk_drop_statement(&mut sink, place).is_ok()
         }
-        StatementKind::Unwatch(_)
-        | StatementKind::NotifyBlock { .. }
-        | StatementKind::WatchNotify(_)
-        | StatementKind::FreshCell(_)
+        StatementKind::FreshCell(_)
         | StatementKind::VizEnter(_)
         | StatementKind::VizExit(_)
         | StatementKind::Intrinsic { .. }
         | StatementKind::Nop => true,
-        StatementKind::WatchOptions { local, filter } => {
-            let mut sink = StackCarryPullSink {
-                sim,
-                carried_local,
-                classifications,
-                def_use,
-            };
-            pull_semantics::walk_watch_options_statement(&mut sink, *local, None, filter).is_ok()
-        }
     }
 }
 
@@ -501,9 +494,49 @@ fn simulate_terminator_stack(
             }
             sim.pop_n(1)
         }
-        Terminator::Switch { discriminant, .. } => {
-            // All switch strategies pull the discriminant first; that's the carried-use point.
-            simulate_operand_pull_stack(discriminant, sim, carried_local, classifications, def_use)
+        Terminator::NarrowBind { source, .. } => {
+            if !simulate_operand_pull_stack(source, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            sim.pop_n(1)
+        }
+        Terminator::Switch {
+            discriminant,
+            arms,
+            exhaustive,
+            ..
+        } => {
+            // Simulate the discriminant pull once per pull the chosen emission
+            // strategy actually emits (`switch_discriminant_pulls` is derived
+            // from the same `SwitchStrategy` the emitter dispatches on, so
+            // this simulation and the emitters cannot drift apart). The
+            // single-pull strategies consume the carried value exactly once —
+            // the carried-use point. The if-else chain re-loads the
+            // discriminant per comparison: its second simulated pull finds the
+            // carried value already consumed (`sim.used`) — including when the
+            // carry is reached through a Virtual chain such as
+            // `discriminant(call_result)` — and rejects the candidate, because
+            // the emitted pulls 2..N would pop unrelated stack slots (a crash
+            // when the popped value is type-incompatible, a SILENT wrong arm
+            // when it is compatible). The chain's no-comparison forms (no
+            // arms; a single exhaustive arm) pull zero times, so the carried
+            // value is never consumed and the region-end `sim.used` check
+            // rejects — it would be orphaned on the operand stack. A rejected
+            // discriminant takes its regular slot, which every strategy
+            // re-loads correctly.
+            let pulls = crate::emit::switch_discriminant_pulls(arms, *exhaustive);
+            for _ in 0..pulls {
+                if !simulate_operand_pull_stack(
+                    discriminant,
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                ) {
+                    return false;
+                }
+            }
+            true
         }
         Terminator::Return => {
             let mut sink = StackCarryPullSink {
@@ -667,7 +700,10 @@ fn simulate_terminator_stack(
                 return false;
             }
             // Config operand is pushed last (null when there is no `with`
-            // clause). Mirror `emit`: always push three, pop three.
+            // clause). Mirror `emit`: always push three, pop three. The
+            // future's `T`/`E` types are pushed after it by `load_type` and
+            // popped again by `Spawn`, so like `alloc_array`'s element type
+            // they leave the net stack effect unchanged.
             let null_config = Operand::Constant(Constant::Null);
             let config_op = config.as_deref().unwrap_or(&null_config);
             if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {
@@ -821,6 +857,22 @@ fn simulate_rvalue_pull_stack(
         return result;
     }
 
+    // Class aggregates containing field-copy operands are emitted incrementally
+    // as `AllocInstance; InitField/InitSpread`, not as the generic
+    // stack-consuming aggregate modeled by `walk_rvalue_pull`. A call result
+    // carried into that sequence would sit below the newly allocated instance,
+    // reversing the `InitField` operands and treating the call result as the
+    // destination object. Reject stack carry for this shape.
+    if matches!(
+        rvalue,
+        Rvalue::Aggregate {
+            kind: AggregateKind::Class { .. },
+            fields,
+        } if fields.iter().any(is_class_field_copy_operand)
+    ) {
+        return false;
+    }
+
     // The emitter pulls binary operands left-to-right. If the right operand is
     // a carried call result, pulling a safe commutative left operand first puts
     // the stack in reversed order (`right, left`). Numeric add/mul tolerate
@@ -861,6 +913,18 @@ fn simulate_rvalue_pull_stack(
         }
         sim.push();
         return true;
+    }
+    // MakeVirtualBoundMethod has a variable-arity stack effect (receiver + N method
+    // type args + interface type + method name). Rather than simulate it, opt out of
+    // the stack-carry optimization for it — `walk_rvalue_pull` panics on it, and it is
+    // materialized correctly through `emit_rvalue_pull`.
+    // `VirtualFieldAccess` joins it: `walk_rvalue_pull` panics on both, and both are
+    // materialized correctly through `emit_rvalue_pull`.
+    if matches!(
+        rvalue,
+        Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::VirtualFieldAccess { .. }
+    ) {
+        return false;
     }
     let mut sink = StackCarryPullSink {
         sim,
@@ -1181,7 +1245,18 @@ impl PullSink for StackCarryPullSink<'_> {
                     .get(&local)
                     .and_then(|du| du.def.as_ref())
                     .ok_or(())?;
-                if matches!(def.rvalue, Rvalue::MakeBoundMethod { .. }) {
+                // These are materialized only by `emit_rvalue_pull`, which
+                // intercepts them before the shared walker sees them — so
+                // inlining one here would hand `walk_rvalue_pull` an rvalue it
+                // asserts it never receives. Reject instead, which is also the
+                // honest answer: their stack effects are variable-arity and this
+                // simulator does not model them.
+                if matches!(
+                    def.rvalue,
+                    Rvalue::MakeBoundMethod { .. }
+                        | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::VirtualFieldAccess { .. }
+                ) {
                     return Err(());
                 }
                 if let Some(ok) = simulate_aggregate_operand_pull_stack(
@@ -1351,6 +1426,15 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn is_type_tag(&mut self, _tag: i64) -> Result<(), Self::Error> {
+        // Same stack shape as `is_type`: consume the operand, push the bool.
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn load_type(&mut self, _template: &baml_type::TyTemplate) -> Result<(), Self::Error> {
         // LoadType pushes one Object::Type value onto the stack. No operands consumed.
         self.sim.push();
@@ -1440,22 +1524,6 @@ impl StackEffectSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn push_watch_channel(
-        &mut self,
-        _local: Local,
-        _channel_name: Option<&str>,
-    ) -> Result<(), Self::Error> {
-        self.sim.push();
-        Ok(())
-    }
-
-    fn watch_local(&mut self, _local: Local) -> Result<(), Self::Error> {
-        if !self.sim.pop_n(2) {
-            return Err(());
-        }
-        Ok(())
-    }
-
     fn store_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
         // StoreCapture pops one value (the value to store into the capture cell).
         if !self.sim.pop_n(1) {
@@ -1490,7 +1558,6 @@ mod tests {
             ty,
             span: None,
             scope_span: None,
-            is_watched: false,
             is_captured: false,
         }
     }
@@ -1703,6 +1770,37 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn class_spread_rejects_call_result_immediate_before_incremental_init() {
+        let carried = Local(1);
+        let spread_base = Local(2);
+        let rvalue = Rvalue::Aggregate {
+            kind: AggregateKind::Class {
+                name: "GuideHooks".to_string(),
+                type_arg_templates: vec![],
+            },
+            fields: vec![
+                Operand::copy_local(carried),
+                Operand::Copy(Place::Field {
+                    base: Box::new(Place::Local(spread_base)),
+                    field: 1,
+                }),
+            ],
+        };
+        let body = body_with_locals(vec![int_ty(), int_ty(), int_ty()]);
+        let mut sim = StackCarrySim::new();
+
+        assert!(!simulate_rvalue_pull_stack(
+            &rvalue,
+            &mut sim,
+            carried,
+            &body,
+            &HashMap::new(),
+            &HashMap::new(),
+        ));
+        assert!(!sim.used);
     }
 
     #[test]

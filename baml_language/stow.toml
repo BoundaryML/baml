@@ -86,15 +86,24 @@ reason = "Use thiserror for proper error types in library crates."
 [[namespaces]]
 name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2", "type"]
+# The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
+# the same shape), not a prefix + word.
+approved_suffixes = ["compiler2_hir_ty"]
 test_crate_exceptions = ["baml_tests"]
-embed_crates = ["tools_onionskin", "bex_project"]
+embed_crates = ["bex_project"]
+# The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
+# `bridge_python`/`bridge_nodejs`) while the published crate is `baml_bridge`.
+name_exceptions = { "bridge_rust" = "baml_bridge" }
 
 # baml-specific dependency rules
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler", "compiler2"]
-allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen"]
-reason = "Use baml_db or baml_project to access compiler interfaces."
+# `baml_surface` is the semantic-surface API boundary over the compiler
+# (handles + export IR); it wraps compiler queries so downstream consumers
+# don't have to be on this list.
+allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen", "baml_surface"]
+reason = "Use baml_db, baml_project, or baml_surface to access compiler interfaces."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
@@ -115,7 +124,7 @@ reason = "Only compiler_emit and baml_project crates should depend on bex_vm_typ
 # tools namespace configuration
 [[namespaces]]
 name = "tools"
-approved_prefixes = ["sap"]
+approved_prefixes = ["sap", "semantic", "compile"]
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
 name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 
@@ -145,6 +154,7 @@ link_crates = ["baml_db", "baml_project"]
 # bridge namespace configuration
 [[namespaces]]
 name = "bridge"
+approved_suffixes = ["typescript_web"]
 link_crates = ["bex_project", "sys_native", "sys_types"]
 
 # Bridge crates should go through bex_project for runtime access, not depend on bex internals directly.
@@ -163,9 +173,9 @@ link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
 
 [[namespaces]]
 name = "sdkgen"
-# Each SDK generator targets a specific language + runtime, so the whole tail
-# is meaningful and validated as a unit rather than by sub-prefix.
-approved_suffixes = ["python_pydantic2", "typescript_node"]
+# Each SDK generator has a meaningful language-specific tail that is validated
+# as a unit rather than by sub-prefix.
+approved_suffixes = ["python_pydantic2", "typescript_shared"]
 
 [[namespaces]]
 name = "surface"

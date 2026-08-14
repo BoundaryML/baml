@@ -122,6 +122,7 @@ def assert_report(scenario, raw, want_proj):
     scope = jget(d, "tokeninfo.scope")
     rm_s = jget(d, "resourcemanager.status")
     rm_p = jget(d, "resourcemanager.project_id")
+    vx_s = jget(d, "vertex.status")
     has_cp = "cloud-platform" in str(scope)
     detail = f"token={tok} tokeninfo={ti_s} scope={'cloud-platform' if scope else 'none'}"
     ok = (tok is True) and (ti_s == 200) and has_cp
@@ -132,6 +133,11 @@ def assert_report(scenario, raw, want_proj):
         detail += f" rm={rm_s}" + (f"/{rm_p}" if rm_p else "")
     if want_proj:
         ok = ok and (rm_s == 200) and (str(rm_p) == str(want_proj))
+    # The vertex key only exists when --vertex-model/--vertex-region were
+    # supplied; when it does, the generateContent call must succeed.
+    if vx_s != "":
+        detail += f" vertex={vx_s}"
+        ok = ok and (vx_s == 200)
     if ok:
         print(f"  {green('PASS')} {scenario} — {detail}")
     else:

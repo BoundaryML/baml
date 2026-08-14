@@ -3,100 +3,116 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function deep_copy.$init_test_ns_deep_copy_deep_copy(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.deep_copy"
     load_const "deep_copy_object"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.deep_copy"
     load_const "deep_copy_independence"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.deep_copy"
     load_const "deep_copy_nested_arrays_in_class"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.deep_copy"
     load_const "deep_copy_map_in_class"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.deep_copy"
     load_const "deep_copy_complex_nested_structure"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.deep_copy"
     load_const "deep_copy_circular_reference"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_primitives"
+    load_const "root.deep_copy"
+    load_const "eq_primitives"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_different_primitives"
+    load_const "root.deep_copy"
+    load_const "eq_different_primitives"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_simple_objects"
+    load_const "root.deep_copy"
+    load_const "eq_simple_objects"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_different_objects"
+    load_const "root.deep_copy"
+    load_const "eq_different_objects"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_nested_objects"
+    load_const "root.deep_copy"
+    load_const "eq_nested_objects"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_nested_objects_different"
+    load_const "root.deep_copy"
+    load_const "eq_nested_objects_different"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_with_arrays"
+    load_const "root.deep_copy"
+    load_const "eq_with_arrays"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_with_maps"
+    load_const "root.deep_copy"
+    load_const "eq_with_maps"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_same_reference"
+    load_const "root.deep_copy"
+    load_const "eq_same_reference"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_equals_circular_structure"
+    load_const "root.deep_copy"
+    load_const "eq_circular_structure"
     make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -293,7 +309,7 @@ function deep_copy.deep_copy_object_helper() -> deep_copy.Tree {
     return
 }
 
-function deep_copy.deep_equals_circular_helper() -> bool {
+function deep_copy.eq_circular_helper() -> bool {
     load_const 1
     load_type deep_copy.Node
     alloc_array 0
@@ -322,36 +338,32 @@ function deep_copy.deep_equals_circular_helper() -> bool {
     load_type deep_copy.Node
     alloc_array 1
     store_field .children
-    load_type deep_copy.Node
     load_var2 1 2
-    call baml.deep_equals
+    call baml.ops.equals_equals
     return
 }
 
-function deep_copy.deep_equals_different_primitives_helper() -> bool {
-    load_type int
+function deep_copy.eq_different_primitives_helper() -> bool {
     load_const 42
     load_const 43
-    call baml.deep_equals
+    cmp_int_op ==
     return
 }
 
-function deep_copy.deep_equals_primitives_helper() -> bool {
-    load_type int
+function deep_copy.eq_primitives_helper() -> bool {
     load_const 42
     load_const 42
-    call baml.deep_equals
+    cmp_int_op ==
     return
 }
 
-function deep_copy.deep_equals_same_reference_helper() -> bool {
+function deep_copy.eq_same_reference_helper() -> bool {
     load_const 1
     load_type deep_copy.Node
     alloc_array 0
     init_instance user.deep_copy.Node .value, .children
-    store_var n
-    load_type deep_copy.Node
-    load_var2 1 1
-    call baml.deep_equals
+    store_var_load_var n
+    load_var n
+    call baml.ops.equals_equals
     return
 }

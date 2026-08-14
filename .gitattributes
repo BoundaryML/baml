@@ -16,3 +16,27 @@ typescript2/pkg-playground/src/__fixtures__/*.json text eol=lf
 # on Windows) turns every "\n\n" into "\r\n\r\n", so the whole body streams
 # as one chunk and the streaming e2e tests observe zero partials (B-315).
 *.snap.sse text eol=lf
+# The C# union generator emits and byte-checks LF deterministically.
+baml_language/sdks/csharp/bridge_csharp/src/Values/BamlUnion.cs text eol=lf
+typescript2/app-website/**/*.avif filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.eot filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.gif filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.ico filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.m4a filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.m4v filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.mov filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.mp3 filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.mp4 filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.otf filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.pdf filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.png filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.svg filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.ttf filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.wav filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.webm filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.webp filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.woff filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/**/*.woff2 filter=lfs diff=lfs merge=lfs -text
+typescript2/app-website/lib/mdx/bfcl/data/**/*.jsonl filter=lfs diff=lfs merge=lfs -text

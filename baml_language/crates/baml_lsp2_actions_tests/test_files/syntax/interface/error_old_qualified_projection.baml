@@ -2,7 +2,7 @@
 // `obj.as<Interface>.method()` instead.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {
@@ -18,12 +18,10 @@ function bad() -> string {
 
 //----
 //- diagnostics
-// error: interface projection uses `.as<Animal>`, not `.Animal`
-//     ╭─[ interface_error_old_qualified_projection.baml:16:10 ]
-//     │
+// E0007
+//
+//   × type `Dog` has no member `Animal`
+//     ╭─[interface_error_old_qualified_projection.baml:16:10]
 //  16 │   return d.Animal.speak()
-//     │          ───────┬──────
-//     │                 ╰──────── interface projection uses `.as<Animal>`, not `.Animal`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
+//     ·          ──────────────
+//     ╰────

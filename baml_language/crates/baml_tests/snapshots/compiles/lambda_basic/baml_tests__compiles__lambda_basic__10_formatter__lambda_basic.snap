@@ -28,12 +28,9 @@ function test_zero_param() -> int {
 // Lambda passed to higher-order function with inferred param types
 function test_map_inferred() -> int[] {
     let items: int[] = [1, 2, 3];
-    items
-        .map(
-            (x) -> {
-                x * 2
-            },
-        )
+    items.map((x) -> {
+        x * 2
+    })
 }
 
 // Lambda with throws clause

@@ -27,7 +27,7 @@
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
-use bex_vm_types::{HeapPtr, Object, Value, types::Future};
+use bex_vm_types::{FutureRead, HeapPtr, Object, Value, types::Future};
 
 use crate::{
     BexHeap,
@@ -47,12 +47,7 @@ fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
     use bex_vm_types::FutureRead;
     match fut.read() {
         FutureRead::Ready(v) | FutureRead::Error(v) => v.as_object_ptr(),
-        // ErrorPending's value lives in the ENGINE's GC-rooted stash, not in
-        // the heap future — nothing reachable from here.
-        FutureRead::Pending(_)
-        | FutureRead::Cancelled
-        | FutureRead::InternalError(_)
-        | FutureRead::ErrorPending(_) => None,
+        FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => None,
     }
 }
 
@@ -295,6 +290,129 @@ impl BexHeap {
         }
     }
 
+    /// Find dead errored futures whose result was never delivered to an
+    /// awaiter. This runs after the normal root trace while from-space is
+    /// still intact.
+    unsafe fn scan_unhandled_spawn_errors(
+        &self,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+        gens: &[&ChunkedVec<Object>],
+    ) -> Vec<crate::UnhandledSpawnError> {
+        let mut errors = Vec::new();
+        for space in gens {
+            for i in 0..space.len() {
+                // SAFETY: GC safepoint and `i` is in bounds.
+                let ptr = unsafe { self.make_heap_ptr(space.get_ptr(i)) };
+                if forwarding.contains_key(&ptr) {
+                    continue;
+                }
+                // SAFETY: from-space is intact until the collection swap.
+                let Object::Future(future) = (unsafe { ptr.get() }) else {
+                    continue;
+                };
+                if future.is_observed() {
+                    continue;
+                }
+                if let FutureRead::Error(value) = future.read()
+                    && future.try_mark_reported()
+                {
+                    errors.push(crate::UnhandledSpawnError {
+                        future_id: future.id(),
+                        value,
+                        trace: future.error_trace(),
+                        cancelled: future.cancel_requested(),
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+    /// Preserve the payload graph of every unhandled error found by a major
+    /// collection, then queue the remapped values for the engine.
+    unsafe fn keepalive_unhandled_spawn_errors_major(
+        &self,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
+    ) {
+        let errors = unsafe {
+            self.scan_unhandled_spawn_errors(
+                forwarding,
+                &[self.gen0_ref(), self.gen1_ref(), self.gen2_ref()],
+            )
+        };
+        let mut worklist: Vec<HeapPtr> = errors
+            .iter()
+            .filter_map(|error| error.value.as_object_ptr())
+            .collect();
+        while let Some(old_ptr) = worklist.pop() {
+            if forwarding.contains_key(&old_ptr) {
+                continue;
+            }
+            if self.is_compile_time_ptr(old_ptr) {
+                forwarding.insert(old_ptr, old_ptr);
+                continue;
+            }
+            let new_ptr = self.copy_object_to_inactive(old_ptr, forwarding);
+            // SAFETY: `new_ptr` was just initialized in inactive space.
+            self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
+        }
+        for error in errors {
+            let value = error.value.as_object_ptr().map_or(error.value, |ptr| {
+                Value::object(
+                    *forwarding
+                        .get(&ptr)
+                        .expect("error payload must be forwarded"),
+                )
+            });
+            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, ..error });
+        }
+    }
+
+    /// Minor-collection counterpart to
+    /// [`Self::keepalive_unhandled_spawn_errors_major`].
+    unsafe fn keepalive_unhandled_spawn_errors_minor(
+        &self,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
+        promoted_to_gen2: &mut usize,
+    ) {
+        let errors = unsafe {
+            self.scan_unhandled_spawn_errors(forwarding, &[self.gen0_ref(), self.gen1_ref()])
+        };
+        let mut worklist: Vec<HeapPtr> = errors
+            .iter()
+            .filter_map(|error| error.value.as_object_ptr())
+            .collect();
+        while let Some(old_ptr) = worklist.pop() {
+            if forwarding.contains_key(&old_ptr) {
+                continue;
+            }
+            match self.generation_of(old_ptr) {
+                Generation::CompileTime | Generation::Gen2 => {
+                    forwarding.insert(old_ptr, old_ptr);
+                }
+                Generation::Gen0 => {
+                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
+                    self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
+                }
+                Generation::Gen1 => {
+                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
+                    self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
+                    *promoted_to_gen2 += 1;
+                }
+            }
+        }
+        for error in errors {
+            let value = error.value.as_object_ptr().map_or(error.value, |ptr| {
+                Value::object(
+                    *forwarding
+                        .get(&ptr)
+                        .expect("error payload must be forwarded"),
+                )
+            });
+            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, ..error });
+        }
+    }
+
     fn copy_collection(
         &self,
         roots: &[HeapPtr],
@@ -357,6 +475,12 @@ impl BexHeap {
             // SAFETY: We just wrote the object into inactive, pointer is valid.
             let obj = unsafe { new_ptr.get() };
             self.add_references_to_worklist(obj, &mut worklist);
+        }
+
+        // Preserve unobserved spawn errors before reclaiming their futures.
+        // SAFETY: GC safepoint; exclusive access.
+        unsafe {
+            self.keepalive_unhandled_spawn_errors_major(&mut forwarding);
         }
 
         // BEP-042: keep alive every dead instance with a `cleanup` finalizer
@@ -1062,6 +1186,12 @@ impl BexHeap {
             }
         }
 
+        // Preserve unobserved spawn errors before reclaiming their futures.
+        // SAFETY: GC safepoint; exclusive access.
+        unsafe {
+            self.keepalive_unhandled_spawn_errors_minor(&mut forwarding, &mut promoted_to_gen2);
+        }
+
         // BEP-042: keep alive dead young instances with a `cleanup` finalizer
         // (and their closure) and queue them. Runs after the root trace and
         // before the fixup, so the just-promoted finalizable objects are
@@ -1183,6 +1313,7 @@ impl BexHeap {
 mod tests {
     use std::sync::Arc;
 
+    use baml_type::RealizedTy;
     use bex_vm_types::{Object, Value};
 
     use super::*;
@@ -1323,7 +1454,7 @@ mod tests {
         // Instance has 3 fields but class expects 1 — should panic on verify
         let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance::new(
             class_ptr,
-            vec![],
+            Box::new([]),
             vec![Value::int(1), Value::int(2), Value::int(3)],
         )));
 
@@ -1368,7 +1499,7 @@ mod tests {
 
         // Allocate an array that references the string
         let arr = tlab.alloc_array(
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::unknown(),
             vec![Value::object(str_obj)],
         );
 
@@ -1528,8 +1659,8 @@ mod tests {
         let mut map = indexmap::IndexMap::new();
         map.insert(bex_str::BexStr::from("key"), Value::object(str_obj));
         let map_obj = tlab.alloc_map(
-            baml_type::RuntimeTy::string(),
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
             map,
         );
 
@@ -1653,20 +1784,20 @@ mod tests {
         let leaf_str = tlab.alloc_string("leaf".to_string());
 
         let inner_array = tlab.alloc_array(
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::unknown(),
             vec![Value::object(leaf_str)],
         );
 
         let mut map = indexmap::IndexMap::new();
         map.insert(bex_str::BexStr::from("nested"), Value::object(inner_array));
         let middle_map = tlab.alloc_map(
-            baml_type::RuntimeTy::string(),
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
             map,
         );
 
         let outer_array = tlab.alloc_array(
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::unknown(),
             vec![Value::object(middle_map)],
         );
 
@@ -2098,6 +2229,8 @@ mod tests {
             closure,
             name: Some(name),
             config: None,
+            returns: RealizedTy::int(),
+            throws: RealizedTy::never(),
         })));
 
         let roots = vec![future_ptr];
@@ -2119,6 +2252,8 @@ mod tests {
         // `HeapPtr` to pass to `settle_ready` for its write-barrier hook.
         let future_ptr = tlab.alloc(Object::Future(Future::pending(
             FutureId::from_usize(0),
+            RealizedTy::unknown(),
+            RealizedTy::unknown(),
             bex_vm_types::types::CancellationToken::new(),
         )));
         let Object::Future(future) = (unsafe { future_ptr.get() }) else {
@@ -2156,6 +2291,8 @@ mod tests {
 
         let future_ptr = tlab.alloc(Object::Future(Future::pending(
             FutureId::from_usize(0),
+            RealizedTy::unknown(),
+            RealizedTy::unknown(),
             bex_vm_types::types::CancellationToken::new(),
         )));
         let Object::Future(future) = (unsafe { future_ptr.get() }) else {
@@ -2250,7 +2387,7 @@ mod tests {
     fn test_gc_leaf_type_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::RuntimeTy::Int {
+        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::RealizedTy::Int {
             attr: baml_type::TyAttr::default(),
         })));
 
@@ -2258,7 +2395,7 @@ mod tests {
         let Object::Type(ty) = (unsafe { new_roots[0].get() }) else {
             panic!("not type")
         };
-        assert!(matches!(**ty, baml_type::RuntimeTy::Int { .. }));
+        assert!(matches!(**ty, baml_type::RealizedTy::Int { .. }));
     }
 
     #[test]
@@ -2266,10 +2403,10 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let arr = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![]);
+        let arr = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![]);
         let map = tlab.alloc_map(
-            baml_type::RuntimeTy::string(),
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
             indexmap::IndexMap::new(),
         );
 
@@ -2298,9 +2435,9 @@ mod tests {
 
         // D -> C -> B -> A (leaf string wrapped in nested arrays)
         let a = tlab.alloc_string("a".to_string());
-        let b = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(a)]);
-        let c = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(b)]);
-        let d = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(c)]);
+        let b = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(a)]);
+        let c = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(b)]);
+        let d = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(c)]);
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[d]) };
         assert_eq!(stats.live_count, 4);
@@ -2338,7 +2475,7 @@ mod tests {
         let children: Vec<Value> = (0..5)
             .map(|i| Value::object(tlab.alloc_string(format!("child_{i}"))))
             .collect();
-        let parent = tlab.alloc_array(baml_type::RuntimeTy::unknown(), children);
+        let parent = tlab.alloc_array(baml_type::RealizedTy::unknown(), children);
 
         // Also allocate explicit garbage
         let _garbage = tlab.alloc_string("garbage".to_string());
@@ -2355,10 +2492,14 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let shared = tlab.alloc_string("shared".to_string());
-        let parent_a =
-            tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(shared)]);
-        let parent_b =
-            tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(shared)]);
+        let parent_a = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(shared)],
+        );
+        let parent_b = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(shared)],
+        );
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[parent_a, parent_b]) };
         // 2 parents + 1 shared child (not 4 — shared object copied only once)
@@ -2391,10 +2532,10 @@ mod tests {
 
         // root -> [B, C], B -> [D], C -> [D]
         let d = tlab.alloc_string("diamond_bottom".to_string());
-        let b = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(d)]);
-        let c = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(d)]);
+        let b = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(d)]);
+        let c = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(d)]);
         let root = tlab.alloc_array(
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::unknown(),
             vec![Value::object(b), Value::object(c)],
         );
 
@@ -2437,14 +2578,14 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Create A (array placeholder) and B (cell pointing to A), then patch A -> B
-        let a = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![]); // placeholder, will be patched
+        let a = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![]); // placeholder, will be patched
         let b = tlab.alloc(Object::Cell(bex_vm_types::types::Cell::new(Value::object(
             a,
         ))));
         // Patch A to reference B, forming a cycle
         unsafe {
             *a.get_mut() = Object::Array(bex_vm_types::types::Array::new(
-                baml_type::RuntimeTy::unknown(),
+                baml_type::RealizedTy::unknown(),
                 vec![Value::object(b)],
             ));
         }
@@ -2478,12 +2619,12 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Island: three mutually-referencing objects, none reachable from roots
-        let x = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![]); // placeholder
-        let y = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(x)]);
-        let z = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(y)]);
+        let x = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![]); // placeholder
+        let y = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(x)]);
+        let z = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(y)]);
         unsafe {
             *x.get_mut() = Object::Array(bex_vm_types::types::Array::new(
-                baml_type::RuntimeTy::unknown(),
+                baml_type::RealizedTy::unknown(),
                 vec![Value::object(z)],
             ));
         }
@@ -2506,7 +2647,7 @@ mod tests {
         let mut current = tlab.alloc_string("leaf".to_string());
         for _ in 0..99 {
             current = tlab.alloc_array(
-                baml_type::RuntimeTy::unknown(),
+                baml_type::RealizedTy::unknown(),
                 vec![Value::object(current)],
             );
         }
@@ -2612,7 +2753,7 @@ mod tests {
 
         // --- Container: Object::Array ---
         let array_container = tlab.alloc_array(
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::unknown(),
             vec![Value::object(leaf_for_array)],
         );
 
@@ -2620,8 +2761,8 @@ mod tests {
         let mut map_data = indexmap::IndexMap::new();
         map_data.insert(bex_str::BexStr::from("k"), Value::object(leaf_for_map));
         let map_container = tlab.alloc_map(
-            baml_type::RuntimeTy::string(),
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
             map_data,
         );
 
@@ -2642,6 +2783,8 @@ mod tests {
             closure: leaf_for_future,
             name: None,
             config: None,
+            returns: RealizedTy::int(),
+            throws: RealizedTy::never(),
         })));
 
         // --- Container: Object::Instance ---
@@ -2658,7 +2801,7 @@ mod tests {
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
-            vec![],
+            Box::new([]),
             vec![Value::object(leaf_string)],
         )));
 

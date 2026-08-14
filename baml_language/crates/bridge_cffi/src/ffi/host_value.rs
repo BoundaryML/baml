@@ -17,16 +17,31 @@
 //! the `call_host_value` sysop impl (also in `sys_native`) needs them,
 //! and bridge_cffi → sys_native is the one-way dependency direction.
 
-use bex_project::{BexExternalValue, HostReleaseFn, host_release_dispatch};
+use bex_project::{BexExternalValue, host_release_dispatch};
 use bridge_ctypes::{HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external};
 use prost::Message;
 use sys_native::host_dispatch;
-/// Signature for invocation requests from BAML to the host.
-///
-/// Re-exported from `sys_native::host_dispatch::HostDispatchFn` for
-/// external consumers (cbindgen header generation, etc.).
-pub use sys_native::host_dispatch::HostDispatchFn;
 use sys_types::{OpError, SysOp, VmBamlError, VmInternalError};
+
+pub use super::super::api::BamlHostDispatchCallback as HostDispatchFn;
+use super::super::api::BamlHostReleaseCallback;
+
+/// Flush host-value drops caused while decoding or delivering one host-call
+/// completion. In particular, a completion racing cancellation decodes its
+/// opaque error handle and then drops it on the unknown-id path; without this
+/// boundary safepoint that release can remain queued after the engine has
+/// already performed its final drain.
+///
+/// Accepted values remain owned by the completion payload. The release
+/// dispatcher's interner guard observes that live `HostValueArc` and will not
+/// release its host key prematurely.
+struct DrainHostReleasesOnReturn;
+
+impl Drop for DrainHostReleasesOnReturn {
+    fn drop(&mut self) {
+        host_release_dispatch::drain();
+    }
+}
 
 /// Register the host dispatch callback. First call wins; subsequent calls
 /// are silently ignored (consistent with `register_callback` semantics).
@@ -53,7 +68,7 @@ pub extern "C" fn register_host_dispatch_callback(cb: HostDispatchFn) {
 ///
 /// `cb` must remain valid for the lifetime of the process.
 #[unsafe(no_mangle)]
-pub extern "C" fn register_host_release_callback(cb: HostReleaseFn) {
+pub extern "C" fn register_host_release_callback(cb: BamlHostReleaseCallback) {
     if host_release_dispatch::install(cb).is_err() {
         eprintln!("BAML internal: register_host_release_callback called twice");
     }
@@ -86,6 +101,10 @@ pub extern "C" fn complete_host_call(
     content: *const i8,
     length: usize,
 ) {
+    // This FFI boundary holds no heap permit or engine/interner/table lock, so
+    // it is a safe place to invoke the host release callback on return.
+    let _drain_host_releases = DrainHostReleasesOnReturn;
+
     // A non-zero length with a null pointer is an ABI violation: the caller
     // promised `length` bytes but gave us nothing to read. Don't silently treat
     // it as an empty payload (which would mask the bug as a `Null` return or a
@@ -255,7 +274,63 @@ pub extern "C" fn complete_host_call(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        LazyLock, Mutex, Once,
+        atomic::{AtomicU64, Ordering},
+    };
+
     use super::*;
+
+    static RELEASE_CALLBACK_INIT: Once = Once::new();
+    static RELEASED_HOST_KEYS: LazyLock<Mutex<Vec<u64>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+    static NEXT_TEST_HOST_KEY: AtomicU64 = AtomicU64::new(10_000_000);
+
+    extern "C" fn record_host_release(key: u64) {
+        RELEASED_HOST_KEYS.lock().unwrap().push(key);
+    }
+
+    fn install_release_recorder() {
+        RELEASE_CALLBACK_INIT.call_once(|| register_host_release_callback(record_host_release));
+    }
+
+    fn take_recorded_release(key: u64) -> bool {
+        let mut released = RELEASED_HOST_KEYS.lock().unwrap();
+        released
+            .iter()
+            .position(|candidate| *candidate == key)
+            .map(|index| released.swap_remove(index))
+            .is_some()
+    }
+
+    fn host_callable_throw_payload(key: u64) -> Vec<u8> {
+        use bridge_ctypes::baml_bridge::cffi::{
+            BamlHandle, BamlHandleType, BamlTy, BamlTyClass, InboundClassValue, InboundMapEntry,
+            InboundValue, baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
+            inbound_value::Value as InboundValueVariant,
+        };
+
+        InboundValue {
+            value_type: Some(BamlTy {
+                ty: Some(BamlTyVariant::ClassTy(BamlTyClass {
+                    name: "baml.errors.HostCallable".to_string(),
+                    type_args: vec![],
+                })),
+            }),
+            value: Some(InboundValueVariant::ClassValue(InboundClassValue {
+                fields: vec![InboundMapEntry {
+                    key: Some(InboundMapKey::StringKey("_handle".to_string())),
+                    value: Some(InboundValue {
+                        value_type: None,
+                        value: Some(InboundValueVariant::Handle(BamlHandle {
+                            key,
+                            handle_type: BamlHandleType::HostValueOpaque.into(),
+                        })),
+                    }),
+                }],
+            })),
+        }
+        .encode_to_vec()
+    }
 
     /// Verify first-call-wins semantics for dispatch registration.
     #[test]
@@ -306,8 +381,9 @@ mod tests {
     #[tokio::test]
     async fn complete_host_call_throw_payload_delivers_external_value() {
         use bridge_ctypes::baml_bridge::cffi::{
-            BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
-            inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
+            BamlTy, BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
+            baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
+            inbound_value::Value as InboundValueVariant,
         };
         use prost::Message;
         use sys_types::{SysOp, SysOpResult};
@@ -318,16 +394,19 @@ mod tests {
         let message_entry = InboundMapEntry {
             key: Some(InboundMapKey::StringKey("message".to_string())),
             value: Some(InboundValue {
+                value_type: None,
                 value: Some(InboundValueVariant::StringValue("bad input".to_string())),
             }),
         };
         let inbound = InboundValue {
-            value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-                fields: vec![message_entry],
-                class_ty: Some(BamlTyClass {
+            value_type: Some(BamlTy {
+                ty: Some(BamlTyVariant::ClassTy(BamlTyClass {
                     name: "baml.errors.HostCallable".to_string(),
                     type_args: vec![],
-                }),
+                })),
+            }),
+            value: Some(InboundValueVariant::ClassValue(InboundClassValue {
+                fields: vec![message_entry],
             })),
         };
         let encoded = inbound.encode_to_vec();
@@ -349,22 +428,91 @@ mod tests {
                     other => panic!("expected HostThrown payload, got {other:?}"),
                 };
                 match thrown {
-                    BexExternalValue::Instance {
-                        class_name, fields, ..
-                    } => {
-                        assert_eq!(class_name, "baml.errors.HostCallable");
-                        match fields.get("message") {
-                            Some(BexExternalValue::String(s)) => {
-                                assert_eq!(s.as_str(), "bad input");
+                    BexExternalValue::Union { value, metadata }
+                        if metadata.is_inbound_type_annotation =>
+                    {
+                        assert_eq!(
+                            metadata.selected_option.to_string(),
+                            "baml.errors.HostCallable"
+                        );
+                        match &**value {
+                            BexExternalValue::Instance { fields, .. } => {
+                                match fields.get("message") {
+                                    Some(BexExternalValue::String(s)) => {
+                                        assert_eq!(s.as_str(), "bad input");
+                                    }
+                                    other => panic!("expected `message: String`, got {other:?}"),
+                                }
                             }
-                            other => panic!("expected `message: String`, got {other:?}"),
+                            other => panic!("expected annotated Instance, got {other:?}"),
                         }
                     }
-                    other => panic!("expected Instance, got {other:?}"),
+                    other => panic!("expected inbound type annotation, got {other:?}"),
                 }
             }
             sys_types::SysOpResult::Ready(_) => panic!("expected async"),
         }
+    }
+
+    /// A late callback error/panic can arrive after cancellation evicted its
+    /// call id. Decoding that payload creates a HostValueArc for the native
+    /// error identity; the unknown-id path drops it. `complete_host_call` must
+    /// synchronously drain the resulting release without relying on a future
+    /// engine call. Conversely, an accepted throw must retain the handle until
+    /// the receiver consumes and drops it.
+    #[tokio::test]
+    async fn late_unknown_throw_releases_opaque_handle_but_accepted_throw_retains_it() {
+        use sys_types::{OpErrorPayload, SysOp, SysOpResult};
+
+        install_release_recorder();
+
+        for _ in 0..64 {
+            let key = NEXT_TEST_HOST_KEY.fetch_add(1, Ordering::Relaxed);
+            let call_id = host_dispatch::next_call_id();
+            let payload = host_callable_throw_payload(key);
+            complete_host_call(call_id, 1, payload.as_ptr().cast(), payload.len());
+            assert!(
+                take_recorded_release(key),
+                "late completion did not synchronously release host key {key}"
+            );
+        }
+
+        let key = NEXT_TEST_HOST_KEY.fetch_add(1, Ordering::Relaxed);
+        let payload = host_callable_throw_payload(key);
+        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let call_id = host_dispatch::next_call_id();
+        assert!(host_dispatch::insert(call_id, completion));
+        complete_host_call(call_id, 1, payload.as_ptr().cast(), payload.len());
+        assert!(
+            !take_recorded_release(key),
+            "accepted throw released native error identity before delivery"
+        );
+
+        let SysOpResult::Async(result) = result else {
+            panic!("expected asynchronous host-call result")
+        };
+        let error = result.await.expect_err("throw should complete as an error");
+        let OpErrorPayload::HostThrown(value) = &error.payload else {
+            panic!("expected host-thrown completion, got {:?}", error.payload)
+        };
+        assert!(matches!(
+            &**value,
+            BexExternalValue::Union {
+                value,
+                metadata,
+            } if metadata.is_inbound_type_annotation
+                && matches!(&**value, BexExternalValue::Instance { .. })
+        ));
+        assert!(
+            !take_recorded_release(key),
+            "delivered throw did not retain native error identity"
+        );
+        drop(error);
+        host_release_dispatch::drain();
+        assert!(
+            take_recorded_release(key),
+            "dropped accepted throw did not release native error identity"
+        );
     }
 
     /// Verify the `length > isize::MAX as usize` guard surfaces as a

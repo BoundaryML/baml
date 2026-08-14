@@ -26,24 +26,14 @@ function getProfile(req: int) -> bool throws Errors {
 
 //----
 //- diagnostics
-// warning: unreachable arm
-//     ╭─[ hover_catch_rethrow_caller.baml:16:28 ]
-//     │
-//  16 │     AuthenticationError => { throw e }
-//     │                            ─────┬─────
-//     │                                 ╰─────── unreachable arm
-//     │
-//     │ Note: Error code: E0063
-// ────╯
-// warning: extraneous throws declaration: Errors
-//     ╭─[ hover_catch_rethrow_caller.baml:23:46 ]
-//     │
-//  23 │ function getProfile(req: int) -> bool throws Errors {
-//     │                                              ───┬──
-//     │                                                 ╰──── extraneous throws declaration: Errors
-//     │
-//     │ Note: Error code: E0097
-// ────╯
+// E0097
+//
+//   ⚠ extraneous throws declaration: Errors
+//     ╭─[hover_catch_rethrow_caller.baml:23:53]
+//  23 │ ╭─▶ function getProfile(req: int) -> bool throws Errors {
+//  24 │ │     return true
+//  25 │ ╰─▶ }
+//     ╰────
 //
 //- on_hover expressions
 // hover at hover_catch_rethrow_caller.baml:6:16

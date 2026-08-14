@@ -2,10 +2,9 @@
 // generic interface should compile cleanly.
 
 interface Container<T> {
-  function add(self, item: T) -> null
-  function get(self, index: int) -> T?
-  function size(self) -> int { return 0 }
-}
+  function add(self, item: T) -> null throws never
+  function get(self, index: int) -> T? throws never
+  function size(self) -> int throws never { return 0 }}
 
 class IntStack {
   items: int[]

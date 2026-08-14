@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+443..444 'f': throws never
+475..583 '{\n   ...int\n}': int
+481..495 'let best: int?': int | null
+491..495 'int?': int | null
+498..502 'null': null
+512..517 'let x': int
+521..523 'xs': int[]
+524..549 '{\n   ...n    }': void
+534..538 'best': int | null
+541..542 'x': int
+554..558 'best': int | null
+554..563 'best ?? 0': int
+562..563 '0': 0

@@ -17,8 +17,6 @@ use text_size::TextSize;
 use crate::{
     definition::{Location, definition_at},
     describe::SymbolDescription,
-    grep::{GrepOptions, GrepResult, TextMatch},
-    search::SymbolInfo,
     usages::usages_at,
 };
 
@@ -101,9 +99,6 @@ impl baml_compiler2_hir::Db for TestDb {
 
 #[salsa::db]
 impl baml_compiler2_ppir::Db for TestDb {}
-
-#[salsa::db]
-impl baml_compiler2_tir::Db for TestDb {}
 
 #[salsa::db]
 impl crate::Db for TestDb {}
@@ -285,8 +280,7 @@ fn offset_to_line_col(content: &str, offset: usize) -> (usize, usize) {
 
 // ── Project-level test infrastructure (no cursor needed) ────────────────────
 
-/// A test project with multiple BAML files, suitable for testing `describe()`
-/// and `grep()` which operate on a set of source files.
+/// A test project with multiple BAML files for project-level IDE features.
 pub(crate) struct ProjectTest {
     pub(crate) db: TestDb,
     pub(crate) files: Vec<SourceFile>,
@@ -308,38 +302,6 @@ impl ProjectTest {
     pub(crate) fn describe_compiler2_visible(&self, name: &str) -> Vec<SymbolDescription> {
         let files = baml_compiler2_hir::compiler2_all_files(&self.db);
         crate::describe::describe(&self.db, &files, name)
-    }
-
-    /// Run `grep()` and return the result.
-    pub(crate) fn grep(&self, pattern: &str) -> GrepResult {
-        let opts = GrepOptions {
-            pattern,
-            ignore_case: false,
-            kind_filter: &[],
-        };
-        crate::grep::grep(&self.db, &self.files, &opts)
-    }
-
-    /// Run `grep()` with case-insensitive matching.
-    pub(crate) fn grep_case_insensitive(&self, pattern: &str) -> GrepResult {
-        let opts = GrepOptions {
-            pattern,
-            ignore_case: true,
-            kind_filter: &[],
-        };
-        crate::grep::grep(&self.db, &self.files, &opts)
-    }
-
-    /// Run `list_symbols()` and return the result.
-    pub(crate) fn list_symbols(&self) -> Vec<SymbolInfo> {
-        crate::grep::list_symbols(&self.db, &self.files, &[])
-    }
-
-    /// Run `list_symbols()` using the compiler2-visible file set.
-    #[allow(dead_code)]
-    pub(crate) fn list_symbols_compiler2_visible(&self) -> Vec<SymbolInfo> {
-        let files = baml_compiler2_hir::compiler2_all_files(&self.db);
-        crate::grep::list_symbols(&self.db, &files, &[])
     }
 
     /// Run `list_package_items()` for the user package and return the result.
@@ -455,28 +417,6 @@ impl ProjectTest {
             }
         }
         out
-    }
-
-    /// Format a `TextMatch` for snapshot comparison.
-    pub(crate) fn format_text_match(&self, m: &TextMatch) -> String {
-        let filename = m
-            .file
-            .path(&self.db)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-        let annotation = match &m.annotation {
-            Some(ann) => format!("  ← {ann:?}"),
-            None => String::new(),
-        };
-        format!(
-            "{}:{}│ {}{}",
-            filename,
-            m.line_number,
-            m.line_text.trim(),
-            annotation
-        )
     }
 }
 

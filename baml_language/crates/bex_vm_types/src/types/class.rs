@@ -7,8 +7,6 @@ use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, Value};
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ClassField {
     pub name: String,
-    /// Resolved field type with `TypeVar`s erased to `RuntimeTy::BuiltinUnknown`.
-    ///
     /// Used by paths that don't care about parametric class type-args
     /// (codegen, `sys_ops` walking, output-format rendering).  For typed
     /// runtime walking against an `Instance::class_type_args` binding, use
@@ -29,7 +27,7 @@ pub struct ClassField {
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
     /// Type identity: carries short name, module path, and display name.
-    /// Use `name.display_name` for the display string (e.g. "baml.llm.OrchestrationStep" or "Person").
+    /// Use `name.display_name` for the display string (e.g. "ai.PromptMessage" or "Person").
     pub name: baml_type::TypeName,
 
     /// Class fields with type and schema metadata.
@@ -82,7 +80,7 @@ pub struct Instance {
     /// Boxed (immutable after construction) rather than a `Vec` so `Instance`
     /// stays within `Object`'s 64-byte budget once the `cleaned` latch is added
     /// — matching the existing `Box<[RuntimeTy]>` convention for type-arg lists.
-    pub class_type_args: Box<[baml_type::RuntimeTy]>,
+    pub class_type_args: Box<[baml_type::RealizedTy]>,
 
     /// Fields are accessed by index. No string lookups. Each slot is atomic so
     /// racing field reads/writes across `spawn` fibers cannot become a Rust
@@ -99,12 +97,12 @@ pub struct Instance {
 impl Instance {
     pub fn new(
         class: HeapPtr,
-        class_type_args: Vec<baml_type::RuntimeTy>,
+        class_type_args: Box<[baml_type::RealizedTy]>,
         fields: Vec<Value>,
     ) -> Self {
         Self {
             class,
-            class_type_args: class_type_args.into(),
+            class_type_args,
             fields: fields.into_iter().map(AtomicValueSlot::new).collect(),
             cleaned: CleanupLatch::new(false),
         }

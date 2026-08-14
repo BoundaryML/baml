@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+workspace_root="$(dirname "$script_dir")"
+
+# Self-heal the three ways a local (pre-commit / prek) invocation differs from
+# CI, so the hook works out of the box instead of tempting a SKIP:
+#
+# 1. PATH: `cargo-hawk` is provisioned by mise, whose shims aren't on the PATH
+#    git hook subshells inherit. Resolve the exact pinned revision through
+#    mise itself (honoring MISE_DATA_DIR and the mise.toml pin) rather than
+#    trusting whatever `cargo-hawk` happens to be on PATH.
+if command -v mise >/dev/null 2>&1; then
+  hawk_bin="$(cd "$workspace_root/.." && mise which cargo-hawk 2>/dev/null || true)"
+  if [ -n "$hawk_bin" ] && [ -x "$hawk_bin" ]; then
+    PATH="$(dirname "$hawk_bin"):$PATH"
+  fi
+fi
+if ! command -v cargo-hawk >/dev/null 2>&1; then
+  echo "scripts/hawk: cargo-hawk not found — run \`mise install\` from the repo root" >&2
+  exit 1
+fi
+
+# 2. RUSTC_WRAPPER: hawk drives an instrumented check through its own rustc
+#    driver, which the baml-sccache wrapper cannot probe (and caching an
+#    instrumented build is useless anyway).
+export RUSTC_WRAPPER=""
+
+# 3. macOS: the prebuilt cargo-hawk-driver carries no rpath, so it can't find
+#    the pinned toolchain's librustc_driver on its own.
+if [ "$(uname -s)" = "Darwin" ]; then
+  sysroot="$(rustc +1.97.1 --print sysroot 2>/dev/null || true)"
+  if [ -n "$sysroot" ]; then
+    export DYLD_FALLBACK_LIBRARY_PATH="$sysroot/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
+  fi
+fi
+
+# Hawk performs closed-world analysis. These crates expose supported APIs at
+# bridge, WebAssembly, cloud-fork, or signing boundaries outside the native
+# production binaries configured in hawk.toml.
+external_crates=(
+  aws_sigv4
+  baml_bridge
+  bridge_cffi
+  bridge_ctypes
+  forked_google_cloud_auth
+  sys_wasm
+)
+
+exclude_args=()
+for crate in "${external_crates[@]}"; do
+  exclude_args+=(--exclude-crate "$crate")
+done
+
+exec cargo +1.97.1 hawk check \
+  --manifest-path "$workspace_root/Cargo.toml" \
+  --config "$workspace_root/hawk.toml" \
+  --only dead-public \
+  -D warnings \
+  "${exclude_args[@]}" \
+  "$@"

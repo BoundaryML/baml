@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 24269
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -7,7 +8,7 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: () -> void throws unknown
+    let _3: () -> void throws never
     let _4: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never
 
     bb0: {
@@ -16,7 +17,7 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     }
 
     bb1: {
-        _2 = call const fn testing.TestCollector.register_test(copy _1, const "with quorum", copy _3, copy _4) -> [bb2];
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root", const "with quorum", copy _3, copy _4) -> [bb2];
     }
 
     bb2: {
@@ -30,9 +31,9 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_main, 0)>() -> null {
+fn .<lambda($init_test_main, 0)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: string // result
     let _2: string
 

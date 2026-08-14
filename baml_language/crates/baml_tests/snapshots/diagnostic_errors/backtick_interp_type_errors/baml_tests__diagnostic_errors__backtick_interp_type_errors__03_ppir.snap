@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 38480
+---
+=== PPIR ===
+function user.bad_member_chain_interp() -> string  [expr] {
+  {  } `...`
+}
+function user.bad_member_in_for_segment(xs: int[]) -> string  [expr] {
+  {  } `...`
+}
+function user.bad_member_in_if_segment(show: bool) -> string  [expr] {
+  {  } `...`
+}
+function user.bad_member_interp() -> string  [expr] {
+  {  } `...`
+}
+function user.bad_method_interp() -> string  [expr] {
+  {  } `...`
+}
+function user.bad_operator_interp() -> string  [expr] {
+  {  } `...`
+}
+function user.unresolved_name_interp() -> string  [expr] {
+  {  } `...`
+}

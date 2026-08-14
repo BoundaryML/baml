@@ -1,20 +1,17 @@
 // Phase 3: Verify that `function F() -> json` compiles end-to-end.
 // The rendered prompt must contain "Respond with valid JSON." when
-// the template includes `{{ ctx.output_format }}`.
+// the template includes `${ctx.output_format}`.
 
-client<llm> TestClient {
-    provider openai
-    options {
-        model "gpt-4o-mini"
-        api_key "test-key"
-    }
-}
+client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+);
 
 function ExtractAny() -> json {
-    client TestClient
-    prompt #"
+    client: TestClient
+    prompt: `
       Return whatever JSON you like.
 
-      {{ ctx.output_format }}
-    "#
+      ${ctx.output_format}
+    `
 }

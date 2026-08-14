@@ -3,7 +3,7 @@
 //! This crate provides:
 //! - A unified `Diagnostic` type that can represent any compiler error
 //! - The `ToDiagnostic` trait for converting error types to `Diagnostic`
-//! - Multi-format rendering (Ariadne for CLI)
+//! - Multi-format rendering (Miette for CLI)
 //!
 //! ## Architecture
 //!
@@ -22,7 +22,7 @@
 //!
 //! let error = ParseError::UnexpectedToken { ... };
 //! let diagnostic = error.to_diagnostic();
-//! let output = render_diagnostic(&diagnostic, &sources, &file_paths, &RenderConfig::cli());
+//! let output = render_diagnostic(&diagnostic, &sources, &file_paths, &RenderConfig::default());
 //! ```
 //!
 //! ## LSP Conversion
@@ -32,6 +32,8 @@
 
 pub mod diagnostic;
 pub mod errors;
+pub mod highlight;
+pub mod message;
 pub mod render;
 pub mod to_diagnostic;
 
@@ -39,5 +41,12 @@ pub mod to_diagnostic;
 // Re-export the unified diagnostic types
 pub use diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, ToDiagnostic};
 pub use errors::{ErrorContext, NameError, ParseError, TypeError};
+pub use highlight::{
+    DiagnosticMessageHighlighter, HighlightAttributes, HighlightColor, HighlightSpan,
+    HighlightStyle, SourceHighlights,
+};
+pub use message::{
+    DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind, DiagnosticText,
+};
 // Re-export the rendering functions and types
 pub use render::{RenderConfig, render_diagnostic};

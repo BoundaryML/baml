@@ -3,264 +3,300 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function json_auto_derive.$init_test_ns_json_auto_derive_json_auto_derive(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "simple_class_to_json_roundtrip"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "user_to_json_override_suppresses_auto_derive"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "int_to_json_resolves_and_executes"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "float_to_json_resolves_and_executes"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "bool_to_json_resolves_and_executes"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "null_to_json_resolves_and_executes"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "array_of_int_to_json_returns_json_array"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "array_of_class_to_json_honors_override"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "map_of_int_to_json_returns_json_map"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "typevar_to_json_compiles_in_generic_class"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "primitive_field_to_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "array_of_primitive_to_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_direct"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_in_array"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_in_map"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "recursive_class_to_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_to_json_concrete"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_to_json_array_typearg"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_honors_override_through_typevar"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_with_optional_typevar_field"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_with_optional_typevar_field_null"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_with_optional_typevar_field_honors_override"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "primitive_field_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "array_of_primitive_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_direct_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_in_array_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_in_map_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "recursive_class_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_from_json_concrete"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_honors_override_through_typevar_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "optional_class_override_honored_from_json_non_null"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "optional_class_override_honored_from_json_null"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 31)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "optional_primitive_field_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 32)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "map_of_primitive_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 33)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "top_level_from_json_call_concrete_class"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 34)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "top_level_from_json_call_primitive"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 35)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "independent_synthesis_only_from_json_defined"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 36)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "independent_synthesis_only_to_json_defined"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 37)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "round_trip_with_overrides_both_directions"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 38)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "alias_chain_dispatch_to_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 39)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "alias_chain_dispatch_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 40)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "from_json_wrapper_body_fallback"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 41)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
-    return
-}
-
-function json_auto_derive.BAliasFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BAliasFrom$stream {
-    load_const 99
-    init_instance user.json_auto_derive.BAliasFrom .y
     return
 }
 
@@ -270,29 +306,13 @@ function json_auto_derive.BAliasFrom.baml.FromJson.from_json(j: baml.json.json) 
     return
 }
 
-function json_auto_derive.BAliasTo$stream.baml.ToJson.to_json(self: json_auto_derive.BAliasTo$stream) -> baml.json.json {
-    load_const 42
-    return
-}
-
 function json_auto_derive.BAliasTo.baml.ToJson.to_json(self: json_auto_derive.BAliasTo) -> baml.json.json {
     load_const 42
     return
 }
 
-function json_auto_derive.BArr$stream.baml.ToJson.to_json(self: json_auto_derive.BArr$stream) -> baml.json.json {
-    load_const 99
-    return
-}
-
 function json_auto_derive.BArr.baml.ToJson.to_json(self: json_auto_derive.BArr) -> baml.json.json {
     load_const 99
-    return
-}
-
-function json_auto_derive.BMapFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BMapFrom$stream {
-    load_const 0
-    init_instance user.json_auto_derive.BMapFrom .v
     return
 }
 
@@ -302,31 +322,14 @@ function json_auto_derive.BMapFrom.baml.FromJson.from_json(j: baml.json.json) ->
     return
 }
 
-function json_auto_derive.BOnlyFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom$stream {
-    load_const 99
-    init_instance user.json_auto_derive.BOnlyFrom .y
-    return
-}
-
 function json_auto_derive.BOnlyFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom {
     load_const 99
     init_instance user.json_auto_derive.BOnlyFrom .y
     return
 }
 
-function json_auto_derive.BOnlyTo$stream.baml.ToJson.to_json(self: json_auto_derive.BOnlyTo$stream) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
 function json_auto_derive.BOnlyTo.baml.ToJson.to_json(self: json_auto_derive.BOnlyTo) -> baml.json.json {
     load_const "[redacted]"
-    return
-}
-
-function json_auto_derive.BOptFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOptFrom$stream {
-    load_const 99
-    init_instance user.json_auto_derive.BOptFrom .y
     return
 }
 
@@ -336,20 +339,9 @@ function json_auto_derive.BOptFrom.baml.FromJson.from_json(j: baml.json.json) ->
     return
 }
 
-function json_auto_derive.BOverride$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOverride$stream {
-    load_const 99
-    init_instance user.json_auto_derive.BOverride .y
-    return
-}
-
 function json_auto_derive.BOverride.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOverride {
     load_const 99
     init_instance user.json_auto_derive.BOverride .y
-    return
-}
-
-function json_auto_derive.BSecret$stream.baml.ToJson.to_json(self: json_auto_derive.BSecret$stream) -> baml.json.json {
-    load_const "[secret]"
     return
 }
 
@@ -358,29 +350,13 @@ function json_auto_derive.BSecret.baml.ToJson.to_json(self: json_auto_derive.BSe
     return
 }
 
-function json_auto_derive.BStr$stream.baml.ToJson.to_json(self: json_auto_derive.BStr$stream) -> baml.json.json {
-    load_const "B"
-    return
-}
-
 function json_auto_derive.BStr.baml.ToJson.to_json(self: json_auto_derive.BStr) -> baml.json.json {
     load_const "B"
     return
 }
 
-function json_auto_derive.BZero$stream.baml.ToJson.to_json(self: json_auto_derive.BZero$stream) -> baml.json.json {
-    load_const 0
-    return
-}
-
 function json_auto_derive.BZero.baml.ToJson.to_json(self: json_auto_derive.BZero) -> baml.json.json {
     load_const 0
-    return
-}
-
-function json_auto_derive.BZeroFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BZeroFrom$stream {
-    load_const 0
-    init_instance user.json_auto_derive.BZeroFrom .y
     return
 }
 
@@ -390,10 +366,10 @@ function json_auto_derive.BZeroFrom.baml.FromJson.from_json(j: baml.json.json) -
     return
 }
 
-function json_auto_derive.G.f(self: json_auto_derive.G<T>) -> baml.json.json[] {
+function json_auto_derive.G.f(self: json_auto_derive.G<#0>) -> baml.json.json[] {
     load_type #0
     load_type baml.json.json
-    load_type baml.json.JsonSerializationError
+    load_type baml.json.JsonParseError | baml.json.JsonSerializationError
     load_var self
     load_field .items
     load_type #0
@@ -402,23 +378,7 @@ function json_auto_derive.G.f(self: json_auto_derive.G<T>) -> baml.json.json[] {
     return
 }
 
-function json_auto_derive.Secret$stream.baml.ToJson.to_json(self: json_auto_derive.Secret$stream) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
 function json_auto_derive.Secret.baml.ToJson.to_json(self: json_auto_derive.Secret) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
-function json_auto_derive.SecretBoth$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretBoth$stream {
-    load_const "[reset]"
-    init_instance user.json_auto_derive.SecretBoth .data
-    return
-}
-
-function json_auto_derive.SecretBoth$stream.baml.ToJson.to_json(self: json_auto_derive.SecretBoth$stream) -> baml.json.json {
     load_const "[redacted]"
     return
 }
@@ -434,29 +394,13 @@ function json_auto_derive.SecretBoth.baml.ToJson.to_json(self: json_auto_derive.
     return
 }
 
-function json_auto_derive.SecretRedact$stream.baml.ToJson.to_json(self: json_auto_derive.SecretRedact$stream) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
 function json_auto_derive.SecretRedact.baml.ToJson.to_json(self: json_auto_derive.SecretRedact) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
-function json_auto_derive.SecretRedact2$stream.baml.ToJson.to_json(self: json_auto_derive.SecretRedact2$stream) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
 function json_auto_derive.SecretRedact2.baml.ToJson.to_json(self: json_auto_derive.SecretRedact2) -> baml.json.json {
     load_const "[redacted]"
-    return
-}
-
-function json_auto_derive.SecretReset$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretReset$stream {
-    load_const "[reset]"
-    init_instance user.json_auto_derive.SecretReset .data
     return
 }
 
@@ -477,404 +421,23 @@ function json_auto_derive.alias_chain_dispatch_from_json_val() -> int {
 function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
     load_const 7
     init_instance user.json_auto_derive.BAliasTo .y
-    store_var_load_var b
-    is_type baml.toml.Table
+    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=1
     pop_jump_if_false L0
-    jump L61
+    jump L1
 
   L0:
-    load_var b
-    is_type baml.toml.Table
-    pop_jump_if_false L1
-    jump L60
-
-  L1:
-    load_var b
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L2
-    jump L59
-
-  L2:
-    load_var b
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L3
-    jump L58
-
-  L3:
-    load_var b
-    is_type baml.time.PlainTime
-    pop_jump_if_false L4
-    jump L57
-
-  L4:
-    load_var b
-    is_type baml.time.PlainTime
-    pop_jump_if_false L5
-    jump L56
-
-  L5:
-    load_var b
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L6
-    jump L55
-
-  L6:
-    load_var b
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L7
-    jump L54
-
-  L7:
-    load_var b
-    is_type baml.time.Instant
-    pop_jump_if_false L8
-    jump L53
-
-  L8:
-    load_var b
-    is_type baml.time.Instant
-    pop_jump_if_false L9
-    jump L52
-
-  L9:
-    load_var b
-    is_type baml.time.PlainDate
-    pop_jump_if_false L10
-    jump L51
-
-  L10:
-    load_var b
-    is_type baml.time.PlainDate
-    pop_jump_if_false L11
-    jump L50
-
-  L11:
-    load_var b
-    is_type json_auto_derive.BOnlyTo
-    pop_jump_if_false L12
-    jump L49
-
-  L12:
-    load_var b
-    is_type json_auto_derive.BOnlyTo
-    pop_jump_if_false L13
-    jump L48
-
-  L13:
-    load_var b
-    is_type json_auto_derive.Secret
-    pop_jump_if_false L14
-    jump L47
-
-  L14:
-    load_var b
-    is_type json_auto_derive.Secret
-    pop_jump_if_false L15
-    jump L46
-
-  L15:
-    load_var b
-    is_type json_auto_derive.BSecret
-    pop_jump_if_false L16
-    jump L45
-
-  L16:
-    load_var b
-    is_type json_auto_derive.BSecret
-    pop_jump_if_false L17
-    jump L44
-
-  L17:
-    load_var b
-    is_type json_auto_derive.SecretRedact2
-    pop_jump_if_false L18
-    jump L43
-
-  L18:
-    load_var b
-    is_type json_auto_derive.SecretRedact2
-    pop_jump_if_false L19
-    jump L42
-
-  L19:
-    load_var b
-    is_type json_auto_derive.BArr
-    pop_jump_if_false L20
-    jump L41
-
-  L20:
-    load_var b
-    is_type json_auto_derive.BArr
-    pop_jump_if_false L21
-    jump L40
-
-  L21:
-    load_var b
-    is_type json_auto_derive.BAliasTo
-    pop_jump_if_false L22
-    jump L39
-
-  L22:
-    load_var b
-    is_type json_auto_derive.BAliasTo
-    pop_jump_if_false L23
-    jump L38
-
-  L23:
-    load_var b
-    is_type json_auto_derive.BStr
-    pop_jump_if_false L24
-    jump L37
-
-  L24:
-    load_var b
-    is_type json_auto_derive.BStr
-    pop_jump_if_false L25
-    jump L36
-
-  L25:
-    load_var b
-    is_type json_auto_derive.SecretRedact
-    pop_jump_if_false L26
-    jump L35
-
-  L26:
-    load_var b
-    is_type json_auto_derive.SecretRedact
-    pop_jump_if_false L27
-    jump L34
-
-  L27:
-    load_var b
-    is_type json_auto_derive.BZero
-    pop_jump_if_false L28
-    jump L33
-
-  L28:
-    load_var b
-    is_type json_auto_derive.BZero
-    pop_jump_if_false L29
-    jump L32
-
-  L29:
-    load_var b
-    is_type json_auto_derive.SecretBoth
-    pop_jump_if_false L30
-    jump L31
-
-  L30:
-    load_var b
-    is_type json_auto_derive.SecretBoth
-    pop_jump_if_false L66
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L31:
-    load_var b
-    call user.json_auto_derive.SecretBoth.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L32:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L33:
-    load_var b
-    call user.json_auto_derive.BZero.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L34:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L35:
-    load_var b
-    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L36:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L37:
-    load_var b
-    call user.json_auto_derive.BStr.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L38:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L39:
-    load_var b
-    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L40:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L41:
-    load_var b
-    call user.json_auto_derive.BArr.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L42:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L43:
-    load_var b
-    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L44:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L45:
-    load_var b
-    call user.json_auto_derive.BSecret.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L46:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L47:
-    load_var b
-    call user.json_auto_derive.Secret.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L48:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L49:
-    load_var b
-    call user.json_auto_derive.BOnlyTo.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L50:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L51:
-    load_var b
-    call baml.time.PlainDate.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L52:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L53:
-    load_var b
-    call baml.time.Instant.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L54:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L55:
-    load_var b
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L56:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L57:
-    load_var b
-    call baml.time.PlainTime.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L58:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L59:
-    load_var b
-    call baml.time.PlainDateTime.baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L60:
-    load_var b
-    call baml.ToJson.to_json
-    store_var j
-    jump L62
-
-  L61:
-    load_var b
-    call baml.toml.Table.baml.ToJson.to_json
-    store_var j
-
-  L62:
-    load_var j
-    is_type int
-    pop_jump_if_false L63
-    jump L64
-
-  L63:
     load_const 1
     unary_op -
-    jump L65
+    jump L2
 
-  L64:
-    load_var j
+  L1:
+    load_var _3
 
-  L65:
+  L2:
     return
-
-  L66:
-    unreachable
 }
 
 function json_auto_derive.array_of_class_to_json_str() -> string {
@@ -962,8 +525,9 @@ function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     load_var j
     call baml.json.to
     load_field .value
-    store_var_load_var _5
-    is_type int
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -973,7 +537,7 @@ function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     jump L2
 
   L1:
-    load_var _5
+    load_var _6
 
   L2:
     return
@@ -1439,362 +1003,16 @@ function json_auto_derive.recursive_class_to_json_str() -> string {
 function json_auto_derive.round_trip_with_overrides_both_directions_val() -> string {
     load_const "hunter2"
     init_instance user.json_auto_derive.SecretBoth .data
-    store_var_load_var s
-    is_type baml.toml.Table
-    pop_jump_if_false L0
-    jump L61
-
-  L0:
-    load_var s
-    is_type baml.toml.Table
-    pop_jump_if_false L1
-    jump L60
-
-  L1:
-    load_var s
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L2
-    jump L59
-
-  L2:
-    load_var s
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L3
-    jump L58
-
-  L3:
-    load_var s
-    is_type baml.time.PlainTime
-    pop_jump_if_false L4
-    jump L57
-
-  L4:
-    load_var s
-    is_type baml.time.PlainTime
-    pop_jump_if_false L5
-    jump L56
-
-  L5:
-    load_var s
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L6
-    jump L55
-
-  L6:
-    load_var s
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L7
-    jump L54
-
-  L7:
-    load_var s
-    is_type baml.time.Instant
-    pop_jump_if_false L8
-    jump L53
-
-  L8:
-    load_var s
-    is_type baml.time.Instant
-    pop_jump_if_false L9
-    jump L52
-
-  L9:
-    load_var s
-    is_type baml.time.PlainDate
-    pop_jump_if_false L10
-    jump L51
-
-  L10:
-    load_var s
-    is_type baml.time.PlainDate
-    pop_jump_if_false L11
-    jump L50
-
-  L11:
-    load_var s
-    is_type json_auto_derive.BOnlyTo
-    pop_jump_if_false L12
-    jump L49
-
-  L12:
-    load_var s
-    is_type json_auto_derive.BOnlyTo
-    pop_jump_if_false L13
-    jump L48
-
-  L13:
-    load_var s
-    is_type json_auto_derive.Secret
-    pop_jump_if_false L14
-    jump L47
-
-  L14:
-    load_var s
-    is_type json_auto_derive.Secret
-    pop_jump_if_false L15
-    jump L46
-
-  L15:
-    load_var s
-    is_type json_auto_derive.BSecret
-    pop_jump_if_false L16
-    jump L45
-
-  L16:
-    load_var s
-    is_type json_auto_derive.BSecret
-    pop_jump_if_false L17
-    jump L44
-
-  L17:
-    load_var s
-    is_type json_auto_derive.SecretRedact2
-    pop_jump_if_false L18
-    jump L43
-
-  L18:
-    load_var s
-    is_type json_auto_derive.SecretRedact2
-    pop_jump_if_false L19
-    jump L42
-
-  L19:
-    load_var s
-    is_type json_auto_derive.BArr
-    pop_jump_if_false L20
-    jump L41
-
-  L20:
-    load_var s
-    is_type json_auto_derive.BArr
-    pop_jump_if_false L21
-    jump L40
-
-  L21:
-    load_var s
-    is_type json_auto_derive.BAliasTo
-    pop_jump_if_false L22
-    jump L39
-
-  L22:
-    load_var s
-    is_type json_auto_derive.BAliasTo
-    pop_jump_if_false L23
-    jump L38
-
-  L23:
-    load_var s
-    is_type json_auto_derive.BStr
-    pop_jump_if_false L24
-    jump L37
-
-  L24:
-    load_var s
-    is_type json_auto_derive.BStr
-    pop_jump_if_false L25
-    jump L36
-
-  L25:
-    load_var s
-    is_type json_auto_derive.SecretRedact
-    pop_jump_if_false L26
-    jump L35
-
-  L26:
-    load_var s
-    is_type json_auto_derive.SecretRedact
-    pop_jump_if_false L27
-    jump L34
-
-  L27:
-    load_var s
-    is_type json_auto_derive.BZero
-    pop_jump_if_false L28
-    jump L33
-
-  L28:
-    load_var s
-    is_type json_auto_derive.BZero
-    pop_jump_if_false L29
-    jump L32
-
-  L29:
-    load_var s
-    is_type json_auto_derive.SecretBoth
-    pop_jump_if_false L30
-    jump L31
-
-  L30:
-    load_var s
-    is_type json_auto_derive.SecretBoth
-    pop_jump_if_false L63
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L31:
-    load_var s
-    call user.json_auto_derive.SecretBoth.baml.ToJson.to_json
-    jump L62
-
-  L32:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L33:
-    load_var s
-    call user.json_auto_derive.BZero.baml.ToJson.to_json
-    jump L62
-
-  L34:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L35:
-    load_var s
-    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
-    jump L62
-
-  L36:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L37:
-    load_var s
-    call user.json_auto_derive.BStr.baml.ToJson.to_json
-    jump L62
-
-  L38:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L39:
-    load_var s
-    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
-    jump L62
-
-  L40:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L41:
-    load_var s
-    call user.json_auto_derive.BArr.baml.ToJson.to_json
-    jump L62
-
-  L42:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L43:
-    load_var s
-    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
-    jump L62
-
-  L44:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L45:
-    load_var s
-    call user.json_auto_derive.BSecret.baml.ToJson.to_json
-    jump L62
-
-  L46:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L47:
-    load_var s
-    call user.json_auto_derive.Secret.baml.ToJson.to_json
-    jump L62
-
-  L48:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L49:
-    load_var s
-    call user.json_auto_derive.BOnlyTo.baml.ToJson.to_json
-    jump L62
-
-  L50:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L51:
-    load_var s
-    call baml.time.PlainDate.baml.ToJson.to_json
-    jump L62
-
-  L52:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L53:
-    load_var s
-    call baml.time.Instant.baml.ToJson.to_json
-    jump L62
-
-  L54:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L55:
-    load_var s
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
-    jump L62
-
-  L56:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L57:
-    load_var s
-    call baml.time.PlainTime.baml.ToJson.to_json
-    jump L62
-
-  L58:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L59:
-    load_var s
-    call baml.time.PlainDateTime.baml.ToJson.to_json
-    jump L62
-
-  L60:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L61:
-    load_var s
-    call baml.toml.Table.baml.ToJson.to_json
-
-  L62:
+    load_type baml.ToJson
+    load_const "to_json"
+    virtual_call nargs=1 ntypeargs=0
+    store_var json_val
+    load_var json_val
     call baml.json.stringify
     call baml.json.parse
     call user.json_auto_derive.SecretBoth.baml.FromJson.from_json
     load_field .data
     return
-
-  L63:
-    unreachable
 }
 
 function json_auto_derive.simple_class_to_json_roundtrip_name() -> string {
@@ -1835,356 +1053,10 @@ function json_auto_derive.top_level_from_json_call_primitive_val() -> int {
 function json_auto_derive.user_to_json_override_result() -> baml.json.json {
     load_const "hunter2"
     init_instance user.json_auto_derive.Secret .value
-    store_var_load_var s
-    is_type baml.toml.Table
-    pop_jump_if_false L0
-    jump L61
-
-  L0:
-    load_var s
-    is_type baml.toml.Table
-    pop_jump_if_false L1
-    jump L60
-
-  L1:
-    load_var s
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L2
-    jump L59
-
-  L2:
-    load_var s
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L3
-    jump L58
-
-  L3:
-    load_var s
-    is_type baml.time.PlainTime
-    pop_jump_if_false L4
-    jump L57
-
-  L4:
-    load_var s
-    is_type baml.time.PlainTime
-    pop_jump_if_false L5
-    jump L56
-
-  L5:
-    load_var s
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L6
-    jump L55
-
-  L6:
-    load_var s
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L7
-    jump L54
-
-  L7:
-    load_var s
-    is_type baml.time.Instant
-    pop_jump_if_false L8
-    jump L53
-
-  L8:
-    load_var s
-    is_type baml.time.Instant
-    pop_jump_if_false L9
-    jump L52
-
-  L9:
-    load_var s
-    is_type baml.time.PlainDate
-    pop_jump_if_false L10
-    jump L51
-
-  L10:
-    load_var s
-    is_type baml.time.PlainDate
-    pop_jump_if_false L11
-    jump L50
-
-  L11:
-    load_var s
-    is_type json_auto_derive.BOnlyTo
-    pop_jump_if_false L12
-    jump L49
-
-  L12:
-    load_var s
-    is_type json_auto_derive.BOnlyTo
-    pop_jump_if_false L13
-    jump L48
-
-  L13:
-    load_var s
-    is_type json_auto_derive.Secret
-    pop_jump_if_false L14
-    jump L47
-
-  L14:
-    load_var s
-    is_type json_auto_derive.Secret
-    pop_jump_if_false L15
-    jump L46
-
-  L15:
-    load_var s
-    is_type json_auto_derive.BSecret
-    pop_jump_if_false L16
-    jump L45
-
-  L16:
-    load_var s
-    is_type json_auto_derive.BSecret
-    pop_jump_if_false L17
-    jump L44
-
-  L17:
-    load_var s
-    is_type json_auto_derive.SecretRedact2
-    pop_jump_if_false L18
-    jump L43
-
-  L18:
-    load_var s
-    is_type json_auto_derive.SecretRedact2
-    pop_jump_if_false L19
-    jump L42
-
-  L19:
-    load_var s
-    is_type json_auto_derive.BArr
-    pop_jump_if_false L20
-    jump L41
-
-  L20:
-    load_var s
-    is_type json_auto_derive.BArr
-    pop_jump_if_false L21
-    jump L40
-
-  L21:
-    load_var s
-    is_type json_auto_derive.BAliasTo
-    pop_jump_if_false L22
-    jump L39
-
-  L22:
-    load_var s
-    is_type json_auto_derive.BAliasTo
-    pop_jump_if_false L23
-    jump L38
-
-  L23:
-    load_var s
-    is_type json_auto_derive.BStr
-    pop_jump_if_false L24
-    jump L37
-
-  L24:
-    load_var s
-    is_type json_auto_derive.BStr
-    pop_jump_if_false L25
-    jump L36
-
-  L25:
-    load_var s
-    is_type json_auto_derive.SecretRedact
-    pop_jump_if_false L26
-    jump L35
-
-  L26:
-    load_var s
-    is_type json_auto_derive.SecretRedact
-    pop_jump_if_false L27
-    jump L34
-
-  L27:
-    load_var s
-    is_type json_auto_derive.BZero
-    pop_jump_if_false L28
-    jump L33
-
-  L28:
-    load_var s
-    is_type json_auto_derive.BZero
-    pop_jump_if_false L29
-    jump L32
-
-  L29:
-    load_var s
-    is_type json_auto_derive.SecretBoth
-    pop_jump_if_false L30
-    jump L31
-
-  L30:
-    load_var s
-    is_type json_auto_derive.SecretBoth
-    pop_jump_if_false L63
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L31:
-    load_var s
-    call user.json_auto_derive.SecretBoth.baml.ToJson.to_json
-    jump L62
-
-  L32:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L33:
-    load_var s
-    call user.json_auto_derive.BZero.baml.ToJson.to_json
-    jump L62
-
-  L34:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L35:
-    load_var s
-    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
-    jump L62
-
-  L36:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L37:
-    load_var s
-    call user.json_auto_derive.BStr.baml.ToJson.to_json
-    jump L62
-
-  L38:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L39:
-    load_var s
-    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
-    jump L62
-
-  L40:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L41:
-    load_var s
-    call user.json_auto_derive.BArr.baml.ToJson.to_json
-    jump L62
-
-  L42:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L43:
-    load_var s
-    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
-    jump L62
-
-  L44:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L45:
-    load_var s
-    call user.json_auto_derive.BSecret.baml.ToJson.to_json
-    jump L62
-
-  L46:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L47:
-    load_var s
-    call user.json_auto_derive.Secret.baml.ToJson.to_json
-    jump L62
-
-  L48:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L49:
-    load_var s
-    call user.json_auto_derive.BOnlyTo.baml.ToJson.to_json
-    jump L62
-
-  L50:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L51:
-    load_var s
-    call baml.time.PlainDate.baml.ToJson.to_json
-    jump L62
-
-  L52:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L53:
-    load_var s
-    call baml.time.Instant.baml.ToJson.to_json
-    jump L62
-
-  L54:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L55:
-    load_var s
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
-    jump L62
-
-  L56:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L57:
-    load_var s
-    call baml.time.PlainTime.baml.ToJson.to_json
-    jump L62
-
-  L58:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L59:
-    load_var s
-    call baml.time.PlainDateTime.baml.ToJson.to_json
-    jump L62
-
-  L60:
-    load_var s
-    call baml.ToJson.to_json
-    jump L62
-
-  L61:
-    load_var s
-    call baml.toml.Table.baml.ToJson.to_json
-
-  L62:
+    load_type baml.ToJson
+    load_const "to_json"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
-
-  L63:
-    unreachable
 }

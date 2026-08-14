@@ -8,6 +8,8 @@
 //! `NamespaceItems::conflicts` but do not prevent resolution — downstream
 //! layers always see a resolved symbol (the first one).
 
+use std::collections::BTreeSet;
+
 use baml_base::{Name, SourceFile, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use rustc_hash::FxHashMap;
@@ -43,18 +45,20 @@ impl<'db> NameConflict<'db> {
         let first = &self.entries[0];
         let rest = &self.entries[1..];
 
-        let first_kind = first.definition.kind();
-        let kinds_match = rest.iter().all(|e| e.definition.kind() == first_kind);
+        let first_kind = first.definition.source_kind(db);
+        let kinds_match = rest
+            .iter()
+            .all(|e| e.definition.source_kind(db) == first_kind);
         let message = if kinds_match {
-            format!("Duplicate {} `{}`", first_kind, self.name)
+            format!("duplicate {} `{}`", first_kind, self.name)
         } else {
             let kind_list: Vec<&str> = self
                 .entries
                 .iter()
-                .map(|e| e.definition.kind_name())
+                .map(|e| e.definition.source_kind_name(db))
                 .collect();
             format!(
-                "Name `{}` defined {} times as: {}",
+                "name `{}` defined {} times as: {}",
                 self.name,
                 self.entries.len(),
                 kind_list.join(", ")
@@ -69,7 +73,10 @@ impl<'db> NameConflict<'db> {
                 file_id: first_file_id,
                 range: first.name_span,
             },
-            format!("first defined as {} here", first.definition.kind_name()),
+            format!(
+                "first defined as {} here",
+                first.definition.source_kind_name(db)
+            ),
         );
 
         for entry in rest {
@@ -79,7 +86,10 @@ impl<'db> NameConflict<'db> {
                     file_id,
                     range: entry.name_span,
                 },
-                format!("duplicate {} definition", entry.definition.kind_name()),
+                format!(
+                    "duplicate {} definition",
+                    entry.definition.source_kind_name(db)
+                ),
             );
         }
 
@@ -186,47 +196,63 @@ pub fn namespace_items<'db>(
         }
     }
 
-    // First definition wins; collect conflicts for names with len > 1.
+    // Lookup keeps type and value declarations separate, but BAML source does
+    // not: all namespace-level declarations with the same spelling contribute
+    // to one conflict. Build that conflict once so mixed declaration kinds do
+    // not also produce redundant type-only or value-only diagnostics.
     let mut types: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
     let mut values: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
     let mut conflicts: Vec<NameConflict<'db>> = Vec::new();
 
+    let declaration_names: BTreeSet<_> =
+        type_defs.keys().chain(value_defs.keys()).cloned().collect();
+    for name in declaration_names {
+        let mut entries: Vec<_> = type_defs
+            .get(&name)
+            .into_iter()
+            .flatten()
+            .chain(value_defs.get(&name).into_iter().flatten())
+            .copied()
+            .collect();
+
+        // Tests are function-scoped (identity is functionName/testName), so
+        // same-named tests for different functions remain legal.
+        let all_tests = entries
+            .iter()
+            .all(|entry| matches!(entry.definition, Definition::Test(_)));
+        if entries.len() < 2 || all_tests {
+            continue;
+        }
+
+        entries.sort_by(|left, right| {
+            left.definition
+                .file(db)
+                .path(db)
+                .cmp(&right.definition.file(db).path(db))
+                .then_with(|| left.name_span.start().cmp(&right.name_span.start()))
+                .then_with(|| {
+                    left.definition
+                        .source_kind_name(db)
+                        .cmp(right.definition.source_kind_name(db))
+                })
+        });
+        conflicts.push(NameConflict {
+            name,
+            entries: entries
+                .into_iter()
+                .map(|entry| ConflictEntry {
+                    definition: entry.definition,
+                    name_span: entry.name_span,
+                })
+                .collect(),
+        });
+    }
+
     for (name, contribs) in type_defs {
         types.insert(name.clone(), contribs[0].definition);
-        if contribs.len() > 1 {
-            conflicts.push(NameConflict {
-                name,
-                entries: contribs
-                    .into_iter()
-                    .map(|c| ConflictEntry {
-                        definition: c.definition,
-                        name_span: c.name_span,
-                    })
-                    .collect(),
-            });
-        }
     }
     for (name, contribs) in value_defs {
         values.insert(name.clone(), contribs[0].definition);
-        if contribs.len() > 1 {
-            // Tests are function-scoped (identity is functionName/testName),
-            // so same-named tests for different functions are not conflicts.
-            let all_tests = contribs
-                .iter()
-                .all(|c| matches!(c.definition, Definition::Test(_)));
-            if !all_tests {
-                conflicts.push(NameConflict {
-                    name,
-                    entries: contribs
-                        .into_iter()
-                        .map(|c| ConflictEntry {
-                            definition: c.definition,
-                            name_span: c.name_span,
-                        })
-                        .collect(),
-                });
-            }
-        }
     }
 
     // Sort conflicts by name for deterministic output.

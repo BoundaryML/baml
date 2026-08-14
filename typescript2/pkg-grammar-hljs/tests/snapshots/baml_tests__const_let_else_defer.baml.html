@@ -1,0 +1,45 @@
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">User</span> {
+  name <span class="hljs-type">string</span>
+}
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">BindingAndDeferForms</span>(user: User, xs: <span class="hljs-type">int</span>[], value: <span class="hljs-type">int</span> | <span class="hljs-type">string</span>, items: <span class="hljs-type">int</span>[]) <span class="hljs-operator">-&gt;</span> <span class="hljs-type">int</span> {
+  <span class="hljs-keyword">const</span> x = <span class="hljs-number">1</span>;
+  <span class="hljs-keyword">const</span> y: <span class="hljs-type">int</span> = x;
+  <span class="hljs-keyword">const</span> <span class="hljs-variable language_">_</span> = y;
+  <span class="hljs-keyword">const</span> User { name } = user;
+  <span class="hljs-keyword">const</span> [first] = xs;
+
+  <span class="hljs-keyword">let</span> v: <span class="hljs-type">int</span> = value <span class="hljs-keyword">else</span> { <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>; };
+
+  <span class="hljs-keyword">defer</span> {
+    <span class="hljs-keyword">let</span> cleanup = v;
+    cleanup;
+  }
+
+  <span class="hljs-keyword">watch</span> <span class="hljs-keyword">let</span> observed = v;
+
+  <span class="hljs-keyword">if</span> <span class="hljs-keyword">const</span> narrowed: <span class="hljs-type">int</span> = value {
+    observed += narrowed;
+  } <span class="hljs-keyword">else</span> {
+    observed += <span class="hljs-number">0</span>;
+  };
+
+  <span class="hljs-keyword">while</span> <span class="hljs-keyword">const</span> loop_value: <span class="hljs-type">int</span> = value {
+    observed += loop_value;
+    <span class="hljs-keyword">break</span>;
+  }
+
+  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">3</span>; i += <span class="hljs-number">1</span>) {
+    observed += i;
+  }
+
+  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> item <span class="hljs-keyword">in</span> items) {
+    observed += item;
+  }
+
+  <span class="hljs-keyword">for</span> <span class="hljs-keyword">const</span> item <span class="hljs-keyword">in</span> items {
+    observed += item;
+  }
+
+  observed
+}

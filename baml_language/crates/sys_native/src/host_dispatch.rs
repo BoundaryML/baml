@@ -58,12 +58,11 @@ use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmBamlError}
 ///   including host-side exceptions and panics. There is no engine-side timeout
 ///   (see "In-flight lifetime" above), so a call that is never completed and
 ///   never cancelled hangs the issuing BAML call indefinitely.
-/// * **No synchronous re-entrancy.** A host callable must not synchronously
-///   re-enter the engine (e.g. issue a *blocking* BAML call from inside the
-///   callback). Dispatch is fire-and-return and the engine awaits completion,
-///   so a blocking re-entrant call would deadlock the thread that must service
-///   this dispatch. The bridges fast-fail the narrow case of passing a callable
-///   to the synchronous call path; broader sync re-entrancy is unsupported.
+/// * **Dispatch itself is fire-and-return.** A bridge must hand execution to a
+///   host task/goroutine before returning from this C callback. That worker may
+///   re-enter the runtime with a separate BAML call while the original engine
+///   call awaits completion; executing the user's callable inline on this C
+///   callback stack remains unsupported.
 pub type HostDispatchFn =
     extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
 

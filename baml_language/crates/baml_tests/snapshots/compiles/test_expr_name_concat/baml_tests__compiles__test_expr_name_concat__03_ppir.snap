@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 30781
+---
+=== PPIR ===
+function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_set_at("root", "concat names", (testset: testing.TestCollector) -> void { { testset.register_test("prefix_" Add "suffix", () -> { {  } null }, null); testset.register_test_set("nested_" Add "group", (testset: testing.TestCollector) -> { { testset.register_test("inner", () -> { {  } null }, null) } null }, null) } null }, null) } null
+}

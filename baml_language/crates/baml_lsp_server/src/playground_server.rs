@@ -60,6 +60,10 @@ use crate::{
     playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
+#[derive(Debug, thiserror::Error)]
+#[error("Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR")]
+pub(crate) struct PlaygroundNotConfigured;
+
 fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
     match serde_json::to_string(msg) {
         Ok(json) => Some(AxumWsMsg::Text(json.into())),
@@ -489,8 +493,12 @@ struct WsState {
     history_store: Arc<HistoryStore>,
     _history_observer_registration: Arc<HistoryObserverRegistration>,
     value_store: LiveValueStore,
-    /// LSP output (responses + publishDiagnostics) destined for `/api/lsp`.
-    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    /// Broadcast LSP output (root-dispatcher notifications, disk-change
+    /// pushes) destined for `/api/lsp`. Responses never travel here: they are
+    /// routed per-session by the ingress runtime.
+    lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
+    /// Process-owned ingress runtime shared with the stdio transport.
+    lsp_runtime: Arc<crate::lsp_runtime::LspRuntime>,
     /// What the browser currently has per file (for disk-watcher echo avoidance).
     doc_mirror: DocMirror,
     /// Workspace roots that browser-mode LSP saves are allowed to write under.
@@ -930,7 +938,7 @@ struct UpdateSourceFileResponse {
 
 /// Start the playground server on the given listener.
 #[allow(clippy::too_many_arguments)]
-pub async fn run(
+pub(crate) async fn run(
     listener: TcpListener,
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
@@ -938,7 +946,8 @@ pub async fn run(
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
     playground_dir_override: Option<PathBuf>,
-    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
+    lsp_runtime: Arc<crate::lsp_runtime::LspRuntime>,
     doc_mirror: DocMirror,
     workspace_roots: Vec<PathBuf>,
     current_open_target: crate::playground_sender::SharedOpenTarget,
@@ -953,6 +962,7 @@ pub async fn run(
         run_store,
         playground_dir_override,
         lsp_out_tx,
+        lsp_runtime,
         doc_mirror,
         Arc::new(workspace_roots),
         access_guard,
@@ -974,7 +984,8 @@ fn build_router(
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
     playground_dir_override: Option<PathBuf>,
-    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
+    lsp_runtime: Arc<crate::lsp_runtime::LspRuntime>,
     doc_mirror: DocMirror,
     workspace_roots: Arc<Vec<PathBuf>>,
     access_guard: PlaygroundAccessGuard,
@@ -995,6 +1006,7 @@ fn build_router(
         _history_observer_registration: history_observer_registration,
         value_store,
         lsp_out_tx,
+        lsp_runtime,
         doc_mirror,
         workspace_roots,
         current_open_target,
@@ -1026,9 +1038,7 @@ fn build_router(
         tracing::info!("Playground: serving static files from {dir}");
         static_router(dir)
     } else {
-        anyhow::bail!(
-            "Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR"
-        )
+        return Err(PlaygroundNotConfigured.into());
     };
 
     Ok(api.fallback_service(fallback))
@@ -1066,29 +1076,29 @@ async fn lsp_ws_handler(State(state): State<WsState>, ws: WebSocketUpgrade) -> R
     ws.on_upgrade(move |socket| lsp_ws_session(socket, state))
 }
 
-/// Serialize an `lsp_server::Message` as a JSON-RPC text frame (adds the
-/// `jsonrpc` field that `lsp_server` only writes via its stdio framing).
-fn lsp_message_to_ws_text(msg: &lsp_server::Message) -> Option<AxumWsMsg> {
-    let mut value = match serde_json::to_value(msg) {
-        Ok(v) => v,
+/// One pre-serialized outbound frame as a WS text message. The bytes already
+/// carry the `jsonrpc` member (see `crate::serialize_jsonrpc_message`).
+fn frame_to_ws_text(frame: &crate::OutboundFrame) -> Option<AxumWsMsg> {
+    match std::str::from_utf8(frame.bytes()) {
+        Ok(text) => Some(AxumWsMsg::Text(text.to_string().into())),
         Err(e) => {
-            tracing::error!("LSP WS: failed to serialize message: {e}");
-            return None;
-        }
-    };
-    if let Some(obj) = value.as_object_mut() {
-        obj.insert(
-            "jsonrpc".to_string(),
-            serde_json::Value::String("2.0".to_string()),
-        );
-    }
-    match serde_json::to_string(&value) {
-        Ok(text) => Some(AxumWsMsg::Text(text.into())),
-        Err(e) => {
-            tracing::error!("LSP WS: failed to stringify message: {e}");
+            tracing::error!("LSP WS: outbound frame is not UTF-8: {e}");
             None
         }
     }
+}
+
+/// A browser session that cannot drain within this deadline is
+/// deterministically closed; slow readers cannot grow an unbounded
+/// writer queue).
+async fn send_lsp_ws_message(
+    sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
+    message: AxumWsMsg,
+) -> bool {
+    matches!(
+        tokio::time::timeout(std::time::Duration::from_secs(5), sink.send(message)).await,
+        Ok(Ok(()))
+    )
 }
 
 async fn lsp_ws_session(socket: WebSocket, state: WsState) {
@@ -1096,34 +1106,68 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
     let (mut sink, mut stream) = socket.split();
     let mut lsp_rx = state.lsp_out_tx.subscribe();
 
-    // Dispatch `bex` LSP work (which can recompile the project on every keystroke
-    // via didChange) on a DEDICATED thread instead of the async WS task. Calling
-    // the synchronous, CPU-heavy `bex.handle_*` inline would block this task's
-    // select! — so a save (and its disk write-through) would queue behind the
-    // backlog of didChange recompiles and only land once the user stops typing.
-    // The thread processes messages in order; the WS loop stays responsive.
-    let (dispatch_tx, dispatch_rx) = std::sync::mpsc::channel::<lsp_server::Message>();
-    let bex = state.bex.clone();
-    let _dispatch_thread = std::thread::Builder::new()
-        .name("lsp-ws-dispatch".into())
-        .spawn(move || {
-            while let Ok(msg) = dispatch_rx.recv() {
-                match msg {
-                    lsp_server::Message::Request(req) => bex.handle_request(req),
-                    lsp_server::Message::Notification(notif) => bex.handle_notification(notif),
-                    lsp_server::Message::Response(_) => {}
-                }
+    // The session's response channel: the ingress runtime orders responses
+    // (and session-scoped notifications) into this bounded, budgeted queue;
+    // the WS loop forwards them. Saturation is backpressure — the runtime
+    // retries with the response still reserved — never loss.
+    let (response_tx, mut response_rx) = tokio::sync::mpsc::channel(256);
+    let response_budget = crate::OutboundBudget::new();
+    let response_sink_budget = response_budget.clone();
+    let response_sink: crate::lsp_runtime::Sink = Arc::new(move |message| {
+        let frame = match response_sink_budget.try_message(message) {
+            Ok(frame) => frame,
+            Err(crate::OutboundReserveError::Saturated) => {
+                return crate::lsp_runtime::SinkDelivery::Saturated;
             }
-        });
-
-    // Latest full text per document URI, captured from didOpen/didChange so we
-    // can write it through to disk on didSave. Disk writes happen ONLY on an
-    // explicit save (Cmd+S → didSave) — never on didChange — so the browser and
-    // any other editor (e.g. VS Code) don't race to write the same file. The
-    // disk watcher still pushes external edits to the browser live; applying one
-    // fires a didChange that is NOT written back, so there's no edit loop.
-    let mut pending_text: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
+            Err(
+                crate::OutboundReserveError::Oversized | crate::OutboundReserveError::Serialization,
+            ) => return crate::lsp_runtime::SinkDelivery::Oversized,
+        };
+        match response_tx.try_send(frame) {
+            Ok(()) => crate::lsp_runtime::SinkDelivery::Sent,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                crate::lsp_runtime::SinkDelivery::Saturated
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                crate::lsp_runtime::SinkDelivery::Closed
+            }
+        }
+    });
+    // Browser takeover closes the superseded socket through this signal.
+    let (close_tx, mut close_rx) = tokio::sync::watch::channel(false);
+    let close_endpoint: crate::lsp_runtime::Close = Arc::new(move || {
+        let _ = close_tx.send(true);
+    });
+    // Latest full text per document URI, captured from applied didOpen/
+    // didChange so didSave can write it through to disk. The hook runs on the
+    // dispatch worker strictly after the mutation was accepted, so persisted
+    // bytes always correspond to an applied overlay.
+    let pending_text = Arc::new(std::sync::Mutex::new(std::collections::HashMap::<
+        String,
+        String,
+    >::new()));
+    let hook_pending_text = pending_text.clone();
+    let hook_doc_mirror = state.doc_mirror.clone();
+    let hook_workspace_roots = state.workspace_roots.clone();
+    let after_notification: crate::lsp_runtime::NotificationHook = Arc::new(move |notification| {
+        let Ok(mut pending_text) = hook_pending_text.lock() else {
+            return;
+        };
+        track_and_persist_lsp_notification(
+            notification,
+            &mut pending_text,
+            &hook_doc_mirror,
+            &hook_workspace_roots,
+        );
+    });
+    let opened = state.lsp_runtime.open_session(
+        crate::lsp_ingress::TransportKind::Browser,
+        state.bex.clone(),
+        response_sink,
+        close_endpoint,
+        Some(after_notification),
+    );
+    let session_id = opened.session_id;
 
     loop {
         tokio::select! {
@@ -1133,11 +1177,9 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
                         let text_str: &str = &text;
                         handle_lsp_client_text(
                             text_str,
-                            &dispatch_tx,
-                            &state.doc_mirror,
-                            &state.workspace_roots,
+                            &state.lsp_runtime,
+                            session_id,
                             &mut sink,
-                            &mut pending_text,
                         ).await;
                     }
                     Some(Ok(AxumWsMsg::Close(_))) | None => break,
@@ -1146,77 +1188,93 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
             }
             out_msg = lsp_rx.recv() => {
                 match out_msg {
-                    Ok(msg) => {
-                        if let Some(ws_msg) = lsp_message_to_ws_text(&msg)
-                            && sink.send(ws_msg).await.is_err()
+                    // Responses are per-session (routed via `response_rx`);
+                    // a lossy broadcast is not a response transport.
+                    Ok(frame) if !frame.is_response() => {
+                        if let Some(ws_msg) = frame_to_ws_text(&frame)
+                            && !send_lsp_ws_message(&mut sink, ws_msg).await
                         {
                             break;
                         }
                     }
+                    Ok(_) => {}
                     Err(broadcast::error::RecvError::Lagged(n)) => {
+                        // Overflow closes only this session; the process and
+                        // other sessions continue.
                         tracing::warn!("LSP WS: broadcast lagged by {n} messages");
+                        break;
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            response = response_rx.recv() => {
+                match response {
+                    Some(frame) => {
+                        if let Some(ws_msg) = frame_to_ws_text(&frame)
+                            && !send_lsp_ws_message(&mut sink, ws_msg).await
+                        {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
+            changed = close_rx.changed() => {
+                if changed.is_err() || *close_rx.borrow() {
+                    break;
                 }
             }
         }
     }
 
-    // Dropping `dispatch_tx` ends the dispatch thread (its recv() returns Err).
-    drop(dispatch_tx);
+    state.lsp_runtime.close_session(session_id);
     tracing::debug!("LSP WS session ended");
 }
 
 async fn handle_lsp_client_text(
     text: &str,
-    dispatch_tx: &std::sync::mpsc::Sender<lsp_server::Message>,
-    doc_mirror: &DocMirror,
-    workspace_roots: &[PathBuf],
+    runtime: &Arc<crate::lsp_runtime::LspRuntime>,
+    session_id: crate::lsp_ingress::SessionId,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
-    pending_text: &mut std::collections::HashMap<String, String>,
 ) {
-    let msg = match serde_json::from_str::<lsp_server::Message>(text) {
-        Ok(m) => m,
-        Err(e) => {
-            tracing::warn!("LSP WS: invalid JSON-RPC message: {e}");
+    // Malformed JSON and invalid envelopes get the same null-ID protocol
+    // errors the stdio transport produces, keeping traces transport-identical.
+    let value = match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!("LSP WS: malformed JSON: {error}");
+            let parse_error = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": serde_json::Value::Null,
+                "error": { "code": -32700, "message": format!("Parse error: {error}") },
+            });
+            let _ =
+                send_lsp_ws_message(sink, AxumWsMsg::Text(parse_error.to_string().into())).await;
             return;
         }
     };
-
-    match msg {
-        lsp_server::Message::Request(req) => {
-            // Mirror the stdio loop: answer `shutdown` directly without
-            // dispatching it into BexLsp.
-            if req.method == "shutdown" {
-                let response = lsp_server::Response {
-                    id: req.id,
-                    result: Some(serde_json::Value::Null),
-                    error: None,
-                };
-                if let Some(ws_msg) =
-                    lsp_message_to_ws_text(&lsp_server::Message::Response(response))
-                {
-                    let _ = sink.send(ws_msg).await;
-                }
-                return;
-            }
-            let _ = dispatch_tx.send(lsp_server::Message::Request(req));
+    let msg = match crate::decode_lsp_message(value) {
+        Ok(message) => message,
+        Err(error) => {
+            let invalid_request = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": serde_json::Value::Null,
+                "error": { "code": -32600, "message": error },
+            });
+            let _ = send_lsp_ws_message(sink, AxumWsMsg::Text(invalid_request.to_string().into()))
+                .await;
+            return;
         }
-        lsp_server::Message::Notification(notif) => {
-            if notif.method == "exit" {
-                return;
+    };
+    loop {
+        match runtime.submit(session_id, msg.clone()) {
+            crate::lsp_runtime::SubmitResult::Accepted
+            | crate::lsp_runtime::SubmitResult::Dropped
+            | crate::lsp_runtime::SubmitResult::Exited { .. }
+            | crate::lsp_runtime::SubmitResult::Closed => break,
+            crate::lsp_runtime::SubmitResult::Backpressure => {
+                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
             }
-            // Capture the latest text and, on an explicit save (didSave), write
-            // it through to disk RIGHT HERE on the WS read loop — not the dispatch
-            // thread — so the save is immediate and independent of the recompile
-            // backlog. didChange never writes to disk. BexLsp still sees the
-            // notification (via the dispatch thread) for live diagnostics.
-            track_and_persist_lsp_notification(&notif, pending_text, doc_mirror, workspace_roots);
-            let _ = dispatch_tx.send(lsp_server::Message::Notification(notif));
-        }
-        lsp_server::Message::Response(_) => {
-            // Responses to server-initiated requests; the stdio loop ignores
-            // these as well.
         }
     }
 }
@@ -1361,9 +1419,10 @@ fn update_doc_mirror(doc_mirror: &DocMirror, uri: &str, text: &str) {
 /// a change whose content already matches `doc_mirror` (what the browser has, or
 /// just wrote through) is NOT pushed back. The returned watcher must be kept
 /// alive for as long as watching should continue.
-pub fn spawn_disk_watcher(
+pub(crate) fn spawn_disk_watcher(
     roots: &[PathBuf],
-    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
+    lsp_out_budget: Arc<crate::OutboundBudget>,
     doc_mirror: DocMirror,
 ) -> Option<notify::RecommendedWatcher> {
     use notify::{EventKind, RecursiveMode, Watcher};
@@ -1398,7 +1457,25 @@ pub fn spawn_disk_watcher(
                 method: DISK_CHANGE_NOTIFICATION.to_string(),
                 params: serde_json::json!({ "uri": url.to_string(), "text": content }),
             };
-            let _ = lsp_out_tx.send(lsp_server::Message::Notification(notif));
+            let message = lsp_server::Message::Notification(notif);
+            // Disk pushes are best-effort refresh hints: budget exhaustion
+            // drops the hint (the browser re-reads on save/reload) instead of
+            // growing an unbounded queue.
+            let frame = match lsp_out_budget.try_message(message) {
+                Ok(frame) => frame,
+                Err(crate::OutboundReserveError::Saturated) => {
+                    tracing::warn!("Disk watcher: LSP outbound byte budget is saturated");
+                    continue;
+                }
+                Err(
+                    crate::OutboundReserveError::Oversized
+                    | crate::OutboundReserveError::Serialization,
+                ) => {
+                    tracing::warn!("Disk watcher: LSP outbound frame is not deliverable");
+                    continue;
+                }
+            };
+            let _ = lsp_out_tx.send(frame);
             tracing::debug!(
                 "Disk watcher: pushed external change for {}",
                 canonical.display()
@@ -1466,6 +1543,14 @@ async fn update_source_file_handler(
         .playground_update_source_file(&request.project, &request.path, request.content)
     {
         Ok(()) => {
+            // The edit may have added or removed an `env.FOO` reference, and
+            // the declared set decides which keys are worth blocking a run to
+            // prompt for. Without this refresh a removed key keeps prompting
+            // and a newly added one resolves silently until the session
+            // reconnects.
+            state
+                .env_state
+                .set_declared_keys(&state.bex.all_env_var_names());
             state.bex.request_playground_state();
             json_response(StatusCode::OK, &UpdateSourceFileResponse { ok: true })
         }
@@ -1534,6 +1619,9 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     // round-trip (playground_env.rs).
     {
         let names = state.bex.all_env_var_names();
+        // Only these keys are worth blocking a run to prompt for; everything
+        // else resolves to unset without stalling. See `playground_env`.
+        state.env_state.set_declared_keys(&names);
         let vars = collect_referenced_env_vars(&names, |name| std::env::var(name).ok());
         if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
             && sink.send(msg).await.is_err()
@@ -1630,16 +1718,27 @@ async fn handle_function_run(
     };
 
     let broadcast_tx = state.broadcast_tx.clone();
-    let project_generation = state.bex.project_generation(&project).unwrap_or(0);
-    // Pin the run's control-flow graph while its generation is still
-    // current, so overlay spans stay resolvable after later recompiles.
-    if let Some(function_name) = overlay_function_name_for_target(&target.run_target) {
-        let _ = state.bex.control_flow_graph_for_generation(
-            &project,
-            project_generation,
-            function_name,
-        );
-    }
+    // One coherent launch snapshot: engine + generation captured
+    // in a single transaction, with the overlay control-flow graph pinned
+    // for that generation so overlay spans stay resolvable after later
+    // recompiles. Replaces the racy generation → graph → engine triple-read.
+    let prepared = match state.bex.prepare_function_run(
+        &project,
+        overlay_function_name_for_target(&target.run_target),
+    ) {
+        Ok(prepared) => prepared,
+        Err(e) => {
+            send_ws(
+                sink,
+                &client.error("projectNotReady", format!("Cannot start run: {e}")),
+            )
+            .await;
+            return;
+        }
+    };
+    let project_generation = prepared.generation;
+    let bex = prepared.engine;
+
     let fs_path = bex_project::FsPath::from_str(project);
     let boundary_id = BoundaryId::new_random();
     let value_capture =
@@ -1651,21 +1750,6 @@ async fn handle_function_run(
             logs_enabled: true,
         })
         .with_value_capture(value_capture.clone());
-
-    let bex = match state.bex.get_bex_for_project(&fs_path) {
-        Ok(bex) => bex,
-        Err(e) => {
-            send_ws(
-                sink,
-                &client.error(
-                    "projectMissing",
-                    format!("Failed to get Bex for project: {e}"),
-                ),
-            )
-            .await;
-            return;
-        }
-    };
 
     let run_store = state.run_store.clone();
     let history_store = state.history_store.clone();
@@ -1918,10 +2002,10 @@ async fn handle_ws_in_message(
                     return;
                 }
             };
-            let project_id = state
+            let run_identity = state
                 .run_store
                 .snapshot(boundary_id)
-                .map(|run| run.request.project_id.0);
+                .map(|run| (run.request.project_id.0, run.request.project_generation.0));
 
             let response = match state.run_store.cancel_run(boundary_id, epoch_ms(), None) {
                 bex_events::run::CancelRunEffect::CancelHostCall {
@@ -1931,10 +2015,25 @@ async fn handle_ws_in_message(
                     broadcast_run_patch(&state.broadcast_tx, &patch);
                     state.io_state.cancel_for_host_call(&host_call_id);
                     state.env_state.cancel_for_host_call(&host_call_id);
-                    match (host_call_id, project_id) {
-                        (HostCallId::Native(call_id), Some(project_id)) => {
-                            let fs_path = bex_project::FsPath::from_str(project_id);
-                            match state.bex.get_bex_for_project(&fs_path) {
+                    match (host_call_id, run_identity) {
+                        (HostCallId::Native(call_id), Some((project_id, generation))) => {
+                            // Best-effort cancel: `engine_for_generation`
+                            // resolves only while the run's generation is
+                            // still the installed one (only one engine is
+                            // retained), so a run pinned to a superseded
+                            // engine is not reachable from here — the
+                            // current-engine fallback cannot find its call
+                            // and the run keeps executing. Registration that
+                            // retains superseded run engines is deferred.
+                            let engine = state
+                                .bex
+                                .engine_for_generation(&project_id, generation)
+                                .map(Ok)
+                                .unwrap_or_else(|| {
+                                    let fs_path = bex_project::FsPath::from_str(project_id.clone());
+                                    state.bex.get_bex_for_project(&fs_path)
+                                });
+                            match engine {
                                 Ok(bex) => match bex.cancel_function_call(call_id) {
                                     Ok(()) => WsOutMessage::CommandAck {
                                         request_id,
@@ -2369,6 +2468,7 @@ async fn handle_ws_in_message(
         WsInMessage::RequestControlFlowGraph {
             project: _,
             function_name,
+            request_id,
         } => {
             let graph = state.bex.ast_control_flow_graph(&function_name);
             let graph = graph.map(|g| {
@@ -2378,6 +2478,7 @@ async fn handle_ws_in_message(
             let msg = WsOutMessage::ControlFlowGraphResult {
                 function_name,
                 graph: graph_json,
+                request_id,
             };
             if let Some(ws_msg) = to_ws_text(&msg)
                 && sink.send(ws_msg).await.is_err()

@@ -1,8 +1,8 @@
 {
   "name": "baml-extension",
-  "displayName": "Baml",
-  "description": "BAML is a DSL for AI applications.",
-  "version": "0.223.0",
+  "displayName": "BAML v0",
+  "description": "BAML v0 is a DSL for AI applications.",
+  "version": "0.225.0",
   "publisher": "Boundary",
   "packageManager": "pnpm@9.12.0",
   "repository": "https://github.com/BoundaryML/baml",
@@ -32,7 +32,7 @@
     ],
     "configuration": {
       "type": "object",
-      "title": "Baml extension settings",
+      "title": "BAML v0 extension settings",
       "properties": {
         "baml.cliPath": {
           "type": [
@@ -65,13 +65,13 @@
         "baml.enablePlaygroundProxy": {
           "type": "boolean",
           "default": true,
-          "description": "BAML Extension starts a localhost proxy for the playground to send requests to fix any CORS issues with some LLM providers. Disable this if you're having issues communicating with any APIs via the playground"
+          "description": "BAML v0 extension starts a localhost proxy for the playground to send requests to fix any CORS issues with some LLM providers. Disable this if you're having issues communicating with any APIs via the playground"
         },
         "baml.fileWatcher": {
           "scope": "window",
           "type": "boolean",
           "default": false,
-          "description": "Enable, when checked, the File Watcher functionality for Baml Client."
+          "description": "Enable, when checked, the File Watcher functionality for the BAML v0 client."
         },
         "baml.trace.server": {
           "scope": "window",
@@ -87,7 +87,7 @@
         "baml.bamlPanelOpen": {
           "type": "boolean",
           "default": false,
-          "description": "Indicates whether the Baml playground panel is open or closed."
+          "description": "Indicates whether the BAML v0 playground panel is open or closed."
         },
         "baml.envVarFile": {
           "type": "string",
@@ -118,7 +118,7 @@
       {
         "id": "baml",
         "aliases": [
-          "Baml",
+          "BAML v0",
           "baml"
         ],
         "extensions": [
@@ -169,33 +169,33 @@
       {
         "command": "baml.restartLanguageServer",
         "title": "Restart Language Server",
-        "category": "Baml"
+        "category": "BAML v0"
       },
       {
         "command": "baml.openBamlPanel",
         "title": "Open Playground",
-        "category": "Baml"
+        "category": "BAML v0"
       },
       {
         "command": "baml.checkForUpdates",
         "title": "Check Updates",
-        "category": "Baml"
+        "category": "BAML v0"
       },
       {
         "command": "baml.jumpToDefinition",
         "title": "Jump to Definition",
-        "category": "Baml",
+        "category": "BAML v0",
         "enablement": "editorLangId == 'python'"
       },
       {
         "command": "baml.selectTestCase",
         "title": "Select Test Case",
-        "category": "Baml"
+        "category": "BAML v0"
       },
       {
         "command": "baml.setDefaultFormatter",
         "title": "Set Default Formatter",
-        "category": "Baml"
+        "category": "BAML v0"
       }
     ]
   },

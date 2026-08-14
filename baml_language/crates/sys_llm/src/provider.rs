@@ -56,3 +56,14 @@ pub enum LlmProvider {
     #[strum(serialize = "baml-round-robin")]
     BamlRoundRobin,
 }
+
+impl LlmProvider {
+    /// Conventional API-key environment variable for providers that define one.
+    pub(crate) fn default_api_key_env_var(self) -> Option<&'static str> {
+        match self {
+            Self::OpenAi | Self::OpenAiResponses => Some("OPENAI_API_KEY"),
+            Self::Anthropic => Some("ANTHROPIC_API_KEY"),
+            _ => None,
+        }
+    }
+}

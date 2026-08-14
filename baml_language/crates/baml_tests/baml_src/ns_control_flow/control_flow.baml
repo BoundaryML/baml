@@ -9,10 +9,14 @@
 
 // ─── shared declarations ──────────────────────────────────────────────────────
 
-class Ok { value string }
+// A shared member accessed on a union (`(Ok | Warn).value`) is reachable only
+// through an interface both arms implement — a bare class field is not enough.
+interface HasValue { value string }
+
+class Ok { value string  implements HasValue {} }
 class Err { message string }
 class Empty {}
-class Warn { value string }
+class Warn { value string  implements HasValue {} }
 class User { name string, age int }
 class Admin { handle string }
 class Wrapper { payload string }
@@ -74,15 +78,15 @@ function return_from_match(x: int) -> int {
 }
 
 test "match_arm_break_exits_infinite_while_loop" {
-    assert.is_true(baml.deep_equals(break_loop(1) + break_loop(2), 42))
+    assert.equal(break_loop(1) + break_loop(2), 42)
 }
 
 test "match_arm_continue_continues_loop_without_falling_through" {
-    assert.is_true(baml.deep_equals(continue_loop(1) + continue_loop(2), 13))
+    assert.equal(continue_loop(1) + continue_loop(2), 13)
 }
 
 test "match_arm_return_returns_without_falling_through" {
-    assert.is_true(baml.deep_equals(return_from_match(1) + return_from_match(2), 42))
+    assert.equal(return_from_match(1) + return_from_match(2), 42)
 }
 
 // ─── if-let ───────────────────────────────────────────────────────────────────
@@ -169,52 +173,49 @@ function first_value_statement(r: Ok | Err) -> string {
 }
 
 test "if_let_takes_then_branch_when_pattern_matches" {
-    assert.is_true(baml.deep_equals(describe_then_default(Ok { value: "hit" }), "hit"))
+    assert.equal(describe_then_default(Ok { value: "hit" }), "hit")
 }
 
 test "if_let_takes_else_branch_when_pattern_does_not_match" {
-    assert.is_true(baml.deep_equals(describe_else_message(Err { message: "boom" }), "boom"))
+    assert.equal(describe_else_message(Err { message: "boom" }), "boom")
 }
 
 test "if_let_destructure_binds_fields_at_runtime" {
-    assert.is_true(baml.deep_equals(greet_if_let(User { name: "alice", age: 30 }), "alice"))
+    assert.equal(greet_if_let(User { name: "alice", age: 30 }), "alice")
 }
 
 test "if_let_else_if_let_chain_runs_correct_arm" {
-    assert.is_true(baml.deep_equals(pick_ok_err_empty(Err { message: "second" }), "second"))
+    assert.equal(pick_ok_err_empty(Err { message: "second" }), "second")
 }
 
 test "if_let_chain_falls_through_to_final_else" {
-    assert.is_true(baml.deep_equals(pick_ok_err_empty(Empty {}), "empty"))
+    assert.equal(pick_ok_err_empty(Empty {}), "empty")
 }
 
 test "if_let_or_pattern_dispatches_to_either_alternative" {
-    assert.is_true(baml.deep_equals(describe_or_pattern(Ok { value: "ok!" }), "ok!"));
-    assert.is_true(baml.deep_equals(describe_or_pattern(Warn { value: "warn!" }), "warn!"));
-    assert.is_true(baml.deep_equals(describe_or_pattern(Err { message: "boom" }), "boom"))
+    assert.equal(describe_or_pattern(Ok { value: "ok!" }), "ok!");
+    assert.equal(describe_or_pattern(Warn { value: "warn!" }), "warn!");
+    assert.equal(describe_or_pattern(Err { message: "boom" }), "boom")
 }
 
 test "if_let_nested_shadowing_restores_outer_binding" {
-    assert.is_true(baml.deep_equals(
-        pick_nested(Wrapper { payload: "outer" }, Other {}),
-        "outer"
-    ))
+    assert.equal(pick_nested(Wrapper { payload: "outer" }, Other {}), "outer")
 }
 
 test "if_let_composite_scrutinee_binds_call_result" {
-    assert.is_true(baml.deep_equals(if_let_call(), "from call"))
+    assert.equal(if_let_call(), "from call")
 }
 
 test "if_let_optional_scrutinee_some" {
-    assert.is_true(baml.deep_equals(pick_optional(Item { name: "alice" }), "alice"))
+    assert.equal(pick_optional(Item { name: "alice" }), "alice")
 }
 
 test "if_let_optional_scrutinee_null" {
-    assert.is_true(baml.deep_equals(pick_optional(null), "none"))
+    assert.equal(pick_optional(null), "none")
 }
 
 test "if_let_statement_form_with_return_in_then" {
-    assert.is_true(baml.deep_equals(first_value_statement(Err { message: "ignored" }), "fell through"))
+    assert.equal(first_value_statement(Err { message: "ignored" }), "fell through")
 }
 
 // ─── let-else ───────────────────────────────────────────────────────────────
@@ -276,51 +277,42 @@ function main_caught() -> string {
 }
 
 test "let_else_binds_when_pattern_matches" {
-    assert.is_true(baml.deep_equals(get_value_or_fallback(Ok { value: "hit" }), "hit"))
+    assert.equal(get_value_or_fallback(Ok { value: "hit" }), "hit")
 }
 
 test "let_else_takes_else_branch_when_pattern_does_not_match" {
-    assert.is_true(baml.deep_equals(get_value_or_fallback(Err { message: "ignored" }), "fallback"))
+    assert.equal(get_value_or_fallback(Err { message: "ignored" }), "fallback")
 }
 
 test "let_else_destructure_binds_fields_at_runtime" {
-    assert.is_true(baml.deep_equals(greet_let_else(User { name: "alice", age: 30 }), "alice"))
+    assert.equal(greet_let_else(User { name: "alice", age: 30 }), "alice")
 }
 
 test "let_else_or_pattern_matches_either_alternative" {
-    assert.is_true(baml.deep_equals(pick_let_else(Warn { value: "warn-val" }), "warn-val"))
+    assert.equal(pick_let_else(Warn { value: "warn-val" }), "warn-val")
 }
 
 test "let_else_break_in_else_inside_loop" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         pick_first_ok([Ok { value: "first" }, Err { message: "stop" }, Ok { value: "third" }]),
-        "first"
-    ))
+        "first",
+    )
 }
 
 test "let_else_continue_in_else_inside_loop" {
-    assert.is_true(baml.deep_equals(
-        concat_oks([Ok { value: "a" }, Err { message: "skip" }, Ok { value: "c" }]),
-        "ac"
-    ))
+    assert.equal(concat_oks([Ok { value: "a" }, Err { message: "skip" }, Ok { value: "c" }]), "ac")
 }
 
 test "let_else_multiple_consecutive_bindings" {
-    assert.is_true(baml.deep_equals(
-        chain_two(Ok { value: "x" }, Ok { value: "y" }),
-        "x-y"
-    ))
+    assert.equal(chain_two(Ok { value: "x" }, Ok { value: "y" }), "x-y")
 }
 
 test "let_else_second_miss_skips_first_binding" {
-    assert.is_true(baml.deep_equals(
-        chain_two(Ok { value: "x" }, Err { message: "boom" }),
-        "b-failed"
-    ))
+    assert.equal(chain_two(Ok { value: "x" }, Err { message: "boom" }), "b-failed")
 }
 
 test "let_else_throw_in_else_is_caught_by_outer_catch" {
-    assert.is_true(baml.deep_equals(main_caught(), "caught"))
+    assert.equal(main_caught(), "caught")
 }
 
 test "let_else_throw_in_else_propagates_when_uncaught" {

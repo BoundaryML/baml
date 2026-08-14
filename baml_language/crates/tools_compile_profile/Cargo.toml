@@ -1,0 +1,33 @@
+[package]
+name = "tools_compile_profile"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Standalone profiling harness for the BAML compiler pipeline (parse → HIR → PPIR → TIR → MIR → emit)."
+
+[[bin]]
+name = "tools_compile_profile"
+path = "src/main.rs"
+
+[dependencies]
+baml_compiler_diagnostics = { workspace = true }
+baml_project = { workspace = true }
+baml_workspace = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true, features = [ "derive" ] }
+mimalloc = { workspace = true }
+salsa = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints.clippy]
+print_stdout = "allow"
+print_stderr = "allow"
+
+[package.metadata.ci]
+wasm_support = false

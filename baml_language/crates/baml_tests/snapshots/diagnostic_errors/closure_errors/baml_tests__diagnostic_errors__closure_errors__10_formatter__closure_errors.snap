@@ -40,13 +40,13 @@ function test_err_missing_self() -> string {
 // Error 3: Bound type assigned to wrong function type
 function test_err_bound_type_mismatch() -> int {
     let c = Counter { value: 0 };
-    let inc: (Counter) -> int = c.increment;
+    let inc: (Counter) -> int throws never = c.increment;
     0
 }
 
 // Error 4: Unbound type assigned to zero-arg function type
 function test_err_unbound_type_mismatch() -> string {
-    let f: () -> string = Employee.full_name;
+    let f: () -> string throws never = Employee.full_name;
     ""
 }
 

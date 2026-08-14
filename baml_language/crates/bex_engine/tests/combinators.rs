@@ -50,7 +50,7 @@ async fn await_inside_direct_closure() {
         function one() -> int { 7 }
         function main() -> int {
             let fut = spawn { one() };
-            let g = (x: baml.future.Future<int, null>) -> { await x };
+            let g = (x: baml.future.Future<int, never>) -> { await x };
             g(fut)
         }
     "#;
@@ -104,9 +104,13 @@ async fn all_collects_in_order() {
 #[tokio::test]
 async fn all_rethrows_failure_to_catch() {
     let source = r#"
+        function ok() -> int throws string { 1 }
         function bad() -> int throws string { throw "boom" }
         function main() -> int {
-            let fs = [spawn { 1 }, spawn { bad() }];
+            // Future's error param is invariant, so both spawns must produce the
+            // SAME error type; `ok` declares (without using) the same `throws
+            // string` as `bad` to keep the array element type homogeneous.
+            let fs = [spawn { ok() }, spawn { bad() }];
             let r = await baml.future.all(fs) catch (e) {
                 let e => [99]
             };
@@ -137,7 +141,13 @@ async fn race_returns_first_to_settle() {
 async fn any_returns_first_success() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
-        function good() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(80n)); 42 }
+        function good() -> int throws string {
+            // sleep's own `throws baml.errors.Io` is swallowed so the declared
+            // surface stays exactly `string`, matching `bad` (Future's error
+            // param is invariant, so the spawns must agree).
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(80n)) catch (e) { let e => null };
+            42
+        }
         function main() -> int {
             let fs = [spawn { bad() }, spawn { good() }];
             await baml.future.any(fs) catch (e) {

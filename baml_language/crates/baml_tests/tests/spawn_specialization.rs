@@ -67,6 +67,8 @@ async fn captured_int_arithmetic_uses_generic_binop() {
         make_closure .<lambda(main, 0)>, 1
         load_const null
         load_const null
+        load_type int
+        load_type never
         spawn
         store_var _4
         load_var _4
@@ -112,6 +114,8 @@ async fn spawned_closure_capture_marks_transitive_cells() {
         make_closure .<lambda(main, 1)>, 1
         load_const null
         load_const null
+        load_type int
+        load_type never
         spawn
         store_var _5
         load_var _5
@@ -152,6 +156,8 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
         make_closure .<lambda(main, 0)>, 1
         load_const null
         load_const null
+        load_type int
+        load_type never
         spawn
         store_var _4
         load_var _4

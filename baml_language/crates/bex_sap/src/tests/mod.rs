@@ -31,11 +31,11 @@ test_deserializer!(
 );
 
 test_deserializer!(
-    test_string_from_string_with_quotes,
+    test_string_from_complete_json_string,
     r#""hello""#,
     baml_tyannotated!(string),
     baml_db! {},
-    "\"hello\""
+    "hello"
 );
 
 test_deserializer!(

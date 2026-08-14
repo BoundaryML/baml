@@ -60,8 +60,19 @@ run = "cargo run -p cargo-size-gate -- size-gate bake --branch canary"
 description = "Record a new size baseline by building locally (bootstrap a brand-new platform)"
 run = "cargo run -p cargo-size-gate -- size-gate record"
 
+[tasks.fmt-cpp]
+description = "Run clang-format over the hand-written C++ SDK sources"
+run = "scripts/fmt_cpp.sh"
+sources = ["sdks/cpp/**/*.h", "sdks/cpp/**/*.cc", "sdk_tests/crates/cpp/**/*.h", "sdk_tests/crates/cpp/**/*.cc"]
+
 [tasks.insta-update]
 description = "Run all snapshot tests with INSTA_UPDATE=always"
 env = { INSTA_UPDATE = "always" }
 run = "cargo test --workspace"
 sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.fmt-stdlib]
+description = "Run the BAML formatter on the standard library packages"
+run = "cargo run -p baml_cli -- fmt"
+dir = "crates/baml_builtins2/baml_std"
+sources = ["crates/baml_builtins2/baml_std/**/*.baml"]

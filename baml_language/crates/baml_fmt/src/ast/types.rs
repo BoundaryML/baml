@@ -20,6 +20,7 @@ pub enum Type {
     /// Generally only string literals are used in normal types,
     /// but other literals are valid in some contexts like match bindings.
     Literal(Literal),
+    SignedLiteral(SignedLiteralType),
     Union(UnionType),
     Optional(OptionalType),
     Array(ArrayType),
@@ -44,6 +45,7 @@ impl Type {
             Type::Paren(_) => false,
             Type::Path(_) => true,
             Type::Literal(_) => false,
+            Type::SignedLiteral(_) => false,
             Type::Union(_) => true,
             Type::Optional(inner) => inner.ty.multi_line_is_indented(),
             Type::Array(inner) => inner.ty.multi_line_is_indented(),
@@ -116,6 +118,7 @@ impl Printable for Type {
             Type::Paren(paren) => paren.print(shape, printer),
             Type::Path(path) => path.print(shape, printer),
             Type::Literal(literal) => literal.print(shape, printer),
+            Type::SignedLiteral(literal) => literal.print(shape, printer),
             Type::Union(union) => union.print(shape, printer),
             Type::Optional(optional) => optional.print(shape, printer),
             Type::Array(array) => array.print(shape, printer),
@@ -136,6 +139,7 @@ impl Printable for Type {
             Type::Paren(paren) => paren.leftmost_token(),
             Type::Path(path) => path.leftmost_token(),
             Type::Literal(literal) => literal.leftmost_token(),
+            Type::SignedLiteral(literal) => literal.leftmost_token(),
             Type::Union(union) => union.leftmost_token(),
             Type::Optional(optional) => optional.leftmost_token(),
             Type::Array(array) => array.leftmost_token(),
@@ -151,6 +155,7 @@ impl Printable for Type {
             Type::Paren(paren) => paren.rightmost_token(),
             Type::Path(path) => path.rightmost_token(),
             Type::Literal(literal) => literal.rightmost_token(),
+            Type::SignedLiteral(literal) => literal.rightmost_token(),
             Type::Union(union) => union.rightmost_token(),
             Type::Optional(optional) => optional.rightmost_token(),
             Type::Array(array) => array.rightmost_token(),
@@ -266,6 +271,31 @@ impl Printable for PathType {
             .last()
             .map_or(&self.first, |(_, word)| word)
             .span()
+    }
+}
+
+/// A negative numeric literal used as a type/pattern atom, such as `-42`.
+/// Keep token anchors for surrounding trivia while preserving any unusual
+/// whitespace or comments between the sign and literal verbatim.
+#[derive(Debug)]
+pub struct SignedLiteralType {
+    pub minus: t::Minus,
+    pub literal: TextRange,
+}
+
+impl Printable for SignedLiteralType {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let range = TextRange::new(self.minus.span().start(), self.literal.end());
+        printer.print_input_range(range);
+        PrintInfo {
+            multi_lined: printer.input[range].contains('\n'),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.minus.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.literal
     }
 }
 
@@ -409,6 +439,7 @@ pub enum UnionTypeMember {
     Paren(ParenType),
     Path(PathType),
     Literal(Literal),
+    SignedLiteral(SignedLiteralType),
     Optional(OptionalType),
     Array(ArrayType),
     Generic(GenericType),
@@ -427,12 +458,32 @@ impl UnionTypeMember {
     fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let first = it.expect_next("a type")?;
         match first.kind() {
+            SyntaxKind::MINUS => {
+                let minus = t::Minus::from_cst(first)?;
+                let literal = it.expect_next("numeric literal after '-'")?;
+                if !matches!(
+                    literal.kind(),
+                    SyntaxKind::BIGINT_LITERAL
+                        | SyntaxKind::INTEGER_LITERAL
+                        | SyntaxKind::FLOAT_LITERAL
+                ) {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "BIGINT_LITERAL, INTEGER_LITERAL, or FLOAT_LITERAL".into(),
+                        found: literal.kind(),
+                        at: literal.text_range(),
+                    });
+                }
+                Ok(UnionTypeMember::SignedLiteral(SignedLiteralType {
+                    minus,
+                    literal: literal.text_range(),
+                }))
+            }
             SyntaxKind::L_PAREN => {
                 // Either a parenthesized type or a function type
                 let open_paren = t::LParen::from_cst(first)?;
                 if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
                     let base: Type = it.expect_parse()?;
-                    let as_token: t::Word = it.expect_parse()?;
+                    let as_token: t::As = it.expect_parse()?;
                     let interface: Type = it.expect_parse()?;
                     let close_paren: t::RParen = it.expect_parse()?;
                     let dot: t::Dot = it.expect_parse()?;
@@ -615,6 +666,7 @@ impl From<UnionTypeMember> for Type {
             UnionTypeMember::Paren(paren) => Type::Paren(paren),
             UnionTypeMember::Path(path) => Type::Path(path),
             UnionTypeMember::Literal(literal) => Type::Literal(literal),
+            UnionTypeMember::SignedLiteral(literal) => Type::SignedLiteral(literal),
             UnionTypeMember::Optional(optional) => Type::Optional(optional),
             UnionTypeMember::Array(array) => Type::Array(array),
             UnionTypeMember::Generic(generic) => Type::Generic(generic),
@@ -634,6 +686,7 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Paren(paren) => paren.print(shape, printer),
             UnionTypeMember::Path(path) => path.print(shape, printer),
             UnionTypeMember::Literal(literal) => literal.print(shape, printer),
+            UnionTypeMember::SignedLiteral(literal) => literal.print(shape, printer),
             UnionTypeMember::Optional(optional) => optional.print(shape, printer),
             UnionTypeMember::Array(array) => array.print(shape, printer),
             UnionTypeMember::Generic(generic) => generic.print(shape, printer),
@@ -651,6 +704,7 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Paren(paren) => paren.leftmost_token(),
             UnionTypeMember::Path(path) => path.leftmost_token(),
             UnionTypeMember::Literal(lit) => lit.leftmost_token(),
+            UnionTypeMember::SignedLiteral(lit) => lit.leftmost_token(),
             UnionTypeMember::Optional(optional) => optional.leftmost_token(),
             UnionTypeMember::Array(array) => array.leftmost_token(),
             UnionTypeMember::Generic(generic) => generic.leftmost_token(),
@@ -665,6 +719,7 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Paren(paren) => paren.rightmost_token(),
             UnionTypeMember::Path(path) => path.rightmost_token(),
             UnionTypeMember::Literal(lit) => lit.rightmost_token(),
+            UnionTypeMember::SignedLiteral(lit) => lit.rightmost_token(),
             UnionTypeMember::Optional(optional) => optional.rightmost_token(),
             UnionTypeMember::Array(array) => array.rightmost_token(),
             UnionTypeMember::Generic(generic) => generic.rightmost_token(),
@@ -755,7 +810,7 @@ impl Printable for GenericType {
 pub struct AssociatedProjectionType {
     pub open_paren: t::LParen,
     pub base: Box<Type>,
-    pub as_token: t::Word,
+    pub as_token: t::As,
     pub interface: Box<Type>,
     pub close_paren: t::RParen,
     pub dot: t::Dot,
@@ -1239,7 +1294,9 @@ impl FromCST for FunctionTypeParam {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        let name = if let Some(name) = it.next_if_kind(SyntaxKind::WORD) {
+        let name = if let Some(name) =
+            it.next_if(|e| matches!(e.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+        {
             let name = t::Word::new_from_span(name.text_range());
             let question = it
                 .next_if_kind(SyntaxKind::QUESTION)

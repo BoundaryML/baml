@@ -1,4 +1,7 @@
-//! Unified tests for HTTP operations.
+//! Tests for HTTP operations.
+//!
+//! Tests here use insta snapshots (bytecode and/or traceback text), which
+//! cannot be expressed in BAML.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -253,6 +256,12 @@ async fn http_fetch_network_error() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
 }
 
+// Kept in Rust (not the baml_src corpus): the silent peer must be a controlled
+// Rust listener that accepts and holds the connection open. A corpus version
+// using `baml.http.Server.bind` as the silent peer is flaky — the BAML
+// listener object can be GC-collected between building the request and the
+// throwing `fetch`, resetting the connection into an `Io` error instead of the
+// expected `Timeout`, intermittently under load.
 #[tokio::test]
 async fn http_fetch_timeout_fires() {
     // A raw TCP listener that accepts connections but never writes an HTTP

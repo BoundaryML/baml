@@ -4,4 +4,4 @@ expression: output
 ---
 instanceof — BAML uses `is` for type checks.
 
-See: baml describe is
+see: `baml describe is`

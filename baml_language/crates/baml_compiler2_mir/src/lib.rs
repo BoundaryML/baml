@@ -1,4 +1,5 @@
 mod builder;
+mod inference_provider;
 mod ir;
 mod lower;
 mod optimize;
@@ -7,10 +8,9 @@ pub mod pretty;
 pub use baml_type::ResolvedAliases;
 pub use ir::*;
 pub use lower::{
-    DispatchCandidateCache, def_to_item_ref, lower_function, lower_function_cached, lower_let_body,
-    lower_let_body_cached, resolved_aliases_for_package, tir2_to_template,
+    def_to_item_ref, lower_function, lower_let_body, resolved_aliases_for_package, tir2_to_template,
 };
 
 /// Database trait for compiler2 MIR queries.
 #[salsa::db]
-pub trait Db: baml_compiler2_tir::Db {}
+pub trait Db: baml_compiler2_ppir::Db {}

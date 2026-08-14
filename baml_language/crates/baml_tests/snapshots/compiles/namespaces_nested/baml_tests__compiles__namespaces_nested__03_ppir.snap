@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 20989
+---
+=== PPIR ===
+class user.AppConfig {
+  api_key: string
+}
+class user.AppConfig$stream {
+  api_key: string | null
+}
+function user.CallOpenAI(cfg: user.AppConfig) -> root.llm.openai.OpenAIResponse  [expr] {
+  {  } root.llm.openai.OpenAIResponse { text: "response", model: "gpt-4" }
+}
+class user.llm.openai.OpenAIResponse {
+  text: string
+  model: string
+}
+class user.llm.openai.OpenAIResponse$stream {
+  text: string | null
+  model: string | null
+}

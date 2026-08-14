@@ -103,14 +103,11 @@ fn outbound_string_list(value: &BamlOutboundValue) -> Vec<String> {
 #[test]
 fn llm_function_capture_defaults_auto_inputs_outputs_errors() {
     let source = r##"
-        client C {
-            provider openai
-            options { model "gpt-4o" api_key "sk-test" }
-        }
+        client C = openai.OpenAiClient.new(model = "gpt-4o", api_key = "sk-test");
 
         function capture_phase6_llm(name: string) -> string {
-            client C
-            prompt #"Hello, {{ name }}"#
+            client: C
+            prompt: `Hello, ${name}`
         }
 
         function capture_phase6_plain(name: string) -> string {
@@ -645,7 +642,7 @@ async fn call_output_capture_attributes_repeated_enabled_calls() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn call_input_capture_uses_explicit_local_id_and_snapshots_before_mutation() {
+async fn explicit_local_id_source_to_value_artifact_snapshots_before_mutation() {
     let _guard = test_lock().await;
     init_prof_env();
     let source = r#"
@@ -668,6 +665,20 @@ async fn call_input_capture_uses_explicit_local_id_and_snapshots_before_mutation
         }
     "#;
     let program = compile_for_engine(source);
+    let main_idx = program.function_indices["user.main"];
+    let Object::Function(main) = &(*program.objects)[main_idx] else {
+        panic!("user.main must compile to a function")
+    };
+    assert!(
+        main.bytecode
+            .instructions
+            .iter()
+            .any(|instruction| matches!(
+                instruction,
+                bex_vm_types::Instruction::CallWithRuntimeId { .. }
+            )),
+        "the source-level side channel must survive through runtime-ID bytecode"
+    );
     let engine = Arc::new(
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
@@ -776,10 +787,15 @@ async fn explicit_local_id_reuse_is_catchable_invalid_argument() {
 
         function main() -> string {
             let id = boundary.id()
+            let alias = id
             let first = capture_phase6_id_leaf(1, $id = id)
-            baml.json.to_string(capture_phase6_id_leaf(2, $id = id)) catch (e) {
-                baml.errors.InvalidArgument => "caught"
+            let reuse = baml.json.to_string(capture_phase6_id_leaf(2, $id = alias)) catch (e) {
+                baml.errors.InvalidArgument => "reuse-caught"
             }
+            let mutation = baml.json.to_string(id.capture(inputs = true)) catch (e) {
+                baml.errors.InvalidArgument => "mutation-caught"
+            }
+            reuse + "+" + mutation
         }
     "#;
     let program = compile_for_engine(source);
@@ -796,7 +812,108 @@ async fn explicit_local_id_reuse_is_catchable_invalid_argument() {
         )
         .await
         .expect("single-use LocalId program runs");
-    assert_eq!(value, BexExternalValue::String("caught".into()));
+    assert_eq!(
+        value,
+        BexExternalValue::String("reuse-caught+mutation-caught".into())
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn explicit_local_id_output_and_error_overrides_write_artifacts() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function capture_phase6_output_leaf(n: int) -> int {
+            n + 1
+        }
+
+        function capture_phase6_error_leaf() -> int throws string {
+            throw "boom"
+        }
+
+        function main() -> int {
+            let output_id = boundary.id().capture(inputs = false, output = true, error = false)
+            let value = capture_phase6_output_leaf(4, $id = output_id)
+            let error_id = boundary.id().capture(inputs = false, output = false, error = true)
+            let _ = capture_phase6_error_leaf($id = error_id) catch (e) { _ => 0 }
+            value
+        }
+    "#;
+    let program = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let boundary_id = BoundaryId::from_bytes([24; 16]);
+    let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_engine::CaptureDefaults {
+            values_enabled: true,
+            logs_enabled: false,
+        })
+        .with_value_capture(value_capture.clone())
+        .build();
+    let result = engine
+        .call_function_with_trace("main", vec![], call_ctx, true)
+        .await
+        .expect("output/error override program runs");
+    assert_eq!(result.value.unwrap(), BexExternalValue::Int(5));
+    drop(engine);
+
+    let mut writer =
+        ValueWriter::new(ByteValueArtifactSink::new(), boundary_id).expect("value writer");
+    let captured = value_capture
+        .drain_to_value_writer(&mut writer)
+        .expect("explicit output/error drafts encode");
+    assert_eq!(
+        captured
+            .iter()
+            .filter(|value| value.kind == CaptureKind::CallInput)
+            .count(),
+        0,
+        "inputs=false must override the disabled ordinary-function base without capturing"
+    );
+    assert_eq!(
+        captured
+            .iter()
+            .filter(|value| value.kind == CaptureKind::CallOutput)
+            .count(),
+        1,
+        "output=true must capture exactly the selected call"
+    );
+    assert_eq!(
+        captured
+            .iter()
+            .filter(|value| value.kind == CaptureKind::CallError)
+            .count(),
+        1,
+        "error=true must capture exactly the throw origin"
+    );
+
+    let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).expect("value bytes parse");
+    let call_kinds = parsed
+        .records
+        .iter()
+        .filter_map(|record| match record {
+            ValueFileRecord::CapturedValue(value) => value.capture.as_ref().map(|c| c.kind),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        call_kinds
+            .iter()
+            .filter(|kind| **kind == ValueCaptureKind::CallOutput)
+            .count(),
+        1
+    );
+    assert_eq!(
+        call_kinds
+            .iter()
+            .filter(|kind| **kind == ValueCaptureKind::CallError)
+            .count(),
+        1
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -829,12 +946,49 @@ async fn explicit_local_id_rejects_native_builtin_calls() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn explicit_local_id_is_evaluated_last_and_exactly_once() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function capture_phase6_record_arg(events: string[]) -> int {
+            events.push("arg")
+            1
+        }
+
+        function capture_phase6_record_id(events: string[]) -> boundary.LocalId {
+            events.push("id")
+            boundary.id()
+        }
+
+        function capture_phase6_eval_leaf(n: int) -> int { n }
+
+        function main() -> int {
+            let events: string[] = []
+            let _ = capture_phase6_eval_leaf(
+                capture_phase6_record_arg(events),
+                $id = capture_phase6_record_id(events),
+            )
+            if (events.length() == 2 && events[0] == "arg" && events[1] == "id") {
+                1
+            } else {
+                0
+            }
+        }
+    "#;
+    let value = run_main(source)
+        .await
+        .expect("evaluation-order program runs");
+    assert_eq!(value, BexExternalValue::Int(1));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn call_input_capture_attributes_enabled_sysop_calls() {
     let _guard = test_lock().await;
     init_prof_env();
     let source = r#"
         function capture_phase6_sysop_marker() -> int {
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n))
+            let id = boundary.id().capture(inputs = true)
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n), $id = id)
             1
         }
 
@@ -842,15 +996,7 @@ async fn call_input_capture_attributes_enabled_sysop_calls() {
             capture_phase6_sysop_marker()
         }
     "#;
-    let mut program = compile_for_engine(source);
-    for object in &mut program.objects {
-        let Object::Function(function) = object else {
-            continue;
-        };
-        if function.name == "baml.sys.sleep" {
-            function.capture = FunctionCaptureProps::disabled().with_auto(CaptureCategory::Input);
-        }
-    }
+    let program = compile_for_engine(source);
 
     let engine = Arc::new(
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
@@ -2091,7 +2237,7 @@ async fn call_callable_has_real_identity_and_balance() {
     init_prof_env();
     let source = r#"
         function cc_callee(x: int) -> int { x + 1 }
-        function cc_get() -> (int) -> int { cc_callee }
+        function cc_get() -> (int) -> int throws never { cc_callee }
     "#;
     let program = compile_for_engine(source);
     let engine = Arc::new(
@@ -2286,17 +2432,9 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
     );
 }
 
-/// An UNOBSERVED fire-and-forget child error (BEP-034) surfaces at the
-/// spawner's next await and terminates the parent thread *without*
-/// unwinding its VM — the parent is parked at the Await opcode with every
-/// frame open. The §7 decision 2 drain (Errored flavor) closes those
-/// frames, so full balance holds. Found by the post-decision adversarial
-/// review: before the fix this was the one remaining systematic
-/// frame-strander (the awaited-future error path in
-/// `spawned_child_error_ends_child_errored` below unwinds VM-side and
-/// never hit it).
+/// B-405: an unobserved child error does not alter the parent profile.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn unobserved_child_error_drains_parent_frames() {
+async fn unobserved_child_error_keeps_parent_completed() {
     let _guard = test_lock().await;
     init_prof_env();
     let source = r#"
@@ -2310,19 +2448,16 @@ async fn unobserved_child_error_drains_parent_frames() {
             await g
         }
     "#;
-    let result = run_main(source).await;
-    assert!(
-        matches!(result, Err(EngineError::UnhandledThrow { .. })),
-        "the dropped child error must surface as UnhandledThrow: {result:?}"
-    );
+    let value = run_main(source).await.expect("parent call succeeds");
+    assert_eq!(value, BexExternalValue::Int(1));
 
     let (header, events) = load_profile_quiesced("user.uce_pin");
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     assert_eq!(
         statuses.get("user.main"),
-        Some(&vec![pb::FunctionEndStatus::Errored as i32]),
-        "the drain closes the parent's open root frame Errored: {statuses:?}"
+        Some(&vec![pb::FunctionEndStatus::Ok as i32]),
+        "the parent frame completes normally: {statuses:?}"
     );
     assert_eq!(
         statuses.get("user.uce_bad"),
@@ -2339,8 +2474,8 @@ async fn unobserved_child_error_drains_parent_frames() {
     assert!(
         events.iter().any(|e| matches!(e, Event::EndThread(et)
             if !child_threads.contains(&et.thread_id)
-                && et.status == pb::ThreadEndStatus::Errored as i32)),
-        "the root thread must end Errored"
+                && et.status == pb::ThreadEndStatus::Completed as i32)),
+        "the root thread must end Completed"
     );
 }
 

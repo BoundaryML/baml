@@ -1,0 +1,18 @@
+{
+  "slug": "valid-anagram",
+  "id": 242,
+  "title": "Valid Anagram",
+  "difficulty": "Easy",
+  "category": "Arrays & Hashing",
+  "statement": "Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.\n\nAn **anagram** is a word formed by rearranging the letters of another, using all the original letters exactly once.\n\n**Example**\n\n```\ns = \"anagram\", t = \"nagaram\"  => true\ns = \"rat\", t = \"car\"          => false\n```",
+  "signature": "function IsAnagram(s: string, t: string) -> bool",
+  "starter": "function IsAnagram(s: string, t: string) -> bool {\n  // Return true if t is a rearrangement of the letters of s.\n  return false;\n}",
+  "solution": "function IsAnagram(s: string, t: string) -> bool {\n  if (s.length() != t.length()) {\n    return false;\n  }\n  let counts: map<string, int> = {};\n  let sc = s.chars();\n  let i = 0;\n  while (i < sc.length()) {\n    let ch = sc[i];\n    let cur = counts.get(ch);\n    if (cur == null) {\n      counts.set(ch, 1);\n    } else {\n      counts.set(ch, cur + 1);\n    }\n    i += 1;\n  }\n  let tc = t.chars();\n  let j = 0;\n  while (j < tc.length()) {\n    let ch = tc[j];\n    let cur = counts.get(ch);\n    if (cur == null) {\n      return false;\n    }\n    if (cur == 0) {\n      return false;\n    }\n    counts.set(ch, cur - 1);\n    j += 1;\n  }\n  return true;\n}",
+  "tests": [
+    { "call": "IsAnagram(\"anagram\", \"nagaram\")", "expected": "true" },
+    { "call": "IsAnagram(\"rat\", \"car\")", "expected": "false" },
+    { "call": "IsAnagram(\"a\", \"ab\")", "expected": "false" },
+    { "call": "IsAnagram(\"ab\", \"a\")", "expected": "false", "hidden": true },
+    { "call": "IsAnagram(\"aacc\", \"ccac\")", "expected": "false", "hidden": true }
+  ]
+}

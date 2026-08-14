@@ -7,7 +7,7 @@ use std::{
     fmt::Write as _,
 };
 
-use baml_base::Literal;
+use baml_base::{Literal, qualified_name::AI_STREAM_STREAM};
 use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault, Ty};
 use indexmap::IndexMap;
 
@@ -120,15 +120,26 @@ impl LeafBody {
     pub(crate) fn needs_baml_pyhandle(&self) -> bool {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
-                Ty::RustType => true,
-                Ty::List(inner) => ty_uses_rust_type(inner),
-                Ty::Map { key, value } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
-                Ty::Union(items) => items.iter().any(ty_uses_rust_type),
-                Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
-                Ty::Callable { params, ret } => {
+                Ty::RustType { .. } => true,
+                Ty::List(inner, _) => ty_uses_rust_type(inner),
+                Ty::Map { key, value, .. } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
+                Ty::Union(items, _) => items.iter().any(ty_uses_rust_type),
+                Ty::Class(_, args, _) => args.iter().any(ty_uses_rust_type),
+                Ty::Interface(_, generics, associated_types, _) => {
+                    generics.iter().any(ty_uses_rust_type)
+                        || associated_types.iter().any(|(_, ty)| ty_uses_rust_type(ty))
+                }
+                Ty::Function {
+                    params,
+                    ret,
+                    throws,
+                    ..
+                } => {
                     params.iter().any(|param| ty_uses_rust_type(&param.ty))
                         || ty_uses_rust_type(ret)
+                        || ty_uses_rust_type(throws)
                 }
+                Ty::Future(value, error, _) => ty_uses_rust_type(value) || ty_uses_rust_type(error),
                 _ => false,
             }
         }
@@ -158,7 +169,7 @@ impl LeafBody {
         self.symbols.is_empty()
     }
 
-    /// The optional-argument `Ty::Callable`s reachable from this leaf's
+    /// The optional-argument `Ty::Function`s reachable from this leaf's
     /// function/method/field signatures, in deterministic first-seen order,
     /// each paired with the `_<owner>__<param>` prefix for its Protocol name
     /// (`render_leaf_body_pyi` appends a per-prefix counter, giving e.g.
@@ -503,7 +514,7 @@ fn fqn_leaf(fqn: &str) -> &str {
     fqn.rsplit('.').next().unwrap_or(fqn)
 }
 
-/// Recursively collect every optional-argument `Ty::Callable` reachable from
+/// Recursively collect every optional-argument `Ty::Function` reachable from
 /// `ty`, in first-seen order, skipping duplicates (`seen`). Each is paired with
 /// `base` — the `_<owner>__<param>` prefix for its Protocol name (the final
 /// name appends a per-base counter in `LeafBody::callback_protocols`). Children
@@ -516,22 +527,22 @@ fn collect_optional_callables(
     out: &mut Vec<(Ty, String)>,
 ) {
     match ty {
-        Ty::List(inner) => collect_optional_callables(inner, base, seen, out),
-        Ty::Map { key, value } => {
+        Ty::List(inner, _) => collect_optional_callables(inner, base, seen, out),
+        Ty::Map { key, value, .. } => {
             collect_optional_callables(key, base, seen, out);
             collect_optional_callables(value, base, seen, out);
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             for item in items {
                 collect_optional_callables(item, base, seen, out);
             }
         }
-        Ty::Class(_, args) => {
+        Ty::Class(_, args, _) => {
             for a in args {
                 collect_optional_callables(a, base, seen, out);
             }
         }
-        Ty::Callable { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             for p in params {
                 collect_optional_callables(&p.ty, base, seen, out);
             }
@@ -549,26 +560,26 @@ fn collect_optional_callables(
 
 fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
     match ty {
-        Ty::Class(name, args) => {
+        Ty::Class(name, args, _) => {
             record_name_routing(name, current, out);
             for a in args {
                 collect_root_imports(a, current, out);
             }
         }
-        Ty::Enum(name) | Ty::TypeAlias(name) => {
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) | Ty::TypeAlias(name, _) => {
             record_name_routing(name, current, out);
         }
-        Ty::List(inner) => collect_root_imports(inner, current, out),
-        Ty::Map { key, value } => {
+        Ty::List(inner, _) => collect_root_imports(inner, current, out),
+        Ty::Map { key, value, .. } => {
             collect_root_imports(key, current, out);
             collect_root_imports(value, current, out);
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             for item in items {
                 collect_root_imports(item, current, out);
             }
         }
-        Ty::Callable { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             for p in params {
                 collect_root_imports(&p.ty, current, out);
             }
@@ -585,7 +596,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         // `from baml_bridge import BamlPyHandle as _BamlPyHandle`
         // line via `needs_baml_pyhandle` — it does *not* go through
         // the cross-leaf segment set.
-        Ty::Media(_) => {
+        Ty::Media(..) => {
             // Skip when current leaf IS `baml/media` (same-leaf ref).
             let target: &[&str] = &["baml", "media"];
             let target_eq = current.segments.len() == target.len()
@@ -606,19 +617,24 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
                 anchor: "baml".to_string(),
             });
         }
-        Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Literal(_)
-        | Ty::Uint8Array
-        | Ty::TypeVar(_)
-        | Ty::RustType
-        | Ty::BuiltinUnknown
-        | Ty::Unit
-        | Ty::BamlOptions => {}
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Literal(..)
+        | Ty::Uint8Array { .. }
+        | Ty::TypeVar(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Void { .. }
+        | Ty::Interface(..)
+        | Ty::Future(..) => {}
     }
 }
 
@@ -672,46 +688,160 @@ pub(crate) fn group_and_sort(
     // Stable sort preserves intra-parent function fan-out order (base
     // sync, base async, companions each sync/async).
     //
-    // Tertiary tie-breaker: when sort keys collide (PPIR assigns
-    // synthetic `$stream` symbols `TextRange::default()` so they share
-    // span 0), emit type aliases last — the alias's RHS may reference
-    // stream classes in the same leaf, and the class must be defined
-    // before the alias's RHS evaluates.
-    //
-    // Then, with a second stable pass, hoist recursive aliases to the
-    // very front of the leaf. Pyright recognizes a
-    // `Name = typing_extensions.TypeAliasType("Name", …)` assignment
-    // as a type alias only after the assignment line; consuming
+    // Recursive aliases are hoisted to the front of the leaf. Pyright
+    // recognizes a
+    // `Name = typing_extensions.TypeAliasType("Name", ...)` assignment as a
+    // type alias only after the assignment line; consuming
     // classes whose field annotations name the alias must come *after*
     // the assignment or pyright reports
     // `reportInvalidTypeForm` on the alias's own self-reference (18c).
+    //
+    // Non-recursive aliases are emitted after every other symbol because
+    // their right-hand sides evaluate eagerly. Same-leaf dependencies are
+    // topologically ordered within both alias phases so forward chains
+    // evaluate safely; recursive strongly connected components stay stable.
     let mut out: BTreeMap<LeafPath, LeafBody> = BTreeMap::new();
     for (leaf, mut pairs) in buckets {
-        pairs.sort_by(|a, b| {
-            a.1.cmp(&b.1)
-                .then_with(|| symbol_kind_ord(&a.0).cmp(&symbol_kind_ord(&b.0)))
-        });
-        // Stable hoist: recursive aliases first, everything else in
-        // the order produced by the previous sort.
-        pairs.sort_by_key(|(sym, _)| match sym {
-            EmittedSymbol::TypeAlias(a) if a.recursive => 0u8,
-            _ => 1,
-        });
-        out.insert(
-            leaf.clone(),
-            LeafBody {
-                leaf,
-                symbols: pairs,
-            },
+        pairs.sort_by(|a, b| a.1.cmp(&b.1));
+
+        let mut recursive_aliases = Vec::new();
+        let mut other_symbols = Vec::new();
+        let mut non_recursive_aliases = Vec::new();
+        for pair in pairs {
+            match &pair.0 {
+                EmittedSymbol::TypeAlias(a) if a.recursive => recursive_aliases.push(pair),
+                EmittedSymbol::TypeAlias(_) => non_recursive_aliases.push(pair),
+                _ => other_symbols.push(pair),
+            }
+        }
+
+        let mut symbols = Vec::with_capacity(
+            recursive_aliases.len() + other_symbols.len() + non_recursive_aliases.len(),
         );
+        symbols.extend(sort_aliases(recursive_aliases));
+        symbols.extend(other_symbols);
+        symbols.extend(sort_aliases(non_recursive_aliases));
+        out.insert(leaf.clone(), LeafBody { leaf, symbols });
     }
     out
 }
 
-fn symbol_kind_ord(sym: &EmittedSymbol) -> u8 {
-    match sym {
-        EmittedSymbol::TypeAlias(_) => 1,
-        _ => 0,
+fn sort_aliases(aliases: Vec<(EmittedSymbol, SortKey)>) -> Vec<(EmittedSymbol, SortKey)> {
+    let alias_indices: BTreeMap<baml_codegen_types::Name, usize> = aliases
+        .iter()
+        .enumerate()
+        .map(|(index, (symbol, _))| match symbol {
+            EmittedSymbol::TypeAlias(alias) => (alias.source.clone(), index),
+            _ => unreachable!("only type aliases are passed here"),
+        })
+        .collect();
+
+    let mut dependencies = vec![BTreeSet::new(); aliases.len()];
+    for (index, (symbol, _)) in aliases.iter().enumerate() {
+        let EmittedSymbol::TypeAlias(alias) = symbol else {
+            unreachable!("only type aliases are passed here");
+        };
+        collect_alias_dependencies(&alias.resolves_to, &alias_indices, &mut dependencies[index]);
+        dependencies[index].remove(&index);
+    }
+
+    let mut in_degree: Vec<usize> = dependencies.iter().map(BTreeSet::len).collect();
+    let mut dependents = vec![Vec::new(); aliases.len()];
+    for (dependent, required) in dependencies.iter().enumerate() {
+        for dependency in required {
+            dependents[*dependency].push(dependent);
+        }
+    }
+
+    let mut ready: BTreeSet<usize> = in_degree
+        .iter()
+        .enumerate()
+        .filter_map(|(index, degree)| (*degree == 0).then_some(index))
+        .collect();
+    let mut order = Vec::with_capacity(aliases.len());
+    while let Some(index) = ready.iter().next().copied() {
+        ready.remove(&index);
+        order.push(index);
+        for dependent in &dependents[index] {
+            in_degree[*dependent] -= 1;
+            if in_degree[*dependent] == 0 {
+                ready.insert(*dependent);
+            }
+        }
+    }
+
+    // Preserve deterministic source order for strongly connected components,
+    // which cannot be topologically separated.
+    if order.len() != aliases.len() {
+        order.extend(
+            in_degree
+                .iter()
+                .enumerate()
+                .filter_map(|(index, degree)| (*degree != 0).then_some(index)),
+        );
+    }
+
+    let mut aliases: Vec<Option<(EmittedSymbol, SortKey)>> =
+        aliases.into_iter().map(Some).collect();
+    order
+        .into_iter()
+        .map(|index| aliases[index].take().expect("alias index is unique"))
+        .collect()
+}
+
+fn collect_alias_dependencies(
+    ty: &Ty,
+    alias_indices: &BTreeMap<baml_codegen_types::Name, usize>,
+    out: &mut BTreeSet<usize>,
+) {
+    match ty {
+        Ty::TypeAlias(name, _) => {
+            if let Some(index) = alias_indices.get(name) {
+                out.insert(*index);
+            }
+        }
+        Ty::Class(_, arguments, _) => {
+            for argument in arguments {
+                collect_alias_dependencies(argument, alias_indices, out);
+            }
+        }
+        Ty::List(inner, _) => collect_alias_dependencies(inner, alias_indices, out),
+        Ty::Map { key, value, .. } => {
+            collect_alias_dependencies(key, alias_indices, out);
+            collect_alias_dependencies(value, alias_indices, out);
+        }
+        Ty::Union(members, _) => {
+            for member in members {
+                collect_alias_dependencies(member, alias_indices, out);
+            }
+        }
+        Ty::Function { params, ret, .. } => {
+            for param in params {
+                collect_alias_dependencies(&param.ty, alias_indices, out);
+            }
+            collect_alias_dependencies(ret, alias_indices, out);
+        }
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Literal(..)
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::TypeVar(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Void { .. }
+        | Ty::Interface(..)
+        | Ty::Future(..) => {}
     }
 }
 
@@ -735,7 +865,7 @@ fn render_class_bases(generic_params: &[String]) -> String {
 /// of `PyO3` types holding `Arc<MediaValue>` directly — live in
 /// `baml_bridge.baml_py` (the `PyO3` extension module).
 ///
-/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_bridge`
+/// `ai.stream.Stream`: pure-Python wrapper re-exported from `baml_bridge`
 /// (`sdks/python/src/baml_bridge/_stream.py`). Lives outside the `PyO3`
 /// module because nothing on the call path needed Rust — the args
 /// encoder, runtime accessor, and result decoder are all already
@@ -748,7 +878,7 @@ fn media_reexport_rust_name(
         "baml.media.Video" => Some(("baml_bridge.baml_py", "BamlVideo")),
         "baml.media.Audio" => Some(("baml_bridge.baml_py", "BamlAudio")),
         "baml.media.Pdf" => Some(("baml_bridge.baml_py", "BamlPdf")),
-        "baml.llm.Stream" => Some(("baml_bridge", "BamlStream")),
+        AI_STREAM_STREAM => Some(("baml_bridge", "BamlStream")),
         _ => None,
     }
 }
@@ -1040,9 +1170,9 @@ fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) 
     // TODO: replace with a proper recursive-alias representation once
     // pyright handles `TypeAliasType` forward-refs (or once we move json to
     // a stricter codegen surface).
-    if a.source.pkg.as_str() == "baml"
-        && a.source.namespace_path.len() == 1
-        && a.source.namespace_path[0].as_str() == "json"
+    if a.source.package().as_str() == "baml"
+        && a.source.namespace().len() == 1
+        && a.source.namespace()[0].as_str() == "json"
         && a.source.bare_name() == "json"
     {
         let py_name = &a.py_name;
@@ -2053,7 +2183,7 @@ pub(crate) fn render_leaf_body_pyi(
             callback_protocols: Some(map.clone()),
         };
         for (ty, _base) in &protocol_tys {
-            if let Ty::Callable { params, ret } = ty {
+            if let Ty::Function { params, ret, .. } = ty {
                 out.push_str("\n\n");
                 out.push_str(&render_callback_protocol(&map[ty], params, ret, &proto_ctx));
             }

@@ -41,7 +41,7 @@
 # Rust sources behind the editable install — so step 2 owns rebuilds.
 # Re-run after bridge_python Rust changes or after adding a new fixture.
 #
-# This mirrors the typescript_node crate's setup.sh: install/native-
+# This mirrors the TypeScript crate's setup.sh: install/native-
 # build lives here, OUT of build.rs, so `cargo check`/`cargo doc`
 # succeed without uv installed and the heavy work only fires when a
 # python sdk-test is actually selected.

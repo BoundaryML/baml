@@ -18,66 +18,51 @@ client<llm> Hello {
 
 //----
 //- diagnostics
-// error: Expected config key, found error
-//    ╭─[ strings_unquoted_strings.baml:4:16 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[strings_unquoted_strings.baml:4:16]
 //  4 │     thing hello'world
-//    │                ┬  
-//    │                ╰── Expected config key, found error
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected identifier, found '#'
-//    ╭─[ strings_unquoted_strings.baml:6:13 ]
-//    │
+//    ·                ┬
+//    ·                ╰── expected `config key`, found `error`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[strings_unquoted_strings.baml:6:13]
 //  6 │     banned2 #helloworld
-//    │             ┬  
-//    │             ╰── Expected identifier, found '#'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected config key, found '#'
-//    ╭─[ strings_unquoted_strings.baml:6:13 ]
-//    │
-//  6 │     banned2 #helloworld
-//    │             ┬  
-//    │             ╰── Expected config key, found '#'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected identifier, found '('
-//    ╭─[ strings_unquoted_strings.baml:7:18 ]
-//    │
+//    ·             ┬
+//    ·             ╰── expected `identifier`, found `'#'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[strings_unquoted_strings.baml:7:18]
 //  7 │     banned3 hello(world)
-//    │                  ┬  
-//    │                  ╰── Expected identifier, found '('
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected config key, found '('
-//    ╭─[ strings_unquoted_strings.baml:7:18 ]
-//    │
+//    ·                  ┬
+//    ·                  ╰── expected `identifier`, found `'('`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[strings_unquoted_strings.baml:7:24]
 //  7 │     banned3 hello(world)
-//    │                  ┬  
-//    │                  ╰── Expected config key, found '('
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected identifier, found ')'
-//    ╭─[ strings_unquoted_strings.baml:7:24 ]
-//    │
-//  7 │     banned3 hello(world)
-//    │                        ┬  
-//    │                        ╰── Expected identifier, found ')'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected config key, found ')'
-//    ╭─[ strings_unquoted_strings.baml:7:24 ]
-//    │
-//  7 │     banned3 hello(world)
-//    │                        ┬  
-//    │                        ╰── Expected config key, found ')'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
+//    ·                        ┬
+//    ·                        ╰── expected `identifier`, found `')'`
+//    ╰────
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client Hello = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[strings_unquoted_strings.baml:1:1]
+//  1 │ ╭─▶ client<llm> Hello {
+//  2 │ │     provider openai
+//  3 │ │     options {
+//  4 │ │       thing hello'world
+//  5 │ │       banned @helloworld
+//  6 │ │       banned2 #helloworld
+//  7 │ │       banned3 hello(world)
+//  8 │ │     }
+//  9 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

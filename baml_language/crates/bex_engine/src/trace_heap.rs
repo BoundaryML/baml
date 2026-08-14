@@ -118,11 +118,6 @@ impl TraceSnapshot {
         self.values.get(value_ref.0)
     }
 
-    #[must_use]
-    pub fn values(&self) -> &[TraceValue] {
-        &self.values
-    }
-
     #[cfg(test)]
     pub(crate) fn for_test(root: TraceValueRef, values: Vec<TraceValue>) -> Self {
         Self { root, values }
@@ -321,7 +316,11 @@ impl TraceSnapshotBuilder {
                         .collect();
                     self.alloc(TraceValue::Instance {
                         type_name: class.name.to_string(),
-                        type_args: instance.class_type_args.to_vec(),
+                        type_args: instance
+                            .class_type_args
+                            .iter()
+                            .map(baml_type::RuntimeTy::from)
+                            .collect(),
                         fields,
                     })
                 } else {
@@ -617,10 +616,10 @@ mod tests {
             .await;
         let array_ptr = permit
             .tlab_mut()
-            .alloc_array(baml_type::RuntimeTy::unknown(), vec![]);
+            .alloc_array(baml_type::RealizedTy::unknown(), vec![]);
         unsafe {
             *array_ptr.get_mut() = Object::Array(bex_vm_types::types::Array::new(
-                baml_type::RuntimeTy::unknown(),
+                baml_type::RealizedTy::unknown(),
                 vec![Value::int(1), Value::object(array_ptr)],
             ));
         }

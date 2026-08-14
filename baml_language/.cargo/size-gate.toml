@@ -36,31 +36,36 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 16.09 MB file (generics: TyArg/TyClass proto types +
-# engine/compiler/sdkgen generics support, +499 KB / +3.2% vs the prior
-# 15.59 MB baseline).
+# baml-cli is larger than the python/node CLIs because `sdkgen_rust`
+# formats generated code with `quote` + `prettyplease`, which pulls `syn`
+# into the CLI's runtime graph (the string-template generators don't).
+# Baselines include the first-class C# generator now linked into baml-cli.
+# Reclaiming the `syn` cost would mean dropping prettyplease (raw,
+# unformatted generated SDK output).
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 17_052_433
-# Linux x86_64: baseline 21.51 MB file.
+max_file_bytes = "20.9 MiB"
+
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 22_176_914
-# Windows x86_64: baseline 18.11 MB file.
+max_file_bytes = "26.9 MiB"
+
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 18_657_997
+max_file_bytes = "22.5 MiB"
 
 [artifacts.packed-program]
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 12.01 MB file.
+# Bumped ~3% above the Aug 2026 baselines when the builtin ai/provider
+# stdlib packages landed (PR #4352): the packed program carries their
+# bytecode (~700 KB).
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = 12_472_693
-# Linux x86_64: baseline 15.62 MB file.
+max_file_bytes = "14.3 MiB"
+
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 16_090_067
-# Windows x86_64: baseline 13.00 MB file.
+max_file_bytes = "18.3 MiB"
+
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 13_397_777
+max_file_bytes = "15.3 MiB"
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -82,6 +87,5 @@ no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# Single platform; baseline 4.06 MB gzip.
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = 4_180_730
+max_gzip_bytes = "4.5 MiB"

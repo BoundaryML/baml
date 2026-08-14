@@ -2,7 +2,7 @@
 // an `implements` block calls the interface's own default body.
 
 interface Logger {
-  function log(self, msg: string) -> string {
+  function log(self, msg: string) -> string throws never {
     return "[LOG] " + msg
   }
 }

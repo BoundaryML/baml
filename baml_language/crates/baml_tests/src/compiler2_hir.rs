@@ -34,14 +34,15 @@ mod tests {
         file: baml_base::SourceFile,
         name: &str,
     ) -> FunctionLoc<'db> {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-        let local_id = item_tree
-            .functions
+        *baml_compiler2_ppir::item_data::file_functions(db, file)
             .iter()
-            .find(|(_, func)| func.name.as_str() == name)
-            .map(|(local_id, _)| *local_id)
-            .unwrap_or_else(|| panic!("missing function {name}"));
-        FunctionLoc::new(db, file, local_id)
+            .find(|&&loc| {
+                baml_compiler2_ppir::item_data::function_data(db, loc)
+                    .name
+                    .as_str()
+                    == name
+            })
+            .unwrap_or_else(|| panic!("missing function {name}"))
     }
 
     fn find_method_loc<'db>(
@@ -50,19 +51,25 @@ mod tests {
         class_name: &str,
         method_name: &str,
     ) -> FunctionLoc<'db> {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-        let class = item_tree
-            .classes
-            .values()
-            .find(|class| class.name.as_str() == class_name)
+        let class_loc = *baml_compiler2_ppir::item_data::file_classes(db, file)
+            .iter()
+            .find(|&&loc| {
+                baml_compiler2_ppir::item_data::class_data(db, loc)
+                    .name
+                    .as_str()
+                    == class_name
+            })
             .unwrap_or_else(|| panic!("missing class {class_name}"));
-        let method_id = class
+        *baml_compiler2_ppir::item_data::class_data(db, class_loc)
             .methods
             .iter()
-            .find(|method_id| item_tree[**method_id].name.as_str() == method_name)
-            .copied()
-            .unwrap_or_else(|| panic!("missing method {class_name}.{method_name}"));
-        FunctionLoc::new(db, file, method_id)
+            .find(|&&method_loc| {
+                baml_compiler2_ppir::item_data::function_data(db, method_loc)
+                    .name
+                    .as_str()
+                    == method_name
+            })
+            .unwrap_or_else(|| panic!("missing method {class_name}.{method_name}"))
     }
 
     // ── 1. Targeted unit test: multi-file package_items ──────────────────────
@@ -76,7 +83,7 @@ mod tests {
         let _file_a = db.add_file("a.baml", "class Foo { name string }");
         let _file_b = db.add_file(
             "b.baml",
-            "function bar(x: string) -> string { client GPT4\nprompt #\"hi\"# }",
+            "function bar(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
 
         let user_pkg_id = PackageId::new(&db, Name::new("user"));
@@ -129,7 +136,7 @@ mod tests {
         let mut db = make_db();
         let _f = db.add_file(
             "methods.baml",
-            "class MyClass {\n  name string\n  function helper(x: string) -> string { client C\nprompt #\"hi\"# }\n}",
+            "class MyClass {\n  name string\n  function helper(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n}",
         );
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
@@ -222,7 +229,7 @@ mod tests {
         assert!(ns.types.contains_key(&Name::new("Widget")));
     }
 
-    // ── 3. file_item_tree Index access ────────────────────────────────────────
+    // ── 3. item-data firewall: function data + impl representation ─────────────
 
     /// The enriched ItemTree stores function params and return types.
     #[test]
@@ -230,17 +237,17 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "fn.baml",
-            "function greet(name: string) -> string { client C\nprompt #\"hi\"# }",
+            "function greet(name: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
 
-        let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
-
-        // Find the function in the item tree
-        let func = item_tree
-            .functions
-            .values()
-            .find(|f| f.name == Name::new("greet"));
-        let func = func.expect("function 'greet' should be in item tree");
+        // Find the function via the firewall.
+        let greet = *baml_compiler2_ppir::item_data::file_functions(&db, file)
+            .iter()
+            .find(|&&loc| {
+                baml_compiler2_ppir::item_data::function_data(&db, loc).name == Name::new("greet")
+            })
+            .expect("function 'greet' should be in item tree");
+        let func = baml_compiler2_ppir::item_data::function_data(&db, greet);
 
         assert_eq!(
             func.params.len(),
@@ -269,8 +276,6 @@ mod tests {
     /// `class_to_impls` indexes every `InClass` impl.
     #[test]
     fn impls_map_is_consistent_with_legacy_representation() {
-        use baml_compiler2_hir::item_tree::ImplSubject;
-
         let mut db = make_db();
         let file = db.add_file(
             "impls.baml",
@@ -299,39 +304,52 @@ mod tests {
             "#,
         );
 
-        let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
+        use baml_compiler2_ppir::item_data::{
+            ImplSubjectData, class_data, class_impls, file_classes, file_free_impls, file_impls,
+            impl_block_data,
+        };
 
-        let legacy_in_class: usize = item_tree.classes.values().map(|c| c.implements.len()).sum();
-        let legacy_out_of_body = item_tree.implements_for.len();
+        let legacy_in_class: usize = file_classes(&db, file)
+            .iter()
+            .map(|&c| class_data(&db, c).implements.len())
+            .sum();
+        let legacy_out_of_body = file_free_impls(&db, file).len();
 
         // One ImplBlock per legacy entry.
         assert_eq!(
-            item_tree.impls.len(),
+            file_impls(&db, file).len(),
             legacy_in_class + legacy_out_of_body,
             "expected one ImplBlock per legacy impl entry"
         );
 
         // Subject partition matches the legacy split.
-        let in_class = item_tree
-            .impls
-            .values()
-            .filter(|b| matches!(b.subject, ImplSubject::InClass { .. }))
+        let in_class = file_impls(&db, file)
+            .iter()
+            .filter(|&&b| {
+                matches!(
+                    impl_block_data(&db, b).subject,
+                    ImplSubjectData::InClass { .. }
+                )
+            })
             .count();
         assert_eq!(in_class, legacy_in_class, "InClass count mismatch");
         assert_eq!(
-            item_tree.impls.len() - in_class,
+            file_impls(&db, file).len() - in_class,
             legacy_out_of_body,
             "Free count mismatch"
         );
 
-        // `class_to_impls` indexes exactly the InClass impls.
-        let indexed: usize = item_tree.class_to_impls.values().map(|v| v.len()).sum();
+        // `class_impls` indexes exactly the InClass impls.
+        let indexed: usize = file_classes(&db, file)
+            .iter()
+            .map(|&c| class_impls(&db, c).len())
+            .sum();
         assert_eq!(indexed, legacy_in_class, "class_to_impls coverage mismatch");
 
         // Every impl carries its lowered method ids (here, `show`).
-        for block in item_tree.impls.values() {
+        for &block in file_impls(&db, file) {
             assert!(
-                !block.methods.is_empty(),
+                !impl_block_data(&db, block).methods.is_empty(),
                 "impl block should carry its method ids"
             );
         }
@@ -367,31 +385,30 @@ mod tests {
         );
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
-        let tree = baml_compiler2_hir::file_item_tree(&db, file);
         let aliases = std::collections::HashMap::new();
 
         let class_ty = |class_name: &str| {
-            let (id, data) = tree
-                .classes
+            let loc = *baml_compiler2_ppir::item_data::file_classes(&db, file)
                 .iter()
-                .find(|(_, c)| c.name == Name::new(class_name))
+                .find(|&&loc| {
+                    baml_compiler2_ppir::item_data::class_data(&db, loc).name
+                        == Name::new(class_name)
+                })
                 .expect("class in item tree");
-            let loc = baml_compiler2_hir::loc::ClassLoc::new(&db, file, *id);
-            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
-                &db,
-                Definition::Class(loc),
-                &data.name,
-            );
+            let data = baml_compiler2_ppir::item_data::class_data(&db, loc);
+            let qtn =
+                baml_compiler2_hir_ty::lower::qualify_def(&db, Definition::Class(loc), &data.name);
             Ty::Class(qtn, vec![], TyAttr::default())
         };
         let iface = |iface_name: &str| {
-            let (id, _) = tree
-                .interfaces
+            let loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
                 .iter()
-                .find(|(_, i)| i.name == Name::new(iface_name))
+                .find(|&&loc| {
+                    baml_compiler2_ppir::item_data::interface_data(&db, loc).name
+                        == Name::new(iface_name)
+                })
                 .expect("interface in item tree");
-            let loc = baml_compiler2_hir::loc::InterfaceLoc::new(&db, file, *id);
-            let qtn = baml_compiler2_tir::interfaces::interface_loc_qtn(&db, loc)
+            let qtn = baml_compiler2_hir_ty::interfaces::interface_loc_qtn(&db, loc)
                 .expect("interface loc resolves to a qtn");
             baml_type::Interface {
                 name: qtn,
@@ -405,7 +422,7 @@ mod tests {
         // H2: Widget implements Printable, so the bounded blanket
         // `Loud for T extends Printable` applies.
         assert!(
-            baml_compiler2_tir::interfaces::get_implements_block(
+            baml_compiler2_hir_ty::interfaces::get_implements_block(
                 &db,
                 pkg_id,
                 &class_ty("Widget"),
@@ -419,7 +436,7 @@ mod tests {
         // H2: Plain does not implement Printable, so the bound fails and the
         // blanket must not apply.
         assert!(
-            baml_compiler2_tir::interfaces::get_implements_block(
+            baml_compiler2_hir_ty::interfaces::get_implements_block(
                 &db,
                 pkg_id,
                 &class_ty("Plain"),
@@ -441,7 +458,7 @@ mod tests {
             TyAttr::default(),
         );
         assert!(
-            baml_compiler2_tir::interfaces::get_implements_block(
+            baml_compiler2_hir_ty::interfaces::get_implements_block(
                 &db,
                 pkg_id,
                 &printable_existential,
@@ -462,7 +479,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "bindings.baml",
-            "function add(a: int, b: int) -> int { client C\nprompt #\"hi\"# }",
+            "function add(a: int, b: int) -> int { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
 
         let index = file_semantic_index(&db, file);
@@ -544,15 +561,15 @@ mod tests {
         let mut db = make_db();
         let _file_a = db.add_file(
             "a.baml",
-            "function greet(x: string) -> string { client C\nprompt #\"hi\"# }",
+            "function greet(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
         let _file_b = db.add_file(
             "b.baml",
-            "function greet(y: int) -> int { client C\nprompt #\"hey\"# }",
+            "function greet(y: int) -> int { client: \"openai/gpt-4o-mini\"\nprompt: `hey` }",
         );
         let _file_c = db.add_file(
             "c.baml",
-            "function greet(z: bool) -> bool { client C\nprompt #\"yo\"# }",
+            "function greet(z: bool) -> bool { client: \"openai/gpt-4o-mini\"\nprompt: `yo` }",
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
@@ -561,10 +578,9 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Four conflicts: greet, greet$render_prompt, greet$build_request,
-        // greet$build_request_stream
-        // Each LLM function expands to AST-level companions, all duplicated across 3 files.
-        // ($stream, $parse_stream, and $parse are PPIR-level and don't appear here.)
+        // Four conflicts: greet, greet$spec, greet$render_prompt, greet$parse.
+        // Each LLM function expands to AST-level companions, all duplicated
+        // across 3 files.
         assert_eq!(ns.conflicts().len(), 4);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
@@ -594,6 +610,104 @@ mod tests {
             ns.types.get(&Name::new("Thing")),
             Some(baml_compiler2_hir::contributions::Definition::Class(_))
         ));
+    }
+
+    /// Type and value lookup are separate implementation details; declarations
+    /// still share one BAML namespace and produce one complete diagnostic.
+    #[test]
+    fn mixed_declaration_kinds_across_files_produce_one_conflict() {
+        let mut db = make_db();
+        let file_a = db.add_file("a.baml", "class Shared { value int }");
+        let file_b = db.add_file("b.baml", "enum Shared { One\nTwo }");
+        let file_c = db.add_file("c.baml", "type Shared = string");
+        let file_d = db.add_file("d.baml", "function Shared() -> int { 1 }");
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+
+        assert_eq!(ns.conflicts().len(), 1);
+        let conflict = &ns.conflicts()[0];
+        assert_eq!(conflict.name, Name::new("Shared"));
+        assert_eq!(conflict.entries.len(), 4);
+        assert_eq!(
+            conflict
+                .entries
+                .iter()
+                .map(|entry| entry.definition.kind_name())
+                .collect::<Vec<_>>(),
+            vec!["class", "enum", "type", "function"]
+        );
+        assert!(
+            conflict
+                .entries
+                .iter()
+                .map(|entry| entry.definition.file(&db))
+                .eq([file_a, file_b, file_c, file_d])
+        );
+
+        let diagnostic = conflict.to_diagnostic(&db);
+        assert_eq!(diagnostic.annotations.len(), 4);
+        assert_eq!(
+            diagnostic
+                .annotations
+                .iter()
+                .map(|annotation| annotation.span.file_id)
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            4,
+            "every conflicting source location must be included"
+        );
+    }
+
+    #[test]
+    fn type_and_client_names_collide_across_files() {
+        let mut db = make_db();
+        let _type_file = db.add_file("types.baml", "type Backend = string");
+        let _client_file = db.add_file(
+            "clients.baml",
+            r#"client Backend = openai.OpenAiClient.new(model = "gpt-4o-mini");"#,
+        );
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        assert_eq!(ns.conflicts().len(), 1);
+        assert_eq!(
+            ns.conflicts()[0]
+                .entries
+                .iter()
+                .map(|entry| entry.definition.source_kind_name(&db))
+                .collect::<std::collections::HashSet<_>>(),
+            std::collections::HashSet::from(["type", "client"])
+        );
+    }
+
+    #[test]
+    fn type_and_value_names_in_different_baml_namespaces_are_legal() {
+        let mut db = make_db();
+        let _type_file = db.add_file("ns_models/types.baml", "class Shared { value int }");
+        let _value_file = db.add_file("ns_api/functions.baml", "function Shared() -> int { 1 }");
+
+        let package = PackageId::new(&db, Name::new("user"));
+        assert!(package_items(&db, package).conflicts().is_empty());
+    }
+
+    #[test]
+    fn same_named_tests_keep_function_scoped_identity() {
+        let mut db = make_db();
+        let _file_a = db.add_file(
+            "a.baml",
+            "function First() -> int { 1 }\ntest Shared { functions [First] }
+",
+        );
+        let _file_b = db.add_file(
+            "b.baml",
+            "function Second() -> int { 2 }\ntest Shared { functions [Second] }
+",
+        );
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        assert!(ns.conflicts().is_empty());
     }
 
     /// No conflict when names are unique across files.
@@ -673,7 +787,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "dup_method.baml",
-            "class Foo {\n  name string\n  function Bar(self) -> string { client C\nprompt #\"hi\"# }\n  function Bar(self) -> string { client C\nprompt #\"bye\"# }\n}",
+            "class Foo {\n  name string\n  function Bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n  function Bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `bye` }\n}",
         );
 
         let index = file_semantic_index(&db, file);
@@ -1396,7 +1510,7 @@ function foo(user: User) -> string {
         let mut db = make_db();
         let file = db.add_file(
             "cross_kind.baml",
-            "class Foo {\n  bar string\n  function bar(self) -> string { client C\nprompt #\"hi\"# }\n}",
+            "class Foo {\n  bar string\n  function bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n}",
         );
 
         let index = file_semantic_index(&db, file);
@@ -1763,7 +1877,7 @@ function foo(user: User) -> string {
         let mut db = make_db();
         let file = db.add_file(
             "alias_hidden.baml",
-            "type Handler = (value: int) -> string\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
+            "type Handler = (value: int) -> string throws never\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
         );
 
         let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "use_alias"));
@@ -1772,8 +1886,11 @@ function foo(user: User) -> string {
         assert_eq!(sig.params[0].ty.to_string(), "Handler");
     }
 
+    /// A nested callback position is NOT opened to an effect parameter — only the
+    /// immediate parameter root is (rule 4). The nested omitted throws is left
+    /// unfilled; TIR lowering rejects it (`FunctionTypeMissingThrows`, E0151).
     #[test]
-    fn function_type_throws_nested_callback_position_stays_closed() {
+    fn function_type_throws_nested_callback_position_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "nested.baml",
@@ -1788,12 +1905,14 @@ function foo(user: User) -> string {
         );
         assert_eq!(
             sig.params[0].ty.to_string(),
-            "((value: int) -> string throws never) -> string throws __effect_param_0"
+            "((value: int) -> string) -> string throws __effect_param_0"
         );
     }
 
+    /// Return position is not an argument position, so rule 4 does not apply: the
+    /// omitted throws is left unfilled for TIR to reject (rule 5, E0151).
     #[test]
-    fn function_type_throws_return_position_stays_closed() {
+    fn function_type_throws_return_position_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_fn.baml",
@@ -1806,12 +1925,14 @@ function foo(user: User) -> string {
         assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "(value: int) -> string throws never"
+            "(value: int) -> string"
         );
     }
 
+    /// A returned function type's callback parameters do not open effect
+    /// parameters either — the whole return type passes through untouched.
     #[test]
-    fn function_type_throws_return_position_opens_immediate_callback_surface() {
+    fn function_type_throws_return_position_callbacks_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_wrapper.baml",
@@ -1821,22 +1942,19 @@ function foo(user: User) -> string {
         let sig =
             elaborated_function_signature(&db, find_function_loc(&db, file, "returns_wrapper"));
 
-        assert_eq!(
-            sig.synthetic_effect_params,
-            vec![Name::new("__effect_param_0")]
-        );
+        assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "((value: int) -> string throws __effect_param_0) -> string throws __effect_param_0"
+            "((value: int) -> string) -> string"
         );
     }
 
     #[test]
-    fn function_type_throws_return_position_preserves_explicit_callback_throws() {
+    fn function_type_throws_return_position_preserves_explicit_throws() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_explicit_wrapper.baml",
-            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string { return \"ok\"; }",
+            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string throws never { return \"ok\"; }",
         );
 
         let sig = elaborated_function_signature(
@@ -1847,7 +1965,7 @@ function foo(user: User) -> string {
         assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "((value: int) -> string throws string) -> string throws string"
+            "((value: int) -> string throws string) -> string throws never"
         );
     }
 
@@ -1947,6 +2065,146 @@ function foo(user: User) -> string {
             !executed.iter().any(|s| s.contains("package_items")),
             "package_items should NOT re-run on comment-only change (early cutoff). Got: {:?}",
             executed
+        );
+    }
+
+    /// Every item kind's name span (and the config kinds' full spans) must
+    /// slice to exactly the identifier written in source, and the docstrings
+    /// added for type aliases and free `implements … for …` blocks must
+    /// survive lowering. Locks the item-tree source-map plumbing end to end.
+    #[test]
+    fn item_source_maps_carry_name_spans_and_docstrings() {
+        use baml_compiler2_ppir::item_data;
+
+        let mut db = make_db();
+        let src = r##"/// Alias docs.
+type MyAlias = string
+
+class MyClass { name string }
+
+enum MyEnum { A }
+
+interface MyIface {
+  function m(self) -> int
+}
+
+/// Impl docs.
+implements MyIface for MyClass {
+  function m(self) -> int { 1 }
+}
+
+function MyTemplate(x: string) -> string { `${x}` }
+
+client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
+
+function target() -> int { 1 }
+
+test my_test {
+  functions [target]
+  args {}
+}
+"##;
+        let file = db.add_file("spans.baml", src);
+        let text = |range: text_size::TextRange| {
+            &src[usize::from(range.start())..usize::from(range.end())]
+        };
+
+        // Select by name: the PPIR expanded index also holds synthetic
+        // `$stream` companions, whose spans are (correctly) defaulted.
+        let alias = *item_data::file_type_aliases(&db, file)
+            .iter()
+            .find(|&&a| item_data::type_alias_data(&db, a).name.as_str() == "MyAlias")
+            .unwrap();
+        assert_eq!(
+            text(item_data::type_alias_source_map(&db, alias).name_span),
+            "MyAlias"
+        );
+        assert_eq!(
+            item_data::type_alias_data(&db, alias).docstring.as_deref(),
+            Some("Alias docs.")
+        );
+
+        let class = *item_data::file_classes(&db, file)
+            .iter()
+            .find(|&&c| item_data::class_data(&db, c).name.as_str() == "MyClass")
+            .unwrap();
+        assert_eq!(
+            text(item_data::class_source_map(&db, class).name_span),
+            "MyClass"
+        );
+
+        let enum_loc = *item_data::file_enums(&db, file)
+            .iter()
+            .find(|&&e| item_data::enum_data(&db, e).name.as_str() == "MyEnum")
+            .unwrap();
+        assert_eq!(
+            text(item_data::enum_source_map(&db, enum_loc).name_span),
+            "MyEnum"
+        );
+
+        let iface = *item_data::file_interfaces(&db, file)
+            .iter()
+            .find(|&&i| item_data::interface_data(&db, i).name.as_str() == "MyIface")
+            .unwrap();
+        assert_eq!(
+            text(item_data::interface_source_map(&db, iface).name_span),
+            "MyIface"
+        );
+
+        let template = *item_data::file_functions(&db, file)
+            .iter()
+            .find(|&&f| item_data::function_data(&db, f).name.as_str() == "MyTemplate")
+            .unwrap();
+        assert_eq!(
+            text(item_data::function_source_map(&db, template).name_span),
+            "MyTemplate"
+        );
+
+        // `client Name = <expr>;` desugars to a top-level let, so its name
+        // span comes from the let source map, not a client item query.
+        let find_let = |name: &str| {
+            *item_data::file_lets(&db, file)
+                .iter()
+                .find(|&&l| item_data::let_data(&db, l).name.as_str() == name)
+                .unwrap()
+        };
+        assert_eq!(
+            text(item_data::let_source_map(&db, find_let("MyClient")).name_span),
+            "MyClient"
+        );
+
+        let test_loc = *item_data::file_tests(&db, file)
+            .iter()
+            .find(|&&t| item_data::test_data(&db, t).name.as_str() == "my_test")
+            .unwrap();
+        let test_spans = item_data::test_source_map(&db, test_loc);
+        assert_eq!(text(test_spans.name_span), "my_test");
+        assert!(text(test_spans.span).starts_with("test my_test"));
+
+        // The `implements … for …` block merges onto same-file `MyClass`, so it
+        // is an in-class impl — its docstring is intentionally absent today.
+        // A cross-file (free) impl keeps its docstring.
+        let in_class_impl = *item_data::class_impls(&db, class)
+            .first()
+            .expect("MyClass has an in-class impl");
+        assert_eq!(
+            item_data::impl_block_data(&db, in_class_impl)
+                .docstring
+                .as_deref(),
+            None,
+            "in-class impl docstrings are absent today"
+        );
+
+        let file_b = db.add_file(
+            "spans_b.baml",
+            "/// Free impl docs.\nimplements MyIface for int {\n  function m(self) -> int { 2 }\n}\n",
+        );
+        let free_impl = *item_data::file_free_impls(&db, file_b).first().unwrap();
+        assert_eq!(
+            item_data::impl_block_data(&db, free_impl)
+                .docstring
+                .as_deref(),
+            Some("Free impl docs.")
         );
     }
 }

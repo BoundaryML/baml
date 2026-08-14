@@ -15,14 +15,17 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// error: type mismatch: expected map<string, string> | null, got "not_a_map"
-//    ╭─[ client_remap_role_invalid_type.baml:1:1 ]
-//    │
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[client_remap_role_invalid_type.baml:1:1]
 //  1 │ ╭─▶ client<llm> MyClient {
-//    ┆ ┆
+//  2 │ │     provider openai
+//  3 │ │     options {
+//  4 │ │       model "gpt-4o"
+//  5 │ │       remap_roles "not_a_map"
+//  6 │ │     }
 //  7 │ ├─▶ }
-//    │ │
-//    │ ╰─────── type mismatch: expected map<string, string> | null, got "not_a_map"
-//    │
-//    │     Note: Error code: E0001
-// ───╯
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

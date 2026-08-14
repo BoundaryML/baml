@@ -1,0 +1,71 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0153
+
+  × `baml.AnyFunction` is a compiler builtin and cannot be implemented by hand; every function type implements it automatically
+   ╭─[anyfunction.baml:9:12]
+ 9 │ implements baml.AnyFunction for MyTool {
+   ·            ────────────────
+   ╰────
+
+  [type] E0154
+
+  × `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
+    ╭─[anyfunction.baml:12:25]
+ 12 │ function pick<T extends baml.AnyFunction>(f: T) -> T throws never {
+    ·                         ────────────────
+    ╰────
+
+  [type] E0154
+
+  × `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
+    ╭─[anyfunction.baml:16:24]
+ 16 │ class Holder<T extends baml.AnyFunction> {
+    ·                        ────────────────
+    ╰────
+
+  [type] E0154
+
+  × `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
+    ╭─[anyfunction.baml:21:25]
+ 21 │     type Callee extends baml.AnyFunction
+    ·                         ────────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[anyfunction.baml:45:55]
+ 45 │     let bad_ret: baml.AnyFunction<Returns = string> = web_search
+    ·                                                       ─────┬────
+    ·                                                            ╰── expected `baml.AnyFunction<Returns = string, Throws = unknown>`, found `(q: string) -> Doc[] throws ToolError`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[anyfunction.baml:46:56]
+ 46 │     let bad_throws: baml.AnyFunction<Throws = never> = web_search
+    ·                                                        ─────┬────
+    ·                                                             ╰── expected `baml.AnyFunction<Returns = unknown, Throws = never>`, found `(q: string) -> Doc[] throws ToolError`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[anyfunction.baml:47:38]
+ 47 │     let not_a_fn: baml.AnyFunction = 42
+    ·                                      ─┬
+    ·                                       ╰── expected `baml.AnyFunction<Returns = unknown, Throws = unknown>`, found `42`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[anyfunction.baml:49:57]
+ 49 │     let bad_widen: baml.AnyFunction<Returns = string> = narrow
+    ·                                                         ───┬──
+    ·                                                            ╰── expected `baml.AnyFunction<Returns = string, Throws = unknown>`, found `baml.AnyFunction<Returns = Doc[], Throws = unknown>`
+    ╰────

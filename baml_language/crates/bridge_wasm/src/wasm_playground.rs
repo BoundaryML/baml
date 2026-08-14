@@ -12,6 +12,8 @@ pub struct FunctionInfo {
     pub name: String,
     pub kind: FunctionKind,
     pub origin: FunctionOrigin,
+    pub signature: String,
+    pub source_position: FunctionSourcePosition,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
     /// `None` = no schema available (UI degrades to raw JSON); `Some(vec![])`
@@ -24,9 +26,20 @@ pub struct FunctionInfo {
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
+pub struct FunctionSourcePosition {
+    pub file: String,
+    pub line: u32,
+    pub column: u32,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
 pub struct ParamSchema {
     pub name: String,
     pub has_default: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_expression: Option<String>,
     pub schema: FieldSchema,
 }
 
@@ -99,6 +112,7 @@ impl From<bex_project::ParamSchema> for ParamSchema {
         ParamSchema {
             name: p.name,
             has_default: p.has_default,
+            default_expression: p.default_expression,
             schema: p.schema.into(),
         }
     }
@@ -210,6 +224,7 @@ pub struct TestInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
+    pub generation: u64,
     pub functions: Vec<FunctionInfo>,
     pub tests: Vec<TestInfo>,
     /// Shared type table for `FunctionInfo.params` refs; `None` = binary
@@ -244,6 +259,8 @@ pub enum PlaygroundNotification {
     ControlFlowGraphResult {
         function_name: String,
         graph: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<u32>,
     },
     #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
@@ -335,11 +352,18 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                     project,
                     update: ProjectUpdate {
                         is_bex_current: update.is_bex_current,
+                        generation: update.generation,
                         functions: update
                             .functions
                             .into_iter()
                             .map(|f| FunctionInfo {
                                 name: f.name,
+                                signature: f.signature,
+                                source_position: FunctionSourcePosition {
+                                    file: f.source_position.file,
+                                    line: f.source_position.line,
+                                    column: f.source_position.column,
+                                },
                                 kind: match f.kind {
                                     bex_project::FunctionKind::Llm => FunctionKind::Llm,
                                     bex_project::FunctionKind::Expr => FunctionKind::Expr,
@@ -406,9 +430,11 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
             bex_project::PlaygroundNotification::ControlFlowGraphResult {
                 function_name,
                 graph,
+                request_id,
             } => PlaygroundNotification::ControlFlowGraphResult {
                 function_name,
                 graph,
+                request_id,
             },
             bex_project::PlaygroundNotification::CursorContext { context } => {
                 PlaygroundNotification::CursorContext { context }
@@ -489,6 +515,7 @@ mod tests {
         let src = SrcParam {
             name: "p".to_string(),
             has_default: true,
+            default_expression: Some("constants.DEFAULT".to_string()),
             schema: Src::Union {
                 variants: vec![
                     Src::String,

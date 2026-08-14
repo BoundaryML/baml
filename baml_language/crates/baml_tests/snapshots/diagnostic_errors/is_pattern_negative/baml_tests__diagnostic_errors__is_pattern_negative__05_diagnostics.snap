@@ -2,72 +2,58 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved name: x
-    ╭─[ main.baml:10:5 ]
-    │
+  [type] E0003
+
+  × unresolved name: `x`
+    ╭─[main.baml:10:5]
  10 │     x
-    │     ┬  
-    │     ╰── unresolved name: x
-    │ 
-    │ Note: Error code: E0003
-────╯
+    ·     ─
+    ╰────
 
-  [type] error: unresolved name: x
-    ╭─[ main.baml:17:28 ]
-    │
+  [type] E0003
+
+  × unresolved name: `x`
+    ╭─[main.baml:17:28]
  17 │     if (v is let x: int) { x } else { 0 }
-    │                            ┬  
-    │                            ╰── unresolved name: x
-    │ 
-    │ Note: Error code: E0003
-────╯
+    ·                            ─
+    ╰────
 
-  [type] error: or-pattern binding `x` has conflicting types: int and string
-    ╭─[ main.baml:23:34 ]
-    │
+  [type] E0001
+
+  × or-pattern binding `x` has conflicting types: int and string
+    ╭─[main.baml:23:18]
  23 │     let _ = v is (let x: int) | (let x: string)
-    │                                  ──────┬──────  
-    │                                        ╰──────── or-pattern binding `x` has conflicting types: int and string
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                  ──────────────────────────────
+    ╰────
 
-  [type] error: unresolved name: x
-    ╭─[ main.baml:24:5 ]
-    │
+  [type] E0003
+
+  × unresolved name: `x`
+    ╭─[main.baml:24:5]
  24 │     x
-    │     ┬  
-    │     ╰── unresolved name: x
-    │ 
-    │ Note: Error code: E0003
-────╯
+    ·     ─
+    ╰────
 
-  [type] error: unresolved name: Frobnitz
-    ╭─[ main.baml:30:10 ]
-    │
+  [type] E0003
+
+  × unresolved name: `Frobnitz`
+    ╭─[main.baml:30:10]
  30 │     v is Frobnitz { x }
-    │          ───────┬──────  
-    │                 ╰──────── unresolved name: Frobnitz
-    │ 
-    │ Note: Error code: E0003
-────╯
+    ·          ──────────────
+    ╰────
 
-  [type] error: unresolved type: Missing
-    ╭─[ main.baml:36:22 ]
-    │
+  [type] E0002
+
+  × unresolved type: Missing
+    ╭─[main.baml:36:22]
  36 │     v is WrapGeneric<Missing>
-    │                      ───┬───  
-    │                         ╰───── unresolved type: Missing
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                      ───────
+    ╰────
 
-  [type] error: unresolved type: Frobnitz
-    ╭─[ main.baml:41:10 ]
-    │
+  [type] E0002
+
+  × unresolved type: Frobnitz
+    ╭─[main.baml:41:10]
  41 │     v is Frobnitz
-    │          ────┬───  
-    │              ╰───── unresolved type: Frobnitz
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·          ────────
+    ╰────

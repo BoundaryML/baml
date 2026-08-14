@@ -2,72 +2,50 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
-   ╭─[ main.baml:3:9 ]
-   │
+  [type] E0001
+
+  × type `Box` expects 1 type argument(s), got 0
+   ╭─[main.baml:3:9]
  3 │         root.llm.openai.Box => 1
-   │         ─────────┬─────────  
-   │                  ╰─────────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·         ───────────────────
+   ╰────
 
-  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
-   ╭─[ main.baml:9:9 ]
-   │
+  [type] E0001
+
+  × type `Box` expects 1 type argument(s), got 0
+   ╭─[main.baml:9:9]
  9 │         llm.openai.Box => 1
-   │         ───────┬──────  
-   │                ╰──────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·         ──────────────
+   ╰────
 
-  [type] error: type `Box` expects 1 type argument(s), got 2
-    ╭─[ main.baml:15:9 ]
-    │
+  [type] E0001
+
+  × type `Box` expects 1 type argument(s), got 2
+    ╭─[main.baml:15:9]
  15 │         root.llm.openai.Box<int, string> => 1,
-    │         ────────────────┬───────────────  
-    │                         ╰───────────────── type `Box` expects 1 type argument(s), got 2
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·         ────────────────────────────────
+    ╰────
 
-  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box<int, string>
-    ╭─[ main.baml:15:9 ]
-    │
- 15 │         root.llm.openai.Box<int, string> => 1,
-    │         ────────────────┬───────────────  
-    │                         ╰───────────────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box<int, string>
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0063
 
-  [type] error: type `Response` expects 0 type argument(s), got 1
-    ╭─[ main.baml:22:9 ]
-    │
+  × unreachable arm
+    ╭─[main.baml:16:14]
+ 16 │         _ => 0
+    ·              ─
+    ╰────
+
+  [type] E0001
+
+  × type `Response` expects 0 type argument(s), got 1
+    ╭─[main.baml:22:9]
  22 │         root.llm.openai.Response<int> => 1
-    │         ──────────────┬──────────────  
-    │                       ╰──────────────── type `Response` expects 0 type argument(s), got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·         ─────────────────────────────
+    ╰────
 
-  [type] error: type mismatch: expected root.llm.openai.Response, got root.llm.openai.Response<int>
-    ╭─[ main.baml:22:9 ]
-    │
- 22 │         root.llm.openai.Response<int> => 1
-    │         ──────────────┬──────────────  
-    │                       ╰──────────────── type mismatch: expected root.llm.openai.Response, got root.llm.openai.Response<int>
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0007
 
-  [type] error: class `llm.openai.Response` has no field `missing`
-    ╭─[ main.baml:28:9 ]
-    │
+  × class `llm.openai.Response` has no field `missing`
+    ╭─[main.baml:28:9]
  28 │         root.llm.openai.Response { missing } => 1,
-    │         ──────────────────┬─────────────────  
-    │                           ╰─────────────────── class `llm.openai.Response` has no field `missing`
-    │ 
-    │ Note: Error code: E0007
-────╯
+    ·         ────────────────────────────────────
+    ╰────

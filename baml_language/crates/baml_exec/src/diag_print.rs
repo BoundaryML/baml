@@ -43,7 +43,7 @@ pub fn print_anyhow_error(err: &anyhow::Error) {
     let causes: Vec<_> = err.chain().skip(1).collect();
     if !causes.is_empty() {
         eprintln!();
-        eprintln!("Caused by:");
+        eprintln!("caused by:");
         for (i, cause) in causes.iter().enumerate() {
             eprintln!("    {i}: {cause}");
         }

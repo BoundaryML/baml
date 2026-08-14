@@ -2,7 +2,7 @@
 // access concrete-class fields like `breed` that aren't on the interface.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {

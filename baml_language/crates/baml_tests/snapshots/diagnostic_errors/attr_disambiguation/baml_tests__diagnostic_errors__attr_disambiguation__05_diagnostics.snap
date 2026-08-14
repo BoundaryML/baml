@@ -2,172 +2,176 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ nested.baml:12:12 ]
-    │
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+   ╭─[nested.baml:1:1]
+ 1 │ // Group D: @alias in nested type positions.
+   · ▲
+   ╰────
+
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[nested.baml:12:12]
  12 │   d2 (NFoo @alias("d2_alias"))[]
-    │            ─────────┬────────  
-    │                     ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·            ─────────┬────────
+    ·                     ╰── field attribute here
+    ╰────
 
-  [type] error: map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-    ╭─[ nested.baml:18:6 ]
-    │
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[nested.baml:18:6]
  18 │   d4 map<NFoo @alias("d4_alias"), NBar>
-    │      ─────────────────┬────────────────  
-    │                       ╰────────────────── map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-    │ 
-    │ Note: Error code: E0067
-────╯
+    ·      ──────────────────────────────────
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ nested.baml:18:15 ]
-    │
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[nested.baml:18:6]
  18 │   d4 map<NFoo @alias("d4_alias"), NBar>
-    │               ─────────┬────────  
-    │                        ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·      ──────────────────────────────────
+    ╰────
 
-  [type] error: map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-    ╭─[ nested.baml:21:6 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[nested.baml:18:15]
+ 18 │   d4 map<NFoo @alias("d4_alias"), NBar>
+    ·               ─────────┬────────
+    ·                        ╰── field attribute here
+    ╰────
+
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[nested.baml:21:6]
  21 │   d5 map<NFoo @stream.done, NBar>
-    │      ──────────────┬─────────────  
-    │                    ╰─────────────── map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-    │ 
-    │ Note: Error code: E0067
-────╯
+    ·      ────────────────────────────
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ nested.baml:24:12 ]
-    │
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[nested.baml:21:6]
+ 21 │   d5 map<NFoo @stream.done, NBar>
+    ·      ────────────────────────────
+    ╰────
+
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[nested.baml:24:12]
  24 │   d6 (NFoo @alias("d6_alias") | NBar)[]
-    │            ─────────┬────────  
-    │                     ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·            ─────────┬────────
+    ·                     ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ nested.baml:30:12 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[nested.baml:30:12]
  30 │   d8 (NFoo @alias("d8_alias"))[] @stream.done
-    │            ─────────┬────────  
-    │                     ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·            ─────────┬────────
+    ·                     ╰── field attribute here
+    ╰────
 
-  [type] error: map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-    ╭─[ nested.baml:36:7 ]
-    │
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[nested.baml:36:19]
  36 │   d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
-    │       ────────────────────────┬───────────────────────  
-    │                               ╰───────────────────────── map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-    │ 
-    │ Note: Error code: E0067
-────╯
+    ·                   ───────────────────────────────────
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ nested.baml:36:28 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[nested.baml:36:28]
  36 │   d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
-    │                            ─────────┬─────────  
-    │                                     ╰─────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·                            ─────────┬─────────
+    ·                                     ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ non_field.baml:10:16 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[non_field.baml:10:16]
  10 │ type E1 = EFoo @alias("e1_alias")
-    │                ─────────┬────────  
-    │                         ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·                ─────────┬────────
+    ·                         ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ non_field.baml:16:16 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[non_field.baml:16:16]
  16 │ type E3 = EFoo @alias("e3_alias") @stream.done
-    │                ─────────┬────────  
-    │                         ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·                ─────────┬────────
+    ·                         ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ non_field.baml:19:24 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[non_field.baml:19:24]
  19 │ type E4 = EA | EB | EC @alias("e4_alias")
-    │                        ─────────┬────────  
-    │                                 ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·                        ─────────┬────────
+    ·                                 ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ non_field.baml:22:21 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[non_field.baml:22:21]
  22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                     ─────────┬────────  
-    │                              ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·                     ─────────┬────────
+    ·                              ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ non_field.baml:32:23 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[non_field.baml:32:23]
  32 │ function E7() -> EFoo @alias("e7_alias") {
-    │                       ─────────┬────────  
-    │                                ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·                       ─────────┬────────
+    ·                                ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ unions.baml:22:14 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[unions.baml:22:14]
  22 │   b5 UA | UB @alias("b5_alias") | UC
-    │              ─────────┬────────  
-    │                       ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·              ─────────┬────────
+    ·                       ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ unions.baml:25:9 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[unions.baml:25:9]
  25 │   b6 UA @alias("b6_alias") | UB | UC
-    │         ─────────┬────────  
-    │                  ╰────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·         ─────────┬────────
+    ·                  ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ unions.baml:48:16 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[unions.baml:48:16]
  48 │   b13 UA | (UB @alias("b13_alias"))
-    │                ─────────┬─────────  
-    │                         ╰─────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·                ─────────┬─────────
+    ·                         ╰── field attribute here
+    ╰────
 
-  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
-    ╭─[ unions.baml:51:16 ]
-    │
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[unions.baml:51:16]
  51 │   b14 (UA | UB @alias("b14_alias"))
-    │                ─────────┬─────────  
-    │                         ╰─────────── field attribute here
-    │ 
-    │ Note: Error code: E0106
-────╯
+    ·                ─────────┬─────────
+    ·                         ╰── field attribute here
+    ╰────

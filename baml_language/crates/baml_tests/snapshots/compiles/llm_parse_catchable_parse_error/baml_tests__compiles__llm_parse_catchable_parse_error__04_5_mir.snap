@@ -1,44 +1,207 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15456
 ---
 === MIR2 ===
-fn user.ExtractInvoice(text: string, client: baml.llm.Client) -> Invoice {
+fn user.ExtractInvoice(text: string, client: null | ai.Client) -> Invoice {
     // Locals:
     let _0: Invoice // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: null | ai.Client // client // param
     let _3: bool
-    let _4: map<string, unknown>
+    let _4: ai.RunResult<Invoice>
+    let _5: ai.Agent<Invoice>
+    let _6: type
+    let _7: ai.FunctionSpec<Invoice>
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = load_type(Invoice);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        _7 = call const fn user.ExtractInvoice$spec(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<Invoice, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Invoice>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.ExtractInvoice$parse(json: string) -> Invoice {
+    // Locals:
+    let _0: Invoice // _0 // return
+    let _1: string // json // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Invoice);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ExtractInvoice$render_prompt(text: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // text // param
+    let _2: ai.FunctionSpec<Invoice>
+    let _3: string
+    let _4: type
     let _5: type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = call const fn user.ExtractInvoice$spec(copy _1) -> [bb1];
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _4 = load_type(Invoice);
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
+        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
+    }
+
+    bb3: {
         _5 = load_type(Invoice);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
+        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
     }
 
-    bb3: {
+    bb4: {
         return;
     }
 }
 
-fn user.ExtractInvoice$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     // Locals:
-    let _0: baml.http.Request // _0 // return
+    let _0: ai.FunctionSpec<Invoice> // _0 // return
+    let _1: string // text // param [captured]
+    let _2: map<string, unknown>
+    let _3: (string) -> ai.Prompt throws never
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+
+    bb0: {
+        _2 = { const "text": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _0 = ai.FunctionSpec<Invoice> { const "ExtractInvoice", copy _2, copy _3, copy _4, const item user.GPT4o };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(ExtractInvoice$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: string
+    let _7: int
+    let _8: string[]
+    let _9: string
+    let _10: type
+    let _11: int
+    let _12: unknown[]
+    let _13: string
+    let _14: type
+    let _15: int
+    let _16: string[]
+    let _17: ""
+    let _18: type
+    let _19: string[]
+    let _20: unknown[]
+    let _21: string[]
+    let _22: baml.TaggedString
+    let _23: unknown[]
+    let _24: baml.TaggedString
+
+    bb0: {
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _6 = copy _5;
+        _5 = copy _6 + const "extract an invoice from ";
+        _8 = copy _3;
+        _9 = copy _5;
+        _10 = load_type(string);
+        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
+    }
+
+    bb1: {
+        _5 = const "";
+        _12 = copy _4;
+        _13 = copy capture[0];
+        _14 = load_type(unknown);
+        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
+    }
+
+    bb2: {
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
+    }
+
+    bb3: {
+        _19 = copy _3;
+        _20 = copy _4;
+        _2 = baml.TaggedString { copy _19, copy _20 };
+        _22 = copy _2;
+        _21 = copy _22.0;
+        _24 = copy _2;
+        _23 = copy _24.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.ExtractInvoice$stream(text: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<null | Invoice$stream, Invoice> {
+    // Locals:
+    let _0: ai.stream.Stream<null | Invoice$stream, Invoice> // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
-    let _4: map<string, unknown>
+    let _4: ai.FunctionSpec<Invoice>
+    let _5: type
+    let _6: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -46,114 +209,35 @@ fn user.ExtractInvoice$build_request(text: string, client: baml.llm.Client) -> b
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn user.ExtractInvoice$spec(copy _1) -> [bb3];
     }
 
     bb3: {
+        _5 = load_type(Invoice$stream | null);
+        _6 = load_type(Invoice);
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
 
-fn user.ExtractInvoice$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.TryExtract(json: string) -> null | Invoice {
     // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.GPT4o$new(lenient: bool) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: bool // lenient // param
-    let _2: baml.llm.PrimitiveClientOptions
-    let _3: string
-    let _4: map<string, string>
-    let _5: map<string, string>
-    let _6: map<string, unknown>
-
-    bb0: {
-        _3 = call const fn baml.env.get_or_panic_lenient(const "OPENAI_API_KEY", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _4 = {  }: map<string, string>;
-        _5 = {  }: map<string, string>;
-        _6 = {  }: map<string, unknown>;
-        _2 = baml.llm.PrimitiveClientOptions { const "gpt-4o", const null, const null, const null, const null, const null, const null, const null, const null, copy _3, const null, const null, copy _4, copy _5, copy _6 };
-        _0 = baml.llm.PrimitiveClient { const "GPT4o", const "openai", copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.TryExtract(json: string) -> Invoice | null {
-    // Locals:
-    let _0: Invoice | null // _0 // return
+    let _0: null | Invoice // _0 // return
     let _1: string // json // param
     let _2: unknown // _
     let _3: bool
     let _4: string
 
     bb0: {
-        _0 = call const fn user.ExtractInvoice$parse(copy _1, const <omitted>) -> [bb4, unwind: bb1];
+        _0 = call const fn user.ExtractInvoice$parse(copy _1) -> [bb4, unwind: bb1];
     }
 
     bb1: {

@@ -8,7 +8,7 @@ pub(crate) use output_format::{
     Class, ClassField, Enum, EnumValue, HoistClasses, MapStyle, RenderOptions, RenderSetting,
     is_text_or_image_union,
 };
-pub use sap::SapStreamCache;
+pub use sap::SapParseCache;
 
 /// Errors that can occur during LLM operations (render, specialize, `build_request`).
 #[derive(Debug, thiserror::Error)]

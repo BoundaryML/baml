@@ -164,14 +164,13 @@ function MissingReturnExpression() -> int {
 
 //----
 //- diagnostics
-// error: missing return value of type int
-//      ╭─[ expr_missing_semicolons.baml:160:43 ]
-//      │
+// E0001
+//
+//   × mismatched types
+//      ╭─[expr_missing_semicolons.baml:160:43]
 //  160 │ ╭─▶ function MissingReturnExpression() -> int {
-//      ┆ ┆
+//  161 │ │       let x = 42;  // This is a statement, not a return expression
+//  162 │ │       // ERROR: missing return expression
 //  163 │ ├─▶ }
-//      │ │
-//      │ ╰────── missing return value of type int
-//      │
-//      │     Note: Error code: E0029
-// ─────╯
+//      · ╰──── expected `int`, found `void`
+//      ╰────

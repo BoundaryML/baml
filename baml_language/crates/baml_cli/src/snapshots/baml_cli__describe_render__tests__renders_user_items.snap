@@ -1,0 +1,32 @@
+---
+source: crates/baml_cli/src/describe_render.rs
+expression: out
+---
+════ Widget ════
+class Widget   app.baml:2
+  /// Widget docs.
+
+fields:
+  name string
+      Visible name.
+  _cache string
+
+blanket implementations:
+  baml.Concrete   (<builtin>/baml/core.baml:13)
+════ Mode ════
+enum Mode   app.baml:8
+
+variants:
+  Fast
+  Slow
+
+blanket implementations:
+  baml.Concrete   (<builtin>/baml/core.baml:13)
+════ Id ════
+type Id = string   app.baml:10
+════ greet ════
+function greet(name: string) -> string throws baml.errors.Io   app.baml:13
+  /// Greets.
+════ Widget.name ════
+Widget.name string
+  /// Visible name.

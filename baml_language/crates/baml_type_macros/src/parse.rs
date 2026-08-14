@@ -179,6 +179,8 @@ pub(crate) struct MVariant {
     pub(crate) ident: Ident,
     pub(crate) fields: Fields,
     pub(crate) axis: usize,
+    /// Stable discriminant in the master enum. Gaps are wire-format tombstones.
+    pub(crate) discriminant: u8,
     /// Whether the variant carries a `TyAttr` (a named `attr` field or a
     /// trailing tuple `TyAttr`). Attr-less template leaves get accessor
     /// fallbacks instead of a compile error.
@@ -288,8 +290,29 @@ fn resolve_variant(
         )
     })?;
     let axis = axis_index(&axis_ident)?;
-    // A variant need not carry a `TyAttr`: template-only leaves (`TypeArgRef`,
-    // `Wildcard`) are pure structure with no streaming metadata. The generated
+    let discriminant = match variant.discriminant.as_ref().map(|(_, expr)| expr) {
+        Some(syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(value),
+            ..
+        })) => value.base10_parse::<u8>()?,
+        Some(expr) => {
+            return Err(syn::Error::new_spanned(
+                expr,
+                "type-family variants require an explicit u8 integer discriminant",
+            ));
+        }
+        None => {
+            return Err(syn::Error::new(
+                span,
+                format!(
+                    "variant `{}` requires an explicit discriminant to stabilize its Borsh tag",
+                    variant.ident
+                ),
+            ));
+        }
+    };
+    // A variant need not carry a `TyAttr`: a template-only leaf (`TypeArgRef`)
+    // is pure structure with no streaming metadata. The generated
     // `attr()`/`with_attr()` accessors fall back to `TyAttr::EMPTY` / identity
     // for them (see `emit::attr_arm`). `has_attr` records which case applies so
     // the accessor arms don't need to re-derive it.
@@ -299,6 +322,7 @@ fn resolve_variant(
         ident: variant.ident,
         fields: variant.fields,
         axis,
+        discriminant,
         has_attr,
     })
 }

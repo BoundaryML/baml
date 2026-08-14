@@ -17,14 +17,13 @@
 /// `Object::HostClosure`), dropping omitted optionals — so each bridge applies
 /// its own calling convention (TS `$opts`, Python kwargs) without needing the
 /// callee type on the wire.
-function call_host_value<T, E>(handle: HostValue, args: unknown[])
-    -> T throws E {
-  $rust_io_function
+function call_host_value<T, E>(handle: HostValue, args: unknown[]) -> T throws E {
+    $rust_io_function
 }
 
 /// Opaque builtin class. Construction is reserved to the bridge
 /// boundary; users cannot construct or destructure it.
 class HostValue {
-  // intentionally empty; the value lives in the BexExternalValue
-  // HostValue slot.
+    // intentionally empty; the value lives in the BexExternalValue
+    // HostValue slot.
 }

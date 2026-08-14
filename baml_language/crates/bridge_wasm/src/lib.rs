@@ -45,9 +45,13 @@ use std::{
 
 mod error;
 mod handle;
-mod host_value;
 mod registry;
-mod send_wrapper;
+mod host_value {
+    pub(crate) use sys_wasm::WasmHost;
+}
+mod send_wrapper {
+    pub(crate) use sys_wasm::{SendFuture, SendWrapper};
+}
 mod wasm_env;
 mod wasm_fs;
 mod wasm_http;
@@ -56,6 +60,7 @@ mod wasm_io_fs;
 mod wasm_io_glob;
 mod wasm_lsp;
 mod wasm_playground;
+mod wasm_random;
 mod wasm_sys;
 mod wasm_time;
 
@@ -92,9 +97,12 @@ pub use bridge_ctypes::{
     HANDLE_TABLE, baml_bridge, external_to_outbound, playground_run_args_to_bex_values,
 };
 pub use error::BridgeError;
-pub use host_value::{complete_host_call, register_host_callable};
 use js_sys::Function;
 use serde::Deserialize;
+pub use sys_wasm::{
+    complete_host_call, mint_host_value_key, register_host_callable,
+    register_host_value_release_callback, release_host_callable,
+};
 use wasm_bindgen::prelude::*;
 pub use wasm_lsp::LspNotification;
 
@@ -517,6 +525,10 @@ fn run_filter_from_js(filter: JsValue) -> Result<RunFilter, String> {
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
 #[wasm_bindgen(start)]
 pub fn start() {
+    bex_project::register_inbound_union_ambiguity_policy(
+        bex_project::InboundUnionAmbiguityPolicy::SelectDefault,
+    )
+    .expect("the browser TypeScript bridge must own the process-wide inbound policy");
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
     LOGGER_INIT.call_once(|| {
@@ -533,6 +545,12 @@ pub fn start() {
 #[wasm_bindgen]
 pub fn version() -> String {
     baml_version::CANONICAL_VERSION.to_string()
+}
+
+/// Get the Git commit used to build the `bridge_wasm` crate.
+#[wasm_bindgen(js_name = commitHash)]
+pub fn commit_hash() -> String {
+    env!("BRIDGE_WASM_GIT_SHA").to_string()
 }
 
 /// Returns the build timestamp (unix seconds) for hot-reload / build-identity checks.
@@ -749,12 +767,14 @@ impl BamlWasmRuntime {
                 std::sync::Arc::clone(&wasm_vfs_arc),
             )))
             .with_time_instance(std::sync::Arc::new(wasm_time::WasmTime))
+            .with_random_instance(std::sync::Arc::new(wasm_random::WasmRandom))
             // One `WasmHost` per runtime, holding *this* runtime's JS
             // `host_dispatch` callback so a BAML→host call dispatches through
             // the correct wrapper (a process-global callback would let a second
             // runtime clobber the first's).
             .with_host_instance(std::sync::Arc::new(host_value::WasmHost::new(
                 host_dispatch_fn,
+                false,
             )))
             .build();
         let sys_ops = std::sync::Arc::new(sys_ops);
@@ -1463,8 +1483,14 @@ impl BamlWasmRuntime {
     /// Triggers a `playground_send_notification` callback with a
     /// `ControlFlowGraphResult` notification containing the serialized graph.
     #[wasm_bindgen(js_name = requestControlFlowGraph)]
-    pub fn request_control_flow_graph(&self, _project: String, function_name: &str) {
-        self.bex.request_control_flow_graph(function_name);
+    pub fn request_control_flow_graph(
+        &self,
+        _project: String,
+        function_name: &str,
+        request_id: Option<u32>,
+    ) {
+        self.bex
+            .request_control_flow_graph(function_name, request_id);
     }
 
     /// Handle a cursor position change from the editor.

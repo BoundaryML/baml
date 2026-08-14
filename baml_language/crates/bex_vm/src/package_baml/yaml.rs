@@ -66,7 +66,7 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
             }
             // `baml.json.json` maps: string keys, `json` values.
             Ok(Value::object(vm.alloc_map(
-                baml_type::RuntimeTy::string(),
+                baml_type::RealizedTy::string(),
                 super::json::json_alias_ty(),
                 entries,
             )))

@@ -8,9 +8,10 @@ use lsp_types::{Position, Range};
 
 /// A line index for efficient offset-to-position conversion.
 ///
-/// This is a simple implementation that stores line start offsets.
-/// For a file with N lines, we store N+1 offsets (including the end).
-pub struct LineIndex {
+/// This stores each line's UTF-8 byte start and converts columns to and from
+/// the UTF-16 code units used by VS Code and the playground protocol.
+pub struct LineIndex<'a> {
+    text: &'a str,
     /// Byte offsets of line starts. `line_starts[0]` is always 0.
     /// `line_starts[i]` is the byte offset of the start of line `i`.
     line_starts: Vec<u32>,
@@ -18,29 +19,44 @@ pub struct LineIndex {
     len: u32,
 }
 
-impl LineIndex {
+impl<'a> LineIndex<'a> {
     /// Create a new line index from source text.
-    pub fn new(text: &str) -> Self {
+    pub fn new(text: &'a str) -> Self {
         let mut line_starts = vec![0];
-
-        for (offset, c) in text.char_indices() {
-            if c == '\n' {
-                // The next line starts after the newline character
-                line_starts.push(to_u32_saturating(offset + 1));
+        let bytes = text.as_bytes();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            match bytes[offset] {
+                b'\n' => {
+                    offset += 1;
+                    line_starts.push(to_u32_saturating(offset));
+                }
+                b'\r' => {
+                    offset += if bytes.get(offset + 1) == Some(&b'\n') {
+                        2
+                    } else {
+                        1
+                    };
+                    line_starts.push(to_u32_saturating(offset));
+                }
+                _ => offset += 1,
             }
         }
 
         Self {
+            text,
             line_starts,
             len: to_u32_saturating(text.len()),
         }
     }
 
-    /// Convert a byte offset to an LSP position (0-indexed line and column).
+    /// Convert a UTF-8 byte offset to an LSP position with a UTF-16 column.
     ///
-    /// Returns `None` if the offset is out of bounds.
+    /// VS Code and the playground wire use UTF-16 code units for columns.
+    /// Returns `None` if the offset is out of bounds or inside a UTF-8 code point.
     pub fn offset_to_position(&self, offset: u32) -> Option<Position> {
-        if offset > self.len {
+        let offset_usize = offset as usize;
+        if offset > self.len || !self.text.is_char_boundary(offset_usize) {
             return None;
         }
 
@@ -50,8 +66,11 @@ impl LineIndex {
             Err(line) => line.saturating_sub(1), // Between lines - use previous line
         };
 
-        let line_start = self.line_starts[line];
-        let column = offset - line_start;
+        let line_start = self.line_starts[line] as usize;
+        let content_end = self.line_content_end(line);
+        let clamped_offset = offset_usize.min(content_end);
+        let column =
+            to_u32_saturating(self.text[line_start..clamped_offset].encode_utf16().count());
 
         Some(Position {
             line: to_u32_saturating(line),
@@ -59,9 +78,10 @@ impl LineIndex {
         })
     }
 
-    /// Convert an LSP position to a byte offset.
+    /// Convert an LSP position with a UTF-16 column to a UTF-8 byte offset.
     ///
-    /// Returns `None` if the position is out of bounds.
+    /// Returns `None` if the line is out of bounds or the column falls inside
+    /// a surrogate pair. Columns beyond the line clamp to its content end.
     pub fn position_to_offset(&self, pos: &Position) -> Option<u32> {
         let line = pos.line as usize;
 
@@ -69,20 +89,39 @@ impl LineIndex {
             return None;
         }
 
-        let line_start = self.line_starts[line];
-        let offset = line_start + pos.character;
-
-        if offset > self.len {
-            // Clamp to end of file
-            Some(self.len)
-        } else {
-            Some(offset)
+        let line_start = self.line_starts[line] as usize;
+        let content_end = self.line_content_end(line);
+        let line_text = &self.text[line_start..content_end];
+        let mut utf16_column = 0;
+        for (byte_column, ch) in line_text.char_indices() {
+            if utf16_column == pos.character {
+                return Some(to_u32_saturating(line_start + byte_column));
+            }
+            let next_column = utf16_column
+                + u32::try_from(ch.len_utf16()).expect("a char uses at most two UTF-16 code units");
+            if next_column > pos.character {
+                return None;
+            }
+            utf16_column = next_column;
         }
+        Some(to_u32_saturating(content_end))
     }
 
     /// Get the number of lines in the file.
     pub fn line_count(&self) -> usize {
         self.line_starts.len()
+    }
+
+    fn line_content_end(&self, line: usize) -> usize {
+        let start = self.line_starts[line] as usize;
+        let mut end = self.line_starts.get(line + 1).copied().unwrap_or(self.len) as usize;
+        if end > start && self.text.as_bytes()[end - 1] == b'\n' {
+            end -= 1;
+        }
+        if end > start && self.text.as_bytes()[end - 1] == b'\r' {
+            end -= 1;
+        }
+        end
     }
 }
 
@@ -106,24 +145,6 @@ pub fn span_to_lsp_range(text: &str, span: &Span) -> Range {
     Range { start, end }
 }
 
-/// Convert a `baml_base::Span` to an LSP `Range` using a pre-built line index.
-///
-/// This is more efficient when converting multiple spans from the same file.
-pub fn span_to_lsp_range_with_index(line_index: &LineIndex, span: &Span) -> Range {
-    let start_offset: u32 = span.range.start().into();
-    let end_offset: u32 = span.range.end().into();
-
-    let start = line_index
-        .offset_to_position(start_offset)
-        .unwrap_or(Position {
-            line: 0,
-            character: 0,
-        });
-    let end = line_index.offset_to_position(end_offset).unwrap_or(start);
-
-    Range { start, end }
-}
-
 /// Convert an LSP `Position` to a byte offset.
 pub fn lsp_position_to_offset(text: &str, pos: &Position) -> usize {
     let line_index = LineIndex::new(text);
@@ -131,35 +152,6 @@ pub fn lsp_position_to_offset(text: &str, pos: &Position) -> usize {
         .position_to_offset(pos)
         .map(|o| o as usize)
         .unwrap_or(text.len())
-}
-
-/// Convert a byte offset to an LSP `Position`.
-pub fn offset_to_lsp_position(text: &str, offset: usize) -> Position {
-    let line_index = LineIndex::new(text);
-    line_index
-        .offset_to_position(to_u32_saturating(offset))
-        .unwrap_or(Position {
-            line: 0,
-            character: 0,
-        })
-}
-
-/// Convert a `text_size::TextRange` to an LSP `Range`.
-pub fn text_range_to_lsp_range(text: &str, range: text_size::TextRange) -> Range {
-    let line_index = LineIndex::new(text);
-
-    let start_offset: u32 = range.start().into();
-    let end_offset: u32 = range.end().into();
-
-    let start = line_index
-        .offset_to_position(start_offset)
-        .unwrap_or(Position {
-            line: 0,
-            character: 0,
-        });
-    let end = line_index.offset_to_position(end_offset).unwrap_or(start);
-
-    Range { start, end }
 }
 
 /// Get the word at a given position in the text.
@@ -301,6 +293,49 @@ mod tests {
                 character: 5
             }),
             Some(11)
+        );
+    }
+
+    #[test]
+    fn test_line_index_uses_utf16_columns() {
+        let text = "a🚀é\r\nnext";
+        let index = LineIndex::new(text);
+
+        assert_eq!(
+            index.offset_to_position(5),
+            Some(Position {
+                line: 0,
+                character: 3
+            })
+        );
+        assert_eq!(
+            index.offset_to_position(7),
+            Some(Position {
+                line: 0,
+                character: 4
+            })
+        );
+        assert_eq!(
+            index.position_to_offset(&Position {
+                line: 0,
+                character: 3,
+            }),
+            Some(5)
+        );
+        assert_eq!(
+            index.position_to_offset(&Position {
+                line: 0,
+                character: 2,
+            }),
+            None,
+            "a UTF-16 column inside the emoji surrogate pair is invalid"
+        );
+        assert_eq!(
+            index.offset_to_position(9),
+            Some(Position {
+                line: 1,
+                character: 0
+            })
         );
     }
 

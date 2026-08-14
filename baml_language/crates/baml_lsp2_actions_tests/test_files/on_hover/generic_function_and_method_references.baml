@@ -10,7 +10,7 @@ class Wrapper<T> {
 }
 
 interface MyInterface {
-  function myMethod(self) -> int
+  function myMethod(self) -> int throws never
 }
 
 class MyClass {
@@ -54,7 +54,7 @@ function example() -> void {
 // ```
 // hover at generic_function_and_method_references.baml:31:30
 // ```baml
-// inferredInterfaceMethod: (self: Self) -> int throws never
+// inferredInterfaceMethod: (self: !error) -> int throws never
 // ```
 // hover at generic_function_and_method_references.baml:34:21
 // ```baml

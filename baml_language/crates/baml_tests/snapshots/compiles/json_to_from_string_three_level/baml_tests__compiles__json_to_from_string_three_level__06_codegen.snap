@@ -1,30 +1,22 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13220
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function user.level1(s: string) -> T {
+function user.level1(s: string) -> #0 {
     load_type #0
     load_var s
     call baml.json.from_string
     return
 }
 
-function user.level2(s: string) -> T {
+function user.level2(s: string) -> #0 {
     load_type #0
     load_var s
     call user.level1
     return
 }
 
-function user.level3(s: string) -> T {
+function user.level3(s: string) -> #0 {
     load_type #0
     load_var s
     call user.level2

@@ -13,6 +13,10 @@ import (
 	"math"
 	"reflect"
 	"testing"
+
+	pb "bridge_go/cffi/proto/baml_bridge/cffi/v1"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // --- coerceToType range/precision checks -------------------------------------
@@ -242,11 +246,28 @@ func TestEncodeCallArgsRollsBackOnLaterFailure(t *testing.T) {
 	_, err := encodeCallArgs(map[string]any{
 		"callback": cb,
 		"bad":      unencodable{},
-	})
+	}, "TestFunction", 1)
 	if err == nil {
 		t.Fatal("expected encodeCallArgs to fail on the unencodable kwarg")
 	}
 	if countRegistry() != before {
 		t.Fatalf("encodeCallArgs should have rolled back the callable: before=%d now=%d", before, countRegistry())
+	}
+}
+
+func TestEncodeCallArgsAlwaysSetsFunctionTarget(t *testing.T) {
+	encoded, err := encodeCallArgs(map[string]any{}, "TestFunction", 7)
+	if err != nil {
+		t.Fatalf("encodeCallArgs failed: %v", err)
+	}
+	var call pb.CallFunctionArgs
+	if err := proto.Unmarshal(encoded, &call); err != nil {
+		t.Fatalf("decoding CallFunctionArgs failed: %v", err)
+	}
+	if got := call.GetFunctionName(); got != "TestFunction" {
+		t.Fatalf("function target = %q, want TestFunction", got)
+	}
+	if got := call.GetCallId(); got != 7 {
+		t.Fatalf("call ID = %d, want 7", got)
 	}
 }

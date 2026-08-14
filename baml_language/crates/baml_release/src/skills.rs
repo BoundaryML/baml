@@ -5,9 +5,10 @@
 //! single track (the repo's `main` branch) and are identified by git commit
 //! SHA rather than a released version.
 //!
-//! This module is the single source of truth shared by the `baml` wrapper
-//! (which surfaces "skill outdated" warnings) and the `baml-cli` toolchain
-//! binary (whose `agent install` command records what it installed).
+//! This module is the single source of truth for skill state and freshness.
+//! The `baml-cli` toolchain binary owns both sides: `agent install` records
+//! what it installed, and the passive authoring-command check (`skill_check`
+//! in `baml_cli`) surfaces missing/outdated warnings from the caches here.
 
 use std::{
     fs,
@@ -68,14 +69,128 @@ pub fn state_path() -> PathBuf {
     baml_home().join("state.toml")
 }
 
-/// Cache file recording the latest known skill repo commit, refreshed at most
-/// once per TTL window by the wrapper's auto-check and by explicit toolchain
-/// commands. Lives next to the toolchain manifest cache.
+/// Cache file recording the latest known skill repo commit, written by
+/// `agent install` and refreshed at most once per TTL window by the
+/// toolchain's passive skill check. Lives next to the toolchain manifest
+/// cache.
 pub fn latest_skill_commit_cache_path() -> PathBuf {
     baml_home()
         .join("manifest-cache")
         .join("skills")
         .join("latest-commit.json")
+}
+
+/// How long a cached latest-commit answer stays fresh before a passive
+/// network re-check is due.
+pub const LATEST_COMMIT_CACHE_TTL: Duration = Duration::from_hours(24);
+
+/// Decide which passive skill warning (if any) applies:
+///
+/// - No `baml-*` skills in the project at all: prompt to install. This fires
+///   regardless of caches, so users discover skills exist.
+/// - Skills present but the `[skills]` provenance is missing or behind the
+///   cached latest skill repo commit: prompt to upgrade. Requires the cache
+///   (written by the auto-check or explicit commands); without it we can't
+///   know what's current, so we stay silent rather than guess.
+pub fn skill_warning_message(
+    project_has_skills: bool,
+    state: Option<&SkillsState>,
+    cached_latest: Option<&str>,
+) -> Option<&'static str> {
+    if !project_has_skills {
+        return Some("no baml skill is installed; set it up with `baml agent install`");
+    }
+    let latest = cached_latest?;
+    match state {
+        Some(state) if state.installed_commit == latest => None,
+        _ => Some("your baml skill is outdated; use `baml agent install` to upgrade it"),
+    }
+}
+
+/// Walk from the current directory up to $HOME looking for installed
+/// `baml-*` agent skills (`.agents/skills/` or `.claude/skills/`).
+pub fn project_has_baml_skills() -> bool {
+    let Ok(mut dir) = std::env::current_dir() else {
+        return false;
+    };
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    loop {
+        let agents = dir.join(".agents").join("skills");
+        let claude = dir.join(".claude").join("skills");
+        if dir_contains_baml_skill(&agents) || dir_contains_baml_skill(&claude) {
+            return true;
+        }
+        if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
+            return false;
+        }
+    }
+}
+
+/// A skill counts only when it's a `baml-*` directory actually containing a
+/// `SKILL.md`; a leftover empty directory or stray file must not suppress the
+/// missing-skill prompt.
+fn dir_contains_baml_skill(skills_dir: &Path) -> bool {
+    fs::read_dir(skills_dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(std::result::Result::ok)
+        .any(|entry| {
+            entry.file_name().to_string_lossy().starts_with("baml-")
+                && entry.path().join("SKILL.md").is_file()
+        })
+}
+
+/// Whether normal commands may refresh the freshness caches over the network,
+/// per `[update] auto_check` in `~/.baml/config.toml`. Defaults to on; only an
+/// explicit `auto_check = false` opts out. Shared by the wrapper and the
+/// toolchain so one setting silences both.
+pub fn update_auto_check_enabled() -> bool {
+    let Ok(text) = fs::read_to_string(baml_home().join("config.toml")) else {
+        return true;
+    };
+    let Ok(value) = text.parse::<toml::Value>() else {
+        return true;
+    };
+    value
+        .get("update")
+        .and_then(|update| update.get("auto_check"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true)
+}
+
+/// The latest-commit cache is due for a refresh attempt when both the cache
+/// file and its attempt marker are older than the TTL. The marker is touched
+/// before every attempt (success or failure) so an unreachable network is
+/// retried at most once per TTL window instead of on every command.
+pub fn should_attempt_latest_commit_refresh() -> bool {
+    should_attempt_refresh(&latest_skill_commit_cache_path(), LATEST_COMMIT_CACHE_TTL)
+}
+
+fn should_attempt_refresh(cache_path: &Path, ttl: Duration) -> bool {
+    let marker = refresh_marker_path(cache_path);
+    if !file_older_than(cache_path, ttl) || !file_older_than(&marker, ttl) {
+        return false;
+    }
+    if let Some(parent) = marker.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::write(&marker, "").is_ok()
+}
+
+fn refresh_marker_path(cache_path: &Path) -> PathBuf {
+    let mut path = cache_path.as_os_str().to_owned();
+    path.push(".last-check");
+    PathBuf::from(path)
+}
+
+/// True when the file is missing or its mtime is older than `ttl`.
+fn file_older_than(path: &Path, ttl: Duration) -> bool {
+    path.metadata()
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| std::time::SystemTime::now().duration_since(modified).ok())
+        .is_none_or(|age| age > ttl)
 }
 
 /// Installed skill provenance, stored as the `[skills]` section of
@@ -174,7 +289,7 @@ pub fn write_cached_latest_skill_commit(cache_path: &Path, sha: &str) -> Result<
 
 /// Resolve the latest commit SHA of the skill repo's main branch over the
 /// network. Callers decide the timeout: explicit commands can afford a long
-/// one, while the wrapper's passive auto-check should use a short one.
+/// one, while the passive background check should use a short one.
 pub fn fetch_latest_skill_commit(timeout: Duration) -> Result<String> {
     let url = skill_commits_url();
     let client = reqwest::blocking::Client::builder()
@@ -345,6 +460,60 @@ mod tests {
         assert!(now.ends_with('Z'), "{now}");
         assert_eq!(&now[4..5], "-");
         assert_eq!(&now[10..11], "T");
+    }
+
+    fn skills_state(commit: &str) -> SkillsState {
+        SkillsState {
+            installed_commit: commit.to_string(),
+            installed_at: "x".to_string(),
+        }
+    }
+
+    #[test]
+    fn missing_project_skills_prompt_install_regardless_of_caches() {
+        let expected = Some("no baml skill is installed; set it up with `baml agent install`");
+        assert_eq!(skill_warning_message(false, None, None), expected);
+        assert_eq!(skill_warning_message(false, None, Some("bbb")), expected);
+        // Even matching global provenance doesn't matter: this project has no skills.
+        assert_eq!(
+            skill_warning_message(false, Some(&skills_state("bbb")), Some("bbb")),
+            expected
+        );
+    }
+
+    #[test]
+    fn skills_behind_or_untracked_prompt_upgrade() {
+        let expected = Some("your baml skill is outdated; use `baml agent install` to upgrade it");
+        assert_eq!(
+            skill_warning_message(true, Some(&skills_state("aaa")), Some("bbb")),
+            expected
+        );
+        assert_eq!(skill_warning_message(true, None, Some("bbb")), expected);
+    }
+
+    #[test]
+    fn current_skills_or_unknown_latest_stay_silent() {
+        assert_eq!(
+            skill_warning_message(true, Some(&skills_state("bbb")), Some("bbb")),
+            None
+        );
+        // No cached latest: can't judge freshness, so no nag.
+        assert_eq!(
+            skill_warning_message(true, Some(&skills_state("aaa")), None),
+            None
+        );
+        assert_eq!(skill_warning_message(true, None, None), None);
+    }
+
+    #[test]
+    fn refresh_attempt_is_throttled_by_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = tmp.path().join("latest-commit.json");
+        // Cache missing and no marker: attempt allowed, marker gets created.
+        assert!(should_attempt_refresh(&cache, LATEST_COMMIT_CACHE_TTL));
+        assert!(refresh_marker_path(&cache).exists());
+        // Fresh marker: no retry within the TTL window.
+        assert!(!should_attempt_refresh(&cache, LATEST_COMMIT_CACHE_TTL));
     }
 
     #[test]

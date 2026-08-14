@@ -3,174 +3,298 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function lambdas.$init_test_ns_lambdas_lambdas(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.lambdas"
     load_const "iife_single_param_returns_correct_value"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "zero_param_lambda_returns_constant"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "multi_param_lambda_returns_sum"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "annotated_lambda_doubles_value"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "inferred_return_type_lambda"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "lambda_captures_local_variable"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "lambda_captures_function_parameter"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "lambda_captures_multiple_variables"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "shared_cell_mutation_counter"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "nested_lambda_transitive_capture"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "iife_returns_closure_counter"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "closure_in_map_with_captured_offset"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "multiple_closures_share_cell"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "multiple_closures_share_cell_deep_copy"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "explicit_throwing_lambda_catches_error"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "lambda_inside_catch_base_keeps_parameter_scope"
+    load_const "root.lambdas"
+    load_const "callback_effect_param_is_inferred_from_unannotated_lambda_body"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "deep_nesting_three_levels"
+    load_const "root.lambdas"
+    load_const "contextual_lambda_preserves_omitted_throws_surface"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "lambda_captures_loop_variable_accumulation"
+    load_const "root.lambdas"
+    load_const "lambda_inside_catch_base_keeps_parameter_scope"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_e_method_resolution_different_types"
+    load_const "root.lambdas"
+    load_const "deep_nesting_three_levels"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_f_shadowing_capture_correct_binding"
+    load_const "root.lambdas"
+    load_const "lambda_captures_loop_variable_accumulation"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_f_shadowing_capture_independent_cells"
+    load_const "root.lambdas"
+    load_const "issue_e_method_resolution_different_types"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_a_capture_read_after_mutation"
+    load_const "root.lambdas"
+    load_const "issue_f_shadowing_capture_correct_binding"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_a_interleaved_capture_reads_writes"
+    load_const "root.lambdas"
+    load_const "issue_f_shadowing_capture_independent_cells"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_d_capture_as_call_destination"
+    load_const "root.lambdas"
+    load_const "issue_a_capture_read_after_mutation"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_b_captured_variable_mutation_visible"
+    load_const "root.lambdas"
+    load_const "issue_a_interleaved_capture_reads_writes"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_b_watch_let_captured_by_lambda"
+    load_const "root.lambdas"
+    load_const "issue_d_capture_as_call_destination"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
-    load_const "issue_b_watch_let_mutated_by_parent_and_lambda"
+    load_const "root.lambdas"
+    load_const "issue_b_captured_variable_mutation_visible"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lambdas"
     load_const "lambda_param_shadows_annotated_outer_local"
     make_closure .<lambda($init_test_ns_lambdas_lambdas, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "inferred_signature_is_reconstructed"
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "inferred_throwing_signature_is_reconstructed"
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
+    return
+}
+
+function lambdas.lambda_contextual_call(cb: (int) -> int throws int | string) -> int {
+    load_const 1
+    load_var cb
+    call_indirect
+    return
+}
+
+function lambdas.lambda_contextual_main() -> int {
+    make_closure .<lambda(lambda_contextual_main, 0)>, 0
+    call user.lambdas.lambda_contextual_call
+    jump L4
+    load_var e
+    is_type string
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_const 2
+    jump L4
+
+  L3:
+    load_const 1
+
+  L4:
+    return
+}
+
+function lambdas.lambda_effect_fail() -> int {
+    load_const "callback"
+    throw
+}
+
+function lambdas.lambda_effect_forward(f: () -> int throws #0) -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type int
+    load_type #0
+    load_type #0
+    load_var f
+    make_closure .<lambda(lambda_effect_forward, 0)>, captures=1, ntypeargs=1
+    call user.lambdas.lambda_effect_invoke
+    return
+}
+
+function lambdas.lambda_effect_invoke(f: () -> #0 throws #1) -> #0 {
+    load_var f
+    call_indirect
+    return
+}
+
+function lambdas.lambda_effect_main() -> int {
+    load_type string
+    load_const user.lambdas.lambda_effect_fail
+    call user.lambdas.lambda_effect_forward
+    jump L2
+    load_var e
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 1
+
+  L2:
     return
 }
 
@@ -212,178 +336,37 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     store_var ?1
     load_const 0
     store_deref ?1
-    load_type int
     load_const 1
     load_const 2
     load_const 3
     load_type int
     alloc_array 3
-    call baml.iter.Iterable$for$T[].iter
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
 
   L0:
     load_var _5
-    is_type baml.iter.Flatten<...>
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L20
+    jump L2
 
   L1:
-    load_var _5
-    is_type baml.iter.Range
-    pop_jump_if_false L2
-    jump L19
-
-  L2:
-    load_var _5
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L3
-    jump L18
-
-  L3:
-    load_var _5
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L4
-    jump L17
-
-  L4:
-    load_var _5
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L5
-    jump L16
-
-  L5:
-    load_var _5
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L6
-    jump L15
-
-  L6:
-    load_var _5
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L7
-    jump L14
-
-  L7:
-    load_var _5
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L8
-    jump L13
-
-  L8:
-    load_var _5
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L9
-    jump L12
-
-  L9:
-    load_var _5
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L10
-    jump L11
-
-  L10:
-    load_var _5
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L24
-    load_type int
-    load_type never
-    load_var _5
-    call baml.iter.Peekable.Iterator.next
-    store_var _7
-    jump L21
-
-  L11:
-    load_var _5
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _7
-    jump L21
-
-  L12:
-    load_var _5
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _7
-    jump L21
-
-  L13:
-    load_type int
-    load_type never
-    load_type never
-    load_var _5
-    call baml.iter.Filter.Iterator.next
-    store_var _7
-    jump L21
-
-  L14:
-    load_var _5
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _7
-    jump L21
-
-  L15:
-    load_type int
-    load_var _5
-    call baml.iter.Repeat.Iterator.next
-    store_var _7
-    jump L21
-
-  L16:
-    load_type int
-    load_type never
-    load_type never
-    load_var _5
-    call baml.iter.Chain.Iterator.next
-    store_var _7
-    jump L21
-
-  L17:
-    load_type int
-    load_type never
-    load_var _5
-    call baml.iter.StepBy.Iterator.next
-    store_var _7
-    jump L21
-
-  L18:
-    load_type int
-    load_var _5
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _7
-    jump L21
-
-  L19:
-    load_var _5
-    call baml.iter.Range.Iterator.next
-    store_var _7
-    jump L21
-
-  L20:
-    load_var _5
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _7
-
-  L21:
-    load_var _7
-    is_type baml.iter.Done
-    pop_jump_if_false L22
-    jump L23
-
-  L22:
     load_var2 3 1
     make_closure .<lambda(lambdas_captures_loop_variable_accumulation, 0)>, 1
     call_indirect
     pop 1
     jump L0
 
-  L23:
+  L2:
     load_deref ?1
     return
-
-  L24:
-    unreachable
 }
 
 function lambdas.lambdas_captures_multiple_variables() -> int {
@@ -497,6 +480,46 @@ function lambdas.lambdas_inferred_return_type_lambda() -> int {
     return
 }
 
+function lambdas.lambdas_inferred_signature() -> string {
+    make_closure .<lambda(lambdas_inferred_signature, 0)>, 0
+    call reflect.signature
+    store_var sig
+    load_var sig
+    load_field .returns
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _5
+    load_var sig
+    load_field .errors
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _7
+    load_var _5
+    load_const "/"
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}
+
+function lambdas.lambdas_inferred_throwing_signature() -> string {
+    make_closure .<lambda(lambdas_inferred_throwing_signature, 0)>, 0
+    call reflect.signature
+    store_var sig
+    load_var sig
+    load_field .returns
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _5
+    load_var sig
+    load_field .errors
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _7
+    load_var _5
+    load_const "/"
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}
+
 function lambdas.lambdas_issue_a_capture_read_after_mutation() -> int {
     load_var ?1
     make_cell
@@ -578,48 +601,6 @@ function lambdas.lambdas_issue_b_captured_variable_mutation_visible() -> int {
     return
 }
 
-function lambdas.lambdas_issue_b_watch_let_captured_by_lambda() -> int {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_const 0
-    store_deref ?1
-    load_const "x"
-    load_const null
-    watch x
-    load_var x
-    make_closure .<lambda(lambdas_issue_b_watch_let_captured_by_lambda, 0)>, 1
-    store_var_load_var inc
-    call_indirect
-    pop 1
-    load_var inc
-    call_indirect
-    pop 1
-    load_deref ?1
-    unwatch x
-    return
-}
-
-function lambdas.lambdas_issue_b_watch_let_mutated_by_parent_and_lambda() -> int {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_const 0
-    store_deref ?1
-    load_const "counter"
-    load_const null
-    watch counter
-    load_const 1
-    store_deref ?1
-    load_var counter
-    make_closure .<lambda(lambdas_issue_b_watch_let_mutated_by_parent_and_lambda, 0)>, 1
-    call_indirect
-    pop 1
-    load_deref ?1
-    unwatch counter
-    return
-}
-
 function lambdas.lambdas_issue_d_capture_as_call_destination() -> int {
     load_var ?1
     make_cell
@@ -640,14 +621,14 @@ function lambdas.lambdas_issue_e_method_resolution_different_types() -> int {
     alloc_array 3
     container_len
     store_var arr_len
-    load_const "hello"
-    make_closure .<lambda(lambdas_issue_e_method_resolution_different_types, 0)>, 0
-    call_indirect
-    store_var _6
     load_var arr_len
     load_const 10
     mul_int
-    load_var _6
+    store_var _4
+    load_const "hello"
+    make_closure .<lambda(lambdas_issue_e_method_resolution_different_types, 0)>, 0
+    call_indirect
+    load_var _4
     add_int
     return
 }
@@ -666,15 +647,13 @@ function lambdas.lambdas_issue_f_shadowing_capture_correct_binding() -> int {
     load_var x
     make_closure .<lambda(lambdas_issue_f_shadowing_capture_correct_binding, 0)>, 1
     call_indirect
-    store_var _6
+    load_const 10
+    mul_int
+    store_var _5
     load_var x
     make_closure .<lambda(lambdas_issue_f_shadowing_capture_correct_binding, 1)>, 1
     call_indirect
-    store_var _8
-    load_var _6
-    load_const 10
-    mul_int
-    load_var _8
+    load_var _5
     add_int
     return
 }

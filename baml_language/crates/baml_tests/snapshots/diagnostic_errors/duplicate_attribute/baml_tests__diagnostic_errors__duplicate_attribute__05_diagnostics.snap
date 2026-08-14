@@ -2,38 +2,32 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: Duplicate attribute `@alias`
-    ╭─[ duplicate_attribute.baml:12:28 ]
-    │
+  [hir] E0014
+
+  × duplicate attribute `@alias`
+    ╭─[duplicate_attribute.baml:12:28]
  12 │   a string @alias("first") @alias("second")
-    │            ───────┬─────── ────────┬───────  
-    │                   ╰────────────────────────── `@alias` first applied here
-    │                                    │         
-    │                                    ╰───────── duplicate `@alias` — only the last takes effect
-    │ 
-    │ Note: Error code: E0014
-────╯
+    ·            ───────┬─────── ────────┬───────
+    ·                   │                ╰── duplicate `@alias` — only the last takes effect
+    ·                   ╰── `@alias` first applied here
+    ╰────
 
-  [hir] error: Duplicate attribute `@description`
-    ╭─[ duplicate_attribute.baml:17:34 ]
-    │
+  [hir] E0014
+
+  × duplicate attribute `@description`
+    ╭─[duplicate_attribute.baml:17:34]
  17 │   a string @description("first") @description("second")
-    │            ──────────┬────────── ───────────┬──────────  
-    │                      ╰─────────────────────────────────── `@description` first applied here
-    │                                             │            
-    │                                             ╰──────────── duplicate `@description` — only the last takes effect
-    │ 
-    │ Note: Error code: E0014
-────╯
+    ·            ──────────┬────────── ───────────┬──────────
+    ·                      │                      ╰── duplicate `@description` — only the last takes effect
+    ·                      ╰── `@description` first applied here
+    ╰────
 
-  [hir] error: Duplicate attribute `@alias`
-    ╭─[ duplicate_attribute.baml:22:23 ]
-    │
+  [hir] E0014
+
+  × duplicate attribute `@alias`
+    ╭─[duplicate_attribute.baml:22:23]
  22 │   ACTIVE @alias("on") @alias("enabled")
-    │          ──────┬───── ────────┬────────  
-    │                ╰───────────────────────── `@alias` first applied here
-    │                               │          
-    │                               ╰────────── duplicate `@alias` — only the last takes effect
-    │ 
-    │ Note: Error code: E0014
-────╯
+    ·          ──────┬───── ────────┬────────
+    ·                │              ╰── duplicate `@alias` — only the last takes effect
+    ·                ╰── `@alias` first applied here
+    ╰────

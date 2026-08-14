@@ -2,8 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 // Basic void function — empty body
-function do_nothing() -> void {
-}
+function do_nothing() -> void {}
 
 // Void function with bare return
 function do_return() -> void {

@@ -5,6 +5,9 @@ syntax = "proto3";
 package baml_bridge.cffi.v1;
 
 option go_package = "./cffi";
+// C++ generates against the lite runtime (no descriptors/reflection);
+// ignored by every other generator in this repo (prost, protoc-gen-go).
+option optimize_for = LITE_RUNTIME;
 
 // The wire representation of BAML types, 1:1 with RuntimeTy.
 //
@@ -38,7 +41,6 @@ message BamlTy {
     BamlTyResource resource = 18;
     BamlTyPromptAst prompt_ast = 19;
     BamlTyVoid void = 20;
-    BamlTyWatchAccessor watch_accessor = 21;
     BamlTyTypeVar type_var = 22;
     BamlTyAssociatedTypeProjection associated_type_projection = 23;
     BamlTyNever never = 24;
@@ -100,8 +102,9 @@ message BamlTyUnknown {}
 
 // Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 // strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
-// its source string to preserve formatting). Literal types widen to their base
-// primitive at decode time.
+// its source string to preserve formatting). Decoders preserve literal
+// identity so `InboundValue.value_type` remains exact rather than being
+// widened to the corresponding primitive payload shape.
 message BamlTyLiteral {
   oneof literal {
     string string_value = 1;
@@ -197,16 +200,11 @@ message BamlTyPromptAst {}
 // The void type — the type of effectful expressions (`RuntimeTy::Void`).
 message BamlTyVoid {}
 
-// Watch accessor for `x.$watch` on a watched variable
-// (`RuntimeTy::WatchAccessor`).
-message BamlTyWatchAccessor {
-  BamlTy inner = 1;
-}
-
 // A type variable / generic parameter such as `T` in `Array<T>`
 // (`RuntimeTy::TypeVar`).
 message BamlTyTypeVar {
   string name = 1;
+  uint32 index = 2;
 }
 
 // An associated-type projection such as `P.Output` or `(T as Iterator).Item`

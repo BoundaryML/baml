@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+307..308 'f': throws never
+347..435 '{\n   ...  }\n}': string
+353..433 'match ...n    }': string
+360..361 'v': int | string
+373..383 'let n: int': int
+380..383 'int': int
+387..388 'd': string
+398..399 '_': int | string
+403..404 'v': string

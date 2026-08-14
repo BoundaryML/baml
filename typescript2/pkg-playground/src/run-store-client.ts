@@ -75,6 +75,31 @@ export interface RunStoreClient {
   dispose(): void;
 }
 
+/** Error raised when the runtime rejects a playground command. Carries the
+ *  machine-readable server error code so the UI can special-case categories
+ *  like `projectNotReady` without parsing message text. The message keeps the
+ *  legacy `code: message` shape for displays that render it verbatim. */
+export class RunCommandError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(`${code}: ${message}`);
+    this.name = 'RunCommandError';
+    this.code = code;
+  }
+}
+
+/** Server rejection code for runs/previews while a rebuild is pending or the
+ *  project has compile errors (fail-closed; see playground_server.rs). */
+export const PROJECT_NOT_READY_ERROR_CODE = 'projectNotReady';
+
+export function isProjectNotReadyError(error: unknown): boolean {
+  return (
+    error instanceof RunCommandError &&
+    error.code === PROJECT_NOT_READY_ERROR_CODE
+  );
+}
+
 type PendingRequest =
   | { kind: 'startRun'; resolve: (boundaryId: BoundaryId) => void; reject: (error: Error) => void }
   | { kind: 'command'; resolve: (outcome: RequestCommandOutcome | string) => void; reject: (error: Error) => void }
@@ -142,7 +167,7 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
     const waiter = pending.get(requestId);
     if (!waiter) return;
     pending.delete(requestId);
-    waiter.reject(new Error(`${code}: ${message}`));
+    waiter.reject(new RunCommandError(code, message));
   }
 
   const off = port.onMessage((msg: WorkerOutMessage) => {

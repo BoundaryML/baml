@@ -55,6 +55,33 @@ function Process(<[CURSOR]input: string) -> string {
     }
 
     #[test]
+    fn test_find_refs_lambda_parameter_in_nested_lambda() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> int {
+    let f = (<[CURSOR]x: int) -> int {
+        let y = x
+        let g = () -> int { x + y }
+        x + g()
+    }
+    f(1)
+}
+"#,
+        );
+
+        let usages = test.find_all_usages();
+        assert_eq!(
+            usages.len(),
+            3,
+            "Should find lambda-parameter usages across nested lambda arenas, found: {:?}",
+            usages
+                .iter()
+                .map(|l| test.format_location_with_name(l))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn test_find_refs_function() {
         let test = CursorTest::new(
             r#"

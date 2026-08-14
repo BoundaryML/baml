@@ -23,12 +23,7 @@ impl<T, M> ValueWithMeta<T, M> {
     pub const fn new(value: T, meta: M) -> Self {
         Self { value, meta }
     }
-    pub const fn as_ref(&self) -> ValueWithMeta<&T, &M> {
-        ValueWithMeta {
-            value: &self.value,
-            meta: &self.meta,
-        }
-    }
+
     pub fn map_value<U, F: FnOnce(T) -> U>(self, f: F) -> ValueWithMeta<U, M> {
         ValueWithMeta {
             value: f(self.value),

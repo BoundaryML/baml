@@ -2,11 +2,11 @@
 // would be ambiguous. BEP-044 §"Method Disambiguation".
 
 interface Serializer {
-  function encode(self) -> string
+  function encode(self) -> string throws never
 }
 
 interface BinarySerializer {
-  function encode(self) -> string
+  function encode(self) -> string throws never
 }
 
 class Hybrid {

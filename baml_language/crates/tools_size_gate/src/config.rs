@@ -4,7 +4,9 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de};
+
+use crate::human_size;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct Config {
@@ -197,13 +199,16 @@ impl ArtifactConfig {
 pub(crate) struct Policy {
     /// Maximum allowed on-disk file bytes (absolute ceiling). This is the
     /// primary gate — the actual size a user installs/ships.
+    #[serde(default, deserialize_with = "deserialize_optional_size")]
     pub max_file_bytes: Option<u64>,
 
     /// Maximum allowed gzip bytes (absolute ceiling). Optional secondary
     /// gate; gzip is recorded and displayed for visibility either way.
+    #[serde(default, deserialize_with = "deserialize_optional_size")]
     pub max_gzip_bytes: Option<u64>,
 
     /// Maximum allowed stripped file bytes (absolute ceiling).
+    #[serde(default, deserialize_with = "deserialize_optional_size")]
     pub max_stripped_bytes: Option<u64>,
 
     /// Maximum allowed file-size delta in bytes vs baseline.
@@ -212,6 +217,21 @@ pub(crate) struct Policy {
     /// Maximum allowed file-size growth percentage vs baseline
     /// (e.g., 3.0 = 3%).
     pub max_delta_pct: Option<f64>,
+}
+
+fn deserialize_optional_size<'de, D>(deserializer: D) -> std::result::Result<Option<u64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)?
+        .map(|value| parse_size(&value).map_err(de::Error::custom))
+        .transpose()
+}
+
+fn parse_size(value: &str) -> Result<u64> {
+    human_size::parse(value)
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("invalid size threshold `{value}`"))
 }
 
 impl Config {
@@ -282,5 +302,46 @@ pub(crate) fn host_triple() -> String {
         ("x86_64", "windows") => "x86_64-pc-windows-msvc".to_owned(),
         ("aarch64", "windows") => "aarch64-pc-windows-msvc".to_owned(),
         _ => format!("{arch}-unknown-{os}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_human_readable_size_thresholds() {
+        assert_eq!(parse_size("1.5 KiB").unwrap(), 1536);
+        assert_eq!(parse_size("20.94 MiB").unwrap(), 21_957_181);
+        assert_eq!(parse_size("2 GiB").unwrap(), 2_147_483_648);
+        assert_eq!(parse_size("1 MB").unwrap(), 1_000_000);
+        assert_eq!(parse_size("1024").unwrap(), 1024);
+    }
+
+    #[test]
+    fn rejects_invalid_size_thresholds() {
+        assert!(parse_size("-1 MiB").is_err());
+        assert!(parse_size("not a size").is_err());
+    }
+
+    #[test]
+    fn policy_accepts_human_readable_thresholds() {
+        let human: Policy = toml::from_str(r#"max_file_bytes = "1.5 MiB""#).unwrap();
+        assert_eq!(human.max_file_bytes, Some(1_572_864));
+    }
+
+    #[test]
+    fn policy_rejects_integer_thresholds() {
+        assert!(toml::from_str::<Policy>("max_file_bytes = 1_572_864").is_err());
+    }
+
+    #[test]
+    fn checked_in_config_uses_valid_human_readable_thresholds() {
+        let config: Config =
+            toml::from_str(include_str!("../../../.cargo/size-gate.toml")).unwrap();
+        config.validate().unwrap();
+
+        let macos = &config.artifacts["baml-cli"].platform["aarch64-apple-darwin"];
+        assert_eq!(macos.max_file_bytes, Some(21_915_238));
     }
 }

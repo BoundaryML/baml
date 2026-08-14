@@ -9,6 +9,10 @@
 //! dispatch to a user class's custom `Equals.eq` (resolved against the baked impl
 //! registry and called via `YieldToCall`), including generic classes and the
 //! structural fallback when a class has no `Equals` impl.
+//!
+//! It also covers the sibling comparison surface: `baml.ops.Compare`, reached
+//! both by method call (`bool_compare_is_reflexive`) and — since ordering
+//! operators gained an interface lowering — by `<` `<=` `>` `>=` themselves.
 
 use std::sync::{Arc, atomic::AtomicBool};
 
@@ -270,6 +274,163 @@ fn driver_dispatches_custom_enum_equals() {
         function eq_diff_variants() -> bool { baml.ops.equals_equals(E.A, E.B) }
     "#;
     assert!(run_bool(SRC, "user.eq_diff_variants"));
+}
+
+// ── Ordering operators dispatch `baml.ops.Compare` ──────────────────────────
+//
+// `<` `<=` `>` `>=` on operands the comparison opcodes cannot order lower to a
+// `VirtualCall` on `baml.ops.Compare`. Before that route existed they reached
+// `exec_cmpop` and aborted with the uncatchable `VmInternalError::CannotApplyCmpOp`
+// ("cannot apply comparison operation: bool < bool") — for `bool` that needed no
+// user code at all, since the stdlib declares `implement Compare for bool`.
+
+// The operator form must agree with the method form pinned by
+// `bool_compare_is_reflexive` above, value for value — same impl, same defaults.
+#[test]
+fn bool_ordering_operators_dispatch_compare() {
+    const SRC: &str = r#"
+        function lt_b(a: bool, b: bool) -> bool { a < b }
+        function le_b(a: bool, b: bool) -> bool { a <= b }
+        function gt_b(a: bool, b: bool) -> bool { a > b }
+        function ge_b(a: bool, b: bool) -> bool { a >= b }
+
+        function lt_false_true() -> bool { lt_b(false, true) }
+        function lt_true_false() -> bool { lt_b(true, false) }
+        function lt_same() -> bool { lt_b(true, true) }
+        function le_same() -> bool { le_b(false, false) }
+        function le_false_true() -> bool { le_b(false, true) }
+        function le_true_false() -> bool { le_b(true, false) }
+        function gt_true_false() -> bool { gt_b(true, false) }
+        function gt_same() -> bool { gt_b(true, true) }
+        function ge_same() -> bool { ge_b(true, true) }
+        function ge_false_true() -> bool { ge_b(false, true) }
+    "#;
+    // `false < true` is the only strict-less pair.
+    assert!(run_bool(SRC, "user.lt_false_true"));
+    assert!(!run_bool(SRC, "user.lt_true_false"));
+    assert!(!run_bool(SRC, "user.lt_same"));
+    // `le`/`ge` come from the `Compare` defaults and are reflexive.
+    assert!(run_bool(SRC, "user.le_same"));
+    assert!(run_bool(SRC, "user.ge_same"));
+    assert!(run_bool(SRC, "user.le_false_true"));
+    assert!(!run_bool(SRC, "user.le_true_false"));
+    // `gt` is `bool`'s own override.
+    assert!(run_bool(SRC, "user.gt_true_false"));
+    assert!(!run_bool(SRC, "user.gt_same"));
+    assert!(!run_bool(SRC, "user.ge_false_true"));
+}
+
+// A class implementing only the required `lt`: `le`/`gt`/`ge` must resolve to the
+// interface defaults, which are merged into the impl's method table at bake time.
+#[test]
+fn user_class_ordering_dispatches_compare() {
+    const SRC: &str = r#"
+        class Money {
+            cents: int
+            implements baml.ops.Equals {
+                function eq(self, other: Self) -> bool throws never { self.cents == other.cents }
+            }
+            implements baml.ops.Compare {
+                function lt(self, other: Self) -> bool throws never { self.cents < other.cents }
+            }
+        }
+        function money(c: int) -> Money { Money { cents: c } }
+
+        function cheaper() -> bool { money(1) < money(2) }
+        function not_cheaper() -> bool { money(2) < money(1) }
+        function le_equal() -> bool { money(1) <= money(1) }
+        function gt_bigger() -> bool { money(2) > money(1) }
+        function ge_equal() -> bool { money(1) >= money(1) }
+        function ge_smaller() -> bool { money(1) >= money(2) }
+    "#;
+    assert!(run_bool(SRC, "user.cheaper"));
+    assert!(!run_bool(SRC, "user.not_cheaper"));
+    assert!(run_bool(SRC, "user.le_equal"));
+    assert!(run_bool(SRC, "user.gt_bigger"));
+    assert!(run_bool(SRC, "user.ge_equal"));
+    assert!(!run_bool(SRC, "user.ge_smaller"));
+}
+
+// Each operator dispatches its own method, so an override wins over the default it
+// replaces. `gt` here is deliberately inconsistent with `!le` — the default would
+// make `a > a` false, the override makes it true. Pins that `>` is not lowered as
+// `!(a <= b)` or as a swapped `b.lt(a)`.
+#[test]
+fn user_class_ordering_honors_gt_override() {
+    const SRC: &str = r#"
+        class Odd {
+            n: int
+            implements baml.ops.Equals {
+                function eq(self, other: Self) -> bool throws never { self.n == other.n }
+            }
+            implements baml.ops.Compare {
+                function lt(self, other: Self) -> bool throws never { self.n < other.n }
+                function gt(self, other: Self) -> bool throws never { true }
+            }
+        }
+        function odd(n: int) -> Odd { Odd { n: n } }
+        function gt_self() -> bool { odd(1) > odd(1) }
+        function le_self() -> bool { odd(1) <= odd(1) }
+    "#;
+    assert!(run_bool(SRC, "user.gt_self"));
+    // The un-overridden `le` still follows the default (`lt || eq`).
+    assert!(run_bool(SRC, "user.le_self"));
+}
+
+// Enums can implement `Compare` too; before the route existed `exec_cmpop`'s
+// `(Variant, Variant)` arm handled only `Eq`/`Ne` and aborted on ordering.
+#[test]
+fn enum_ordering_dispatches_compare() {
+    const SRC: &str = r#"
+        enum E { A B }
+        implement baml.ops.Equals for E {
+            function eq(self, other: Self) -> bool throws never { false }
+        }
+        implement baml.ops.Compare for E {
+            function lt(self, other: Self) -> bool throws never { true }
+        }
+        function lt_variants() -> bool { E.A < E.B }
+        function gt_variants() -> bool { E.A > E.B }
+    "#;
+    assert!(run_bool(SRC, "user.lt_variants"));
+    // `gt` defaults to `!le` = `!(lt || eq)` = `!(true || false)`.
+    assert!(!run_bool(SRC, "user.gt_variants"));
+}
+
+// Inside a `T extends Compare` body the operand type is a type variable, so the impl
+// can only come from the runtime instantiation. This shape silently worked for
+// primitives before (the VM's opcode arms) and fatally aborted for classes — the
+// body looks tested while half its instantiations abort.
+// Monomorphic wrappers are required because literal arguments would otherwise infer a
+// literal union for `T`, which no `Compare` bound admits.
+#[test]
+fn bounded_typevar_ordering_dispatches_at_runtime() {
+    const SRC: &str = r#"
+        class Money {
+            cents: int
+            implements baml.ops.Equals {
+                function eq(self, other: Self) -> bool throws never { self.cents == other.cents }
+            }
+            implements baml.ops.Compare {
+                function lt(self, other: Self) -> bool throws never { self.cents < other.cents }
+            }
+        }
+        function money(c: int) -> Money { Money { cents: c } }
+
+        function lt_g<T extends baml.ops.Compare>(a: T, b: T) -> bool { a < b }
+        function lt_int(a: int, b: int) -> bool { lt_g(a, b) }
+        function lt_bool(a: bool, b: bool) -> bool { lt_g(a, b) }
+        function lt_money(a: Money, b: Money) -> bool { lt_g(a, b) }
+
+        function generic_int() -> bool { lt_int(1, 2) }
+        function generic_bool() -> bool { lt_bool(false, true) }
+        function generic_money() -> bool { lt_money(money(1), money(2)) }
+        function generic_money_rev() -> bool { lt_money(money(2), money(1)) }
+    "#;
+    assert!(run_bool(SRC, "user.generic_int"));
+    assert!(run_bool(SRC, "user.generic_bool"));
+    assert!(run_bool(SRC, "user.generic_money"));
+    assert!(!run_bool(SRC, "user.generic_money_rev"));
 }
 
 // Union type args are order-insensitive: `Box<int | string>` and `Box<string | int>` are

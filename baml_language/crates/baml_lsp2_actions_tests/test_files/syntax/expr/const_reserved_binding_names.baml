@@ -58,75 +58,67 @@ function NonBindingConstField(record: WithConstField) -> int {
 
 //----
 //- diagnostics
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//     ╭─[ expr_const_reserved_binding_names.baml:10:3 ]
-//     │
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//     ╭─[expr_const_reserved_binding_names.baml:10:3]
 //  10 │   const const = 1;
-//     │   ──┬──
-//     │     ╰──── `const` behaves like `let` for now
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: `const` is reserved and cannot be used as a binding name
-//     ╭─[ expr_const_reserved_binding_names.baml:10:9 ]
-//     │
+//     ·   ──┬──
+//     ·     ╰── `const` behaves like `let` for now
+//     ╰────
+// E0010
+//
+//   × `const` is reserved and cannot be used as a binding name
+//     ╭─[expr_const_reserved_binding_names.baml:10:9]
 //  10 │   const const = 1;
-//     │         ──┬──
-//     │           ╰──── `const` is reserved here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: `const` is reserved and cannot be used as a binding name
-//     ╭─[ expr_const_reserved_binding_names.baml:15:24 ]
-//     │
+//     ·         ──┬──
+//     ·           ╰── `const` is reserved here
+//     ╰────
+// E0010
+//
+//   × `const` is reserved and cannot be used as a binding name
+//     ╭─[expr_const_reserved_binding_names.baml:15:24]
 //  15 │   let Box { value: let const } = box;
-//     │                        ──┬──
-//     │                          ╰──── `const` is reserved here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: `const` is reserved and cannot be used as a binding name
-//     ╭─[ expr_const_reserved_binding_names.baml:21:9 ]
-//     │
+//     ·                        ──┬──
+//     ·                          ╰── `const` is reserved here
+//     ╰────
+// E0010
+//
+//   × `const` is reserved and cannot be used as a binding name
+//     ╭─[expr_const_reserved_binding_names.baml:21:9]
 //  21 │     let const: int => 1,
-//     │         ──┬──
-//     │           ╰──── `const` is reserved here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: `const` is reserved and cannot be used as a binding name
-//     ╭─[ expr_const_reserved_binding_names.baml:28:12 ]
-//     │
+//     ·         ──┬──
+//     ·           ╰── `const` is reserved here
+//     ╰────
+// E0010
+//
+//   × `const` is reserved and cannot be used as a binding name
+//     ╭─[expr_const_reserved_binding_names.baml:28:12]
 //  28 │   for (let const in items) {
-//     │            ──┬──
-//     │              ╰──── `const` is reserved here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: `const` is reserved and cannot be used as a binding name
-//     ╭─[ expr_const_reserved_binding_names.baml:36:12 ]
-//     │
+//     ·            ──┬──
+//     ·              ╰── `const` is reserved here
+//     ╰────
+// E0010
+//
+//   × `const` is reserved and cannot be used as a binding name
+//     ╭─[expr_const_reserved_binding_names.baml:36:12]
 //  36 │   for (let const = 0; const < 1; const += 1) {
-//     │            ──┬──
-//     │              ╰──── `const` is reserved here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//     ╭─[ expr_const_reserved_binding_names.baml:44:6 ]
-//     │
+//     ·            ──┬──
+//     ·              ╰── `const` is reserved here
+//     ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//     ╭─[expr_const_reserved_binding_names.baml:44:6]
 //  44 │   if const [let x] = items {
-//     │      ──┬──
-//     │        ╰──── `const` behaves like `let` for now
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//     ╭─[ expr_const_reserved_binding_names.baml:49:9 ]
-//     │
+//     ·      ──┬──
+//     ·        ╰── `const` behaves like `let` for now
+//     ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//     ╭─[expr_const_reserved_binding_names.baml:49:9]
 //  49 │   while const [let y] = items {
-//     │         ──┬──
-//     │           ╰──── `const` behaves like `let` for now
-//     │
-//     │ Note: Error code: E0010
-// ────╯
+//     ·         ──┬──
+//     ·           ╰── `const` behaves like `let` for now
+//     ╰────

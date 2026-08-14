@@ -27,7 +27,7 @@ fn front_end_errors(source: &str) -> Vec<String> {
     collect_compiler2_diagnostics(&db)
         .into_iter()
         .filter(|d| d.severity == Severity::Error)
-        .map(|d| format!("[{:?}] {}", d.phase, d.message))
+        .map(|d| format!("[{:?}] {}", d.phase, d.message_with_primary_label()))
         .collect()
 }
 
@@ -224,7 +224,7 @@ fn tagged_interp_unknown_name_reports_unresolved() {
     assert!(
         errors
             .iter()
-            .any(|e| e.contains("unresolved name: nonexistent")),
+            .any(|e| e.contains("unresolved name: `nonexistent`")),
         "an unknown interpolation name must report UnresolvedName, got:\n{}",
         errors.join("\n")
     );
@@ -254,7 +254,7 @@ fn tagged_for_binding_out_of_scope_after_endfor() {
     );
     let errors = front_end_errors(&source);
     assert!(
-        errors.iter().any(|e| e.contains("unresolved name: x")),
+        errors.iter().any(|e| e.contains("unresolved name: `x`")),
         "for-binding `x` must be out of scope after endfor, got:\n{}",
         errors.join("\n")
     );
@@ -286,7 +286,7 @@ fn tagged_body_param_does_not_leak_after_template() {
     );
     let errors = front_end_errors(&source);
     assert!(
-        errors.iter().any(|e| e.contains("unresolved name: role")),
+        errors.iter().any(|e| e.contains("unresolved name: `role`")),
         "the body-lambda param `role` must not leak past the template, got:\n{}",
         errors.join("\n")
     );

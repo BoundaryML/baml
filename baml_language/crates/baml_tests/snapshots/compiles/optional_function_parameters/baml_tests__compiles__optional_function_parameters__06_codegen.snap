@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19115
 ---
 function $init() -> null {
     call $init_let_0
@@ -8,247 +9,108 @@ function $init() -> null {
     return
 }
 
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
-    load_var max_results
+function user.AskDocs(query: string, max_results: int, filter: string, client: ai.Client | null) -> string {
+    load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_const 10
-    store_var max_results
-
-  L0:
-    load_var filter
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    call user.DefaultFilter
-    store_var filter
-
-  L1:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L2
-    load_global user.TestClient
+    load_const null
     store_var client
 
-  L2:
+  L0:
     load_type string
+    load_const <omitted>
     load_var client
-    load_const "AskDocs"
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _7
     load_var2 1 2
     load_var filter
-    load_const "query"
-    load_const "max_results"
-    load_const "filter"
-    load_type string
-    load_type unknown
-    alloc_map 3
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    call user.AskDocs$spec
+    store_var _9
+    load_var2 6 7
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _6
+    load_var _6
+    load_field .value
     return
 }
 
-function user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var max_results
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const 10
-    store_var max_results
-
-  L0:
-    load_var filter
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    call user.DefaultFilter
-    store_var filter
-
-  L1:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L2
-    load_global user.TestClient
-    store_var client
-
-  L2:
-    load_var client
-    load_const "AskDocs"
-    load_var2 1 2
-    load_var filter
-    load_const "query"
-    load_const "max_results"
-    load_const "filter"
-    load_type string
-    load_type unknown
-    alloc_map 3
-    load_const <omitted>
-    call baml.llm.build_request
-    return
-}
-
-function user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var max_results
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const 10
-    store_var max_results
-
-  L0:
-    load_var filter
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    call user.DefaultFilter
-    store_var filter
-
-  L1:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L2
-    load_global user.TestClient
-    store_var client
-
-  L2:
-    load_var client
-    load_const "AskDocs"
-    load_var2 1 2
-    load_var filter
-    load_const "query"
-    load_const "max_results"
-    load_const "filter"
-    load_type string
-    load_type unknown
-    alloc_map 3
-    load_const <omitted>
-    call baml.llm.build_request_stream
-    return
-}
-
-function user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_type string | null
+function user.AskDocs$parse(json: string) -> string {
     load_type string
     load_var json
-    call baml.llm.parse
+    call baml.sap.parse
     return
 }
 
-function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_type string | null
-    load_type string
-    load_var2 2 1
-    call baml.llm.Client.__make_stream
-    return
-}
-
-function user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var max_results
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const 10
-    store_var max_results
-
-  L0:
-    load_var filter
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    call user.DefaultFilter
-    store_var filter
-
-  L1:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L2
-    load_global user.TestClient
-    store_var client
-
-  L2:
-    load_var client
-    load_const "AskDocs"
+function user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> ai.Prompt {
     load_var2 1 2
     load_var filter
+    call user.AskDocs$spec
+    store_var _4
+    load_type string
+    call ai.wire.render_output_format
+    store_var _5
+    load_type string
+    load_var2 4 5
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function user.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _6
+    load_const "AskDocs"
+    load_deref ?1
+    load_deref ?2
+    load_deref ?3
     load_const "query"
     load_const "max_results"
     load_const "filter"
     load_type string
     load_type unknown
     alloc_map 3
-    load_const <omitted>
-    call baml.llm.render_prompt
+    load_var2 1 2
+    load_var filter
+    make_closure .<lambda(AskDocs$spec, 0)>, 3
+    load_var _6
+    load_global user.TestClient
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
-    load_var max_results
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_const 10
-    store_var max_results
-
-  L0:
-    load_var filter
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    call user.DefaultFilter
-    store_var filter
-
-  L1:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L2
-    load_global user.TestClient
+    load_const null
     store_var client
 
-  L2:
-    load_type string | null
-    load_type string
-    load_var client
-    load_const "AskDocs"
+  L0:
     load_var2 1 2
     load_var filter
-    load_const "query"
-    load_const "max_results"
-    load_const "filter"
+    call user.AskDocs$spec
+    store_var _6
+    load_type string | null
     load_type string
-    load_type unknown
-    alloc_map 3
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 5 4
+    call ai.stream.from_spec
     return
 }
 
@@ -379,38 +241,6 @@ function user.SearchService.Run(self: SearchService, query: string, limit: int) 
     return
 }
 
-function user.TestClient$new(lenient: bool) -> null {
-    load_const "OPENAI_API_KEY"
-    sys_op baml.env.get
-    store_var _3
-    load_const "TestClient"
-    load_const "openai"
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_var _3
-    load_const null
-    load_const null
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type unknown
-    alloc_map 0
-    init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
-    init_instance baml.llm.PrimitiveClient .name, .provider, .options
-    return
-}
-
 function user.UseMixedArgs() -> int {
     load_const "dogs"
     load_const 3
@@ -431,7 +261,7 @@ function user.UseOptionalDropping() -> string[] {
     load_var ?1
     make_cell
     store_var ?1
-    load_global user.SearchDocs
+    load_const user.SearchDocs
     store_deref ?1
     load_const "cats"
     load_const "recent"

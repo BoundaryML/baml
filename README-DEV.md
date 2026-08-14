@@ -164,6 +164,30 @@ cd integ-tests/python && uv run pytest
 cd integ-tests/ruby && rake test
 ```
 
+### Rust Workspace (`baml_language/`)
+
+The compiler, engine, and LSP server live in the `baml_language/` Cargo
+workspace. Common commands (run from `baml_language/`):
+
+```bash
+# Unit tests for the whole workspace (always run these after Rust changes)
+cargo test --lib
+
+# Unit tests for one crate
+cargo test --lib -p bex_project
+
+# Format with the repo's import style (fixes most lints)
+cargo fmt -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
+
+# The LSP/runtime crates must also compile for the browser playground
+cargo check --target wasm32-unknown-unknown -p bridge_wasm
+```
+
+Start with `baml_language/ARCHITECTURE.md` for the compiler pipeline and
+`baml_language/TEST_INSTRUCTIONS.md` for the snapshot-test workflow. Design
+documents for larger subsystems (e.g. the LSP server's locking and rebuild
+pipeline) live in `docs/design/`.
+
 ### Building
 
 ```bash

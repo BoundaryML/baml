@@ -155,6 +155,8 @@ pub enum WsInMessage {
         project: String,
         #[serde(rename = "functionName")]
         function_name: String,
+        #[serde(rename = "requestId")]
+        request_id: Option<u32>,
     },
     #[serde(rename = "cursorPosition")]
     CursorPosition {
@@ -355,6 +357,8 @@ pub enum WsOutMessage {
         #[serde(rename = "functionName")]
         function_name: String,
         graph: Option<serde_json::Value>,
+        #[serde(rename = "requestId", skip_serializing_if = "Option::is_none")]
+        request_id: Option<u32>,
     },
     #[serde(rename = "cursorContext")]
     CursorContext { context: serde_json::Value },

@@ -14,7 +14,7 @@ function iter_collect() -> int[] throws unknown {
 }
 
 test "iter_collect" {
-  assert.is_true(baml.deep_equals(iter_collect(), [5, 6, 7]))
+  assert.equal(iter_collect(), [5, 6, 7])
 }
 
 function iter_reduce() -> int throws unknown {
@@ -51,7 +51,7 @@ function iter_range() -> int[] throws unknown {
 }
 
 test "iter_range" {
-  assert.is_true(baml.deep_equals(iter_range(), [0, 1, 2, 3, 4]))
+  assert.equal(iter_range(), [0, 1, 2, 3, 4])
 }
 
 function iter_for_in_range() -> int[] {
@@ -63,7 +63,7 @@ function iter_for_in_range() -> int[] {
 }
 
 test "iter_for_in_range" {
-  assert.is_true(baml.deep_equals(iter_for_in_range(), [1, 2, 3]))
+  assert.equal(iter_for_in_range(), [1, 2, 3])
 }
 
 function iter_for_in_array_iterator() -> int[] {
@@ -75,7 +75,7 @@ function iter_for_in_array_iterator() -> int[] {
 }
 
 test "iter_for_in_array_iterator" {
-  assert.is_true(baml.deep_equals(iter_for_in_array_iterator(), [2, 4, 6]))
+  assert.equal(iter_for_in_array_iterator(), [2, 4, 6])
 }
 
 function iter_for_in_array_literal() -> int[] {
@@ -87,7 +87,7 @@ function iter_for_in_array_literal() -> int[] {
 }
 
 test "iter_for_in_array_literal" {
-  assert.is_true(baml.deep_equals(iter_for_in_array_literal(), [10, 12]))
+  assert.equal(iter_for_in_array_literal(), [10, 12])
 }
 
 function iter_for_in_array_of_classes() -> int {
@@ -131,7 +131,7 @@ function iter_array_for_each() -> int[] {
 }
 
 test "iter_array_for_each" {
-  assert.is_true(baml.deep_equals(iter_array_for_each(), [3, 6, 9]))
+  assert.equal(iter_array_for_each(), [3, 6, 9])
 }
 
 function iter_array_first_native_methods() -> bool throws unknown {
@@ -139,8 +139,8 @@ function iter_array_first_native_methods() -> bool throws unknown {
   let flat_mapped = [1, 2].flat_map((x: int) -> int[] { [x, x + 10] });
   let reduced = [1, 2, 3, 4].reduce((acc: int, x: int) -> int { acc + x }, 0);
 
-  baml.deep_equals(mapped, [2, 4, 6]) &&
-    baml.deep_equals(flat_mapped, [1, 11, 2, 12]) &&
+  mapped == [2, 4, 6] &&
+    flat_mapped == [1, 11, 2, 12] &&
     reduced == 10
 }
 
@@ -157,7 +157,7 @@ function iter_array_eager_filter_map_without_collect() -> int[] throws unknown {
 }
 
 test "iter_array_eager_filter_map_without_collect" {
-  assert.is_true(baml.deep_equals(iter_array_eager_filter_map_without_collect(), [12, 14]))
+  assert.equal(iter_array_eager_filter_map_without_collect(), [12, 14])
 }
 
 function iter_array_iter_lazy_over_source_details() -> int[] throws unknown {
@@ -177,7 +177,7 @@ function iter_array_iter_lazy_over_source_details() -> int[] throws unknown {
 }
 
 test "iter_array_iter_lazy_over_source" {
-  assert.is_true(baml.deep_equals(iter_array_iter_lazy_over_source_details(), [3, 2, 1, 3]))
+  assert.equal(iter_array_iter_lazy_over_source_details(), [3, 2, 1, 3])
 }
 
 function iter_for_loop_sees_push_during_iteration() -> int[] throws unknown {
@@ -193,7 +193,7 @@ function iter_for_loop_sees_push_during_iteration() -> int[] throws unknown {
 }
 
 test "iter_for_loop_sees_push_during_iteration" {
-  assert.is_true(baml.deep_equals(iter_for_loop_sees_push_during_iteration(), [1, 2, 3]))
+  assert.equal(iter_for_loop_sees_push_during_iteration(), [1, 2, 3])
 }
 
 function iter_for_loop_pop_during_iteration() -> int[] throws unknown {
@@ -207,7 +207,7 @@ function iter_for_loop_pop_during_iteration() -> int[] throws unknown {
 }
 
 test "iter_for_loop_pop_during_iteration" {
-  assert.is_true(baml.deep_equals(iter_for_loop_pop_during_iteration(), [1, 2]))
+  assert.equal(iter_for_loop_pop_during_iteration(), [1, 2])
 }
 
 function iter_array_eager_filter_map() -> int[] throws unknown {
@@ -221,7 +221,7 @@ function iter_array_eager_filter_map() -> int[] throws unknown {
 }
 
 test "iter_array_eager_filter_map" {
-  assert.is_true(baml.deep_equals(iter_array_eager_filter_map(), [20, 40]))
+  assert.equal(iter_array_eager_filter_map(), [20, 40])
 }
 
 function iter_array_nullable_elements_details() -> int[] throws unknown {
@@ -244,7 +244,7 @@ function iter_array_nullable_elements_details() -> int[] throws unknown {
 }
 
 test "iter_array_nullable_elements" {
-  assert.is_true(baml.deep_equals(iter_array_nullable_elements_details(), [3, 1, 4, 3]))
+  assert.equal(iter_array_nullable_elements_details(), [3, 1, 4, 3])
 }
 
 function iter_array_lazy_filter_map_collect() -> int[] throws unknown {
@@ -256,7 +256,7 @@ function iter_array_lazy_filter_map_collect() -> int[] throws unknown {
 }
 
 test "iter_array_lazy_filter_map_collect" {
-  assert.is_true(baml.deep_equals(iter_array_lazy_filter_map_collect(), [12, 14]))
+  assert.equal(iter_array_lazy_filter_map_collect(), [12, 14])
 }
 
 function iter_array_first_adapter_defaults() -> bool throws unknown {
@@ -285,10 +285,10 @@ function iter_array_first_adapter_defaults() -> bool throws unknown {
     visited.push(x * 3);
   });
 
-  baml.deep_equals(mapped, [20, 40]) &&
-    baml.deep_equals(flattened, [1, 11, 2, 12]) &&
+  mapped == [20, 40] &&
+    flattened == [1, 11, 2, 12] &&
     reduced == 9 &&
-    baml.deep_equals(visited, [3, 9])
+    visited == [3, 9]
 }
 
 test "iter_array_first_adapter_defaults" {
@@ -297,7 +297,7 @@ test "iter_array_first_adapter_defaults" {
 
 function iter_array_collect_count() -> bool {
   let xs = [4, 5, 6];
-  baml.deep_equals(xs.iter().collect(), [4, 5, 6]) && xs.iter().count() == 3
+  xs.iter().collect() == [4, 5, 6] && xs.iter().count() == 3
 }
 
 test "iter_array_collect_count" {
@@ -311,7 +311,7 @@ function iter_array_filter_step_by() -> int[] throws unknown {
 }
 
 test "iter_array_filter_step_by" {
-  assert.is_true(baml.deep_equals(iter_array_filter_step_by(), [2, 6]))
+  assert.equal(iter_array_filter_step_by(), [2, 6])
 }
 
 function iter_array_filter_map_fluent() -> int[] throws unknown {
@@ -325,7 +325,7 @@ function iter_array_filter_map_fluent() -> int[] throws unknown {
 }
 
 test "iter_array_filter_map_fluent" {
-  assert.is_true(baml.deep_equals(iter_array_filter_map_fluent(), [20, 40]))
+  assert.equal(iter_array_filter_map_fluent(), [20, 40])
 }
 
 function iter_array_chain_fluent() -> int[] throws unknown {
@@ -333,7 +333,7 @@ function iter_array_chain_fluent() -> int[] throws unknown {
 }
 
 test "iter_array_chain_fluent" {
-  assert.is_true(baml.deep_equals(iter_array_chain_fluent(), [1, 2, 3, 4]))
+  assert.equal(iter_array_chain_fluent(), [1, 2, 3, 4])
 }
 
 function iter_array_peekable_fluent() -> int[] throws unknown {
@@ -355,7 +355,7 @@ function iter_array_peekable_fluent() -> int[] throws unknown {
 }
 
 test "iter_array_peekable_fluent" {
-  assert.is_true(baml.deep_equals(iter_array_peekable_fluent(), [8, 8, 9]))
+  assert.equal(iter_array_peekable_fluent(), [8, 8, 9])
 }
 
 function iter_array_as_iterable_param_inner(xs: baml.iter.Iterable<Item = int, Error = never>) -> int[] throws never {
@@ -367,7 +367,7 @@ function iter_array_as_iterable_param() -> int[] throws never {
 }
 
 test "iter_array_as_iterable_param" {
-  assert.is_true(baml.deep_equals(iter_array_as_iterable_param(), [10, 20, 30]))
+  assert.equal(iter_array_as_iterable_param(), [10, 20, 30])
 }
 
 function iter_shadowed_param_method(source: baml.iter.Iterable<Item = int, Error = never>) -> string {
@@ -389,7 +389,7 @@ function iter_shadowed_param_for_in(source: baml.iter.Iterable<Item = int, Error
 }
 
 test "iter_shadowed_param_for_in" {
-  assert.is_true(baml.deep_equals(iter_shadowed_param_for_in([1, 2, 3]), ["a", "b"]))
+  assert.equal(iter_shadowed_param_for_in([1, 2, 3]), ["a", "b"])
 }
 
 function iter_for_in_repeat() -> int[] {
@@ -401,7 +401,7 @@ function iter_for_in_repeat() -> int[] {
 }
 
 test "iter_for_in_repeat" {
-  assert.is_true(baml.deep_equals(iter_for_in_repeat(), [7, 7]))
+  assert.equal(iter_for_in_repeat(), [7, 7])
 }
 
 function iter_chain() -> int[] throws unknown {
@@ -411,7 +411,7 @@ function iter_chain() -> int[] throws unknown {
 }
 
 test "iter_chain" {
-  assert.is_true(baml.deep_equals(iter_chain(), [1, 2, 3, 4]))
+  assert.equal(iter_chain(), [1, 2, 3, 4])
 }
 
 function iter_repeat() -> int[] throws unknown {
@@ -419,7 +419,7 @@ function iter_repeat() -> int[] throws unknown {
 }
 
 test "iter_repeat" {
-  assert.is_true(baml.deep_equals(iter_repeat(), [7, 7, 7]))
+  assert.equal(iter_repeat(), [7, 7, 7])
 }
 
 function iter_map() -> int[] throws unknown {
@@ -428,7 +428,7 @@ function iter_map() -> int[] throws unknown {
 }
 
 test "iter_map" {
-  assert.is_true(baml.deep_equals(iter_map(), [2, 4, 6]))
+  assert.equal(iter_map(), [2, 4, 6])
 }
 
 function iter_map_implicit_source() -> int[] throws unknown {
@@ -436,7 +436,7 @@ function iter_map_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_map_implicit_source(), [2, 4, 6]))
+  assert.equal(iter_map_implicit_source(), [2, 4, 6])
 }
 
 function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
@@ -449,7 +449,7 @@ function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
 }
 
 test "iter_explicit_map_coerces_to_iterator" {
-  assert.is_true(baml.deep_equals(iter_explicit_map_coerces_to_iterator(), [3, 6, 9]))
+  assert.equal(iter_explicit_map_coerces_to_iterator(), [3, 6, 9])
 }
 
 function iter_filter() -> int[] throws unknown {
@@ -458,7 +458,7 @@ function iter_filter() -> int[] throws unknown {
 }
 
 test "iter_filter" {
-  assert.is_true(baml.deep_equals(iter_filter(), [2, 4]))
+  assert.equal(iter_filter(), [2, 4])
 }
 
 function iter_filter_implicit_source() -> int[] throws unknown {
@@ -466,7 +466,7 @@ function iter_filter_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_filter_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_filter_implicit_source(), [2, 4]))
+  assert.equal(iter_filter_implicit_source(), [2, 4])
 }
 
 function iter_filter_map() -> int[] throws unknown {
@@ -481,7 +481,7 @@ function iter_filter_map() -> int[] throws unknown {
 }
 
 test "iter_filter_map" {
-  assert.is_true(baml.deep_equals(iter_filter_map(), [20, 40]))
+  assert.equal(iter_filter_map(), [20, 40])
 }
 
 function iter_filter_map_implicit_source() -> int[] throws unknown {
@@ -495,7 +495,7 @@ function iter_filter_map_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_filter_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_filter_map_implicit_source(), [20, 40]))
+  assert.equal(iter_filter_map_implicit_source(), [20, 40])
 }
 
 function iter_flat_map() -> int[] throws unknown {
@@ -506,7 +506,7 @@ function iter_flat_map() -> int[] throws unknown {
 }
 
 test "iter_flat_map" {
-  assert.is_true(baml.deep_equals(iter_flat_map(), [1, 11, 2, 12]))
+  assert.equal(iter_flat_map(), [1, 11, 2, 12])
 }
 
 function iter_flat_map_implicit_source() -> int[] throws unknown {
@@ -516,20 +516,23 @@ function iter_flat_map_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_flat_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_flat_map_implicit_source(), [1, 11, 2, 12]))
+  assert.equal(iter_flat_map_implicit_source(), [1, 11, 2, 12])
 }
 
 function iter_flatten() -> int[] throws unknown {
-  let xs: baml.iter.Iterable<Item = int, Error = never>[] = [
+  // `flatten`'s element type parameter (`I extends Iterable<…>`) must be a
+  // concrete implementor, so the elements are typed `ArrayIterator<int>` rather
+  // than the abstract `Iterable<…>` existential.
+  let xs: baml.iter.ArrayIterator<int>[] = [
     baml.iter.ArrayIterator.new([1, 2]),
     baml.iter.ArrayIterator.new([3, 4]),
   ];
-  let outer: baml.iter.Iterator<Item = baml.iter.Iterable<Item = int, Error = never>, Error = never> = baml.iter.ArrayIterator.new(xs);
+  let outer: baml.iter.Iterator<Item = baml.iter.ArrayIterator<int>, Error = never> = baml.iter.ArrayIterator.new(xs);
   baml.iter.flatten(outer).collect()
 }
 
 test "iter_flatten" {
-  assert.is_true(baml.deep_equals(iter_flatten(), [1, 2, 3, 4]))
+  assert.equal(iter_flatten(), [1, 2, 3, 4])
 }
 
 function iter_peekable() -> int[] throws unknown {
@@ -555,7 +558,7 @@ function iter_peekable() -> int[] throws unknown {
 }
 
 test "iter_peekable" {
-  assert.is_true(baml.deep_equals(iter_peekable(), [4, 4, 5, 99]))
+  assert.equal(iter_peekable(), [4, 4, 5, 99])
 }
 
 function iter_step_by() -> int[] throws unknown {
@@ -563,7 +566,7 @@ function iter_step_by() -> int[] throws unknown {
 }
 
 test "iter_step_by" {
-  assert.is_true(baml.deep_equals(iter_step_by(), [0, 2, 4]))
+  assert.equal(iter_step_by(), [0, 2, 4])
 }
 
 function iter_array_iter() -> int[] throws unknown {
@@ -571,5 +574,5 @@ function iter_array_iter() -> int[] throws unknown {
 }
 
 test "iter_array_iter" {
-  assert.is_true(baml.deep_equals(iter_array_iter(), [1, 2, 3]))
+  assert.equal(iter_array_iter(), [1, 2, 3])
 }

@@ -1,6 +1,6 @@
-# baml
+# BAML v0 — Rust runtime for baml_client
 
-BAML runtime for Rust - Type-safe LLM function calls.
+BAML v0 runtime for Rust with type-safe LLM function calls.
 
 This crate provides the runtime support for BAML-generated Rust code. Users should not import from this crate directly - instead, use the generated `baml_client` crate which re-exports necessary types.
 

@@ -1,5 +1,5 @@
 // host_callable_test.go — Go equivalent of
-// `crates/bridge_nodejs/tests/host_callable.test.ts` and
+// `sdks/typescript/bridge_typescript/tests/host_callable.test.ts` and
 // `sdks/python/tests/test_host_callable.py`.
 //
 // Exercises the Go host-callable bridge end-to-end: encoder auto-registration
@@ -190,8 +190,9 @@ func TestHostCallablePanicSurfacesAsError(t *testing.T) {
 
 func TestHostCallableReturnedErrorSurfaces(t *testing.T) {
 	rt := getHostCallableRuntime(t)
+	expected := errors.New("explicit failure")
 	cb := func(_ int64) (string, error) {
-		return "", errors.New("explicit failure")
+		return "", expected
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -202,8 +203,8 @@ func TestHostCallableReturnedErrorSurfaces(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from callback returning non-nil error")
 	}
-	if !contains(err.Error(), "explicit failure") {
-		t.Fatalf("expected error to contain 'explicit failure', got %v", err)
+	if err != expected {
+		t.Fatalf("expected the original Go error by identity, got %T: %v", err, err)
 	}
 }
 

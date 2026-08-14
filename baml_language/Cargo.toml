@@ -2,15 +2,34 @@
 members = [
   "crates/*",
   "forks/*",
+  "sdks/cpp/sdkgen_cpp",
+  "sdks/csharp/sdkgen_csharp",
   "sdks/go/sdkgen_go",
-  "sdks/nodejs/bridge_nodejs",
-  "sdks/nodejs/sdkgen_typescript_node",
+  "sdks/java/bridge_java",
+  "sdks/java/sdkgen_java",
+  "sdks/typescript/bridge_typescript",
+  "sdks/typescript/bridge_typescript_web",
+  "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
+  "sdks/swift/rust/*",
+  "sdks/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
+  # `sdk_tests/crates/java` follows typescript_node's soft-fail model
+  # (see below); its per-fixture tests are `#[ignore]`d while
+  # `sdkgen_java` is a stub.
+  "sdk_tests/crates/java",
+  "sdk_tests/crates/cpp",
+  "sdk_tests/crates/csharp",
   "sdk_tests/crates/python_pydantic2",
-  # `sdk_tests/crates/typescript_node`'s build.rs runs codegen +
+  # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
+  # (sdkgen_swift is early); the swift toolchain tests themselves are
+  # macOS-only and setup.sh (xcframework assembly) is bound in
+  # .config/nextest.toml for macOS hosts.
+  "sdk_tests/crates/swift",
+  "sdk_tests/crates/go",
+  # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
   # if pnpm is missing or install fails (see
   # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
@@ -18,7 +37,9 @@ members = [
   # `cargo build` / `cargo doc` succeeds without pnpm installed.
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.
-  "sdk_tests/crates/typescript_node",
+  "sdk_tests/crates/typescript",
+  "sdk_tests/crates/typescript_web",
+  "sdk_tests/crates/rust",
   # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
   # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
   "tools_sccache",
@@ -30,6 +51,10 @@ exclude = [
   # unsupported features through resolver feature unification.
   "forks/aws-config-systest",
   "forks/google-cloud-auth-systest",
+  # Rust SDK release-verification fixtures (a `baml.toml` BAML project + a
+  # consumer smoke, not a crate); the `sdks/rust/*` members glob would
+  # otherwise try to load it as a workspace member.
+  "sdks/rust/verify",
 ]
 resolver = "2"
 
@@ -55,13 +80,20 @@ baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
-sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
+sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
+sdkgen_csharp = { path = "sdks/csharp/sdkgen_csharp" }
+sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
+sdkgen_java = { path = "sdks/java/sdkgen_java" }
+bridge_java = { path = "sdks/java/bridge_java" }
+sdkgen_swift = { path = "sdks/swift/rust/sdkgen_swift" }
+sdkgen_go = { path = "sdks/go/sdkgen_go" }
+sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
-baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
+baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
@@ -69,11 +101,10 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
+bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
-sys_jinja = { path = "crates/sys_jinja" }
-sys_jinja_types = { path = "crates/sys_jinja_types" }
 sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
@@ -81,9 +112,11 @@ sys_native = { path = "crates/sys_native", default-features = false }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
+baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
+baml_surface = { path = "crates/baml_surface" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
@@ -93,28 +126,17 @@ bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
+sys_wasm = { path = "crates/sys_wasm" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
 
-# External dependency for sys_llm jinja module
-minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
-  "macros",
-  "builtins",
-  "debug",
-  "preserve_order",
-  "serde",
-  "unstable_machinery",
-] }
-minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", features = [ "pycompat" ] }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
 anyhow = { version = "1" }
-arboard = "3.4"
-ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
@@ -128,6 +150,7 @@ aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
 aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
+bitflags = "2"
 # Native `borsh` derives on the entire Program type graph (bex_vm_types +
 # baml_type + baml_exec envelope). The pack envelope was previously
 # bitcode-with-serde; borsh's native derive avoids both the bitcode crate
@@ -137,20 +160,27 @@ axum = { version = "0.8.4", default-features = false, features = [ "http1", "mat
 # HeapPtr) that need to refuse or proxy their on-disk form.
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
+bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
+cbindgen = "=0.29.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
+miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
+owo-colors = "4"
 crossbeam-channel = { version = "0.5" }
 # `CachePadded` for the profiling ring's cache-line-aligned field groups
 # (bex_events::prof, plan D3).
 crossbeam-utils = { version = "0.8" }
-crossterm = "0.28"
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
+# Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
+# crate rustc and rust-analyzer build their inference tables on.
+ena = "0.14"
 flate2 = { version = "1" }
+fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
@@ -162,10 +192,12 @@ indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
 infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+similar = "2"
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
-libsui = { version = "0.14" }
+libloading = "0.8"
+libsui = { version = "0.16.4" }
 log = "0.4.20"
 logos = { version = "0.15" }
 # Concurrency model checker for the profiling ring (bex_events::prof). Only a
@@ -175,10 +207,6 @@ loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 notify = "7.0"
-# Pinned to the exact version libsui depends on so `baml pack`'s ELF note
-# writer (crates/baml_cli/src/pack_elf.rs) and libsui's reader share one
-# `object` build. See pack_elf.rs for why we don't use `libsui::Elf::append`.
-object = { version = "=0.36.3", default-features = false, features = [ "build", "read_core", "elf", "std" ] }
 once_cell = "1.19"
 ouroboros = "0.18.5"
 parking_lot = { version = "0.12" }
@@ -191,15 +219,17 @@ prost = "0.14"
 prost-build = "0.14.1"
 protoc-bin-vendored = "3"
 quote = { version = "1" }
-ratatui = "0.29"
+rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
 base64 = "0.22"
+mime_guess = "2"
 bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
+mimalloc = { version = "0.1.52" }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
@@ -213,11 +243,11 @@ salsa = { version = "0.26", default-features = false, features = [
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
+semver = { version = "1" }
 # The maintained fork of the archived serde_yaml, published by the YAML org;
 # package-renamed so `use serde_yaml::` imports stay unchanged.
 serde_yaml = { package = "yaml_serde", version = "0.10" }
 sha1 = "0.10"
-similar = { version = "2.4.0", features = [ "inline" ] }
 smallvec = { version = "1.15", features = [ "const_generics" ] }
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 strsim = { version = "0.11.1" }
@@ -242,13 +272,15 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
   "fmt",
 ] }
 unicode-normalization = "0.1.25"
+ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
 url = "2.5.2"
-uuid = { version = "1", features = [ "v4" ] }
+uuid = { version = "1", features = [ "serde", "v4" ] }
 walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
+jni = "0.21"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
@@ -265,9 +297,20 @@ wasm-logger = "0.2.0"
 web-time = "1.1.0"
 getrandom = { version = "0.2" }
 getrandom_03 = { package = "getrandom", version = "0.3", features = [ "wasm_js" ] }
+# Pinned to the rand 0.8-era ecosystem (rand_core 0.6) to share the `RngCore`
+# trait with `num-bigint`'s `rand` feature below, so the `baml.random`
+# generators can drive `num-bigint` sampling (future `bigint.random`). Bumping
+# to rand_core 0.9 would fork that trait and is deliberately avoided.
+rand_core = "0.6"
+rand_chacha = "0.3"
+rand_xoshiro = "0.6"
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 num-traits = { version = "0.2" }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
+# The hardware SHA-2 backend (`asm`: SHA-NI / ARMv8 crypto extensions,
+# runtime-detected) is enabled per-target in `bex_cache` — the `asm` feature
+# does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not
+# be turned on here unconditionally.
 sha2 = { version = "0.10", features = [ "oid" ] }
 
 [workspace.lints.rust]
@@ -351,9 +394,12 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
-# Salsa dominates our compile times, so we disable it in dev mode.
+# Salsa is the compiler's query engine: it only recompiles on a lockfile or
+# toolchain bump, but it executes on every compile. At opt-level 0 a debug
+# `baml-cli` takes 10-30s to cold-compile a one-function project, which the
+# spawned-CLI e2e suites (exit_code_e2e and friends) pay per test.
 [profile.dev.package.salsa]
-opt-level = 0
+opt-level = 3
 
 # This profile is meant to mimic the `release` profile as closely as
 # possible, but using settings that are more beneficial for iterative
@@ -400,10 +446,28 @@ inherits = "release"
 # two artifacts with `unwind` turns an engine panic into a catchable
 # `BamlPanic` / JS error instead of killing the host process.
 #
+# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
+# target, language-neutral) that dylib-loader SDKs — the Rust `baml_bridge`
+# crate today, the Go bridge when it migrates — dlopen at runtime, again
+# *inside the user's process*. It needs `unwind` for the same reason:
+# `bridge_cffi`'s `catch_unwind` -> `SdkPanic` boundary only fires when the
+# stack can unwind. Host-process safety over the ~+5 MB of unwind tables (the
+# contract mandates `panic = "unwind"` for a library loaded into a user's
+# server).
+#
+# `bridge_java` is the JVM analog: a cdylib `System.load`ed into the user's JVM
+# process. Its `catch_unwind` boundary turns an engine panic into a catchable
+# `BamlPanic` instead of `SIGABRT`ing the JVM (which no `try`/`catch` could
+# recover), so it needs `panic = "unwind"` for exactly the same reason as
+# `bridge_cffi` — the 8-target Java native matrix selects
+# `--profile release-bridge-java`.
+#
 # `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
-# binary can't mix strategies), so the SDKs need their own profile rather than a
-# package override. maturin (`--profile release-bridge-python`) and napi
-# (`--profile release-bridge-node`) select these at build time. The CLI and wasm
+# binary can't mix strategies), so these artifacts need their own profile rather
+# than a package override. maturin (`--profile release-bridge-python`), napi
+# (`--profile release-bridge-node`), the standalone cdylib matrix
+# (`--profile release-bridge-cffi`), and the Java native matrix
+# (`--profile release-bridge-java`) select these at build time. The CLI and wasm
 # stay on `release`/`abort`: each owns its own process and is size-gated, so an
 # abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
 [profile.release-bridge-python]
@@ -411,5 +475,17 @@ inherits = "release"
 panic = "unwind"
 
 [profile.release-bridge-node]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-swift]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-cffi]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-java]
 inherits = "release"
 panic = "unwind"

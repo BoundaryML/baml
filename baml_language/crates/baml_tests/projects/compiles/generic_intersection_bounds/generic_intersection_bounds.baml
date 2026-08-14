@@ -1,0 +1,126 @@
+// A generic parameter's bound list is a CONJUNCTION: `T extends A & B` requires
+// an argument for `T` to implement both, and `T`'s member surface is the union
+// of every conjunct. Each conjunct must name an interface — see
+// `diagnostic_errors/generic_intersection_bounds` for the rejection cases.
+//
+// Every declaration site that accepts bounds appears below, so the TIR snapshot
+// pins both conjuncts on each type variable. CST lowering used to keep only the
+// first, silently weakening every bound written with `&`.
+
+interface Named {
+    name: string
+}
+
+interface Sized {
+    function size(self) -> int throws never
+}
+
+interface Tagged {
+    type Label
+
+    function tag(self) -> Self.Label throws never
+}
+
+class Both {
+    name: string
+
+    implements Named {}
+
+    implements Sized {
+        function size(self) -> int { 7 }
+    }
+
+    implements Tagged {
+        type Label = string
+
+        function tag(self) -> string { self.name }
+    }
+}
+
+// Function generics: members reached through either conjunct.
+function describe<T extends Named & Sized>(item: T) -> string {
+    item.name + ":" + item.size().to_string()
+}
+
+// Three conjuncts: a member declared by the *last* one is still in `T`'s
+// surface, which is the case a dropped conjunct silently broke.
+function label_of<T extends Named & Sized & Tagged<Label = string>>(item: T) -> string {
+    item.tag()
+}
+
+// An interface field read on a bounded type variable lowers to a virtual field
+// access, which the stack-carry simulator must decline to inline. Each consumer
+// below reaches that simulator by a different route — a `Return` terminator, a
+// call argument, and a `Switch` discriminant — so all three are pinned, not just
+// the one a tail expression happens to take.
+function shout(text: string) -> string {
+    text + "!"
+}
+
+function field_into_call_arg<T extends Named & Sized>(item: T) -> string {
+    let out = shout(item.name)
+    out
+}
+
+function field_into_switch<T extends Named & Sized>(item: T) -> int {
+    match (item.name) {
+        "a" => 1,
+        _ => 0,
+    }
+}
+
+// Type-constructor generics carry the same conjunction.
+class Holder<T extends Named & Sized> {
+    item: T
+}
+
+// Interface generics, and an interface method signature's own generics.
+interface Registry<T extends Named & Sized> {
+    function put(self, item: T) -> void throws never
+
+    function summarize<U extends Named & Sized>(self, other: U) -> string throws never
+}
+
+// An out-of-body `implements` block applies only to types satisfying every
+// conjunct of its own bound list.
+interface Printable {
+    function display(self) -> string throws never
+}
+
+implements<T extends Named & Sized> Printable for T {
+    function display(self) -> string { describe<T>(self) }
+}
+
+class Registered {
+    items: Both[]
+
+    implements Registry<Both> {
+        function put(self, item: Both) -> void {}
+
+        // Conformance compares full conjunctions, and the order of conjuncts is
+        // not significant, so the override may spell them the other way round.
+        function summarize<U extends Sized & Named>(self, other: U) -> string {
+            describe<U>(other)
+        }
+    }
+}
+
+function main() -> string {
+    let both = Both { name: "b" }
+    let holder = Holder<Both> { item: both }
+    let printable: Printable = both
+    let registry = Registered { items: [both] }
+    describe<Both>(both)
+        + "/"
+        + field_into_call_arg<Both>(both)
+        + "/"
+        + field_into_switch<Both>(both).to_string()
+        + "/"
+        + label_of<Both>(both)
+        + "/"
+        + holder.item.name
+        + "/"
+        + printable.display()
+        + "/"
+        + registry.summarize<Both>(both)
+}

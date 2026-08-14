@@ -16,7 +16,7 @@ class BamlPlaygroundAction : LSPCommandAction() {
         log.info("baml playground action $command $e")
         val project = e.project ?: return
         val toolWindow = ToolWindowManager.getInstance(project)
-            .getToolWindow("BAML Playground (beta)")
+            .getToolWindow("BAML v0 Playground (beta)")
 
         val args: List<Any> = command.arguments
 

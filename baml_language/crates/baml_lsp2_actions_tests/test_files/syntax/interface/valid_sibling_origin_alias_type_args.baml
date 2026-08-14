@@ -1,7 +1,7 @@
 type Texty = string | int
 
 interface Parent<T> {
-  function describe(self) -> string
+  function describe(self) -> string throws never
 }
 
 interface Child requires Parent<int | string> {}

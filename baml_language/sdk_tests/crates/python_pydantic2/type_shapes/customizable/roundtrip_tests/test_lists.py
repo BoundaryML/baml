@@ -10,26 +10,26 @@ from baml_sdk.lists import (
 )
 
 
-def test_round_trip_ints():
+def test_lists_round_trip_ints():
     assert round_trip_ints(xs=[1, 2, 3]) == [1, 2, 3]
 
 
-def test_round_trip_empty_list():
+def test_lists_round_trip_empty_list():
     # Regression for Bug A (35b), fixed by `SetInParent()` on the
     # `list_value` oneof arm in proto.py: an empty list used to encode as
     # an unset oneof, which the engine read as null and returned as `None`.
     assert round_trip_ints(xs=[]) == []
 
 
-def test_round_trip_optional_strings():
+def test_lists_round_trip_optional_strings():
     assert round_trip_optional_strings(xs=["a", None, "b"]) == ["a", None, "b"]
 
 
-def test_round_trip_union_list():
+def test_lists_round_trip_union_list():
     assert round_trip_union_list(xs=[1, "two", 3]) == [1, "two", 3]
 
 
-def test_round_trip_list_container():
+def test_lists_round_trip_list_container():
     c = ListContainer(
         ints=[1, 2],
         optional_strings=[None, "z"],

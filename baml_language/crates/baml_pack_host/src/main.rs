@@ -137,7 +137,7 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
     };
 
     finalize_dispatch(
-        engine,
+        &engine,
         &target.qualified_name,
         parsed,
         envelope.output_format,
@@ -225,11 +225,12 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
         engine.set_argv(patched);
     }
 
-    finalize_dispatch(Arc::new(engine), &chosen, parsed, envelope.output_format)
+    let engine = Arc::new(engine);
+    finalize_dispatch(&engine, &chosen, parsed, envelope.output_format)
 }
 
 fn finalize_dispatch(
-    engine: Arc<BexEngine>,
+    engine: &Arc<BexEngine>,
     target_name: &str,
     parsed: baml_exec::ParsedTargetArgs,
     output_format: baml_exec::OutputFormat,
@@ -254,12 +255,24 @@ fn finalize_dispatch(
     };
 
     let result = rt.block_on(dispatch_target(
-        engine,
+        Arc::clone(engine),
         target_name,
         parsed.cli_values,
         json_args,
         output_format,
     ));
+    rt.block_on(engine.shutdown());
+    let mut unhandled_spawn_failed = false;
+    for report in engine.take_unhandled_spawn_errors() {
+        if report.cancelled {
+            let error = report.into_engine_error();
+            eprintln!("Warning: cancelled spawned task failed: {error}");
+        } else {
+            let error = report.into_engine_error();
+            print_error(format_args!("unhandled spawned task failed: {error}"));
+            unhandled_spawn_failed = true;
+        }
+    }
 
     // Drain the profiling rings to .bamlprof before exit (no-op when
     // BAML_PROFILE is off). NB: `baml.sys.exit()` paths bypass this — same
@@ -267,7 +280,8 @@ fn finalize_dispatch(
     bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
 
     match result {
-        Ok(DispatchResult::Ok) => ExitCode::SUCCESS,
+        Ok(DispatchResult::Ok) if !unhandled_spawn_failed => ExitCode::SUCCESS,
+        Ok(DispatchResult::Ok) => ExitCode::FAILURE,
         Ok(DispatchResult::TargetError) => ExitCode::FAILURE,
         Ok(DispatchResult::Exit(code)) => std::process::exit(clamp_exit_code(code)),
         Err(e) => {

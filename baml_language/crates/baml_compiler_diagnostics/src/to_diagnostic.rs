@@ -8,6 +8,7 @@ use baml_base::Span;
 use crate::{
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic},
     errors::{ErrorContext, NameError, ParseError, TypeError},
+    message::{DiagnosticIdentifierKind, DiagnosticText},
 };
 
 // ============================================================================
@@ -21,21 +22,28 @@ impl ToDiagnostic for ParseError {
                 expected,
                 found,
                 span,
-            } => Diagnostic::error(
-                DiagnosticId::UnexpectedToken,
-                format!("Expected {expected}, found {found}"),
-            )
-            .with_primary_span(*span),
+            } => {
+                let label = DiagnosticText::new()
+                    .text("expected ")
+                    .code(expected)
+                    .text(", found ")
+                    .code(found);
+                Diagnostic::error(DiagnosticId::UnexpectedToken, "unexpected token")
+                    .with_primary(*span, label)
+            }
 
-            ParseError::UnexpectedEof { expected, span } => Diagnostic::error(
-                DiagnosticId::UnexpectedEof,
-                format!("Expected {expected}, found EOF"),
-            )
-            .with_primary_span(*span),
+            ParseError::UnexpectedEof { expected, span } => {
+                let label = DiagnosticText::new()
+                    .text("expected ")
+                    .code(expected)
+                    .text(", found end of file");
+                Diagnostic::error(DiagnosticId::UnexpectedEof, "unexpected end of file")
+                    .with_primary(*span, label)
+            }
 
             ParseError::InvalidSyntax { message, span } => {
-                Diagnostic::error(DiagnosticId::InvalidSyntax, message.clone())
-                    .with_primary_span(*span)
+                Diagnostic::error(DiagnosticId::InvalidSyntax, "invalid syntax")
+                    .with_primary(*span, message.clone())
             }
         };
         diag.with_phase(DiagnosticPhase::Parse)
@@ -63,25 +71,33 @@ impl<C: ErrorContext> TypeError<C> {
                 location,
                 info_location,
             } => {
-                let diag = Diagnostic::error(
-                    DiagnosticId::TypeMismatch,
-                    format!("Expected `{}`, found `{}`", ty_fn(expected), ty_fn(found)),
-                )
-                .with_primary_span(loc_fn(location));
+                let message = DiagnosticText::new()
+                    .text("expected ")
+                    .type_expr(ty_fn(expected))
+                    .text(", found ")
+                    .type_expr(ty_fn(found));
+                let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+                    .with_primary(loc_fn(location), message);
                 if let Some(info_location) = info_location {
-                    diag.with_secondary(loc_fn(info_location), "Type required here")
+                    diag.with_secondary(loc_fn(info_location), "expected due to this")
                 } else {
                     diag
                 }
             }
-            TypeError::UnknownType { name, location } => {
-                Diagnostic::error(DiagnosticId::UnknownType, format!("Unknown type `{name}`"))
-                    .with_primary_span(loc_fn(location))
-            }
+            TypeError::UnknownType { name, location } => Diagnostic::error(
+                DiagnosticId::UnknownType,
+                DiagnosticText::new().text("unknown type ").identifier(
+                    name,
+                    DiagnosticIdentifierKind::Type,
+                ),
+            )
+            .with_primary_span(loc_fn(location)),
 
             TypeError::UnknownVariable { name, location } => Diagnostic::error(
                 DiagnosticId::UnknownVariable,
-                format!("Unknown variable `{name}`"),
+                DiagnosticText::new()
+                    .text("unknown variable ")
+                    .identifier(name, DiagnosticIdentifierKind::Variable),
             )
             .with_primary_span(loc_fn(location)),
 
@@ -90,25 +106,31 @@ impl<C: ErrorContext> TypeError<C> {
                 lhs,
                 rhs,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::InvalidOperator,
-                format!(
-                    "Cannot apply operator '{op}' to types `{}` and `{}`",
-                    ty_fn(lhs),
-                    ty_fn(rhs)
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
+            } => {
+                let message = DiagnosticText::new()
+                    .text("cannot apply operator ")
+                    .code(op)
+                    .text(" to types ")
+                    .type_expr(ty_fn(lhs))
+                    .text(" and ")
+                    .type_expr(ty_fn(rhs));
+                Diagnostic::error(DiagnosticId::InvalidOperator, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
             TypeError::InvalidUnaryOp {
                 op,
                 operand,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::InvalidOperator,
-                format!("Cannot apply operator '{op}' to type `{}`", ty_fn(operand)),
-            )
-            .with_primary_span(loc_fn(location)),
+            } => {
+                let message = DiagnosticText::new()
+                    .text("cannot apply operator ")
+                    .code(op)
+                    .text(" to type ")
+                    .type_expr(ty_fn(operand));
+                Diagnostic::error(DiagnosticId::InvalidOperator, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
             TypeError::ArgumentCountMismatch {
                 expected,
@@ -116,31 +138,41 @@ impl<C: ErrorContext> TypeError<C> {
                 location,
             } => Diagnostic::error(
                 DiagnosticId::ArgumentCountMismatch,
-                format!("Expected {expected} arguments, found {found}"),
+                format!("expected {expected} arguments, found {found}"),
             )
             .with_primary_span(loc_fn(location)),
 
-            TypeError::NotCallable { ty, location } => Diagnostic::error(
-                DiagnosticId::NotCallable,
-                format!("Type `{}` is not callable", ty_fn(ty)),
-            )
-            .with_primary_span(loc_fn(location)),
+            TypeError::NotCallable { ty, location } => {
+                let message = DiagnosticText::new()
+                    .text("type ")
+                    .type_expr(ty_fn(ty))
+                    .text(" is not callable");
+                Diagnostic::error(DiagnosticId::NotCallable, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
             TypeError::NoSuchField {
                 ty,
                 field,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::NoSuchField,
-                format!("Type `{}` has no field `{field}`", ty_fn(ty)),
-            )
-            .with_primary_span(loc_fn(location)),
+            } => {
+                let message = DiagnosticText::new()
+                    .text("type ")
+                    .type_expr(ty_fn(ty))
+                    .text(" has no field ")
+                    .identifier(field, DiagnosticIdentifierKind::Field);
+                Diagnostic::error(DiagnosticId::NoSuchField, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
-            TypeError::NotIndexable { ty, location } => Diagnostic::error(
-                DiagnosticId::NotIndexable,
-                format!("Type `{}` is not indexable", ty_fn(ty)),
-            )
-            .with_primary_span(loc_fn(location)),
+            TypeError::NotIndexable { ty, location } => {
+                let message = DiagnosticText::new()
+                    .text("type ")
+                    .type_expr(ty_fn(ty))
+                    .text(" is not indexable");
+                Diagnostic::error(DiagnosticId::NotIndexable, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
             TypeError::NonExhaustiveMatch {
                 scrutinee_type,
@@ -151,7 +183,7 @@ impl<C: ErrorContext> TypeError<C> {
                 Diagnostic::error(
                     DiagnosticId::NonExhaustiveMatch,
                     format!(
-                        "Non-exhaustive match on `{}`: missing cases {missing}",
+                        "non-exhaustive match on `{}`: missing cases {missing}",
                         ty_fn(scrutinee_type)
                     ),
                 )
@@ -159,12 +191,12 @@ impl<C: ErrorContext> TypeError<C> {
             }
 
             TypeError::UnreachableArm { location } => {
-                Diagnostic::error(DiagnosticId::UnreachableArm, "Unreachable match arm")
+                Diagnostic::error(DiagnosticId::UnreachableArm, "unreachable match arm")
                     .with_primary_span(loc_fn(location))
             }
 
             TypeError::UnreachableCatchArm { location } => {
-                Diagnostic::warning(DiagnosticId::UnreachableCatchArm, "Unreachable catch arm")
+                Diagnostic::warning(DiagnosticId::UnreachableCatchArm, "unreachable catch arm")
                     .with_primary_span(loc_fn(location))
             }
 
@@ -172,34 +204,26 @@ impl<C: ErrorContext> TypeError<C> {
                 enum_name,
                 variant_name,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::UnknownEnumVariant,
-                format!("Unknown variant `{variant_name}` for enum `{enum_name}`"),
-            )
-            .with_primary_span(loc_fn(location)),
+            } => {
+                let message = DiagnosticText::new()
+                    .text("unknown variant ")
+                    .identifier(variant_name, DiagnosticIdentifierKind::EnumVariant)
+                    .text(" for enum ")
+                    .identifier(enum_name, DiagnosticIdentifierKind::Type);
+                Diagnostic::error(DiagnosticId::UnknownEnumVariant, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
-            TypeError::WatchOnNonVariable { location } => Diagnostic::error(
-                DiagnosticId::WatchOnNonVariable,
-                "$watch can only be used on simple variable expressions",
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::WatchOnUnwatchedVariable { name, location } => Diagnostic::error(
-                DiagnosticId::WatchOnUnwatchedVariable,
-                format!(
-                    "Cannot use $watch on `{name}`: variable must be declared with `watch let`"
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::MissingReturnExpression { expected, location } => Diagnostic::error(
-                DiagnosticId::MissingReturnExpression,
-                format!(
-                    "Missing return expression. Function expects `{}` but body has no final expression.",
-                    ty_fn(expected)
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
+            TypeError::MissingReturnExpression { expected, location } => {
+                let label = DiagnosticText::new()
+                    .text("expected return value of type ")
+                    .type_expr(ty_fn(expected));
+                Diagnostic::error(
+                    DiagnosticId::MissingReturnExpression,
+                    "missing return expression",
+                )
+                .with_primary(loc_fn(location), label)
+            }
 
             TypeError::NonExhaustiveCatch {
                 unhandled_types,
@@ -208,7 +232,7 @@ impl<C: ErrorContext> TypeError<C> {
                 let unhandled = unhandled_types.join(", ");
                 Diagnostic::error(
                     DiagnosticId::NonExhaustiveCatch,
-                    format!("Non-exhaustive catch chain: unhandled throw types {unhandled}"),
+                    format!("non-exhaustive catch chain: unhandled throw types {unhandled}"),
                 )
                 .with_primary_span(loc_fn(location))
             }
@@ -220,7 +244,7 @@ impl<C: ErrorContext> TypeError<C> {
                 let extras = extra_types.join(", ");
                 Diagnostic::error(
                     DiagnosticId::ThrowsContractViolation,
-                    format!("Function throws types not covered by `throws` declaration: {extras}"),
+                    format!("function throws types not covered by `throws` declaration: {extras}"),
                 )
                 .with_primary_span(loc_fn(location))
             }
@@ -240,273 +264,29 @@ impl<C: ErrorContext> TypeError<C> {
             TypeError::InvalidMapKeyType { ty, location } => Diagnostic::error(
                 DiagnosticId::InvalidMapKeyType,
                 format!(
-                    "Invalid type {} for map key. Only strings, string literals and enums are valid map keys.",
+                    "invalid type {} for map key. Only strings, string literals and enums are valid map keys.",
                     ty_fn(ty)
                 )
             ).with_primary_span(loc_fn(location)),
 
             TypeError::AliasCycle { cycle_path, location } => Diagnostic::error(
                 DiagnosticId::AliasCycle,
-                format!("These aliases form a dependency cycle: {cycle_path}"),
+                format!("these aliases form a dependency cycle: {cycle_path}"),
             )
             .with_primary_span(loc_fn(location)),
 
             TypeError::ClassCycle { cycle_path, location } => Diagnostic::error(
                 DiagnosticId::ClassCycle,
-                format!("These classes form a dependency cycle: {cycle_path}"),
+                format!("these classes form a dependency cycle: {cycle_path}"),
             )
             .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaUnresolvedVariable {
-                name,
-                suggestions,
-                location,
-            } => {
-                let message = if suggestions.is_empty() {
-                    format!("Variable `{name}` does not exist.")
-                } else if suggestions.len() == 1 {
-                    format!(
-                        "Variable `{name}` does not exist. Did you mean `{}`?",
-                        suggestions[0]
-                    )
-                } else {
-                    format!(
-                        "Variable `{name}` does not exist. Did you mean one of these: `{}`?",
-                        suggestions.join("`, `")
-                    )
-                };
-                Diagnostic::warning(DiagnosticId::JinjaUnresolvedVariable, message)
-                    .with_primary_span(loc_fn(location))
-            }
-
-            TypeError::JinjaFunctionReferenceWithoutCall {
-                function_name,
-                location,
-            } => Diagnostic::warning(
-                DiagnosticId::JinjaFunctionReferenceWithoutCall,
-                format!(
-                    "Function '{function_name}' referenced without parentheses. Did you mean '{function_name}()'?"
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaInvalidFilter {
-                filter_name,
-                suggestions,
-                location,
-            } => {
-                let message = if suggestions.is_empty() {
-                    format!("Filter '{filter_name}' does not exist")
-                } else if suggestions.len() == 1 {
-                    format!(
-                        "Filter '{filter_name}' does not exist. Did you mean '{}'?",
-                        suggestions[0]
-                    )
-                } else {
-                    format!(
-                        "Filter '{filter_name}' does not exist. Did you mean one of these: '{}'?",
-                        suggestions.join("', '")
-                    )
-                };
-                Diagnostic::warning(
-                    DiagnosticId::JinjaInvalidFilter,
-                    format!(
-                        "{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions"
-                    ),
-                )
-                .with_primary_span(loc_fn(location))
-            }
-
-            TypeError::JinjaInvalidType {
-                expression,
-                expected,
-                found,
-                location,
-            } => {
-                let found_desc = if found == "undefined" {
-                    "undefined".to_string()
-                } else {
-                    format!("a {found}")
-                };
-                Diagnostic::warning(
-                    DiagnosticId::JinjaInvalidType,
-                    format!("'{expression}' is {found_desc}, expected {expected}"),
-                )
-                .with_primary_span(loc_fn(location))
-            }
-
-            TypeError::JinjaPropertyNotDefined {
-                variable,
-                class_name,
-                property,
-                location,
-            } => Diagnostic::warning(
-                DiagnosticId::JinjaPropertyNotDefined,
-                format!("class {class_name} ({variable}) does not have a property '{property}'"),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaEnumValuePropertyAccess {
-                variable,
-                enum_value,
-                property,
-                location,
-            } => Diagnostic::warning(
-                DiagnosticId::JinjaEnumValuePropertyAccess,
-                format!(
-                    "enum value {enum_value} ({variable}) does not have a property '{property}'"
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaEnumStringComparison { enum_name, location } => Diagnostic::warning(
-                DiagnosticId::JinjaEnumStringComparison,
-                format!(
-                    "Comparing enum {enum_name} to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaPropertyNotFoundInUnion {
-                property,
-                missing_on,
-                location,
-            } => {
-                let classes_str = missing_on.join(", ");
-                Diagnostic::warning(
-                    DiagnosticId::JinjaPropertyNotFoundInUnion,
-                    format!("property '{property}' does not exist on {classes_str}"),
-                )
-                .with_primary_span(loc_fn(location))
-            }
-
-            TypeError::JinjaPropertyTypeMismatchInUnion { property, location } => {
-                Diagnostic::warning(
-                    DiagnosticId::JinjaPropertyTypeMismatchInUnion,
-                    format!(
-                        "property '{property}' has inconsistent types across union members"
-                    ),
-                )
-                .with_primary_span(loc_fn(location))
-            }
-
-            TypeError::JinjaNonClassInUnion {
-                variable,
-                property,
-                non_class_type,
-                location,
-            } => Diagnostic::warning(
-                DiagnosticId::JinjaNonClassInUnion,
-                format!(
-                    "cannot access property '{property}' on '{variable}': union contains non-class type {non_class_type}"
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaWrongArgCount {
-                function_name,
-                expected,
-                found,
-                location,
-            } => Diagnostic::warning(
-                DiagnosticId::JinjaWrongArgCount,
-                format!(
-                    "Function '{function_name}' expects {expected} arguments, but got {found}"
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaMissingArg {
-                function_name,
-                arg_name,
-                location,
-            } => Diagnostic::warning(
-                DiagnosticId::JinjaMissingArg,
-                format!("Function '{function_name}' expects argument '{arg_name}'"),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaUnknownArg {
-                function_name,
-                arg_name,
-                suggestions,
-                location,
-            } => {
-                let message = if suggestions.is_empty() {
-                    format!(
-                        "Function '{function_name}' does not have an argument '{arg_name}'"
-                    )
-                } else if suggestions.len() == 1 {
-                    format!(
-                        "Function '{function_name}' does not have an argument '{arg_name}'. Did you mean '{}'?",
-                        suggestions[0]
-                    )
-                } else {
-                    format!(
-                        "Function '{function_name}' does not have an argument '{arg_name}'. Did you mean one of these: '{}'?",
-                        suggestions.join("', '")
-                    )
-                };
-                Diagnostic::warning(DiagnosticId::JinjaUnknownArg, message)
-                    .with_primary_span(loc_fn(location))
-            }
-
-            TypeError::JinjaWrongArgType {
-                function_name,
-                arg_name,
-                expected,
-                found,
-                location,
-            } => Diagnostic::warning(
-                DiagnosticId::JinjaWrongArgType,
-                format!(
-                    "Function '{function_name}' expects argument '{arg_name}' to be of type {expected}, but got {found}"
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaParseError { message, location } => {
-                Diagnostic::warning(
-                    DiagnosticId::JinjaParseError,
-                    format!("Failed to parse Jinja template: {message}"),
-                )
-                .with_primary_span(loc_fn(location))
-            }
-
-            TypeError::JinjaUnsupportedFeature { feature, location } => Diagnostic::warning(
-                DiagnosticId::JinjaUnsupportedFeature,
-                format!("{feature} are not yet supported"),
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::JinjaInvalidSyntax { message, location } => {
-                Diagnostic::warning(DiagnosticId::JinjaInvalidSyntax, message.clone())
-                    .with_primary_span(loc_fn(location))
-            }
-
-            TypeError::JinjaInvalidTest {
-                test_name,
-                suggestions,
-                location,
-            } => {
-                let msg = if suggestions.is_empty() {
-                    format!("unknown test '{test_name}'")
-                } else {
-                    format!(
-                        "unknown test '{test_name}'. Valid tests: {}",
-                        suggestions.join(", ")
-                    )
-                };
-                Diagnostic::warning(DiagnosticId::JinjaInvalidTest, msg)
-                    .with_primary_span(loc_fn(location))
-            }
 
             TypeError::InvalidCatchBindingType {
                 type_name,
                 location,
             } => Diagnostic::error(
                 DiagnosticId::InvalidCatchBindingType,
-                format!("Type `{type_name}` is not allowed in catch bindings"),
+                format!("type `{type_name}` is not allowed in catch bindings"),
             )
             .with_primary_span(loc_fn(location)),
 
@@ -536,7 +316,7 @@ impl ToDiagnostic for NameError {
                 second_path: _,
             } => Diagnostic::error(
                 DiagnosticId::DuplicateName,
-                format!("Duplicate {kind} `{name}`"),
+                format!("duplicate {kind} `{name}`"),
             )
             .with_primary(*second, format!("{kind} `{name}` redefined here"))
             .with_secondary(*first, format!("`{name}` first defined in {first_path}")),
@@ -550,7 +330,7 @@ impl ToDiagnostic for NameError {
                 second_path: _,
             } => Diagnostic::error(
                 DiagnosticId::DuplicateName,
-                format!("Duplicate test `{test_name}` for function `{function_name}`"),
+                format!("duplicate test `{test_name}` for function `{function_name}`"),
             )
             .with_primary(
                 *second,
@@ -566,7 +346,7 @@ impl ToDiagnostic for NameError {
                 span,
             } => Diagnostic::error(
                 DiagnosticId::UnknownFunctionInTest,
-                format!("Unknown function `{function_name}` in test block"),
+                format!("unknown function `{function_name}` in test block"),
             )
             .with_primary(*span, format!("no function named `{function_name}` exists")),
         };
@@ -599,7 +379,13 @@ mod tests {
 
         let diag = error.to_diagnostic();
         assert_eq!(diag.code(), "E0010");
-        assert!(diag.message.contains("Expected"));
+        assert_eq!(diag.message, "unexpected token");
+        assert!(
+            diag.annotations[0]
+                .message
+                .as_deref()
+                .is_some_and(|message| message.contains("expected"))
+        );
         assert_eq!(diag.phase, DiagnosticPhase::Parse);
     }
 
@@ -614,8 +400,10 @@ mod tests {
 
         let diag = error.to_diagnostic(Clone::clone, |s| *s);
         assert_eq!(diag.code(), "E0001");
-        assert!(diag.message.contains("int"));
-        assert!(diag.message.contains("string"));
+        assert_eq!(diag.message, "mismatched types");
+        let label = diag.annotations[0].message.as_deref().unwrap();
+        assert!(label.contains("int"));
+        assert!(label.contains("string"));
         assert_eq!(diag.phase, DiagnosticPhase::Type);
     }
 
@@ -657,7 +445,7 @@ mod tests {
 
         let diag = error.to_diagnostic();
         assert_eq!(diag.code(), "E0011");
-        assert!(diag.message.contains("Duplicate"));
+        assert!(diag.message.contains("duplicate"));
         assert_eq!(diag.annotations.len(), 2); // primary + secondary
         assert_eq!(diag.phase, DiagnosticPhase::Validation);
     }

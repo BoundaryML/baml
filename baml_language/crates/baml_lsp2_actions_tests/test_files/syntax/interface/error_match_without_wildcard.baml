@@ -2,7 +2,7 @@
 // (new implementors may appear).
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {
@@ -26,14 +26,12 @@ function describe(a: Animal) -> string {
 
 //----
 //- diagnostics
-// error: non-exhaustive match on type Animal; missing: _
-//     ╭─[ interface_error_match_without_wildcard.baml:21:10 ]
-//     │
+// E0062
+//
+//   × non-exhaustive match on type Animal; missing: Animal {}
+//     ╭─[interface_error_match_without_wildcard.baml:21:10]
 //  21 │ ╭─▶   return match (a) {
-//     ┆ ┆
-//  24 │ ├─▶   }
-//     │ │
-//     │ ╰───────── non-exhaustive match on type Animal; missing: _
-//     │
-//     │     Note: Error code: E0062
-// ────╯
+//  22 │ │       let d: Dog => "dog"
+//  23 │ │       let c: Cat => "cat"
+//  24 │ ╰─▶   }
+//     ╰────

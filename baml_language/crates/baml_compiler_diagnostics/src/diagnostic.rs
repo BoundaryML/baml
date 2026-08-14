@@ -4,7 +4,12 @@
 //! compiler error across all phases (parsing, HIR lowering, type checking).
 //! This enables centralized rendering and consistent error handling.
 
+use std::borrow::Cow;
+
 use baml_base::{FileId, Span};
+use borsh::{BorshDeserialize, BorshSerialize};
+
+use crate::message::{DiagnosticMessageHighlight, DiagnosticText};
 
 // ============================================================================
 // DiagnosticPhase - Tracks which compiler phase produced a diagnostic
@@ -13,8 +18,12 @@ use baml_base::{FileId, Span};
 /// The compiler phase that produced a diagnostic.
 ///
 /// This enables grouping diagnostics by phase for display purposes
-/// (e.g., in `tools_onionskin` TUI or `baml_tests` snapshots).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+/// (e.g., in `baml_tests` snapshots).
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticPhase {
     /// Parsing phase errors (syntax errors from the parser)
     #[default]
@@ -27,20 +36,12 @@ pub enum DiagnosticPhase {
     Type,
 }
 
-impl DiagnosticPhase {
-    /// Get a short display name for the phase.
-    pub fn name(&self) -> &'static str {
-        match self {
-            DiagnosticPhase::Parse => "parse",
-            DiagnosticPhase::Hir => "hir",
-            DiagnosticPhase::Validation => "validation",
-            DiagnosticPhase::Type => "type",
-        }
-    }
-}
-
 /// Unique identifier for a diagnostic category.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticId {
     // Parse errors (E0009, E0010)
     UnexpectedEof,
@@ -122,8 +123,6 @@ pub enum DiagnosticId {
     NonExhaustiveCatch,
     UnreachableCatchArm,
     UnknownEnumVariant,
-    WatchOnNonVariable,
-    WatchOnUnwatchedVariable,
 
     // Control-flow diagnostics (E0146)
     UnreachableCode,
@@ -158,38 +157,12 @@ pub enum DiagnosticId {
     TestFieldAttribute,
     UnknownFunctionInTest,
 
-    // Type builder diagnostics (E0040-E0043)
-    TypeBuilderInNonTestContext,
-    DuplicateTypeBuilderBlock,
-    IncompleteDynamicDefinition,
-    TypeBuilderSyntaxError,
-
     // Reserved prefix diagnostics
     ReservedStreamPrefix,
 
     // Cycle detection diagnostics (E0068-E0069)
     AliasCycle,
     ClassCycle,
-
-    // Jinja template diagnostics (E0070-E0086)
-    JinjaUnresolvedVariable,
-    JinjaFunctionReferenceWithoutCall,
-    JinjaInvalidFilter,
-    JinjaInvalidType,
-    JinjaPropertyNotDefined,
-    JinjaEnumValuePropertyAccess,
-    JinjaEnumStringComparison,
-    JinjaPropertyNotFoundInUnion,
-    JinjaPropertyTypeMismatchInUnion,
-    JinjaNonClassInUnion,
-    JinjaWrongArgCount,
-    JinjaMissingArg,
-    JinjaUnknownArg,
-    JinjaWrongArgType,
-    JinjaParseError,
-    JinjaUnsupportedFeature,
-    JinjaInvalidSyntax,
-    JinjaInvalidTest,
 
     // Catch binding errors (E0093)
     InvalidCatchBindingType,
@@ -226,7 +199,7 @@ pub enum DiagnosticId {
     // Wildcard `_` type in a non-inferable position (E0147)
     WildcardTypeNotAllowed,
 
-    // Interface diagnostics (BEP-044; E0112-E0120)
+    // Interface diagnostics (BEP-044)
     /// `implements I {}` references an interface that does not exist.
     UnknownInterface,
     /// A class is missing the body of a required interface method.
@@ -246,6 +219,11 @@ pub enum DiagnosticId {
     /// A method body in `implements I {}` has a signature that doesn't match
     /// the interface's declared signature for that method.
     InterfaceMethodSignatureMismatch,
+    /// A `$rust_io_function` (sys-op) method in an `implements` block declares
+    /// its own generic parameters. Such a method is reached only through
+    /// interface (virtual) dispatch, which cannot carry the sys-op's
+    /// method-level type arguments.
+    GenericSysOpMethodInInterfaceImpl,
     /// Two `implements` blocks on the same class declare methods with the
     /// same name — unqualified calls would be ambiguous (BEP-044
     /// §"Method Disambiguation").
@@ -262,6 +240,10 @@ pub enum DiagnosticId {
     UnconstrainedImplTypeParam,
     /// `Self` used in an interface FIELD type (only valid in method signatures).
     SelfInInterfaceField,
+    /// Bare `Self` used in an associated type's DEFAULT. `Self` is universal, so it
+    /// cannot be resolved where the interface is used as an interface-existential
+    /// type (the implementor is hidden).
+    SelfInAssociatedTypeDefault,
     /// An `implements … for <target>` whose `for` target is not a single concrete
     /// type — a union, optional, interface ("dyn"), or `unknown`. Interfaces can
     /// only be implemented for a concrete type (or a concrete type constructor
@@ -320,6 +302,13 @@ pub enum DiagnosticId {
     /// is a lint (warning), not a type error.
     ArrayFilledAliasing,
 
+    // Function-type throws requirement (E0151)
+    /// A function type in a position where its error type cannot be inferred
+    /// (type alias, class field, `let` annotation, nested or return position)
+    /// omits its `throws` clause (`TYPE_SYSTEM.md` rule 5). Only an immediate
+    /// callback parameter of a function declaration may omit it (rule 4).
+    FunctionTypeMissingThrows,
+
     // Serialized-key collision (E0149)
     /// Two or more fields of a class serialize to the same JSON key — either two
     /// fields share an `@alias`, or one field's name equals another field's
@@ -327,6 +316,31 @@ pub enum DiagnosticId {
     /// never matched, so `ctx.output_format` renders duplicate keys and a
     /// required shadowed field can never be parsed (Linear B-615).
     DuplicateFieldAlias,
+
+    // Numeric literal validation (E0152)
+    /// A numeric literal token failed validation in `baml_base::num_lit`:
+    /// uppercase base prefix (`0X1F`), no digits after the prefix (`0x`),
+    /// a digit invalid for the base (`0b12`), or an integer literal whose
+    /// magnitude exceeds `i64::MAX`.
+    InvalidNumericLiteral,
+
+    // Builtin interfaces (BEP-062, E0153/E0154)
+    /// An `implements` block targets a compiler-builtin interface
+    /// (`baml.AnyFunction`), whose conformance is derived by the compiler
+    /// (every function type implements it) and cannot be written by hand.
+    BuiltinInterfaceNotImplementable,
+    /// A generic parameter's bound (`T extends X`) names a compiler-builtin
+    /// interface (`baml.AnyFunction`) that is only legal as a value type
+    /// (an existential), never as a bound.
+    BuiltinInterfaceNotABound,
+
+    // Projection bases (E0156)
+    /// The dotted projection shorthand (`Base.Member`) was written with the
+    /// interface itself as the base (`Iterator.Element`). A projection's base
+    /// is an implementor type, a bounded type variable, or `Self` — naming
+    /// the interface explicitly takes a qualified projection
+    /// (`(Base as Iterator).Element`). Rust's E0223 analog.
+    InterfaceProjectionBase,
 }
 
 impl DiagnosticId {
@@ -393,8 +407,6 @@ impl DiagnosticId {
             DiagnosticId::NonExhaustiveCatch => "E0094",
             DiagnosticId::UnreachableCatchArm => "E0095",
             DiagnosticId::UnknownEnumVariant => "E0064",
-            DiagnosticId::WatchOnNonVariable => "E0065",
-            DiagnosticId::WatchOnUnwatchedVariable => "E0066",
 
             // Control-flow diagnostics
             DiagnosticId::UnreachableCode => "E0146",
@@ -416,7 +428,9 @@ impl DiagnosticId {
 
             // Type literal errors
             DiagnosticId::UnsupportedFloatLiteral => "E0033",
-            DiagnosticId::IntegerLiteralOutOfRange => "E0139",
+            // E0139 is the orphan-rule code (`ImplViolatesOrphanRule`, BEP-044); this
+            // literal error previously collided with it — moved to the next free code.
+            DiagnosticId::IntegerLiteralOutOfRange => "E0150",
 
             // Map type errors
             DiagnosticId::InvalidMapArity => "E0039",
@@ -427,35 +441,9 @@ impl DiagnosticId {
             DiagnosticId::TestFieldAttribute => "E0036",
             DiagnosticId::UnknownFunctionInTest => "E0088",
 
-            // Type builder diagnostics
-            DiagnosticId::TypeBuilderInNonTestContext => "E0040",
-            DiagnosticId::DuplicateTypeBuilderBlock => "E0041",
-            DiagnosticId::IncompleteDynamicDefinition => "E0042",
-            DiagnosticId::TypeBuilderSyntaxError => "E0043",
-
             // Cycle detection diagnostics
             DiagnosticId::AliasCycle => "E0068",
             DiagnosticId::ClassCycle => "E0069",
-
-            // Jinja template diagnostics
-            DiagnosticId::JinjaUnresolvedVariable => "E0070",
-            DiagnosticId::JinjaFunctionReferenceWithoutCall => "E0071",
-            DiagnosticId::JinjaInvalidFilter => "E0072",
-            DiagnosticId::JinjaInvalidType => "E0073",
-            DiagnosticId::JinjaPropertyNotDefined => "E0074",
-            DiagnosticId::JinjaEnumValuePropertyAccess => "E0075",
-            DiagnosticId::JinjaEnumStringComparison => "E0076",
-            DiagnosticId::JinjaPropertyNotFoundInUnion => "E0077",
-            DiagnosticId::JinjaPropertyTypeMismatchInUnion => "E0078",
-            DiagnosticId::JinjaNonClassInUnion => "E0079",
-            DiagnosticId::JinjaWrongArgCount => "E0080",
-            DiagnosticId::JinjaMissingArg => "E0081",
-            DiagnosticId::JinjaUnknownArg => "E0082",
-            DiagnosticId::JinjaWrongArgType => "E0083",
-            DiagnosticId::JinjaParseError => "E0084",
-            DiagnosticId::JinjaUnsupportedFeature => "E0085",
-            DiagnosticId::JinjaInvalidSyntax => "E0086",
-            DiagnosticId::JinjaInvalidTest => "E0087",
 
             // Reserved prefix errors
             DiagnosticId::ReservedStreamPrefix => "E0100",
@@ -522,23 +510,42 @@ impl DiagnosticId {
             DiagnosticId::ImplTargetNotConcrete => "E0138",
             DiagnosticId::ImplViolatesOrphanRule => "E0139",
             DiagnosticId::ToStringMustImplementInterface => "E0140",
+            DiagnosticId::SelfInAssociatedTypeDefault => "E0157",
             DiagnosticId::DeferControlFlowEscape => "E0141",
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
             DiagnosticId::GenericBoundNotInterface => "E0145",
+            DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
             // Aliasing lints
             DiagnosticId::ArrayFilledAliasing => "E0148",
 
             // Serialized-key collision
             DiagnosticId::DuplicateFieldAlias => "E0149",
+
+            // Function-type throws requirement
+            DiagnosticId::FunctionTypeMissingThrows => "E0151",
+
+            // Numeric literal validation
+            DiagnosticId::InvalidNumericLiteral => "E0152",
+            // BUG(e-code-collision): "E0153" is also assigned to
+            // `GenericSysOpMethodInInterfaceImpl` above. One of the two needs
+            // a fresh code; renumbering changes user-facing diagnostics, so it
+            // deserves its own change.
+            DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
+            DiagnosticId::BuiltinInterfaceNotABound => "E0154",
+            DiagnosticId::InterfaceProjectionBase => "E0156",
         }
     }
 }
 
 /// Severity level of a diagnostic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum Severity {
     /// An error that prevents compilation.
     Error,
@@ -555,34 +562,41 @@ pub struct Annotation {
     pub span: Span,
     /// Message for this annotation (optional).
     pub message: Option<String>,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Whether this is the primary annotation.
     pub is_primary: bool,
 }
 
 impl Annotation {
     /// Create a primary annotation with a message.
-    pub fn primary(span: Span, message: impl Into<String>) -> Self {
+    pub fn primary(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: Some(message.into()),
+            message: Some(message),
+            message_highlights,
             is_primary: true,
         }
     }
 
-    /// Create a primary annotation without a message.
-    pub fn primary_no_msg(span: Span) -> Self {
+    /// Create a primary annotation without a label.
+    pub fn primary_span(span: Span) -> Self {
         Self {
             span,
             message: None,
+            message_highlights: Vec::new(),
             is_primary: true,
         }
     }
 
     /// Create a secondary annotation with a message.
-    pub fn secondary(span: Span, message: impl Into<String>) -> Self {
+    pub fn secondary(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: Some(message.into()),
+            message: Some(message),
+            message_highlights,
             is_primary: false,
         }
     }
@@ -595,26 +609,21 @@ pub struct RelatedInfo {
     pub span: Span,
     /// The message describing this related location.
     pub message: String,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Optional file path for display purposes.
     pub file_path: Option<String>,
 }
 
 impl RelatedInfo {
     /// Create a new related info with a span and message.
-    pub fn new(span: Span, message: impl Into<String>) -> Self {
+    pub fn new(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: message.into(),
+            message,
+            message_highlights,
             file_path: None,
-        }
-    }
-
-    /// Create a new related info with file path for display.
-    pub fn with_path(span: Span, message: impl Into<String>, path: impl Into<String>) -> Self {
-        Self {
-            span,
-            message: message.into(),
-            file_path: Some(path.into()),
         }
     }
 }
@@ -623,7 +632,7 @@ impl RelatedInfo {
 ///
 /// This type is inspired by `ruff_db::Diagnostic` and enables:
 /// - Centralized diagnostic collection via `Project::check()`
-/// - Multi-format rendering (Ariadne for CLI, LSP types for editors)
+/// - Multi-format rendering (Miette for CLI, LSP types for editors)
 /// - Consistent error handling across all compiler phases
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
@@ -633,6 +642,8 @@ pub struct Diagnostic {
     pub severity: Severity,
     /// The main error message.
     pub message: String,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Annotations pointing to relevant source locations.
     pub annotations: Vec<Annotation>,
     /// Related information (e.g., "first defined here").
@@ -643,11 +654,13 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     /// Create a new diagnostic with a single primary span.
-    pub fn new(id: DiagnosticId, severity: Severity, message: impl Into<String>) -> Self {
+    pub fn new(id: DiagnosticId, severity: Severity, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             id,
             severity,
-            message: message.into(),
+            message,
+            message_highlights,
             annotations: Vec::new(),
             related_info: Vec::new(),
             phase: DiagnosticPhase::default(),
@@ -655,12 +668,12 @@ impl Diagnostic {
     }
 
     /// Create an error diagnostic.
-    pub fn error(id: DiagnosticId, message: impl Into<String>) -> Self {
+    pub fn error(id: DiagnosticId, message: impl Into<DiagnosticText>) -> Self {
         Self::new(id, Severity::Error, message)
     }
 
     /// Create a warning diagnostic.
-    pub fn warning(id: DiagnosticId, message: impl Into<String>) -> Self {
+    pub fn warning(id: DiagnosticId, message: impl Into<DiagnosticText>) -> Self {
         Self::new(id, Severity::Warning, message)
     }
 
@@ -673,7 +686,7 @@ impl Diagnostic {
 
     /// Add a primary annotation at a span with a message.
     #[must_use]
-    pub fn with_primary(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_primary(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.annotations.push(Annotation::primary(span, message));
         self
     }
@@ -681,35 +694,21 @@ impl Diagnostic {
     /// Add a primary annotation at a span using the main message.
     #[must_use]
     pub fn with_primary_span(mut self, span: Span) -> Self {
-        self.annotations
-            .push(Annotation::primary(span, self.message.clone()));
+        self.annotations.push(Annotation::primary_span(span));
         self
     }
 
     /// Add a secondary annotation at a span.
     #[must_use]
-    pub fn with_secondary(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_secondary(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.annotations.push(Annotation::secondary(span, message));
         self
     }
 
     /// Add related information.
     #[must_use]
-    pub fn with_related(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_related(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.related_info.push(RelatedInfo::new(span, message));
-        self
-    }
-
-    /// Add related information with file path.
-    #[must_use]
-    pub fn with_related_path(
-        mut self,
-        span: Span,
-        message: impl Into<String>,
-        path: impl Into<String>,
-    ) -> Self {
-        self.related_info
-            .push(RelatedInfo::with_path(span, message, path));
         self
     }
 
@@ -724,6 +723,19 @@ impl Diagnostic {
             .iter()
             .find(|a| a.is_primary)
             .map(|a| a.span)
+    }
+
+    /// Return the headline plus a distinct primary annotation label.
+    pub fn message_with_primary_label(&self) -> Cow<'_, str> {
+        self.annotations
+            .iter()
+            .find(|annotation| annotation.is_primary)
+            .and_then(|annotation| annotation.message.as_deref())
+            .filter(|message| *message != self.message)
+            .map_or_else(
+                || Cow::Borrowed(self.message.as_str()),
+                |message| Cow::Owned(format!("{}: {message}", self.message)),
+            )
     }
 
     /// Get the primary file ID.
@@ -780,6 +792,17 @@ mod tests {
     }
 
     #[test]
+    fn message_with_primary_label_preserves_span_detail() {
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+            .with_primary(test_span(), "expected `int`, found `string`");
+
+        assert_eq!(
+            diag.message_with_primary_label(),
+            "mismatched types: expected `int`, found `string`"
+        );
+    }
+
+    #[test]
     fn test_all_error_codes() {
         // Ensure all DiagnosticId variants have unique error codes
         let ids = vec![
@@ -802,6 +825,33 @@ mod tests {
         for id in ids {
             let code = id.code();
             assert!(code.starts_with('E'), "Code should start with E: {code}");
+        }
+    }
+
+    #[test]
+    fn borsh_discriminants_are_stable() {
+        // The per-file diagnostics cache serializes these fieldless enums as a
+        // declaration-order discriminant. A snapshot of the first few variants
+        // guards against a silent reorder (which must instead bump the cache's
+        // `FORMAT_VERSION`). Borsh writes enum discriminants as a single byte.
+        assert_eq!(
+            borsh::to_vec(&DiagnosticId::UnexpectedEof).unwrap(),
+            vec![0]
+        );
+        assert_eq!(borsh::to_vec(&DiagnosticId::TypeMismatch).unwrap(), vec![3]);
+        assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
+        assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);
+        assert_eq!(borsh::to_vec(&DiagnosticPhase::Parse).unwrap(), vec![0]);
+        assert_eq!(borsh::to_vec(&DiagnosticPhase::Type).unwrap(), vec![3]);
+
+        // Round-trip every representative id to prove deserialize is the inverse.
+        for id in [
+            DiagnosticId::TypeMismatch,
+            DiagnosticId::DuplicateFieldAlias,
+            DiagnosticId::OverlappingImplements,
+        ] {
+            let bytes = borsh::to_vec(&id).unwrap();
+            assert_eq!(borsh::from_slice::<DiagnosticId>(&bytes).unwrap(), id);
         }
     }
 }

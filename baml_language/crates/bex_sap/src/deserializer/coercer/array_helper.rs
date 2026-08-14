@@ -100,7 +100,8 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
     // Sort by (false, score, index)
     let best = all_valid_scores.into_iter().min_by(
         |&(a, a_score, a_default, a_val), &(b, b_score, b_default, b_val)| {
-            // TODO: This is a bit of a hack. We should likely use some is_subtype_of logic here
+            // TODO: This is a bit of a hack. We should likely use the canonical subtype
+            // relation (`baml_type::normalize::is_subtype`) here
             // to ensure that we're accepting the "best" type.
             // E.g. if a is a subtype of b, we should prefer a over b. (empty list is a subtype of any list)
             if matches!(&a_val.value, BamlValue::Array(..))

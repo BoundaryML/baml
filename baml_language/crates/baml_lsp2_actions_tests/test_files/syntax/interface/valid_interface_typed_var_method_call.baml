@@ -3,7 +3,7 @@
 
 interface Animal {
   name: string
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {

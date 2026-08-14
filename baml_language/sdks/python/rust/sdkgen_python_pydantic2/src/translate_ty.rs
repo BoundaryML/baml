@@ -29,7 +29,7 @@ pub(crate) struct TranslateCtx {
     /// quoted form defers resolution until pydantic walks the alias
     /// later.
     pub(crate) defer_name_refs: bool,
-    /// `.pyi`-only: maps each optional-argument `Ty::Callable` in the leaf to
+    /// `.pyi`-only: maps each optional-argument `Ty::Function` in the leaf to
     /// the name of the `typing.Protocol` emitted for it. A function *type*
     /// (`typing.Callable[[…], R]`) cannot express per-parameter optionality,
     /// so a callback with optional params is rendered as a named Protocol
@@ -48,33 +48,33 @@ pub(crate) struct SelfRef {
 
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
     match ty {
-        Ty::Int => "int".to_string(),
-        Ty::Bigint => "int".to_string(),
-        Ty::Float => "float".to_string(),
-        Ty::String => "str".to_string(),
-        Ty::Bool => "bool".to_string(),
-        Ty::Null => "None".to_string(),
-        Ty::Literal(Literal::Int(value)) => format!("typing.Literal[{value}]"),
-        Ty::Literal(Literal::Bigint(value)) => format!("typing.Literal[{value}]"),
-        Ty::Literal(Literal::String(value)) => {
+        Ty::Int { .. } => "int".to_string(),
+        Ty::Bigint { .. } => "int".to_string(),
+        Ty::Float { .. } => "float".to_string(),
+        Ty::String { .. } => "str".to_string(),
+        Ty::Bool { .. } => "bool".to_string(),
+        Ty::Null { .. } => "None".to_string(),
+        Ty::Literal(Literal::Int(value), ..) => format!("typing.Literal[{value}]"),
+        Ty::Literal(Literal::Bigint(value), ..) => format!("typing.Literal[{value}]"),
+        Ty::Literal(Literal::String(value), ..) => {
             format!("typing.Literal[{}]", py_string(value))
         }
-        Ty::Literal(Literal::Bool(true)) => "typing.Literal[True]".to_string(),
-        Ty::Literal(Literal::Bool(false)) => "typing.Literal[False]".to_string(),
+        Ty::Literal(Literal::Bool(true), ..) => "typing.Literal[True]".to_string(),
+        Ty::Literal(Literal::Bool(false), ..) => "typing.Literal[False]".to_string(),
         // Python does not allow float parameters to typing.Literal.
-        Ty::Literal(Literal::Float(_)) => "typing.Any".to_string(),
-        Ty::Uint8Array => "bytes".to_string(),
-        Ty::Media(MediaKind::Image) => media_ref("Image", ctx),
-        Ty::Media(MediaKind::Audio) => media_ref("Audio", ctx),
-        Ty::Media(MediaKind::Video) => media_ref("Video", ctx),
-        Ty::Media(MediaKind::Pdf) => media_ref("Pdf", ctx),
-        Ty::Media(MediaKind::Generic) => "typing.Any".to_string(),
-        Ty::Class(name, args) => {
+        Ty::Literal(Literal::Float(_), ..) => "typing.Any".to_string(),
+        Ty::Uint8Array { .. } => "bytes".to_string(),
+        Ty::Media(MediaKind::Image, _) => media_ref("Image", ctx),
+        Ty::Media(MediaKind::Audio, _) => media_ref("Audio", ctx),
+        Ty::Media(MediaKind::Video, _) => media_ref("Video", ctx),
+        Ty::Media(MediaKind::Pdf, _) => media_ref("Pdf", ctx),
+        Ty::Media(MediaKind::Generic, _) => "typing.Any".to_string(),
+        Ty::Class(name, args, _) => {
             let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
             render_name_ref_or_self_ref(name, ctx, &arg_strs.join(", "))
         }
-        Ty::TypeAlias(name) => render_name_ref_or_self_ref(name, ctx, ""),
-        Ty::Enum(name) => {
+        Ty::TypeAlias(name, _) => render_name_ref_or_self_ref(name, ctx, ""),
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             let head = render_name_ref(name, ctx);
             if should_defer_name_ref(ctx) {
                 py_string(&head)
@@ -82,20 +82,23 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 head
             }
         }
-        Ty::TypeVar(name) => name.as_str().to_string(),
-        Ty::List(inner) => format!("typing.List[{}]", translate_ty(inner, ctx)),
-        Ty::Map { key, value } => {
+        Ty::TypeVar(name, _) => name.as_str().to_string(),
+        Ty::List(inner, _) => format!("typing.List[{}]", translate_ty(inner, ctx)),
+        Ty::Map { key, value, .. } => {
             format!(
                 "typing.Dict[{}, {}]",
                 translate_ty(key, ctx),
                 translate_ty(value, ctx)
             )
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             // `T | null` (a single non-null member plus null) is optionality —
             // emit idiomatic `typing.Optional[T]`. Multi-member nullable unions
             // fall through to `typing.Union[A, B, None]` (Null → "None").
-            let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
+            let non_null: Vec<&Ty> = items
+                .iter()
+                .filter(|t| !matches!(t, Ty::Null { .. }))
+                .collect();
             if non_null.len() == 1 && non_null.len() < items.len() {
                 format!("typing.Optional[{}]", translate_ty(non_null[0], ctx))
             } else {
@@ -109,8 +112,13 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 )
             }
         }
-        Ty::BuiltinUnknown => "typing.Any".to_string(),
-        Ty::Callable { params, ret } => {
+        Ty::BuiltinUnknown { .. }
+        | Ty::Interface(..)
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Future(..) => "typing.Any".to_string(),
+        Ty::Function { params, ret, .. } => {
             let has_optional = params
                 .iter()
                 .any(|param| param.mode == baml_codegen_types::CodegenFunctionParamMode::Optional);
@@ -136,8 +144,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 )
             }
         }
-        Ty::Unit => "None".to_string(),
-        Ty::BamlOptions => "baml.Options".to_string(),
+        Ty::Void { .. } | Ty::Never { .. } => "None".to_string(),
         // `$rust_type` fields in stdlib stubs (Response._body, SseStream._handle, …).
         // The host-language opaque-handle wrapper is `BamlPyHandle` from the
         // bridge runtime, imported as `_BamlPyHandle` to keep `baml` (the
@@ -145,7 +152,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         // field name still triggers Pydantic v2's private-attribute handling
         // regardless of the annotation; `_decode_class` injects the value
         // into `__pydantic_private__` post-construction.
-        Ty::RustType => "_BamlPyHandle".to_string(),
+        Ty::RustType { .. } => "_BamlPyHandle".to_string(),
     }
 }
 
@@ -282,6 +289,50 @@ mod tests {
             BaseName::new(bare_name),
         )
     }
+    fn class_ty(name: Name, args: Vec<Ty>) -> Ty {
+        Ty::Class(name, args, baml_base::TyAttr::EMPTY)
+    }
+    fn enum_ty(name: Name) -> Ty {
+        Ty::Enum(name, baml_base::TyAttr::EMPTY)
+    }
+    fn alias_ty(name: Name) -> Ty {
+        Ty::TypeAlias(name, baml_base::TyAttr::EMPTY)
+    }
+    fn type_var(name: BaseName) -> Ty {
+        Ty::TypeVar(
+            baml_codegen_types::ParamTy::new(0, name),
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+    fn list(inner: Box<Ty>) -> Ty {
+        Ty::List(inner, baml_base::TyAttr::EMPTY)
+    }
+    fn union(members: Vec<Ty>) -> Ty {
+        Ty::Union(members, baml_base::TyAttr::EMPTY)
+    }
+    fn media(kind: MediaKind) -> Ty {
+        Ty::Media(kind, baml_base::TyAttr::EMPTY)
+    }
+    fn literal(value: Literal) -> Ty {
+        Ty::Literal(
+            value,
+            baml_codegen_types::Freshness::Regular,
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+    fn baml_options() -> Ty {
+        class_ty(name("baml", &[], "Options"), Vec::new())
+    }
+    fn callable(params: Vec<baml_codegen_types::CallableParam>, ret: Box<Ty>) -> Ty {
+        Ty::Function {
+            params,
+            ret,
+            throws: Box::new(Ty::Never {
+                attr: baml_base::TyAttr::EMPTY,
+            }),
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
 
     fn callable_param(ty: Ty) -> baml_codegen_types::CallableParam {
         baml_codegen_types::CallableParam {
@@ -311,27 +362,33 @@ mod tests {
 
     fn check_exhaustive(ty: &Ty) {
         match ty {
-            Ty::Int
-            | Ty::Bigint
-            | Ty::Float
-            | Ty::String
-            | Ty::Bool
-            | Ty::Null
-            | Ty::Literal(_)
-            | Ty::Uint8Array
-            | Ty::Media(_)
-            | Ty::Class(_, _)
-            | Ty::Enum(_)
-            | Ty::TypeAlias(_)
-            | Ty::TypeVar(_)
-            | Ty::List(_)
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Literal(..)
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Class(..)
+            | Ty::Interface(..)
+            | Ty::Enum(..)
+            | Ty::EnumVariant(..)
+            | Ty::TypeAlias(..)
+            | Ty::TypeVar(..)
+            | Ty::List(..)
             | Ty::Map { .. }
-            | Ty::Union(_)
-            | Ty::BuiltinUnknown
-            | Ty::Callable { .. }
-            | Ty::Unit
-            | Ty::RustType
-            | Ty::BamlOptions => {}
+            | Ty::Union(..)
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Function { .. }
+            | Ty::Future(..)
+            | Ty::Void { .. }
+            | Ty::Never { .. }
+            | Ty::RustType { .. }
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. } => {}
         }
     }
 
@@ -340,243 +397,273 @@ mod tests {
         let cases = vec![
             Case {
                 label: "int",
-                ty: Ty::Int,
+                ty: Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&["lorem"]),
                 expected: "int",
             },
             Case {
                 label: "float",
-                ty: Ty::Float,
+                ty: Ty::Float {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&["lorem"]),
                 expected: "float",
             },
             Case {
                 label: "string",
-                ty: Ty::String,
+                ty: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&["lorem"]),
                 expected: "str",
             },
             Case {
                 label: "bool",
-                ty: Ty::Bool,
+                ty: Ty::Bool {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&["lorem"]),
                 expected: "bool",
             },
             Case {
                 label: "null",
-                ty: Ty::Null,
+                ty: Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&["lorem"]),
                 expected: "None",
             },
             Case {
                 label: "uint8array",
-                ty: Ty::Uint8Array,
+                ty: Ty::Uint8Array {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&["lorem"]),
                 expected: "bytes",
             },
             Case {
                 label: "builtin unknown",
-                ty: Ty::BuiltinUnknown,
+                ty: Ty::BuiltinUnknown {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Any",
             },
             Case {
                 label: "unit",
-                ty: Ty::Unit,
+                ty: Ty::Void {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&["lorem"]),
                 expected: "None",
             },
             Case {
                 label: "baml options",
-                ty: Ty::BamlOptions,
+                ty: baml_options(),
                 ctx: ctx(&["lorem"]),
                 expected: "baml.Options",
             },
             Case {
                 label: "literal int",
-                ty: Ty::Literal(Literal::Int(42)),
+                ty: literal(Literal::Int(42)),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Literal[42]",
             },
             Case {
                 label: "literal negative int",
-                ty: Ty::Literal(Literal::Int(-1)),
+                ty: literal(Literal::Int(-1)),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Literal[-1]",
             },
             Case {
                 label: "literal string",
-                ty: Ty::Literal(Literal::String("draft".to_string())),
+                ty: literal(Literal::String("draft".to_string())),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Literal[\"draft\"]",
             },
             Case {
                 label: "literal escaped string",
-                ty: Ty::Literal(Literal::String("has \"quotes\"".to_string())),
+                ty: literal(Literal::String("has \"quotes\"".to_string())),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Literal[\"has \\\"quotes\\\"\"]",
             },
             Case {
                 label: "literal bool true",
-                ty: Ty::Literal(Literal::Bool(true)),
+                ty: literal(Literal::Bool(true)),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Literal[True]",
             },
             Case {
                 label: "literal bool false",
-                ty: Ty::Literal(Literal::Bool(false)),
+                ty: literal(Literal::Bool(false)),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Literal[False]",
             },
             Case {
                 label: "literal float fallback",
-                ty: Ty::Literal(Literal::Float("3.14".to_string())),
+                ty: literal(Literal::Float("3.14".to_string())),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Any",
             },
             Case {
                 label: "media image",
-                ty: Ty::Media(MediaKind::Image),
+                ty: media(MediaKind::Image),
                 ctx: ctx(&["lorem"]),
                 expected: "baml.media.Image",
             },
             Case {
                 label: "media audio",
-                ty: Ty::Media(MediaKind::Audio),
+                ty: media(MediaKind::Audio),
                 ctx: ctx(&["lorem"]),
                 expected: "baml.media.Audio",
             },
             Case {
                 label: "media video",
-                ty: Ty::Media(MediaKind::Video),
+                ty: media(MediaKind::Video),
                 ctx: ctx(&["lorem"]),
                 expected: "baml.media.Video",
             },
             Case {
                 label: "media pdf",
-                ty: Ty::Media(MediaKind::Pdf),
+                ty: media(MediaKind::Pdf),
                 ctx: ctx(&["lorem"]),
                 expected: "baml.media.Pdf",
             },
             Case {
                 label: "media generic fallback",
-                ty: Ty::Media(MediaKind::Generic),
+                ty: media(MediaKind::Generic),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Any",
             },
             Case {
                 label: "class same leaf root namespace",
-                ty: Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
+                ty: class_ty(name("user", &["lorem"], "Resume"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "Resume",
             },
             Case {
                 label: "class cross leaf root namespace",
-                ty: Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
+                ty: class_ty(name("user", &["lorem"], "Resume"), vec![]),
                 ctx: ctx(&["ipsum"]),
                 expected: "lorem.Resume",
             },
             Case {
                 label: "class same leaf root init",
-                ty: Ty::Class(name("user", &[], "Foo"), vec![]),
+                ty: class_ty(name("user", &[], "Foo"), vec![]),
                 ctx: ctx(&[]),
                 expected: "Foo",
             },
             Case {
                 label: "class root init from namespaced leaf",
-                ty: Ty::Class(name("user", &[], "Foo"), vec![]),
+                ty: class_ty(name("user", &[], "Foo"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "Foo",
             },
             Case {
                 label: "class vendor cross leaf",
-                ty: Ty::Class(name("aws", &["s3"], "Bucket"), vec![]),
+                ty: class_ty(name("aws", &["s3"], "Bucket"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "vendor.aws.s3.Bucket",
             },
             Case {
                 label: "class vendor same leaf",
-                ty: Ty::Class(name("aws", &["s3"], "Bucket"), vec![]),
+                ty: class_ty(name("aws", &["s3"], "Bucket"), vec![]),
                 ctx: ctx(&["vendor", "aws", "s3"]),
                 expected: "Bucket",
             },
             Case {
                 label: "class vendor other vendor leaf",
-                ty: Ty::Class(name("aws", &["s3"], "Bucket"), vec![]),
+                ty: class_ty(name("aws", &["s3"], "Bucket"), vec![]),
                 ctx: ctx(&["vendor", "aws", "ec2"]),
                 expected: "vendor.aws.s3.Bucket",
             },
             Case {
                 label: "class stdlib cross leaf",
-                ty: Ty::Class(name("baml", &["http"], "Response"), vec![]),
+                ty: class_ty(name("baml", &["http"], "Response"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "baml.http.Response",
             },
             Case {
                 label: "class stdlib same leaf",
-                ty: Ty::Class(name("baml", &["http"], "Response"), vec![]),
+                ty: class_ty(name("baml", &["http"], "Response"), vec![]),
                 ctx: ctx(&["baml", "http"]),
                 expected: "Response",
             },
             Case {
                 label: "class stream from non stream leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Resume$stream"), vec![]),
+                ty: class_ty(name("user", &["lorem"], "Resume$stream"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "stream_types.lorem.Resume",
             },
             Case {
                 label: "class stream same leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Resume$stream"), vec![]),
+                ty: class_ty(name("user", &["lorem"], "Resume$stream"), vec![]),
                 ctx: ctx(&["stream_types", "lorem"]),
                 expected: "Resume",
             },
             Case {
                 label: "class non stream from stream leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
+                ty: class_ty(name("user", &["lorem"], "Resume"), vec![]),
                 ctx: ctx(&["stream_types", "lorem"]),
                 expected: "lorem.Resume",
             },
             Case {
                 label: "enum same leaf",
-                ty: Ty::Enum(name("user", &["ipsum"], "Sentiment")),
+                ty: enum_ty(name("user", &["ipsum"], "Sentiment")),
                 ctx: ctx(&["ipsum"]),
                 expected: "Sentiment",
             },
             Case {
                 label: "enum cross leaf",
-                ty: Ty::Enum(name("user", &["ipsum"], "Sentiment")),
+                ty: enum_ty(name("user", &["ipsum"], "Sentiment")),
                 ctx: ctx(&["lorem"]),
                 expected: "ipsum.Sentiment",
             },
             Case {
                 label: "type alias same leaf",
-                ty: Ty::TypeAlias(name("user", &["util"], "StringList")),
+                ty: alias_ty(name("user", &["util"], "StringList")),
                 ctx: ctx(&["util"]),
                 expected: "StringList",
             },
             Case {
                 label: "type alias cross leaf",
-                ty: Ty::TypeAlias(name("user", &["util"], "StringList")),
+                ty: alias_ty(name("user", &["util"], "StringList")),
                 ctx: ctx(&["lorem"]),
                 expected: "util.StringList",
             },
             Case {
                 label: "optional string",
-                ty: Ty::Union(vec![Ty::String, Ty::Null]),
+                ty: union(vec![
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[str]",
             },
             Case {
                 label: "list int",
-                ty: Ty::List(Box::new(Ty::Int)),
+                ty: list(Box::new(Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                })),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.List[int]",
             },
             Case {
                 label: "map string int",
                 ty: Ty::Map {
-                    key: Box::new(Ty::String),
-                    value: Box::new(Ty::Int),
+                    key: Box::new(Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                    value: Box::new(Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                    attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[str, int]",
@@ -584,156 +671,226 @@ mod tests {
             Case {
                 label: "map enum to class",
                 ty: Ty::Map {
-                    key: Box::new(Ty::Enum(name("user", &["ipsum"], "Sentiment"))),
-                    value: Box::new(Ty::Class(name("user", &["lorem"], "Resume"), vec![])),
+                    key: Box::new(enum_ty(name("user", &["ipsum"], "Sentiment"))),
+                    value: Box::new(class_ty(name("user", &["lorem"], "Resume"), vec![])),
+                    attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[ipsum.Sentiment, Resume]",
             },
             Case {
                 label: "union int string",
-                ty: Ty::Union(vec![Ty::Int, Ty::String]),
+                ty: union(vec![
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Union[int, str]",
             },
             Case {
                 label: "union int string bool",
-                ty: Ty::Union(vec![Ty::Int, Ty::String, Ty::Bool]),
+                ty: union(vec![
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Union[int, str, bool]",
             },
             Case {
                 label: "optional list same leaf class",
-                ty: Ty::Union(vec![
-                    Ty::List(Box::new(Ty::Class(
+                ty: union(vec![
+                    list(Box::new(class_ty(
                         name("user", &["lorem"], "Resume"),
                         vec![],
                     ))),
-                    Ty::Null,
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                 ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[typing.List[Resume]]",
             },
             Case {
                 label: "list optional string",
-                ty: Ty::List(Box::new(Ty::Union(vec![Ty::String, Ty::Null]))),
+                ty: list(Box::new(union(vec![
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]))),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.List[typing.Optional[str]]",
             },
             Case {
                 label: "map vendor list",
                 ty: Ty::Map {
-                    key: Box::new(Ty::String),
-                    value: Box::new(Ty::List(Box::new(Ty::Class(
+                    key: Box::new(Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                    value: Box::new(list(Box::new(class_ty(
                         name("aws", &["s3"], "Bucket"),
                         vec![],
                     )))),
+                    attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[str, typing.List[vendor.aws.s3.Bucket]]",
             },
             Case {
                 label: "callable two params",
-                ty: Ty::Callable {
-                    params: vec![callable_param(Ty::Int), callable_param(Ty::String)],
-                    ret: Box::new(Ty::Bool),
-                },
+                ty: callable(
+                    vec![
+                        callable_param(Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                        callable_param(Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                    ],
+                    Box::new(Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Callable[[int, str], bool]",
             },
             Case {
                 label: "callable no params",
-                ty: Ty::Callable {
-                    params: vec![],
-                    ret: Box::new(Ty::Unit),
-                },
+                ty: callable(
+                    vec![],
+                    Box::new(Ty::Void {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Callable[[], None]",
             },
             Case {
                 label: "callable nested params",
-                ty: Ty::Callable {
-                    params: vec![callable_param(Ty::List(Box::new(Ty::Int)))],
-                    ret: Box::new(Ty::Union(vec![Ty::String, Ty::Null])),
-                },
+                ty: callable(
+                    vec![callable_param(list(Box::new(Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    })))],
+                    Box::new(union(vec![
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                        Ty::Null {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    ])),
+                ),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Callable[[typing.List[int]], typing.Optional[str]]",
             },
             Case {
                 label: "callable optional params",
-                ty: Ty::Callable {
-                    params: vec![
-                        callable_param(Ty::String),
-                        optional_callable_param("limit", Ty::Int),
+                ty: callable(
+                    vec![
+                        callable_param(Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                        optional_callable_param(
+                            "limit",
+                            Ty::Int {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ),
                     ],
-                    ret: Box::new(Ty::Bool),
-                },
+                    Box::new(Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Callable[..., bool]",
             },
             Case {
                 label: "union stream and non stream classes",
-                ty: Ty::Union(vec![
-                    Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
-                    Ty::Class(name("user", &["lorem"], "Resume$stream"), vec![]),
+                ty: union(vec![
+                    class_ty(name("user", &["lorem"], "Resume"), vec![]),
+                    class_ty(name("user", &["lorem"], "Resume$stream"), vec![]),
                 ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Union[Resume, stream_types.lorem.Resume]",
             },
             Case {
                 label: "optional media",
-                ty: Ty::Union(vec![Ty::Media(MediaKind::Image), Ty::Null]),
+                ty: union(vec![
+                    media(MediaKind::Image),
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[baml.media.Image]",
             },
             Case {
                 label: "recursive alias self ref",
-                ty: Ty::TypeAlias(name("user", &["util"], "RecList")),
+                ty: alias_ty(name("user", &["util"], "RecList")),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "\"RecList\"",
             },
             Case {
                 label: "self-ref class no args",
-                ty: Ty::Class(name("user", &["lorem"], "Node"), vec![]),
+                ty: class_ty(name("user", &["lorem"], "Node"), vec![]),
                 ctx: ctx_with_self(&["lorem"], &["lorem"], "Node"),
                 expected: "\"Node\"",
             },
             Case {
                 label: "self-ref generic class wraps args inside quotes",
-                ty: Ty::Class(name("user", &["lorem"], "Node"), vec![Ty::String]),
+                ty: class_ty(
+                    name("user", &["lorem"], "Node"),
+                    vec![Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }],
+                ),
                 ctx: ctx_with_self(&["lorem"], &["lorem"], "Node"),
                 expected: "\"Node[str]\"",
             },
             Case {
                 label: "self-ref generic class nested in list wraps args inside quotes",
-                ty: Ty::List(Box::new(Ty::Class(
+                ty: list(Box::new(class_ty(
                     name("user", &["lorem"], "Node"),
-                    vec![Ty::Int],
+                    vec![Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }],
                 ))),
                 ctx: ctx_with_self(&["lorem"], &["lorem"], "Node"),
                 expected: "typing.List[\"Node[int]\"]",
             },
             Case {
                 label: "recursive alias inside list",
-                ty: Ty::List(Box::new(Ty::TypeAlias(name("user", &["util"], "RecList")))),
+                ty: list(Box::new(alias_ty(name("user", &["util"], "RecList")))),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "typing.List[\"RecList\"]",
             },
             Case {
                 label: "recursive alias inside union",
-                ty: Ty::Union(vec![
-                    Ty::Int,
-                    Ty::List(Box::new(Ty::TypeAlias(name("user", &["util"], "RecList")))),
+                ty: union(vec![
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    list(Box::new(alias_ty(name("user", &["util"], "RecList")))),
                 ]),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "typing.Union[int, typing.List[\"RecList\"]]",
             },
             Case {
                 label: "recursive alias leaves other refs unquoted under self_ref-only",
-                ty: Ty::List(Box::new(Ty::Class(
-                    name("user", &["util"], "Other"),
-                    vec![],
-                ))),
+                ty: list(Box::new(class_ty(name("user", &["util"], "Other"), vec![]))),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "typing.List[Other]",
             },
@@ -745,73 +902,73 @@ mod tests {
             // in scope then (hoisting + TYPE_CHECKING guards).
             Case {
                 label: "recursive body quotes same-leaf sibling",
-                ty: Ty::List(Box::new(Ty::Class(
-                    name("user", &["util"], "Other"),
-                    vec![],
-                ))),
+                ty: list(Box::new(class_ty(name("user", &["util"], "Other"), vec![]))),
                 ctx: ctx_recursive_alias_body(&["util"], &["util"], "RecList"),
                 expected: "typing.List[\"Other\"]",
             },
             Case {
                 label: "recursive body quotes cross-leaf class as dotted forward-ref",
-                ty: Ty::List(Box::new(Ty::Class(name("user", &["util"], "Bar"), vec![]))),
+                ty: list(Box::new(class_ty(name("user", &["util"], "Bar"), vec![]))),
                 ctx: ctx_recursive_alias_body(&["lorem"], &["lorem"], "RecList"),
                 expected: "typing.List[\"util.Bar\"]",
             },
             Case {
                 label: "recursive body quotes root-routed name",
-                ty: Ty::Class(name("user", &[], "Foo"), vec![]),
+                ty: class_ty(name("user", &[], "Foo"), vec![]),
                 ctx: ctx_recursive_alias_body(&["lorem"], &["lorem"], "RecList"),
                 expected: "\"Foo\"",
             },
             Case {
                 label: "recursive body quotes cross-leaf enum",
-                ty: Ty::Enum(name("user", &["ipsum"], "Sentiment")),
+                ty: enum_ty(name("user", &["ipsum"], "Sentiment")),
                 ctx: ctx_recursive_alias_body(&["lorem"], &["lorem"], "RecList"),
                 expected: "\"ipsum.Sentiment\"",
             },
             Case {
                 label: "non recursive alias same leaf",
-                ty: Ty::TypeAlias(name("user", &["util"], "RecList")),
+                ty: alias_ty(name("user", &["util"], "RecList")),
                 ctx: ctx(&["util"]),
                 expected: "RecList",
             },
             Case {
                 label: "non recursive alias cross leaf",
-                ty: Ty::TypeAlias(name("user", &["util"], "RecList")),
+                ty: alias_ty(name("user", &["util"], "RecList")),
                 ctx: ctx(&["lorem"]),
                 expected: "util.RecList",
             },
             Case {
                 label: "optional stdlib class",
-                ty: Ty::Union(vec![
-                    Ty::Class(name("baml", &["http"], "Response"), vec![]),
-                    Ty::Null,
+                ty: union(vec![
+                    class_ty(name("baml", &["http"], "Response"), vec![]),
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                 ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[baml.http.Response]",
             },
             Case {
                 label: "list vendor class",
-                ty: Ty::List(Box::new(Ty::Class(name("aws", &["s3"], "Bucket"), vec![]))),
+                ty: list(Box::new(class_ty(name("aws", &["s3"], "Bucket"), vec![]))),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.List[vendor.aws.s3.Bucket]",
             },
             Case {
                 label: "map enum to stream vendor class",
                 ty: Ty::Map {
-                    key: Box::new(Ty::Enum(name("user", &["ipsum"], "Sentiment"))),
-                    value: Box::new(Ty::Class(name("aws", &["s3"], "Bucket$stream"), vec![])),
+                    key: Box::new(enum_ty(name("user", &["ipsum"], "Sentiment"))),
+                    value: Box::new(class_ty(name("aws", &["s3"], "Bucket$stream"), vec![])),
+                    attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[ipsum.Sentiment, stream_types.vendor.aws.s3.Bucket]",
             },
             Case {
                 label: "union across placements",
-                ty: Ty::Union(vec![
-                    Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
-                    Ty::Class(name("aws", &["s3"], "Bucket"), vec![]),
-                    Ty::Class(name("baml", &["http"], "Response"), vec![]),
+                ty: union(vec![
+                    class_ty(name("user", &["lorem"], "Resume"), vec![]),
+                    class_ty(name("aws", &["s3"], "Bucket"), vec![]),
+                    class_ty(name("baml", &["http"], "Response"), vec![]),
                 ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Union[Resume, vendor.aws.s3.Bucket, baml.http.Response]",
@@ -819,60 +976,85 @@ mod tests {
             // Generics — `13a` §3.1, §3.2, §3.4.
             Case {
                 label: "generic class same leaf concrete int",
-                ty: Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int]),
+                ty: class_ty(
+                    name("user", &["lorem"], "Box"),
+                    vec![Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }],
+                ),
                 ctx: ctx(&["lorem"]),
                 expected: "Box[int]",
             },
             Case {
                 label: "generic class cross leaf concrete int",
-                ty: Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int]),
+                ty: class_ty(
+                    name("user", &["lorem"], "Box"),
+                    vec![Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }],
+                ),
                 ctx: ctx(&["ipsum"]),
                 expected: "lorem.Box[int]",
             },
             Case {
                 label: "generic class with list arg",
-                ty: Ty::Class(
+                ty: class_ty(
                     name("user", &["lorem"], "Box"),
-                    vec![Ty::List(Box::new(Ty::Int))],
+                    vec![list(Box::new(Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }))],
                 ),
                 ctx: ctx(&["lorem"]),
                 expected: "Box[typing.List[int]]",
             },
             Case {
                 label: "generic class nested generic arg",
-                ty: Ty::Class(
+                ty: class_ty(
                     name("user", &["lorem"], "Box"),
-                    vec![Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int])],
+                    vec![class_ty(
+                        name("user", &["lorem"], "Box"),
+                        vec![Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }],
+                    )],
                 ),
                 ctx: ctx(&["lorem"]),
                 expected: "Box[Box[int]]",
             },
             Case {
                 label: "generic class stream from non-stream leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Box$stream"), vec![Ty::Int]),
+                ty: class_ty(
+                    name("user", &["lorem"], "Box$stream"),
+                    vec![Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }],
+                ),
                 ctx: ctx(&["lorem"]),
                 expected: "stream_types.lorem.Box[int]",
             },
             Case {
                 label: "generic class with typevar arg",
-                ty: Ty::Class(
+                ty: class_ty(
                     name("user", &["lorem"], "Box"),
-                    vec![Ty::TypeVar(baml_base::Name::new("T"))],
+                    vec![type_var(baml_base::Name::new("T"))],
                 ),
                 ctx: ctx(&["lorem"]),
                 expected: "Box[T]",
             },
             Case {
                 label: "bare typevar",
-                ty: Ty::TypeVar(baml_base::Name::new("T")),
+                ty: type_var(baml_base::Name::new("T")),
                 ctx: ctx(&["lorem"]),
                 expected: "T",
             },
             Case {
                 label: "map with typevar key and value",
                 ty: Ty::Map {
-                    key: Box::new(Ty::String),
-                    value: Box::new(Ty::TypeVar(baml_base::Name::new("V"))),
+                    key: Box::new(Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                    value: Box::new(type_var(baml_base::Name::new("V"))),
+                    attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[str, V]",

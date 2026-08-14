@@ -2,22 +2,18 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type `map<string, map<string, int>>` has no member `a`
-    ╭─[ captured_field_chain.baml:32:3 ]
-    │
- 32 │   data.a.b
-    │   ────┬───  
-    │       ╰───── type `map<string, map<string, int>>` has no member `a`
-    │ 
-    │ Note: Error code: E0007
-────╯
+  [type] E0007
 
-  [type] error: type `map<string, map<string, map<string, int>>>` has no member `a`
-    ╭─[ captured_field_chain.baml:37:3 ]
-    │
+  × type `map<string, map<string, int>>` has no member `a`
+    ╭─[captured_field_chain.baml:32:3]
+ 32 │   data.a.b
+    ·   ────────
+    ╰────
+
+  [type] E0007
+
+  × type `map<string, map<string, map<string, int>>>` has no member `a`
+    ╭─[captured_field_chain.baml:37:3]
  37 │   data.a.b.c
-    │   ─────┬────  
-    │        ╰────── type `map<string, map<string, map<string, int>>>` has no member `a`
-    │ 
-    │ Note: Error code: E0007
-────╯
+    ·   ──────────
+    ╰────

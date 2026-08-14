@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+401..408 'csv_get': throws baml.csv.CsvError
+466..527 '{\n   ...  0\n}': 0
+472..477 'let v': int | null
+480..487 'rec.get': (self: baml.csv.CsvRecord, column: string) -> int | null throws baml.csv.CsvError
+480..497 'rec.ge...>("n")': int | null
+493..496 '"n"': "n"
+524..525 '0': 0
+538..546 'csv_iter': throws baml.csv.CsvError | baml.errors.Io
+598..897 '{\n   ...tal\n}': int
+604..609 'let r': baml.csv.CsvReader
+612..627 'baml.csv.reader': (source: string | uint8array | baml.fs.File, options?: baml.csv.ReaderOptions | null) -> baml.csv.CsvReader throws baml.csv.CsvError
+612..643 'baml.c...n3\n")': baml.csv.CsvReader
+628..642 '"n\n1\n2\n3\n"': "n\n1\n2\n3\n"
+678..687 'let total': int
+690..691 '0': 0
+702..709 'let rec': baml.csv.CsvRecord
+713..714 'r': baml.csv.CsvReader
+716..885 '{\n   ...n    }': void
+726..731 'let x': baml.csv.CsvRecord
+734..737 'rec': baml.csv.CsvRecord
+780..785 'total': int
+789..878 'match ...     }': int
+796..803 'rec.get': (self: baml.csv.CsvRecord, column: string) -> int | null throws baml.csv.CsvError
+796..813 'rec.ge...>("n")': int | null
+809..812 '"n"': "n"
+829..833 'null': null
+837..838 '0': 0
+852..862 'let v: int': int
+859..862 'int': int
+866..867 'v': int
+890..895 'total': int

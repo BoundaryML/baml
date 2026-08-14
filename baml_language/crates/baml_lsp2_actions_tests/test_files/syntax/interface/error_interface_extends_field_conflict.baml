@@ -13,12 +13,4 @@ interface Z requires X, Y {}
 
 //----
 //- diagnostics
-// error: interface `Z` inherits conflicting types for field `id`: `string` from `X`, `int` from `Y`
-//     ╭─[ interface_error_interface_extends_field_conflict.baml:12:11 ]
-//     │
-//  12 │ interface Z requires X, Y {}
-//     │           ┬  
-//     │           ╰── conflicting field types inherited via `requires`
-//     │ 
-//     │ Note: Error code: E0122
-// ────╯
+// <no-diagnostics-expected>

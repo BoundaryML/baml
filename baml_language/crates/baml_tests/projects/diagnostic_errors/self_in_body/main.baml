@@ -1,13 +1,19 @@
-// `Self` is a signature-only construct. In a method *body* type position it has
-// no substitution (a class body cannot name its own instantiation as a value
-// type, and an interface default method cannot name the implementor), so every
-// body-position `Self` is a compile error — rather than silently resolving to a
-// misbehaving `TypeVar("Self")` (interface default methods) or matching any
-// instantiation (generic class bodies).
+// `Self` in a method *body* type position.
 //
-// The sound alternative in a class method is to name the enclosing type
-// explicitly, e.g. `Box<T>` (exercised as a runtime test in
+// In a CLASS method body `Self` has no substitution today — a class body cannot
+// name its own instantiation as a value type — so every body-position `Self`
+// there is an unresolved-type error. The sound alternative is to name the
+// enclosing type explicitly, e.g. `Box<T>` (exercised as a runtime test in
 // `ns_match_self_workaround`).
+//
+// In an INTERFACE default-method body `Self` is a real rigid type variable
+// bounded by the interface, so body-position `Self` (patterns, `is`,
+// turbofish, `let` annotations) resolves symbolically and is NOT an error —
+// the interface half below compiles clean.
+//
+// In an IMPLEMENTS-BLOCK body (in-body or free) `Self` is statically
+// substituted to the block's `for` target and is likewise not an error —
+// exercised as runtime tests in `ns_self_frame_slot`, not pinned here.
 
 // ── Class-body method: match arm, `is`, and turbofish ────────────────────────
 
@@ -40,14 +46,14 @@ class Box<T> {
 // ── Interface default-method body (the previously-silent hole) ───────────────
 
 interface Tester {
-    function eq(self, other: Self) -> bool
-    function check(self, other: Self) -> bool {
+    function eq(self, other: Self) -> bool throws never
+    function check(self, other: Self) -> bool throws never {
         other is Self
     }
-    function describe(self) -> string {
+    function describe(self) -> string throws never {
         reflect.type_of<Self>().to_string()
     }
-    function bind_self(self, other: Self) -> bool {
+    function bind_self(self, other: Self) -> bool throws never {
         let a: Self = other;
         true
     }

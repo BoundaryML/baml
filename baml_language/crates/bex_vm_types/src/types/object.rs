@@ -121,8 +121,8 @@ pub enum Object {
     /// Collector object (opaque handle to `bex_events::Collector`).
     Collector(CollectorRef),
 
-    /// A type descriptor value — wraps a `baml_type::RuntimeTy`.
-    Type(Box<baml_type::RuntimeTy>),
+    /// A type descriptor value — wraps a `baml_type::RealizedTy`.
+    Type(Box<baml_type::RealizedTy>),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(crate::types::SentinelKind),
@@ -191,16 +191,21 @@ enum ObjectWire {
         num_bigint::BigInt,
     ),
     Uint8Array(Vec<u8>),
-    Array(Box<baml_type::RuntimeTy>, Vec<Value>),
+    Array(Box<baml_type::RealizedTy>, Vec<Value>),
     Map(
-        Box<baml_type::RuntimeTy>,
-        Box<baml_type::RuntimeTy>,
+        Box<baml_type::RealizedTy>,
+        Box<baml_type::RealizedTy>,
         IndexMap<String, Value>,
     ),
     Float(f64),
     Future(crate::Future),
-    UnscheduledFuture(UnscheduledFuture),
-    Type(Box<baml_type::RuntimeTy>),
+    // Boxed like the other large variants (and like `Object`'s own
+    // `UnscheduledFuture`): the struct carries the spawn's `Future<T, E>` type
+    // arguments, which are `RealizedTy`s, so inline it would set the whole
+    // enum's size. Borsh treats `Box<T>` transparently, so the wire form is
+    // unchanged.
+    UnscheduledFuture(Box<UnscheduledFuture>),
+    Type(Box<baml_type::RealizedTy>),
 }
 
 impl BorshSerialize for Object {
@@ -232,7 +237,7 @@ impl BorshSerialize for Object {
             ),
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
-            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture((**v).clone()),
+            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
             Self::Type(v) => ObjectWire::Type(v.clone()),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
@@ -299,7 +304,7 @@ impl BorshDeserialize for Object {
             }),
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
-            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(Box::new(v)),
+            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
             ObjectWire::Type(v) => Self::Type(v),
         })
     }

@@ -28,7 +28,7 @@ function takes_int(x: int) -> int {
 }
 
 function call_site_label() -> int {
-    takes_int($id = baml.id.new())
+    takes_int($id = boundary.id())
 }
 
 // $id cannot be used as a binding name (the binding would be silently dead).

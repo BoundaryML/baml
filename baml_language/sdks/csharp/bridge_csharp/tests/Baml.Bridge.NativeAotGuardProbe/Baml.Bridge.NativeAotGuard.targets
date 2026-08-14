@@ -1,0 +1,10 @@
+<Project>
+  <Target
+    Name="BamlRejectUnsupportedNativeAot"
+    BeforeTargets="PrepareForBuild"
+    Condition="'$(PublishAot)' == 'true'">
+    <Error
+      Code="BAML0019"
+      Text="baml-bridge does not support NativeAOT in v1. Use a normal, trimmed, single-file, or trimmed single-file JIT publish instead." />
+  </Target>
+</Project>

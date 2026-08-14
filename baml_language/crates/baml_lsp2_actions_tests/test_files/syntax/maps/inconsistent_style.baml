@@ -21,21 +21,11 @@ function InconsistentStyleUse() -> int{
 
 //----
 //- diagnostics
-// error: Expected expression, found ':'
-//    ╭─[ maps_inconsistent_style.baml:9:19 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[maps_inconsistent_style.baml:9:19]
 //  9 │         some_ident: "yes"
-//    │                   ┬  
-//    │                   ╰── Expected expression, found ':'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// error: unresolved name: name
-//    ╭─[ maps_inconsistent_style.baml:8:9 ]
-//    │
-//  8 │         name "Hello"
-//    │         ──┬─  
-//    │           ╰─── unresolved name: name
-//    │ 
-//    │ Note: Error code: E0003
-// ───╯
+//    ·                   ┬
+//    ·                   ╰── expected `expression`, found `':'`
+//    ╰────

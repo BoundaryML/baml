@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 48719
+---
+=== PPIR ===
+class user.WrapGeneric {
+  val: T
+}
+class user.WrapGeneric$stream {
+  val: T | null
+}
+class user.WrapNonGeneric {
+  x: int
+}
+class user.WrapNonGeneric$stream {
+  x: int | null
+}
+function user.binding_leak_if() -> int  [expr] {
+  { let v: int | string = 7 } if (v is x: int) {  } x else {  } 0
+}
+function user.binding_leak_scope() -> int  [expr] {
+  { let v: int | string = 7; let _ = v is x: int } x
+}
+function user.or_pattern_leak() -> int  [expr] {
+  { let v: int | string = 7; let _ = v is x: int | x: string } x
+}
+function user.unresolved_class_head(v: user.WrapNonGeneric) -> bool  [expr] {
+  {  } v is Frobnitz { x: x }
+}
+function user.unresolved_generic_arg(v: user.WrapGeneric<int>) -> bool  [expr] {
+  {  } v is user.WrapGeneric<Missing>
+}
+function user.unresolved_type_pattern(v: int | string) -> bool  [expr] {
+  {  } v is Frobnitz
+}

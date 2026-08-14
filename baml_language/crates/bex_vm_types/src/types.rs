@@ -7,6 +7,7 @@
 
 #![allow(unsafe_code)]
 mod class;
+mod const_value;
 mod containers;
 mod enums;
 mod function;
@@ -21,6 +22,7 @@ use std::collections::HashMap;
 use baml_type::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 pub use class::*;
+pub use const_value::*;
 pub use containers::*;
 pub use enums::*;
 pub use function::*;
@@ -79,10 +81,6 @@ pub struct Program {
     /// E.g., `"user.my_const" -> 5`. Populated in Pass 1; slots hold `ConstValue::Null`
     /// until `$init` runs at load time via `StoreGlobal`.
     pub let_global_indices: HashMap<String, usize>,
-
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    /// Prepended to function prompt templates by `get_jinja_template`.
-    pub template_strings_macros: String,
 
     /// Client build metadata for constructing full client trees at runtime.
     /// Keyed by client name.
@@ -394,84 +392,13 @@ pub struct TestCase {
     pub function_names: Vec<String>,
     /// Test arguments, keyed by parameter name.
     pub args: IndexMap<String, TestArgValue>,
-}
-
-/// Compile-time constant values.
-///
-/// Similar to `Value` but uses `ObjectIndex` for object references instead of `HeapPtr`.
-/// Used in bytecode constants which are converted to `Value` when loading into the engine.
-///
-/// Note: `ConstValue::Type` is intentionally excluded from the `to_value` conversion — the
-/// `LoadType` instruction reads the `TyTemplate` directly from the constant pool at execution
-/// time and substitutes type arguments from `frame.type_args` before allocating an
-/// `Object::Type` on the heap.
-#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub enum ConstValue {
-    OmittedArg,
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    /// Index into the object pool (converted to `HeapPtr` at load time).
-    Object(crate::ObjectIndex),
-    /// A type template for use by the `LoadType` instruction.
+    /// Project-root-relative path of the file that *defines* this test block.
     ///
-    /// Unlike the other variants, this constant is **not** pre-resolved at load
-    /// time — `LoadType` reads the template here and performs substitution at
-    /// runtime (using the current frame's `type_args`).
-    Type(baml_type::TyTemplate),
-    /// A parametric-class `IsType` check constant.
-    ///
-    /// Used by `Instruction::IsType` when the expected type is a generic class
-    /// instantiation (e.g. `Foo<int>` or `Foo<T>`).  Like `ConstValue::Type`,
-    /// this constant is **not** pre-resolved: the `IsType` VM dispatch reads it
-    /// directly from the raw constant pool and resolves the `class_obj` index to
-    /// a `HeapPtr` at execution time.
-    ClassWithTypeArgs {
-        /// Compile-time index of the class object in the object pool.
-        class_obj: crate::ObjectIndex,
-        /// Templates for the class-level type args, in De Bruijn order.
-        /// `TypeArgRef(n)` refers to `frame.type_args[n]`.
-        type_args_templates: Vec<baml_type::TyTemplate>,
-    },
-}
-
-impl ConstValue {
-    /// Convert to a runtime `Value` using a function to resolve object indices to heap pointers.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called on `ConstValue::Type` — type-template constants are
-    /// handled at runtime by the `LoadType` instruction, not pre-resolved at
-    /// load time.
-    pub fn to_value<F>(&self, resolve: F) -> Value
-    where
-        F: Fn(crate::ObjectIndex) -> HeapPtr,
-    {
-        match self {
-            ConstValue::OmittedArg => Value::OMITTED_ARG,
-            ConstValue::Null => Value::NULL,
-            ConstValue::Int(v) => Value::int(*v),
-            ConstValue::Float(_) => panic!(
-                "ConstValue::Float must be heap-boxed at engine load time — \
-                 use the float-allocating conversion path, not to_value"
-            ),
-            ConstValue::Bool(v) => Value::bool(*v),
-            ConstValue::Object(idx) => Value::object(resolve(*idx)),
-            ConstValue::Type(_) => {
-                panic!(
-                    "ConstValue::Type must not be pre-resolved via to_value — \
-                     use the LoadType instruction instead"
-                )
-            }
-            ConstValue::ClassWithTypeArgs { .. } => {
-                panic!(
-                    "ConstValue::ClassWithTypeArgs must not be pre-resolved via to_value — \
-                     use the IsType instruction instead"
-                )
-            }
-        }
-    }
+    /// Recorded so `baml test --list` reports the test-defining file
+    /// identically whether the program was freshly compiled or served from the
+    /// bytecode cache. Empty only for programs compiled before this field
+    /// existed.
+    pub source_file: String,
 }
 
 /// Media value.
@@ -616,7 +543,7 @@ mod tests {
     fn instance_field_helpers_load_and_store_checked_slots() {
         let instance = Instance::new(
             HeapPtr::null(),
-            vec![],
+            Box::new([]),
             vec![Value::int(10), Value::int(20)],
         );
 
@@ -633,7 +560,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "index out of bounds")]
     fn instance_load_field_panics_for_invalid_slot() {
-        let instance = Instance::new(HeapPtr::null(), vec![], vec![Value::int(10)]);
+        let instance = Instance::new(HeapPtr::null(), Box::new([]), vec![Value::int(10)]);
 
         let _ = instance.load_field(1);
     }

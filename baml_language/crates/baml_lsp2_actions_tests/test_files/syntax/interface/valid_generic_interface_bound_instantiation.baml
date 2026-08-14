@@ -2,7 +2,7 @@
 // instantiation, and `.as<Interface<T>>` selects that same view.
 
 interface Converter<T> {
-  function convert(self) -> T
+  function convert(self) -> T throws never
 }
 
 class MultiFormat {

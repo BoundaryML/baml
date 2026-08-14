@@ -18,22 +18,22 @@ from baml_sdk.forward_refs import (
 )
 
 
-def test_round_trip_other():
+def test_forward_refs_round_trip_other():
     o = Other(v=7)
     assert round_trip_other(o=o) == o
 
 
-def test_round_trip_rec_list():
+def test_forward_refs_round_trip_rec_list():
     assert round_trip_rec_list(r=[1, [2, 3]]) == [1, [2, 3]]
 
 
-def test_round_trip_rec_list_with_other():
+def test_forward_refs_round_trip_rec_list_with_other():
     # RecListWithOther = int | Other | RecListWithOther[]
     assert round_trip_rec_list_with_other(r=1) == 1
     assert round_trip_rec_list_with_other(r=[1, 2]) == [1, 2]
 
 
-def test_round_trip_g_node_int():
+def test_forward_refs_round_trip_g_node_int():
     # The leaf node carries `children=[]`; this exercises the empty-list
     # round trip fixed under Bug A (35b).
     g = GNode[int](children=[GNode[int](children=[])])

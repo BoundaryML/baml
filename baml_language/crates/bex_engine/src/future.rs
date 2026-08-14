@@ -40,11 +40,13 @@
 //! re-executes `Await`, reads the terminal state directly from the heap,
 //! and proceeds.
 
+use ::baml_type::RealizedTy;
 use ::bex_heap::{
     HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
 use ::bex_vm_types::{
     FutureRead, HeapPtr, Object, ObjectType, RootHaver, Value,
+    errors::StackFrame,
     types::{FutureId, FutureInternalError, FutureType},
 };
 use ::core::sync::atomic::AtomicUsize;
@@ -54,13 +56,7 @@ use ::tokio::sync::{Mutex, MutexGuard, SetOnce};
 
 use crate::EngineError;
 
-/// One outstanding future's `ready` wake handle, snapshotted by
-/// [`FutureManagerGuard::pending_join_handles`] for the end-of-run wait
-/// (B-650). Cloning the `Arc<SetOnce>` lets the engine `.wait()` on the
-/// future's settle **without** consuming its parked fire-and-forget error
-/// (unlike [`FutureManagerGuard::future_ready`]), so the spawner's drain can
-/// still surface that error afterwards. No cancel token is captured: the
-/// end-of-run rule WAITS for outstanding work, it never cancels it.
+/// One outstanding future's `ready` wake handle, snapshotted for shutdown.
 pub(crate) type PendingJoinHandle = Arc<SetOnce<Result<(), FutureInternalError>>>;
 
 /// Manages all futures for the Bex engine.
@@ -114,6 +110,13 @@ impl FutureManager {
         let guard = self.acquire(active.proof()).await;
         guard.active_future_count()
     }
+
+    pub async fn pending_join_handles(&self, mgr: &HeapPermitManager) -> Vec<PendingJoinHandle> {
+        let inactive = mgr.new_permit(()).await;
+        let active = inactive.acquire().await;
+        let mut guard = self.acquire(active.proof()).await;
+        guard.pending_join_handles()
+    }
 }
 
 pub struct FutureManagerGuard<'a> {
@@ -131,15 +134,15 @@ impl FutureManagerGuard<'_> {
 
     /// Registers a future with the future manager and returns a unique ID.
     ///
-    /// `detached` records whether the future backs a `detach = true` spawn, so
-    /// the end-of-run wait can exclude it; `run_id` records which run created
-    /// it, so the wait can scope to a single run's own spawns (see
-    /// `pending_join_handles`). Non-spawn callers pass `false` / `0`.
+    /// `returns` / `throws` are the `Future<T, E>` type arguments the spawn
+    /// site was typed at, already resolved against the spawning frame. They are
+    /// stored on the heap `Future` so reflection and `is`/`match` can see the
+    /// future's generic parameters rather than only "some future".
     pub fn new_future(
         &mut self,
+        returns: RealizedTy,
+        throws: RealizedTy,
         cancel: CancellationToken,
-        detached: bool,
-        run_id: usize,
     ) -> (FutureId, HeapPtr) {
         // The contract on `FutureId::from_usize` is "no two live ids share a
         // usize". We satisfy this by drawing the value from the manager's
@@ -153,32 +156,17 @@ impl FutureManagerGuard<'_> {
 
         let ptr = inner
             .tlab
-            .alloc_future(::bex_vm_types::Future::pending(id, cancel));
+            .alloc_future(::bex_vm_types::Future::pending(id, returns, throws, cancel));
 
-        inner.active_futures.insert(
-            id,
-            FutureState {
-                future: ptr,
-                detached,
-                run_id,
-            },
-        );
+        inner.active_futures.insert(id, FutureState { future: ptr });
         (id, ptr)
-    }
-
-    /// Look up the heap pointer for `id`, or `None` if the future is
-    /// no longer in `active_futures`. Used by the engine's
-    /// fire-and-forget propagation path to capture the soon-to-settle
-    /// future's pointer before the terminal helper removes the entry.
-    pub fn future_heap_ptr(&self, id: FutureId) -> Option<HeapPtr> {
-        self.holder().active_futures.get(&id).map(|s| s.future)
     }
 
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
         // Snapshot the heap Arc before borrowing self mutably for take_pending;
         // settle_ready needs it to fire the generational write barrier.
         let heap = ::std::sync::Arc::clone(self.tlab().heap());
-        if let Some((fut, self_ptr)) = self.take_pending(id, false)? {
+        if let Some((fut, self_ptr)) = self.take_pending(id)? {
             // SAFETY: caller holds the heap permit (witnessed by `self.proof`).
             // `settle_ready` CAS-transitions Pending → Ready; the producer is
             // the unique writer reaching this path (cancel uses its own CAS).
@@ -191,65 +179,22 @@ impl FutureManagerGuard<'_> {
 
     /// Transition a future to `Future::Error(value)` with the given BAML
     /// error/panic value.
-    pub fn err_future(&mut self, id: FutureId, err: Value) -> Result<(), EngineError> {
+    pub fn err_future(
+        &mut self,
+        id: FutureId,
+        err: Value,
+        trace: Vec<StackFrame>,
+    ) -> Result<(), EngineError> {
         let heap = ::std::sync::Arc::clone(self.tlab().heap());
-        // `true`: this is the single path allowed to claim an ErrorPending
-        // future (consuming its parked fire-and-forget error).
-        if let Some((fut, self_ptr)) = self.take_pending(id, true)? {
+        if let Some((fut, self_ptr)) = self.take_pending(id)? {
             // SAFETY: see `fulfill_future`.
-            let _ = unsafe { fut.settle_error(heap.as_ref(), self_ptr, err) };
+            let _ = unsafe { fut.settle_error(heap.as_ref(), self_ptr, err, trace) };
         }
         Ok(())
-    }
-
-    /// BEP-034 fire-and-forget: park `err` as `id`'s *deferred* error instead
-    /// of settling the heap `Future`.
-    ///
-    /// The future stays `Pending` but its wake signal fires, so parked
-    /// awaiters resume, re-yield their `Await`/`AwaitAny`, and route through
-    /// [`Self::future_ready`] — the single observation point that settles the
-    /// future from the stash and consumes the entry. An error consumed there
-    /// was (potentially) handled by the awaiter's `catch` and must not
-    /// re-surface at the spawner; the spawner's drain only surfaces errors
-    /// still in the stash. See `FutureManagerInner::deferred_errors`.
-    ///
-    /// A future already settled out-of-band (e.g. a concurrent `f.cancel()`)
-    /// wins the race: the error is dropped, mirroring `err_future`'s no-op.
-    pub fn defer_error(&mut self, id: FutureId, err: Value) -> Result<(), EngineError> {
-        let still_pending = {
-            let Some(entry) = self.holder().active_futures.get(&id) else {
-                // Settled and cleaned up out-of-band — nothing to defer.
-                return Ok(());
-            };
-            // SAFETY: caller holds the heap permit via `self.proof`.
-            let fut = unsafe { entry.future_ref() }?;
-            // `Pending → ErrorPending`: the heap future now READS as failed
-            // (`is_error()`, `state()`) while the error value stays parked
-            // here until first observed — `await` routes ErrorPending through
-            // the engine exactly like Pending, and `future_ready` consumes
-            // the stash. Also fires the wake signal so parked awaiters
-            // re-yield and observe.
-            fut.mark_error_pending()
-        };
-        if still_pending {
-            self.holder_mut().deferred_errors.insert(id, err);
-        }
-        Ok(())
-    }
-
-    /// Take `id`'s deferred error, if any, settling the heap `Future` to
-    /// `Error` so subsequent reads observe the terminal state. Returns the
-    /// error value when `id` had an unobserved deferred error.
-    pub fn take_deferred_error(&mut self, id: FutureId) -> Result<Option<Value>, EngineError> {
-        let Some(err) = self.holder_mut().deferred_errors.remove(&id) else {
-            return Ok(None);
-        };
-        self.err_future(id, err)?;
-        Ok(Some(err))
     }
 
     pub fn cancel_future(&mut self, id: FutureId) -> Result<(), EngineError> {
-        if let Some((fut, _self_ptr)) = self.take_pending(id, false)? {
+        if let Some((fut, _self_ptr)) = self.take_pending(id)? {
             // `settle_cancelled` fires the cancel token and the wake signal
             // internally. CAS-based, so this races safely with the producer's
             // settle_ready/settle_error. No value payload → no write barrier.
@@ -317,6 +262,50 @@ impl FutureManagerGuard<'_> {
         Ok(())
     }
 
+    /// Settle `id` to `InternalError` from the spawn task's terminal
+    /// engine-error path, where the child thread (and its heap permit) are
+    /// already gone.
+    ///
+    /// Tolerant counterpart to [`Self::internal_error_future`]: that helper
+    /// runs on the still-live child thread, where a non-`Pending` future is an
+    /// invariant violation worth asserting. Here the thread died on an
+    /// arbitrary engine-error escape path, so the future may legitimately
+    /// already be settled (the error can strike after a successful settle) —
+    /// an already-settled or unknown future is left as-is and the error only
+    /// logged. Like `internal_error_future`, the `active_futures` entry is
+    /// retained so a later `Await` resumes against the same heap object and
+    /// surfaces the original [`EngineError`] instead of parking forever.
+    pub fn settle_spawn_engine_error(&mut self, id: FutureId, err: EngineError) {
+        let Some(entry) = self.holder().active_futures.get(&id) else {
+            tracing::error!(
+                ?id,
+                ?err,
+                "spawn thread terminated with an engine error but its future \
+                 is not active; error dropped"
+            );
+            return;
+        };
+        // SAFETY: caller holds the heap permit via `self.proof`.
+        let fut = match unsafe { entry.future_ref() } {
+            Ok(fut) => fut,
+            Err(handle_err) => {
+                tracing::error!(
+                    ?id,
+                    ?err,
+                    ?handle_err,
+                    "spawn thread terminated with an engine error but its \
+                     future handle is unreadable; error dropped"
+                );
+                return;
+            }
+        };
+        // A lost CAS means the future already reached a terminal state (a
+        // settle that preceded the error, or a concurrent `f.cancel()`);
+        // that state is the one the awaiter observes, and it is already a
+        // wake-up — no parked parent is left behind either way.
+        let _ = fut.settle_internal_error(Box::new(err));
+    }
+
     /// Remove and return the heap `Future` for `id` if it's still
     /// `Pending`. Returns `Ok(None)` if the future has already been
     /// settled out-of-band (e.g. via BAML's `f.cancel()` which transitions
@@ -332,7 +321,6 @@ impl FutureManagerGuard<'_> {
     fn take_pending(
         &mut self,
         id: FutureId,
-        claim_error_pending: bool,
     ) -> Result<Option<(&'static bex_vm_types::Future, HeapPtr)>, EngineError> {
         // Phase 1: peek. Already-removed entries → Ok(None).
         let already_settled = {
@@ -341,17 +329,7 @@ impl FutureManagerGuard<'_> {
             };
             // SAFETY: caller holds the heap permit via `self.proof`.
             let fut = unsafe { entry_ref.future_ref() }?;
-            // ErrorPending is claimable ONLY by the error-consumption path
-            // (`err_future` → `settle_error`, which accepts the
-            // `ErrorPending → Error` transition). For fulfill/cancel it is a
-            // SETTLED-failed future: treating it as claimable would drop the
-            // bookkeeping while the heap future never advances (awaiter
-            // livelock) or orphan the parked error.
-            match fut.read() {
-                FutureRead::Pending(_) => false,
-                FutureRead::ErrorPending(_) => !claim_error_pending,
-                _ => true,
-            }
+            !matches!(fut.read(), FutureRead::Pending(_))
         };
         if already_settled {
             // Heap state moved on without us — drop the bookkeeping entry
@@ -398,13 +376,6 @@ impl FutureManagerGuard<'_> {
         &mut self,
         id: FutureId,
     ) -> Result<impl Future<Output = Result<(), EngineError>> + use<>, EngineError> {
-        // BEP-034 fire-and-forget: observing a deferred-errored future settles
-        // it. This is the single observation point for both `Await` and
-        // `AwaitAny`; consuming the stash entry here marks the error as
-        // awaited (and possibly `catch`-handled), so the spawner's drain no
-        // longer surfaces it. After the settle the `active_futures` entry is
-        // gone and the lookup below takes the already-resolved path.
-        let _ = self.take_deferred_error(id)?;
         let inner = self.holder();
         let waiter = match inner.active_futures.get(&id) {
             Some(entry) => {
@@ -446,49 +417,24 @@ impl FutureManagerGuard<'_> {
         })
     }
 
-    /// Snapshot the `ready` wake handle of every strictly-`Pending`,
-    /// **non-detached** future **created by run `run_id`**, for that run's
-    /// end-of-run wait (B-650).
-    ///
-    /// Scoped to `run_id` because the `FutureManager` is shared across every
-    /// concurrent run on one engine (the SDK drives many `call_function` roots
-    /// against one process-global runtime). A completing root must wait ONLY on
-    /// its own descendants' spawns; waiting on another run's outstanding future
-    /// deadlocks — e.g. an LLM-call root blocking on the in-process replay
-    /// server's still-streaming HTTP-response spawn, which belongs to the
-    /// server's handler run and never settles once the caller stops reading.
-    /// See [`crate::thread::BexThread::vm_thread_run_id`].
-    ///
-    /// `detach = true` spawns are also excluded: a detached spawn is
-    /// contractually decoupled from its spawner and "behaves like a top-level
-    /// task" that OUTLIVES the run which created it (its unhandled error routes
-    /// to the root and is logged if the root is already gone). Waiting on it at
-    /// end-of-run contradicts that contract and deadlocks any long-lived
-    /// detached task meant to span calls — e.g. the SDK's `replay_serve_detached`
-    /// pattern, where a `spawn with detach { server.serve(...) }` returns the
-    /// bound address immediately and is only torn down by a *later*, separate
-    /// bridge call hitting a shutdown route. Blocking the spawning call on that
-    /// serve future can never make progress (nothing cancels it until the call
-    /// returns), so the SDK hangs. Non-detached fire-and-forget spawns of this
-    /// run ARE its in-flight work and remain waited-for, so a racing/delayed
-    /// non-detached throw still surfaces (B-612/B-650 core).
-    ///
-    /// `ErrorPending` futures are deliberately excluded: they have already
-    /// failed (their error is parked engine-side and their `ready` wake has
-    /// already fired), so the spawner's drain surfaces them — waiting again
-    /// would return immediately and they are effectively settled. Ready /
-    /// Cancelled / Error futures are already removed from `active_futures`, so
-    /// they never appear here.
-    ///
-    /// Unlike [`Self::future_ready`], this does **not** consume any deferred
-    /// error: it clones the raw `ready` `Arc` so a joiner can wait for the
-    /// future to settle while leaving the parked error in place for the
-    /// spawner's drain to surface.
-    pub(crate) fn pending_join_handles(&self, run_id: usize) -> Vec<PendingJoinHandle> {
+    /// Snapshot every pending future for the explicit engine shutdown wait.
+    pub(crate) fn pending_join_handles(&mut self) -> Vec<PendingJoinHandle> {
+        let settled: Vec<_> = self
+            .holder()
+            .active_futures
+            .iter()
+            .filter_map(|(id, state)| {
+                // SAFETY: caller holds the heap permit via `self.proof`.
+                let future = unsafe { state.future_ref() }.ok()?;
+                (!matches!(future.read(), FutureRead::Pending(_))).then_some(*id)
+            })
+            .collect();
+        for id in settled {
+            self.holder_mut().active_futures.remove(&id);
+        }
         self.holder()
             .active_futures
             .values()
-            .filter(|state| !state.detached && state.run_id == run_id)
             .filter_map(|state| {
                 // SAFETY: caller holds the heap permit via `self.proof`.
                 let fut = unsafe { state.future_ref() }.ok()?;
@@ -528,22 +474,6 @@ pub struct FutureManagerInner {
     tlab: Tlab,
     next_future_id: AtomicUsize,
     active_futures: HashMap<FutureId, FutureState>,
-    /// BEP-034 deferred fire-and-forget errors (see [`FutureManagerGuard::defer_error`]).
-    ///
-    /// A spawned child's unhandled throw is parked here (keyed by its
-    /// `FutureId`) instead of settling the heap `Future` to `Error`
-    /// immediately. The future stays `Pending` (its wake signal fired), so
-    /// *every* observation — `await` or `__await_any`, from any task — routes
-    /// back through the engine via [`FutureManagerGuard::future_ready`], which
-    /// settles the future from this stash and removes the entry. The
-    /// spawner's fire-and-forget drain only surfaces errors still present
-    /// here, i.e. genuinely unobserved ones; an error consumed by an awaiter
-    /// (and possibly `catch`-handled) never re-surfaces at the spawner.
-    ///
-    /// GC: the parked error `Value`s are rooted/forwarded via this struct's
-    /// `RootHaver` impl. The corresponding heap `Future` stays rooted through
-    /// its still-live `active_futures` entry.
-    deferred_errors: HashMap<FutureId, Value>,
 }
 impl FutureManagerInner {
     pub fn new(tlab: Tlab) -> Self {
@@ -551,7 +481,6 @@ impl FutureManagerInner {
             tlab,
             next_future_id: AtomicUsize::new(0),
             active_futures: HashMap::new(),
-            deferred_errors: HashMap::new(),
         }
     }
 
@@ -568,13 +497,6 @@ impl RootHaver for FutureManagerInner {
         for future in self.active_futures.values() {
             future.collect_roots(roots);
         }
-        // Deferred fire-and-forget error payloads stay alive until an awaiter
-        // (or the spawner's drain) consumes them.
-        for value in self.deferred_errors.values() {
-            if let Some(ptr) = value.as_object_ptr() {
-                roots.push(ptr);
-            }
-        }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         // Drop the cached TLAB cursor — GC has swapped semispaces and our
@@ -584,13 +506,6 @@ impl RootHaver for FutureManagerInner {
         self.tlab.invalidate();
         for future in self.active_futures.values_mut() {
             future.forward_roots(roots);
-        }
-        for value in self.deferred_errors.values_mut() {
-            if let Some(ptr) = value.as_object_ptr()
-                && let Some(new_ptr) = roots.get(&ptr)
-            {
-                *value = Value::object(*new_ptr);
-            }
         }
     }
 }
@@ -609,18 +524,6 @@ struct FutureState {
     /// holds it directly (fire-and-forget spawn before the producer task
     /// gets scheduled).
     future: HeapPtr,
-    /// Whether this future backs a `detach = true` spawn. Detached spawns
-    /// are contractually decoupled from their spawner and outlive the run
-    /// that created them (they "behave like a top-level task"), so the B-650
-    /// end-of-run wait must NOT block on them — see
-    /// [`FutureManagerGuard::pending_join_handles`].
-    detached: bool,
-    /// Opaque identity of the run that created this future (see
-    /// [`crate::thread::BexThread::vm_thread_run_id`]). The `FutureManager` is
-    /// shared across all concurrent runs on one engine, so the end-of-run wait
-    /// filters on this key to block only on the completing run's OWN spawns,
-    /// never on a different concurrent run's outstanding work.
-    run_id: usize,
 }
 impl FutureState {
     /// Returns an immutable reference to the heap-allocated `Future`.
@@ -680,45 +583,36 @@ mod tests {
         pm.new_permit(()).await.acquire().await
     }
 
+    /// Register a future typed as `Future<int, never>` — the shape a
+    /// non-throwing `spawn { 1 }` produces. These tests exercise registry
+    /// bookkeeping, so the types are inert here; a concrete pair is used
+    /// anyway so nothing reads as "type unknown by design".
+    fn new_int_future(
+        guard: &mut FutureManagerGuard<'_>,
+        cancel: CancellationToken,
+    ) -> (FutureId, HeapPtr) {
+        guard.new_future(RealizedTy::int(), RealizedTy::never(), cancel)
+    }
+
     #[tokio::test]
     async fn fulfill_removes_entry() {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _ptr) = guard.new_future(CancellationToken::new(), false, 0);
+        let (id, _ptr) = new_int_future(&mut guard, CancellationToken::new());
         assert_eq!(guard.active_future_count(), 1);
         guard.fulfill_future(id, Value::int(42)).unwrap();
         assert_eq!(guard.active_future_count(), 0);
     }
 
-    /// B-650: the end-of-run wait for a given run joins on that run's
-    /// non-detached pending futures only. It must (a) exclude `detach = true`
-    /// spawns (they outlive the run) and (b) exclude futures from OTHER runs
-    /// (the `FutureManager` is shared across concurrent runs). All four futures
-    /// stay tracked in `active_futures`; `pending_join_handles(run)` surfaces
-    /// only the one that is this run's AND non-detached.
     #[tokio::test]
-    async fn pending_join_handles_scopes_to_run_and_excludes_detached() {
-        const RUN_A: usize = 0xA;
-        const RUN_B: usize = 0xB;
+    async fn pending_join_handles_includes_all_pending_futures() {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        // Run A: one non-detached (waited) + one detached (excluded).
-        let (_a_plain, _) = guard.new_future(CancellationToken::new(), false, RUN_A);
-        let (_a_detached, _) = guard.new_future(CancellationToken::new(), true, RUN_A);
-        // Run B: a non-detached future belonging to a different concurrent run.
-        let (_b_plain, _) = guard.new_future(CancellationToken::new(), false, RUN_B);
-        // A detached future of run B, for good measure.
-        let (_b_detached, _) = guard.new_future(CancellationToken::new(), true, RUN_B);
-        // All four are live and pending in the shared registry.
-        assert_eq!(guard.active_future_count(), 4);
-        // Run A waits only on its own non-detached future.
-        assert_eq!(guard.pending_join_handles(RUN_A).len(), 1);
-        // Run B likewise.
-        assert_eq!(guard.pending_join_handles(RUN_B).len(), 1);
-        // An unrelated run waits on nothing.
-        assert_eq!(guard.pending_join_handles(0xC).len(), 0);
+        new_int_future(&mut guard, CancellationToken::new());
+        new_int_future(&mut guard, CancellationToken::new());
+        assert_eq!(guard.pending_join_handles().len(), 2);
     }
 
     #[tokio::test]
@@ -727,7 +621,7 @@ mod tests {
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
         let token = CancellationToken::new();
-        let (id, _ptr) = guard.new_future(token.clone(), false, 0);
+        let (id, _ptr) = new_int_future(&mut guard, token.clone());
         assert!(!token.is_cancelled());
         guard.cancel_future(id).unwrap();
         assert_eq!(guard.active_future_count(), 0);
@@ -743,10 +637,10 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id_a, _) = guard.new_future(CancellationToken::new(), false, 0);
-        let (id_b, _) = guard.new_future(CancellationToken::new(), false, 0);
+        let (id_a, _) = new_int_future(&mut guard, CancellationToken::new());
+        let (id_b, _) = new_int_future(&mut guard, CancellationToken::new());
         assert_eq!(guard.active_future_count(), 2);
-        guard.err_future(id_a, Value::int(7)).unwrap();
+        guard.err_future(id_a, Value::int(7), Vec::new()).unwrap();
         guard
             .internal_error_future(
                 id_b,
@@ -769,7 +663,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new(), false, 0);
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         let original = EngineError::TypeMismatch {
             message: "synthetic op error".into(),
         };
@@ -803,7 +697,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new(), false, 0);
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         let original = EngineError::TypeMismatch {
             message: "stale".into(),
         };
@@ -845,7 +739,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new(), false, 0);
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         guard.fulfill_future(id, Value::int(1)).unwrap();
         let again = guard.fulfill_future(id, Value::int(2));
         assert!(again.is_ok(), "second fulfill should be idempotent no-op");
@@ -856,7 +750,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new(), false, 0);
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         guard.fulfill_future(id, Value::int(1)).unwrap();
         // Entry is gone; future_ready should treat it as already-resolved.
         let waiter = guard.future_ready(id).expect("expected immediate Ok");
@@ -887,7 +781,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new(), false, 0);
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         let waiter = guard.future_ready(id).expect("waiter should be created");
         drop(guard);
 

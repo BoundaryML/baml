@@ -1,44 +1,37 @@
-client<llm> OpenAIImageResponses {
-  provider openai-responses
-  options {
-    model "gpt-4.1"
-    api_key env.OPENAI_API_KEY
-    tools [
-      {
-        type "image_generation"
-        size "1024x1024"
-        quality "low"
-      }
-    ]
-  }
-}
+// LLM functions whose return types contain `image` compile end-to-end:
+// plain image, image[], and (image | string)[] outputs.
+
+client OpenAIImageResponses = openai.OpenAiClient.new(
+    model = "gpt-4.1",
+    api_key = "test-key",
+);
 
 function GenerateImage(prompt: string) -> image {
-  client OpenAIImageResponses
-  prompt #"
+  client: OpenAIImageResponses
+  prompt: `
     Generate an image for this prompt:
-    {{ prompt }}
+    ${prompt}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 function GenerateImageSet(prompt: string) -> image[] {
-  client OpenAIImageResponses
-  prompt #"
+  client: OpenAIImageResponses
+  prompt: `
     Generate multiple distinct image outputs for this prompt:
-    {{ prompt }}
+    ${prompt}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 function GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
-  client OpenAIImageResponses
-  prompt #"
+  client: OpenAIImageResponses
+  prompt: `
     Generate a short narrative with text captions and image outputs for:
-    {{ prompt }}
+    ${prompt}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }

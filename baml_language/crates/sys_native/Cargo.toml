@@ -32,6 +32,7 @@ bundle-http = [
   "dep:tokio-rustls",
   "dep:rustls-pemfile",
   "dep:bytes",
+  "dep:tokio-tungstenite",
 ]
 
 [dependencies]
@@ -45,6 +46,7 @@ sys_ops = { workspace = true }
 sys_types = { workspace = true }
 bytes = { workspace = true, optional = true }
 futures = { workspace = true }
+getrandom = { workspace = true }
 http-body-util = { workspace = true, optional = true }
 hyper = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }
@@ -67,6 +69,10 @@ tokio = { workspace = true, features = [
   "time",
 ] }
 tokio-rustls = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true, features = [
+  "connect",
+  "rustls-tls-native-roots",
+] }
 tracing = { workspace = true }
 walkdir = { workspace = true }
 

@@ -2,12 +2,10 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved type: Config. Did you mean `root.Config`?
-   ╭─[ models.baml:7:25 ]
-   │
+  [type] E0002
+
+  × unresolved type: Config. Did you mean `root.Config`?
+   ╭─[models.baml:7:25]
  7 │ function UseConfig(cfg: Config) -> Response {
-   │                         ───┬──  
-   │                            ╰──── unresolved type: Config. Did you mean `root.Config`?
-   │ 
-   │ Note: Error code: E0002
-───╯
+   ·                         ──────
+   ╰────

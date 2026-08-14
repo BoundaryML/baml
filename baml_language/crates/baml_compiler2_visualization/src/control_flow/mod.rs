@@ -9,7 +9,9 @@ mod from_ast;
 use std::{collections::HashMap, fmt};
 
 pub use flatten::{flatten_control_flow_graph, prepare_control_flow_graph_for_visualization};
-pub use from_ast::{STMT_SOURCE_EXPR_TAG, build_control_flow_graph_from_ast};
+pub use from_ast::{
+    STMT_SOURCE_EXPR_TAG, build_control_flow_graph_from_ast, build_control_flow_graph_from_expr,
+};
 use indexmap::IndexMap;
 
 // ---------------------------------------------------------------------------
@@ -376,15 +378,6 @@ pub fn slugify(input: &str) -> String {
         }
     }
     slug.trim_matches('-').to_string()
-}
-
-pub fn slug_or_default(label: &str, default: &str) -> String {
-    let candidate = slugify(label);
-    if candidate.is_empty() {
-        default.to_string()
-    } else {
-        candidate
-    }
 }
 
 pub fn describe_node_type(node_type: &NodeType) -> &'static str {

@@ -1,0 +1,148 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function iter_closure_elements.$init_test_ns_iter_closure_elements_iter_closure_elements(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.iter_closure_elements"
+    load_const "iterating_closure_array_calls_each"
+    make_closure .<lambda($init_test_ns_iter_closure_elements_iter_closure_elements, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter_closure_elements"
+    load_const "iterating_nullable_elements_yields_stored_null"
+    make_closure .<lambda($init_test_ns_iter_closure_elements_iter_closure_elements, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function iter_closure_elements.closure_loop_sum() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?5
+    make_cell
+    store_var ?5
+    load_const 0
+    store_deref ?1
+    load_type () -> void throws never
+    alloc_array 0
+    store_var total
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_type int
+    alloc_array 4
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    make_cell
+    store_var i
+    load_var _5
+    store_deref ?5
+    load_type () -> void throws never
+    load_var2 2 1
+    load_var i
+    make_closure .<lambda(closure_loop_sum, 0)>, 2
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var total
+    load_type baml.iter.Iterable<Error = never, Item = () -> void throws never>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _13
+
+  L3:
+    load_var _13
+    load_type baml.iter.Iterator<Error = never, Item = () -> void throws never>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+    load_var _14
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _14
+    call_indirect
+    pop 1
+    jump L3
+
+  L5:
+    load_deref ?1
+    return
+}
+
+function iter_closure_elements.nullable_elements_sum() -> int {
+    load_const 0
+    store_var count
+    load_const 1
+    load_const null
+    load_const 3
+    load_type int | null
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int | null>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int | null>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _4
+    load_const null
+    call baml.ops.equals_equals
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    jump L0
+
+  L3:
+    load_var count
+    load_const 10
+    add_int
+    store_var count
+    jump L0
+
+  L4:
+    load_var count
+    return
+}

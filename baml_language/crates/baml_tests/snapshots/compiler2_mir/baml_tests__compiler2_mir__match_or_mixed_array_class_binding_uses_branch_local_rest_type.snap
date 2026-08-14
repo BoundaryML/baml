@@ -19,27 +19,21 @@ fn user.f(v: NumberBag | int[][]) -> int {
     let _13: bool
     let _14: int
     let _15: bool
-    let _16: int[]
-    let _17: int
-    let _18: int[][]
+    let _16: int
+    let _17: int[]
+    let _18: int[]
     let _19: int
-    let _20: int
+    let _20: int[] // field
     let _21: int[]
-    let _22: int[]
-    let _23: int
-    let _24: int[] // field
-    let _25: int[][]
-    let _26: int
-    let _27: int[]
-    let _28: 0
+    let _22: 0
 
     bb0: {
         _2 = is_type(copy _1, NumberBag);
-        branch copy _2 -> [bb12, bb1];
+        branch copy _2 -> [bb9, bb1];
     }
 
     bb1: {
-        _7 = is_type(copy _1, _[]);
+        _7 = is_type_tag(copy _1, LIST);
         branch copy _7 -> [bb2, bb6];
     }
 
@@ -69,49 +63,34 @@ fn user.f(v: NumberBag | int[][]) -> int {
 
     bb6: {
         _0 = const 0_i64;
-        goto -> bb13;
+        goto -> bb10;
     }
 
     bb7: {
-        _17 = len(_11);
-        _16 = call const fn baml.Array.slice(copy _11, const 0_i64, copy _17) -> [bb8];
+        _16 = const 0_i64;
+        _17 = copy _1[_16];
+        _19 = len(_17);
+        _18 = call const fn baml.Array.slice(copy _17, const 0_i64, copy _19) -> [bb8];
     }
 
     bb8: {
-        _19 = len(_1);
-        _18 = call const fn baml.Array.slice(copy _1, const 1_i64, copy _19) -> [bb9];
+        _20 = copy _18;
+        _21 = copy _20;
+        _22 = const 0_i64;
+        _0 = copy _21[_22];
+        goto -> bb10;
     }
 
     bb9: {
-        _20 = const 0_i64;
-        _21 = copy _1[_20];
-        _23 = len(_21);
-        _22 = call const fn baml.Array.slice(copy _21, const 0_i64, copy _23) -> [bb10];
-    }
-
-    bb10: {
-        _24 = copy _22;
-        _26 = len(_1);
-        _25 = call const fn baml.Array.slice(copy _1, const 1_i64, copy _26) -> [bb11];
-    }
-
-    bb11: {
-        _27 = copy _24;
-        _28 = const 0_i64;
-        _0 = copy _27[_28];
-        goto -> bb13;
-    }
-
-    bb12: {
         _3 = copy _1.0;
         _4 = copy _3;
         _5 = copy _4;
         _6 = const 0_i64;
         _0 = copy _5[_6];
-        goto -> bb13;
+        goto -> bb10;
     }
 
-    bb13: {
+    bb10: {
         return;
     }
 }

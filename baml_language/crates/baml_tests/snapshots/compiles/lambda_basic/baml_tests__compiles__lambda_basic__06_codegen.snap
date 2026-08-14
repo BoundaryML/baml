@@ -1,15 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13756
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
 function user.test_annotated() -> int {
     load_const 21
     make_closure .<lambda(test_annotated, 0)>, 0

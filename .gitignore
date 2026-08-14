@@ -150,6 +150,10 @@ pyvenv.cfg
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 sample/baml_client/*target
 test_logs/**
+baml_language/sdk_tests/crates/parity_analysis.new.md
+# BAML-authored tools' local compile caches (baml-cli run/test)
+tools/*/.baml/
+/profiles/*.bamlprof
 tmp
 tmp/
 vendor/
@@ -189,6 +193,6 @@ rpi/
 .codeboarding/
 
 # Track generated Node bridge package JS/TS dist outputs, but not native addons.
-!baml_language/sdks/nodejs/bridge_nodejs/dist/
-!baml_language/sdks/nodejs/bridge_nodejs/dist/**
-baml_language/sdks/nodejs/bridge_nodejs/dist/*.node
+!baml_language/sdks/typescript/bridge_typescript/dist/
+!baml_language/sdks/typescript/bridge_typescript/dist/**
+baml_language/sdks/typescript/bridge_typescript/dist/*.node

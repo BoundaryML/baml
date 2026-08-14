@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+606..608 'ja': throws never
+642..715 '{\n   ...  j\n}': baml.json.json
+648..669 'let j:...n.json': baml.json.json
+655..669 'baml.json.json': baml.json.json
+672..681 '[1, 2, 3]': baml.json.json[]
+673..674 '1': 1
+676..677 '2': 2
+679..680 '3': 3
+712..713 'j': baml.json.json
+726..728 'jm': throws never
+762..862 '{\n   ...  m\n}': baml.json.json
+768..789 'let m:...n.json': baml.json.json
+775..789 'baml.json.json': baml.json.json
+792..828 '{"key"...ull]}}': map<string, baml.json.json>
+793..798 '"key"': "key"
+800..827 '{"nest...null]}': map<string, baml.json.json>
+801..809 '"nested"': "nested"
+811..826 '[1, true, null]': baml.json.json[]
+812..813 '1': 1
+815..819 'true': true
+821..825 'null': null
+859..860 'm': baml.json.json

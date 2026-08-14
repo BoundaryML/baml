@@ -41,6 +41,9 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
         .arg(dir)
         .arg("-o")
         .arg(&out_bin);
+    // Share the bytecode cache across the suite so only the first invocation
+    // pays the stdlib compile; see `common::shared_cache_dir`.
+    cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());
     for arg in pack_args {
         cmd.arg(arg);
     }
@@ -115,6 +118,10 @@ fn pack_e2e_omits_compile_file_status() {
 
     let output = Command::new(&built.baml_cli)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
+        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
+        .env("BAML_OUTPUT_PRESET", "human")
+        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .arg("pack")
         .arg("--from")
         .arg(tmp.path())
@@ -166,6 +173,7 @@ fn pack_e2e_hermetic_baml_file() {
     std::fs::write(&src, "function main() -> string { \"hermetic\" }\n").unwrap();
     let out_bin = tmp.path().join("out");
     let status = Command::new(&built.baml_cli)
+        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .arg("pack")
         .arg("--file")
         .arg(&src)
@@ -234,11 +242,11 @@ fn pack_e2e_sys_exit_propagates_to_shell() {
     let built = common::ensure_built();
     let (_tmp, bin) = pack_project(
         built,
-        "function main() -> string {\n  baml.sys.exit(7)\n  \"never\"\n}\n",
+        "function main() -> never {\n  baml.sys.exit(42)\n}\n",
         &["main"],
     );
     let out = run(&bin, &[]);
-    assert_eq!(out.status.code(), Some(7));
+    assert_eq!(out.status.code(), Some(42));
 }
 
 /// Pack a **manifest-less** `baml_src/`-only project (no `baml.toml`) and

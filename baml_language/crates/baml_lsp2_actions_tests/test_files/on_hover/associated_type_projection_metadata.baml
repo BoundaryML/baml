@@ -1,6 +1,6 @@
 interface PublicIdentity {
   type Key
-  key: Key
+  key: Self.Key
 }
 
 class AccountRecord {
@@ -14,7 +14,7 @@ class AccountRecord {
 
 interface Repository {
   type Record
-  function find(self) -> Self.Record
+  function find(self) -> Self.Record throws never
 }
 
 class UserRecord {
@@ -34,7 +34,7 @@ class UserRepository {
 }
 
 function example(account: AccountRecord, repo: UserRepository) -> void {
-  let publicKey<[CURSOR] = account.as<PublicIdentity>.key
+  let publicKey<[CURSOR] = account.as<PublicIdentity<Key = string>>.key
   let found<[CURSOR] = repo.find()
 }
 

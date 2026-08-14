@@ -1,18 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10182
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function user.unwrap_or(o: Opt<T> | Non, default: T) -> T {
+function user.unwrap_or(o: Opt<#0> | Non, default: #0) -> #0 {
     load_var o
-    is_type Opt<...>
+    store_var _3
+    load_var _3
+    narrow_bind Opt<...>, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -21,7 +15,7 @@ function user.unwrap_or(o: Opt<T> | Non, default: T) -> T {
     jump L2
 
   L1:
-    load_var o
+    load_var _3
     load_field .value
 
   L2:

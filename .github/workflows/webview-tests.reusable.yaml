@@ -53,7 +53,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "cargo:wasm-pack"
+          install_args: "github:rustwasm/wasm-pack"
 
       # Path-mapped imports from app-vscode-webview resolve into pkg-playground/wasm
       # and pkg-proto/src/generated, so both must be present before tsc runs.
@@ -111,7 +111,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "cargo:wasm-pack"
+          install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
         run: pnpm --filter pkg-playground build:wasm
@@ -159,7 +159,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "cargo:wasm-pack"
+          install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
         run: pnpm --filter pkg-playground build:wasm

@@ -1,5 +1,5 @@
 interface Loop<T> requires Loop<T[]> {
-  function ping(self) -> string
+  function ping(self) -> string throws never
 }
 
 class Box {
@@ -12,21 +12,17 @@ class Box {
 
 //----
 //- diagnostics
-// error: interface `requires` chain forms a cycle: Loop -> Loop
-//    ╭─[ interface_error_generic_requires_cycle_changes_args.baml:1:11 ]
-//    │
+// E0118
+//
+//   × interface `requires` cycle: Loop → Loop
+//    ╭─[interface_error_generic_requires_cycle_changes_args.baml:1:11]
 //  1 │ interface Loop<T> requires Loop<T[]> {
-//    │           ──┬─
-//    │             ╰─── cyclic `requires`
-//    │
-//    │ Note: Error code: E0118
-// ───╯
-// error: class `Box` implements `Loop`, which requires `Loop<int[]>`, but `Box` does not implement them
-//    ╭─[ interface_error_generic_requires_cycle_changes_args.baml:6:14 ]
-//    │
+//    ·           ────
+//    ╰────
+// E0125
+//
+//   × implementing `Loop` also requires implementing `Loop<int[]>`
+//    ╭─[interface_error_generic_requires_cycle_changes_args.baml:6:14]
 //  6 │   implements Loop<int> {
-//    │              ────┬────
-//    │                  ╰────── requires `Loop<int[]>`
-//    │
-//    │ Note: Error code: E0125
-// ───╯
+//    ·              ─────────
+//    ╰────

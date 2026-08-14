@@ -166,9 +166,7 @@ function raw_quad_backslash() -> string { #"\\\\"# }
 
         for (source, label) in &cases {
             let db = setup_test_db(source);
-            let project = db.get_project().expect("project must be set");
-            let all_files = db.get_source_files();
-            let diagnostics = collect_diagnostics(&db, project, &all_files);
+            let diagnostics = collect_diagnostics(&db);
             let has_error = diagnostics
                 .iter()
                 .any(|d| matches!(d.severity, Severity::Error));

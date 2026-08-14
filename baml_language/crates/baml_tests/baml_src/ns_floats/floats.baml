@@ -1,96 +1,87 @@
 // Tests for the `float` builtin class (BEP-043).
 //
-// Converted from crates/baml_tests/tests/floats.rs. Each Rust test becomes a
-// `test` block with the `main()` body inlined.
-//
 // Assertion strategy:
-//   - Boolean predicates (is_nan, is_infinite, is_finite): deep_equals to true/false.
-//   - Exact float values (integer-valued results): deep_equals.
+//   - Boolean predicates (is_nan, is_infinite, is_finite): asserted directly.
+//   - Exact float values (integer-valued results): `assert.equal`.
 //   - Approximate float values (transcendental results): inline epsilon check
 //     `assert.is_true(((result) - (expected)).abs() < eps)`.
 //   - NaN results: assert.is_true(result.is_nan()).
-//   - Multi-case Rust tests are split into separate BAML tests.
 //
 // Random tests use property/coverage checks (looping N samples) instead of
 // asserting exact values; they are included at the bottom of this file.
-//
-// KEPT IN RUST (tests/floats.rs) — no is_sign_positive() in BAML, so
-// sign-of-zero cannot be tested:
-//   float_abs_negative_zero  (checks n == 0.0 && n.is_sign_positive())
 
 // ─── is_nan ───────────────────────────────────────────────────────────────────
 
 test "float_is_nan_true" {
-    assert.is_true(baml.deep_equals(float.nan().is_nan(), true))
+    assert.is_true(float.nan().is_nan())
 }
 
 test "float_is_nan_false_for_zero" {
-    assert.is_true(baml.deep_equals((0.0).is_nan(), false))
+    assert.is_true(!(0.0).is_nan())
 }
 
 test "float_is_nan_false_for_finite" {
-    assert.is_true(baml.deep_equals((3.14).is_nan(), false))
+    assert.is_true(!(3.14).is_nan())
 }
 
 test "float_is_nan_false_for_infinity" {
-    assert.is_true(baml.deep_equals(float.inf().is_nan(), false))
+    assert.is_true(!float.inf().is_nan())
 }
 
 // ─── is_infinite ──────────────────────────────────────────────────────────────
 
 test "float_is_infinite_true_positive" {
-    assert.is_true(baml.deep_equals(float.inf().is_infinite(), true))
+    assert.is_true(float.inf().is_infinite())
 }
 
 test "float_is_infinite_true_negative" {
-    assert.is_true(baml.deep_equals((-float.inf()).is_infinite(), true))
+    assert.is_true((-float.inf()).is_infinite())
 }
 
 test "float_is_infinite_false_for_large_finite" {
-    assert.is_true(baml.deep_equals((1000000.0 * 1000000.0).is_infinite(), false))
+    assert.is_true(!(1000000.0 * 1000000.0).is_infinite())
 }
 
 test "float_is_infinite_false_for_nan" {
-    assert.is_true(baml.deep_equals(float.nan().is_infinite(), false))
+    assert.is_true(!float.nan().is_infinite())
 }
 
 // ─── is_finite ────────────────────────────────────────────────────────────────
 
 test "float_is_finite_true_for_zero" {
-    assert.is_true(baml.deep_equals((0.0).is_finite(), true))
+    assert.is_true((0.0).is_finite())
 }
 
 test "float_is_finite_true_for_normal" {
-    assert.is_true(baml.deep_equals((3.14).is_finite(), true))
+    assert.is_true((3.14).is_finite())
 }
 
 test "float_is_finite_true_for_negative_zero" {
-    assert.is_true(baml.deep_equals((-0.0).is_finite(), true))
+    assert.is_true((-0.0).is_finite())
 }
 
 test "float_is_finite_false_for_nan" {
-    assert.is_true(baml.deep_equals(float.nan().is_finite(), false))
+    assert.is_true(!float.nan().is_finite())
 }
 
 test "float_is_finite_false_for_infinity" {
-    assert.is_true(baml.deep_equals(float.inf().is_finite(), false))
+    assert.is_true(!float.inf().is_finite())
 }
 
 test "float_is_finite_false_for_negative_infinity" {
-    assert.is_true(baml.deep_equals((-float.inf()).is_finite(), false))
+    assert.is_true(!(-float.inf()).is_finite())
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Verify pi via the identity cos(π) == -1 (cos is computed independently of the
-// pi constant). Original asserted float.pi() ≈ std::f64::consts::PI.
+// pi constant).
 test "float_pi_value" {
     assert.is_true(((float.pi().cos()) - (-1.0)).abs() < 0.000000000001)
 }
 
 // e has no simple algebraic identity among the available float ops (no exp/ln,
 // and log_base(base) == 1 for any base), so compare against the constant.
-// Original asserted float.e() ≈ std::f64::consts::E.
 test "float_e_value" {
     assert.is_true(((float.e()) - 2.718281828459045).abs() < 0.000000000001)
 }
@@ -109,7 +100,7 @@ test "float_inf_is_positive_infinity" {
 }
 
 test "float_inf_is_positive_not_negative" {
-    assert.is_true(baml.deep_equals(float.inf() > 0.0, true))
+    assert.is_true(float.inf() > 0.0)
 }
 
 test "float_negative_inf_via_unary_minus" {
@@ -117,7 +108,7 @@ test "float_negative_inf_via_unary_minus" {
 }
 
 test "float_negative_inf_is_negative" {
-    assert.is_true(baml.deep_equals(-float.inf() < 0.0, true))
+    assert.is_true(-float.inf() < 0.0)
 }
 
 // ─── abs ──────────────────────────────────────────────────────────────────────
@@ -130,8 +121,8 @@ test "float_abs_positive" {
     assert.is_true(((3.5).abs() - 3.5).abs() < 0.000000000001)
 }
 
-// Note: float_abs_negative_zero is kept in tests/floats.rs — requires
-// is_sign_positive() which is not available in BAML.
+// Note: float_abs_negative_zero (sign-of-zero) is at the end of this file —
+// the test registry stays append-only.
 
 test "float_abs_nan_is_nan" {
     assert.is_true(float.nan().abs().is_nan())
@@ -142,7 +133,7 @@ test "float_abs_inf_is_inf" {
 }
 
 test "float_abs_inf_becomes_positive" {
-    assert.is_true(baml.deep_equals((-float.inf()).abs() > 0.0, true))
+    assert.is_true((-float.inf()).abs() > 0.0)
 }
 
 // ─── min / max ────────────────────────────────────────────────────────────────
@@ -153,12 +144,12 @@ test "float_min_basic" {
 
 // f.min(NaN) suppresses NaN and returns f.
 test "float_min_with_nan_suppresses_nan" {
-    assert.is_true(baml.deep_equals((3.0).min(float.nan()), 3.0))
+    assert.equal((3.0).min(float.nan()), 3.0)
 }
 
 // NaN.min(f) suppresses NaN and returns f.
 test "float_min_nan_receiver_suppresses_nan" {
-    assert.is_true(baml.deep_equals(float.nan().min(3.0), 3.0))
+    assert.equal(float.nan().min(3.0), 3.0)
 }
 
 test "float_min_both_nan_is_nan" {
@@ -170,11 +161,11 @@ test "float_max_basic" {
 }
 
 test "float_max_with_nan_suppresses_nan" {
-    assert.is_true(baml.deep_equals((3.0).max(float.nan()), 3.0))
+    assert.equal((3.0).max(float.nan()), 3.0)
 }
 
 test "float_max_nan_receiver_suppresses_nan" {
-    assert.is_true(baml.deep_equals(float.nan().max(3.0), 3.0))
+    assert.equal(float.nan().max(3.0), 3.0)
 }
 
 // ─── clamp ────────────────────────────────────────────────────────────────────
@@ -263,47 +254,46 @@ test "float_floor_nan_propagates" {
 }
 
 // ─── ifloor / iceil / iround / itrunc ─────────────────────────────────────────
-// Multi-case Rust tests are split into one BAML test per case.
 
 test "float_ifloor_positive" {
-    assert.is_true(baml.deep_equals((3.7).ifloor(), 3))
+    assert.equal((3.7).ifloor(), 3)
 }
 
 test "float_ifloor_negative" {
-    assert.is_true(baml.deep_equals((-1.5).ifloor(), -2))
+    assert.equal((-1.5).ifloor(), -2)
 }
 
 test "float_iceil_positive" {
-    assert.is_true(baml.deep_equals((3.2).iceil(), 4))
+    assert.equal((3.2).iceil(), 4)
 }
 
 test "float_iceil_negative" {
-    assert.is_true(baml.deep_equals((-1.5).iceil(), -1))
+    assert.equal((-1.5).iceil(), -1)
 }
 
 test "float_iround_half_up" {
-    assert.is_true(baml.deep_equals((1.5).iround(), 2))
+    assert.equal((1.5).iround(), 2)
 }
 
 test "float_iround_negative_half" {
-    assert.is_true(baml.deep_equals((-1.5).iround(), -2))
+    assert.equal((-1.5).iround(), -2)
 }
 
 test "float_iround_below_half" {
-    assert.is_true(baml.deep_equals((1.4).iround(), 1))
+    assert.equal((1.4).iround(), 1)
 }
 
 test "float_itrunc_positive" {
-    assert.is_true(baml.deep_equals((3.7).itrunc(), 3))
+    assert.equal((3.7).itrunc(), 3)
 }
 
 test "float_itrunc_negative" {
-    assert.is_true(baml.deep_equals((-3.7).itrunc(), -3))
+    assert.equal((-3.7).itrunc(), -3)
 }
 
 // -2^62 (BAML int.min_value()) is exactly representable as f64.
 test "float_iround_at_i63_min_is_ok" {
-    assert.is_true(baml.deep_equals((-4611686018427387904.0).iround(), -4611686018427387904))
+    assert.equal((-4611686018427387904.0).iround(), -4611686018427387904)
 }
 
 test "float_iround_too_large_throws" {
@@ -412,7 +402,7 @@ test "float_sqrt_basic_4" {
 }
 
 // sqrt(2) is irrational; verify the defining property sqrt(2)*sqrt(2) == 2
-// rather than a hardcoded decimal. Original asserted ≈ std::f64::consts::SQRT_2.
+// rather than a hardcoded decimal.
 test "float_sqrt_basic_2" {
     assert.is_true(((2.0).sqrt() * (2.0).sqrt() - 2.0).abs() < 0.000000000001)
 }
@@ -444,12 +434,12 @@ test "float_pow_negative_base_fractional_is_nan" {
 
 // IEEE 754-2008: 1^anything (including NaN) is 1.
 test "float_pow_one_to_nan_is_one" {
-    assert.is_true(baml.deep_equals((1.0).pow(float.nan()), 1.0))
+    assert.equal((1.0).pow(float.nan()), 1.0)
 }
 
 // IEEE 754-2008: x^0 (including NaN base) is 1.
 test "float_pow_nan_to_zero_is_one" {
-    assert.is_true(baml.deep_equals(float.nan().pow(0.0), 1.0))
+    assert.equal(float.nan().pow(0.0), 1.0)
 }
 
 test "float_pow_nan_to_one_is_nan" {
@@ -529,7 +519,6 @@ test "float_atan_one_is_quarter_pi" {
     assert.is_true(((1.0).atan() - (float.pi() / 4.0)).abs() < 0.000000000001)
 }
 
-// atan2 multi-case — split into separate tests.
 test "float_atan2_one_one_is_quarter_pi" {
     assert.is_true(((1.0).atan2(1.0) - (float.pi() / 4.0)).abs() < 0.000000000001)
 }
@@ -630,7 +619,7 @@ test "float_parse_inf" {
 }
 
 test "float_parse_inf_is_positive" {
-    assert.is_true(baml.deep_equals(float.parse("inf") > 0.0, true))
+    assert.is_true(float.parse("inf") > 0.0)
 }
 
 test "float_parse_infinity_word" {
@@ -638,7 +627,7 @@ test "float_parse_infinity_word" {
 }
 
 test "float_parse_infinity_word_is_positive" {
-    assert.is_true(baml.deep_equals(float.parse("infinity") > 0.0, true))
+    assert.is_true(float.parse("infinity") > 0.0)
 }
 
 test "float_parse_negative_inf" {
@@ -646,7 +635,7 @@ test "float_parse_negative_inf" {
 }
 
 test "float_parse_negative_inf_is_negative" {
-    assert.is_true(baml.deep_equals(float.parse("-inf") < 0.0, true))
+    assert.is_true(float.parse("-inf") < 0.0)
 }
 
 test "float_parse_nan_lowercase" {
@@ -1028,5 +1017,37 @@ test "float_nan_ge_method_is_false" {
 // expr and fail to type-check. Appended at the end so the test registry stays
 // append-only.
 test "float_floor_bare_literal" {
-    assert.is_true(baml.deep_equals(2.5.floor(), 2.0))
+    assert.equal(2.5.floor(), 2.0)
+}
+
+// ─── underscore separators ────────────────────────────────────────────────────
+// `_` digit separators are allowed in the mantissa, fraction, and exponent
+// (the exponent must start with a digit). Underscores are stripped during
+// AST lowering, so downstream f64 parsing never sees them.
+
+test "float_underscore_mantissa" {
+    assert.equal(1_000.5, 1000.5)
+}
+
+test "float_underscore_fraction" {
+    assert.equal(1.000_1, 1.0001)
+}
+
+test "float_underscore_exponent" {
+    assert.equal(1e1_0, 1e10)
+}
+
+test "float_underscore_everywhere" {
+    assert.equal(1_234.567_8e1_0, 1234.5678e10)
+}
+
+// ─── abs: sign of zero ────────────────────────────────────────────────────────
+// BAML has no is_sign_positive(), but float.to_string() preserves the sign of
+// zero ("-0.0" vs "0.0"), so the sign check is observable through formatting.
+// The first assert is a baseline guard: it proves `-0.0` really reaches the VM
+// as negative zero, so the abs assertion cannot pass vacuously.
+test "float_abs_negative_zero" {
+    assert.equal((-0.0).to_string(), "-0.0");
+    assert.equal((-0.0).abs(), 0.0);
+    assert.equal((-0.0).abs().to_string(), "0.0")
 }

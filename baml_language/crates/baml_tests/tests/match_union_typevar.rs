@@ -5,7 +5,7 @@
 //! is *not* unreachable just because `let s: string` and `null` arms precede
 //! it. The concrete arms must NOT over-claim the open `T` union member.
 //!
-//! See `union_targets_for_pattern` in `baml_compiler2_tir/src/builder.rs`.
+//! See the union-claim rules in `baml_compiler2_hir_ty/src/infer/pat.rs`.
 
 use baml_compiler_diagnostics::{DiagnosticId, Severity};
 use baml_project::{collect_diagnostics, testing::setup_test_db};
@@ -13,9 +13,7 @@ use baml_project::{collect_diagnostics, testing::setup_test_db};
 /// Collect all error-severity diagnostic ids for a source program.
 fn error_ids(source: &str) -> Vec<DiagnosticId> {
     let db = setup_test_db(source);
-    let project = db.get_project().expect("project must be set");
-    let files = db.get_source_files();
-    collect_diagnostics(&db, project, &files)
+    collect_diagnostics(&db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .map(|d| d.id)
@@ -65,12 +63,15 @@ fn tag_or_value_without_typevar_arm_is_non_exhaustive() {
     );
 }
 
-/// Adding the `let v: T` arm BEFORE the concrete arms makes those concrete arms
-/// unreachable (the open-`T` catch-all already covers every value). This is the
-/// *symmetric* check: the introspection fix is directional, not a blanket
-/// disabling of unreachable-arm detection for `TypeVar` unions.
+/// Adding the `let v: T` arm BEFORE the concrete arms leaves those concrete
+/// arms reachable: a rigid arm covers only its *own* union member (it is a
+/// possible-but-not-covering match against the concrete members), so with
+/// `T = int` and `x = "hi"` the `T` arm's runtime test fails and the `string`
+/// arm genuinely fires. Each arm covers exactly its member, so the match is
+/// exhaustive and no arm is unreachable. (This used to assert the opposite —
+/// the pre-overlap-oracle coverage treated `let v: T` as a catch-all.)
 #[test]
-fn typevar_arm_first_shadows_concrete_arms() {
+fn typevar_arm_first_leaves_concrete_arms_reachable() {
     let src = r#"
         function tag_or_value<T>(x: T | string | null) -> T? {
           match (x) {
@@ -83,13 +84,13 @@ fn typevar_arm_first_shadows_concrete_arms() {
     "#;
     let errors = error_ids(src);
     assert!(
-        errors.contains(&DiagnosticId::UnreachableArm),
-        "expected concrete arms after a bare `let v: T` to be unreachable, got: {errors:?}"
+        errors.is_empty(),
+        "expected concrete arms after a bare `let v: T` to stay reachable, got: {errors:?}"
     );
 }
 
 /// A `TypeVar` union beside a concrete *class* sibling — the real streaming
-/// `TStream | StreamNoYield` shape — must also compile, including the
+/// `TStream | NoYield` shape — must also compile, including the
 /// `let p: T | Concrete` binding form whose natural type is itself a union
 /// carrying the `TypeVar` (this was the regression the naive fix introduced).
 #[test]

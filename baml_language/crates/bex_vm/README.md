@@ -34,11 +34,11 @@ Stack-based bytecode interpreter for the BAML language, inspired by CPython and 
 │  │                                                                                 │  │
 │  └─────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                       │
-│  ┌────────────────────────┐  ┌────────────────────────┐  ┌────────────────────────┐   │
-│  │  tlab: Tlab            │  │  heap: Arc<BexHeap>    │  │  watch: Watch          │   │
-│  │  • alloc_ptr: usize    │  │                        │  │  (watch graph)         │   │
-│  │  • alloc_limit: usize  │  │                        │  │                        │   │
-│  └───────────┬────────────┘  └───────────┬────────────┘  └────────────────────────┘   │
+│  ┌────────────────────────┐  ┌────────────────────────┐                               │
+│  │  tlab: Tlab            │  │  heap: Arc<BexHeap>    │                               │
+│  │  • alloc_ptr: usize    │  │                        │                               │
+│  │  • alloc_limit: usize  │  │                        │                               │
+│  └───────────┬────────────┘  └───────────┬────────────┘                               │
 │              │                           │                                            │
 └──────────────│───────────────────────────│────────────────────────────────────────────┘
                │                           │
@@ -363,75 +363,6 @@ Example: `let content = fetch("http://example.com")`
 
 Key insight: SCHEDULE_FUTURE returns immediately, allowing the VM to continue other work.
 AWAIT blocks only if the future is still pending.
-
-## Watch System
-
-The `watch` keyword enables reactive change notifications. The Watch module maintains a
-dependency graph tracking which heap objects are reachable from watched variables. When a
-watched variable or its nested fields change, the VM yields to the engine which calls a
-notification handler callback.
-
-Example: `watch let user = getUser(); ... user.email = "new@..."`
-
-```
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                                          VM                                          │
-├──────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  Instruction:               Eval Stack:                     Frames:                  │
-│                                                                                      │
-│  ┌──────────────────────┐   ┌──────┐                        ┌──────┐                 │
-│  │ CALL getUser         │   │ user │                        │ main │                 │
-│  │                      │   └──────┘                        └──────┘                 │
-│  │ WATCH 0, "user"      │   (registers root)                                         │
-│  │ ...                  │                                   ┌──────┐                 │
-│  │                      │   ┌───────────┐                   │ main │                 │
-│  │ LOAD_CONST "new@..." │   │ "new@..." │                   └──────┘                 │
-│  │ LOAD_VAR user        │   └───────────┘                                            │
-│  │                      │                                   ┌──────┐                 │
-│  │ STORE_FIELD email    │   (triggers filter)               │ main │                 │
-│  │                      │                                   └──────┘                 │
-│  └──────────────────────┘                                                            │
-│                                                                                      │
-│  ┌─────────────────────────────────────────────────────────────────────────────────┐ │
-│  │ match filter:                                                                   │ │
-│  │   Default       → deep_equals(last_assigned, value)?                            │ │
-│  │   Function(f)   → interrupt(f, [value])                                         │ │
-│  │   Manual/Paused → skip                                                          │ │
-│  └─────────────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                      │
-│  ─── interrupt(f, [value]) ────────────────────────────────────────────────────────  │
-│                                                                                      │
-│  ┌──────────────────────┐   ┌───────────┐                   ┌──────┬────────┐        │
-│  │ (filter bytecode)    │   │ filter_fn │                   │ main │ filter │        │
-│  │ LOAD_VAR 1           │   │ value     │                   └──────┴────────┘        │
-│  │ ...                  │   └───────────┘                                            │
-│  │                      │   ┌──────┐                        ┌──────┐                 │
-│  │ RETURN               │   │ bool │  ← should notify?      │ main │                 │
-│  │                      │   └──────┘                        └──────┘                 │
-│  └──────────────────────┘                                                            │
-│                                                                                      │
-│  ─── if should_notify ─────────────────────────────────────────────────────────────  │
-│                                                                                      │
-│                                        VmExecState::Notify                           │
-│                                               │                                      │
-│                                               │                          ▲           │
-│                                               │                 continues│           │
-└───────────────────────────────────────────────│──────────────────────────│───────────┘
-                                                │                          │
-                                                ▼                          │
-┌───────────────────────────────────┐      ┌───────────────────────────┐   │
-│ Python (Host Lang):               │      │ Engine:                   │   │
-│   def handle_watch_notification() │◄─────│   watch_handlers(roots)   │   │
-└───────────────────────────────────┘      │   vm.exec() ──────────────│───┘
-                                           └───────────────────────────┘
-```
-
-**Filters** control when notifications fire:
-- `Default`: deep_equals(last_assigned, value) - notify only if actually changed
-- `Function(f)`: calls `interrupt(f, [value])` which runs filter bytecode inline, returns bool
-- `Manual`: never auto-notifies, requires explicit NOTIFY instruction
-- `Paused`: disabled, never notifies
 
 ## Crate Dependencies
 

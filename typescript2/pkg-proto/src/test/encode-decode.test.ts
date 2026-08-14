@@ -119,10 +119,15 @@ describe('encodeCallArgs', () => {
     const custom = {
       toBaml() {
         return {
+          valueType: {
+            ty: {
+              $case: 'classTy' as const,
+              classTy: { name: 'MyClass', typeArgs: [] },
+            },
+          },
           value: {
             $case: 'classValue',
             classValue: {
-              classTy: { name: 'MyClass', typeArgs: [] },
               fields: [
                 {
                   key: { $case: 'stringKey', stringKey: 'x' },
@@ -138,9 +143,47 @@ describe('encodeCallArgs', () => {
     const decoded = CallFunctionArgs.decode(bytes);
     const val = decoded.kwargs[0].value;
     expect(val?.value?.$case).toBe('classValue');
-    if (val?.value?.$case === 'classValue') {
-      expect(val.value.classValue.classTy?.name).toBe('MyClass');
-    }
+    expect(val?.valueType?.ty).toEqual({
+      $case: 'classTy',
+      classTy: { name: 'MyClass', typeArgs: [] },
+    });
+  });
+
+  it('preserves a sparse exact literal type on the value node', () => {
+    const draft = {
+      toBaml() {
+        return {
+          valueType: {
+            ty: {
+              $case: 'literal' as const,
+              literal: {
+                literal: {
+                  $case: 'stringValue' as const,
+                  stringValue: 'draft',
+                },
+              },
+            },
+          },
+          value: {
+            $case: 'stringValue' as const,
+            stringValue: 'draft',
+          },
+        };
+      },
+    };
+
+    const decoded = CallFunctionArgs.decode(encodeCallArgs({ status: draft }, 131));
+    const value = decoded.kwargs[0].value;
+    expect(value?.valueType?.ty).toEqual({
+      $case: 'literal',
+      literal: {
+        literal: { $case: 'stringValue', stringValue: 'draft' },
+      },
+    });
+    expect(value?.value).toEqual({
+      $case: 'stringValue',
+      stringValue: 'draft',
+    });
   });
 
   it('encodes a $baml enum marker as an enumValue', () => {

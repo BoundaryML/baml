@@ -1,6 +1,6 @@
 //! Utilities for traversing syntax trees.
 
-use rowan::{NodeOrToken, TextRange, TextSize, ast::AstNode};
+use rowan::{NodeOrToken, TextRange};
 
 use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 
@@ -71,26 +71,6 @@ impl SyntaxNodeExt for SyntaxNode {
     fn span_range(&self) -> TextRange {
         trimmed_range(self)
     }
-}
-
-/// Find a specific node type at a text offset.
-pub fn find_node_at_offset<N: AstNode<Language = crate::BamlLanguage>>(
-    root: &SyntaxNode,
-    offset: TextSize,
-) -> Option<N> {
-    root.token_at_offset(offset)
-        .right_biased()
-        .and_then(|token| token.parent_ancestors().find_map(N::cast))
-}
-
-/// Find all nodes of a specific type in the tree.
-pub fn find_all_nodes<N: AstNode<Language = crate::BamlLanguage>>(root: &SyntaxNode) -> Vec<N> {
-    root.descendants().filter_map(N::cast).collect()
-}
-
-/// Check if a node contains any errors.
-pub fn has_errors(node: &SyntaxNode) -> bool {
-    node.descendants().any(|n| n.kind() == SyntaxKind::ERROR)
 }
 
 /// Get the text range of a node, excluding leading/trailing trivia.

@@ -1,0 +1,142 @@
+---
+title: Semantic Streaming vs Token-based Streaming
+description: A new technique for streaming structured output from LLMs
+slug: semantic-streaming
+date: Nov 22, 2024
+tags: ['engineering']
+author:
+  name: Aaron Villalpando
+  imageUrl: /aaronv.jpg
+  linkedin: https://www.linkedin.com/in/aaron-villalpando-99284576/
+---
+
+**Semantic streaming allows you to stream meaningful chunks of data that make more sense for your application, versus streaming tokens.** Scroll down to see the [interactive example](#semantic-streaming-in-baml).
+<hr />
+
+Many LLM providers allow us to stream the tokens back from the LLM as they are being generated. This can be really nice! Imagine asking ChatGPT to produce the digits of Pi. The LLM streams different tokens, e.g. `3`, `.`, `14`, and we can accumulate them as they come in to build up the final result:
+```text
+> Please produce Pi to 100 decimal pointsss
+LLM Accumulated Streamed Response:
+3
+3.1
+3.14
+3.141
+```
+
+Streaming the result adds more precision to the right of the decimal point as more tokens stream in.
+
+However, something more sinister happens if we focus on the left of a decimal point:
+
+```text
+> How many tablespoons of water are there in all of Earth's oceans?
+Accumulated Streamed Response:
+5
+53
+530
+53000
+```
+
+The meaning is completely lost at different points in the stream -- these numbers are orders of magnitude off.
+
+Here's what happens when you plot this as they come in:
+<p align="center">
+<img src="/blog/semantic-streaming/semantic-streaming-1.gif" width="500" />
+</p>
+
+Each datapoint moves along the x axis as more tokens come in. A token does not have the same meaning as "a number in the graph", and so we end up with clunky results.
+
+## The Importance of Semantic Streaming
+
+The difference between these two cases illustrates a broader concept - the distinction between **token-based streaming** and **semantic streaming**. In these examples, tokens were being streamed, and in one case, the semantics were preserved (the number got more precise with time), while in the other case, the semantics weren't (the number continued to change wildly).
+
+Ultimately, this can lead to poor or even faulty user experience.
+
+Let's think back to the first example again. What if we ask the LLM:
+
+```text
+> Which version of my software first introduced new feature X?
+3
+3.1
+3.14
+3.141
+```
+
+These numbers are very distinct entities and the introduction of a new feature probably only appears in one of the changelogs. So even though streaming out 3.141 in the context of Pi makes sense, streaming out 3.141 in the context of version numbers makes less sense.
+
+Remember the jarring visual from the dynamically generated graph earlier? That was from token-based streaming. Semantic streaming will enable users of our AI application to see more meaningful results at each step of the stream. Here's what happens when we only render numbers that are fully formed:
+
+<div align="center">
+<img src="/blog/semantic-streaming/semantic-streaming-2.gif" width="500" />
+</div>
+and another example:
+<div align="center">
+<img src="/blog/semantic-streaming/semantic-streaming-3.gif" width="500" />
+<div style={{textAlign: 'center'}}>
+(Try this example [here](https://baml-examples.vercel.app/examples/book-analyzer))
+</div>
+</div>
+
+## Semantic Streaming for any Structured data
+You can apply this technique to more than just numbers.
+
+In the example below, we stream a list of `Card`s, and we only do so when the entire Card is fully formed.
+
+<Video src="/blog/semantic-streaming/streaming-cards.mp4" />
+<div style={{textAlign: 'center'}}>
+(From [@nicoalbanese10](https://x.com/nicoalbanese10/status/1831383597304910044))
+</div>
+
+The UI renders less, and it feels _less noisy_ and jarring for a user.
+
+Here's another example, where we stream the `Ingredient` quantities as whole numbers, and render each one at a time as it comes in, which allows us to adjust the recipe in real-time as it streams:
+
+<Video src="/blog/semantic-streaming/semantic-streaming-4.mp4" />
+
+You can see how we could reduce noise even further by waiting to show the whole ingredient until both the `unit` and `name` are completed.
+
+
+
+## Semantic Streaming in BAML
+We're excited to see new patterns emerge for how to render LLM-generated content in a way that feels more natural. To make this easier on developers we added semantic streaming to [BAML](https://docs.boundaryml.com) -- with support for numbers (lists are coming soon). All numbers in BAML are only streamed when they are complete. No need to do anything else in your code.
+
+You can try the interactive example below:
+
+<BamlBlock name="1" bamlCode={`class MyClass {
+  a int
+  b float
+  c int
+  d string
+  e int
+  f float
+}
+
+
+function GenerateNumbers() -> MyClass {
+  client "openai/gpt-4o"
+  prompt #"
+  Generate numbers with 14 digits.
+
+  {{ ctx.output_format }}
+  "#
+}
+
+test TestName {
+  functions [GenerateNumbers]
+  args {}
+}
+
+`}
+
+languageCode={`
+
+from baml_client import b
+stream = b.stream.GenerateNumbers()
+for item in stream:
+  print(f"a={item.a}, b={item.b}, c={item.c}, d={item.d}, e={item.e}, f={item.f}")
+`}
+
+language="python"
+ />
+
+
+We'll be supporting more streaming capabilities to the BAML SDKs in the coming months. Stay tuned!

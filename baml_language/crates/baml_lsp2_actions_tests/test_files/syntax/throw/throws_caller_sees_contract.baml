@@ -20,21 +20,11 @@ function Caller(x: int) -> string {
 
 //----
 //- diagnostics
-// error: declared throws is `Errors`, but this function may also throw `Errors.AuthError`
-//    ╭─[ throw_throws_caller_sees_contract.baml:9:43 ]
-//    │
-//  9 │ function MayFail(x: int) -> string throws Errors {
-//    │                                           ───┬──
-//    │                                              ╰──── declared throws is `Errors`, but this function may also throw `Errors.AuthError`
-//    │
-//    │ Note: Error code: E0096
-// ───╯
-// warning: extraneous throws declaration: Errors
-//    ╭─[ throw_throws_caller_sees_contract.baml:9:43 ]
-//    │
-//  9 │ function MayFail(x: int) -> string throws Errors {
-//    │                                           ───┬──
-//    │                                              ╰──── extraneous throws declaration: Errors
-//    │
-//    │ Note: Error code: E0097
-// ───╯
+// E0097
+//
+//   ⚠ extraneous throws declaration: Errors
+//     ╭─[throw_throws_caller_sees_contract.baml:9:50]
+//   9 │ ╭─▶ function MayFail(x: int) -> string throws Errors {
+//  10 │ │     throw Errors.AuthError
+//  11 │ ╰─▶ }
+//     ╰────

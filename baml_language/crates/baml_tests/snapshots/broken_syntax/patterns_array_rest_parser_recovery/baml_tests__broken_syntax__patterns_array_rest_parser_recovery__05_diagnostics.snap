@@ -1,0 +1,83 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+   ╭─[patterns_array_rest_parser_recovery.baml:8:19]
+ 8 │         [..let a, ..let b] => a.length() + b.length(),
+   ·                   ─┬
+   ·                    ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:16:10]
+ 16 │         [...let r] => r.length(),
+    ·          ─┬─
+    ·           ╰── expected `pattern`, found `'...'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:16:13]
+ 16 │         [...let r] => r.length(),
+    ·             ─┬─
+    ·              ╰── expected `',' or ']' after array pattern element`, found `let`
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: r
+    ╭─[patterns_array_rest_parser_recovery.baml:16:17]
+ 16 │         [...let r] => r.length(),
+    ·                 ─
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:24:15]
+ 24 │         [..let] => 1,
+    ·               ┬
+    ·               ╰── expected `identifier after 'let'`, found `']'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:32:13]
+ 32 │         [.. : int[]] => 1,
+    ·             ┬
+    ·             ╰── expected `pattern`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:32:15]
+ 32 │         [.. : int[]] => 1,
+    ·               ─┬─
+    ·                ╰── expected `',' or ']' after array pattern element`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:40:14]
+ 40 │         [.._ : int[]] => 1,
+    ·              ┬
+    ·              ╰── expected `',' or ']' after array pattern element`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:48:17]
+ 48 │         [..[.., ..]] => 1,
+    ·                 ─┬
+    ·                  ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
+    ╰────

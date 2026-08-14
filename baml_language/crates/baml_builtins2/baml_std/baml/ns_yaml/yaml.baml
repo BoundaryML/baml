@@ -1,7 +1,7 @@
 /// Thrown when YAML text cannot be parsed as a single JSON-compatible YAML
 /// document.
 class YamlParseError {
-    message: string
+    message: string,
 }
 
 /// Parses a single YAML document into JSON-compatible BAML values.

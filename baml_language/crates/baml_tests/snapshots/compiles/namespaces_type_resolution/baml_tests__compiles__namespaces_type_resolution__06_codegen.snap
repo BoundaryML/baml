@@ -1,15 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17884
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
 function user.RootAliasParam(cfg: Config) -> string {
     load_var cfg
     load_field .key

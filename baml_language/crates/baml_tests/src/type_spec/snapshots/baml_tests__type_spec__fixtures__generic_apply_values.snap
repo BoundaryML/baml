@@ -1,0 +1,46 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+433..439 'giv_id': throws never
+467..476 '{\n    x\n}': T
+473..474 'x': T
+487..495 'giv_pair': throws never
+532..541 '{\n    b\n}': B
+538..539 'b': B
+582..586 'pick': throws never
+620..637 '{\n   ...n    }': T
+630..631 'x': T
+650..660 'giv_direct': throws never
+683..759 '{\n   ...(5)\n}': int
+689..694 'let f': (x: int) -> int throws never
+697..708 'giv_id<int>': (x: int) -> int throws never
+753..754 'f': (x: int) -> int throws never
+753..757 'f(5)': int
+755..756 '5': 5
+770..779 'giv_multi': throws never
+805..914 '{\n   ...o")\n}': string
+811..816 'let f': (a: int, b: string) -> string throws never
+819..840 'giv_pa...tring>': (a: int, b: string) -> string throws never
+899..900 'f': (a: int, b: string) -> string throws never
+899..912 'f(1, "hello")': string
+901..902 '1': 1
+904..911 '"hello"': "hello"
+925..938 'giv_dependent': throws never
+966..1036 '{\n   ...(x)\n}': T
+972..977 'let f': (x: T) -> T throws never
+980..989 'giv_id<T>': (x: T) -> T throws never
+1030..1031 'f': (x: T) -> T throws never
+1030..1034 'f(x)': T
+1032..1033 'x': T
+1047..1056 'giv_bound': throws never
+1079..1184 '{\n   ...(7)\n}': int
+1085..1090 'let p': user.GivBox
+1093..1108 'GivBox { v: 1 }': user.GivBox
+1105..1106 '1': 1
+1114..1119 'let f': (x: int) -> int throws never
+1122..1128 'p.pick': (self: user.GivBox, x: int) -> int throws never
+1122..1133 'p.pick<int>': (x: int) -> int throws never
+1178..1179 'f': (x: int) -> int throws never
+1178..1182 'f(7)': int
+1180..1181 '7': 7

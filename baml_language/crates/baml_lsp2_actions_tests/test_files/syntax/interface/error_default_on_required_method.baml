@@ -2,7 +2,7 @@
 // default body (it is a required method).
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {
@@ -15,12 +15,10 @@ class Dog {
 
 //----
 //- diagnostics
-// error: `default.speak()` is invalid: method `speak` on interface `Animal` has no default body
-//     ╭─[ interface_error_default_on_required_method.baml:11:14 ]
-//     │
+// E0003
+//
+//   × unresolved name: `default.speak`
+//     ╭─[interface_error_default_on_required_method.baml:11:14]
 //  11 │       return default.speak()
-//     │              ──────┬──────
-//     │                    ╰──────── `default.speak()` is invalid: method `speak` on interface `Animal` has no default body
-//     │
-//     │ Note: Error code: E0123
-// ────╯
+//     ·              ─────────────
+//     ╰────

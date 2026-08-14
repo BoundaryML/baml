@@ -1,8 +1,8 @@
 // Unified tests for class construction, field access, and methods.
 //
-// Converted from crates/baml_tests/tests/classes.rs. Instance-valued results use
-// baml.deep_equals; scalar field-access results from a local instance use
-// baml.deep_equals (direct field access on the instance, not a plain local read).
+// Converted from crates/baml_tests/tests/classes.rs. Instance-valued results and
+// scalar field-access results from a local instance both use `assert.equal`
+// (direct field access on the instance, not a plain local read).
 // Tests requiring nested field writes go through top-level helpers to avoid the
 // test-block local-boxing VM bug.
 
@@ -85,10 +85,7 @@ function class_constructor_fn() -> Point {
 }
 
 test "class_constructor" {
-    assert.is_true(baml.deep_equals(
-        class_constructor_fn(),
-        Point { x: 1, y: 2 }
-    ))
+    assert.equal(class_constructor_fn(), Point { x: 1, y: 2 })
 }
 
 function class_constructor_return_directly_fn() -> Point {
@@ -96,10 +93,7 @@ function class_constructor_return_directly_fn() -> Point {
 }
 
 test "class_constructor_return_directly" {
-    assert.is_true(baml.deep_equals(
-        class_constructor_return_directly_fn(),
-        Point { x: 1, y: 2 }
-    ))
+    assert.equal(class_constructor_return_directly_fn(), Point { x: 1, y: 2 })
 }
 
 function constructor_with_preceding_variables_fn() -> int {
@@ -111,7 +105,7 @@ function constructor_with_preceding_variables_fn() -> int {
 }
 
 test "constructor_with_preceding_variables" {
-    assert.is_true(baml.deep_equals(constructor_with_preceding_variables_fn(), 360))
+    assert.equal(constructor_with_preceding_variables_fn(), 360)
 }
 
 // ─── Nested construction ──────────────────────────────────────────────────────
@@ -122,7 +116,7 @@ function nested_construction_dead_store_fn() -> int {
 }
 
 test "nested_construction_dead_store" {
-    assert.is_true(baml.deep_equals(nested_construction_dead_store_fn(), 42))
+    assert.equal(nested_construction_dead_store_fn(), 42)
 }
 
 function nested_construction_field_access_fn() -> int {
@@ -134,7 +128,7 @@ function nested_construction_field_access_fn() -> int {
 }
 
 test "nested_construction_field_access" {
-    assert.is_true(baml.deep_equals(nested_construction_field_access_fn(), 30))
+    assert.equal(nested_construction_field_access_fn(), 30)
 }
 
 function nested_construction_inner_field_access_fn() -> int {
@@ -146,7 +140,7 @@ function nested_construction_inner_field_access_fn() -> int {
 }
 
 test "nested_construction_inner_field_access" {
-    assert.is_true(baml.deep_equals(nested_construction_inner_field_access_fn(), 20))
+    assert.equal(nested_construction_inner_field_access_fn(), 20)
 }
 
 function nested_field_read_fn() -> int {
@@ -155,7 +149,7 @@ function nested_field_read_fn() -> int {
 }
 
 test "nested_field_read" {
-    assert.is_true(baml.deep_equals(nested_field_read_fn(), 42))
+    assert.equal(nested_field_read_fn(), 42)
 }
 
 function nested_field_read_separate_construction_fn() -> int {
@@ -165,7 +159,7 @@ function nested_field_read_separate_construction_fn() -> int {
 }
 
 test "nested_field_read_separate_construction" {
-    assert.is_true(baml.deep_equals(nested_field_read_separate_construction_fn(), 42))
+    assert.equal(nested_field_read_separate_construction_fn(), 42)
 }
 
 function nested_constructor_with_preceding_variables_fn() -> int {
@@ -179,7 +173,7 @@ function nested_constructor_with_preceding_variables_fn() -> int {
 }
 
 test "nested_constructor_with_preceding_variables" {
-    assert.is_true(baml.deep_equals(nested_constructor_with_preceding_variables_fn(), 165))
+    assert.equal(nested_constructor_with_preceding_variables_fn(), 165)
 }
 
 // ─── Spread operator ──────────────────────────────────────────────────────────
@@ -202,10 +196,7 @@ function spread_before_named_fields_fn() -> PointXYZW {
 }
 
 test "spread_before_named_fields" {
-    assert.is_true(baml.deep_equals(
-        spread_before_named_fields_fn(),
-        PointXYZW { x: 1, y: 2, z: 0, w: 0 }
-    ))
+    assert.equal(spread_before_named_fields_fn(), PointXYZW { x: 1, y: 2, z: 0, w: 0 })
 }
 
 function spread_after_named_fields_fn() -> PointXYZW {
@@ -214,10 +205,7 @@ function spread_after_named_fields_fn() -> PointXYZW {
 }
 
 test "spread_after_named_fields" {
-    assert.is_true(baml.deep_equals(
-        spread_after_named_fields_fn(),
-        PointXYZW { x: 0, y: 0, z: 0, w: 0 }
-    ))
+    assert.equal(spread_after_named_fields_fn(), PointXYZW { x: 0, y: 0, z: 0, w: 0 })
 }
 
 function multiple_spreads_fn() -> PointXYZW {
@@ -226,10 +214,7 @@ function multiple_spreads_fn() -> PointXYZW {
 }
 
 test "multiple_spreads" {
-    assert.is_true(baml.deep_equals(
-        multiple_spreads_fn(),
-        PointXYZW { x: 1, y: 1, z: 0, w: 0 }
-    ))
+    assert.equal(multiple_spreads_fn(), PointXYZW { x: 1, y: 1, z: 0, w: 0 })
 }
 
 function spread_does_not_break_locals_fn() -> int {
@@ -239,7 +224,7 @@ function spread_does_not_break_locals_fn() -> int {
 }
 
 test "spread_does_not_break_locals" {
-    assert.is_true(baml.deep_equals(spread_does_not_break_locals_fn(), 0))
+    assert.equal(spread_does_not_break_locals_fn(), 0)
 }
 
 // ─── Field assignment ─────────────────────────────────────────────────────────
@@ -254,7 +239,7 @@ function field_assignment_fn() -> int {
 }
 
 test "field_assignment" {
-    assert.is_true(baml.deep_equals(field_assignment_fn(), 42))
+    assert.equal(field_assignment_fn(), 42)
 }
 
 function field_compound_assignment_fn() -> int {
@@ -264,7 +249,7 @@ function field_compound_assignment_fn() -> int {
 }
 
 test "field_compound_assignment" {
-    assert.is_true(baml.deep_equals(field_compound_assignment_fn(), 15))
+    assert.equal(field_compound_assignment_fn(), 15)
 }
 
 function nested_field_assignment_fn() -> int {
@@ -274,7 +259,7 @@ function nested_field_assignment_fn() -> int {
 }
 
 test "nested_field_assignment" {
-    assert.is_true(baml.deep_equals(nested_field_assignment_fn(), 99))
+    assert.equal(nested_field_assignment_fn(), 99)
 }
 
 function nested_field_compound_assignment_fn() -> int {
@@ -284,7 +269,7 @@ function nested_field_compound_assignment_fn() -> int {
 }
 
 test "nested_field_compound_assignment" {
-    assert.is_true(baml.deep_equals(nested_field_compound_assignment_fn(), 15))
+    assert.equal(nested_field_compound_assignment_fn(), 15)
 }
 
 // ─── Methods ──────────────────────────────────────────────────────────────────
@@ -297,7 +282,7 @@ function method_call_fn() -> int {
 }
 
 test "method_call" {
-    assert.is_true(baml.deep_equals(method_call_fn(), 3))
+    assert.equal(method_call_fn(), 3)
 }
 
 function mutable_self_method_fn() -> int {
@@ -308,5 +293,5 @@ function mutable_self_method_fn() -> int {
 }
 
 test "mutable_self_method" {
-    assert.is_true(baml.deep_equals(mutable_self_method_fn(), 3))
+    assert.equal(mutable_self_method_fn(), 3)
 }

@@ -1,15 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14551
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
 function user.branch_locals(b: bool) -> int {
     load_var b
     pop_jump_if_false L0
@@ -40,15 +32,13 @@ function user.capture_before_after_shadow() -> int {
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 0)>, 1
     call_indirect
-    store_var _6
+    load_const 10
+    mul_int
+    store_var _5
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 1)>, 1
     call_indirect
-    store_var _8
-    load_var _6
-    load_const 10
-    mul_int
-    load_var _8
+    load_var _5
     add_int
     return
 }
@@ -59,175 +49,34 @@ function user.declared_type_restored() -> string {
 }
 
 function user.for_loop_restores_outer() -> int {
-    load_type int
     load_const 2
     load_const 3
     load_type int
     alloc_array 2
-    call baml.iter.Iterable$for$T[].iter
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    is_type baml.iter.Flatten<...>
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L20
+    jump L2
 
   L1:
-    load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L2
-    jump L19
-
-  L2:
-    load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L3
-    jump L18
-
-  L3:
-    load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L4
-    jump L17
-
-  L4:
-    load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L5
-    jump L16
-
-  L5:
-    load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L6
-    jump L15
-
-  L6:
-    load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L7
-    jump L14
-
-  L7:
-    load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L8
-    jump L13
-
-  L8:
-    load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L9
-    jump L12
-
-  L9:
-    load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L10
-    jump L11
-
-  L10:
-    load_var _3
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L24
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.Peekable.Iterator.next
-    store_var _5
-    jump L21
-
-  L11:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L12:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L13:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
-    call baml.iter.Filter.Iterator.next
-    store_var _5
-    jump L21
-
-  L14:
-    load_var _3
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L15:
-    load_type int
-    load_var _3
-    call baml.iter.Repeat.Iterator.next
-    store_var _5
-    jump L21
-
-  L16:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
-    call baml.iter.Chain.Iterator.next
-    store_var _5
-    jump L21
-
-  L17:
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.StepBy.Iterator.next
-    store_var _5
-    jump L21
-
-  L18:
-    load_type int
-    load_var _3
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _5
-    jump L21
-
-  L19:
-    load_var _3
-    call baml.iter.Range.Iterator.next
-    store_var _5
-    jump L21
-
-  L20:
-    load_var _3
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _5
-
-  L21:
-    load_var _5
-    is_type baml.iter.Done
-    pop_jump_if_false L22
-    jump L23
-
-  L22:
-    load_var _5
+    load_var _4
     store_var x
     jump L0
 
-  L23:
+  L2:
     load_const 1
     return
-
-  L24:
-    unreachable
 }
 
 function user.initializer_uses_previous() -> int {
@@ -272,23 +121,6 @@ function user.shadow_param(x: int) -> int {
     load_var x
     load_const 1
     add_int
-    return
-}
-
-function user.watch_block_cleanup() -> int {
-    load_const 1
-    store_var x
-    load_const "x"
-    load_const null
-    watch x
-    load_const 2
-    store_var x
-    load_const "x"
-    load_const null
-    watch x
-    unwatch x
-    load_var x
-    unwatch x
     return
 }
 

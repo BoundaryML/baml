@@ -9,12 +9,10 @@ function ThrowsNeverViolation(x: int) -> string throws never {
 
 //----
 //- diagnostics
-// error: declared throws is `never`, but this function may also throw `string`
-//    ╭─[ throw_throws_never_violation.baml:3:56 ]
-//    │
-//  3 │ function ThrowsNeverViolation(x: int) -> string throws never {
-//    │                                                        ──┬──
-//    │                                                          ╰──── declared throws is `never`, but this function may also throw `string`
-//    │
-//    │ Note: Error code: E0096
-// ───╯
+// E0096
+//
+//   × declared throws is `never`, but this function may also throw `string`
+//    ╭─[throw_throws_never_violation.baml:5:11]
+//  5 │     throw "escaped"
+//    ·           ─────────
+//    ╰────

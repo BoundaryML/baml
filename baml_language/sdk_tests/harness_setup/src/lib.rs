@@ -13,8 +13,8 @@
 //! including the shared `build_diagnostics::no_build_failures`,
 //! lives in the sibling `sdk_test_harness_runner` crate.
 //!
-//! Generator-specific entry points (`run_all`) live in submodules
-//! like [`python_pydantic2`] and [`typescript_node`].
+//! Generator-specific entry points live in submodules like
+//! [`python_pydantic2`], [`typescript`], and [`typescript_web`].
 //!
 //! Layout the helpers assume:
 //!
@@ -32,12 +32,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use baml_codegen_types::SymbolPool;
+use baml_codegen_types::{GeneratedOutputFile, SymbolPool, write_generated_output};
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
+pub mod cpp;
+pub mod csharp;
+pub mod go;
+pub mod java;
 pub mod python_pydantic2;
-pub mod typescript_node;
+pub mod rust;
+pub mod swift;
+pub mod typescript;
+pub mod typescript_web;
 
 /// Emit one Cargo build-script line. Cargo consumes directives and
 /// warnings from stdout, so this intentionally writes there.
@@ -104,6 +111,27 @@ impl BuildDiagnostics {
     }
 }
 
+/// Install an SDK generator's complete output through the same filesystem
+/// transaction used by `baml generate`.
+pub(crate) fn write_codegen_output<C>(
+    output_directory: &Path,
+    output: impl IntoIterator<Item = (PathBuf, C)>,
+    fixture: &str,
+    diagnostics: &mut BuildDiagnostics,
+) where
+    C: AsRef<[u8]>,
+{
+    let files = output
+        .into_iter()
+        .map(|(relative_path, contents)| {
+            GeneratedOutputFile::new(relative_path, contents.as_ref().to_vec())
+        })
+        .collect();
+    if let Err(error) = write_generated_output(output_directory, files) {
+        diagnostics.record("codegen_write", fixture, error);
+    }
+}
+
 /// A user BAML source file as it should appear in the emitter's
 /// inlined-baml output. `rel_path` is relative to the fixture's
 /// `baml_src/` root.
@@ -128,17 +156,6 @@ pub fn fixtures_root_from_manifest(manifest_dir: &Path) -> PathBuf {
         .and_then(Path::parent)
         .expect("crate not at <workspace>/sdk_tests/crates/<generator>/")
         .join("fixtures")
-}
-
-/// Workspace root (`baml_language/`) from a generator crate's
-/// `CARGO_MANIFEST_DIR`. 3 ancestors up: `crates/<G>` → `crates` →
-/// `sdk_tests` → workspace.
-pub fn workspace_root_from_manifest(manifest_dir: &Path) -> PathBuf {
-    manifest_dir
-        .ancestors()
-        .nth(3)
-        .expect("crate not at <workspace>/sdk_tests/crates/<generator>/")
-        .to_path_buf()
 }
 
 /// Enumerate every `<fixtures_root>/<name>/` that contains a
@@ -191,9 +208,8 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         db.add_or_update_file(file_path, &content);
     }
 
-    let project = db.get_project().expect("no project context");
     let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+    let diagnostics = baml_project::collect_diagnostics(&db);
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)
@@ -229,8 +245,8 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     }
 }
 
-/// Copy every file in `customizable_dir` into `dst_dir`. Used by
-/// the typescript_node target: symlinks would force every parallel
+/// Recursively copy `customizable_dir` into `dst_dir`. Used by the Go and
+/// TypeScript targets: symlinks would force every parallel
 /// test process to either set `NODE_OPTIONS=--preserve-symlinks`
 /// (which breaks the pnpm CLI, itself a symlinked node script) or
 /// let node follow the symlink and resolve `node_modules` from
@@ -244,6 +260,16 @@ pub fn copy_customizable(customizable_dir: &Path, dst_dir: &Path) {
         let file_name = entry.file_name();
         let dst = dst_dir.join(&file_name);
 
+        if src.is_dir() {
+            fs::create_dir_all(&dst).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to create {} for customizable overlay: {e}",
+                    dst.display()
+                )
+            });
+            copy_customizable(&src, &dst);
+            continue;
+        }
         if !src.is_file() {
             continue;
         }
@@ -331,4 +357,33 @@ pub fn walk_files(dir: &Path) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod csharp_abi_probe_tests {
+    use std::{env, fs, path::PathBuf};
+
+    #[test]
+    #[ignore = "writes bytecode to the path requested by the C# product workflow"]
+    fn emit_function_calls_bytecode() {
+        let output = PathBuf::from(
+            env::var("BAML_CSHARP_ABI_PROBE_BYTECODE")
+                .expect("BAML_CSHARP_ABI_PROBE_BYTECODE is not set"),
+        );
+        assert!(
+            output.is_absolute(),
+            "C# ABI probe bytecode path must be absolute"
+        );
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("harness_setup is not inside sdk_tests")
+            .join("fixtures");
+        let fixture = super::load_fixture(&fixtures, "function_calls");
+        fs::write(&output, fixture.baml_bytecode).unwrap_or_else(|error| {
+            panic!(
+                "failed to write C# ABI probe bytecode to {}: {error}",
+                output.display()
+            )
+        });
+    }
 }

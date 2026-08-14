@@ -2,7 +2,7 @@
 // one present the match is exhaustive.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {

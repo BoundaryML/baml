@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public class filename.
 /**
  * RuntimePort backed by a WebSocket connection to the Rust playground server.
  *
@@ -6,32 +7,58 @@
  * Argument/result bytes are base64-encoded for transit.
  *
  * Features:
- *   - Queues outgoing messages while WebSocket is connecting
+ *   - Fail-closed handshake: nothing is processed or sent (except the
+ *     catalog-only `requestState`) until the server `hello` proves protocol
+ *     compatibility
+ *   - Bounded queue for commands issued before the FIRST handshake; once a
+ *     session existed, session-scoped commands are never queued across a
+ *     disconnect — they fail fast and the client resyncs after reconnect
+ *   - The project-runtime lease (`ensureProjectRuntime`) is standing intent:
+ *     the latest lease is re-asserted after every successful hello
  *   - Buffers incoming messages until a handler is registered (avoids race)
  *   - Auto-reconnects on close/error with exponential backoff
  */
 
+import { isPlaygroundProtocolCompatible } from '../protocol';
 import type { RuntimePort } from '../runtime-port';
 import type {
-  WorkerOutMessage,
-  WorkerInMessage,
   WebSocketInMessage,
   WebSocketOutMessage,
+  WorkerInMessage,
+  WorkerOutMessage,
 } from '../worker-protocol';
-import { isPlaygroundProtocolCompatible } from '../protocol';
 
 const MAX_RECONNECT_DELAY = 5000;
+
+/** Upper bound on commands held while waiting for the first handshake. */
+const MAX_PRE_SESSION_QUEUE = 64;
+
+/** Synthetic command-error code for commands dropped by the transport. */
+export const PORT_DISCONNECTED_ERROR_CODE = 'disconnected';
 
 export class WebSocketRuntimePort implements RuntimePort {
   private url: string;
   private ws: WebSocket | null = null;
   private handlers = new Set<(msg: WorkerOutMessage) => void>();
-  private outQueue: string[] = [];
+  /** Commands held until the first compatible hello (never across sessions). */
+  private outQueue: WebSocketInMessage[] = [];
   private inBuffer: WorkerOutMessage[] = [];
   private disposed = false;
   private reconnectDelay = 500;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private playgroundCompatible = true;
+  /** Fail closed: assume incompatible until a hello proves otherwise. */
+  private playgroundCompatible = false;
+  private handshakeComplete = false;
+  /** True once any hello completed; after that, disconnected commands are
+   *  dropped instead of queued so they can never replay into a new session. */
+  private everHadSession = false;
+  /** The one selected-project runtime lease this client wants to hold. This is
+   *  desired state, not a one-shot command: it survives reconnects and is
+   *  re-sent after every successful hello. */
+  private desiredRuntimeLease: Extract<
+    WorkerInMessage,
+    { type: 'ensureProjectRuntime' }
+  > | null = null;
 
   constructor(url: string) {
     this.url = url;
@@ -41,47 +68,59 @@ export class WebSocketRuntimePort implements RuntimePort {
   private connect(): void {
     if (this.disposed) return;
 
+    // A reconnect performs a fresh handshake; do not retain trust from the
+    // previous server instance while waiting for its replacement.
+    this.handshakeComplete = false;
+    this.playgroundCompatible = false;
+
+    let socket: WebSocket;
     try {
-      this.ws = new WebSocket(this.url);
+      socket = new WebSocket(this.url);
+      this.ws = socket;
     } catch {
       this.scheduleReconnect();
       return;
     }
 
-    this.ws.onopen = () => {
+    socket.onopen = () => {
+      if (this.ws !== socket) return;
       this.reconnectDelay = 500; // reset backoff
-      // Flush queued outgoing messages.
-      for (const msg of this.outQueue) {
-        this.ws!.send(msg);
-      }
-      this.outQueue = [];
-      this.ws!.send(JSON.stringify({ type: 'requestState' }));
+      // The catalog-only state request is the sole pre-handshake frame; the
+      // full resync it triggers arrives after the server's hello, which is
+      // what re-establishes the session.
+      socket.send(JSON.stringify({ type: 'requestState' }));
     };
 
-    this.ws.onmessage = (event: MessageEvent) => {
+    socket.onmessage = (event: MessageEvent) => {
+      if (this.ws !== socket) return;
       try {
         const raw: WebSocketOutMessage = JSON.parse(event.data as string);
         const msg = this.fromServer(raw);
         if (!msg) return;
-
-        if (this.handlers.size === 0) {
-          // No handler registered yet — buffer the message.
-          this.inBuffer.push(msg);
-        } else {
-          for (const h of this.handlers) h(msg);
-        }
+        this.deliver(msg);
       } catch (e) {
         console.warn('WebSocketRuntimePort: failed to parse message', e);
       }
     };
 
-    this.ws.onclose = () => {
+    socket.onclose = () => {
+      if (this.ws !== socket) return;
+      // Tombstone this socket immediately. A queued callback from the closed
+      // connection must not be mistaken for output from the reconnect that
+      // will be installed after the backoff.
+      this.ws = null;
+      this.handshakeComplete = false;
+      this.playgroundCompatible = false;
+      if (this.everHadSession) {
+        // Session-scoped commands must not replay into the next session.
+        this.dropQueuedCommands('connection closed');
+      }
       if (!this.disposed) {
         this.scheduleReconnect();
       }
     };
 
-    this.ws.onerror = () => {
+    socket.onerror = () => {
       // onclose will fire after onerror, which triggers reconnect.
     };
   }
@@ -98,19 +137,96 @@ export class WebSocketRuntimePort implements RuntimePort {
     );
   }
 
-  postMessage(msg: WorkerInMessage): void {
-    const serverMsg = this.toServer(msg);
-    if (!serverMsg) return;
-    this.sendServerMessage(serverMsg);
+  private get sendable(): boolean {
+    return (
+      this.ws !== null &&
+      this.ws.readyState === WebSocket.OPEN &&
+      this.handshakeComplete &&
+      this.playgroundCompatible
+    );
   }
 
-  private sendServerMessage(serverMsg: WebSocketInMessage): void {
-    const raw = JSON.stringify(serverMsg);
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(raw);
-    } else {
-      this.outQueue.push(raw);
+  postMessage(msg: WorkerInMessage): void {
+    // Track the standing lease regardless of connection state; `hello`
+    // replays the latest lease into every new session.
+    if (msg.type === 'ensureProjectRuntime') {
+      this.desiredRuntimeLease = msg;
+    } else if (
+      msg.type === 'releaseProjectRuntime' &&
+      this.desiredRuntimeLease?.project === msg.project &&
+      this.desiredRuntimeLease.incarnation === msg.incarnation
+    ) {
+      this.desiredRuntimeLease = null;
     }
+
+    // Every successful open issues one state request, so pre-open callers do
+    // not need to accumulate duplicate requestState frames in the queue.
+    if (
+      msg.type === 'requestState' &&
+      (!this.ws || this.ws.readyState !== WebSocket.OPEN)
+    ) {
+      return;
+    }
+
+    const serverMsg = this.toServer(msg);
+    if (!serverMsg) return;
+
+    // Lease controls describe desired session state; stale transitions must
+    // never sit in the generic queue. The hello handler restores exactly the
+    // latest lease.
+    if (
+      (msg.type === 'ensureProjectRuntime' ||
+        msg.type === 'releaseProjectRuntime') &&
+      !this.sendable
+    ) {
+      return;
+    }
+
+    if (this.sendable) {
+      this.ws!.send(JSON.stringify(serverMsg));
+      return;
+    }
+
+    if (!this.everHadSession && !this.handshakeComplete) {
+      // No session has existed yet — hold startup commands (bounded) until
+      // the first compatible hello, so early callers are not lost while the
+      // socket connects.
+      this.outQueue.push(serverMsg);
+      if (this.outQueue.length > MAX_PRE_SESSION_QUEUE) {
+        const dropped = this.outQueue.shift()!;
+        this.synthesizeDropError(
+          dropped,
+          'queue overflow before the first playground handshake',
+        );
+      }
+      return;
+    }
+
+    // Session-scoped command while disconnected, mid-handshake on a
+    // reconnect, or against an incompatible server: fail fast instead of
+    // replaying it into a session it was not issued against.
+    this.synthesizeDropError(serverMsg, 'playground connection unavailable');
+  }
+
+  /** Clear the pre-session queue, failing any queued request/response pairs. */
+  private dropQueuedCommands(reason: string): void {
+    const dropped = this.outQueue.splice(0);
+    for (const msg of dropped) {
+      this.synthesizeDropError(msg, reason);
+    }
+  }
+
+  /** Locally reject a dropped command so pending promises fail instead of
+   *  hanging. Fire-and-forget frames (no requestId) are dropped silently. */
+  private synthesizeDropError(msg: WebSocketInMessage, reason: string): void {
+    const requestId = (msg as { requestId?: unknown }).requestId;
+    if (typeof requestId !== 'number') return;
+    this.deliver({
+      code: PORT_DISCONNECTED_ERROR_CODE,
+      message: `Playground command dropped: ${reason}.`,
+      requestId,
+      type: 'commandError',
+    });
   }
 
   onMessage(handler: (msg: WorkerOutMessage) => void): () => void {
@@ -147,6 +263,7 @@ export class WebSocketRuntimePort implements RuntimePort {
     this.handlers.clear();
     this.outQueue = [];
     this.inBuffer = [];
+    this.desiredRuntimeLease = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -158,124 +275,159 @@ export class WebSocketRuntimePort implements RuntimePort {
       case 'startRun':
         this.clearLogDecorations();
         return {
-          type: 'startRun',
-          requestId: msg.requestId,
-          project: msg.project,
-          functionName: msg.functionName,
           argsBytes: uint8ArrayToBase64(msg.argsBytes),
+          functionName: msg.functionName,
+          project: msg.project,
+          requestId: msg.requestId,
+          type: 'startRun',
         };
       case 'startPreviewRun':
         this.clearLogDecorations();
         return {
-          type: 'startPreviewRun',
-          requestId: msg.requestId,
-          project: msg.project,
-          parentFunctionName: msg.parentFunctionName,
-          helper: msg.helper,
-          functionName: msg.functionName,
           argsBytes: uint8ArrayToBase64(msg.argsBytes),
+          functionName: msg.functionName,
+          helper: msg.helper,
+          parentFunctionName: msg.parentFunctionName,
+          project: msg.project,
+          requestId: msg.requestId,
+          type: 'startPreviewRun',
         };
       case 'startTestRun':
         this.clearLogDecorations();
         return {
-          type: 'startTestRun',
-          requestId: msg.requestId,
-          project: msg.project,
           generation: msg.generation,
+          project: msg.project,
+          requestId: msg.requestId,
           testName: msg.testName,
+          type: 'startTestRun',
         };
       case 'cancelRun':
-        return { type: 'cancelRun', requestId: msg.requestId, boundaryId: msg.boundaryId };
+        return {
+          boundaryId: msg.boundaryId,
+          requestId: msg.requestId,
+          type: 'cancelRun',
+        };
       case 'respondToInput':
         return {
-          type: 'respondToInput',
-          requestId: msg.requestId,
           boundaryId: msg.boundaryId,
           inputRequestId: msg.inputRequestId,
+          requestId: msg.requestId,
+          type: 'respondToInput',
           value: msg.value,
         };
       case 'respondToEnv':
         return {
-          type: 'respondToEnv',
-          requestId: msg.requestId,
           boundaryId: msg.boundaryId,
           envRequestId: msg.envRequestId,
+          requestId: msg.requestId,
+          type: 'respondToEnv',
           value: msg.value,
         };
       case 'listRuns':
-        return { type: 'listRuns', requestId: msg.requestId, filter: msg.filter };
+        return {
+          filter: msg.filter,
+          requestId: msg.requestId,
+          type: 'listRuns',
+        };
       case 'listHistory':
-        return { type: 'listHistory', requestId: msg.requestId, filter: msg.filter };
+        return {
+          filter: msg.filter,
+          requestId: msg.requestId,
+          type: 'listHistory',
+        };
       case 'openHistory':
-        return { type: 'openHistory', requestId: msg.requestId, boundaryId: msg.boundaryId };
+        return {
+          boundaryId: msg.boundaryId,
+          requestId: msg.requestId,
+          type: 'openHistory',
+        };
       case 'snapshot':
-        return { type: 'snapshot', requestId: msg.requestId, boundaryId: msg.boundaryId };
+        return {
+          boundaryId: msg.boundaryId,
+          requestId: msg.requestId,
+          type: 'snapshot',
+        };
       case 'readValue':
         return {
-          type: 'readValue',
-          requestId: msg.requestId,
           boundaryId: msg.boundaryId,
+          requestId: msg.requestId,
+          type: 'readValue',
           valueRef: msg.valueRef,
         };
       case 'subscribe':
         return {
-          type: 'subscribe',
+          afterCursor: msg.afterCursor,
+          boundaryId: msg.boundaryId,
           requestId: msg.requestId,
           subscriptionId: msg.subscriptionId,
-          boundaryId: msg.boundaryId,
-          afterCursor: msg.afterCursor,
+          type: 'subscribe',
         };
       case 'unsubscribe':
         return {
-          type: 'unsubscribe',
           requestId: msg.requestId,
           subscriptionId: msg.subscriptionId,
+          type: 'unsubscribe',
         };
       case 'envVarResponse':
         return {
-          type: 'envVarResponse',
           id: msg.id,
+          type: 'envVarResponse',
           value: msg.value,
           variable: msg.variable,
         };
       case 'setEnvVar':
-        return { type: 'setEnvVar', key: msg.key, value: msg.value };
+        return { key: msg.key, type: 'setEnvVar', value: msg.value };
       case 'deleteEnvVar':
-        return { type: 'deleteEnvVar', key: msg.key };
+        return { key: msg.key, type: 'deleteEnvVar' };
       case 'selectProject':
         return null; // handled locally for now
       case 'filesChanged':
         return null; // handled locally, not sent to server
       case 'requestState':
         return { type: 'requestState' };
+      case 'ensureProjectRuntime':
+        return {
+          incarnation: msg.incarnation,
+          project: msg.project,
+          requestId: msg.requestId,
+          type: 'ensureProjectRuntime',
+        };
+      case 'releaseProjectRuntime':
+        return {
+          incarnation: msg.incarnation,
+          project: msg.project,
+          requestId: msg.requestId,
+          type: 'releaseProjectRuntime',
+        };
       case 'requestControlFlowGraph':
         return {
-          type: 'requestControlFlowGraph',
-          project: msg.project,
           functionName: msg.functionName,
+          project: msg.project,
+          type: 'requestControlFlowGraph',
+          ...(msg.requestId !== undefined ? { requestId: msg.requestId } : {}),
         };
       case 'cursorPosition':
         return {
-          type: 'cursorPosition',
+          column: msg.column,
           file: msg.file,
           line: msg.line,
-          column: msg.column,
+          type: 'cursorPosition',
         };
       case 'requestCollectTests':
-        return { type: 'requestCollectTests', project: msg.project };
+        return { project: msg.project, type: 'requestCollectTests' };
       case 'expandTestSet':
         return {
-          type: 'expandTestSet',
-          project: msg.project,
           generation: msg.generation,
+          project: msg.project,
           testsetName: msg.testsetName,
+          type: 'expandTestSet',
         };
       case 'inputResponse':
         return {
-          type: 'inputResponse',
-          id: msg.id,
-          value: msg.value,
           callId: msg.callId,
+          id: msg.id,
+          type: 'inputResponse',
+          value: msg.value,
         };
       case 'dispose':
         return null; // worker-only; no server equivalent
@@ -289,119 +441,142 @@ export class WebSocketRuntimePort implements RuntimePort {
   // ---------------------------------------------------------------------------
 
   private fromServer(raw: WebSocketOutMessage): WorkerOutMessage | null {
-    switch (raw.type) {
-      case 'hello':
-        this.playgroundCompatible = isPlaygroundProtocolCompatible(
-          raw.playgroundProtocol,
-          raw.minClientPlaygroundProtocol,
+    if (raw.type === 'hello') {
+      this.playgroundCompatible = isPlaygroundProtocolCompatible(
+        raw.playgroundProtocol,
+        raw.minClientPlaygroundProtocol,
+      );
+      this.handshakeComplete = true;
+      if (this.everHadSession) {
+        // A replacement session: input buffered for the old session must not
+        // replay to a late-registering handler.
+        this.inBuffer = [];
+      }
+      this.everHadSession = true;
+      if (!this.playgroundCompatible) {
+        console.warn(
+          `BAML playground protocol ${raw.playgroundProtocol} from toolchain ${raw.toolchainVersion} is incompatible with this extension.`,
         );
-        if (!this.playgroundCompatible) {
-          console.warn(
-            `BAML playground protocol ${raw.playgroundProtocol} from toolchain ${raw.toolchainVersion} is incompatible with this extension.`,
-          );
-        }
+        this.dropQueuedCommands('playground protocol is incompatible');
         return null;
+      }
+      // Re-assert the standing project-runtime lease on EVERY hello. It is
+      // desired state, not a one-shot command; the replacement server session
+      // starts without it. (Deliberately not cleared here — dropping the
+      // saved lease after hello would lose it across reconnects.)
+      if (this.desiredRuntimeLease) {
+        const lease = this.toServer(this.desiredRuntimeLease);
+        if (lease) this.ws?.send(JSON.stringify(lease));
+      }
+      // Flush commands held from before the first handshake.
+      const queued = this.outQueue.splice(0);
+      for (const pending of queued) {
+        this.ws?.send(JSON.stringify(pending));
+      }
+      return null;
+    }
+
+    // Fail closed until a compatible hello establishes this connection.
+    if (!this.handshakeComplete || !this.playgroundCompatible) return null;
+
+    switch (raw.type) {
       case 'ready':
-        if (!this.playgroundCompatible) {
-          return null;
-        }
         return { type: 'ready' };
       case 'playgroundNotification':
         return {
-          type: 'playgroundNotification',
           notification: raw.notification,
+          type: 'playgroundNotification',
         };
       case 'runStarted':
         return {
-          type: 'runStarted',
           requestId: raw.requestId,
           run: raw.run,
+          type: 'runStarted',
         };
       case 'runPatch':
-        return { type: 'runPatch', patch: raw.patch };
+        return { patch: raw.patch, type: 'runPatch' };
       case 'commandAck':
         return {
-          type: 'commandAck',
-          requestId: raw.requestId,
           outcome: raw.outcome,
+          requestId: raw.requestId,
+          type: 'commandAck',
         };
       case 'commandError':
         return {
-          type: 'commandError',
-          requestId: raw.requestId,
           code: raw.code,
           message: raw.message,
+          requestId: raw.requestId,
+          type: 'commandError',
         };
       case 'runList':
-        return { type: 'runList', requestId: raw.requestId, runs: raw.runs };
+        return { requestId: raw.requestId, runs: raw.runs, type: 'runList' };
       case 'runSnapshot':
         return {
-          type: 'runSnapshot',
-          requestId: raw.requestId,
           boundaryId: raw.boundaryId,
+          requestId: raw.requestId,
           snapshot: raw.snapshot,
+          type: 'runSnapshot',
         };
       case 'valueBody':
         return {
-          type: 'valueBody',
-          requestId: raw.requestId,
-          boundaryId: raw.boundaryId,
-          valueRefId: raw.valueRefId,
-          codec: raw.codec,
           availability: raw.availability,
           bodyBase64: raw.bodyBase64,
+          boundaryId: raw.boundaryId,
+          codec: raw.codec,
           diagnostic: raw.diagnostic,
+          requestId: raw.requestId,
+          type: 'valueBody',
+          valueRefId: raw.valueRefId,
         };
       case 'runCursorExpired':
         return {
-          type: 'runCursorExpired',
-          requestId: raw.requestId,
-          subscriptionId: raw.subscriptionId,
           boundaryId: raw.boundaryId,
           reason: raw.reason,
+          requestId: raw.requestId,
+          subscriptionId: raw.subscriptionId,
+          type: 'runCursorExpired',
         };
       case 'envVarRequest':
-        return { type: 'envVarRequest', id: raw.id, variable: raw.variable };
+        return { id: raw.id, type: 'envVarRequest', variable: raw.variable };
       case 'processEnvVars':
         return { type: 'processEnvVars', vars: raw.vars };
       case 'envVarFromShell':
         return {
           type: 'envVarFromShell',
-          variable: raw.variable,
           value: raw.value,
+          variable: raw.variable,
         };
       case 'knownEnvVarNames':
-        return { type: 'knownEnvVarNames', names: raw.names };
+        return { names: raw.names, type: 'knownEnvVarNames' };
       case 'inputRequest':
         return {
-          type: 'inputRequest',
+          callId: raw.callId,
           id: raw.id,
           prompt: raw.prompt,
-          callId: raw.callId,
+          type: 'inputRequest',
         };
       case 'inputResolved':
-        return { type: 'inputResolved', id: raw.id, callId: raw.callId };
+        return { callId: raw.callId, id: raw.id, type: 'inputResolved' };
       case 'fetchLogNew':
         return {
-          type: 'fetchLogNew',
           callId: raw.callId,
           entry: {
-            id: raw.id,
-            timestamp: Date.now(),
-            method: raw.method,
-            url: raw.url,
-            requestHeaders: raw.requestHeaders,
-            requestBody: raw.requestBody,
-            status: null,
-            responseBody: null,
-            error: null,
             durationMs: null,
+            error: null,
+            id: raw.id,
+            method: raw.method,
+            requestBody: raw.requestBody,
+            requestHeaders: raw.requestHeaders,
+            responseBody: null,
             responseHeaders: null,
+            status: null,
+            timestamp: Date.now(),
+            url: raw.url,
           },
+          type: 'fetchLogNew',
         };
       case 'fetchLogUpdate':
         return {
-          type: 'fetchLogUpdate',
           logId: raw.logId,
           patch: {
             ...(raw.status !== undefined ? { status: raw.status } : {}),
@@ -416,19 +591,21 @@ export class WebSocketRuntimePort implements RuntimePort {
               ? { responseHeaders: raw.responseHeaders }
               : {}),
           },
+          type: 'fetchLogUpdate',
         };
       case 'controlFlowGraphResult':
         return {
-          type: 'controlFlowGraphResult',
           functionName: raw.functionName,
           graph: (raw.graph ?? null) as
             | import('../worker-protocol').ControlFlowGraph
             | null,
+          type: 'controlFlowGraphResult',
+          ...(raw.requestId !== undefined ? { requestId: raw.requestId } : {}),
         };
       case 'cursorContext':
         return {
-          type: 'cursorContext',
           context: raw.context as import('../worker-protocol').CursorContext,
+          type: 'cursorContext',
         };
       default:
         return null;

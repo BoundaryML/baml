@@ -2,7 +2,7 @@
 // type arguments. `.as<Interface<T>>` selects the instantiation at call sites.
 
 interface Converter<T> {
-  function convert(self) -> T
+  function convert(self) -> T throws never
 }
 
 class MultiFormat {

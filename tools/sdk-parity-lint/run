@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+tool_repo="$(cd "${script_dir}/../.." && pwd -P)"
+invocation_dir="$(pwd -P)"
+repo_root="${tool_repo}"
+baseline_file=""
+output_file=""
+
+absolute_path() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *) printf '%s/%s\n' "${invocation_dir}" "$1" ;;
+    esac
+}
+
+usage() {
+    cat <<'EOF'
+Usage: tools/sdk-parity-lint/run [--repo-root PATH] [--baseline PATH] [--output PATH]
+
+Inventory checked-in SDK test declarations and compare exact parity with the checked-in baseline.
+EOF
+}
+
+parity_guidance() {
+    echo "SDK tests must use conformant canonical test names across SDKs. For intentionally SDK-specific behavior, use a canonical test name and add an immediately preceding SDK_PARITY_LINT(skip): <reason> directive." >&2
+}
+
+while (($# > 0)); do
+    case "$1" in
+        --repo-root)
+            repo_root="$(absolute_path "$2")"
+            shift 2
+            ;;
+        --baseline)
+            baseline_file="$(absolute_path "$2")"
+            shift 2
+            ;;
+        --output)
+            output_file="$(absolute_path "$2")"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "sdk-parity-lint: unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+baml_bin="${BAML_BIN:-${tool_repo}/baml_language/target/debug/baml-cli}"
+if [[ ! -x "${baml_bin}" ]]; then
+    echo "sdk-parity-lint: local baml-cli not found at ${baml_bin}" >&2
+    echo "Build it with: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli" >&2
+    exit 2
+fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "sdk-parity-lint: jq is required to decode BAML output" >&2
+    exit 2
+fi
+
+temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/sdk-parity-lint.XXXXXX")"
+temporary_output=""
+cleanup() {
+    if [[ -n "${temporary_output}" ]]; then
+        rm -f "${temporary_output}"
+    fi
+    rm -rf "${temporary_dir}"
+}
+trap cleanup EXIT
+
+baml_args=(
+    run
+    --output-format json
+    --from tools/sdk-parity-lint
+    run_ratchet
+    --
+    --repo_root "${repo_root}"
+)
+if [[ -n "${baseline_file}" ]]; then
+    baml_args+=(--baseline_file "${baseline_file}")
+fi
+if [[ -n "${output_file}" ]]; then
+    baml_args+=(--output_file "${output_file}")
+fi
+
+cd "${tool_repo}"
+if ! "${baml_bin}" "${baml_args[@]}" > "${temporary_dir}/result.json"; then
+    echo "sdk-parity-lint: discovery or configuration failed" >&2
+    parity_guidance
+    exit 2
+fi
+
+if ! resolved_output="$(jq -er '.output_file' "${temporary_dir}/result.json")"; then
+    echo "sdk-parity-lint: BAML returned an invalid result" >&2
+    exit 2
+fi
+mkdir -p "$(dirname "${resolved_output}")"
+temporary_output="$(mktemp "${resolved_output}.XXXXXX")"
+if ! jq -er '.markdown' "${temporary_dir}/result.json" > "${temporary_output}"; then
+    echo "sdk-parity-lint: BAML returned an invalid report" >&2
+    exit 2
+fi
+chmod 0644 "${temporary_output}"
+mv "${temporary_output}" "${resolved_output}"
+temporary_output=""
+
+total_ids="$(jq -er '.total_ids' "${temporary_dir}/result.json")"
+outcome="$(jq -er '.comparison.outcome' "${temporary_dir}/result.json")"
+baseline_missing="$(jq -er '.comparison.baseline_missing_count' "${temporary_dir}/result.json")"
+current_missing="$(jq -er '.comparison.current_missing_count' "${temporary_dir}/result.json")"
+baseline_present="$(jq -er '.comparison.baseline_present_count' "${temporary_dir}/result.json")"
+current_present="$(jq -er '.comparison.current_present_count' "${temporary_dir}/result.json")"
+weakened_count="$(jq -er '.comparison.weakened_requirements | length' "${temporary_dir}/result.json")"
+
+echo "Wrote ${total_ids} test cases to ${resolved_output}"
+if [[ "${outcome}" == "worse" ]]; then
+    echo "Parity became worse: required gaps ${baseline_missing} → ${current_missing}, present declarations ${baseline_present} → ${current_present}, and ${weakened_count} weakened requirements" >&2
+    parity_guidance
+    exit 1
+fi
+if [[ "${outcome}" == "better" ]]; then
+    echo "Parity improved: required gaps ${baseline_missing} → ${current_missing} and present declarations ${baseline_present} → ${current_present}"
+else
+    echo "Parity is unchanged from the checked-in baseline"
+fi

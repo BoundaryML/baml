@@ -18,5 +18,4 @@ class FieldAttributes {
 
 class ClassAttributes {
     name string
-    @@dynamic
 }

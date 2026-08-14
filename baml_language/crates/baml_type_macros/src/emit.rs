@@ -39,8 +39,8 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
     let child = &family.members[member.child];
     let map = replacements(family, &child.name);
 
-    // Each variant carries an explicit discriminant equal to its index in the
-    // *master* declaration order — not its position within this member. Members
+    // Each variant carries its explicit stable discriminant from the master
+    // declaration — not its position within this member. Members
     // that omit variants therefore leave gaps in their discriminant sequence
     // rather than renumbering the tail, so a given logical variant has the same
     // `#[repr(C, u8)]` tag in every member that includes it. That cross-member
@@ -49,13 +49,12 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
     let variants = family
         .variants
         .iter()
-        .enumerate()
-        .filter(|(_, v)| member.includes.contains(&v.axis))
-        .map(|(idx, v)| {
+        .filter(|v| member.includes.contains(&v.axis))
+        .map(|v| {
             let attrs = &v.attrs;
             let ident = &v.ident;
             let fields = replace_idents(v.fields.to_token_stream(), &map);
-            let disc = Literal::u8_unsuffixed(idx as u8);
+            let disc = Literal::u8_unsuffixed(v.discriminant);
             quote! { #(#attrs)* #ident #fields = #disc }
         });
 
@@ -67,12 +66,8 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
         #(#derives)*
         // `repr(C, u8)`: a layout-stable `{ u8 tag, C-union payload }` shared
         // identically across the family, so members with matching size/align are
-        // mutually transmutable. `use_discriminant = false`: Borsh keeps tagging
-        // by declaration index (compact, gap-free), decoupled from the in-memory
-        // discriminant — so the explicit tags above leave the wire format
-        // unchanged.
+        // mutually transmutable.
         #[repr(C, u8)]
-        #[borsh(use_discriminant = false)]
         pub enum #name {
             #(#variants),*
         }
@@ -92,7 +87,7 @@ pub(crate) fn member_variants<'a>(
 
 /// Generate the mechanical `attr` / `with_attr` accessors for a member. An
 /// attr-carrying variant exposes its `TyAttr` (a named `attr` field or the last
-/// tuple positional); an attr-less template leaf (`TypeArgRef`, `Wildcard`)
+/// tuple positional); an attr-less template leaf (`TypeArgRef`)
 /// borrows the shared [`TyAttr::EMPTY`] and ignores `with_attr` (it has nowhere
 /// to store one).
 fn gen_accessors(family: &Family, member: &Member) -> TokenStream {
@@ -175,7 +170,7 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
     let map = replacements(family, &member.name);
 
     let fields = replace_idents(sat.fields.to_token_stream(), &map);
-    let derives = nondoc_attrs(&family.master_attrs);
+    let derives = satellite_attrs(&family.master_attrs);
     let methods = sat.methods.as_ref().map(|body| {
         let body = replace_idents(body.clone(), &map);
         quote! { impl #sat_name { #body } }
@@ -262,6 +257,13 @@ fn member_docs(family: &Family, member: &Member) -> Vec<TokenStream> {
 
 fn nondoc_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
     attrs.iter().filter(|a| !is_doc(a)).collect()
+}
+
+fn satellite_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
+    attrs
+        .iter()
+        .filter(|attr| !is_doc(attr) && !attr.path().is_ident("borsh"))
+        .collect()
 }
 
 fn is_doc(attr: &Attribute) -> bool {

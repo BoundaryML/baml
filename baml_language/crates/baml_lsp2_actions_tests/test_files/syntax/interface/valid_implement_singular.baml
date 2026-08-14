@@ -1,7 +1,7 @@
 // BEP-044: `implement` (singular) is accepted as an alias for `implements`.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {

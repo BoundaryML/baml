@@ -1,0 +1,21 @@
+---
+source: crates/baml_surface/src/handles_tests.rs
+expression: render_typed_surface(&db)
+---
+enum Mode { Fast, Slow }
+type Pair = user.Point[]
+class Point
+  x: int  doc: Horizontal.
+  y: float | null  doc: -
+function pick<T extends baml.Comparable>(items: T[]) -> T | null
+  declared: never
+  panics:   -
+  errors:   -
+function risky(a: int) -> int
+  declared: baml.panics.DivisionByZero | baml.errors.Io
+  panics:   baml.panics.DivisionByZero
+  errors:   baml.errors.Io
+function wrapper(a: int) -> int
+  declared: -
+  panics:   baml.panics.DivisionByZero
+  errors:   baml.errors.Io

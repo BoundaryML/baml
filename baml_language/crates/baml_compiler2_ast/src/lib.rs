@@ -12,11 +12,11 @@ pub mod cleanup_guard;
 pub(crate) mod companions;
 pub(crate) mod disambiguate;
 pub mod docstring;
-pub(crate) mod lower_config_item;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
+pub mod traverse;
 
 pub use ast::*;
 /// Decode common escape sequences in a quoted string literal body.
@@ -24,17 +24,15 @@ pub use ast::*;
 /// Re-exported from [`baml_base::escape::unescape_string_literal`] so existing
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
-pub use companions::llm_parse as llm_parse_companion;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
-pub use lower_cst::{
-    lower_file, lower_file_with_path, synthesize_llm_builtin_call, synthesize_llm_make_stream_call,
-};
-pub use lower_expr_body::EnvVarRef;
+pub use lower_cst::{lower_file, lower_file_with_path, lower_file_with_path_and_test_owner};
+pub use lower_expr_body::{EnvVarRef, synthesize_spec_stream_body};
 pub use lowering_diagnostic::LoweringDiagnostic;
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type
 // without depending on `text_size` directly.
 pub use text_size::TextRange;
+pub use traverse::BodyNode;
 
 /// The BEP-044 `default` receiver keyword. Inside an `implements` block,
 /// `default.method(...)` invokes the interface's *default* method body,
@@ -83,26 +81,72 @@ pub fn parse_string_attr_value(raw: &str) -> Option<String> {
     Some(rest[1..rest.len() - 1 - hash_count].to_string())
 }
 
-/// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
-///
-/// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal
-/// digits, so a parse failure here indicates the CST has been corrupted.
-/// Callers should pass the digit-only string (with the trailing `n` suffix
-/// already stripped).
-pub fn parse_bigint_literal_digits(digits: &str) -> num_bigint::BigInt {
-    num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_else(|| {
-        unreachable!("CST bigint_literal returned non-decimal digits: {digits:?}")
-    })
+/// Push diagnostics for a failed numeric literal. `InvalidDigits` gets one
+/// diagnostic per offending digit with a one-character span (rustc-style);
+/// every other error spans the whole token.
+fn push_num_lit_error(
+    error: baml_base::num_lit::IntLitError,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    use baml_base::num_lit::IntLitError;
+    if let IntLitError::InvalidDigits { positions, .. } = &error {
+        for (offset, ch) in positions {
+            let offset = u32::try_from(*offset).expect("literal token exceeds u32 length");
+            let start = token_range.start() + text_size::TextSize::from(offset);
+            let span = text_size::TextRange::new(start, start + text_size::TextSize::of(*ch));
+            diags.push(LoweringDiagnostic::InvalidNumericLiteral {
+                error: error.clone(),
+                span,
+            });
+        }
+    } else {
+        diags.push(LoweringDiagnostic::InvalidNumericLiteral {
+            error,
+            span: token_range,
+        });
+    }
 }
 
-/// Parse the raw text of a `BIGINT_LITERAL` token (digits plus trailing
-/// lowercase `n` suffix) into a [`num_bigint::BigInt`]. The lexer guarantees
-/// the suffix is present, so its absence panics with `unreachable!`.
-pub fn parse_bigint_literal_token(text: &str) -> num_bigint::BigInt {
+/// Lower the raw text of an `INTEGER_LITERAL` token (`42`, `1_000`, `0xFF`,
+/// `0o755`, `0b1010`) into its value, emitting diagnostics for invalid
+/// literals and returning `0` as the placeholder (compilation already
+/// failed). Signs are handled by callers; the VM's i63 `int` range is
+/// enforced later in type inference.
+pub fn lower_int_literal(
+    text: &str,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> i64 {
+    match baml_base::num_lit::parse_int_literal(text) {
+        Ok(v) => v,
+        Err(e) => {
+            push_num_lit_error(e, token_range, diags);
+            0
+        }
+    }
+}
+
+/// Lower the raw text of a `BIGINT_LITERAL` token (digits plus trailing
+/// lowercase `n` suffix, e.g. `42n` or `0xFFn`) into a
+/// [`num_bigint::BigInt`], emitting diagnostics for invalid literals and
+/// returning `0` as the placeholder. The lexer guarantees the suffix is
+/// present, so its absence panics with `unreachable!`.
+pub fn lower_bigint_literal(
+    text: &str,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> num_bigint::BigInt {
     let digits = text
         .strip_suffix('n')
         .unwrap_or_else(|| unreachable!("BIGINT_LITERAL missing 'n' suffix: {text:?}"));
-    parse_bigint_literal_digits(digits)
+    match baml_base::num_lit::parse_bigint_literal(digits) {
+        Ok(v) => v,
+        Err(e) => {
+            push_num_lit_error(e, token_range, diags);
+            num_bigint::BigInt::from(0)
+        }
+    }
 }
 
 // `unescape_string_literal` lives in `baml_base::escape` and is re-exported
@@ -385,7 +429,7 @@ mod tests {
     }
 
     /// Parse BAML source and lower to AST items.
-    fn parse_and_lower(source: &str) -> Vec<Item> {
+    pub(super) fn parse_and_lower(source: &str) -> Vec<Item> {
         let root = parse(source);
         let (items, diags, _env_var_refs) = lower_file(&root);
         assert!(diags.is_empty(), "expected no diagnostics, got: {diags:#?}");
@@ -398,6 +442,21 @@ mod tests {
         let root = parse(source);
         let (items, diags, _env_var_refs) = lower_file(&root);
         (items, diags)
+    }
+
+    /// Generic parameters rendered back to source form (`T extends A & B`), so
+    /// one assertion covers both the names and the full conjunction of bounds.
+    fn rendered_generic_params(params: &[crate::ast::GenericParam]) -> Vec<String> {
+        params
+            .iter()
+            .map(|param| {
+                if param.bounds.is_empty() {
+                    return param.name.as_str().to_string();
+                }
+                let bounds: Vec<String> = param.bounds.iter().map(ToString::to_string).collect();
+                format!("{} extends {}", param.name.as_str(), bounds.join(" & "))
+            })
+            .collect()
     }
 
     fn first_function(items: Vec<Item>) -> crate::ast::FunctionDef {
@@ -416,17 +475,9 @@ mod tests {
     #[test]
     fn llm_function_user_client_param_is_reserved() {
         let source = r##"
-client<llm> GPT4 {
-  provider "openai"
-  options {
-    model "gpt-4o"
-    api_key "test"
-  }
-}
-
 function Extract(client: string, text: string) -> string {
-  client GPT4
-  prompt #"{{ text }}"#
+  client: "openai/gpt-4o"
+  prompt: `${text} ${ctx.output_format}`
 }
 "##;
 
@@ -455,116 +506,48 @@ function Extract(client: string, text: string) -> string {
         let default_id = function.params[1].default.expect("expected client default");
         let default_expr = &function.defaults.exprs.exprs[default_id.expr()];
         assert!(
-            matches!(default_expr, Expr::Path(path) if path.len() == 1 && path[0].as_str() == "GPT4"),
-            "expected compiler-injected client default to reference GPT4, got {default_expr:#?}"
+            matches!(default_expr, Expr::Null),
+            "the injected ai.Client? override defaults to null, got {default_expr:#?}"
         );
     }
 
-    /// The synthesized `<Client>$new` constructor for `client_name`.
-    fn client_new_companion(items: Vec<Item>, client_name: &str) -> crate::ast::FunctionDef {
-        let target = format!("{client_name}$new");
-        items
-            .into_iter()
-            .find_map(|item| match item {
-                Item::Function(f) if f.name.as_str() == target => Some(f),
-                _ => None,
-            })
-            .unwrap_or_else(|| panic!("expected synthesized {target} function"))
-    }
-
-    /// Does `$new`'s body read `env_var` via a soft `baml.env.get`?
-    fn new_companion_reads_env(function: &crate::ast::FunctionDef, env_var: &str) -> bool {
-        use baml_base::Name;
-        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
-            panic!("expected expression body for $new companion");
-        };
-        body.exprs.iter().any(|(_, expr)| {
-            let Expr::Call { callee, args, .. } = expr else {
-                return false;
-            };
-            let Expr::Path(path) = &body.exprs[*callee] else {
-                return false;
-            };
-            let is_env_get =
-                path.iter().map(Name::as_str).collect::<Vec<_>>() == ["baml", "env", "get"];
-            let reads_var = args.first().is_some_and(|arg| {
-                matches!(
-                    &body.exprs[arg.expr],
-                    Expr::Literal(baml_base::Literal::String(s)) if s == env_var
-                )
-            });
-            is_env_get && reads_var
-        })
-    }
-
     #[test]
-    fn named_openai_client_defaults_api_key_to_env_var() {
-        // B-489: a named `client<llm>` with `provider openai` and no explicit
-        // `api_key` defaults the key to a soft `baml.env.get("OPENAI_API_KEY")`,
-        // mirroring the inline `"openai/model"` shorthand (unset -> null, never
-        // panics, so offline render still works without the var set).
+    fn client_block_is_a_migration_error() {
         let source = r#"
 client<llm> C {
   provider openai
   options { model "gpt-4o" }
 }
 "#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        let (items, diags) = parse_and_lower_with_diagnostics(source);
+        assert!(items.is_empty(), "client blocks lower to no items");
         assert!(
-            new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
-            "named openai client with no api_key should default to OPENAI_API_KEY"
+            diags.iter().any(|diag| matches!(
+                diag,
+                crate::LoweringDiagnostic::ClientBlockRemoved { name, .. } if name == "C"
+            )),
+            "expected ClientBlockRemoved, got: {diags:#?}"
         );
     }
 
     #[test]
-    fn named_anthropic_client_defaults_api_key_to_env_var() {
+    fn client_value_decl_lowers_to_client_let() {
+        use crate::ast::LetOrigin;
         let source = r#"
-client<llm> C {
-  provider anthropic
-  options { model "claude-3-5-sonnet-20241022" }
-}
+client Fast = openai.OpenAiClient.new(model = "gpt-4o-mini");
 "#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        let items = parse_and_lower(source);
+        assert_eq!(items.len(), 1, "expected exactly one item");
+        let Item::Let(let_def) = &items[0] else {
+            panic!("expected Item::Let, got {:?}", items[0]);
+        };
+        assert_eq!(let_def.name.as_str(), "Fast");
+        assert_eq!(let_def.origin, LetOrigin::Client);
+        let (body, _) = let_def.initializer.as_ref().expect("expected initializer");
+        let root = body.root_expr.expect("expected root expr");
         assert!(
-            new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
-            "named anthropic client with no api_key should default to ANTHROPIC_API_KEY"
-        );
-    }
-
-    #[test]
-    fn named_client_explicit_api_key_suppresses_env_default() {
-        // An explicit `api_key` wins: no env-var default is synthesized.
-        let source = r#"
-client<llm> C {
-  provider openai
-  options { model "gpt-4o"  api_key "sk-explicit" }
-}
-"#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
-        assert!(
-            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
-            "explicit api_key must suppress the OPENAI_API_KEY default"
-        );
-    }
-
-    #[test]
-    fn named_client_unknown_provider_gets_no_env_default() {
-        // Providers without a ubiquitous env-var convention are untouched.
-        // vertex-ai emits an unrelated MissingClientOptions diagnostic (no
-        // base_url/location), but the `$new` companion is still synthesized —
-        // so tolerate diagnostics and only assert on the api_key default.
-        let source = r#"
-client<llm> C {
-  provider vertex-ai
-  options { model "gemini-2.0-flash" }
-}
-"#;
-        let (items, _diags) = parse_and_lower_with_diagnostics(source);
-        let new_fn = client_new_companion(items, "C");
-        assert!(
-            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY")
-                && !new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
-            "vertex-ai must not default an api_key env var"
+            matches!(&body.exprs[root], Expr::Call { .. }),
+            "initializer is the user's constructor call"
         );
     }
 
@@ -578,7 +561,7 @@ function deep_copy<T>(value: T) -> T {
         let function = first_function(parse_and_lower(source));
 
         assert_eq!(function.generic_params.len(), 1);
-        assert_eq!(function.generic_params[0].as_str(), "T");
+        assert_eq!(function.generic_params[0].name.as_str(), "T");
     }
 
     #[test]
@@ -951,22 +934,55 @@ interface Box<T extends Named, E> {
             .expect("expected Box interface");
 
         assert_eq!(
-            interface
-                .generic_params
-                .iter()
-                .map(smol_str::SmolStr::as_str)
-                .collect::<Vec<_>>(),
-            vec!["T", "E"]
+            rendered_generic_params(&interface.generic_params),
+            vec!["T extends Named", "E"]
         );
-        assert_eq!(interface.generic_param_bounds.len(), 2);
+    }
+
+    /// `T extends A & B` is a conjunction — every bound must survive lowering.
+    #[test]
+    fn ast_preserves_every_bound_in_a_generic_param_intersection() {
+        let source = r#"
+interface Named {
+  name string
+}
+
+interface Sized {
+  size int
+}
+
+interface Box<T extends Named & Sized, E> {
+  value T
+}
+
+function pack<U extends Named & Sized>(value: U) -> U {
+  value
+}
+"#;
+        let items = parse_and_lower(source);
+        let interface = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Interface(interface) if interface.name.as_str() == "Box" => Some(interface),
+                _ => None,
+            })
+            .expect("expected Box interface");
         assert_eq!(
-            interface.generic_param_bounds[0]
-                .as_ref()
-                .map(ToString::to_string)
-                .as_deref(),
-            Some("Named")
+            rendered_generic_params(&interface.generic_params),
+            vec!["T extends Named & Sized", "E"]
         );
-        assert!(interface.generic_param_bounds[1].is_none());
+
+        let function = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Function(function) if function.name.as_str() == "pack" => Some(function),
+                _ => None,
+            })
+            .expect("expected pack function");
+        assert_eq!(
+            rendered_generic_params(&function.generic_params),
+            vec!["U extends Named & Sized"]
+        );
     }
 
     #[test]
@@ -996,22 +1012,9 @@ interface Mapper {
             .expect("expected required method");
 
         assert_eq!(
-            method
-                .generic_params
-                .iter()
-                .map(smol_str::SmolStr::as_str)
-                .collect::<Vec<_>>(),
-            vec!["T", "E"]
+            rendered_generic_params(&method.generic_params),
+            vec!["T extends Named", "E"]
         );
-        assert_eq!(method.generic_param_bounds.len(), 2);
-        assert_eq!(
-            method.generic_param_bounds[0]
-                .as_ref()
-                .map(ToString::to_string)
-                .as_deref(),
-            Some("Named")
-        );
-        assert!(method.generic_param_bounds[1].is_none());
     }
 
     #[test]
@@ -1140,14 +1143,7 @@ class InterfaceTwo {
 
         let field = class.fields.first().expect("expected field");
         assert_eq!(field.name.as_str(), "interface");
-        assert_eq!(
-            field
-                .type_expr
-                .as_ref()
-                .map(std::string::ToString::to_string)
-                .as_deref(),
-            Some("string")
-        );
+        assert_eq!(field.type_expr.to_string(), "string");
     }
 
     #[test]
@@ -1352,7 +1348,7 @@ class Array<T> {
             .expect("expected a ClassDef");
 
         assert_eq!(class.generic_params.len(), 1);
-        assert_eq!(class.generic_params[0].as_str(), "T");
+        assert_eq!(class.generic_params[0].name.as_str(), "T");
     }
 
     #[test]
@@ -1377,8 +1373,8 @@ class Map<K, V> {
             .expect("expected a ClassDef");
 
         assert_eq!(class.generic_params.len(), 2);
-        assert_eq!(class.generic_params[0].as_str(), "K");
-        assert_eq!(class.generic_params[1].as_str(), "V");
+        assert_eq!(class.generic_params[0].name.as_str(), "K");
+        assert_eq!(class.generic_params[1].name.as_str(), "V");
     }
 
     #[test]
@@ -1510,12 +1506,9 @@ class Media {
             .find(|f| f.name.as_str() == "_data")
             .expect("expected _data field");
 
-        match &field.type_expr {
-            Some(spanned) => match &spanned.kind {
-                TypeExprKind::Rust { .. } => {}
-                other => panic!("expected TypeExprKind::Rust, got {other:?}"),
-            },
-            None => panic!("expected a type expression for _data field"),
+        match &field.type_expr.kind {
+            TypeExprKind::Rust { .. } => {}
+            other => panic!("expected TypeExprKind::Rust, got {other:?}"),
         }
     }
 
@@ -1549,12 +1542,12 @@ class Array<T> {
         if let Item::Class(c) = &items[0] {
             assert_eq!(c.name.as_str(), "Array");
             assert_eq!(c.generic_params.len(), 1);
-            assert_eq!(c.generic_params[0].as_str(), "T");
+            assert_eq!(c.generic_params[0].name.as_str(), "T");
             // 4 user-defined stubs + 2 auto-derived (`to_json`, `from_json`).
             let stub_methods: Vec<_> = c
                 .methods
                 .iter()
-                .filter(|m| m.origin != crate::ast::FunctionOrigin::AutoDerive)
+                .filter(|m| m.metadata.origin != crate::ast::FunctionOrigin::AutoDerive)
                 .collect();
             assert_eq!(stub_methods.len(), 4);
             for method in &stub_methods {
@@ -1627,8 +1620,8 @@ class Media {
             assert!(data_field.is_some(), "expected _data field");
             assert!(
                 matches!(
-                    data_field.unwrap().type_expr.as_ref().map(|te| &te.kind),
-                    Some(TypeExprKind::Rust { .. })
+                    &data_field.unwrap().type_expr.kind,
+                    TypeExprKind::Rust { .. }
                 ),
                 "_data field should have TypeExprKind::Rust"
             );
@@ -1935,106 +1928,22 @@ function f() -> int {
 
     #[test]
     fn retry_policy_produces_let_item_with_retry_policy_origin() {
-        use crate::ast::{Expr, Item, LetOrigin, Literal};
-
+        // Renamed behavior: retry_policy blocks are removed; retry composes
+        // at the client boundary (ai.Retry).
         let source = r#"
 retry_policy MyRetry {
   max_retries 3
-  initial_delay_ms 500
-  multiplier 2.0
-  max_delay_ms 60000
 }
 "#;
-        let items = parse_and_lower(source);
-        assert_eq!(items.len(), 1, "expected exactly one item");
-
-        let let_def = match &items[0] {
-            Item::Let(ld) => ld,
-            other => panic!("expected Item::Let, got {other:?}"),
-        };
-
-        assert_eq!(let_def.name.as_str(), "MyRetry");
-        assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
-
-        let (body, _source_map) = let_def.initializer.as_ref().expect("expected initializer");
-
-        let root_id = body.root_expr.expect("expected root expr");
-        let root_expr = &body.exprs[root_id];
-
-        let (type_name, fields, _) = match root_expr {
-            Expr::Object {
-                type_name,
-                fields,
-                spreads,
-                ..
-            } => (type_name, fields, spreads),
-            other => panic!("expected Expr::Object, got {other:?}"),
-        };
-
-        assert_eq!(
-            type_name.to_string(),
-            "baml.llm.RetryPolicy",
-            "expected type_name to be baml.llm.RetryPolicy"
+        let (items, diags) = parse_and_lower_with_diagnostics(source);
+        assert!(items.is_empty(), "retry_policy lowers to no items");
+        assert!(
+            diags.iter().any(|diag| matches!(
+                diag,
+                crate::LoweringDiagnostic::RetryPolicyRemoved { name, .. } if name == "MyRetry"
+            )),
+            "expected RetryPolicyRemoved, got: {diags:#?}"
         );
-
-        // Check field names
-        let field_names: Vec<&str> = fields.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(
-            field_names,
-            vec![
-                "max_retries",
-                "initial_delay_ms",
-                "multiplier",
-                "max_delay_ms"
-            ]
-        );
-
-        // Check field values
-        let field_exprs: Vec<&Expr> = fields.iter().map(|(_, id)| &body.exprs[*id]).collect();
-
-        assert_eq!(
-            field_exprs[0],
-            &Expr::Literal(Literal::Int(3)),
-            "max_retries should be Int(3)"
-        );
-        assert_eq!(
-            field_exprs[1],
-            &Expr::Literal(Literal::Int(500)),
-            "initial_delay_ms should be Int(500)"
-        );
-        assert_eq!(
-            field_exprs[2],
-            &Expr::Literal(Literal::Float("2.0".to_string())),
-            "multiplier should be Float(2.0)"
-        );
-        assert_eq!(
-            field_exprs[3],
-            &Expr::Literal(Literal::Int(60000)),
-            "max_delay_ms should be Int(60000)"
-        );
-    }
-
-    #[test]
-    fn retry_policy_with_defaults_produces_let_item() {
-        use crate::ast::{Item, LetOrigin};
-
-        // A retry_policy with only max_retries set; other fields use defaults
-        let source = r#"
-retry_policy Simple {
-  max_retries 5
-}
-"#;
-        let items = parse_and_lower(source);
-        assert_eq!(items.len(), 1);
-
-        let let_def = match &items[0] {
-            Item::Let(ld) => ld,
-            other => panic!("expected Item::Let, got {other:?}"),
-        };
-
-        assert_eq!(let_def.name.as_str(), "Simple");
-        assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
-        assert!(let_def.initializer.is_some(), "expected an initializer");
     }
 
     #[test]
@@ -2103,7 +2012,7 @@ class Foo {
         assert_eq!(field.attributes[0].name.as_str(), "alias");
 
         // Type attribute: @stream.done should be on the TypeExpr
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
+        let type_expr = &field.type_expr;
         let type_attrs = type_expr.attrs();
         assert_eq!(
             type_attrs.len(),
@@ -2141,7 +2050,7 @@ class Foo {
 
         // Type attribute: @stream.done stays on the TypeExpr
         assert_eq!(
-            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
+            strip_spans(&field.type_expr),
             type_expr!(Path("Fizz", Attr("stream.done")))
         );
     }
@@ -2160,7 +2069,7 @@ class Foo {
             .find(|f| f.name.as_str() == "bar")
             .expect("expected field 'bar'");
 
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
+        let type_expr = &field.type_expr;
         // Type should be Optional(Int)
         assert!(
             matches!(type_expr.kind, TypeExprKind::Optional { .. }),
@@ -2190,7 +2099,7 @@ class Foo {
             .find(|f| f.name.as_str() == "items")
             .expect("expected field 'items'");
 
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
+        let type_expr = &field.type_expr;
         assert!(
             matches!(type_expr.kind, TypeExprKind::List { .. }),
             "expected List type, got {type_expr:?}",
@@ -2204,7 +2113,7 @@ class Foo {
         assert_eq!(type_attrs[0].name.as_str(), "stream.done");
         // Type attribute: @stream.done stays on the TypeExpr
         assert_eq!(
-            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
+            strip_spans(&field.type_expr),
             type_expr!(WithAttrs((List(String)), Attr("stream.done")))
         );
     }
@@ -2258,7 +2167,7 @@ class C {
         let field = &class.fields[0];
         assert_eq!(field.attributes.len(), 1);
         assert_eq!(field.attributes[0].name.as_str(), "alias");
-        let te = &field.type_expr.as_ref().unwrap();
+        let te = &field.type_expr;
         assert_eq!(te.attrs().len(), 1);
         assert_eq!(te.attrs()[0].name.as_str(), "stream.done");
     }
@@ -2278,7 +2187,7 @@ class C {
         assert_eq!(field.attributes.len(), 1);
         assert_eq!(field.attributes[0].name.as_str(), "alias");
         assert!(matches!(
-            &field.type_expr.as_ref().unwrap().kind,
+            &field.type_expr.kind,
             TypeExprKind::Union { attrs, .. } if attrs.is_empty()
         ));
     }
@@ -2308,7 +2217,7 @@ class C {
         let class = first_class(parse_and_lower(source));
         let field = &class.fields[0];
         assert_eq!(
-            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
+            strip_spans(&field.type_expr),
             type_expr!(Union(
                 (Union((Path("A")), (Path("B", Attr("stream.done"))))),
                 (Path("C"))
@@ -2331,7 +2240,7 @@ class C {
         let field = &class.fields[0];
 
         assert_eq!(
-            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
+            strip_spans(&field.type_expr),
             type_expr!(Union(
                 (Path("A")),
                 (Path("B")),
@@ -2507,5 +2416,306 @@ function Demo(name: string) -> string {
             &body.exprs[*lhs2],
             Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
         ));
+    }
+
+    #[test]
+    fn property_syntax_is_structural_ast_data() {
+        let items = parse_and_lower(
+            r#"
+class Config { name string }
+function build(name: string) -> unknown {
+  let shorthand_map = { name };
+  let explicit_map = { "name": name };
+  let shorthand_object = Config { name };
+  let explicit_object = Config { name: name };
+  [shorthand_map, explicit_map, shorthand_object, explicit_object]
+}
+"#,
+        );
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+
+        let map_syntax: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(_, expr)| match expr {
+                Expr::Map { entries } => entries.first().map(|entry| entry.syntax),
+                _ => None,
+            })
+            .collect();
+        let object_syntax: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(_, expr)| match expr {
+                Expr::Object { fields, .. } => fields.first().map(|field| field.syntax),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            map_syntax,
+            vec![
+                crate::ast::PropertySyntax::Shorthand,
+                crate::ast::PropertySyntax::Explicit,
+            ]
+        );
+        assert_eq!(
+            object_syntax,
+            vec![
+                crate::ast::PropertySyntax::Shorthand,
+                crate::ast::PropertySyntax::Explicit,
+            ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod traverse_coverage_tests {
+    use crate::{
+        ast::{Expr, FunctionBodyDef, Item},
+        traverse::BodyNode,
+    };
+
+    /// Every expression and statement a lambda-free body allocates must be
+    /// reachable from its root. A child this walker forgets would be silently
+    /// dropped by every analysis built on it — an unwalked `throw` simply
+    /// vanishes from the function's effect set.
+    #[test]
+    fn every_allocated_node_is_reachable_from_the_root() {
+        let sources = [
+            r#"function f(a: int, b: int) -> int throws string {
+  let m = { "k": a + b }
+  let arr = [a, b, m["k"]]
+  for (let x in arr) { if (x > 0) { throw "pos" } }
+  let i = 0
+  while (i < 3) { i = i + 1 }
+  match (a) { 1 => { throw "one" }, _ if b > 0 => { b }, _ => { 0 } }
+}"#,
+            r#"function g(o: int?, cb: () -> int) -> int throws never {
+  defer { let z = 1 }
+  let v = o?.to_string()
+  let c = cb() catch (e) { _ => 0 }
+  return c
+}"#,
+            r#"function h(xs: int[]) -> int throws never {
+  if let [first, ..rest] = xs { return first }
+  return 0
+}"#,
+            // Backtick templates carry their expressions twice — once in
+            // `segments`, once in the desugared tag payload — from the same
+            // `ExprId`s. Both must be walked, and neither may be walked twice.
+            r#"function t(a: string, n: int) -> string throws never {
+  let plain = `hi ${a} there`
+  let looped = `${for (let i in [1, 2])}x${a}${endfor}`
+  let branched = `${if (n > 0)}pos${else}neg${endif}`
+  return plain + looped + branched
+}"#,
+        ];
+        for source in sources {
+            for item in super::tests::parse_and_lower(source) {
+                let Item::Function(f) = item else { continue };
+                let Some(FunctionBodyDef::Expr(body, _)) = &f.body else {
+                    continue;
+                };
+                // Skip bodies containing lambdas: their nodes live in a nested
+                // arena, so arena membership and reachability legitimately differ.
+                if body.exprs.iter().any(|(_, e)| matches!(e, Expr::Lambda(_))) {
+                    continue;
+                }
+                let Some(root) = body.root_expr else { continue };
+                let reached: std::collections::HashSet<BodyNode> =
+                    body.reachable_excluding_lambdas(root).into_iter().collect();
+
+                let missed_exprs: Vec<_> = body
+                    .exprs
+                    .iter()
+                    .map(|(id, _)| id)
+                    .filter(|id| !reached.contains(&BodyNode::Expr(*id)))
+                    .collect();
+                let missed_stmts: Vec<_> = body
+                    .stmts
+                    .iter()
+                    .map(|(id, _)| id)
+                    .filter(|id| !reached.contains(&BodyNode::Stmt(*id)))
+                    .collect();
+
+                // The arena is a DAG (templates share ids between their two
+                // representations), so the walk must also not repeat itself:
+                // callers that push per visit would report duplicates.
+                let walked = body.reachable_excluding_lambdas(root);
+                assert_eq!(
+                    walked.len(),
+                    reached.len(),
+                    "`{}` visited {} nodes for {} unique — the walk must de-duplicate",
+                    f.name,
+                    walked.len(),
+                    reached.len(),
+                );
+
+                assert!(
+                    missed_exprs.is_empty() && missed_stmts.is_empty(),
+                    "unreachable nodes in `{}`:\n  exprs: {:?}\n  stmts: {:?}\nsource:\n{source}",
+                    f.name,
+                    missed_exprs
+                        .iter()
+                        .map(|id| (*id, &body.exprs[*id]))
+                        .collect::<Vec<_>>(),
+                    missed_stmts
+                        .iter()
+                        .map(|id| (*id, &body.stmts[*id]))
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod testset_nesting_tests {
+    use crate::ast::{Expr, FunctionBodyDef, Item, Stmt};
+
+    /// Count `<collector>.register_test` / `register_test_set` calls in a body.
+    ///
+    /// Lambda bodies share this arena, so the flat scan already covers the
+    /// registration lambdas the test/testset wrappers introduce.
+    fn count_registrations(body: &crate::ast::ExprBody) -> usize {
+        let mut n = 0;
+        for (_, expr) in body.exprs.iter() {
+            if let Expr::Call { callee, .. } = expr {
+                if let Expr::MemberAccess { member, .. } = &body.exprs[*callee]
+                    && matches!(member.as_str(), "register_test" | "register_test_set")
+                {
+                    n += 1;
+                }
+                if let Expr::Path(segments) = &body.exprs[*callee]
+                    && segments.last().is_some_and(|s| {
+                        matches!(s.as_str(), "register_test_at" | "register_test_set_at")
+                    })
+                {
+                    n += 1;
+                }
+            }
+        }
+        n
+    }
+
+    fn count_missing_stmts(body: &crate::ast::ExprBody) -> usize {
+        body.stmts
+            .iter()
+            .filter(|(_, s)| matches!(s, Stmt::Missing))
+            .count()
+    }
+
+    /// A `test` nested inside a `testset` registers; a `test` nested inside a
+    /// `test` does not.
+    ///
+    /// The distinction is carried entirely by `LoweringContext::testset_collector_var`:
+    /// a testset body sets it, a test body clears it. Both intents are currently
+    /// expressed by *which constructor* builds the body's context, so anything
+    /// that changes how those bodies are lowered has to reproduce both — set and
+    /// clear. Getting only the "set" half right makes `test` silently nest.
+    #[test]
+    fn a_test_inside_a_test_does_not_register() {
+        let items = super::tests::parse_and_lower(
+            r#"testset "Outer" {
+  test "Middle" {
+    test "Inner" {
+      assert.is_true(true)
+    }
+  }
+}"#,
+        );
+
+        let init = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Function(f) if f.name.as_str().starts_with("$init_test") => Some(f),
+                _ => None,
+            })
+            .expect("expected a synthesized $init_test function");
+        let Some(FunctionBodyDef::Expr(body, _)) = &init.body else {
+            panic!("expected an expression body for $init_test");
+        };
+
+        // Outer testset + Middle test = 2. `Inner` sits in a test body, where
+        // the collector is cleared, so it lowers to `Stmt::Missing` instead.
+        //
+        // This pins the *registration* behaviour, not the diagnostic story:
+        // dropping `Inner` silently is a separate known bug (see the `// BUG:`
+        // note on the `TEST_EXPR_DEF` arm in `lower_expr_body.rs`).
+        assert_eq!(
+            count_registrations(body),
+            2,
+            "expected exactly the testset and the test it contains to register"
+        );
+        assert!(
+            count_missing_stmts(body) >= 1,
+            "expected the doubly-nested `test` to lower to `Stmt::Missing`"
+        );
+    }
+}
+
+#[cfg(test)]
+mod lambda_arena_tests {
+    use crate::ast::{Expr, FunctionBodyDef, Item, Stmt};
+
+    /// A lambda's body is allocated in the enclosing function's arena, and is
+    /// *not* reachable from that function's root.
+    ///
+    /// This is why effect analyses cannot scan the arena flatly: a `throw`
+    /// written inside a lambda is a sibling of the function's own statements,
+    /// indistinguishable from one the function wrote itself.
+    #[test]
+    fn a_lambdas_throw_is_in_the_enclosing_arena_but_not_reachable_from_its_root() {
+        let items = super::tests::parse_and_lower(
+            r#"function defines(value: int) -> int throws never {
+  let risky = (n: int) -> int {
+    throw "boom"
+  }
+  return value
+}"#,
+        );
+        let Some(Item::Function(f)) = items.into_iter().next() else {
+            panic!("expected a function item");
+        };
+        let Some(FunctionBodyDef::Expr(body, _)) = &f.body else {
+            panic!("expected an expression body");
+        };
+
+        let throw_stmts: Vec<_> = body
+            .stmts
+            .iter()
+            .filter(|(_, s)| matches!(s, Stmt::Throw { .. }))
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(
+            throw_stmts.len(),
+            1,
+            "the lambda's `throw` must live in the enclosing function's arena"
+        );
+
+        let root = body.root_expr.expect("root");
+        let reached = body.reachable_excluding_lambdas(root);
+        assert!(
+            !reached.contains(&crate::traverse::BodyNode::Stmt(throw_stmts[0])),
+            "a structural walk that stops at lambdas must not reach the lambda's `throw`"
+        );
+
+        // And the lambda really does own it.
+        let lambda_root = body
+            .exprs
+            .iter()
+            .find_map(|(_, e)| match e {
+                Expr::Lambda(l) => l.body,
+                _ => None,
+            })
+            .expect("lambda body");
+        assert!(
+            body.reachable_excluding_lambdas(lambda_root)
+                .contains(&crate::traverse::BodyNode::Stmt(throw_stmts[0])),
+            "walking from the lambda's own root must reach its `throw`"
+        );
     }
 }

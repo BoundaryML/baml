@@ -3,48 +3,67 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function json_alias.$init_test_ns_json_alias_json_alias(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.json_alias"
     load_const "field_of_type_json_lowers_cleanly"
     make_closure .<lambda($init_test_ns_json_alias_json_alias, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_alias"
     load_const "let_json_null"
     make_closure .<lambda($init_test_ns_json_alias_json_alias, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_alias"
     load_const "let_json_int"
     make_closure .<lambda($init_test_ns_json_alias_json_alias, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_alias"
     load_const "let_json_string"
     make_closure .<lambda($init_test_ns_json_alias_json_alias, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_alias"
     load_const "let_json_array"
     make_closure .<lambda($init_test_ns_json_alias_json_alias, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_alias"
     load_const "let_json_map"
     make_closure .<lambda($init_test_ns_json_alias_json_alias, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_alias"
     load_const "match_json_arms_exhaustive"
     make_closure .<lambda($init_test_ns_json_alias_json_alias, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_alias"
+    load_const "impl_on_recursive_alias_generic_arg_dispatches"
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
+    return
+}
+
+function json_alias.JsonTagged$for$JsonWrap<baml.json.json>.tag(self: json_alias.JsonWrap<baml.json.json>) -> string {
+    load_const "json-wrap"
     return
 }
 
@@ -59,10 +78,11 @@ function json_alias.json_array_len() -> int {
     load_const 1
     load_const 2
     load_const 3
-    load_type int
+    load_type baml.json.json
     alloc_array 3
-    store_var_load_var arr
-    is_type _[]
+    store_var _2
+    load_var _2
+    narrow_bind baml.json.json[], slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -72,7 +92,7 @@ function json_alias.json_array_len() -> int {
     jump L2
 
   L1:
-    load_var arr
+    load_var _2
     container_len
 
   L2:
@@ -83,10 +103,11 @@ function json_alias.json_map_has_key() -> bool {
     load_const "value"
     load_const "key"
     load_type string
-    load_type string
+    load_type baml.json.json
     alloc_map 1
-    store_var_load_var m
-    is_type map<_, _>
+    store_var _2
+    load_var _2
+    narrow_bind map<string, baml.json.json>, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -95,7 +116,7 @@ function json_alias.json_map_has_key() -> bool {
     jump L2
 
   L1:
-    load_var m
+    load_var _2
     container_len
     store_var _4
     load_var _4
@@ -103,6 +124,18 @@ function json_alias.json_map_has_key() -> bool {
     cmp_int_op ==
 
   L2:
+    return
+}
+
+function json_alias.json_wrap_tag() -> string {
+    load_const null
+    load_type baml.json.json
+    init_instance<1> user.json_alias.JsonWrap .data
+    load_type json_alias.JsonTagged
+    load_const "tag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -115,38 +148,45 @@ function json_alias.match_json(j: baml.json.json) -> string {
 
   L0:
     load_var j
-    is_type bool
+    store_var _3
+    load_var _3
+    narrow_bind bool, slot=2
     pop_jump_if_false L1
     jump L10
 
   L1:
     load_var j
-    is_type int
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=3
     pop_jump_if_false L2
     jump L9
 
   L2:
     load_var j
-    is_type float
+    store_var _5
+    load_var _5
+    narrow_bind float, slot=4
     pop_jump_if_false L3
     jump L8
 
   L3:
     load_var j
-    is_type string
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=5
     pop_jump_if_false L4
     jump L7
 
   L4:
     load_var j
-    is_type baml.json.json[]
+    store_var _7
+    load_var _7
+    narrow_bind baml.json.json[], slot=6
     pop_jump_if_false L5
     jump L6
 
   L5:
-    load_var j
-    is_type map<string, baml.json.json>
-    pop_jump_if_false L13
     load_const "map"
     jump L12
 
@@ -175,7 +215,4 @@ function json_alias.match_json(j: baml.json.json) -> string {
 
   L12:
     return
-
-  L13:
-    unreachable
 }

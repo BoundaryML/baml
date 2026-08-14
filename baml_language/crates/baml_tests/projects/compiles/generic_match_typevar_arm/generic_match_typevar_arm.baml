@@ -1,11 +1,12 @@
-// B-634: a generic `match` arm `let s: Opt<T>` (where `T` is the enclosing
-// function's type var) must lower its runtime type-test through the
-// subtype-or-wildcard dispatch-guard template, so the reified frame type-arg is
-// compared with `is_subtype_of` rather than exact `==`.
+// B-634 (resolved): a generic `match` arm `let s: Opt<T>` (where `T` is the
+// enclosing function's type var) lowers its runtime type-test so the frame
+// type-arg `T` is a `TypeArgRef`, compared *invariantly* by the canonical
+// algebra. A widened reified `T` still matches a narrower value arg through union
+// absorption (`Sq <: Shape` ⇒ `Shape | Sq == Shape`), so no covariance is needed.
 //
 // This project locks the emitted template: the `Opt<T>` arm's IsType constant
-// must carry `TypeArgRefOrWildcard(0)` (rendered `#0?`), not the exact
-// `TypeArgRef(0)` (rendered `#0`), in the *_04_5_mir / *_06_codegen snapshots.
+// carries `TypeArgRef(0)` (rendered `#0`), not the retired covariant
+// `TypeArgRefOrWildcard(0)` (`#0?`), in the *_04_5_mir / *_06_codegen snapshots.
 
 class Opt<T> {
   value: T,

@@ -18,25 +18,19 @@ function load_nested(envelope: Envelope) -> string {
 
 //----
 //- diagnostics
-// error: cannot access field `email` on `unknown`
-//     ╭─[ expr_unknown_field_access.baml:12:7 ]
-//     │
+// E0007
+//
+//   × type `unknown` has no member `email`
+//     ╭─[expr_unknown_field_access.baml:12:3]
 //  12 │   raw.email.to_lower_case()
-//     │   ─┬─ ──┬──
-//     │    ╰───────── this value has type `unknown`
-//     │         │
-//     │         ╰──── use `match` to narrow this value before accessing `email`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: cannot access field `email` on `unknown`
-//     ╭─[ expr_unknown_field_access.baml:16:20 ]
-//     │
+//     ·   ───────────┬───────────
+//     ·              ╰── use `match` to narrow this value before accessing `email`
+//     ╰────
+// E0007
+//
+//   × type `unknown` has no member `email`
+//     ╭─[expr_unknown_field_access.baml:16:3]
 //  16 │   envelope.payload.email
-//     │            ───┬─── ──┬──
-//     │               ╰─────────── this value has type `unknown`
-//     │                      │
-//     │                      ╰──── use `match` to narrow this value before accessing `email`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
+//     ·   ───────────┬──────────
+//     ·              ╰── use `match` to narrow this value before accessing `email`
+//     ╰────

@@ -2,18 +2,18 @@
 /// - `"compatible"` (default): later for gaps, earlier for overlaps
 /// - `"earlier"` / `"later"`: always pick that side
 /// - `"reject"`: throw `AmbiguousTimeError`
-type Disambiguation = "compatible" | "earlier" | "later" | "reject"
+type Disambiguation = "compatible" | "earlier" | "later" | "reject";
 
 /// Thrown when an IANA timezone identifier cannot be resolved against the
 /// host's timezone database.
 class UnknownTimezoneError {
-    timezone: string
+    timezone: string,
 }
 
 /// Thrown when a civil time cannot be unambiguously located in a timezone
 /// (DST gap or overlap) and `disambiguation` is `"reject"`.
 class AmbiguousTimeError {
-    message: string
+    message: string,
 }
 
 /// A fixed offset from UTC, with a permitted range of ±24 hours (real
@@ -25,7 +25,7 @@ class AmbiguousTimeError {
 class TimeZoneOffset {
     /// Internal representation: the offset in nanoseconds. Invariant: within
     /// ±24 hours.
-    _nanoseconds: int;
+    _nanoseconds: int,
 
     /// The UTC (zero) offset.
     function utc() -> TimeZoneOffset throws never {
@@ -51,7 +51,10 @@ class TimeZoneOffset {
     /// to its concrete offset at the absolute time `at` (DST-aware).
     ///
     /// Resolution uses the host's timezone database.
-    function from_timezone(timezone: string, at: Instant) -> TimeZoneOffset throws UnknownTimezoneError | root.errors.Io {
+    function from_timezone(
+        timezone: string,
+        at: Instant,
+    ) -> TimeZoneOffset throws UnknownTimezoneError | root.errors.Io {
         match (_tz_offset_at(timezone, at._nanoseconds)) {
             null => throw UnknownTimezoneError { timezone: timezone },
             // `?? 0` is unreachable: the null arm above already matched.
@@ -68,7 +71,9 @@ class TimeZoneOffset {
     ///
     /// Throws `root.errors.InvalidArgument` if the duration exceeds ±24 hours.
     //baml:mut_vm
-    function from_duration(duration: Duration) -> TimeZoneOffset throws root.errors.InvalidArgument {
+    function from_duration(
+        duration: Duration,
+    ) -> TimeZoneOffset throws root.errors.InvalidArgument {
         $rust_function
     }
     function to_duration(self) -> Duration throws never {
@@ -108,6 +113,10 @@ function _tz_offset_at(timezone: string, at_ns: bigint) -> int? throws root.erro
 /// agree). Returns the resolved absolute time as nanoseconds since the Unix
 /// epoch, or `null` if the identifier is unknown to the host's timezone
 /// database.
-function _tz_to_instant(timezone: string, civil_ns: bigint, disambiguation: string) -> bigint? throws root.errors.Io {
+function _tz_to_instant(
+    timezone: string,
+    civil_ns: bigint,
+    disambiguation: string,
+) -> bigint? throws root.errors.Io {
     $rust_io_function
 }

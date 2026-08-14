@@ -59,8 +59,8 @@ fn impl_rule_methods_include_inherited_interface_defaults() {
     let program = compile_source(
         r#"
         interface Greeter {
-            function greet(self) -> string
-            function greet_loud(self) -> string { return self.greet() }
+            function greet(self) -> string throws never
+            function greet_loud(self) -> string throws never { return self.greet() }
         }
         class Dog {
             implements Greeter {
@@ -89,8 +89,8 @@ fn impl_rule_override_wins_over_inherited_default() {
     let program = compile_source(
         r#"
         interface Greeter {
-            function greet(self) -> string
-            function greet_loud(self) -> string { return self.greet() }
+            function greet(self) -> string throws never
+            function greet_loud(self) -> string throws never { return self.greet() }
         }
         class Cat {
             implements Greeter {

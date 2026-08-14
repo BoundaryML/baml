@@ -28,9 +28,8 @@ pub fn setup_test_db(source: &str) -> ProjectDatabase {
 /// in user-provided source files are checked here.
 #[track_caller]
 pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
-    let project = db.get_project().expect("project must be set");
     let all_files = db.get_source_files();
-    let diagnostics = collect_diagnostics(db, project, &all_files);
+    let diagnostics = collect_diagnostics(db);
 
     let user_file_ids: std::collections::HashSet<_> =
         all_files.iter().map(|f| f.file_id(db)).collect();
@@ -48,7 +47,13 @@ pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
         use std::fmt::Write;
         let mut msg = String::from("Compilation produced diagnostic errors:\n");
         for (i, err) in errors.iter().enumerate() {
-            let _ = writeln!(msg, "  {}. [{}] {}", i + 1, err.code(), err.message);
+            let _ = writeln!(
+                msg,
+                "  {}. [{}] {}",
+                i + 1,
+                err.code(),
+                err.message_with_primary_label()
+            );
         }
         panic!("{msg}");
     }

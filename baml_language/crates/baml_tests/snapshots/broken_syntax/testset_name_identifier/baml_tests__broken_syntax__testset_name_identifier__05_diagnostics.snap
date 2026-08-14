@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[testset_name_identifier.baml:6:9]
+ 6 │ testset foo {
+   ·         ─┬─
+   ·          ╰── testset names must be quoted strings: `testset "foo"`
+   ╰────
+
+  [type] E0003
+
+  × unresolved name: `foo`
+   ╭─[testset_name_identifier.baml:6:9]
+ 6 │ testset foo {
+   ·         ───
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[testset_name_identifier.baml:12:6]
+ 12 │ test my_test {
+    ·      ───┬───
+    ·         ╰── test names must be quoted strings: `test "my_test"`
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `my_test`
+    ╭─[testset_name_identifier.baml:12:6]
+ 12 │ test my_test {
+    ·      ───────
+    ╰────

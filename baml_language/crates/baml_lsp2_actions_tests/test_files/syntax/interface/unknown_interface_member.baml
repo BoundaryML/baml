@@ -1,7 +1,7 @@
 // `bark()` is not declared on `Animal` — providing it in `implements Animal {}` is an error.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {
@@ -17,12 +17,11 @@ class Dog {
 
 //----
 //- diagnostics
-// error: method `bark` is not declared on interface `Animal`; remove it or add it to the interface
-//     ╭─[ interface_unknown_interface_member.baml:12:14 ]
-//     │
-//  12 │     function bark(self) -> string {
-//     │              ──┬─  
-//     │                ╰─── not a member of the interface
-//     │ 
-//     │ Note: Error code: E0115
-// ────╯
+// E0115
+//
+//   × `bark` is not a method of interface `Animal`
+//     ╭─[interface_unknown_interface_member.baml:12:5]
+//  12 │ ╭─▶     function bark(self) -> string {
+//  13 │ │         return "Bark!"
+//  14 │ ╰─▶     }
+//     ╰────

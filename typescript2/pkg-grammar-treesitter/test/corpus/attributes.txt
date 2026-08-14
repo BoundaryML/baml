@@ -1,0 +1,139 @@
+==================
+field attributes: plain, dotted, argumentless
+==================
+
+class AttributeVariety {
+  a string @skip
+  b string @description("desc") @alias("alt")
+  c string @stream.done
+  d string @stream.not_null
+  e string @stream.with_state
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier))
+        (attribute
+          (attribute_name
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier))
+        (attribute
+          (attribute_name
+            (identifier))
+          (attribute_arguments
+            (string)))
+        (attribute
+          (attribute_name
+            (identifier))
+          (attribute_arguments
+            (string))))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier))
+        (attribute
+          (attribute_name
+            (identifier)
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier))
+        (attribute
+          (attribute_name
+            (identifier)
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier))
+        (attribute
+          (attribute_name
+            (identifier)
+            (identifier)))))))
+
+==================
+block attributes on class and enum
+==================
+
+class Foo2 {
+  something int
+  @@stream.done
+  @@dynamic
+  @@alias("AKA")
+}
+
+enum Job {
+  SoftwareEngineer
+  @@dynamic
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (block_attribute
+        (attribute_name
+          (identifier)
+          (identifier)))
+      (block_attribute
+        (attribute_name
+          (identifier)))
+      (block_attribute
+        (attribute_name
+          (identifier))
+        (attribute_arguments
+          (string)))))
+  (enum_declaration
+    (identifier)
+    (enum_body
+      (enum_variant
+        (identifier))
+      (block_attribute
+        (attribute_name
+          (identifier))))))
+
+==================
+comments: line, block, header, doc
+==================
+
+// line comment
+//# Header Comment
+/// doc comment
+/* block comment */
+class /* inline */ A {
+  x int // trailing
+}
+
+---
+
+(source_file
+  (comment)
+  (comment)
+  (comment)
+  (block_comment)
+  (class_declaration
+    (block_comment)
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (comment))))

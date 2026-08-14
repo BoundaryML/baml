@@ -37,3 +37,9 @@ pub fn py_sdk_panic(message: impl Into<String>) -> PyErr {
 pub fn bridge_error_to_sdk_panic(err: bridge_cffi::error::BridgeError) -> PyErr {
     py_sdk_panic(err.to_string())
 }
+
+/// Preserve the complete generated-bytecode startup diagnostic as the
+/// exception message without adding Python-side classification text.
+pub fn bridge_error_to_initialization_error(err: bridge_cffi::error::BridgeError) -> PyErr {
+    pyo3::exceptions::PyRuntimeError::new_err(err.to_string())
+}

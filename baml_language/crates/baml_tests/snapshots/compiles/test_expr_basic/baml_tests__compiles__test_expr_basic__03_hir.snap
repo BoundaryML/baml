@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
-  { registry.register_test("simple test", () -> void { { let x = 1 Add 2 } assert.equal(x, 3) }, null); registry.register_test("with not_null", () -> void { { let result = "hello" } assert.not_null(result) }, null) } null
-}

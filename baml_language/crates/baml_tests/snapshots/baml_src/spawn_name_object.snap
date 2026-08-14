@@ -3,16 +3,18 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function spawn_name_object.$init_test_ns_spawn_name_object_spawn_name_object(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.spawn_name_object"
     load_const "spawn_name_then_struct_body_parses_correctly"
     make_closure .<lambda($init_test_ns_spawn_name_object_spawn_name_object, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.spawn_name_object"
     load_const "spawn_name_then_map_literal_body"
     make_closure .<lambda($init_test_ns_spawn_name_object_spawn_name_object, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -22,6 +24,8 @@ function spawn_name_object.spawn_name_then_map_literal_body_fn() -> int {
     make_closure .<lambda(spawn_name_then_map_literal_body_fn, 0)>, 0
     load_const "task"
     load_const null
+    load_type int
+    load_type never
     spawn
     store_var _5
     load_var _5
@@ -33,6 +37,8 @@ function spawn_name_object.spawn_name_then_struct_body_parses_correctly_fn() -> 
     make_closure .<lambda(spawn_name_then_struct_body_parses_correctly_fn, 0)>, 0
     load_const "task"
     load_const null
+    load_type spawn_name_object.B
+    load_type never
     spawn
     store_var _5
     load_var _5

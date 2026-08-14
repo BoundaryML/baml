@@ -22,7 +22,7 @@ use baml_base::SourceFile;
 use baml_compiler_parser::syntax_tree;
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, ast::StringLiteral};
 use baml_compiler2_ast::ast::FunctionOrigin;
-use baml_compiler2_hir::{contributions::Definition, file_item_tree, file_symbol_contributions};
+use baml_compiler2_hir::{contributions::Definition, file_symbol_contributions};
 use rowan::ast::AstNode;
 use text_size::TextRange;
 
@@ -78,9 +78,10 @@ pub fn file_actions(db: &dyn Db, file: SourceFile) -> Vec<FileAction> {
     for (name, contrib) in &contribs.values {
         match contrib.definition {
             Definition::Function(loc) => {
-                let item_tree = file_item_tree(db, loc.file(db));
-                let func = &item_tree[loc.id(db)];
-                if !matches!(func.origin, FunctionOrigin::UserDefined) {
+                let func = baml_compiler2_ppir::item_data::function_data(db, loc);
+                if !matches!(func.metadata.origin, FunctionOrigin::UserDefined)
+                    || func.metadata.is_language_internal
+                {
                     continue;
                 }
 
@@ -185,8 +186,8 @@ mod tests {
             "main.baml",
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt #"Summarize {{ input }}"#
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 "##,
         );

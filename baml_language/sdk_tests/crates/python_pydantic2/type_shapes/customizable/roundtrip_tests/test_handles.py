@@ -29,7 +29,7 @@ PNG_B64 = (
 # --- media: Image.from_base64 ---------------------------------------------
 
 
-def test_image_from_base64_roundtrips_payload():
+def test_handles_image_from_base64_roundtrips_payload():
     img = Image.from_base64(PNG_B64, "image/png")
     assert img.mime_type() == "image/png"
     assert img.base64() == PNG_B64
@@ -65,7 +65,7 @@ def http_server():
         srv.server_close()
 
 
-def test_http_get_response_fields_and_methods(http_server):
+def test_handles_http_get_response_fields_and_methods(http_server):
     resp = fetch(http_server)
     assert resp.status_code == 200
     assert resp.ok() is True
@@ -88,13 +88,13 @@ def temp_file():
         os.rmdir(d)
 
 
-def test_open_file_returns_file_handle(temp_file):
+def test_handles_open_file_returns_file_handle(temp_file):
     f = baml_open(temp_file, "r")
     assert type(f).__name__ == "File"
     assert f.close() is None
 
 
-def test_file_cursor_state_persists_across_calls(temp_file):
+def test_handles_file_cursor_state_persists_across_calls(temp_file):
     f = baml_open(temp_file, "r")
 
     # Two successive reads on the *same* handle must advance the cursor —

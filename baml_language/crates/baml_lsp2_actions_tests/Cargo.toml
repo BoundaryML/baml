@@ -25,3 +25,6 @@ walkdir = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false
+
+[dev-dependencies]
+salsa = { workspace = true }

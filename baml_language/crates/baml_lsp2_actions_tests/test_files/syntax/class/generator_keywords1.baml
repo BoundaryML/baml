@@ -22,21 +22,19 @@ class Foo {
 
 //----
 //- diagnostics
-// error: Expected Unexpected token in class body, found if
-//    ╭─[ class_generator_keywords1.baml:6:5 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[class_generator_keywords1.baml:6:5]
 //  6 │     if string
-//    │     ─┬
-//    │      ╰── Expected Unexpected token in class body, found if
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: field 'string' is missing a type annotation
-//    ╭─[ class_generator_keywords1.baml:6:8 ]
-//    │
+//    ·     ─┬
+//    ·      ╰── expected `Unexpected token in class body`, found `if`
+//    ╰────
+// E0010
+//
+//   × invalid syntax
+//    ╭─[class_generator_keywords1.baml:6:8]
 //  6 │     if string
-//    │        ───┬──
-//    │           ╰──── field 'string' is missing a type annotation
-//    │
-//    │ Note: Error code: E0010
-// ───╯
+//    ·        ───┬──
+//    ·           ╰── field 'string' is missing a type annotation
+//    ╰────

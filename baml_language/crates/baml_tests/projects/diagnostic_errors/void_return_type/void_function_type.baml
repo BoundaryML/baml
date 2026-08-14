@@ -1,5 +1,5 @@
 // Void in function-type return position
-type Callback = (int) -> void
+type Callback = (int) -> void throws never
 
 // Higher-order function taking a void callback
 function run_callback(cb: Callback, x: int) -> int {

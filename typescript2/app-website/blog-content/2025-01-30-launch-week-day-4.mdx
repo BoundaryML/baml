@@ -1,0 +1,182 @@
+---
+title: BAML Launch Week Day 4
+description: Semantic Streaming
+slug: launch-week-day-4
+og:
+  title: Launch Week 2025
+  description: "Day 4: Semantic Streaming"
+date: Jan 30, 2025
+tags: ['launch week']
+author:
+  name: Greg Hale
+  imageUrl: /greg.jpg
+  linkedin: https://www.linkedin.com/in/greg-hale-5684b1bb/
+---
+
+<DevSpotlight
+  users={[
+    {
+      name: "Daniel Edrisian",
+      company: "Alex",
+      role: "Founder",
+      companyDescription: "Alex is an AI coding assistant for Xcode, enhancing iOS and Mac development with features like sidebar chat, inline completions, and image-to-code generation.",
+      bamlTestimonial: "BAML is the foundation of our chat functionality at Alex. It is a dead simple interface which lets us create Agentic experiences within days. The ability to stream structured outputs can't be found anywhere else - even in OpenAI/Anthropic's own libraries.",
+      imageUrl: "/launchweekAssets/daniel.jpeg",
+      companyUrl: "https://alexcodes.app/",
+      logoUrl: "/launchweekAssets/alexLogo.png",
+      logoWidth: 120,
+      logoHeight: 40
+    },
+    {
+      name: "Faizan Sattar",
+      company: "Sherlock AI",
+      role: "CEO & Cofounder",
+      companyDescription: "Sherlock is the ChatGPT for retail traders and investors. They're able to get AI-powered insights, track social trends, and execute trades effortlessly.",
+      bamlTestimonial: "BAML has been crucial in building our Analyst AI agent. Structured responses with parallel function calling does not work natively with most LLMs. BAML types has unlocked this capability for all LLMs, making it super easy to map user input to the right output/behaviors.",
+      imageUrl: "/launchweekAssets/faizan.jpeg",
+      companyUrl: "https://asksherlock.ai/",
+      logoUrl: "/launchweekAssets/sherlockLogo.png",
+      logoWidth: 120,
+      logoHeight: 40
+    }
+  ]}
+/>
+
+## Semantic Streaming
+
+<Video src="/launchweekAssets/day4-semantic-streaming.mp4" />
+
+### Structured Outputs vs. Streaming Data
+
+LLMs provide almost magical reasoning abilities. The current challenge for application developers building on top of LLMs has been retaining the reliability and latency that users expect from normal web apps. We try to meet these goals by encoding our domain objects in structured output frameworks like BAML and JSON-mode, and using streaming APIs to deliver results incrementally as tokens come back from the LLM.
+
+Sadly, these two techniques are at odds - a partially streamed message will not match the semantics you crafted in your structured output. Even if lenient parsers can patch up streaming json objects that are still waiting to receive their closing quotes and braces, the values inside those objects undergo violent janking as objects and numbers receive their new fields and digits, one token at a time.
+
+We are excited to present "Semantic Streaming", a method for preserving domain semantics while streaming. Semantic Streaming allows you to specify invariants on structured outputs, and  receive streamed outputs, not as a series of new tokens, but as a stream of semantically valid messages.
+
+### Semantic Streaming
+
+Consider this BAML type, which has a new attribute `@stream.done`.
+
+```baml
+class PersonAssignment {
+  person Person
+  assignment string
+}
+
+class Person {
+  name string @stream.done
+  age int
+}
+```
+
+The `Person.name string @stream.done` field indicates that a person is not semantically valid until we can be sure that the field is fully available in the stream. `PersonAssignment.assignment string` does not have this annotation, so `PersonAssignment` is valid before `assignment` is fully known.
+
+With this semantic streaming, your application will only see valid states. You will never be given a `Person` with a name that is incomplete.
+
+The following example shows what message would be delivered to your application at each step in the streaming process. Note that `name` doesn't appear one character at a time in the output messages, because it is marked `@stream.done`, whereas `assignment` does appear one character at a time.
+
+<Video src="/launchweekAssets/day4-semantic-streaming.mp4" />
+
+### Semantic Streaming Annotations
+
+Another example shows the full set of annotations available for semantic streaming:
+
+```baml
+class Agenda {
+  start_time string @stream.done // (1)
+  items (Talk | Social)[]
+  description string @stream.with_state // (2)
+}
+
+class Talk {
+  type "talk" @stream.not_null // (3)
+  speaker string
+  title string
+  duration_minutes int
+}
+
+class Social {
+  type "social" @stream.not_null
+  duration_minutes int // (4)
+  @@stream.done
+}
+```
+
+1. This `@stream.done` means that `start_time` will only be streamed when enough tokens have been processed to be sure that `start_time` is done. If you render `start_time` in your application, it will not change from `6` to `6:0` to `6:15PM` as new tokens arrive.
+2. `@stream.with_state` on `description` means that when your application uses the `description` field, that field will have extra metadata attached to it called `stream_state`. You can check the `stream_state` metadata field to make rendering decisions, for example the description text color could pulse while the description is streaming, but remain black when streaming is complete. In the video above, every field was marked with `@stream.with_state` so that we could render loading spinners or check marks for all the data.
+3. `@stream.not_null` on the `type` field indicates that the parent class, `Talk` will not be streamed to your application until the `type` field is present. For fields like `type`, whose job is to indicate whether a JSON object is meant to represent an instance of `Talk` or an instance of `Social`, it is important that your application has this information before it begins to render an item.
+4. There is no annotation on `duration_minutes`. BAML automatically considers numbers and literal types to be `@stream.done`. Your application will never need to render a `4` only for it to become `400000000` several tokens later.
+
+### Using semantic streaming to build progressive data views
+
+The annotations you put onto your BAML types are reflected in the Python, TypeScript, and Ruby types you generate.
+
+To understand these changes, remember that BAML generates a "Partial" version of your BAML types returned by streaming functions. A type `Partial<T>` is created from any type `T` by the following rules:
+
+- If `T` is a class, all its fields will be replaced by partial versions of those fields, and the field may be `null`.
+- If `T` is some other type that builds on top of other types, such as a tuple or a union, then it becomes a tuple or a union over the "Partial" versions of those other types.
+- If `T` is a primitive type, it becomes `T | null`.
+
+"Partialization" allows BAML to flexibly parse anything the LLM streams back. But this level of flexibility means that streamed values are unlikely to be semantically valid. Let's see how we can make the parser more strict with Semantic Streaming, and what impact that has on our generated types.
+
+Returning to our example above with Agendas, Talks and Socials, this code will be generated:
+
+```python
+# partial_types.py
+
+class Agenda(BaseModel):
+    start_time: Optional[str] = None # (1)
+    items: List[Optional[Union["Talk", "types.Social"]]] # (2)
+    description: StreamState[Optional[str]] # (3)
+
+class Talk(BaseModel):
+    type: Literal["talk"]
+    speaker: Optional[str] = None
+    title: Optional[str] = None
+    duration_minutes: Optional[int] = None
+```
+
+```typescript
+# partial_types.py
+
+export interface Agenda {
+    start_time: string // (1)
+    items?: (Talk | null | types.Social | null)[] // (2)
+    description?: StreamState<(string | null)> // (3)
+}
+
+export interface Talk {
+    type: "talk"
+    speaker?: (string | null)
+    title?: (string | null)
+    duration_minutes?: (number | null)
+}
+```
+
+1. `start_time` is still Optional, despite being marked as `@stream.done`. This may be confusing. `@stream.done` does not imply that the value is not null, in only implies that if a value is present, then it is complete.
+2. `items` is a union of `Talk` and `types.Social`. `types.Social` is the version of `Social` defined in the non-streaming `types.py` file, and it is used here becase the entire `Social` BAML type was marked `@stream.done`.
+3. `description` is wrapped in the `StreamState` struct because that BAML field was marked `@stream.with_state`. You can access the value at `description.value` and the streaming state at `description.streaming_state`.
+
+To summarize the effect of Semantic Streaming on generated code: the invariants you specify through semantic streaming attributes will result in stricter types.
+
+### Better living through Domain Specific Languages
+
+The central thesis of BAML is that LLMs present a such a novel interface to computation that they require a different set of tools to collaborate with them effectively. That's why we wrote a new language. The best developer experience for integrating LLMs into traditional applications necessarily has new language semantics to bridge the gap. In the past, BAML introduced LLM functions, LLM annotations, prompt syntax, and partial streaming, and prompting playgrounds.
+
+As our customers encountered the tension between structured data invariants and streaming, the fact that we use a domain specific language to interface with LLMs made it simple to add Semantic Streaming attributes to the syntax, and to uphold semantic invariants in the runtime you use in your generated client code.
+
+Here's one last example of Semantic Streaming. We stream the `Ingredient` quantities as whole numbers, and render each one at a time as it comes in. Note the spinner in the UI.
+<Video src="/blog/semantic-streaming/semantic-streaming-4.mp4" />
+
+Learning a new language can be hard, but we think this is the best way of wrangling the complexity of LLMs for application developers. Please give Semantic Streaming a try! You can play with BAML at [promptfiddle.com](https://promptfiddle.com), learn more at [docs.boundaryml.com](https://docs.boundaryml.com), and hang out in our thriving [Discord](https://discord.gg/boundary) community.
+
+Happy BAML-ing!
+
+<div className="mt-2 pr-4 pl-4 border rounded-lg bg-gray-50">
+  P.S. If you're curious why we created a new programming language for LLMs, check [this post](/blog/ai-agents-need-new-syntax) out!
+</div>
+
+<div className="text-center mt-8">
+  <a href="/launchweek" style={{textDecoration: 'none'}} className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200">Back to Launch Week!</a>
+</div>

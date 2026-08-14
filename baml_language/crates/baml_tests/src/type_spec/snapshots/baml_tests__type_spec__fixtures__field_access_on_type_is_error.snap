@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+322..323 'f': throws never
+346..389 '{\n   ...  0\n}': 0
+352..357 'let v': !error
+360..363 'C.x': !error
+386..387 '0': 0

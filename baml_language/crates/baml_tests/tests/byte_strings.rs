@@ -1,4 +1,9 @@
-//! Tests for byte string literals (`b"..."`) and uint8array behavior.
+//! FFI-boundary tests for byte string literals (`b"..."`) and uint8array behavior.
+//!
+//! Exercises the host↔VM call boundary by passing a host
+//! `BexExternalValue::Uint8Array` argument directly and asserting the conversion
+//! that occurs only at that boundary. A BAML-side call with a `b"..."` literal
+//! would not cover the host→VM path.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;

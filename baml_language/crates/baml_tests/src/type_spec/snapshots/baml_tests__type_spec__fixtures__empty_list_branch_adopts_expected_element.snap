@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+435..436 'f': throws never
+455..528 '{\n   ...t[]\n}': int[]
+461..488 'if c {...{ [] }': int[]
+464..465 'c': bool
+466..476 '{ [1, 2] }': int[]
+468..474 '[1, 2]': int[]
+469..470 '1': 1
+472..473 '2': 2
+482..488 '{ [] }': int[]
+484..486 '[]': int[]

@@ -30,10 +30,10 @@ async fn backtick_one_liner_evaluates_to_string() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn backtick_multiline_dedents_at_runtime() -> anyhow::Result<()> {
-    // §12: multi-line content auto-dedents via the shared `preprocess_template`
-    // helper. The 8-space indent on the content lines is stripped, the leading
-    // newline after the opener is consumed, and the trailing whitespace before
-    // the closer is trimmed.
+    // §12: multi-line content auto-dedents via the shared `dedent_backtick`
+    // helper. The 8-space indent on the content lines is stripped, and so are
+    // the line break after the opener and the one (plus indent) before the
+    // closer — those belong to the delimiters, not to the content.
     assert_engine_executes(EngineProgram {
         source: "
             function main() -> string {
@@ -1062,8 +1062,8 @@ Footer
     assert_engine_executes(EngineProgram {
         source: src,
         entry: "main",
-        // M1's `preprocess_template` trims the trailing newline before the
-        // closing backtick, so "Footer\n" lands as "Footer" in the output.
+        // The line break before the closing backtick is the closer's own, so
+        // "Footer\n" lands as "Footer" in the output.
         expected: Ok(BexExternalValue::String(
             "Header\nExtra\nFooter|Header\nFooter".into(),
         )),
@@ -1419,7 +1419,6 @@ end`
         // (alone on line). Same for `${endfor}`. Each iter emits "X\n".
         // The literal-end "end" remains since `${endfor}` was alone
         // and consumed its own line, then `end` is on the next line.
-        // After M1 .trim() also strips trailing whitespace.
         expected: Ok(BexExternalValue::String("a\nb\nend".into())),
         ..Default::default()
     })
@@ -1566,6 +1565,99 @@ async fn backtick_multi_tick_ladder_preserves_inner_ticks_at_runtime() -> anyhow
         ",
         entry: "main",
         expected: Ok(BexExternalValue::String("inline `code` here".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+// ── B-1474: an authored escape is content, never layout ───────────────────
+
+#[tokio::test]
+async fn backtick_keeps_trailing_escaped_newline() -> anyhow::Result<()> {
+    // The reported bug: `\n` was decoded to a real newline *before* the §12
+    // dedent ran, so the dedent's trailing trim ate it and a
+    // newline-terminated file came out without its newline.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let host = "alpha"
+                `${host}\n`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("alpha\n".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_keeps_repeated_trailing_escaped_newlines() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                `LANG=C\n\n`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("LANG=C\n\n".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_escape_does_not_look_like_indentation() -> anyhow::Result<()> {
+    // `\n` and `\t` are two source characters each. Nothing may read them as
+    // layout, so the literal spaces around them survive too.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                ` a\n b\t `
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String(" a\n b\t ".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_multiline_keeps_trailing_escaped_newline() -> anyhow::Result<()> {
+    // Same escape, this time on a literal that really is dedented: the 16-space
+    // indent goes, the authored newline stays.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                `
+                line one
+                line two\n
+                `
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("line one\nline two\n".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_blank_line_before_closer_is_content() -> anyhow::Result<()> {
+    // Only one line break belongs to the closing delimiter, so a blank line in
+    // front of it is how you ask for a trailing newline without an escape.
+    assert_engine_executes(EngineProgram {
+        source: "
+            function main() -> string {
+                `
+                line one
+
+                `
+            }
+        ",
+        entry: "main",
+        expected: Ok(BexExternalValue::String("line one\n".into())),
         ..Default::default()
     })
     .await

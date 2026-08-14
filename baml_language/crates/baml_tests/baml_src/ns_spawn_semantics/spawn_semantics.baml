@@ -18,7 +18,7 @@ function multiple_awaits_on_same_future_return_cached_value_fn() -> int {
 }
 
 test "multiple_awaits_on_same_future_return_cached_value" {
-    assert.is_true(baml.deep_equals(multiple_awaits_on_same_future_return_cached_value_fn(), 126))
+    assert.equal(multiple_awaits_on_same_future_return_cached_value_fn(), 126)
 }
 
 function leaf() -> int { 1 }
@@ -39,10 +39,10 @@ function three_level_nested_spawn_sum_fn() -> int {
 }
 
 test "three_level_nested_spawn_sum" {
-    assert.is_true(baml.deep_equals(three_level_nested_spawn_sum_fn(), 111))
+    assert.equal(three_level_nested_spawn_sum_fn(), 111)
 }
 
-function spawn_child() -> baml.future.Future<int, null> {
+function spawn_child() -> baml.future.Future<int, never> {
     spawn { 99 }
 }
 
@@ -52,5 +52,5 @@ function function_can_return_future_typed_value_fn() -> int {
 }
 
 test "function_can_return_future_typed_value" {
-    assert.is_true(baml.deep_equals(function_can_return_future_typed_value_fn(), 99))
+    assert.equal(function_can_return_future_typed_value_fn(), 99)
 }

@@ -1,6 +1,6 @@
-# baml-macros
+# BAML v0 — Rust derive macros
 
-Derive macros for BAML types.
+Derive macros for BAML v0 types.
 
 This crate provides procedural macros (`BamlEncode` and `BamlDecode`) for automatically implementing serialization and deserialization for Rust types used with BAML.
 
@@ -25,4 +25,3 @@ This crate is a dependency of the `baml` runtime crate. End users typically inte
 ## License
 
 MIT License - see the [LICENSE](../../LICENSE) file for details.
-

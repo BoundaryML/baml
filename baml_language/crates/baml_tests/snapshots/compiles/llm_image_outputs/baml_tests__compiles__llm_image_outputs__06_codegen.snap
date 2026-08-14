@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15341
 ---
 function $init() -> null {
     call $init_let_0
@@ -8,476 +9,275 @@ function $init() -> null {
     return
 }
 
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
+function user.GenerateImage(prompt: string, client: ai.Client | null) -> image {
     load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
+    load_const null
     store_var client
 
   L0:
     load_type image
-    load_var client
-    load_const "GenerateImage"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
     load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var prompt
+    call user.GenerateImage$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
     return
 }
 
-function user.GenerateImage$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateImage"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request
-    return
-}
-
-function user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateImage"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request_stream
-    return
-}
-
-function user.GenerateImage$parse(json: string, client: baml.llm.Client) -> image {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type image
+function user.GenerateImage$parse(json: string) -> image {
     load_type image
     load_var json
-    call baml.llm.parse
+    call baml.sap.parse
     return
 }
 
-function user.GenerateImage$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<image, image> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
+function user.GenerateImage$render_prompt(prompt: string) -> ai.Prompt {
+    load_var prompt
+    call user.GenerateImage$spec
+    store_var _2
     load_type image
-    load_type image
-    load_var2 2 1
-    call baml.llm.Client.__make_stream
-    return
-}
-
-function user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateImage"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.render_prompt
-    return
-}
-
-function user.GenerateImage$stream(prompt: string, client: baml.llm.Client) -> baml.llm.Stream<image, image> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type image
-    load_type image
-    load_var client
-    load_const "GenerateImage"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
-    return
-}
-
-function user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type image[]
-    load_var client
-    load_const "GenerateImageSet"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
-    return
-}
-
-function user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateImageSet"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request
-    return
-}
-
-function user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateImageSet"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request_stream
-    return
-}
-
-function user.GenerateImageSet$parse(json: string, client: baml.llm.Client) -> image[] {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type image[]
-    load_type image[]
-    load_var json
-    call baml.llm.parse
-    return
-}
-
-function user.GenerateImageSet$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<image[], image[]> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type image[]
-    load_type image[]
-    load_var2 2 1
-    call baml.llm.Client.__make_stream
-    return
-}
-
-function user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateImageSet"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.render_prompt
-    return
-}
-
-function user.GenerateImageSet$stream(prompt: string, client: baml.llm.Client) -> baml.llm.Stream<image[], image[]> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type image[]
-    load_type image[]
-    load_var client
-    load_const "GenerateImageSet"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
-    return
-}
-
-function user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> (image | string)[] {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type (image | string)[]
-    load_var client
-    load_const "GenerateMixedImageNarrative"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
-    return
-}
-
-function user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateMixedImageNarrative"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request
-    return
-}
-
-function user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateMixedImageNarrative"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request_stream
-    return
-}
-
-function user.GenerateMixedImageNarrative$parse(json: string, client: baml.llm.Client) -> (image | string)[] {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type (image | string)[]
-    load_type (image | string)[]
-    load_var json
-    call baml.llm.parse
-    return
-}
-
-function user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<(image | string)[], (image | string)[]> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type (image | string)[]
-    load_type (image | string)[]
-    load_var2 2 1
-    call baml.llm.Client.__make_stream
-    return
-}
-
-function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_var client
-    load_const "GenerateMixedImageNarrative"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.render_prompt
-    return
-}
-
-function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.llm.Client) -> baml.llm.Stream<(image | string)[], (image | string)[]> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.OpenAIImageResponses
-    store_var client
-
-  L0:
-    load_type (image | string)[]
-    load_type (image | string)[]
-    load_var client
-    load_const "GenerateMixedImageNarrative"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
-    return
-}
-
-function user.OpenAIImageResponses$new(lenient: bool) -> null {
-    load_const "OPENAI_API_KEY"
-    load_var lenient
-    call baml.env.get_or_panic_lenient
+    call ai.wire.render_output_format
     store_var _3
-    load_const "OpenAIImageResponses"
-    load_const "openai-responses"
-    load_const "gpt-4.1"
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_var _3
-    load_const null
-    load_const null
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type string
-    alloc_map 0
-    load_const "image_generation"
-    load_const "1024x1024"
-    load_const "low"
-    load_const "type"
-    load_const "size"
-    load_const "quality"
-    load_type string
-    load_type string
-    alloc_map 3
-    load_type map<string, string>
-    alloc_array 1
-    load_const "tools"
+    load_type image
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "GenerateImage"
+    load_deref ?1
+    load_const "prompt"
     load_type string
     load_type unknown
     alloc_map 1
-    init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
-    init_instance baml.llm.PrimitiveClient .name, .provider, .options
+    load_var prompt
+    make_closure .<lambda(GenerateImage$spec, 0)>, 1
+    load_var _4
+    load_global user.OpenAIImageResponses
+    load_type image
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.GenerateImage$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image, image> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var prompt
+    call user.GenerateImage$spec
+    store_var _4
+    load_type image
+    load_type image
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function user.GenerateImageSet(prompt: string, client: ai.Client | null) -> image[] {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type image[]
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var prompt
+    call user.GenerateImageSet$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<image[], Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image[]>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function user.GenerateImageSet$parse(json: string) -> image[] {
+    load_type image[]
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function user.GenerateImageSet$render_prompt(prompt: string) -> ai.Prompt {
+    load_var prompt
+    call user.GenerateImageSet$spec
+    store_var _2
+    load_type image[]
+    call ai.wire.render_output_format
+    store_var _3
+    load_type image[]
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "GenerateImageSet"
+    load_deref ?1
+    load_const "prompt"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var prompt
+    make_closure .<lambda(GenerateImageSet$spec, 0)>, 1
+    load_var _4
+    load_global user.OpenAIImageResponses
+    load_type image[]
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.GenerateImageSet$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image[], image[]> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var prompt
+    call user.GenerateImageSet$spec
+    store_var _4
+    load_type image[]
+    load_type image[]
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function user.GenerateMixedImageNarrative(prompt: string, client: ai.Client | null) -> (image | string)[] {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type (image | string)[]
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var prompt
+    call user.GenerateMixedImageNarrative$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<(string | image)[], Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function user.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] {
+    load_type (image | string)[]
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> ai.Prompt {
+    load_var prompt
+    call user.GenerateMixedImageNarrative$spec
+    store_var _2
+    load_type (image | string)[]
+    call ai.wire.render_output_format
+    store_var _3
+    load_type (string | image)[]
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(image | string)[]> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "GenerateMixedImageNarrative"
+    load_deref ?1
+    load_const "prompt"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var prompt
+    make_closure .<lambda(GenerateMixedImageNarrative$spec, 0)>, 1
+    load_var _4
+    load_global user.OpenAIImageResponses
+    load_type (image | string)[]
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var prompt
+    call user.GenerateMixedImageNarrative$spec
+    store_var _4
+    load_type (image | string)[]
+    load_type (image | string)[]
+    load_var2 3 2
+    call ai.stream.from_spec
     return
 }

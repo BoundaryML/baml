@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25891
 ---
 function $init_test(registry: unknown) -> null {
     load_var ?1
@@ -9,21 +10,13 @@ function $init_test(registry: unknown) -> null {
     return
 }
 
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
 function user.$init_test_main(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root"
     load_const "all evals"
     make_closure .<lambda($init_test_main, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test_set
+    call testing.TestCollector.register_test_set_at
     pop 1
     load_const null
     return

@@ -1,0 +1,39 @@
+---
+title: "LLMs do not understand numbers"
+description: Don't ask it to add a confidence score. Don't add it to sum up items on a receipt. Don't ask it to confirm how many rows there are in a PDF.
+slug: llms-do-not-understand-numbers
+date: November 27, 2025
+tags: ['Engineering']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+---
+
+Stop writing prompts assuming that LLMs understand numbers:
+
+- ❌ don't ask it to add a "confidence score" to its response
+- ❌ don't ask it to sum up the items on a receipt
+- ❌ don't ask it to confirm how many rows there are in a PDF
+
+We've known for a long time that LLMs [are bad at any task that involves understanding the semantics of numbers](https://loeber.substack.com/p/21-everything-we-know-about-llms), which means that they're bad at addition, multiplication, counting, and any task that assumes they're good at those tasks.
+
+It's easy to assume that LLMs _do_ understand numbers, because if you prompt it on something simple, like "count the R's in strawberry", a state of the art model like [gpt-5.1 will give you the right answer](https://chatgpt.com/share/6928b415-b8b4-800a-a229-f47ca790a3d1).
+
+But if you ask gpt-5.1 to do a less trivial counting task, though, it will [try to refuse](https://chatgpt.com/share/691ac9b7-47a0-800a-a9a7-c0302f463168):
+
+> The provided snippet is far too large to **accurately** count functions, types, and imports by hand without risk of giving you an incorrect result.
+
+If you insist that gpt-5.1 go through with the task, you can get an answer out of it, but its [answer will be wrong](https://chatgpt.com/share/691ac5ac-70c0-800a-a829-e14c965f7f67):
+```
+{
+	"fn_count": 82,
+	"fn_names": [<array with 68 elements>],
+	"type_count": 8,
+	"type_names": [<array with 8 elements>],
+	"import_count": 54,
+	"import_names": [<array with 55 elements>]
+}
+```
+
+Note also, that gpt-5.1's attempt to refuse to count is not an inherent reflection of intrinsic LLM behavior, but OpenAI's training decisions: because ChatGPT users so frequently assume that LLMs can count, OpenAI has intentionally trained their flagship model to build associations between "counting task" and "refusal" that were not originally present in the underlying training data, to provide a more useful intelligence-in-a-box product to its users. (Ironically, I suspect this actually reinforces the model's weaknesses around numeric semantic understanding.)
+

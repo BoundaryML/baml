@@ -51,7 +51,7 @@ class LongAttrField {
 class LongFieldTypes {
     very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[],
     another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>,
-    callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>,
+    callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int> throws never,
     deeply_nested: (int | (string | (bool | (float | null))))[]?,
 }
 
@@ -67,21 +67,21 @@ class TypeVariety {
     generic: map<string, int>,
     complex_generic: map<string, int | string | bool>,
     deep_generic: map<string, map<string, int[]>>,
-    fn_type: (x: int, y: int) -> string,
+    fn_type: (x: int, y: int) -> string throws never,
     paren_union_array: (int | string | bool)[],
     triple_nested: map<string, map<string, map<string, int>>>,
 }
 
 // ===== Block attribute =====
-class DynamicClass {
+class BlockAttributedClass {
     name: string,
-    @@dynamic
+    @@streaming
 }
 
 // ===== Multiple block attributes =====
 class MultiBlockAttr {
     name: string,
-    @@dynamic
+    @@first
     @@streaming
 }
 

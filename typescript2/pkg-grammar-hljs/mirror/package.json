@@ -1,0 +1,38 @@
+{
+  "name": "@boundaryml/baml-highlightjs",
+  "version": "0.0.0-dev",
+  "type": "module",
+  "description": "highlight.js language definition for the BAML language.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoundaryML/baml-highlightjs.git"
+  },
+  "homepage": "https://www.boundaryml.com",
+  "bugs": {
+    "url": "https://github.com/BoundaryML/baml/issues"
+  },
+  "keywords": [
+    "baml",
+    "highlight.js",
+    "highlightjs",
+    "hljs",
+    "syntax-highlighting",
+    "language"
+  ],
+  "exports": {
+    ".": {
+      "import": "./src/baml.js",
+      "default": "./src/baml.js"
+    },
+    "./package.json": "./package.json",
+    "./dist/baml.js": "./dist/baml.js"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "peerDependencies": {
+    "highlight.js": "^11.0.0"
+  }
+}

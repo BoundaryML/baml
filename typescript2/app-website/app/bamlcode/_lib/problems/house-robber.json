@@ -1,0 +1,18 @@
+{
+  "slug": "house-robber",
+  "id": 198,
+  "title": "House Robber",
+  "difficulty": "Medium",
+  "category": "Dynamic Programming",
+  "statement": "You are a robber planning to rob houses along a street. Each house has some money, but adjacent houses have connected alarms, so robbing two adjacent houses triggers the police.\n\nGiven an integer array `nums` of the money in each house, return the maximum amount you can rob without alerting the police.\n\n**Example**\n\n```\nnums = [1, 2, 3, 1]     => 4   // rob house 0 and 2\nnums = [2, 7, 9, 3, 1]  => 12  // rob houses 0, 2, 4\n```",
+  "signature": "function Rob(nums: int[]) -> int",
+  "starter": "function Rob(nums: int[]) -> int {\n  // Return the max money robbable with no two adjacent houses.\n  return 0;\n}",
+  "solution": "function Rob(nums: int[]) -> int {\n  let prev = 0;\n  let cur = 0;\n  let i = 0;\n  let n = nums.length();\n  while (i < n) {\n    let take = prev + nums[i];\n    let next = take;\n    if (cur > take) {\n      next = cur;\n    }\n    prev = cur;\n    cur = next;\n    i += 1;\n  }\n  return cur;\n}",
+  "tests": [
+    { "call": "Rob([1, 2, 3, 1])", "expected": "4" },
+    { "call": "Rob([2, 7, 9, 3, 1])", "expected": "12" },
+    { "call": "Rob([5])", "expected": "5" },
+    { "call": "Rob([2, 1, 1, 2])", "expected": "4", "hidden": true },
+    { "call": "Rob([0])", "expected": "0", "hidden": true }
+  ]
+}

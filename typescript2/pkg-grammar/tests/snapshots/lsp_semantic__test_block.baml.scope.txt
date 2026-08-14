@@ -54,7 +54,10 @@
 21:3-7       "args"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml entity.name.type.baml
 21:8-9       "{"                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
 22:1-12      "    input {"      source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml
-23:1-25      "      text \"Hello world\"" source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml
+23:7-11      "text"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+23:12-13     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+23:13-24     "Hello world"      source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
+23:24-25     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
 24:5-6       "}"                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.end.baml
 25:3-4       "}"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.end.baml
 26:1-2       "}"                source.baml

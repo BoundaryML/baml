@@ -81,6 +81,10 @@ impl CffiHandleTableEntry {
                     MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
                     MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
                 },
+                BexExternalAdt::TaggedHeapHandle {
+                    ty: bex_project::RuntimeTy::Function { .. },
+                    ..
+                } => BamlHandleType::FunctionRef,
                 BexExternalAdt::TaggedHeapHandle { .. } => BamlHandleType::AdtTaggedHeapHandle,
             },
         }
@@ -189,6 +193,19 @@ impl CffiHandleTable {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(&key)
             .is_some()
+    }
+
+    /// Return the number of currently owned handle-table keys.
+    pub fn len(&self) -> usize {
+        self.entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+    }
+
+    /// Return whether the handle table currently owns no keys.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// Atomically resolve and remove. Returns the entry or None if the

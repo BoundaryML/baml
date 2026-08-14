@@ -3,11 +3,11 @@
 // are flat.
 
 interface Greeter {
-  function greet(self) -> string
+  function greet(self) -> string throws never
 }
 
 interface Farewell {
-  function bye(self) -> string
+  function bye(self) -> string throws never
 }
 
 class Polite {

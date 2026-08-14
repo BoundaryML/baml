@@ -1,0 +1,42 @@
+[package]
+name = "bridge_typescript"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "baml_node"
+crate-type = [ "cdylib" ]
+# Rust unit/doc tests cannot link standalone: the test binary references the
+# napi C-API symbols, which are provided by Node at addon-load time and are
+# undefined at link time (`cargo test` would fail with unresolved `napi_*`).
+# All testing is done via jest (`pnpm test`). Mirrors bridge_python.
+test = false
+doctest = false
+
+[features]
+default = [ "bundle-http", "aws-crypto" ]
+bundle-http = [ "bridge_cffi/bundle-http" ]
+aws-crypto = [ "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
+ring-crypto = [ "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
+
+[dependencies]
+baml_version = { workspace = true }
+bex_events = { workspace = true }
+bex_project = { workspace = true }
+bridge_cffi = { workspace = true }
+bridge_ctypes = { workspace = true }
+sys_native = { workspace = true }
+indexmap = { workspace = true }
+log = { workspace = true }
+napi = { workspace = true, features = [ "anyhow", "async", "napi5", "serde-json", "tokio_rt" ] }
+napi-derive = { workspace = true }
+prost = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+napi-build = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false

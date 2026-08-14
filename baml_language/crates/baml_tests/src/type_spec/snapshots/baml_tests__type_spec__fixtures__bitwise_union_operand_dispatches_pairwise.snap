@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+536..537 'f': throws never
+579..615 '{\n   ...int\n}': int | bigint
+585..586 'x': int | bigint
+585..590 'x & y': int | bigint
+589..590 'y': int

@@ -16,6 +16,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+bytesize = { workspace = true }
 clap = { workspace = true, features = [ "derive" ] }
 flate2 = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }

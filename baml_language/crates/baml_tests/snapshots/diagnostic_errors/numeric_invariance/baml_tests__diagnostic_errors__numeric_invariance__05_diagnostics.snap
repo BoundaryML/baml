@@ -2,192 +2,178 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected float, got int
-    ╭─[ numeric_invariance.baml:11:5 ]
-    │
- 11 │     x
-    │     ┬  
-    │     ╰── type mismatch: expected float, got int
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: type mismatch: expected float, got 1
-    ╭─[ numeric_invariance.baml:16:5 ]
-    │
- 16 │     1
-    │     ┬  
-    │     ╰── type mismatch: expected float, got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+  × mismatched types
+    ╭─[numeric_invariance.baml:10:38]
+ 10 │ ╭─▶ function IntToFloat(x: int) -> float {
+ 11 │ │       x
+ 12 │ ├─▶ }
+    · ╰──── expected `float`, found `int`
+    ╰────
 
-  [type] error: type mismatch: expected bigint, got int
-    ╭─[ numeric_invariance.baml:22:5 ]
-    │
- 22 │     x
-    │     ┬  
-    │     ╰── type mismatch: expected bigint, got int
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:27:5 ]
-    │
- 27 │     1
-    │     ┬  
-    │     ╰── type mismatch: expected bigint, got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+  × mismatched types
+    ╭─[numeric_invariance.baml:15:39]
+ 15 │ ╭─▶ function IntLiteralToFloat() -> float {
+ 16 │ │       1
+ 17 │ ├─▶ }
+    · ╰──── expected `float`, found `1`
+    ╰────
 
-  [type] error: type mismatch: expected bigint[], got int[]
-    ╭─[ numeric_invariance.baml:33:5 ]
-    │
- 33 │     a
-    │     ┬  
-    │     ╰── type mismatch: expected bigint[], got int[]
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:39:6 ]
-    │
+  × mismatched types
+    ╭─[numeric_invariance.baml:21:40]
+ 21 │ ╭─▶ function IntToBigint(x: int) -> bigint {
+ 22 │ │       x
+ 23 │ ├─▶ }
+    · ╰──── expected `bigint`, found `int`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:26:41]
+ 26 │ ╭─▶ function IntLiteralToBigint() -> bigint {
+ 27 │ │       1
+ 28 │ ├─▶ }
+    · ╰──── expected `bigint`, found `1`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:31:46]
+ 31 │ ╭─▶ function IntArrayToBigintArray() -> bigint[] {
+ 32 │ │       let a = [1, 2];
+ 33 │ │       a
+ 34 │ ├─▶ }
+    · ╰──── expected `bigint[]`, found `int[]`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:39:6]
  39 │     [1, 2]
-    │      ┬  
-    │      ╰── type mismatch: expected bigint, got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·      ┬
+    ·      ╰── expected `bigint`, found `1`
+    ╰────
 
-  [type] error: type mismatch: expected bigint, got 2
-    ╭─[ numeric_invariance.baml:39:9 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:39:9]
  39 │     [1, 2]
-    │         ┬  
-    │         ╰── type mismatch: expected bigint, got 2
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·         ┬
+    ·         ╰── expected `bigint`, found `2`
+    ╰────
 
-  [type] error: type mismatch: expected float[], got int[]
-    ╭─[ numeric_invariance.baml:45:5 ]
-    │
- 45 │     a
-    │     ┬  
-    │     ╰── type mismatch: expected float[], got int[]
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:50:7 ]
-    │
+  × mismatched types
+    ╭─[numeric_invariance.baml:43:44]
+ 43 │ ╭─▶ function IntArrayToFloatArray() -> float[] {
+ 44 │ │       let a = [1, 2];
+ 45 │ │       a
+ 46 │ ├─▶ }
+    · ╰──── expected `float[]`, found `int[]`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:50:7]
  50 │     [[1], [2]]
-    │       ┬  
-    │       ╰── type mismatch: expected bigint, got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·       ┬
+    ·       ╰── expected `bigint`, found `1`
+    ╰────
 
-  [type] error: type mismatch: expected bigint, got 2
-    ╭─[ numeric_invariance.baml:50:12 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:50:12]
  50 │     [[1], [2]]
-    │            ┬  
-    │            ╰── type mismatch: expected bigint, got 2
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·            ┬
+    ·            ╰── expected `bigint`, found `2`
+    ╰────
 
-  [type] error: type mismatch: expected map<string, bigint>, got map<string, int>
-    ╭─[ numeric_invariance.baml:56:5 ]
-    │
- 56 │     m
-    │     ┬  
-    │     ╰── type mismatch: expected map<string, bigint>, got map<string, int>
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:61:11 ]
-    │
+  × mismatched types
+    ╭─[numeric_invariance.baml:54:53]
+ 54 │ ╭─▶ function IntMapToBigintMap() -> map<string, bigint> {
+ 55 │ │       let m = {"a": 1};
+ 56 │ │       m
+ 57 │ ├─▶ }
+    · ╰──── expected `map<string, bigint>`, found `map<string, int>`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:61:11]
  61 │     {"a": 1}
-    │           ┬  
-    │           ╰── type mismatch: expected bigint, got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·           ┬
+    ·           ╰── expected `bigint`, found `1`
+    ╰────
 
-  [type] error: operator `+` cannot be applied to `int | null` and `int`
-    ╭─[ numeric_invariance.baml:67:5 ]
-    │
+  [type] E0004
+
+  × operator `+` cannot be applied to `int | null` and `int`
+    ╭─[numeric_invariance.baml:67:5]
  67 │     x + y
-    │     ──┬──  
-    │       ╰──── operator `+` cannot be applied to `int | null` and `int`
-    │ 
-    │ Note: Error code: E0004
-────╯
+    ·     ─────
+    ╰────
 
-  [type] error: operator `&` cannot be applied to `int | null` and `int`
-    ╭─[ numeric_invariance.baml:72:5 ]
-    │
+  [type] E0004
+
+  × operator `&` cannot be applied to `int | null` and `int`
+    ╭─[numeric_invariance.baml:72:5]
  72 │     x & y
-    │     ──┬──  
-    │       ╰──── operator `&` cannot be applied to `int | null` and `int`
-    │ 
-    │ Note: Error code: E0004
-────╯
+    ·     ─────
+    ╰────
 
-  [type] error: cannot order `int | null` and `int` with `<`: ordering requires both operands to have the same type
-    ╭─[ numeric_invariance.baml:79:5 ]
-    │
+  [type] E0004
+
+  × cannot order `int | null` and `int` with `<`: ordering requires both operands to have the same type
+    ╭─[numeric_invariance.baml:79:5]
  79 │     x < y
-    │     ──┬──  
-    │       ╰──── cannot order `int | null` and `int` with `<`: ordering requires both operands to have the same type
-    │ 
-    │ Note: Error code: E0004
-────╯
+    ·     ─────
+    ╰────
 
-  [type] warning: `float | null` and `bigint` share no value, so this comparison is always false
-    ╭─[ numeric_invariance.baml:87:5 ]
-    │
+  [type] E0004
+
+  ⚠ `float | null` and `bigint` share no value, so this comparison is always false
+    ╭─[numeric_invariance.baml:87:5]
  87 │     x == y
-    │     ───┬──  
-    │        ╰──── `float | null` and `bigint` share no value, so this comparison is always false
-    │ 
-    │ Note: Error code: E0004
-────╯
+    ·     ──────
+    ╰────
 
-  [type] error: cannot order `float | null` and `bigint` with `<`: ordering requires both operands to have the same type
-    ╭─[ numeric_invariance.baml:93:5 ]
-    │
+  [type] E0004
+
+  × cannot order `float | null` and `bigint` with `<`: ordering requires both operands to have the same type
+    ╭─[numeric_invariance.baml:93:5]
  93 │     x < y
-    │     ──┬──  
-    │       ╰──── cannot order `float | null` and `bigint` with `<`: ordering requires both operands to have the same type
-    │ 
-    │ Note: Error code: E0004
-────╯
+    ·     ─────
+    ╰────
 
-  [type] error: type mismatch: expected bigint, got 1
-     ╭─[ numeric_invariance.baml:101:27 ]
-     │
+  [type] E0001
+
+  × mismatched types
+     ╭─[numeric_invariance.baml:101:27]
  101 │     BigintHolder { count: 1 }
-     │                           ┬  
-     │                           ╰── type mismatch: expected bigint, got 1
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·                           ┬
+     ·                           ╰── expected `bigint`, found `1`
+     ╰────
 
-  [type] error: type mismatch: expected bigint, got 0
-     ╭─[ numeric_invariance.baml:106:44 ]
-     │
+  [type] E0001
+
+  × mismatched types
+     ╭─[numeric_invariance.baml:106:44]
  106 │ function BigintParamDefaultInt(x: bigint = 0) -> bigint {
-     │                                            ┬  
-     │                                            ╰── type mismatch: expected bigint, got 0
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·                                            ┬
+     ·                                            ╰── expected `bigint`, found `0`
+     ╰────

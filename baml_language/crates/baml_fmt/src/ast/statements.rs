@@ -45,9 +45,7 @@ pub enum Statement {
 impl FromCST for Statement {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::LET_STMT | SyntaxKind::WATCH_LET => {
-                LetStmt::from_cst(elem).map(Statement::Let)
-            }
+            SyntaxKind::LET_STMT => LetStmt::from_cst(elem).map(Statement::Let),
             SyntaxKind::RETURN_STMT => ReturnStmt::from_cst(elem).map(Statement::Return),
             SyntaxKind::WHILE_STMT => WhileStmt::from_cst(elem).map(Statement::While),
             SyntaxKind::WHILE_LET_STMT => WhileLetStmt::from_cst(elem).map(Statement::WhileLet),
@@ -180,9 +178,9 @@ impl Printable for ExpressionStmt {
     }
 }
 
-/// Corresponds to a [`SyntaxKind::LET_STMT`] node or a [`SyntaxKind::WATCH_LET`] node.
+/// Corresponds to a [`SyntaxKind::LET_STMT`] node.
 ///
-/// Post-pattern-rewrite shape: `KW_WATCH? (KW_LET|KW_CONST)? PATTERN EQUALS? <expr>? (KW_ELSE BLOCK_EXPR)? SEMICOLON?`.
+/// Post-pattern-rewrite shape: `(KW_LET|KW_CONST)? PATTERN EQUALS? <expr>? (KW_ELSE BLOCK_EXPR)? SEMICOLON?`.
 /// Simple bindings carry the introducer inside the [`super::MatchPattern`] (e.g.
 /// `let x: int` parses as a `Chain([Bind, Type])`). Array destructuring uses
 /// the statement-level introducer before an `ARRAY_PATTERN`. The optional
@@ -190,7 +188,6 @@ impl Printable for ExpressionStmt {
 /// whose else branch must diverge.
 #[derive(Debug)]
 pub struct LetStmt {
-    pub watch: Option<t::Watch>,
     pub let_keyword: Option<t::BindingKeyword>,
     pub pattern: super::MatchPattern,
     pub initializer: Option<(t::Equals, Expression)>,
@@ -206,21 +203,8 @@ pub struct LetStmt {
 impl FromCST for LetStmt {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
-        let node_kind = node.kind();
+        StrongAstError::assert_kind_node(&node, SyntaxKind::LET_STMT)?;
         let mut it = SyntaxNodeIter::new(&node);
-
-        let watch = if node_kind == SyntaxKind::WATCH_LET {
-            Some(it.expect_parse()?)
-        } else {
-            if node_kind != SyntaxKind::LET_STMT {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "LET_STMT or WATCH_LET".into(),
-                    found: node_kind,
-                    at: it.parent,
-                });
-            }
-            None
-        };
 
         let let_keyword = it
             .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
@@ -250,7 +234,6 @@ impl FromCST for LetStmt {
         it.expect_end()?;
 
         Ok(LetStmt {
-            watch,
             let_keyword,
             pattern,
             initializer,
@@ -264,10 +247,6 @@ impl Printable for LetStmt {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
 
-        if let Some(watch) = &self.watch {
-            printer.print_raw_token(watch);
-            printer.print_str(" ");
-        }
         if let Some(let_keyword) = &self.let_keyword {
             printer.print_raw_token(let_keyword);
             printer.print_str(" ");
@@ -326,9 +305,7 @@ impl Printable for LetStmt {
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
-        if let Some(watch) = &self.watch {
-            watch.span()
-        } else if let Some(let_keyword) = &self.let_keyword {
+        if let Some(let_keyword) = &self.let_keyword {
             let_keyword.span()
         } else {
             self.pattern.leftmost_token()
@@ -863,10 +840,6 @@ impl PrintMultiLine for ForIteratorArgs {
 
         match &self.binding {
             ForBinding::Let(let_stmt) => {
-                if let Some(watch) = &let_stmt.watch {
-                    printer.print_raw_token(watch);
-                    printer.print_spaces(1);
-                }
                 if let Some(let_keyword) = &let_stmt.let_keyword {
                     printer.print_raw_token(let_keyword);
                     printer.print_spaces(1);
@@ -921,10 +894,6 @@ impl ForIteratorArgs {
 
         match &self.binding {
             ForBinding::Let(let_stmt) => {
-                if let Some(watch) = &let_stmt.watch {
-                    printer.print_raw_token(watch);
-                    printer.print_spaces(1);
-                }
                 if let Some(let_keyword) = &let_stmt.let_keyword {
                     printer.print_raw_token(let_keyword);
                     printer.print_spaces(1);
@@ -987,10 +956,9 @@ impl Printable for ForIteratorArgs {
         }
         match &self.binding {
             ForBinding::Let(let_stmt) => let_stmt
-                .watch
+                .let_keyword
                 .as_ref()
                 .map(Token::span)
-                .or_else(|| let_stmt.let_keyword.as_ref().map(Token::span))
                 .unwrap_or_else(|| let_stmt.pattern.leftmost_token()),
             ForBinding::Bare(word) => word.span(),
         }

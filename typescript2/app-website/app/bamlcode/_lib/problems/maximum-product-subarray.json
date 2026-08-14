@@ -1,0 +1,18 @@
+{
+  "slug": "maximum-product-subarray",
+  "id": 152,
+  "title": "Maximum Product Subarray",
+  "difficulty": "Medium",
+  "category": "Dynamic Programming",
+  "statement": "Given an integer array `nums`, find a contiguous non-empty subarray that has the largest **product**, and return that product.\n\n**Example**\n\n```\nnums = [2, 3, -2, 4]   => 6    // [2, 3]\nnums = [-2, 0, -1]     => 0\n```",
+  "signature": "function MaxProduct(nums: int[]) -> int",
+  "starter": "function MaxProduct(nums: int[]) -> int {\n  // Return the largest product of any contiguous subarray.\n  return 0;\n}",
+  "solution": "function MaxProduct(nums: int[]) -> int {\n  let n = nums.length();\n  let best = nums[0];\n  let curMax = nums[0];\n  let curMin = nums[0];\n  let i = 1;\n  while (i < n) {\n    let x = nums[i];\n    let a = curMax * x;\n    let b = curMin * x;\n    let newMax = x;\n    if (a > newMax) {\n      newMax = a;\n    }\n    if (b > newMax) {\n      newMax = b;\n    }\n    let newMin = x;\n    if (a < newMin) {\n      newMin = a;\n    }\n    if (b < newMin) {\n      newMin = b;\n    }\n    curMax = newMax;\n    curMin = newMin;\n    if (curMax > best) {\n      best = curMax;\n    }\n    i += 1;\n  }\n  return best;\n}",
+  "tests": [
+    { "call": "MaxProduct([2, 3, -2, 4])", "expected": "6" },
+    { "call": "MaxProduct([-2, 0, -1])", "expected": "0" },
+    { "call": "MaxProduct([-2, 3, -4])", "expected": "24" },
+    { "call": "MaxProduct([2])", "expected": "2", "hidden": true },
+    { "call": "MaxProduct([-2])", "expected": "-2", "hidden": true }
+  ]
+}

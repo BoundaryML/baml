@@ -1,4 +1,7 @@
-//! No per-class JSON method is synthesized any more: `to_json` and `from_json`
+//! These tests use `output.bytecode` inspection and the Rust-only
+//! `show_auto_derive: true` option, not available in BAML test blocks.
+//!
+//! No per-class JSON method is synthesized: `to_json` and `from_json`
 //! are both sugars (`obj.to_json()` -> `baml.json.from(obj)`,
 //! `Type.from_json(j)` -> `baml.json.to<Type>(j)`), owned by the `baml.ToJson` /
 //! `baml.FromJson` interfaces. So no auto-derived method should appear in a

@@ -8,19 +8,18 @@
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
 
-use baml_base::{Name, TypePath};
+use baml_base::Name;
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
 use rowan::ast::AstNode;
 
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
-        Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
-        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
-        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
-        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
-        VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
+        FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
+        ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
+        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
+        TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -73,6 +72,18 @@ pub fn lower_file_with_path(
     root: &SyntaxNode,
     file_path: Option<&std::path::Path>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner(root, file_path, None)
+}
+
+/// Variant used by project-aware lowering, where the HIR layer already knows
+/// the exact BAML namespace derived from the project root. Keeping the owner an
+/// input avoids accidentally treating an absolute ancestor named `ns_*` as a
+/// user namespace.
+pub fn lower_file_with_path_and_test_owner(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
@@ -107,15 +118,24 @@ pub fn lower_file_with_path(
                     items.push(Item::TypeAlias(ta));
                 }
             }
-            baml_compiler_syntax::SyntaxKind::CLIENT_DEF => {
-                if let Some((let_item, companion)) =
-                    synthesize_client_items(&child, &mut diags, &mut env_var_refs)
+            baml_compiler_syntax::SyntaxKind::CLIENT_VALUE_DEF => {
+                if let Some(let_item) =
+                    lower_client_value_def(&child, &mut diags, &mut env_var_refs)
                 {
                     items.push(let_item);
-                    if let Some(func) = companion {
-                        items.push(Item::Function(func));
-                    }
                 }
+            }
+            baml_compiler_syntax::SyntaxKind::CLIENT_DEF => {
+                // Legacy `client<llm> Name { ... }` config block: removed in
+                // the single-path world. Parse succeeded so the error is one
+                // targeted diagnostic, not a cascade.
+                let name = ast::ClientDef::cast(child.clone())
+                    .and_then(|c| c.name())
+                    .map_or_else(|| "MyClient".to_string(), |t| t.text().to_string());
+                diags.push(LoweringDiagnostic::ClientBlockRemoved {
+                    name,
+                    span: child.span_range(),
+                });
             }
             baml_compiler_syntax::SyntaxKind::TEST_DEF => {
                 if let Some(t) = lower_test(&child, &mut diags) {
@@ -136,16 +156,23 @@ pub fn lower_file_with_path(
                 diags.push(lower_generator_deprecation(&child));
             }
             baml_compiler_syntax::SyntaxKind::TEMPLATE_STRING_DEF => {
+                diags.push(LoweringDiagnostic::TemplateStringRemoved {
+                    span: child.span_range(),
+                });
                 if let Some(ts) = lower_template_string(&child, &mut diags) {
                     items.push(Item::TemplateString(ts));
                 }
             }
             baml_compiler_syntax::SyntaxKind::RETRY_POLICY_DEF => {
-                if let Some(let_item) =
-                    synthesize_retry_policy_let(&child, &mut diags, &mut env_var_refs)
-                {
-                    items.push(let_item);
-                }
+                // Legacy `retry_policy` block: retry composes at the client
+                // boundary now (ai.Retry).
+                let name = ast::RetryPolicyDef::cast(child.clone())
+                    .and_then(|r| r.name())
+                    .map_or_else(|| "policy".to_string(), |t| t.text().to_string());
+                diags.push(LoweringDiagnostic::RetryPolicyRemoved {
+                    name,
+                    span: child.span_range(),
+                });
             }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
                 if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
@@ -215,6 +242,7 @@ pub fn lower_file_with_path(
         let init_fn = synthesize_init_test_function(
             &test_registrations,
             file_path,
+            test_owner,
             &mut diags,
             &mut env_var_refs,
         );
@@ -268,19 +296,7 @@ fn lower_function(
         diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
     }
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
-    let generic_params: Vec<Name> = generic_params_with_bounds
-        .iter()
-        .map(|(n, _)| n.clone())
-        .collect();
-    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect();
-    for bound in generic_param_bounds.iter_mut().flatten() {
-        let bspan = bound.span;
-        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
-    }
+    let generic_params = extract_generic_params_with_bounds(node, diags);
     let parameter_context = format!("function `{}`", name.as_str());
 
     let (mut params, mut defaults) = func
@@ -298,7 +314,7 @@ fn lower_function(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = func.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
@@ -317,7 +333,7 @@ fn lower_function(
         .throws_clause()
         .and_then(|tc| tc.type_expr())
         .map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             lower_type_expr::check_throws_wildcard(&mut expr, te_span, diags);
             expr.with_span(te_span)
@@ -326,105 +342,93 @@ fn lower_function(
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
         reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
-        let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
-        if let Some(client_name) = client_name.as_deref() {
-            append_default_client_param(&mut params, &mut defaults, client_name, llm_body_def.span);
+        let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
+
+        // Jinja prompts are removed: the single-path world renders prompts as
+        // plain backtick templates through the spec.
+        if let Some(raw_prompt) = llm.prompt_field().and_then(|pf| pf.raw_string()) {
+            diags.push(LoweringDiagnostic::LlmJinjaPromptRemoved {
+                span: raw_prompt.syntax().span_range(),
+            });
         }
+
+        // Resolve the client: a quoted "provider/model" string maps at
+        // compile time to a provider constructor; anything else is an
+        // expression evaluating to ai.Client.
+        let client_value = llm.client_field().and_then(|cf| cf.value_element());
+        let client_spec = resolve_llm_client(name.as_str(), client_value, llm_body_def.span, diags);
+
+        // The function's real parameters — the injected `client` override is
+        // added below and is never part of the spec's bound arguments.
         let param_names: Vec<Name> = params
             .iter()
             .filter(|p| p.name.as_str() != "client")
             .map(|p| p.name.clone())
             .collect();
-        let client_arg_name = client_name.as_ref().map(|_| "client");
-        // Pass the LLM function's declared return type as the explicit `<T>`
-        // type argument to `baml.llm.call_llm_function<T>`. This is required
-        // for the runtime type-arg threading: without it, `T` falls back to
-        // inferred-only and resolves to BuiltinUnknown inside the stdlib's
-        // `primitive.parse<T>(body)` call, surfacing as a "Non-parsable type:
-        // BuiltinUnknown" error from the LLM client.
-        let call_type_args: Vec<crate::ast::TypeExpr> = return_type
-            .as_ref()
-            .map(|rt| vec![rt.clone()])
-            .unwrap_or_default();
-        // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
-        // closure passed as the 4th arg to `call_llm_function`; the orchestrator
-        // invokes it per attempt. Legacy `#"..."#` Jinja prompts keep the 3-arg
-        // path (the closure defaults to `null`, so the Jinja render runs).
-        let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
-        let (expr_body, source_map) = if let Some(backtick) = &prompt_backtick {
-            let (body, sm, mut closure_diags, mut closure_env_refs) =
-                lower_expr_body::synthesize_llm_call_with_prompt(
-                    "call_llm_function",
+
+        // Build and stash the `$spec` companion body while the CST backtick
+        // is in hand (read back by `companions::llm_spec`). Skipped when the
+        // prompt or client is unusable — the migration diagnostics above are
+        // the authoritative errors then.
+        if let (Some(backtick), Some(client_spec)) = (&prompt_backtick, client_spec) {
+            let tools_value = tools_value_element(&llm);
+            let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
+                lower_expr_body::synthesize_llm_spec_body(
                     name.as_str(),
                     &param_names,
-                    client_arg_name,
-                    call_type_args,
+                    &client_spec,
+                    return_type.clone(),
+                    tools_value.as_ref(),
                     backtick,
                     llm_body_def.span,
                 );
-            diags.append(&mut closure_diags);
-            env_var_refs.append(&mut closure_env_refs);
-            // BEP-049 M5e: pre-build the streaming companion's body from the
-            // same backtick now, while the CST is in hand, and stash it for
-            // PPIR (which materializes the `$stream` companion but no longer has
-            // the CST). The closure captures this function's params, so it's a
-            // separate arena from the oneshot body above. Its prompt diagnostics
-            // / `env.X` refs duplicate the oneshot body's — drop them.
-            let (stream_body, stream_sm, _diags, _env_refs) =
-                lower_expr_body::synthesize_llm_call_with_prompt(
-                    "stream_llm_function",
-                    name.as_str(),
-                    &param_names,
-                    client_arg_name,
-                    Vec::new(),
-                    backtick,
-                    llm_body_def.span,
-                );
-            llm_body_def.stream_body = Some((stream_body, stream_sm));
-            // BEP-049 M5: pre-build the render_prompt / build_request /
-            // build_request_stream companion bodies from the same backtick, each
-            // carrying the prompt closure, so the playground preview/cURL render
-            // through the closure exactly like execution. Built here while the CST
-            // is in hand; read back by `make_llm_companion`. Their prompt diags /
-            // `env.X` refs duplicate the oneshot body's — drop them.
-            for target in ["render_prompt", "build_request", "build_request_stream"] {
-                let (c_body, c_sm, _diags, _env_refs) =
-                    lower_expr_body::synthesize_llm_call_with_prompt(
-                        target,
-                        name.as_str(),
-                        &param_names,
-                        client_arg_name,
-                        Vec::new(),
-                        backtick,
-                        llm_body_def.span,
-                    );
-                llm_body_def
-                    .companion_bodies
-                    .push((target.to_string(), (c_body, c_sm)));
-            }
-            (body, sm)
-        } else {
-            synthesize_llm_builtin_call(
-                "call_llm_function",
+            diags.append(&mut spec_diags);
+            env_var_refs.append(&mut spec_env_refs);
+            llm_body_def
+                .companion_bodies
+                .push(("spec".to_string(), (spec_body, spec_sm)));
+        }
+
+        // Every LLM function runs the ai Agent loop; `client: ai.Client? =
+        // null` is the compiler-injected per-call override. When the spec
+        // could not be synthesized (migration diagnostics fired), the body is
+        // omitted so the missing `<Fn>$spec` reference never cascades.
+        append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
+        let body = if llm_body_def
+            .companion_bodies
+            .iter()
+            .any(|(t, _)| t == "spec")
+        {
+            let spec_type_args = generic_params
+                .iter()
+                .map(|param| {
+                    crate::ast::TypeExprKind::Path {
+                        segments: vec![param.name.clone()],
+                        generic_args: vec![],
+                        associated_type_bindings: vec![],
+                        attrs: vec![],
+                    }
+                    .at(llm_body_def.span)
+                })
+                .collect();
+            let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
                 name.as_str(),
                 &param_names,
-                client_arg_name,
-                call_type_args,
+                spec_type_args,
+                return_type.clone(),
                 llm_body_def.span,
-            )
+            );
+            Some(FunctionBodyDef::Expr(expr_body, source_map))
+        } else {
+            None
         };
-        (
-            Some(FunctionBodyDef::Expr(expr_body, source_map)),
-            Some(DeclarativeMeta::Llm(llm_body_def)),
-        )
+        (body, Some(DeclarativeMeta::Llm(llm_body_def)))
     } else if let Some(expr) = func.expr_body() {
         // Check if the body is `$rust_function` or `$rust_io_function` before lowering
         if let Some(builtin_kind) = check_builtin_body(expr.syntax()) {
             (Some(FunctionBodyDef::Builtin(builtin_kind)), None)
         } else {
-            let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-            let (expr_body, source_map) =
-                lower_expr_body::lower(&expr, &param_names, diags, env_var_refs);
+            let (expr_body, source_map) = lower_expr_body::lower(&expr, diags, env_var_refs);
             (Some(FunctionBodyDef::Expr(expr_body, source_map)), None)
         }
     } else {
@@ -438,14 +442,15 @@ fn lower_function(
     Some(FunctionDef {
         name,
         generic_params,
-        generic_param_bounds,
         params,
         defaults,
         return_type,
         throws,
         body,
         declarative_meta,
-        origin: crate::ast::FunctionOrigin::UserDefined,
+        metadata: crate::ast::FunctionMetadata::user_facing(
+            crate::ast::FunctionOrigin::UserDefined,
+        ),
         attributes,
         docstring,
         is_tagged_template_tag,
@@ -545,13 +550,8 @@ pub(crate) fn lower_params_with_defaults(
         }
     }
 
-    let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-    let (defaults, default_ids) = lower_expr_body::lower_default_expr_nodes(
-        &default_nodes,
-        &param_names,
-        diags,
-        env_var_refs,
-    );
+    let (defaults, default_ids) =
+        lower_expr_body::lower_default_expr_nodes(&default_nodes, diags, env_var_refs);
     for (idx, default_id) in default_ids {
         if let Some(param) = params.get_mut(idx) {
             param.default = Some(default_id);
@@ -584,7 +584,7 @@ pub(crate) fn lower_param(
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
@@ -608,25 +608,69 @@ pub(crate) fn lower_param(
     })
 }
 
-pub(crate) fn append_default_client_param(
+/// Lower `client Name = <expr>;` to a top-level client let binding — the
+/// same [`LetOrigin::Client`] item the legacy config blocks produced, so the
+/// name resolves from every function body, but the initializer is the user's
+/// own expression (evaluated once at `$init`; client construction is pure).
+fn lower_client_value_def(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
+) -> Option<Item> {
+    let def = ast::ClientValueDef::cast(node.clone())?;
+    let Some(name_token) = def.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "client",
+            span: node.span_range(),
+        });
+        return None;
+    };
+    let (body, source_map) = lower_expr_body::lower_client_initializer(
+        def.value_element().as_ref(),
+        node.span_range(),
+        diags,
+        env_var_refs,
+    );
+    Some(Item::Let(crate::ast::LetDef {
+        name: Name::new(name_token.text()),
+        initializer: Some((body, source_map)),
+        origin: crate::ast::LetOrigin::Client,
+        span: node.span_range(),
+        name_span: name_token.text_range(),
+    }))
+}
+
+/// Append the spec-mode client override parameter: `client: ai.Client? = null`.
+///
+/// The spec-mode direct-call body passes it to `ai.Agent.new(client = client)`;
+/// a null override makes the runner fall back to the spec's default client.
+pub(crate) fn append_spec_client_param(
     params: &mut Vec<Param>,
     defaults: &mut FunctionDefaults,
-    client_name: &str,
     span: text_size::TextRange,
 ) {
-    let default_expr = alloc_client_override_default_expr(defaults, client_name, span);
+    let null_default = {
+        let id = defaults.exprs.exprs.alloc(Expr::Null);
+        defaults.source_map.expr_spans.alloc(span);
+        id
+    };
+    let client_ty = TypeExprKind::Path {
+        segments: vec![Name::new("ai"), Name::new("Client")],
+        generic_args: vec![],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    }
+    .at(span);
     params.push(Param {
         name: Name::new("client"),
         type_expr: Some(
-            TypeExprKind::Path {
-                segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Client")],
-                generic_args: vec![],
-                associated_type_bindings: vec![],
+            TypeExprKind::Optional {
+                inner: Box::new(client_ty),
                 attrs: vec![],
             }
             .at(span),
         ),
-        default: Some(crate::ast::DefaultExprId::new(default_expr)),
+        default: Some(crate::ast::DefaultExprId::new(null_default)),
         span,
         name_span: span,
     });
@@ -656,60 +700,6 @@ fn reject_reserved_llm_client_params(
     }
 }
 
-fn alloc_client_override_default_expr(
-    defaults: &mut FunctionDefaults,
-    client_name: &str,
-    span: text_size::TextRange,
-) -> ExprId {
-    fn alloc(defaults: &mut FunctionDefaults, expr: Expr, span: text_size::TextRange) -> ExprId {
-        let id = defaults.exprs.exprs.alloc(expr);
-        defaults.source_map.expr_spans.alloc(span);
-        id
-    }
-
-    if client_name.contains('/') {
-        // Shorthand clients are not backed by a synthesized top-level let binding,
-        // so defaults have to carry the inline Client value.
-        let name_lit = alloc(
-            defaults,
-            Expr::Literal(crate::ast::Literal::String(client_name.to_string())),
-            span,
-        );
-        let client_type = alloc(
-            defaults,
-            Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("llm"),
-                Name::new("ClientType"),
-                Name::new("Primitive"),
-            ]),
-            span,
-        );
-        let sub_clients = alloc(defaults, Expr::Array { elements: vec![] }, span);
-        let retry = alloc(defaults, Expr::Null, span);
-        let counter = alloc(defaults, Expr::Literal(crate::ast::Literal::Int(0)), span);
-        alloc(
-            defaults,
-            Expr::Object {
-                type_name: TypePath::from_dotted("baml.llm.Client"),
-                type_args: vec![],
-                fields: vec![
-                    (Name::new("name"), name_lit),
-                    (Name::new("client_type"), client_type),
-                    (Name::new("sub_clients"), sub_clients),
-                    (Name::new("retry"), retry),
-                    (Name::new("counter"), counter),
-                ],
-                spreads: vec![],
-            },
-            span,
-        )
-    } else {
-        // Named client declarations already lower to a top-level client let binding.
-        alloc(defaults, Expr::Path(vec![Name::new(client_name)]), span)
-    }
-}
-
 fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     let span = llm_body.syntax().span_range();
 
@@ -718,331 +708,139 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         .and_then(|cf| cf.value())
         .map(|name| Name::new(&name));
 
-    let prompt = llm_body
-        .prompt_field()
-        .and_then(|pf| pf.raw_string())
-        .map(|raw_str| lower_raw_prompt(&raw_str));
-
     LlmBodyDef {
         client,
-        prompt,
         // Filled in by the LLM-function branch once param names are known.
-        stream_body: None,
         companion_bodies: Vec::new(),
+        has_tools: llm_tools_present(llm_body),
         span,
     }
 }
 
-/// Build a synthetic expression body equivalent to:
-/// `baml.llm.<builtin_name>(client, "FunctionName", { "param1": param1, "param2": param2 })`
+/// Whether the `tools` field can hold tools at runtime. An absent field and
+/// the literal empty list (`tools: []`) are tool-less; a non-empty literal or
+/// any other expression is conservatively tools-bearing (an arbitrary
+/// expression may evaluate empty, but that is only known at runtime).
+fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
+    match tools_value_element(llm_body) {
+        None => false,
+        Some(rowan::NodeOrToken::Node(node)) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
+            // Elements are expression nodes or bare-identifier tokens.
+            node.children().next().is_some()
+                || node
+                    .children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .any(|t| lower_expr_body::is_ident_token(t.kind()))
+        }
+        Some(_) => true,
+    }
+}
+
+/// The provider package + client class the `@spec` desugar constructs for a
+/// `"prefix/model"` client string, or `None` for an unknown prefix.
 ///
-/// When `client_name` is `Some("MyClient")`, the first argument is `Expr::Path(["MyClient"])`.
-/// When `client_name` is `Some("openai/gpt-4o")` (a shorthand with `/`), the first argument is
-/// an inline `Client { name, client_type: ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }`.
-/// When `client_name` is `None`, `Expr::Null` is used as a fallback.
-///
-/// LLM functions and request/render/stream companions pass a client as the first argument.
-/// After default-client parameter synthesis, call sites pass `client_name = Some("client")`
-/// so explicit `client=` overrides flow through the generated body.
-///
-/// All synthetic spans point to `span`.
-pub fn synthesize_llm_builtin_call(
-    builtin_name: &str,
+/// Kept in sync with the builtin provider packages (`baml_std/openai` etc.)
+/// and the user-land `resolve()` convention.
+pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
+    let (prefix, _model) = client.split_once('/')?;
+    match prefix {
+        "openai" => Some(("openai", "OpenAiClient")),
+        "anthropic" => Some(("anthropic", "AnthropicClient")),
+        "google" => Some(("google", "GoogleClient")),
+        "claude-code" => Some(("claude_code", "ClaudeCodeClient")),
+        _ => None,
+    }
+}
+
+/// How an LLM function's `client:` value lowers into the spec's
+/// `default_client`.
+pub(crate) enum LlmClientSpec {
+    /// A `"provider/model"` string, mapped at compile time to a builtin
+    /// provider constructor.
+    Provider {
+        pkg: &'static str,
+        class: &'static str,
+        model: String,
+    },
+    /// An arbitrary expression evaluating to `ai.Client` (a declared client
+    /// name, a constructor call, a wrapper, ...).
+    Expr(rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>),
+}
+
+/// Classify the client field's value element, emitting migration diagnostics
+/// for the unusable shapes. `None` means an authoritative error was emitted
+/// (or the parser already reported a missing value).
+fn resolve_llm_client(
     function_name: &str,
-    param_names: &[Name],
-    client_name: Option<&str>,
-    type_args: Vec<crate::ast::TypeExpr>,
+    value: Option<rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
     span: text_size::TextRange,
-) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
-    use la_arena::Arena;
-
-    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
-
-    let mut exprs = Arena::new();
-    let mut expr_spans = Arena::new();
-
-    // Helper: allocate an expr + its span
-    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    // 1. Function name literal: "FunctionName"
-    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
-
-    // 2. Map entries: { "param1": param1, "param2": param2 }
-    let entries: Vec<(crate::ast::ExprId, crate::ast::ExprId)> = param_names
-        .iter()
-        .map(|name| {
-            let key = alloc(Expr::Literal(Literal::String(name.as_str().to_string())));
-            let value = alloc(Expr::Path(vec![name.clone()]));
-            (key, value)
-        })
-        .collect();
-    let args_map = alloc(Expr::Map { entries });
-
-    // Callee: baml.llm.<builtin_name> as a multi-segment Path
-    let callee = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("llm"),
-        Name::new(builtin_name),
-    ]));
-
-    // Build the client expression from the client name.
-    // All LLM builtins (call_llm_function, render_prompt, build_request) take
-    // a Client as the first argument.
-    let client_arg = match client_name {
-        Some(name) if name.contains('/') => {
-            // Shorthand client (e.g. "openai/gpt-4o"): build an inline Client object.
-            let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
-            let ct_variant = alloc(Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("llm"),
-                Name::new("ClientType"),
-                Name::new("Primitive"),
-            ]));
-            let sub = alloc(Expr::Array { elements: vec![] });
-            let retry = alloc(Expr::Null);
-            let counter = alloc(Expr::Literal(Literal::Int(0)));
-            alloc(Expr::Object {
-                type_name: TypePath::from_dotted("baml.llm.Client"),
-                type_args: vec![],
-                fields: vec![
-                    (Name::new("name"), name_lit),
-                    (Name::new("client_type"), ct_variant),
-                    (Name::new("sub_clients"), sub),
-                    (Name::new("retry"), retry),
-                    (Name::new("counter"), counter),
-                ],
-                spreads: vec![],
-            })
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<LlmClientSpec> {
+    use baml_compiler_syntax::SyntaxKind;
+    let value = value?;
+    if let rowan::NodeOrToken::Node(node) = &value {
+        if node.kind() == SyntaxKind::STRING_LITERAL {
+            let text = ast::StringLiteral::cast(node.clone())
+                .map(|s| s.value())
+                .unwrap_or_default();
+            let Some((prefix, model)) = text.split_once('/') else {
+                diags.push(LoweringDiagnostic::InvalidLlmClient {
+                    function_name: function_name.to_string(),
+                    reason: format!("\"{text}\" is not a \"provider/model\" string (no `/`)"),
+                    span,
+                });
+                return None;
+            };
+            let Some((pkg, class)) = spec_client_provider(&text) else {
+                diags.push(LoweringDiagnostic::InvalidLlmClient {
+                    function_name: function_name.to_string(),
+                    reason: format!(
+                        "no builtin provider for prefix \"{prefix}\"; construct a client \
+                         value instead (OpenAI-compatible endpoints: \
+                         openai.OpenAiClient.new(base_url = ..., model = \"{model}\"))"
+                    ),
+                    span,
+                });
+                return None;
+            };
+            return Some(LlmClientSpec::Provider {
+                pkg,
+                class,
+                model: model.to_string(),
+            });
         }
-        Some(name) => {
-            // Named client: Expr::Path(["MyClient"]) — TIR resolves to the let binding.
-            alloc(Expr::Path(vec![Name::new(name)]))
+        // The removed unquoted shorthand (`client: openai/gpt-4o-mini`) parses
+        // as a whitespace-free division chain; catch it before it cascades
+        // into unresolved-name errors.
+        if node.kind() == SyntaxKind::BINARY_EXPR {
+            let text = node.text().to_string();
+            if text.contains('/') && !text.contains(char::is_whitespace) {
+                diags.push(LoweringDiagnostic::InvalidLlmClient {
+                    function_name: function_name.to_string(),
+                    reason: format!("quote the model string: client: \"{text}\""),
+                    span,
+                });
+                return None;
+            }
         }
-        None => {
-            // No client specified (e.g. missing `client` field) — use null as fallback.
-            alloc(Expr::Null)
-        }
-    };
-    let call = alloc(Expr::Call {
-        callee,
-        type_args,
-        args: vec![
-            CallArg::positional(client_arg),
-            CallArg::positional(fn_name_expr),
-            CallArg::positional(args_map),
-        ],
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts: Arena::new(),
-        patterns: Arena::new(),
-        match_arms: Arena::new(),
-        catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
-        root_expr: Some(call),
-    };
-
-    let source_map = AstSourceMap {
-        expr_spans,
-        ..Default::default()
-    };
-
-    (body, source_map)
+    }
+    Some(LlmClientSpec::Expr(value))
 }
 
-/// Synthesize a `baml.llm.parse<STREAM_EXPANDED, ORIGINAL>(json)` call.
-///
-/// Unlike `synthesize_llm_builtin_call`, there is no client argument and
-/// the only argument is a single `json` identifier (a path expression)
-/// rather than a map of parent params. The explicit type args carry the
-/// stream-expanded and original return types so the stdlib `parse` can
-/// reify them via `reflect.type_of` instead of a name-keyed registry
-/// lookup (same threading as `call_llm_function<T>`).
-pub(crate) fn synthesize_llm_parse_call(
-    type_args: Vec<crate::ast::TypeExpr>,
-    span: text_size::TextRange,
-) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
-    use la_arena::Arena;
-
-    use crate::ast::{AstSourceMap, Expr, ExprBody};
-
-    let mut exprs = Arena::new();
-    let mut expr_spans = Arena::new();
-
-    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    // 1. `json` parameter reference
-    let json_expr = alloc(Expr::Path(vec![Name::new("json")]));
-
-    // 2. Callee: baml.llm.parse
-    let callee = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("llm"),
-        Name::new("parse"),
-    ]));
-
-    let call = alloc(Expr::Call {
-        callee,
-        type_args,
-        args: vec![CallArg::positional(json_expr)],
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts: Arena::new(),
-        patterns: Arena::new(),
-        match_arms: Arena::new(),
-        catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
-        root_expr: Some(call),
-    };
-
-    let source_map = AstSourceMap {
-        expr_spans,
-        ..Default::default()
-    };
-
-    (body, source_map)
-}
-
-/// Synthesize a `CLIENT.__make_stream<STREAM_EXPANDED, ORIGINAL>(sse)` method call.
-///
-/// Used by the PPIR to generate `$parse_stream` companion function bodies.
-/// The explicit type args carry the stream-expanded and original return
-/// types into `__make_stream`'s frame, where `reflect.type_of` reifies them
-/// for `StreamCache.new`.
-pub fn synthesize_llm_make_stream_call(
-    type_args: Vec<crate::ast::TypeExpr>,
-    client_name: &str,
-    span: text_size::TextRange,
-) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
-    use la_arena::Arena;
-
-    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
-
-    let mut exprs = Arena::new();
-    let mut expr_spans = Arena::new();
-
-    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    // 1. `sse` parameter reference
-    let sse_expr = alloc(Expr::Path(vec![Name::new("sse")]));
-
-    // 2. Client argument (same logic as synthesize_llm_builtin_call)
-    let client_arg = if client_name.contains('/') {
-        let name_lit = alloc(Expr::Literal(Literal::String(client_name.to_string())));
-        let ct_path = alloc(Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("llm"),
-            Name::new("ClientType"),
-        ]));
-        let ct_variant = alloc(Expr::MemberAccess {
-            base: ct_path,
-            member: Name::new("Primitive"),
-        });
-        let sub = alloc(Expr::Array { elements: vec![] });
-        let retry = alloc(Expr::Null);
-        let counter = alloc(Expr::Literal(Literal::Int(0)));
-        alloc(Expr::Object {
-            type_name: TypePath::from_dotted("baml.llm.Client"),
-            type_args: vec![],
-            fields: vec![
-                (Name::new("name"), name_lit),
-                (Name::new("client_type"), ct_variant),
-                (Name::new("sub_clients"), sub),
-                (Name::new("retry"), retry),
-                (Name::new("counter"), counter),
-            ],
-            spreads: vec![],
-        })
-    } else {
-        alloc(Expr::Path(vec![Name::new(client_name)]))
-    };
-
-    // 3. Callee: CLIENT.__make_stream (method call on the client)
-    let callee = alloc(Expr::MemberAccess {
-        base: client_arg,
-        member: Name::new("__make_stream"),
-    });
-
-    let call = alloc(Expr::Call {
-        callee,
-        type_args,
-        args: vec![CallArg::positional(sse_expr)],
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts: Arena::new(),
-        patterns: Arena::new(),
-        match_arms: Arena::new(),
-        catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
-        root_expr: Some(call),
-    };
-
-    let source_map = AstSourceMap {
-        expr_spans,
-        ..Default::default()
-    };
-
-    (body, source_map)
+/// The `tools` field's value element, if the function declares one.
+fn tools_value_element(
+    llm: &ast::LlmFunctionBody,
+) -> Option<rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>> {
+    llm.tools_field()
+        .as_ref()
+        .and_then(ast::ToolsField::value_element)
 }
 
 fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
-    use baml_compiler_syntax::{
-        SyntaxKind,
-        ast::{JinjaExpression, JinjaStatement, PromptText},
-    };
-
-    let mut text = String::new();
-    let mut interpolations = Vec::new();
     let prompt_span = raw_string.syntax().span_range();
-
-    for child in raw_string.syntax().children() {
-        match child.kind() {
-            SyntaxKind::PROMPT_TEXT => {
-                if let Some(prompt_text) = PromptText::cast(child.clone()) {
-                    text.push_str(&prompt_text.text());
-                }
-            }
-            SyntaxKind::TEMPLATE_INTERPOLATION => {
-                if let Some(jinja_expr) = JinjaExpression::cast(child.clone()) {
-                    let inner = jinja_expr.inner_text();
-                    let full = jinja_expr.full_text();
-                    let span = child.span_range();
-                    interpolations.push(Interpolation {
-                        content: inner,
-                        span,
-                    });
-                    text.push_str(&full);
-                }
-            }
-            SyntaxKind::TEMPLATE_CONTROL => {
-                if let Some(jinja_stmt) = JinjaStatement::cast(child.clone()) {
-                    text.push_str(&jinja_stmt.full_text());
-                }
-            }
-            _ => {}
-        }
-    }
-
     RawPrompt {
-        text,
-        interpolations,
+        text: crate::parse_string_attr_value(&raw_string.syntax().text().to_string())
+            .unwrap_or_default(),
         span: prompt_span,
     }
 }
@@ -1061,19 +859,7 @@ fn lower_class(
         return None;
     };
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
-    let generic_params: Vec<Name> = generic_params_with_bounds
-        .iter()
-        .map(|(n, _)| n.clone())
-        .collect();
-    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect();
-    for bound in generic_param_bounds.iter_mut().flatten() {
-        let bspan = bound.span;
-        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
-    }
+    let generic_params = extract_generic_params_with_bounds(node, diags);
     let class_name = name_token.text().to_string();
 
     let fields = class
@@ -1088,50 +874,60 @@ fn lower_class(
             };
             let field_name_str = fname.text().to_string();
             let mut hoisted_field_attrs = Vec::new();
-            let type_expr = f.ty().map(|te| {
-                let mut expr = lower_type_expr::lower_type_expr_node(&te);
-                let te_span = te.syntax().span_range();
-                check_unknown_type(
-                    &expr,
-                    format!("field `{class_name}.{field_name_str}`"),
-                    te_span,
-                    diags,
-                );
-                lower_type_expr::check_void_type(
-                    &expr,
-                    "a class field type".to_string(),
-                    te_span,
-                    false,
-                    diags,
-                );
-                lower_type_expr::check_wildcard_type(
-                    &mut expr,
-                    "a class field type",
-                    te_span,
-                    diags,
-                );
+            // A field with no type is already reported by the parser ("field '<name>'
+            // is missing a type annotation"), so recover with the error sentinel rather
+            // than making the type optional: an absent type is not a kind of type, and
+            // leaving it representable downstream forces every consumer to invent its
+            // own stand-in. `Error` suppresses follow-on diagnostics while the rest of
+            // the declaration still type-checks.
+            let type_expr = f.ty().map_or_else(
+                || TypeExprKind::Error { attrs: Vec::new() }.at(f.syntax().span_range()),
+                |te| {
+                    let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
+                    let te_span = te.syntax().span_range();
+                    check_unknown_type(
+                        &expr,
+                        format!("field `{class_name}.{field_name_str}`"),
+                        te_span,
+                        diags,
+                    );
+                    lower_type_expr::check_void_type(
+                        &expr,
+                        "a class field type".to_string(),
+                        te_span,
+                        false,
+                        diags,
+                    );
+                    lower_type_expr::check_wildcard_type(
+                        &mut expr,
+                        "a class field type",
+                        te_span,
+                        diags,
+                    );
 
-                // Hoist field attrs from the outermost TypeExpr to FieldDef.
-                // Only attrs that are direct ATTRIBUTE children of the outermost
-                // CST TYPE_EXPR are hoistable — attrs nested inside parens or
-                // generics are not (and will be flagged by validate_field_attrs).
-                let direct_attr_spans: std::collections::HashSet<text_size::TextRange> = te
-                    .syntax()
-                    .children()
-                    .filter_map(ast::Attribute::cast)
-                    .map(|a| a.syntax().span_range())
-                    .collect();
+                    // Hoist field attrs from the outermost TypeExpr to FieldDef.
+                    // Only attrs that are direct ATTRIBUTE children of the outermost
+                    // CST TYPE_EXPR are hoistable — attrs nested inside parens or
+                    // generics are not (and will be flagged by validate_field_attrs).
+                    let direct_attr_spans: std::collections::HashSet<text_size::TextRange> = te
+                        .syntax()
+                        .children()
+                        .filter_map(ast::Attribute::cast)
+                        .map(|a| a.syntax().span_range())
+                        .collect();
 
-                let all_outer_attrs = std::mem::take(expr.attrs_mut());
-                let (hoist, keep): (Vec<_>, Vec<_>) = all_outer_attrs.into_iter().partition(|a| {
-                    crate::disambiguate::is_field_attr(a.name.as_str())
-                        && direct_attr_spans.contains(&a.span)
-                });
-                *expr.attrs_mut() = keep;
-                hoisted_field_attrs = hoist;
+                    let all_outer_attrs = std::mem::take(expr.attrs_mut());
+                    let (hoist, keep): (Vec<_>, Vec<_>) =
+                        all_outer_attrs.into_iter().partition(|a| {
+                            crate::disambiguate::is_field_attr(a.name.as_str())
+                                && direct_attr_spans.contains(&a.span)
+                        });
+                    *expr.attrs_mut() = keep;
+                    hoisted_field_attrs = hoist;
 
-                expr.with_span(te_span)
-            });
+                    expr.with_span(te_span)
+                },
+            );
             let field_docstring = crate::docstring::extract_docstring(f.syntax());
             Some(FieldDef {
                 name: Name::new(&field_name_str),
@@ -1161,7 +957,6 @@ fn lower_class(
     let mut class_def = crate::ast::ClassDef {
         name: Name::new(name_token.text()),
         generic_params,
-        generic_param_bounds,
         fields,
         methods,
         implements,
@@ -1183,69 +978,20 @@ fn lower_class(
 }
 
 /// BEP-044 generic bounds: walk `GENERIC_PARAM_LIST` and return each
-/// parameter's `Name` paired with its optional `extends Iface` bound.
-/// The bound is captured as a `TypeExpr` so generic parents like
-/// `Container<int>` round-trip.
+/// parameter's `Name` paired with **every** `&`-separated bound it declares
+/// (`<T>` → `(T, [])`; `<T extends A & B>` → `(T, [A, B])`). The bound list is
+/// a conjunction: an argument for `T` must satisfy all of them.
+///
+/// Bounds are captured as `TypeExpr`s so generic parents like `Container<int>`
+/// round-trip; that they must denote *interfaces* (never interface-existential
+/// types) is enforced when they are lowered to constraints in TIR.
 pub(crate) fn extract_generic_params_with_bounds(
     node: &SyntaxNode,
-) -> Vec<(Name, Option<crate::ast::TypeExpr>)> {
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Vec<crate::ast::GenericParam> {
     use baml_compiler_syntax::SyntaxKind;
 
-    let mut out: Vec<(Name, Option<crate::ast::TypeExpr>)> = Vec::new();
-    for child in node.children() {
-        let child_kind: SyntaxKind = child.kind();
-        if child_kind != SyntaxKind::GENERIC_PARAM_LIST {
-            continue;
-        }
-        for param_node in child.children() {
-            if param_node.kind() != SyntaxKind::GENERIC_PARAM {
-                continue;
-            }
-            let mut name: Option<Name> = None;
-            for elem in param_node.children_with_tokens() {
-                if let Some(token) = elem.as_token() {
-                    if token.kind() == SyntaxKind::WORD && name.is_none() {
-                        name = Some(Name::new(token.text()));
-                    }
-                }
-            }
-            let bound: Option<crate::ast::TypeExpr> = param_node
-                .children()
-                .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
-                .and_then(|bounds_node| {
-                    // BEP-044 only requires single-bound support; the
-                    // intersection form lexes as multiple `TypeExpr`
-                    // children separated by `&`. We surface the first
-                    // bound and let downstream check intersection in a
-                    // future pass.
-                    bounds_node
-                        .children()
-                        .find(|n| baml_compiler_syntax::ast::TypeExpr::cast(n.clone()).is_some())
-                })
-                .and_then(|n| {
-                    let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                    Some(lower_type_expr::lower_type_expr_node(&te))
-                });
-            if let Some(n) = name {
-                out.push((n, bound));
-            }
-        }
-    }
-    out
-}
-
-/// Like [`extract_generic_params_with_bounds`], but captures **every**
-/// `&`-separated bound on each generic param (`T extends A & B` → `[A, B]`)
-/// instead of just the first. Used for `implement` blocks (BEP-044), whose
-/// generic-param bounds are an interface intersection. The single-bound
-/// extractor remains for function/class/interface generic params, which do not
-/// yet carry multiple bounds.
-pub(crate) fn extract_generic_params_with_all_bounds(
-    node: &SyntaxNode,
-) -> Vec<(Name, Vec<crate::ast::TypeExpr>)> {
-    use baml_compiler_syntax::SyntaxKind;
-
-    let mut out: Vec<(Name, Vec<crate::ast::TypeExpr>)> = Vec::new();
+    let mut out: Vec<crate::ast::GenericParam> = Vec::new();
     for child in node.children() {
         if child.kind() != SyntaxKind::GENERIC_PARAM_LIST {
             continue;
@@ -1271,13 +1017,21 @@ pub(crate) fn extract_generic_params_with_all_bounds(
                         .children()
                         .filter_map(|n| {
                             let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                            Some(lower_type_expr::lower_type_expr_node(&te))
+                            let mut bound = lower_type_expr::lower_type_expr_node(&te, diags);
+                            let span = bound.span;
+                            lower_type_expr::check_wildcard_type(
+                                &mut bound,
+                                "a generic type bound",
+                                span,
+                                diags,
+                            );
+                            Some(bound)
                         })
                         .collect()
                 })
                 .unwrap_or_default();
-            if let Some(n) = name {
-                out.push((n, bounds));
+            if let Some(name) = name {
+                out.push(crate::ast::GenericParam { name, bounds });
             }
         }
     }
@@ -1340,19 +1094,7 @@ fn lower_interface(
         return None;
     };
     let iface_name = name_token.text().to_string();
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
-    let generic_params: Vec<Name> = generic_params_with_bounds
-        .iter()
-        .map(|(n, _)| n.clone())
-        .collect();
-    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect();
-    for bound in generic_param_bounds.iter_mut().flatten() {
-        let bspan = bound.span;
-        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
-    }
+    let generic_params = extract_generic_params_with_bounds(node, diags);
 
     let parent_type_nodes: Vec<baml_compiler_syntax::ast::TypeExpr> =
         if let Some(c) = iface.requires_clause() {
@@ -1363,7 +1105,7 @@ fn lower_interface(
     let requires: Vec<TypeExpr> = parent_type_nodes
         .into_iter()
         .map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
@@ -1392,30 +1134,35 @@ fn lower_interface(
                 return None;
             };
             let field_name_str = fname.text().to_string();
-            let type_expr = f.ty().map(|te| {
-                let mut expr = lower_type_expr::lower_type_expr_node(&te);
-                let te_span = te.syntax().span_range();
-                check_unknown_type(
-                    &expr,
-                    format!("interface field `{iface_name}.{field_name_str}`"),
-                    te_span,
-                    diags,
-                );
-                lower_type_expr::check_void_type(
-                    &expr,
-                    "an interface field type".to_string(),
-                    te_span,
-                    false,
-                    diags,
-                );
-                lower_type_expr::check_wildcard_type(
-                    &mut expr,
-                    "an interface field type",
-                    te_span,
-                    diags,
-                );
-                expr.with_span(te_span)
-            });
+            // See the class-field site: the parser already reports a missing type, so
+            // recover with the error sentinel instead of an optional type.
+            let type_expr = f.ty().map_or_else(
+                || TypeExprKind::Error { attrs: Vec::new() }.at(f.syntax().span_range()),
+                |te| {
+                    let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
+                    let te_span = te.syntax().span_range();
+                    check_unknown_type(
+                        &expr,
+                        format!("interface field `{iface_name}.{field_name_str}`"),
+                        te_span,
+                        diags,
+                    );
+                    lower_type_expr::check_void_type(
+                        &expr,
+                        "an interface field type".to_string(),
+                        te_span,
+                        false,
+                        diags,
+                    );
+                    lower_type_expr::check_wildcard_type(
+                        &mut expr,
+                        "an interface field type",
+                        te_span,
+                        diags,
+                    );
+                    expr.with_span(te_span)
+                },
+            );
             Some(FieldDef {
                 name: Name::new(&field_name_str),
                 type_expr,
@@ -1445,7 +1192,6 @@ fn lower_interface(
     Some(InterfaceDef {
         name: Name::new(&iface_name),
         generic_params,
-        generic_param_bounds,
         requires,
         fields,
         associated_types,
@@ -1471,7 +1217,7 @@ fn lower_associated_type_def(
     };
     let name = Name::new(name_token.text());
     let bound = decl.bound().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1482,7 +1228,7 @@ fn lower_associated_type_def(
         expr.with_span(span)
     });
     let default = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1514,7 +1260,7 @@ fn lower_associated_type_binding_def(
     };
     let name = Name::new(name_token.text());
     let type_expr = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1545,19 +1291,7 @@ fn lower_method_sig(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
-    let generic_params_with_bounds = extract_generic_params_with_bounds(sig.syntax());
-    let generic_params: Vec<Name> = generic_params_with_bounds
-        .iter()
-        .map(|(n, _)| n.clone())
-        .collect();
-    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect();
-    for bound in generic_param_bounds.iter_mut().flatten() {
-        let bspan = bound.span;
-        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
-    }
+    let generic_params = extract_generic_params_with_bounds(sig.syntax(), diags);
     let parameter_context = format!("method signature `{}`", name.as_str());
 
     let (params, defaults) = sig
@@ -1567,7 +1301,7 @@ fn lower_method_sig(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = sig.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         lower_type_expr::check_void_type(
@@ -1582,7 +1316,7 @@ fn lower_method_sig(
     });
 
     let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         // A bodyless method signature (interface required method) has nothing to
         // infer an open `throws … | _` from, and its declared throws is compared
@@ -1600,7 +1334,6 @@ fn lower_method_sig(
     Some(MethodSigDef {
         name,
         generic_params,
-        generic_param_bounds,
         params,
         defaults,
         return_type,
@@ -1620,7 +1353,7 @@ fn lower_implements_block(
     let target_node = block.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
+    let target = lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
     check_unknown_type(
         &target,
         "interface name in `implements`".to_string(),
@@ -1682,13 +1415,14 @@ fn lower_implements_for(
 ) -> Option<ImplementsForDef> {
     let imp = ast::ImplementsFor::cast(node.clone())?;
 
-    let generic_params = extract_generic_params_with_all_bounds(node);
+    let generic_params = extract_generic_params_with_bounds(node, diags);
 
     // Interface target (the `I` in `implements I for T`)
     let target_node = imp.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let interface_target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
+    let interface_target =
+        lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
     check_unknown_type(
         &interface_target,
         "interface name in `implements ... for`".to_string(),
@@ -1700,7 +1434,7 @@ fn lower_implements_for(
     let for_node = imp.for_target()?;
     let for_te = for_node.type_expr()?;
     let for_span = for_te.syntax().span_range();
-    let for_target = lower_type_expr::lower_type_expr_node(&for_te).with_span(for_span);
+    let for_target = lower_type_expr::lower_type_expr_node(&for_te, diags).with_span(for_span);
     check_unknown_type(
         &for_target,
         "target type in `implements ... for`".to_string(),
@@ -1753,6 +1487,7 @@ fn lower_implements_for(
         associated_type_bindings,
         methods,
         span: node.span_range(),
+        docstring: crate::docstring::extract_docstring(node),
     })
 }
 
@@ -1800,7 +1535,7 @@ fn lower_type_alias(
     Some(TypeAliasDef {
         name: Name::new(&alias_name),
         type_expr: alias.ty().map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
             lower_type_expr::check_void_type(
@@ -1815,6 +1550,7 @@ fn lower_type_alias(
         }),
         span: node.span_range(),
         name_span: name_token.text_range(),
+        docstring: crate::docstring::extract_docstring(node),
     })
 }
 
@@ -1925,10 +1661,27 @@ fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
         _ => {}
     }
 
-    if let Ok(value) = text.parse::<i64>() {
-        return TestArgValue::Int(value);
+    // Duck-typed scalar: number-shaped text becomes a number, everything
+    // else stays a string, so no diagnostics here. `num_lit` handles base
+    // prefixes and underscores; a leading `-` is handled by hand since the
+    // helper only accepts unsigned magnitudes.
+    let (negated, magnitude) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text.as_str()),
+    };
+    if let Ok(value) = baml_base::num_lit::parse_int_literal(magnitude) {
+        return TestArgValue::Int(if negated { -value } else { value });
     }
     if let Ok(value) = text.parse::<f64>() {
+        return TestArgValue::float(value);
+    }
+    // Underscored floats (`1_000.5`) fail the plain parse; retry with
+    // separators stripped, but only for digit-led text so words containing
+    // underscores (`in_f`) can't be misread as `inf`.
+    if magnitude.starts_with(|c: char| c.is_ascii_digit())
+        && text.contains('_')
+        && let Ok(value) = baml_base::num_lit::normalize_float_literal(&text).parse::<f64>()
+    {
         return TestArgValue::float(value);
     }
 
@@ -2078,6 +1831,44 @@ fn init_test_key_from_path(path: &std::path::Path) -> String {
         .collect()
 }
 
+/// Public owner of tests declared in `path`. User package names are deliberately
+/// not embedded in test ids: `root` is stable across package renames, while
+/// `ns_<name>` directories retain BAML's dotted namespace qualification.
+fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
+    let mut namespaces = Vec::new();
+    if let Some(path) = path {
+        for component in path
+            .parent()
+            .into_iter()
+            .flat_map(std::path::Path::components)
+        {
+            let std::path::Component::Normal(component) = component else {
+                continue;
+            };
+            let Some(component) = component.to_str() else {
+                continue;
+            };
+            let Some(name) = component.strip_prefix("ns_") else {
+                continue;
+            };
+            let mut chars = name.chars();
+            let valid = chars
+                .next()
+                .map(|c| c.is_ascii_alphabetic() || c == '_')
+                .unwrap_or(false)
+                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if valid {
+                namespaces.push(name.to_string());
+            }
+        }
+    }
+    if namespaces.is_empty() {
+        "root".to_string()
+    } else {
+        format!("root.{}", namespaces.join("."))
+    }
+}
+
 /// The function is named `"$init_test_<sanitized_path>"` to avoid collisions
 /// when multiple files contain tests. The suffix is derived from the file path
 /// rather than its `FileId`: a `FileId` is a load-order index that shifts
@@ -2088,6 +1879,7 @@ fn init_test_key_from_path(path: &std::path::Path) -> String {
 fn synthesize_init_test_function(
     registrations: &[TestRegistrationItem],
     file_path: Option<&std::path::Path>,
+    explicit_test_owner: Option<&str>,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> FunctionDef {
@@ -2098,11 +1890,14 @@ fn synthesize_init_test_function(
     let span = text_size::TextRange::default();
 
     let mut ctx = lower_expr_body::InitTestContext::new();
+    let test_owner = explicit_test_owner
+        .map(str::to_owned)
+        .unwrap_or_else(|| test_owner_from_path(file_path));
 
     // Build statements: one per registration
     let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
     for reg in registrations {
-        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags, env_var_refs);
+        let stmt_expr = synthesize_register_call(reg, &test_owner, &mut ctx);
         stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
     }
 
@@ -2140,14 +1935,15 @@ fn synthesize_init_test_function(
     FunctionDef {
         name: Name::new(&fn_name),
         generic_params: vec![],
-        generic_param_bounds: vec![],
         params: vec![registry_param],
         defaults: FunctionDefaults::empty(),
         return_type: None,
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
-        origin: crate::ast::FunctionOrigin::Internal,
+        metadata: crate::ast::FunctionMetadata::language_internal(
+            crate::ast::FunctionOrigin::Internal,
+        ),
         attributes: vec![],
         docstring: None,
         is_tagged_template_tag: false,
@@ -2160,9 +1956,8 @@ fn synthesize_init_test_function(
 /// `registry.register_test_set(name, collector_lambda, runner)` call expression.
 fn synthesize_register_call(
     reg: &TestRegistrationItem,
+    test_owner: &str,
     ctx: &mut lower_expr_body::InitTestContext,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> ExprId {
     let span = text_size::TextRange::default();
     match reg {
@@ -2171,38 +1966,31 @@ fn synthesize_register_call(
             body_node,
             runner_element,
         } => {
-            // Lower the test block body into a fresh ExprBody (lambda body)
-            let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
-                lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
-            diags.extend(lambda_diags);
-            env_var_refs.extend(lambda_env_refs);
+            // The body lowers into `$init_test`'s own arena.
+            let lambda_body = ctx.lower_test_body(body_node, span);
 
-            let lambda_def = FunctionDef {
-                name: Name::new("<test body>"),
-                generic_params: vec![],
-                generic_param_bounds: vec![],
+            let lambda_def = LambdaDef {
+                kind: LambdaKind::Anonymous,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
-                body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
-                declarative_meta: None,
-                origin: crate::ast::FunctionOrigin::Internal,
-                attributes: vec![],
-                docstring: None,
-                is_tagged_template_tag: false,
+                body: Some(lambda_body),
                 span,
-                name_span: span,
             };
 
-            // registry.register_test
+            // registry.register_test_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![Name::new("registry"), Name::new("register_test")]),
+                Expr::Path(vec![Name::new("registry"), Name::new("register_test_at")]),
                 span,
             );
 
             // Args: (name_expr, lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            let owner_arg = ctx.alloc_expr(
+                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
+                span,
+            );
             // Use the test body's real CST range as the lambda's span so HIR
             // scope lookup resolves names inside the body correctly. The body's
             // statements carry real source offsets, so a synthetic span (disjoint
@@ -2220,6 +2008,7 @@ fn synthesize_register_call(
                     callee: method_call_target,
                     type_args: vec![],
                     args: vec![
+                        CallArg::positional(owner_arg),
                         CallArg::positional(name_arg),
                         CallArg::positional(lambda_arg),
                         CallArg::positional(runner_arg),
@@ -2233,15 +2022,7 @@ fn synthesize_register_call(
             body_node,
             runner_element,
         } => {
-            // Lower the testset body into a collector lambda using the full testset lowering.
-            let (collector_exprs, collector_source_map, collector_diags, collector_env_refs) =
-                lower_expr_body::lower_testset_block_node(
-                    body_node,
-                    &Name::new("testset"),
-                    &[Name::new("registry")],
-                );
-            diags.extend(collector_diags);
-            env_var_refs.extend(collector_env_refs);
+            let collector_exprs = ctx.lower_testset_body(body_node, Name::new("testset"), span);
 
             // Collector lambda parameter: `testset`
             let testset_param = Param {
@@ -2260,32 +2041,31 @@ fn synthesize_register_call(
                 name_span: span,
             };
 
-            let collector_def = FunctionDef {
-                name: Name::new("<testset collector>"),
-                generic_params: vec![],
-                generic_param_bounds: vec![],
+            let collector_def = LambdaDef {
+                kind: LambdaKind::Anonymous,
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
-                body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
-                declarative_meta: None,
-                origin: crate::ast::FunctionOrigin::Internal,
-                attributes: vec![],
-                docstring: None,
-                is_tagged_template_tag: false,
+                body: Some(collector_exprs),
                 span,
-                name_span: span,
             };
 
-            // registry.register_test_set
+            // registry.register_test_set_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![Name::new("registry"), Name::new("register_test_set")]),
+                Expr::Path(vec![
+                    Name::new("registry"),
+                    Name::new("register_test_set_at"),
+                ]),
                 span,
             );
 
             // Args: (name_expr, collector_lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            let owner_arg = ctx.alloc_expr(
+                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
+                span,
+            );
             // Use the testset body's real CST range so HIR scope lookup works
             // correctly for name resolution inside the collector lambda body.
             let collector_lambda_span = body_node.span_range();
@@ -2298,6 +2078,7 @@ fn synthesize_register_call(
                     callee: method_call_target,
                     type_args: vec![],
                     args: vec![
+                        CallArg::positional(owner_arg),
                         CallArg::positional(name_arg),
                         CallArg::positional(collector_arg),
                         CallArg::positional(runner_arg),
@@ -2388,746 +2169,12 @@ fn lower_template_string(
     })
 }
 
-/// Synthesize an `Item::Let` for a `retry_policy` declaration.
-///
-/// Produces: `baml.llm.RetryPolicy { max_retries: N, initial_delay_ms: N, multiplier: F, max_delay_ms: N }`
-///
-/// Each config field is lowered generically via `lower_config_item::lower_config_value`,
-/// then wrapped in a typed `Expr::Object`.
-fn synthesize_retry_policy_let(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<Item> {
-    let rp = ast::RetryPolicyDef::cast(node.clone())?;
-    let Some(name_token) = rp.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "retry_policy",
-            span: node.span_range(),
-        });
-        return None;
-    };
-    let span = node.span_range();
-    let rp_name = name_token.text().to_string();
-    let Some(config_block) = rp.config_block() else {
-        diags.push(LoweringDiagnostic::MissingConfigBlock {
-            block_kind: "retry_policy",
-            block_name: rp_name,
-            span,
-        });
-        return None;
-    };
-
-    let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
-    let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
-    let mut alloc = |expr: Expr| -> ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    // Lower each config item generically
-    let fields: Vec<(Name, ExprId)> = config_block
-        .items()
-        .filter_map(|item| {
-            let Some(key) = item.key() else {
-                diags.push(LoweringDiagnostic::MissingConfigKey {
-                    block_kind: "retry_policy",
-                    block_name: rp_name.clone(),
-                    span: item.syntax().span_range(),
-                });
-                return None;
-            };
-            let value = crate::lower_config_item::lower_config_value_with_env_refs(
-                &item,
-                &mut alloc,
-                env_var_refs,
-                crate::lower_config_item::EnvReadMode::Strict,
-            );
-            Some((Name::new(key.text()), value))
-        })
-        .collect();
-
-    let root = alloc(Expr::Object {
-        type_name: TypePath::from_dotted("baml.llm.RetryPolicy"),
-        type_args: vec![],
-        fields,
-        spreads: vec![],
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts: la_arena::Arena::new(),
-        patterns: la_arena::Arena::new(),
-        match_arms: la_arena::Arena::new(),
-        catch_arms: la_arena::Arena::new(),
-        type_annotations: la_arena::Arena::new(),
-        root_expr: Some(root),
-    };
-    let source_map = AstSourceMap {
-        expr_spans,
-        ..Default::default()
-    };
-
-    Some(Item::Let(LetDef {
-        name: Name::new(name_token.text()),
-        initializer: Some((body, source_map)),
-        origin: LetOrigin::RetryPolicy,
-        span,
-        name_span: name_token.text_range(),
-    }))
-}
-
-/// Synthesize `Item::Let` + optional `Item::Function` from a `CLIENT_DEF` CST node.
-///
-/// - Every client produces an `Item::Let("ClientName", LetOrigin::Client)` whose initializer
-///   constructs `Client { name, client_type, sub_clients: [], retry: null }`.
-/// - Primitive clients also produce an `Item::Function("ClientName$new")` whose body
-///   constructs `PrimitiveClient { name, provider, options }`.
-fn synthesize_client_items(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<(Item, Option<FunctionDef>)> {
-    let client = ast::ClientDef::cast(node.clone())?;
-    let Some(name_token) = client.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "client",
-            span: node.span_range(),
-        });
-        return None;
-    };
-    let client_name = name_token.text().to_string();
-    let span = node.span_range();
-    let Some(config_block) = client.config_block() else {
-        diags.push(LoweringDiagnostic::MissingConfigBlock {
-            block_kind: "client",
-            block_name: client_name,
-            span,
-        });
-        return None;
-    };
-
-    // Determine provider
-    let provider: Option<String> = config_block.items().find_map(|item| {
-        let key = item.key()?;
-        if key.text() != "provider" {
-            return None;
-        }
-        item.value_word().map(|w| w.text().to_string()).or_else(|| {
-            item.config_value()
-                .and_then(|cv| cv.scalar_text())
-                .map(|t| t.trim().trim_matches('"').to_string())
-        })
-    });
-
-    // Validate provider name.
-    if let Some(p) = &provider {
-        if !is_valid_provider(p.as_str()) {
-            diags.push(LoweringDiagnostic::UnknownProvider {
-                client_name: client_name.clone(),
-                provider: p.clone(),
-                span,
-            });
-        }
-    }
-
-    let is_fallback = provider.as_deref() == Some("fallback");
-    let is_round_robin = provider.as_deref() == Some("round-robin");
-    let is_composite = is_fallback || is_round_robin;
-
-    // Build the Client let binding
-    let let_item = synthesize_client_let(
-        &client_name,
-        span,
-        &name_token,
-        is_fallback,
-        is_round_robin,
-        &config_block,
-    );
-
-    // Build the $new companion for primitive clients only
-    let companion = if !is_composite {
-        Some(synthesize_client_new_companion(
-            &client_name,
-            span,
-            &name_token,
-            &config_block,
-            provider.as_ref(),
-            diags,
-            env_var_refs,
-        ))
-    } else {
-        None
-    };
-
-    Some((let_item, companion))
-}
-
-/// Build the `Client` identity let binding.
-///
-/// Produces: `baml.llm.Client { name, client_type, sub_clients, retry, counter }`
-///
-/// - Composite clients (fallback/round-robin) get sub-client `Expr::Path` references
-///   from `options { strategy [A, B] }`, enabling TIR name validation and
-///   `topological_sort_lets` dependency ordering.
-/// - All clients get `retry` wired as `Expr::Path("RetryPolicyName")` or `null`.
-/// - Round-robin clients get `counter` from `options { start N }`, others get 0.
-fn synthesize_client_let(
-    client_name: &str,
-    span: text_size::TextRange,
-    name_token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
-    is_fallback: bool,
-    is_round_robin: bool,
-    config_block: &ast::ConfigBlock,
-) -> Item {
-    use baml_base::Literal;
-
-    let is_composite = is_fallback || is_round_robin;
-
-    let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
-    let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
-    let mut alloc = |expr: Expr| -> ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    // Extract retry_policy reference and composite sub-client/start from config block
-    let mut retry_policy_name: Option<String> = None;
-    let mut sub_client_exprs: Vec<ExprId> = vec![];
-    let mut round_robin_start: i64 = 0;
-
-    for item in config_block.items() {
-        let Some(key) = item.key() else { continue };
-        match key.text() {
-            "retry_policy" => {
-                // retry_policy MyRetry → Expr::Path(["MyRetry"])
-                if let Some(word) = item.value_word() {
-                    retry_policy_name = Some(word.text().to_string());
-                } else if let Some(cv) = item.config_value() {
-                    if let Some(text) = cv.scalar_text() {
-                        let cleaned = text.trim().trim_matches('"');
-                        if !cleaned.is_empty() {
-                            retry_policy_name = Some(cleaned.to_string());
-                        }
-                    }
-                }
-            }
-            "options" if is_composite => {
-                if let Some(nested) = item.nested_block() {
-                    for opt_item in nested.items() {
-                        let Some(opt_key) = opt_item.key() else {
-                            continue;
-                        };
-                        match opt_key.text() {
-                            "strategy" => {
-                                if let Some(elements) = opt_item.array_string_elements() {
-                                    for (maybe_name, _range) in &elements {
-                                        if let Some(name) = maybe_name {
-                                            let expr = alloc(Expr::Path(vec![Name::new(name)]));
-                                            sub_client_exprs.push(expr);
-                                        }
-                                    }
-                                }
-                            }
-                            "start" => {
-                                if let Some(v) = opt_item.value_int() {
-                                    round_robin_start = v;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // name: "MyClient"
-    let name_expr = alloc(Expr::Literal(Literal::String(client_name.to_string())));
-
-    // client_type: baml.llm.ClientType.Primitive (or Fallback / RoundRobin)
-    let variant_name = if is_fallback {
-        "Fallback"
-    } else if is_round_robin {
-        "RoundRobin"
-    } else {
-        "Primitive"
-    };
-    let client_type_expr = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("llm"),
-        Name::new("ClientType"),
-        Name::new(variant_name),
-    ]));
-
-    // sub_clients: [A, B, ...] for composites, [] for primitive
-    let sub_clients_expr = alloc(Expr::Array {
-        elements: sub_client_exprs,
-    });
-
-    // retry: MyRetry (path reference) or null
-    let retry_expr = if let Some(rp_name) = retry_policy_name {
-        alloc(Expr::Path(vec![Name::new(&rp_name)]))
-    } else {
-        alloc(Expr::Null)
-    };
-
-    // counter: round_robin_start for RR clients, 0 otherwise
-    let counter_val = if is_round_robin { round_robin_start } else { 0 };
-    let counter_expr = alloc(Expr::Literal(Literal::Int(counter_val)));
-
-    // baml.llm.Client { name, client_type, sub_clients, retry, counter }
-    let root = alloc(Expr::Object {
-        type_name: TypePath::from_dotted("baml.llm.Client"),
-        type_args: vec![],
-        fields: vec![
-            (Name::new("name"), name_expr),
-            (Name::new("client_type"), client_type_expr),
-            (Name::new("sub_clients"), sub_clients_expr),
-            (Name::new("retry"), retry_expr),
-            (Name::new("counter"), counter_expr),
-        ],
-        spreads: vec![],
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts: la_arena::Arena::new(),
-        patterns: la_arena::Arena::new(),
-        match_arms: la_arena::Arena::new(),
-        catch_arms: la_arena::Arena::new(),
-        type_annotations: la_arena::Arena::new(),
-        root_expr: Some(root),
-    };
-    let source_map = AstSourceMap {
-        expr_spans,
-        ..Default::default()
-    };
-
-    Item::Let(LetDef {
-        name: Name::new(client_name),
-        initializer: Some((body, source_map)),
-        origin: LetOrigin::Client,
-        span,
-        name_span: name_token.text_range(),
-    })
-}
-
-/// Build the `ClientName$new` companion function for primitive clients.
-///
-/// Body constructs:
-/// ```text
-/// PrimitiveClient {
-///   name: "X", provider: "openai",
-///   options: PrimitiveClientOptions {
-///     base_url, default_role, api_key, allowed_roles, remap_roles,
-///     provider_options, headers, query_params, request_body
-///   }
-/// }
-/// ```
-///
-/// Option keys are routed to match `PrimitiveClientOptions`:
-/// - Known scalar fields (`base_url`, `default_role`, `api_key`, `allowed_roles`, `remap_roles`)
-///   → named fields, default null
-/// - `headers`, `query_params` → `Expr::Map`, default empty
-/// - Provider-specific (`anthropic_version` → `AnthropicOptions`,
-///   `resource_name`+`api_version` → `AzureOpenAiOptions`) → `provider_options`
-/// - Unknown keys → `request_body` map entries
-fn synthesize_client_new_companion(
-    client_name: &str,
-    span: text_size::TextRange,
-    name_token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
-    config_block: &ast::ConfigBlock,
-    provider: Option<&String>,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> FunctionDef {
-    use baml_base::Literal;
-
-    // The constructor's `lenient: bool` parameter. `env.X` option reads are
-    // lowered to `baml.env.get_or_panic_lenient("X", lenient)` so the offline
-    // `render_prompt` path (which calls the constructor with `lenient = true`)
-    // can build the client for its metadata without a credential env var set,
-    // while the network paths keep `lenient = false` and still panic if unset.
-    let lenient_param_name = Name::new("lenient");
-
-    let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
-    let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
-    let mut alloc = |expr: Expr| -> ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    let config = provider
-        .map(String::as_str)
-        .filter(|p| is_valid_provider(p))
-        .and_then(provider_config_for);
-
-    // ── 1. Seed known fields as null/empty ─────────────────────
-    //
-    // All known fields go into one map, seeded as Null (or EmptyMap for
-    // map-typed fields). No provider-specific defaults are injected --
-    // those are applied at runtime in sys_llm.
-
-    let mut values: std::collections::HashMap<String, ExprId> = std::collections::HashMap::new();
-    // Provider-specific field names (from the generated config).
-    let provider_field_set: std::collections::HashSet<&str> = config
-        .map(|c| c.fields.iter().copied().collect())
-        .unwrap_or_default();
-
-    // Seed top-level fields as null / empty map.
-    // Skip provider_options and request_body -- they're assembled separately.
-    for &name in CLIENT_OPTION_FIELDS {
-        if SEPARATELY_ASSEMBLED_FIELDS.contains(&name) {
-            continue;
-        }
-        let expr = if EMPTY_MAP_FIELDS.contains(&name) {
-            alloc(Expr::Map { entries: vec![] })
-        } else {
-            alloc(Expr::Null)
-        };
-        values.insert(name.to_string(), expr);
-    }
-
-    // Seed provider-specific fields as null (so they're recognized as known).
-    for &name in &provider_field_set {
-        values
-            .entry(name.to_string())
-            .or_insert_with(|| alloc(Expr::Null));
-    }
-
-    // ── 2. Override from user config ────────────────────────────
-    //
-    // Every option the user writes goes into the same map. Provider fields
-    // skip null (so writing `field null` preserves the default rather than
-    // overwriting it). Unknown fields go to request_body.
-
-    let options_span = config_block
-        .items()
-        .find(|item| item.matches_key("options"))
-        .map(|item| item.syntax().span_range())
-        .unwrap_or(span);
-
-    let mut has_base_url = false;
-    // Whether the user wrote an `api_key` option (even `api_key null`). If so,
-    // the provider env-var default below is suppressed so user config wins.
-    let mut api_key_set_by_user = false;
-    let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
-    // Track which provider fields have been set to non-null values by the user.
-    // No compile-time defaults, so this starts empty.
-    let mut provider_fields_set: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
-
-    if let Some(options_item) = config_block
-        .items()
-        .find(|item| item.matches_key("options"))
-    {
-        if let Some(nested) = options_item.nested_block() {
-            for opt_item in nested.items() {
-                let Some(opt_key) = opt_item.key() else {
-                    continue;
-                };
-                let k = opt_key.text();
-                let val = crate::lower_config_item::lower_config_value_with_env_refs(
-                    &opt_item,
-                    &mut alloc,
-                    env_var_refs,
-                    crate::lower_config_item::EnvReadMode::Lenient(&lenient_param_name),
-                );
-                let is_null = opt_item.value_str().as_deref() == Some("null");
-
-                if k == "api_key" {
-                    api_key_set_by_user = true;
-                }
-
-                if values.contains_key(k) || provider_field_set.contains(k) {
-                    // Known field. Provider fields skip null to preserve defaults.
-                    if !provider_field_set.contains(k) || !is_null {
-                        values.insert(k.to_string(), val);
-                    }
-                    if provider_field_set.contains(k) && !is_null {
-                        provider_fields_set.insert(k.to_string());
-                    }
-                } else {
-                    // Unknown field -> request_body (preserves source order).
-                    let kx = alloc(Expr::Literal(Literal::String(k.to_string())));
-                    request_body_entries.push((kx, val));
-                }
-                if k == "base_url" {
-                    has_base_url = !is_null;
-                }
-            }
-        }
-    }
-
-    // ── 2b. Default api_key from the provider env var (B-489) ───
-    //
-    // A named `client<llm>` with no explicit `api_key` mirrors the inline
-    // `"openai/model"` shorthand (see `from_shorthand` in the `sys_ops` crate):
-    // default the key to the provider's conventional env var. The read is soft
-    // — `baml.env.get` yields `null` when the var is unset rather than panicking
-    // — exactly like the shorthand, which leaves `api_key` unset when the var is
-    // absent (the request then goes out unauthenticated, as before). This keeps
-    // the offline `render_prompt` path working without the var set (B-626) and
-    // never eagerly *requires* the key. An explicit `api_key` (including
-    // `api_key null`) suppresses this default so user config always wins.
-    if !api_key_set_by_user
-        && let Some(env_var) = provider
-            .map(String::as_str)
-            .and_then(default_api_key_env_var)
-    {
-        let arg = alloc(Expr::Literal(Literal::String(env_var.to_string())));
-        let callee = alloc(Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("env"),
-            Name::new("get"),
-        ]));
-        let call = alloc(Expr::Call {
-            callee,
-            type_args: vec![],
-            args: vec![CallArg::positional(arg)],
-        });
-        values.insert("api_key".to_string(), call);
-        // Surface the synthesized dependency to LSP env-var tooling
-        // (`file_env_var_refs`, which feeds the playground's env panel), the
-        // same as an explicit `env.X` read. There is no user-written token to
-        // point at, so anchor the reference at the `options` block where an
-        // explicit `api_key` would otherwise go.
-        env_var_refs.push(crate::EnvVarRef {
-            name: env_var.to_string(),
-            range: options_span,
-        });
-    }
-
-    // ── 3. Validate ─────────────────────────────────────────────
-
-    if let Some(provider_str) = provider.map(String::as_str) {
-        validate_client_options(
-            provider_str,
-            client_name,
-            has_base_url,
-            &provider_fields_set,
-            options_span,
-            diags,
-        );
-    }
-
-    // ── 4. Assemble ─────────────────────────────────────────────
-    //
-    // Extract provider fields -> build typed sub-object.
-    // Then take() known top-level fields -> leftover = request_body.
-
-    // Build provider options sub-object from provider-specific fields.
-    let null_expr = alloc(Expr::Null);
-    let provider_options = if let Some(type_name) = config.and_then(|c| c.options_type) {
-        let prov_fields: Vec<(Name, ExprId)> = config
-            .unwrap()
-            .fields
-            .iter()
-            .map(|&name| {
-                let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
-                (Name::new(name), val)
-            })
-            .collect();
-        if !provider_fields_set.is_empty() {
-            alloc(Expr::Object {
-                type_name: TypePath::from_dotted(type_name),
-                type_args: vec![],
-                fields: prov_fields,
-                spreads: vec![],
-            })
-        } else {
-            null_expr
-        }
-    } else {
-        null_expr
-    };
-
-    // Extract top-level fields in class-definition order.
-    // Skip provider_options and request_body -- they're inserted separately below.
-    let mut options_fields: Vec<(Name, ExprId)> = CLIENT_OPTION_FIELDS
-        .iter()
-        .filter(|name| !SEPARATELY_ASSEMBLED_FIELDS.contains(name))
-        .map(|&name| {
-            let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
-            (Name::new(name), val)
-        })
-        .collect();
-
-    let request_body = alloc(Expr::Map {
-        entries: request_body_entries,
-    });
-
-    // Insert provider_options before "media_url_handler" to match PrimitiveClientOptions
-    // class-definition order, then append request_body at the end.
-    let insert_pos = options_fields
-        .iter()
-        .position(|(n, _)| n.as_str() == "media_url_handler")
-        .unwrap_or_else(|| {
-            options_fields
-                .iter()
-                .position(|(n, _)| n.as_str() == "headers")
-                .unwrap_or(options_fields.len())
-        });
-    options_fields.insert(
-        insert_pos,
-        (Name::new("provider_options"), provider_options),
-    );
-    options_fields.push((Name::new("request_body"), request_body));
-
-    let options_expr = alloc(Expr::Object {
-        type_name: TypePath::from_dotted("baml.llm.PrimitiveClientOptions"),
-        type_args: vec![],
-        fields: options_fields,
-        spreads: vec![],
-    });
-
-    // PrimitiveClient { name, provider, options }
-    let name_lit = alloc(Expr::Literal(Literal::String(client_name.to_string())));
-    let provider_lit = alloc(Expr::Literal(Literal::String(
-        provider.map_or("unknown", |s| s.as_str()).to_string(),
-    )));
-    let root = alloc(Expr::Object {
-        type_name: TypePath::from_dotted("baml.llm.PrimitiveClient"),
-        type_args: vec![],
-        fields: vec![
-            (Name::new("name"), name_lit),
-            (Name::new("provider"), provider_lit),
-            (Name::new("options"), options_expr),
-        ],
-        spreads: vec![],
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts: la_arena::Arena::new(),
-        patterns: la_arena::Arena::new(),
-        match_arms: la_arena::Arena::new(),
-        catch_arms: la_arena::Arena::new(),
-        type_annotations: la_arena::Arena::new(),
-        root_expr: Some(root),
-    };
-    let source_map = AstSourceMap {
-        expr_spans,
-        ..Default::default()
-    };
-
-    let func_name = format!("{client_name}$new");
-    let lenient_param = Param {
-        name: lenient_param_name,
-        type_expr: Some((TypeExprKind::Bool { attrs: vec![] }).at(span)),
-        default: None,
-        span,
-        name_span: name_token.text_range(),
-    };
-    FunctionDef {
-        name: Name::new(&func_name),
-        generic_params: vec![],
-        generic_param_bounds: vec![],
-        params: vec![lenient_param],
-        defaults: FunctionDefaults::empty(),
-        return_type: None,
-        throws: None,
-        body: Some(FunctionBodyDef::Expr(body, source_map)),
-        declarative_meta: None,
-        origin: crate::ast::FunctionOrigin::Internal,
-        attributes: vec![],
-        docstring: None,
-        is_tagged_template_tag: false,
-        span,
-        name_span: name_token.text_range(),
-    }
-}
-
-// ── Generated field lists & provider config ────────────────────
-//
-// Extracted from llm_types.baml by build.rs. To add a new field or provider,
-// edit the BAML file (and its @providers annotations) -- the compiler picks it
-// up automatically.
-
-#[allow(dead_code)]
-mod generated_client_fields {
-    include!(concat!(env!("OUT_DIR"), "/client_fields_generated.rs"));
-}
-use generated_client_fields::{CLIENT_OPTION_FIELDS, PROVIDER_CONFIGS, ProviderFieldConfig};
-
-/// Map fields that should be seeded as empty maps rather than null.
-const EMPTY_MAP_FIELDS: &[&str] = &["headers", "query_params"];
-
-/// Fields that are assembled separately (not seeded/extracted with normal top-level fields).
-const SEPARATELY_ASSEMBLED_FIELDS: &[&str] = &["provider_options", "request_body"];
-
-/// Look up the provider config for a given provider name.
-fn provider_config_for(provider: &str) -> Option<&'static ProviderFieldConfig> {
-    PROVIDER_CONFIGS
-        .iter()
-        .find(|c| c.providers.contains(&provider))
-}
-
-/// Check whether a provider name is known.
-fn is_valid_provider(provider: &str) -> bool {
-    PROVIDER_CONFIGS
-        .iter()
-        .any(|c| c.providers.contains(&provider))
-}
-
-/// Conventional `api_key` env var for a provider, or `None` if the provider
-/// needs explicit credentials.
-///
-/// Mirrors the mapping the inline `"openai/model"` shorthand applies in
-/// `sys_ops` (`from_shorthand`): only the two providers whose env-var
-/// convention is ubiquitous enough to assume default their key here.
-fn default_api_key_env_var(provider: &str) -> Option<&'static str> {
-    match provider {
-        "openai" | "openai-responses" => Some("OPENAI_API_KEY"),
-        "anthropic" => Some("ANTHROPIC_API_KEY"),
-        _ => None,
-    }
-}
-
-/// Validate provider-specific option constraints at compile time.
-fn validate_client_options(
-    provider: &str,
-    client_name: &str,
-    has_base_url: bool,
-    provider_fields_set: &std::collections::HashSet<String>,
-    span: text_size::TextRange,
-    diags: &mut Vec<LoweringDiagnostic>,
-) {
-    let has_prov = |name: &str| -> bool { provider_fields_set.contains(name) };
-
-    if provider == "azure-openai"
-        && !has_base_url
-        && !(has_prov("resource_name") && has_prov("deployment_id"))
-    {
-        let missing = match (has_prov("resource_name"), has_prov("deployment_id")) {
-            (false, false) => "resource_name and deployment_id",
-            (false, true) => "resource_name",
-            (true, false) => "deployment_id",
-            (true, true) => unreachable!(),
-        };
-        diags.push(LoweringDiagnostic::MissingClientOptions {
-            client_name: client_name.to_string(),
-            message: format!(
-                "azure-openai requires either base_url or both resource_name and deployment_id (missing: {missing})"
-            ),
-            span,
-        });
-    }
-
-    if provider == "vertex-ai" && !has_base_url && !has_prov("location") {
-        diags.push(LoweringDiagnostic::MissingClientOptions {
-            client_name: client_name.to_string(),
-            message: "vertex-ai requires either base_url or location (e.g. us-central1) in options"
-                .to_string(),
-            span,
-        });
-    }
-}
+// NOTE: the legacy `client<llm>` / `retry_policy` config-block synthesis
+// (client identity lets, `<Client>$new` companions, provider option tables,
+// retry-policy lets) lived here. Both blocks are removed language surface:
+// clients are plain values (`client Name = <expr>;`) and retry composes at
+// the client boundary via `ai.Retry`. Their CST nodes now lower to a single
+// migration diagnostic each.
 
 /// Lower variant-level attributes from an `EnumVariant` node.
 fn lower_variant_attributes(variant: &ast::EnumVariant) -> Vec<RawAttribute> {
@@ -3196,4 +2243,23 @@ fn lower_attribute_args_from_node(node: &SyntaxNode) -> Vec<RawAttributeArg> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod test_owner_tests {
+    use std::path::Path;
+
+    use super::test_owner_from_path;
+
+    #[test]
+    fn path_owner_uses_the_same_namespace_identifier_rules_as_hir() {
+        assert_eq!(
+            test_owner_from_path(Some(Path::new("ns_orders/ns_v2/tests.baml"))),
+            "root.orders.v2"
+        );
+        assert_eq!(
+            test_owner_from_path(Some(Path::new("ns_123/tests.baml"))),
+            "root"
+        );
+    }
 }

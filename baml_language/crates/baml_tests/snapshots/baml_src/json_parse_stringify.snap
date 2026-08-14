@@ -3,52 +3,60 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function json_parse_stringify.$init_test_ns_json_parse_stringify_json_parse_stringify(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.json_parse_stringify"
     load_const "parse_array_of_ints"
     make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_parse_stringify"
     load_const "parse_then_match_array"
     make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_parse_stringify"
     load_const "roundtrip_stringify_parse"
     make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_parse_stringify"
     load_const "parse_int_disambiguation"
     make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_parse_stringify"
     load_const "parse_float_disambiguation"
     make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_parse_stringify"
     load_const "parse_throws_on_garbage"
     make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_parse_stringify"
     load_const "stringify_pretty_multiline"
     make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_parse_stringify"
     load_const "roundtrip_nested_object"
     make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -57,9 +65,9 @@ function json_parse_stringify.$init_test_ns_json_parse_stringify_json_parse_stri
 function json_parse_stringify.parse_array_len() -> int {
     load_const "[1, 2, 3]"
     call baml.json.parse
-    store_var j
-    load_var j
-    is_type _[]
+    store_var _2
+    load_var _2
+    narrow_bind baml.json.json[], slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -69,7 +77,7 @@ function json_parse_stringify.parse_array_len() -> int {
     jump L2
 
   L1:
-    load_var j
+    load_var _2
     container_len
 
   L2:
@@ -79,7 +87,9 @@ function json_parse_stringify.parse_array_len() -> int {
 function json_parse_stringify.parse_is_float() -> bool {
     load_const "1.0"
     call baml.json.parse
-    is_type float
+    store_var _2
+    load_var _2
+    narrow_bind float, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -97,7 +107,9 @@ function json_parse_stringify.parse_is_float() -> bool {
 function json_parse_stringify.parse_is_int() -> bool {
     load_const "1"
     call baml.json.parse
-    is_type int
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -115,9 +127,9 @@ function json_parse_stringify.parse_is_int() -> bool {
 function json_parse_stringify.parse_then_match_array_len() -> int {
     load_const "[1, 2, 3]"
     call baml.json.parse
-    store_var j
-    load_var j
-    is_type _[]
+    store_var _2
+    load_var _2
+    narrow_bind baml.json.json[], slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -127,7 +139,7 @@ function json_parse_stringify.parse_then_match_array_len() -> int {
     jump L2
 
   L1:
-    load_var j
+    load_var _2
     container_len
 
   L2:

@@ -123,14 +123,6 @@ impl FunctionMetadataTable {
     pub fn get(&self, function_id: FunctionId) -> Option<&FunctionMetadata> {
         self.functions.iter().find(|f| f.function_id == function_id)
     }
-
-    #[must_use]
-    pub fn function_id_for_fqn(&self, fqn: &str) -> Option<FunctionId> {
-        self.functions
-            .iter()
-            .find(|f| f.fqn == fqn)
-            .map(|f| f.function_id)
-    }
 }
 
 /// Program-level metadata an engine derives at construction. `program_id`

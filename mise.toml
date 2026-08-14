@@ -7,23 +7,30 @@ python = "3.13"     # Will use uv for Python package management
 ruby = "3.2.2"
 node = "22"         # For pnpm
 java = "temurin-23"
+gradle = "8.14"     # sdk_tests/crates/java fixtures (compiled with --release 17)
+dotnet = "10.0.301"
 
 uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
 clang = "22.1.7" # LLVM tools for CI, including llvm-strip
+clang-format = "22.1.7"
+cmake = "4.3.3"
+ninja = "1.13.2"
 
 # Rust tools
 "cargo:bacon" = "latest"
 "cargo:cross" = "latest"
 "cargo:cargo-watch" = "latest"
-"cargo:wasm-pack" = "0.14.0"
+"github:rustwasm/wasm-pack" = "0.14.0"
 "cargo:ripgrep" = "latest"
 "cargo:just" = "latest"
 "cargo:prek" = "0.3.13"
 "cargo:cargo-nextest" = "latest"
 "cargo:cargo-insta" = "latest"
-"cargo:cargo-shear" = "latest"
+# cargo-shear >=1.13.3 needs rustc 1.95; the repo is pinned to 1.93.0, so build it with a newer toolchain.
+"cargo:cargo-shear" = { version = "latest", install_env = { RUSTUP_TOOLCHAIN = "1.97.1" } }
+"cargo:https://github.com/astral-sh/hawk" = { version = "rev:42b09e72b2bf79f75aa8ce5f4563576f2dedf4c1", crate = "cargo-hawk", locked = true, install_env = { RUSTC_BOOTSTRAP = "1", RUSTUP_TOOLCHAIN = "1.97.1" } }
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
@@ -32,9 +39,10 @@ clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 
 # Protobuf compiler — needed by sdks/go/bridge_go/build.sh (bridge_ctypes uses vendored protoc).
 protoc = "27.1"
+"spm:apple/swift-protobuf" = "1.38.1"
 
 # Python tools
-"pipx:ruff" = "latest"
+"pipx:ruff" = "0.15.22"
 "pipx:maturin" = "latest"
 
 # Node tools
@@ -42,6 +50,24 @@ protoc = "27.1"
 "npm:@infisical/cli" = "latest"
 
 actionlint = "latest"
+ast-grep = "0.44.1"
+
+# Code review tools
+[tools.coderabbit]
+version = "0.7.2"
+
+[tools.coderabbit.platforms]
+macos-x64 = { url = "https://cli.coderabbit.ai/releases/0.7.2/coderabbit-darwin-x64.zip", checksum = "sha256:1f54ea386e9f6ef5277101d54fa6f071af65f88a800a786c6f83976396aeb727" }
+macos-arm64 = { url = "https://cli.coderabbit.ai/releases/0.7.2/coderabbit-darwin-arm64.zip", checksum = "sha256:29944665428720e55aa26a452e8f637858607a76f4722cabb88296f6976ee5b7" }
+linux-x64 = { url = "https://cli.coderabbit.ai/releases/0.7.2/coderabbit-linux-x64.zip", checksum = "sha256:32dd3a5a1238fa68eb7cfa95cc19cf6ad4980882589c616c0e300b920f1bb865" }
+linux-arm64 = { url = "https://cli.coderabbit.ai/releases/0.7.2/coderabbit-linux-arm64.zip", checksum = "sha256:cb2aa4a598fab167cdc6467f0a44be504857cc9866057bd94ea7018481937c5d" }
+
+[tool_alias]
+coderabbit = "http:coderabbit"
+
+[tasks.coderabbit-review]
+run = "coderabbit review --base canary"
+description = "Review local changes with CodeRabbit against the canary branch"
 
 [tasks.pr-unresolved]
 run = "./scripts/pr-unresolved"

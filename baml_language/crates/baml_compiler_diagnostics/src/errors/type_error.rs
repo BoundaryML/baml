@@ -100,10 +100,6 @@ pub enum TypeError<C: ErrorContext> {
         variant_name: String,
         location: C::Location,
     },
-    /// Using $watch on a non-variable expression (e.g., `arr[0].$watch`).
-    WatchOnNonVariable { location: C::Location },
-    /// Using $watch on a variable not declared with `watch let`.
-    WatchOnUnwatchedVariable { name: String, location: C::Location },
     /// Function body has no return expression but requires a non-void return type.
     MissingReturnExpression {
         expected: C::Ty,
@@ -127,118 +123,6 @@ pub enum TypeError<C: ErrorContext> {
     /// Classes form a dependency cycle (infinite recursion).
     ClassCycle {
         cycle_path: String,
-        location: C::Location,
-    },
-
-    // ============ Jinja Template Errors ============
-    /// Variable referenced in Jinja template does not exist.
-    JinjaUnresolvedVariable {
-        name: String,
-        suggestions: Vec<String>,
-        location: C::Location,
-    },
-    /// Function referenced without calling it (missing parentheses).
-    JinjaFunctionReferenceWithoutCall {
-        function_name: String,
-        location: C::Location,
-    },
-    /// Unknown Jinja filter.
-    JinjaInvalidFilter {
-        filter_name: String,
-        suggestions: Vec<String>,
-        location: C::Location,
-    },
-    /// Type mismatch in Jinja expression.
-    JinjaInvalidType {
-        expression: String,
-        expected: String,
-        found: String,
-        location: C::Location,
-    },
-    /// Property access on class that doesn't have the property.
-    JinjaPropertyNotDefined {
-        variable: String,
-        class_name: String,
-        property: String,
-        location: C::Location,
-    },
-    /// Property access on enum value (not allowed).
-    JinjaEnumValuePropertyAccess {
-        variable: String,
-        enum_value: String,
-        property: String,
-        location: C::Location,
-    },
-    /// Comparing enum to string (deprecated).
-    JinjaEnumStringComparison {
-        enum_name: String,
-        location: C::Location,
-    },
-    /// Property access on union where some members don't have the property.
-    JinjaPropertyNotFoundInUnion {
-        property: String,
-        missing_on: Vec<String>,
-        location: C::Location,
-    },
-    /// Property has inconsistent types across union members.
-    JinjaPropertyTypeMismatchInUnion {
-        property: String,
-        location: C::Location,
-    },
-    /// Union contains non-class type when accessing property.
-    JinjaNonClassInUnion {
-        variable: String,
-        property: String,
-        non_class_type: String,
-        location: C::Location,
-    },
-    /// Wrong number of arguments in Jinja function call.
-    JinjaWrongArgCount {
-        function_name: String,
-        expected: usize,
-        found: usize,
-        location: C::Location,
-    },
-    /// Missing required argument in Jinja function call.
-    JinjaMissingArg {
-        function_name: String,
-        arg_name: String,
-        location: C::Location,
-    },
-    /// Unknown argument name in Jinja function call.
-    JinjaUnknownArg {
-        function_name: String,
-        arg_name: String,
-        suggestions: Vec<String>,
-        location: C::Location,
-    },
-    /// Wrong argument type in Jinja function call.
-    JinjaWrongArgType {
-        function_name: String,
-        arg_name: String,
-        expected: String,
-        found: String,
-        location: C::Location,
-    },
-    /// Failed to parse Jinja template.
-    JinjaParseError {
-        message: String,
-        location: C::Location,
-    },
-    /// Unsupported Jinja feature.
-    JinjaUnsupportedFeature {
-        feature: String,
-        location: C::Location,
-    },
-    /// Invalid Jinja syntax.
-    JinjaInvalidSyntax {
-        message: String,
-        location: C::Location,
-    },
-    /// Unknown Jinja test.
-    JinjaInvalidTest {
-        test_name: String,
-        suggestions: Vec<String>,
         location: C::Location,
     },
 

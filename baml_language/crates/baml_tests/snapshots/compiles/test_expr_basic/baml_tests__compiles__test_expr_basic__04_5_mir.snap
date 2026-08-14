@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23423
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -7,18 +8,18 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: () -> void throws unknown
+    let _3: () -> void throws never
     let _4: void
-    let _5: () -> void throws unknown
+    let _5: () -> void throws never
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test(copy _1, const "simple test", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root", const "simple test", copy _3, const null) -> [bb1];
     }
 
     bb1: {
         _5 = make_closure lambda[1]();
-        _4 = call const fn testing.TestCollector.register_test(copy _1, const "with not_null", copy _5, const null) -> [bb2];
+        _4 = call const fn testing.TestCollector.register_test_at(copy _1, const "root", const "with not_null", copy _5, const null) -> [bb2];
     }
 
     bb2: {
@@ -32,9 +33,9 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_main, 0)>() -> null {
+fn .<lambda($init_test_main, 0)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: int // x
     let _2: int
 
@@ -50,9 +51,9 @@ fn .<lambda($init_test_main, 0)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda($init_test_main, 1)>() -> null {
+fn .<lambda($init_test_main, 1)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: string // result
     let _2: string
 

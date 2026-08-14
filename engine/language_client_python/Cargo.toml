@@ -3,7 +3,7 @@ name = "baml-python-ffi"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
-description = "BAML python bindings (Cargo.toml)"
+description = "BAML v0 — Python runtime for baml_client"
 license = "Apache-2.0"
 
 [lib]

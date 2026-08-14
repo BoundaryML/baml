@@ -27,7 +27,7 @@
 //! ```
 
 use baml_base::{Name, Span};
-use baml_type::RuntimeTy;
+use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
     BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
@@ -93,7 +93,6 @@ impl MirBuilder {
         name: Option<Name>,
         ty: RuntimeTy,
         span: Option<Span>,
-        is_watched: bool,
     ) -> Local {
         let id = Local(self.locals.len());
         self.locals.push(LocalDecl {
@@ -101,7 +100,6 @@ impl MirBuilder {
             ty,
             span,
             scope_span: None,
-            is_watched,
             is_captured: false,
         });
         id
@@ -109,7 +107,7 @@ impl MirBuilder {
 
     /// Allocate a temporary (unnamed local).
     pub(crate) fn temp(&mut self, ty: RuntimeTy) -> Local {
-        self.declare_local(None, ty, None, false)
+        self.declare_local(None, ty, None)
     }
 
     /// Get the number of locals declared so far.
@@ -208,6 +206,27 @@ impl MirBuilder {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
+    /// Emit an open-world interface-field store.
+    pub(crate) fn virtual_field_store(
+        &mut self,
+        iface: baml_type::TyTemplateInterface,
+        receiver: Operand,
+        field_index: u32,
+        field: baml_base::Name,
+        value: Operand,
+    ) {
+        self.push_statement(
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field_index,
+                field,
+                value,
+            },
+            None,
+        );
+    }
+
     /// Emit a drop statement.
     pub(crate) fn drop(&mut self, place: Place) {
         self.push_statement(StatementKind::Drop(place), None);
@@ -221,21 +240,6 @@ impl MirBuilder {
     /// Emit a nop statement.
     pub(crate) fn nop(&mut self) {
         self.push_statement(StatementKind::Nop, None);
-    }
-
-    /// Emit an unwatch statement for a watched local going out of scope.
-    pub(crate) fn unwatch(&mut self, local: Local) {
-        self.push_statement(StatementKind::Unwatch(local), None);
-    }
-
-    /// Emit a `watch_options` statement to update the filter for a watched local.
-    pub(crate) fn watch_options(&mut self, local: Local, filter: Operand) {
-        self.push_statement(StatementKind::WatchOptions { local, filter }, None);
-    }
-
-    /// Emit a `watch_notify` statement to manually trigger notification for a watched local.
-    pub(crate) fn watch_notify(&mut self, local: Local) {
-        self.push_statement(StatementKind::WatchNotify(local), None);
     }
 
     /// Set debug scope span for a local variable.
@@ -266,6 +270,23 @@ impl MirBuilder {
     pub(crate) fn branch(&mut self, condition: Operand, then_block: BlockId, else_block: BlockId) {
         self.set_terminator(Terminator::Branch {
             condition,
+            then_block,
+            else_block,
+        });
+    }
+
+    pub(crate) fn narrow_bind(
+        &mut self,
+        source: Operand,
+        ty_template: TyTemplate,
+        destination: Local,
+        then_block: BlockId,
+        else_block: BlockId,
+    ) {
+        self.set_terminator(Terminator::NarrowBind {
+            source,
+            ty_template,
+            destination,
             then_block,
             else_block,
         });
@@ -385,7 +406,7 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call(
         &mut self,
-        iface: baml_type::TyTemplate,
+        iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand>,
         ntypeargs: usize,
@@ -410,7 +431,7 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call_with_runtime_id(
         &mut self,
-        iface: baml_type::TyTemplate,
+        iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand>,
         ntypeargs: usize,
@@ -551,6 +572,7 @@ impl MirBuilder {
         closure: Operand,
         name: Operand,
         config: Option<Box<Operand>>,
+        future_ty: Box<crate::ir::SpawnFutureTy>,
         future: Place,
         resume: BlockId,
     ) {
@@ -562,6 +584,7 @@ impl MirBuilder {
             closure,
             name,
             config,
+            future_ty,
             future,
             resume,
         });
@@ -631,6 +654,7 @@ impl MirBuilder {
                 viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
+            signature: None,
         }
     }
 
@@ -673,6 +697,7 @@ impl MirBuilder {
                 viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
+            signature: None,
         }
     }
 

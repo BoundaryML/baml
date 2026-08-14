@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25679
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -7,18 +8,18 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: (testing.TestCollector) -> void throws unknown
+    let _3: (testing.TestCollector) -> void throws testing.InvalidTestName
     let _4: void
-    let _5: (testing.TestCollector) -> void throws unknown
+    let _5: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test_set(copy _1, const "dynamic tests", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root", const "dynamic tests", copy _3, const null) -> [bb1];
     }
 
     bb1: {
         _5 = make_closure lambda[1]();
-        _4 = call const fn testing.TestCollector.register_test_set(copy _1, const "conditional tests", copy _5, const null) -> [bb2];
+        _4 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root", const "conditional tests", copy _5, const null) -> [bb2];
     }
 
     bb2: {
@@ -32,195 +33,57 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: string[] // cases
     let _3: string[]
-    let _4: baml.iter.Iterator<Item = string, Error = never>
-    let _5: type
-    let _6: unknown
-    let _7: bool
-    let _8: unknown
-    let _9: bool
-    let _10: type
-    let _11: bool
-    let _12: type
-    let _13: type
-    let _14: bool
-    let _15: type
-    let _16: type
-    let _17: type
-    let _18: bool
-    let _19: type
-    let _20: bool
-    let _21: unknown
-    let _22: bool
-    let _23: type
-    let _24: type
-    let _25: type
-    let _26: bool
-    let _27: unknown
-    let _28: bool
-    let _29: unknown
-    let _30: bool
-    let _31: type
-    let _32: type
-    let _33: bool
-    let _34: string
-    let _35: string // case [captured]
-    let _36: void
-    let _37: () -> void throws unknown
+    let _4: baml.iter.Iterator<Error = never, Item = string>
+    let _5: unknown
+    let _6: bool
+    let _7: string
+    let _8: string // case [captured]
+    let _9: void
+    let _10: () -> void throws never
 
     bb0: {
         _2 = [const "hello", const "world", const "foo"]: string[];
         _3 = copy _2;
-        goto -> bb1;
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = load_type(string);
-        _4 = call const fn baml.iter.Iterable$for$T[].iter<copy _5>(copy _3) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
-        _7 = is_type(copy _4, baml.iter.Flatten<_, string, never, never>);
-        branch copy _7 -> [bb22, bb3];
+        _6 = is_type(copy _5, baml.iter.Done);
+        branch copy _6 -> [bb4, bb3];
     }
 
     bb3: {
-        _9 = is_type(copy _4, baml.iter.ArrayIterator<string>);
-        branch copy _9 -> [bb21, bb4];
+        _7 = copy _5;
+        fresh_cell(_8);
+        _8 = copy _7;
+        _10 = make_closure lambda[0](copy _8);
+        _9 = call const fn testing.TestCollector.register_test(copy _1, const "check case", copy _10, const null) -> [bb1];
     }
 
     bb4: {
-        _11 = is_type(copy _4, baml.iter.StepBy<string, never>);
-        branch copy _11 -> [bb20, bb5];
+        _0 = const null;
+        goto -> bb5;
     }
 
     bb5: {
-        _14 = is_type(copy _4, baml.iter.Chain<string, never, never>);
-        branch copy _14 -> [bb19, bb6];
-    }
-
-    bb6: {
-        _18 = is_type(copy _4, baml.iter.Repeat<string>);
-        branch copy _18 -> [bb18, bb7];
-    }
-
-    bb7: {
-        _20 = is_type(copy _4, baml.iter.Map<_, string, never, never>);
-        branch copy _20 -> [bb17, bb8];
-    }
-
-    bb8: {
-        _22 = is_type(copy _4, baml.iter.Filter<string, never, never>);
-        branch copy _22 -> [bb16, bb9];
-    }
-
-    bb9: {
-        _26 = is_type(copy _4, baml.iter.FilterMap<_, string, never, never>);
-        branch copy _26 -> [bb15, bb10];
-    }
-
-    bb10: {
-        _28 = is_type(copy _4, baml.iter.FlatMap<_, string, never, never, never>);
-        branch copy _28 -> [bb14, bb11];
-    }
-
-    bb11: {
-        _30 = is_type(copy _4, baml.iter.Peekable<string, never>);
-        branch copy _30 -> [bb13, bb12];
-    }
-
-    bb12: {
-        unreachable;
-    }
-
-    bb13: {
-        _31 = load_type(string);
-        _32 = load_type(never);
-        _6 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _4) -> [bb23];
-    }
-
-    bb14: {
-        _29 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _4);
-        _6 = call copy _29() -> [bb23];
-    }
-
-    bb15: {
-        _27 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _4);
-        _6 = call copy _27() -> [bb23];
-    }
-
-    bb16: {
-        _23 = load_type(string);
-        _24 = load_type(never);
-        _25 = load_type(never);
-        _6 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _4) -> [bb23];
-    }
-
-    bb17: {
-        _21 = make_bound_method baml.iter.Map.Iterator.next(copy _4);
-        _6 = call copy _21() -> [bb23];
-    }
-
-    bb18: {
-        _19 = load_type(string);
-        _6 = call const fn baml.iter.Repeat.Iterator.next<copy _19>(copy _4) -> [bb23];
-    }
-
-    bb19: {
-        _15 = load_type(string);
-        _16 = load_type(never);
-        _17 = load_type(never);
-        _6 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _4) -> [bb23];
-    }
-
-    bb20: {
-        _12 = load_type(string);
-        _13 = load_type(never);
-        _6 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _4) -> [bb23];
-    }
-
-    bb21: {
-        _10 = load_type(string);
-        _6 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _10>(copy _4) -> [bb23];
-    }
-
-    bb22: {
-        _8 = make_bound_method baml.iter.Flatten.Iterator.next(copy _4);
-        _6 = call copy _8() -> [bb23];
-    }
-
-    bb23: {
-        _33 = is_type(copy _6, baml.iter.Done);
-        branch copy _33 -> [bb25, bb24];
-    }
-
-    bb24: {
-        _34 = copy _6;
-        fresh_cell(_35);
-        _35 = copy _34;
-        _37 = make_closure lambda[0](copy _35);
-        _36 = call const fn testing.TestCollector.register_test(copy _1, const "check case", copy _37, const null) -> [bb2];
-    }
-
-    bb25: {
-        _0 = const null;
-        goto -> bb26;
-    }
-
-    bb26: {
         return;
     }
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_main, 0)>, 1)>() -> null {
+fn .<lambda(<lambda($init_test_main, 0)>, 1)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: string
 
     bb0: {
@@ -234,16 +97,16 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda($init_test_main, 2)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_main, 2)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: bool // run_slow
     let _3: void
-    let _4: () -> void throws unknown
+    let _4: () -> void throws never
     let _5: bool
     let _6: void
-    let _7: () -> void throws unknown
+    let _7: () -> void throws never
 
     bb0: {
         _2 = const false;
@@ -272,9 +135,9 @@ fn .<lambda($init_test_main, 2)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_main, 2)>, 3)>() -> null {
+fn .<lambda(<lambda($init_test_main, 2)>, 3)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];
@@ -286,9 +149,9 @@ fn .<lambda(<lambda($init_test_main, 2)>, 3)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(<lambda($init_test_main, 2)>, 4)>() -> null {
+fn .<lambda(<lambda($init_test_main, 2)>, 4)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];

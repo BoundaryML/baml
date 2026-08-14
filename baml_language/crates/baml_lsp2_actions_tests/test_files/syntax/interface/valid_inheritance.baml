@@ -11,7 +11,7 @@ interface Aged {
 interface Person requires Named, Aged {
   occupation: string
 
-  function introduce(self) -> string
+  function introduce(self) -> string throws never
 }
 
 class Employee {

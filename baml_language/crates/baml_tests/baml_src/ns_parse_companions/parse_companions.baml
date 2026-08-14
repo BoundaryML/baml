@@ -1,16 +1,61 @@
 // Tests for parse companion functions ($parse).
 //
-// Converted from crates/baml_tests/tests/parse_companions.rs — but kept in Rust
-// for now (they still pass there). `$parse` is pure parsing, NOT a network call:
-// the same source works in a FLAT (non-namespaced) baml file and via the Rust
-// `baml_test!` single-source runner.
+// `$parse` is pure parsing, NOT a network call: the LLM client below points at
+// a dead localhost port and is never contacted. Each test parses `"{}"`
+// against a class whose only field is optional/nullable and asserts the field
+// materializes as `null` (missing optional field is allowed). Since BAML has
+// no host-side instance shape introspection, assertions compare with `==`
+// against literal instances. Locals go through top-level helper functions
+// (test-block local-boxing VM bug).
+
+client ParseCompanionsTestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+// ─── missing optional class field (`string?`) ────────────────────────────────
+
+class ParseCompanionsOptPayload {
+    text string?
+}
+
+function ParseCompanionsParseOptPayload() -> ParseCompanionsOptPayload {
+    client: ParseCompanionsTestClient
+    prompt: `${ctx.output_format}`
+}
+
+function parse_companions_missing_optional_fn() -> bool {
+    let parsed = ParseCompanionsParseOptPayload$parse("{}");
+    parsed == ParseCompanionsOptPayload { text: null }
+}
+
+test "parse_companion_allows_missing_optional_class_field" {
+    assert.is_true(parse_companions_missing_optional_fn())
+}
+
+// ─── missing nullable alias field (`string | null` alias) ────────────────────
 //
-// BUG (blocks converting them here): in a NAMESPACED file (ns_*/), a `$parse`
-// companion's return-type `<T>` threading resolves to `Void`, so calling
-// `ParsePayload$parse("{}")` fails at runtime with:
-//   ExternalOpFailed(BamlLlmStreamCacheNew, Other("Non-parsable type: Void {...}"))
-// The identical code in baml_src/<flat>.baml (no ns_ dir) returns
-// `Payload { text: null }` correctly. Once the namespaced `$parse` type-arg
-// threading is fixed, move these two tests here:
-//   - parse_companion_allows_missing_optional_class_field
-//   - parse_companion_allows_missing_nullable_alias_field
+// `type MaybeText = string | null` is identical to `string?` — a nullable
+// union is optionality, so a missing/null value is bare `null` (not wrapped in
+// union metadata), matching the `string?` case above.
+
+type ParseCompanionsMaybeText = string | null
+
+class ParseCompanionsAliasPayload {
+    text ParseCompanionsMaybeText
+}
+
+function ParseCompanionsParseAliasPayload() -> ParseCompanionsAliasPayload {
+    client: ParseCompanionsTestClient
+    prompt: `${ctx.output_format}`
+}
+
+function parse_companions_missing_alias_fn() -> bool {
+    let parsed = ParseCompanionsParseAliasPayload$parse("{}");
+    parsed == ParseCompanionsAliasPayload { text: null }
+}
+
+test "parse_companion_allows_missing_nullable_alias_field" {
+    assert.is_true(parse_companions_missing_alias_fn())
+}
