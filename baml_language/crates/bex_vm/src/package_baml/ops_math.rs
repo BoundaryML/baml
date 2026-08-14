@@ -30,7 +30,6 @@
 use std::sync::Arc;
 
 use bex_heap::TlabHolder;
-use bex_str::BexStr;
 use bex_vm_types::{Value, errors::VmPanic};
 use num_bigint::BigInt;
 
@@ -38,22 +37,21 @@ use super::{
     BamlClassOpsAdd_bigint__for_bigint, BamlClassOpsAdd_bigint__for_int,
     BamlClassOpsAdd_float__for_float, BamlClassOpsAdd_float__for_int,
     BamlClassOpsAdd_int__for_bigint, BamlClassOpsAdd_int__for_float, BamlClassOpsAdd_int__for_int,
-    BamlClassOpsAdd_string__for_string, BamlClassOpsDivide_bigint__for_bigint,
-    BamlClassOpsDivide_bigint__for_int, BamlClassOpsDivide_float__for_float,
-    BamlClassOpsDivide_float__for_int, BamlClassOpsDivide_int__for_bigint,
-    BamlClassOpsDivide_int__for_float, BamlClassOpsDivide_int__for_int,
-    BamlClassOpsMultiply_bigint__for_bigint, BamlClassOpsMultiply_bigint__for_int,
-    BamlClassOpsMultiply_float__for_float, BamlClassOpsMultiply_float__for_int,
-    BamlClassOpsMultiply_int__for_bigint, BamlClassOpsMultiply_int__for_float,
-    BamlClassOpsMultiply_int__for_int, BamlClassOpsNegate_for_bigint, BamlClassOpsNegate_for_float,
-    BamlClassOpsNegate_for_int, BamlClassOpsRemainder_bigint__for_bigint,
-    BamlClassOpsRemainder_bigint__for_int, BamlClassOpsRemainder_float__for_float,
-    BamlClassOpsRemainder_float__for_int, BamlClassOpsRemainder_int__for_bigint,
-    BamlClassOpsRemainder_int__for_float, BamlClassOpsRemainder_int__for_int,
-    BamlClassOpsSubtract_bigint__for_bigint, BamlClassOpsSubtract_bigint__for_int,
-    BamlClassOpsSubtract_float__for_float, BamlClassOpsSubtract_float__for_int,
-    BamlClassOpsSubtract_int__for_bigint, BamlClassOpsSubtract_int__for_float,
-    BamlClassOpsSubtract_int__for_int, PackageBamlImpl,
+    BamlClassOpsDivide_bigint__for_bigint, BamlClassOpsDivide_bigint__for_int,
+    BamlClassOpsDivide_float__for_float, BamlClassOpsDivide_float__for_int,
+    BamlClassOpsDivide_int__for_bigint, BamlClassOpsDivide_int__for_float,
+    BamlClassOpsDivide_int__for_int, BamlClassOpsMultiply_bigint__for_bigint,
+    BamlClassOpsMultiply_bigint__for_int, BamlClassOpsMultiply_float__for_float,
+    BamlClassOpsMultiply_float__for_int, BamlClassOpsMultiply_int__for_bigint,
+    BamlClassOpsMultiply_int__for_float, BamlClassOpsMultiply_int__for_int,
+    BamlClassOpsNegate_for_bigint, BamlClassOpsNegate_for_float, BamlClassOpsNegate_for_int,
+    BamlClassOpsRemainder_bigint__for_bigint, BamlClassOpsRemainder_bigint__for_int,
+    BamlClassOpsRemainder_float__for_float, BamlClassOpsRemainder_float__for_int,
+    BamlClassOpsRemainder_int__for_bigint, BamlClassOpsRemainder_int__for_float,
+    BamlClassOpsRemainder_int__for_int, BamlClassOpsSubtract_bigint__for_bigint,
+    BamlClassOpsSubtract_bigint__for_int, BamlClassOpsSubtract_float__for_float,
+    BamlClassOpsSubtract_float__for_int, BamlClassOpsSubtract_int__for_bigint,
+    BamlClassOpsSubtract_int__for_float, BamlClassOpsSubtract_int__for_int, PackageBamlImpl,
     bigint::{MAX_BIGINT_BITS, alloc_failure_panic},
 };
 use crate::{BexVm, errors::VmRustFnError};
@@ -162,12 +160,6 @@ impl BamlClassOpsAdd_bigint__for_int for PackageBamlImpl {
     // `int + bigint`
     fn add(int: i64, rhs: Arc<BigInt>) -> Arc<BigInt> {
         Arc::new(BigInt::from(int) + rhs.as_ref())
-    }
-}
-
-impl BamlClassOpsAdd_string__for_string for PackageBamlImpl {
-    fn add(string: &BexStr, rhs: &BexStr) -> BexStr {
-        BexStr::concat(string.clone(), rhs.clone())
     }
 }
 

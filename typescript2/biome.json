@@ -98,6 +98,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedKeys": "off"
+          }
+        }
+      },
+      "includes": ["pkg-editor/package.json"]
+    }
+  ],
   "vcs": {
     "clientKind": "git",
     "defaultBranch": "canary",

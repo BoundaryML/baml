@@ -501,7 +501,7 @@ impl BexLspRequest for BexMultiProject {
                 })?;
 
                 let project_path = if let Some(pp) = project_path {
-                    self.fs.get_path_from_str(
+                    self.fs.get_path_from_vfs_path(
                         &crate::fs::FsPath::from_str(pp),
                         "workspace/executeCommand",
                     )?
@@ -515,7 +515,7 @@ impl BexLspRequest for BexMultiProject {
                             .ok_or(LspError::NoProjectsFound)?
                     };
                     self.fs
-                        .get_path_from_str(&first_key, "workspace/executeCommand")?
+                        .get_path_from_vfs_path(&first_key, "workspace/executeCommand")?
                 };
 
                 let _ = self.get_or_create_project(project_path.clone())?;

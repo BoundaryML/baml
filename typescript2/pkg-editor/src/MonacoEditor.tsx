@@ -30,6 +30,7 @@ import type {
 } from './backend';
 import { fromDataUrl, isMediaPath, mimeFromPath, toDataUrl } from './media';
 import monospaceDarkTheme from './themes/monospace/monospace-dark.json';
+import { createWorkspacePathModel } from './workspace-path';
 
 declare const __DEV__: boolean | undefined;
 declare const process: { env: { NODE_ENV?: string } } | undefined;
@@ -397,13 +398,13 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
 
       if (disposed || !containerRef.current) return;
 
-      // Workspace root (absolute path the in-memory FS is rooted at).
-      const root = workspaceRoot.replace(/\/+$/, '') || '' || '/workspace';
-      const rootPrefix = `${root}/`;
-      const workspaceConfigPath = `${root}.code-workspace`;
-
-      // Set up in-memory filesystem
-      const workspaceFileUri = vscode.Uri.file(workspaceConfigPath);
+      // Convert the host-native root once. Everything inside Monaco uses the
+      // resulting URI identity, never the raw path spelling.
+      const workspacePaths = createWorkspacePathModel(
+        vscode.Uri,
+        workspaceRoot,
+      );
+      const workspaceFileUri = workspacePaths.configUri;
 
       const {
         InMemoryFileSystemProvider,
@@ -420,34 +421,11 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
         unlock: false,
       };
 
-      // Sandbox: only allow operations inside the workspace root (plus its config file).
-      const WORKSPACE_ROOT = root;
-      const WORKSPACE_CONFIG = workspaceConfigPath;
-
-      /** Returns true if the path is inside /workspace or is the workspace config file. */
-      const isAllowedPath = (uri: { path: string }): boolean => {
-        const p = uri.path;
-        return (
-          p === WORKSPACE_ROOT ||
-          p.startsWith(`${WORKSPACE_ROOT}/`) ||
-          p === WORKSPACE_CONFIG
-        );
-      };
-
       /** Throws if the path is outside the sandbox. */
-      const assertAllowed = (uri: { path: string }, op: string): void => {
-        if (!isAllowedPath(uri)) {
+      const assertAllowed = (uri: import('vscode').Uri, op: string): void => {
+        if (!workspacePaths.isAllowedUri(uri)) {
           throw new Error(
-            `Sandbox violation: ${op} not allowed outside ${WORKSPACE_ROOT} (got ${uri.path})`,
-          );
-        }
-      };
-
-      /** Throws if trying to delete/rename the workspace root itself. */
-      const assertNotRoot = (uri: { path: string }, op: string): void => {
-        if (uri.path === WORKSPACE_ROOT) {
-          throw new Error(
-            `Sandbox violation: cannot ${op} the workspace root directory`,
+            `Sandbox violation: ${op} not allowed outside ${workspacePaths.rootPath} (got ${uri.path})`,
           );
         }
       };
@@ -472,14 +450,15 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
             case 'delete':
               return (uri: any, opts: any) => {
                 assertAllowed(uri, 'delete');
-                assertNotRoot(uri, 'delete');
+                workspacePaths.assertNotRootUri(uri, 'delete');
                 return target.delete(uri, opts);
               };
             case 'rename':
               return (from: any, to: any, opts: any) => {
                 assertAllowed(from, 'rename (source)');
-                assertNotRoot(from, 'rename');
+                workspacePaths.assertNotRootUri(from, 'rename');
                 assertAllowed(to, 'rename (target)');
+                workspacePaths.assertNotRootUri(to, 'rename to');
                 return target.rename(from, to, opts);
               };
             default:
@@ -488,39 +467,38 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
         },
       });
 
-      // Create the workspace directory and ALL its ancestors. When rooted at a
-      // real on-disk path (e.g. /Users/me/project/baml_src), the ancestors
-      // (/Users, /Users/me, …) live OUTSIDE the sandbox, so we must use the raw
-      // (un-proxied) provider — the sandbox proxy only permits paths inside the
-      // root and would reject creating the chain that leads to it.
-      {
-        const rootParts = root.split('/');
-        for (let i = 2; i <= rootParts.length; i++) {
-          const dir = rootParts.slice(0, i).join('/');
-          if (!dir) continue;
-          try {
-            await rawFs.mkdir(vscode.Uri.file(dir));
-          } catch {
-            /* already exists */
-          }
+      // Create the workspace directory and all of its URI ancestors. Real
+      // on-disk roots can have ancestors outside the sandbox, so use rawFs.
+      for (const directoryUri of workspacePaths.rootAncestorUris()) {
+        try {
+          await rawFs.mkdir(directoryUri);
+        } catch {
+          /* already exists */
         }
       }
 
       // Write ALL persisted files to the in-memory FS.
       // Media files (images, etc.) are decoded from data URLs and also get blob URLs.
-      const allFiles = filesRef.current;
+      const allFiles = Object.create(null) as Record<string, string>;
+      for (const [filename, content] of Object.entries(filesRef.current)) {
+        const normalizedFilename = workspacePaths.normalizeFilename(filename);
+        if (normalizedFilename in allFiles) {
+          throw new Error(
+            `Duplicate workspace filename after normalization: ${filename}`,
+          );
+        }
+        allFiles[normalizedFilename] = content;
+      }
       const blobUrlMap: Record<string, string> = {};
       blobUrlsRef.current = blobUrlMap;
 
       for (const [filename, content] of Object.entries(allFiles)) {
-        const absPath = filename.startsWith(rootPrefix)
-          ? filename
-          : `${rootPrefix}${filename}`;
-        const parts = absPath.split('/');
-        for (let i = 2; i < parts.length; i++) {
-          const parentPath = parts.slice(0, i).join('/');
+        const fileUri = workspacePaths.fileUri(filename);
+        for (const directoryUri of workspacePaths.parentDirectoryUris(
+          filename,
+        )) {
           try {
-            await fileSystemProvider.mkdir(vscode.Uri.file(parentPath));
+            await fileSystemProvider.mkdir(directoryUri);
           } catch {
             /* already exists */
           }
@@ -528,18 +506,14 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
 
         if (isMediaPath(filename)) {
           const bytes = fromDataUrl(content);
-          await fileSystemProvider.writeFile(
-            vscode.Uri.file(absPath),
-            bytes,
-            writeOpts,
-          );
+          await fileSystemProvider.writeFile(fileUri, bytes, writeOpts);
           const mime = mimeFromPath(filename);
           blobUrlMap[filename] = URL.createObjectURL(
             new Blob([new Uint8Array(bytes)], { type: mime }),
           );
         } else {
           await fileSystemProvider.writeFile(
-            vscode.Uri.file(absPath),
+            fileUri,
             encoder.encode(content),
             writeOpts,
           );
@@ -550,7 +524,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
       // Write workspace config
       await fileSystemProvider.writeFile(
         workspaceFileUri,
-        encoder.encode(createWorkspaceContent(root)),
+        encoder.encode(createWorkspaceContent(workspacePaths.rootPath)),
         writeOpts,
       );
       registerFileSystemOverlay(1, fileSystemProvider);
@@ -790,8 +764,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
           'bmp',
           'ico',
         ]);
-        const WORKSPACE_PREFIX = rootPrefix;
-
         class ImagePreviewInput extends SimpleEditorInput {
           constructor(uri: any) {
             super(uri);
@@ -839,9 +811,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
               return { dispose() {} };
             }
 
-            const filename = String(uri.path).startsWith(WORKSPACE_PREFIX)
-              ? String(uri.path).slice(WORKSPACE_PREFIX.length)
-              : null;
+            const filename = workspacePaths.relativeFilename(uri);
 
             let dataUrl: string | undefined;
             if (filename) {
@@ -980,7 +950,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
         fileNames.find((path) => path.endsWith('main.baml')) ?? fileNames[0];
 
       if (firstFile) {
-        const firstFileUri = vscode.Uri.file(`${rootPrefix}${firstFile}`);
+        const firstFileUri = workspacePaths.fileUri(firstFile);
         await vscode.workspace.openTextDocument(firstFileUri);
         if (disposed) return;
         await vscode.window.showTextDocument(firstFileUri);
@@ -1035,14 +1005,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
       // Text files store raw content, media files store data URLs.
       const liveFiles: Record<string, string> = { ...allFiles };
 
-      /** Helper: extract the workspace-relative filename from a vscode Uri. */
-      const uriToFilename = (uri: { path: string }): string | null => {
-        if (uri.path.startsWith(rootPrefix)) {
-          return uri.path.slice(rootPrefix.length);
-        }
-        return null;
-      };
-
       /** Notify parent of the latest file state and push to the active backend. */
       const pushUpdate = () => {
         const snapshot = { ...liveFiles };
@@ -1074,7 +1036,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
       // Listen for text changes from the editor (any .baml file)
       const changeSubscription = vscode.workspace.onDidChangeTextDocument(
         (e) => {
-          const filename = uriToFilename(e.document.uri);
+          const filename = workspacePaths.relativeFilename(e.document.uri);
           if (filename?.endsWith('.baml')) {
             liveFiles[filename] = e.document.getText();
             pushUpdate();
@@ -1087,7 +1049,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
       let cursorDebounceTimer: ReturnType<typeof setTimeout> | undefined;
       const cursorSubscription = vscode.window.onDidChangeTextEditorSelection(
         (e: import('vscode').TextEditorSelectionChangeEvent) => {
-          const filename = uriToFilename(e.textEditor.document.uri);
+          const filename = workspacePaths.relativeFilename(
+            e.textEditor.document.uri,
+          );
           if (!filename || !filename.endsWith('.baml')) return;
 
           clearTimeout(cursorDebounceTimer);
@@ -1113,7 +1077,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
       // Listen for file creation/deletion at the FS level
       const fsWatcher = fileSystemProvider.onDidChangeFile((events) => {
         for (const event of events) {
-          const filename = uriToFilename(event.resource);
+          const filename = workspacePaths.relativeFilename(event.resource);
           if (!filename) continue;
 
           const isBaml = filename.endsWith('.baml');
@@ -1129,7 +1093,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
             event.type === FileChangeType.UPDATED ||
             event.type === FileChangeType.ADDED
           ) {
-            const fileUri = vscode.Uri.file(`${rootPrefix}${filename}`);
+            const fileUri = workspacePaths.fileUri(filename);
             fileSystemProvider
               .readFile(fileUri)
               .then((bytes: Uint8Array) => {

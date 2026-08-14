@@ -107,3 +107,10 @@ function Foo6(arg: int) -> float {
 //     ·                     ┬
 //     ·                     ╰── expected `LLM function missing 'prompt' field`, found `'}'`
 //     ╰────
+// E0003
+//
+//   × unresolved name: `bar`
+//     ╭─[functions_v2_invalid2.baml:10:11]
+//  10 │   client: bar
+//     ·           ───
+//     ╰────

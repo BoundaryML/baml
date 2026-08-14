@@ -3,7 +3,6 @@ use bex_vm_types::types::Value;
 
 use super::{BamlClassString, PackageBamlImpl};
 use crate::{
-    VmPanic,
     array_index::{resolve_index, resolve_slice_bound},
     errors::{VmBamlError, VmRustFnError},
 };
@@ -17,17 +16,17 @@ fn char_substrings(string: &BexStr) -> Vec<BexStr> {
 }
 
 impl BamlClassString for PackageBamlImpl {
-    #[allow(clippy::cast_possible_wrap)]
+    #[expect(clippy::cast_possible_wrap)]
     fn length(string: &BexStr) -> i64 {
         string.char_count() as i64
     }
 
-    #[allow(clippy::cast_possible_wrap)]
+    #[expect(clippy::cast_possible_wrap)]
     fn char_count(string: &BexStr) -> i64 {
         string.char_count() as i64
     }
 
-    #[allow(clippy::cast_possible_wrap)]
+    #[expect(clippy::cast_possible_wrap)]
     fn byte_length(string: &BexStr) -> i64 {
         string.len() as i64
     }
@@ -113,7 +112,7 @@ impl BamlClassString for PackageBamlImpl {
             .collect()
     }
 
-    fn substring(string: &BexStr, start: i64, end: i64) -> BexStr {
+    fn slice(string: &BexStr, start: i64, end: i64) -> BexStr {
         // Codepoint-indexed, not byte-indexed; a negative index counts from the end.
         let len = string.char_count();
         let start = resolve_slice_bound(start, len);
@@ -130,41 +129,37 @@ impl BamlClassString for PackageBamlImpl {
         )
     }
 
-    #[allow(clippy::cast_possible_wrap)]
+    #[expect(clippy::cast_possible_wrap)]
     fn index_of(string: &BexStr, search: &BexStr) -> Option<i64> {
         string.char_index_of(search.as_str()).map(|i| i as i64)
     }
 
-    fn char_at(string: &BexStr, index: i64) -> Result<BexStr, VmRustFnError> {
-        // Codepoint-indexed, not byte-indexed. A negative index counts from the
-        // end; an out-of-bounds index raises `IndexOutOfBounds` (like `array[i]`),
-        // so success always yields exactly one codepoint.
-        let len = string.char_count();
-        resolve_index(index, len)
-            .and_then(|i| string.char_at_codepoint(i))
-            .ok_or_else(|| VmPanic::IndexOutOfBounds { index, length: len }.into())
+    #[expect(clippy::cast_possible_wrap)]
+    fn last_index_of(string: &BexStr, search: &BexStr) -> Option<i64> {
+        string.char_last_index_of(search.as_str()).map(|i| i as i64)
     }
 
-    fn code_point_at(string: &BexStr, index: i64) -> Result<i64, VmRustFnError> {
-        // The numeric counterpart of `char_at`: same codepoint-indexing and
-        // bounds rules (negative counts from the end, out-of-range raises
-        // `IndexOutOfBounds`), but yields the code point's value rather than a
-        // one-character string. A `char` is always in `[0, 0x10FFFF]`, so the
-        // widening to `i64` is lossless.
-        let len = string.char_count();
-        resolve_index(index, len)
+    fn at(string: &BexStr, index: i64) -> Option<BexStr> {
+        // Codepoint-indexed, not byte-indexed. A negative index counts from the
+        // end; an index still outside the string after that yields `null`, so a
+        // non-null result is always exactly one codepoint.
+        resolve_index(index, string.char_count()).and_then(|i| string.char_at_codepoint(i))
+    }
+
+    fn code_point_at(string: &BexStr, index: i64) -> Option<i64> {
+        // The numeric counterpart of `at`: same codepoint-indexing and bounds
+        // rules (negative counts from the end, out of range yields `null`), but
+        // yields the code point's value rather than a one-character string. A
+        // `char` is always in `[0, 0x10FFFF]`, so the widening to `i64` is
+        // lossless.
+        resolve_index(index, string.char_count())
             .and_then(|i| string.as_str().chars().nth(i))
             .map(|c| i64::from(u32::from(c)))
-            .ok_or_else(|| VmPanic::IndexOutOfBounds { index, length: len }.into())
     }
 
     fn repeat(string: &BexStr, count: i64) -> BexStr {
         let count = usize::try_from(count.max(0)).unwrap_or(0);
         string.repeat(count)
-    }
-
-    fn matches(string: &BexStr, pattern: &BexStr) -> bool {
-        string.as_str().contains(pattern.as_str())
     }
 
     fn replace_all(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {

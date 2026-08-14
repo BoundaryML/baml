@@ -359,15 +359,6 @@ implement Remainder<bigint> for int {
     }
 }
 
-// ==== string ====
-
-implement Add<string> for string {
-    type Output = string;
-    function add(self, rhs: string) -> string throws never {
-        $rust_function
-    }
-}
-
 // ==== operator dispatch drivers ====
 //
 // Internal: the compiler emits a `__union_<op>` call for a binary operator whose

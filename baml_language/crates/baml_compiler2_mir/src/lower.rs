@@ -2810,6 +2810,38 @@ impl<'db> LoweringContext<'db> {
             .or_else(|| self.upcast_target_interface_view(expr_id, member))
     }
 
+    /// The interface view used to lower a member-access expression. Optional
+    /// member access has already guarded the null branch before the member is
+    /// evaluated, so dispatch must use the non-null receiver type.
+    fn dispatch_target_for_member_access(
+        &self,
+        access: AstExprId,
+        base: AstExprId,
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
+        let narrowed = if matches!(
+            &self.body.exprs[access],
+            AstExpr::OptionalMemberAccess { .. }
+        ) {
+            self.tir_expr_type(self.expr_metadata_key(base))
+                .map(Tir2Ty::strip_null)
+        } else {
+            None
+        };
+
+        narrowed
+            .as_ref()
+            .and_then(|ty| {
+                self.interface_dispatch_target_for_member(ty, member)
+                    .or_else(|| self.dispatch_target_for_concrete(ty, member))
+            })
+            .or_else(|| self.interface_dispatch_target_for_expr_member(base, member))
+            .or_else(|| {
+                self.tir_expr_type(self.expr_metadata_key(base))
+                    .and_then(|ty| self.dispatch_target_for_concrete(ty, member))
+            })
+    }
+
     fn source_param_interface_view_for_expr(
         &self,
         expr_id: AstExprId,
@@ -9586,12 +9618,7 @@ impl<'db> LoweringContext<'db> {
         // declaring interface is resolved *before* lowering the receiver so a
         // field access (no such method) falls through to the field path below
         // without evaluating the receiver expression twice.
-        if let Some(view) = self
-            .interface_dispatch_target_for_expr_member(base, field)
-            .or_else(|| {
-                self.tir_expr_type(self.expr_metadata_key(base))
-                    .and_then(|ty| self.dispatch_target_for_concrete(ty, field))
-            })
+        if let Some(view) = self.dispatch_target_for_member_access(expr_id, base, field)
             && self.mir_interface_declares_method(&view.0, field)
         {
             let recv_op = self.lower_to_operand(base);

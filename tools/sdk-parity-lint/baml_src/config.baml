@@ -188,20 +188,20 @@ function resolve_output_dir(repo_root: string, output_dir: string) -> string {
 
 function trim_trailing_slashes(value: string) -> string {
     let end = value.length();
-    while (end > 1 && value.char_at(end - 1) == "/") {
+    while (end > 1 && value.at(end - 1) == "/") {
         end -= 1;
     }
-    value.substring(0, end)
+    value.slice(0, end)
 }
 
 function trim_surrounding_slashes(value: string) -> string {
     let start = 0;
     let end = value.length();
-    while (start < end && value.char_at(start) == "/") {
+    while (start < end && value.at(start) == "/") {
         start += 1;
     }
-    while (end > start && value.char_at(end - 1) == "/") {
+    while (end > start && value.at(end - 1) == "/") {
         end -= 1;
     }
-    value.substring(start, end)
+    value.slice(start, end)
 }

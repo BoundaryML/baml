@@ -162,6 +162,83 @@ function baml.Array.insert(self: #0[], item: #0, idx: int) -> int {
 }
 
 function baml.Array.join(self: #0[], separator: string) -> string {
+    load_var self
+    is_type _[]
+    pop_jump_if_false L0
+    load_var self
+    container_len
+    store_var_load_var _4
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var self
+    is_type _[]
+    pop_jump_if_false L6
+    load_var self
+    container_len
+    store_var_load_var _7
+    load_const 1
+    cmp_int_op >=
+    pop_jump_if_false L6
+    load_var self
+    container_len
+    store_var _14
+    load_var self
+    load_const 1
+    load_var _14
+    call baml.Array.slice
+    store_var _13
+    load_type #0
+    load_var self
+    load_const 0
+    load_array_element
+    call baml.String.from
+    store_var joined
+    load_var _13
+    load_type baml.iter.Iterable<Error = never, Item = #0>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _20
+
+  L1:
+    load_var _20
+    load_type baml.iter.Iterator<Error = never, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _21
+    load_var _21
+    is_type baml.iter.Done
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var2 7 2
+    bin_op +
+    store_var _25
+    load_type #0
+    load_var _21
+    call baml.String.from
+    store_var _27
+    load_var2 10 11
+    bin_op +
+    store_var joined
+    jump L1
+
+  L3:
+    load_var joined
+    jump L5
+
+  L4:
+    load_const ""
+
+  L5:
+    return
+
+  L6:
+    unreachable
 }
 
 function baml.Array.last_index_of(self: #0[], item: #0) -> int | null {
@@ -758,10 +835,10 @@ function baml.Sortable$for$T[].sort(self: #0[]) -> #0[] {
     return
 }
 
-function baml.String.byte_length(self: baml.String) -> int {
+function baml.String.at(self: baml.String, index: int) -> string | null {
 }
 
-function baml.String.char_at(self: baml.String, index: int) -> string {
+function baml.String.byte_length(self: baml.String) -> int {
 }
 
 function baml.String.char_count(self: baml.String) -> int {
@@ -770,7 +847,7 @@ function baml.String.char_count(self: baml.String) -> int {
 function baml.String.chars(self: baml.String) -> string[] {
 }
 
-function baml.String.code_point_at(self: baml.String, index: int) -> int {
+function baml.String.code_point_at(self: baml.String, index: int) -> int | null {
 }
 
 function baml.String.ends_with(self: baml.String, suffix: string) -> bool {
@@ -849,13 +926,13 @@ function baml.String.is_uppercase(self: baml.String) -> bool {
 function baml.String.is_whitespace(self: baml.String) -> bool {
 }
 
+function baml.String.last_index_of(self: baml.String, search: string) -> int | null {
+}
+
 function baml.String.length(self: baml.String) -> int {
 }
 
 function baml.String.lines(self: baml.String) -> string[] {
-}
-
-function baml.String.matches(self: baml.String, substring: string) -> bool {
 }
 
 function baml.String.repeat(self: baml.String, count: int) -> string {
@@ -867,13 +944,13 @@ function baml.String.replace(self: baml.String, search: string, replacement: str
 function baml.String.replace_all(self: baml.String, search: string, replacement: string) -> string {
 }
 
+function baml.String.slice(self: baml.String, start: int, end: int) -> string {
+}
+
 function baml.String.split(self: baml.String, delimiter: string) -> string[] {
 }
 
 function baml.String.starts_with(self: baml.String, prefix: string) -> bool {
-}
-
-function baml.String.substring(self: baml.String, start: int, end: int) -> string {
 }
 
 function baml.String.to_code_points(self: baml.String) -> int[] {
@@ -1038,6 +1115,95 @@ function baml._to_string_shim(value: #0) -> string {
 }
 
 function baml._trunc_to_int(value: float) -> int {
+}
+
+function baml.crypto.Aes128GcmSiv.Aead.decrypt(self: baml.crypto.Aes128GcmSiv, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.Aes128GcmSiv.Aead.encrypt(self: baml.crypto.Aes128GcmSiv, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    load_var rng
+    load_const 16
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.crypto.Aes128GcmSiv.new(key: uint8array) -> baml.crypto.Aes128GcmSiv {
+}
+
+function baml.crypto.Aes256GcmSiv.Aead.decrypt(self: baml.crypto.Aes256GcmSiv, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.Aes256GcmSiv.Aead.encrypt(self: baml.crypto.Aes256GcmSiv, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    load_var rng
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.crypto.Aes256GcmSiv.new(key: uint8array) -> baml.crypto.Aes256GcmSiv {
+}
+
+function baml.crypto.ChaCha20Poly1305.Aead.decrypt(self: baml.crypto.ChaCha20Poly1305, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.ChaCha20Poly1305.Aead.encrypt(self: baml.crypto.ChaCha20Poly1305, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.ChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    load_var rng
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.crypto.ChaCha20Poly1305.new(key: uint8array) -> baml.crypto.ChaCha20Poly1305 {
+}
+
+function baml.crypto.Sha256.Hasher.finish(self: baml.crypto.Sha256) -> uint8array {
+}
+
+function baml.crypto.Sha256.Hasher.update(self: baml.crypto.Sha256, data: uint8array) -> void {
+}
+
+function baml.crypto.Sha256.new() -> baml.crypto.Sha256 {
+}
+
+function baml.crypto.XChaCha20Poly1305.Aead.decrypt(self: baml.crypto.XChaCha20Poly1305, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.XChaCha20Poly1305.Aead.encrypt(self: baml.crypto.XChaCha20Poly1305, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.XChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    load_var rng
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.crypto.XChaCha20Poly1305.new(key: uint8array) -> baml.crypto.XChaCha20Poly1305 {
 }
 
 function baml.csv.CsvReader._feed(self: baml.csv.CsvReader, chunk: uint8array) -> null {
@@ -3806,7 +3972,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     store_var marker
     load_var marker
     load_const "."
@@ -3841,7 +4007,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     store_var first
     load_var first
     load_const "\""
@@ -3877,7 +4043,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     load_const "]"
     cmp_op !=
 
@@ -3899,7 +4065,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
   L18:
     load_var2 2 28
     load_var i
-    call baml.String.substring
+    call baml.String.slice
     store_var token
     load_var i
     load_const 1
@@ -3971,7 +4137,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     store_var ch
     load_var ch
     load_const "\\"
@@ -4029,7 +4195,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     load_const "]"
     cmp_op !=
 
@@ -4076,7 +4242,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 2
     add_int
-    call baml.String.substring
+    call baml.String.slice
     store_var _77
     load_var2 24 25
     bin_op +
@@ -4133,7 +4299,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     load_const "."
     cmp_op !=
 
@@ -4144,7 +4310,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     load_const "["
     cmp_op !=
 
@@ -4160,7 +4326,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     store_var _37
     load_var2 2 8
     load_var i
-    call baml.String.substring
+    call baml.String.slice
     store_var _38
     load_var2 11 12
     load_var selector
@@ -4479,9 +4645,6 @@ function baml.ops.Add<int>$for$float.add(self: float, rhs: int) -> float {
 }
 
 function baml.ops.Add<int>$for$int.add(self: int, rhs: int) -> int {
-}
-
-function baml.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
 }
 
 function baml.ops.BitAnd<bigint>$for$bigint.bit_and(self: bigint, rhs: bigint) -> bigint {
@@ -4985,6 +5148,20 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
   L0:
     load_var seed
     call baml.random.Xoshiro256PlusPlus._new
+    return
+}
+
+function baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
+    load_type string
+    load_var self
+    call baml.String.from
+    store_var _3
+    load_type string
+    load_var rhs
+    call baml.String.from
+    store_var _5
+    load_var2 3 4
+    bin_op +
     return
 }
 

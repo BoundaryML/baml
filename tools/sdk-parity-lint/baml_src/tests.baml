@@ -1,7 +1,7 @@
 function fixture_config(repo_root: string, source_directory: string) -> SourceConfig {
     let base = source_config_for(source_configs(repo_root), source_directory);
     let absolute_fixture_root = `${repo_root}/tools/sdk-parity-lint/test-fixtures/${base.language}`;
-    let fixture_root = absolute_fixture_root.substring(repo_root.length() + 1, absolute_fixture_root.length());
+    let fixture_root = absolute_fixture_root.slice(repo_root.length() + 1, absolute_fixture_root.length());
     make_source_config(
         base.language,
         base.source_directory,
@@ -177,7 +177,7 @@ test "TypeScript direct and enclosing suite gates set runtime membership" {
     let scan = scan_source(repo_root, fixture_config(repo_root, "typescript"));
     let valid_matches: AstMatch[] = [];
     for (let ast_match in scan.matches) {
-        if (!ast_match.text.matches("dynamic_case")) {
+        if (!ast_match.text.includes("dynamic_case")) {
             valid_matches.push(ast_match);
         }
     }

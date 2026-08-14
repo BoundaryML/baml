@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { BamlReference } from './BamlReference';
+import { BamlReference } from './baml-reference';
 
 /**
  * Resizable statement | workspace | syntax layout for the solve page. Sizes
@@ -18,9 +18,9 @@ export function SolveLayout({
 }) {
   return (
     <PanelGroup
-      direction="horizontal"
       autoSaveId="bamlcode-body-3"
       className="bc-solve-body"
+      direction="horizontal"
     >
       <Panel defaultSize={30} minSize={16}>
         <section className="bc-statement">{statement}</section>
@@ -30,7 +30,7 @@ export function SolveLayout({
         {workbench}
       </Panel>
       <PanelResizeHandle className="bc-handle bc-handle-v" />
-      <Panel defaultSize={22} minSize={0} collapsible>
+      <Panel collapsible defaultSize={22} minSize={0}>
         <BamlReference />
       </Panel>
     </PanelGroup>

@@ -1156,6 +1156,15 @@ impl PromptField {
     pub fn backtick_string(&self) -> Option<BacktickStringLiteral> {
         self.syntax.children().find_map(BacktickStringLiteral::cast)
     }
+
+    /// Get the quoted string literal node containing the prompt.
+    ///
+    /// For `prompt "Hello"`, returns the `"Hello"` node. A quoted prompt
+    /// compiles to the same prompt-tag closure as a backtick one, with the
+    /// whole literal as a single text segment — `"..."` does not interpolate.
+    pub fn string(&self) -> Option<StringLiteral> {
+        self.syntax.children().find_map(StringLiteral::cast)
+    }
 }
 
 impl StringLiteral {

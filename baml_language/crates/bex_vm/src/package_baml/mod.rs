@@ -3,6 +3,7 @@
 //! Each sub-module implements one or more generated traits:
 //!
 //! - `array` — `BamlClassArray` (length, push, at, concat, ...)
+//! - `crypto` — `BamlClassCrypto{Aes128,Aes256}GcmSiv` (AEAD seal/open)
 //! - `float` — `BamlClassFloat` (predicates, rounding, math, trig, ...)
 //! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
@@ -23,6 +24,7 @@
 
 mod array;
 pub(crate) mod bigint;
+mod crypto;
 mod csv;
 mod error_context;
 mod float;
