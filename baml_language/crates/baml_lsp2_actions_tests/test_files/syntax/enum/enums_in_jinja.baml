@@ -12,8 +12,8 @@ enum Priority {
 }
 
 function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status: Status?) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         Status Display: ${status}
         Priority Display: ${priority}
         Nullable Display: ${nullable_status ?? "none"}

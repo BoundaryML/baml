@@ -66,7 +66,7 @@ fn user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = strin
     let _0: map<string, baml.AnyFunction<Returns = string | Doc[], Throws = ToolError>> // _0 // return
 
     bb0: {
-        _0 = { const "search": const fn user.web_search, const "now": const fn user.current_time }: map<string, baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError>>;
+        _0 = { const "search": const fn user.web_search, const "now": const fn user.current_time }: map<string, baml.AnyFunction<Returns = string | Doc[], Throws = ToolError>>;
         goto -> bb1;
     }
 
@@ -270,7 +270,7 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
 
     bb1: {
         _5 = load_type(string);
-        _6 = load_type(baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError>);
+        _6 = load_type(baml.AnyFunction<Returns = string | Doc[], Throws = ToolError>);
         _4 = call const fn baml.Map.get<copy _5, copy _6>(copy _3, copy _1) -> [bb2];
     }
 
@@ -295,7 +295,7 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
 
     bb6: {
         _10 = copy _4;
-        _11 = load_type(Doc[] | string);
+        _11 = load_type(string | Doc[]);
         _12 = load_type(ToolError);
         _0 = call const fn baml.reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb13, unwind: bb8];
     }

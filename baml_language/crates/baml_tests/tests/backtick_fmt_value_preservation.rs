@@ -54,7 +54,7 @@ fn formatting_preserves_backtick_values() {
         // over-indented prompt value
         (
             Reindented,
-            "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n",
+            "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n            Hello ${name}\n            Goodbye\n    `\n}\n",
         ),
         // function return value
         (

@@ -407,7 +407,8 @@ impl SymbolId {
     /// can never disagree about what identifies an impl.
     pub fn impl_owner(db: &dyn Db, imp: crate::handles::Impl<'_>) -> Option<Owner> {
         let data = crate::facts::impl_data(db, imp.loc())?;
-        let mut interface = data.interface_qtn(db)?.render_dotted(false);
+        let iface: crate::Interface<'_> = data.interface.into();
+        let mut interface = iface.qualified_name(db).render_dotted(false);
         if !data.interface_args.is_empty() {
             let args: Vec<String> = data
                 .interface_args

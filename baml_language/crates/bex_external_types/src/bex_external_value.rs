@@ -61,12 +61,9 @@ impl UnionMetadata {
     pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
             RuntimeTy::Union(members, _) => {
-                let has_null = members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }));
-                let non_null_count = members
-                    .iter()
-                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
-                    .count();
-                (has_null, non_null_count == 1)
+                let is_optional = members.iter().any(RuntimeTy::is_null);
+                let non_null_count = members.iter().filter(|member| !member.is_null()).count();
+                (is_optional, non_null_count == 1)
             }
             _ => (false, false),
         };

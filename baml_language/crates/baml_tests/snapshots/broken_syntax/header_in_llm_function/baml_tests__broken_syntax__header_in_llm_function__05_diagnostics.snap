@@ -58,13 +58,13 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[test.baml:13:5]
  13 │     //# collect source material
     ·     ─────────────┬─────────────
-    ·                  ╰── header comments (`//#`) are not allowed inside LLM functions
+    ·                  ╰── header comments (`//#`) are only allowed in expression functions
     ╰────
 
   [type] E0003
 
   × unresolved name: `VertexGCP`
-    ╭─[test.baml:14:12]
- 14 │     client VertexGCP
-    ·            ─────────
+    ╭─[test.baml:14:13]
+ 14 │     client: VertexGCP
+    ·             ─────────
     ╰────

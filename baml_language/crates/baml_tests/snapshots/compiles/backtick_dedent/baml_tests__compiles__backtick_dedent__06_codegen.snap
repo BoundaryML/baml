@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4555
 ---
 function user.FarIndented() -> string {
     load_const "deeply\npushed in"

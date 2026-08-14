@@ -84,8 +84,8 @@ async fn llm_render_prompt_companion_preserves_messages() {
     let output = baml_test!(
         r#"
 function StructuredGreeting(name: string) -> string {
-  client "openai/gpt-4o-mini"
-  prompt `${role("system")}Be concise.${role("user")}Hello ${name}`
+  client: "openai/gpt-4o-mini"
+  prompt: `${role("system")}Be concise.${role("user")}Hello ${name}`
 }
 
 function main() -> ai.Prompt {
@@ -108,8 +108,8 @@ async fn llm_render_prompt_companion_preserves_media() {
     let output = baml_test!(
         r#"
 function InspectPhoto(photo: image) -> string {
-  client "openai/gpt-4o-mini"
-  prompt `${role("user")}Inspect ${photo}`
+  client: "openai/gpt-4o-mini"
+  prompt: `${role("user")}Inspect ${photo}`
 }
 
 function main() -> ai.Prompt {

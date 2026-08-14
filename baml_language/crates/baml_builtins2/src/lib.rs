@@ -133,7 +133,9 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/plaindate.baml"),
     builtin!("baml", "ns_time/plaindatetime.baml"),
     builtin!("baml", "ns_time/zoneddatetime.baml"),
+    builtin!("baml", "ns_ops/bitwise.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
+    builtin!("baml", "ns_ops/index.baml"),
     builtin!("baml", "ns_ops/math.baml"),
     builtin!("baml", "ns_random/random.baml"),
     // `baml.reflect` (BEP-066 I-9: `reflect` is a keyword shorthand for it).

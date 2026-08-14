@@ -17,6 +17,7 @@ function user.check(self: ?, other: Self) -> bool  [expr] {
 function user.describe(self: ?) -> string  [expr] {
   {  } type.of().to_string()
 }
+function user.eq(self: ?, other: Self) -> bool  [missing]
 function user.is_self(self: ?, other: user.Box<int> | user.Box<string>) -> bool  [expr] {
   {  } other is Self
 }

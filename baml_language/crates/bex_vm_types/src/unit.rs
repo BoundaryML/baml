@@ -217,7 +217,7 @@ pub struct CompilationUnit {
     /// Pass-8 compiled test cases defined in this file.
     pub test_cases: Vec<TestCase>,
     /// `borsh(CallableThrowsFragment)` for this file. Opaque bytes
-    /// because `bex_vm_types` sits below `baml_compiler2_tir`, which owns the
+    /// because `bex_vm_types` sits below `baml_compiler2_hir_ty`, which owns the
     /// typed fragment — the same decoupling as the stdlib-interface blob. Empty
     /// for builtins (their interface rides in the stdlib blob) and for any file
     /// whose fragment failed to serialize. Populated by `decompose_units`;

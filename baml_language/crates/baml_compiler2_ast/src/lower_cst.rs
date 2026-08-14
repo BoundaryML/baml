@@ -744,7 +744,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 }
 
 /// Whether the `tools` field can hold tools at runtime. An absent field and
-/// the literal empty list (`tools []`) are tool-less; a non-empty literal or
+/// the literal empty list (`tools: []`) are tool-less; a non-empty literal or
 /// any other expression is conservatively tools-bearing (an arbitrary
 /// expression may evaluate empty, but that is only known at runtime).
 fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
@@ -835,7 +835,7 @@ fn resolve_llm_client(
                 model: model.to_string(),
             });
         }
-        // The removed unquoted shorthand (`client openai/gpt-4o-mini`) parses
+        // The removed unquoted shorthand (`client: openai/gpt-4o-mini`) parses
         // as a whitespace-free division chain; catch it before it cascades
         // into unresolved-name errors.
         if node.kind() == SyntaxKind::BINARY_EXPR {
@@ -843,7 +843,7 @@ fn resolve_llm_client(
             if text.contains('/') && !text.contains(char::is_whitespace) {
                 diags.push(LoweringDiagnostic::InvalidLlmClient {
                     function_name: function_name.to_string(),
-                    reason: format!("quote the model string: client \"{text}\""),
+                    reason: format!("quote the model string: client: \"{text}\""),
                     span,
                 });
                 return None;

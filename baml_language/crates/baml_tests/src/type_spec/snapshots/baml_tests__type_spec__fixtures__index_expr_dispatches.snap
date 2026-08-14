@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+391..392 'f': throws never
+432..526 '{\n   ...+ b\n}': int
+438..443 'let a': int
+446..448 'xs': int[]
+446..451 'xs[0]': int
+449..450 '0': 0
+471..476 'let b': int
+479..481 'xs': int[]
+479..484 'xs[i]': int
+482..483 'i': int
+504..506 'xs': int[]
+504..509 'xs[0]': int
+507..508 '0': 0
+512..513 '7': 7
+519..520 'a': int
+519..524 'a + b': int
+523..524 'b': int

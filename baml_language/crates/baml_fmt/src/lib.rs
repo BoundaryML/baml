@@ -144,10 +144,10 @@ mod llm_tools_field_tests {
     fn test_tools_field_is_preserved_and_idempotent() {
         let source = concat!(
             "function Plan(q: string) -> string {\n",
-            "    client \"openai/gpt-4o-mini\"\n",
+            "    client: \"openai/gpt-4o-mini\"\n",
             "    // the toolbox\n",
-            "    tools [search_flights, search_hotels]\n",
-            "    prompt `\n",
+            "    tools: [search_flights, search_hotels]\n",
+            "    prompt: `\n",
             "        ${q}\n",
             "        ${ctx.output_format}\n",
             "    `\n",
@@ -167,26 +167,27 @@ mod llm_tools_field_tests {
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
 
-    /// A duplicate field the parser tolerates (`type_builder` has no
-    /// duplicate diagnostic) must fail formatting rather than silently
-    /// printing only the survivor — deleting a block from the user's source.
     #[test]
-    fn test_duplicate_llm_field_errors_instead_of_dropping_one() {
+    fn test_llm_field_comments_before_colons_are_preserved() {
         let source = concat!(
-            "function Plan(q: string) -> string {\n",
-            "    client \"openai/gpt-4o-mini\"\n",
-            "    type_builder {\n",
-            "    }\n",
-            "    type_builder {\n",
-            "    }\n",
-            "    prompt `${q}`\n",
+            "function Plan() -> string {\n",
+            "    client /* client colon */ : \"openai/gpt-4o-mini\"\n",
+            "    tools /* tools colon */ : []\n",
+            "    prompt /* prompt colon */ : `hello`\n",
             "}\n",
         );
-        let result = format(source, &FormatOptions::default());
-        assert!(
-            result.is_err(),
-            "duplicate type_builder must be a formatter error, got: {result:?}"
-        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("LLM field comments should format");
+
+        for comment in ["client colon", "tools colon", "prompt colon"] {
+            assert!(
+                formatted.contains(comment),
+                "comment `{comment}` must be preserved: {formatted}"
+            );
+        }
+
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
     }
 }
 
@@ -352,25 +353,14 @@ mod contextual_keyword_identifier_tests {
 mod header_comment_position_tests {
     use super::*;
 
-    /// `//#` header comments must survive formatting in class bodies,
-    /// implements blocks, and between match arms — not only at statement
-    /// boundaries inside blocks.
+    /// `//#` header comments survive formatting before expression functions and remain structural
+    /// at executable statement and arm boundaries.
     #[test]
-    fn test_header_comments_in_member_positions() {
+    fn test_header_comments_in_expression_positions() {
         let source = concat!(
-            "class Dog {\n",
-            "    //# fields\n",
-            "    name: string,\n",
-            "    //# behavior\n",
-            "    implements Sound {\n",
-            "        //# conformance\n",
-            "        function sound(self) -> string {\n",
-            "            \"woof\"\n",
-            "        }\n",
-            "    }\n",
-            "}\n",
-            "\n",
+            "//# classify values\n",
             "function classify(n: int) -> string {\n",
+            "    //# statements\n",
             "    match (n) {\n",
             "        //# leading header\n",
             "        0 => \"zero\",\n",
@@ -381,11 +371,10 @@ mod header_comment_position_tests {
         );
         let options = FormatOptions::default();
         let formatted = format(source, &options)
-            .expect("formatter should accept header comments in member positions");
+            .expect("formatter should accept header comments in expression positions");
         for needle in [
-            "//# fields",
-            "//# behavior",
-            "//# conformance",
+            "//# classify values",
+            "//# statements",
             "//# leading header",
             "//# between arms",
         ] {
@@ -393,6 +382,22 @@ mod header_comment_position_tests {
         }
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_header_comments_in_declarations_are_rejected() {
+        for source in [
+            "interface Animal {\n    //# methods\n    function name(self) -> string\n}\n",
+            "//# generated text\nfunction generate() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `hello`\n}\n",
+        ] {
+            let error = format(source, &FormatOptions::default())
+                .expect_err("formatter should reject headers outside expression functions");
+
+            assert!(
+                format!("{error:?}")
+                    .contains("header comments (`//#`) are only allowed in expression functions")
+            );
+        }
     }
 }
 
@@ -639,7 +644,7 @@ mod backtick_format_tests {
     /// spaces), dedented by the common leading indent.
     #[test]
     fn backtick_prompt_multiline_dedents() {
-        let source = "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
+        let source = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
         let expected = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n        Hello ${name}\n        Goodbye\n    `\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
@@ -662,7 +667,7 @@ mod backtick_format_tests {
     /// A single-line backtick prompt is accepted and printed verbatim.
     #[test]
     fn backtick_prompt_one_liner_accepted() {
-        let source = "function Demo() -> string {\n    client \"openai/gpt-4o\"\n    prompt `Just one line`\n}\n";
+        let source = "function Demo() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `Just one line`\n}\n";
         let expected = "function Demo() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `Just one line`\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");

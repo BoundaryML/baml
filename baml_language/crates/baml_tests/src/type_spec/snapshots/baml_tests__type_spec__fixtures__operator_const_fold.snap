@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+61..67 'cf_add': throws never
+89..104 '{\n   ... 2n\n}': 3n
+95..97 '1n': 1n
+95..102 '1n + 2n': 3n
+100..102 '2n': 2n
+114..120 'cf_mul': throws never
+143..158 '{\n   ... 4n\n}': 12n
+149..151 '3n': 3n
+149..156 '3n * 4n': 12n
+154..156 '4n': 4n
+168..175 'cf_less': throws never
+199..214 '{\n   ... 2n\n}': true
+205..207 '1n': 1n
+205..212 '1n < 2n': true
+210..212 '2n': 2n
+224..234 'cf_int_add': throws never
+255..268 '{\n    1 + 2\n}': 3
+261..262 '1': 1
+261..266 '1 + 2': 3
+265..266 '2': 2
+278..295 'cf_bin...widens': throws never
+321..367 '{\n   ...  x\n}': bigint
+327..332 'let x': bigint
+335..337 '1n': 1n
+335..342 '1n + 2n': 3n
+340..342 '2n': 2n
+364..365 'x': bigint

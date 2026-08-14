@@ -101,9 +101,6 @@ impl baml_compiler2_hir::Db for TestDb {
 impl baml_compiler2_ppir::Db for TestDb {}
 
 #[salsa::db]
-impl baml_compiler2_tir::Db for TestDb {}
-
-#[salsa::db]
 impl crate::Db for TestDb {}
 
 // ── Cursor test infrastructure ───────────────────────────────────────────────

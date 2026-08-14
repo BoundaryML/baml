@@ -168,8 +168,8 @@ pub(crate) async fn render_output_format(baml_types: &str, return_type: &str) ->
 {baml_types}
 
 function TestFunc(input: string) -> {return_type} {{
-    client "openai/gpt-4o"
-    prompt `
+    client: "openai/gpt-4o"
+    prompt: `
         ${{input}}
         ${{ctx.output_format}}
     `

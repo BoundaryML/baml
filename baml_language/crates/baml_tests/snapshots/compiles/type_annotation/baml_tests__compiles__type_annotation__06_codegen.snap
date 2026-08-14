@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 27299
 ---
 function user.test_let_binding(function_name: string) -> string {
     load_var function_name

@@ -121,7 +121,7 @@ function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns =
     load_const "search"
     load_const "now"
     load_type string
-    load_type baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError>
+    load_type baml.AnyFunction<Returns = string | Doc[], Throws = ToolError>
     alloc_map 2
     return
 }
@@ -273,7 +273,7 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
     call user.heterogeneous_tool_map
     store_var tools
     load_type string
-    load_type baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError>
+    load_type baml.AnyFunction<Returns = string | Doc[], Throws = ToolError>
     load_var2 3 1
     call baml.Map.get
     store_var f
@@ -295,7 +295,7 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
     jump L8
 
   L3:
-    load_type Doc[] | string
+    load_type string | Doc[]
     load_type ToolError
     load_var2 4 2
     call baml.reflect.call_any

@@ -100,6 +100,12 @@ class user.AttrsWithDelimiters$stream {
   age: int | null
   active: bool
 }
+class user.BlockAttributedClass {
+  name: string
+}
+class user.BlockAttributedClass$stream {
+  name: string | null
+}
 class user.ColonFields {
   name: string
   age: int
@@ -139,12 +145,6 @@ class user.DeepOuter {
 }
 class user.DeepOuter$stream {
   level1: user.DeepLevel1$stream | null
-}
-class user.DynamicClass {
-  name: string
-}
-class user.DynamicClass$stream {
-  name: string | null
 }
 class user.EmptyClass {
 }
@@ -450,8 +450,8 @@ function user.TestTarget$spec() -> ai.FunctionSpec<string>  [expr] {
 function user.TestTarget$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(TestTarget$spec(), client = client)
 }
+enum user.BlockAttributedEnum {X, Y}
 enum user.DottedAttrEnum {X, Y}
-enum user.DynamicEnum {X, Y}
 enum user.E {V}
 enum user.ExtraWhitespace {A, B}
 enum user.LongAttr {VeryImportantStatus}

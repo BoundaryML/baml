@@ -63,7 +63,7 @@ jobs:
           CHANGELOG="$(./gradlew getChangelog --unreleased --no-header --console=plain -q)"
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "pluginVerifierHomeDir=~/.pluginVerifier" >> $GITHUB_OUTPUT
+          echo "pluginVerifierHomeDir=${HOME}/.pluginVerifier" >> $GITHUB_OUTPUT
 
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
@@ -147,40 +147,39 @@ jobs:
   #       with:
   #         cache-default-branch-only: true
 
-  # # Run plugin structure verification along with IntelliJ Plugin Verifier
-  # verify:
-  #   name: Verify plugin
-  #   needs: [ build ]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v6
+  # Verify the release artifact at the newest supported IntelliJ boundary. This resolves mandatory Marketplace plugin
+  # dependencies, so it catches both missing/incompatible LSP4IJ releases and internal IntelliJ API usage before upload.
+  verify:
+    name: Verify Marketplace compatibility
+    needs: [ build ]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-  #     # Set up Java environment for the next steps
-  #     - name: Setup Java
-  #       uses: actions/setup-java@v4
-  #       with:
-  #         distribution: temurin
-  #         java-version: 23
+      - name: Setup Java
+        uses: ./.github/actions/setup-java
 
-  #     # Setup Gradle
-  #     - name: Setup Gradle
-  #       uses: gradle/actions/setup-gradle@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-  #     # Cache Plugin Verifier IDEs
-  #     - name: Setup Plugin Verifier IDEs Cache
-  #       uses: actions/cache@v5
-  #       with:
-  #         path: ${{ needs.build.outputs.pluginVerifierHomeDir }}/ides
-  #         key: plugin-verifier-${{ hashFiles('build/listProductsReleases.txt') }}
+      - name: Cache Plugin Verifier IDEs
+        uses: actions/cache@v5
+        with:
+          path: ${{ needs.build.outputs.pluginVerifierHomeDir }}/ides
+          key: jetbrains-plugin-verifier-${{ runner.os }}-${{ hashFiles('jetbrains/gradle.properties') }}
 
-  #     # Run Verify Plugin task and IntelliJ Plugin Verifier tool
-  #     - name: Run Plugin Verification tasks
-  #       run: ./gradlew verifyPlugin -Dplugin.verifier.home.dir=${{ needs.build.outputs.pluginVerifierHomeDir }}
+      - name: Run packaged descriptor regression test
+        run: ./gradlew --no-daemon --stacktrace test --tests 'com.boundaryml.jetbrains_ext.BamlPluginTest.testTextMateDescriptorUsesSupportedHandoff'
 
-  #     # Collect Plugin Verifier Result
-  #     - name: Collect Plugin Verifier Result
-  #       if: ${{ always() }}
-  #       uses: actions/upload-artifact@v7
-  #       with:
-  #         name: pluginVerifier-result
-  #         path: ./build/reports/pluginVerifier
+      - name: Run Marketplace boundary verification
+        run: ./gradlew --no-daemon --stacktrace verifyPlugin -PverifyMarketplaceBoundary=true -Dplugin.verifier.home.dir=${{ needs.build.outputs.pluginVerifierHomeDir }}
+
+      - name: Collect Plugin Verifier result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pluginVerifier-result
+          path: ./jetbrains/build/reports/pluginVerifier
+          if-no-files-found: warn
+          retention-days: 14

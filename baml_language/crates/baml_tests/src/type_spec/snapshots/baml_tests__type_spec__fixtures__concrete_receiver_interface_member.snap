@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+447..452 'speak': throws never
+482..512 '{\n   ...     }': "woof"
+496..502 '"woof"': "woof"
+531..532 'f': throws never
+551..589 '{\n   ...ing\n}': string
+557..564 'd.speak': (self: user.Dog) -> string throws never
+557..566 'd.speak()': string

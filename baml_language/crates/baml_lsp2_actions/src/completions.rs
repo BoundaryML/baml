@@ -42,7 +42,7 @@ use baml_compiler2_hir::{
     semantic_index::ScopeBindings,
     signature::function_signature,
 };
-use baml_compiler2_tir::ty::{MediaKind, PrimitiveType, Ty};
+use baml_type::{MediaKind, PrimitiveType, Ty};
 use rowan::{NodeOrToken, ast::AstNode};
 use text_size::TextSize;
 
@@ -566,17 +566,17 @@ fn call_params_for_call_node(
     let name = Name::new(callee_name.text());
     let method_like = callee_has_dot_before_args(call_node, args_node);
 
-    match baml_compiler2_tir::resolve::resolve_name_at(
+    match baml_compiler2_ppir::resolve::resolve_name_at(
         db,
         file,
         callee_name.text_range().start(),
         &name,
     ) {
-        baml_compiler2_tir::resolve::ResolvedName::Item(Definition::Function(func_loc))
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(Definition::Function(func_loc)) => {
+        baml_compiler2_ppir::resolve::ResolvedName::Item(Definition::Function(func_loc))
+        | baml_compiler2_ppir::resolve::ResolvedName::Builtin(Definition::Function(func_loc)) => {
             Some(function_params_for_completion(db, func_loc, method_like))
         }
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             definition_site: Some(site),
             ..
         } => local_variable_ty(db, file, offset, site)
@@ -614,7 +614,7 @@ fn function_params_for_completion(
     let file = func_loc.file(db);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
     let sig = function_signature(db, func_loc);
 
     let mut params: Vec<CallParamCompletion> =
@@ -772,12 +772,12 @@ fn completions_for_field_access(
 
     // Resolve root segment type.
     let root = Name::new(&segments[0]);
-    let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &root);
+    let resolved = baml_compiler2_ppir::resolve::resolve_name_at(db, file, offset, &root);
 
     let mut ty = match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => definition_to_ty(db, def),
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+        | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => definition_to_ty(db, def),
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             definition_site: Some(site),
             ..
         } => local_variable_ty(db, file, offset, site),
@@ -828,7 +828,8 @@ fn completions_for_package_path(
     // Get the file's package context to access dependency packages.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let own_pkg_id = PackageId::new(db, pkg_info.package);
-    let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, own_pkg_id);
+    let res_ctx =
+        baml_compiler2_hir_ty::package_interface::package_resolution_context(db, own_pkg_id);
 
     // Check if the first segment is a known package name. The BEP-066 keyword
     // shorthands (`reflect.` ≡ `baml.reflect.`, `type.` ≡ `baml.type.`)
@@ -1046,15 +1047,13 @@ fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
                 return None;
             };
 
-            let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
-            let bindings =
-                baml_compiler2_tir::generics::bind_type_vars(&class_generic_params, type_args);
-            let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
-            for (name, field_ty, _) in &resolved.fields {
+            let class_generic_params =
+                baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
+            let bindings = baml_type::unify::bind_type_vars(&class_generic_params, type_args);
+            let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
+            for (name, field_ty, _) in resolved {
                 if name.as_str() == field_name {
-                    return Some(baml_compiler2_tir::generics::substitute_ty(
-                        field_ty, &bindings,
-                    ));
+                    return Some(baml_type::unify::substitute_ty(field_ty, &bindings));
                 }
             }
             None
@@ -1161,15 +1160,15 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
             let mut items = Vec::new();
 
             let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-            let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
-            let bindings =
-                baml_compiler2_tir::generics::bind_type_vars(&class_generic_params, type_args);
+            let class_generic_params =
+                baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
+            let bindings = baml_type::unify::bind_type_vars(&class_generic_params, type_args);
 
             // Fields from resolved class fields, specialized for the receiver's
             // concrete type arguments.
-            let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
-            for (field_name, field_ty, _field_attrs) in &resolved.fields {
-                let field_ty = baml_compiler2_tir::generics::substitute_ty(field_ty, &bindings);
+            let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
+            for (field_name, field_ty, _field_attrs) in resolved {
+                let field_ty = baml_type::unify::substitute_ty(field_ty, &bindings);
                 items.push(
                     Completion::new(field_name.as_str(), CompletionKind::Field)
                         .with_detail(utils::display_ty_for_file(db, file, &field_ty))
@@ -1249,7 +1248,7 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
             Some(Ty::Class(
-                baml_compiler2_tir::ty::QualifiedTypeName::new(
+                baml_type::QualifiedTypeName::new(
                     pkg_info.package,
                     pkg_info.namespace_path,
                     class.name.clone(),
@@ -1262,7 +1261,7 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
             Some(Ty::Enum(
-                baml_compiler2_tir::ty::QualifiedTypeName::new(
+                baml_type::QualifiedTypeName::new(
                     pkg_info.package,
                     pkg_info.namespace_path,
                     enum_data.name.clone(),
@@ -1308,36 +1307,23 @@ fn local_variable_ty(
                     let func_scope_range = enclosing_scope_data.range;
                     let func_loc =
                         crate::utils::function_at_scope_range(db, file, func_scope_range)?;
-                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                    sig.params.get(param_idx).map(|param| {
-                        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-                        let pkg = package_items(db, pkg_id);
-                        let mut diags = Vec::new();
-                        baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                            &param.ty,
-                            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                                db,
-                                package_items: pkg,
-                                ns_context: &pkg_info.namespace_path,
-                                generic_params: &[],
-                                bounds:
-                                    &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(
-                                    ),
-                                self_ty: None,
-                            },
-                            &mut diags,
-                        )
-                    })
+                    let sig = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
+                    sig.params.get(param_idx).map(|param| param.ty.to_plain())
                 }
                 ScopeKind::Lambda => {
                     // Lambda parameter — use TIR inference for the lambda scope
                     // to get the inferred param type (handles both annotated and
                     // unannotated params like those in `.map((item) -> { ... })`).
                     let lambda_scope_id = index.scope_ids[enclosing_scope.index() as usize];
-                    let inference =
-                        baml_compiler2_tir::inference::infer_scope_types(db, lambda_scope_id);
-                    inference.param_type(param_idx).cloned()
+                    let body = baml_compiler2_hir_ty::ide::scope_body(db, lambda_scope_id)?;
+                    let lambda_expr = body.scope_expr?;
+                    let inference = baml_compiler2_hir_ty::infer::infer_body(db, body.owner);
+                    match inference.type_of_expr.get(&lambda_expr)?.to_plain() {
+                        baml_type::Ty::Function { params, .. } => {
+                            params.get(param_idx).map(|param| param.ty.clone())
+                        }
+                        _ => None,
+                    }
                 }
                 _ => None,
             }
@@ -1410,9 +1396,11 @@ fn find_binding_ty_for_local(
     let cursor_scope = index.scope_at_offset(at_offset, None);
     for ancestor_id in index.ancestor_scopes(cursor_scope) {
         let scope_id = index.scope_ids[ancestor_id.index() as usize];
-        let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
-        if let Some(ty) = inference.binding_type(pat_id) {
-            return Some(ty.clone());
+        let Some(inference) = baml_compiler2_hir_ty::ide::infer_for_scope(db, scope_id) else {
+            continue;
+        };
+        if let Some(ty) = inference.type_of_pat.get(&pat_id) {
+            return Some(ty.to_plain());
         }
     }
     None

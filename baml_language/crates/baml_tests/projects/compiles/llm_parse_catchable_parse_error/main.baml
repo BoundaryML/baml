@@ -33,8 +33,8 @@ class Invoice {
 }
 
 function ExtractInvoice(text: string) -> Invoice {
-    client GPT4o
-    prompt `extract an invoice from ${text}`
+    client: GPT4o
+    prompt: `extract an invoice from ${text}`
 }
 
 // The documented pattern: parse an existing JSON payload locally and fall back

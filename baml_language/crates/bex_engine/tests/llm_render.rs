@@ -16,8 +16,8 @@ async fn backtick_prompt_interpolates_arguments() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
 function Greet(name: string, age: int) -> string {
-    client "openai/gpt-4o"
-    prompt `Hello, ${name}! You are ${age} years old.`
+    client: "openai/gpt-4o"
+    prompt: `Hello, ${name}! You are ${age} years old.`
 }
 
 function main() -> string {
@@ -38,8 +38,8 @@ async fn backtick_prompt_builds_chat_roles() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
 function Answer(question: string) -> string {
-    client "openai/gpt-4o"
-    prompt `${role("system")}You are a helpful assistant.${role("user")}${question}`
+    client: "openai/gpt-4o"
+    prompt: `${role("system")}You are a helpful assistant.${role("user")}${question}`
 }
 
 function main() -> string {
@@ -69,8 +69,8 @@ enum Category {
 }
 
 function Categorize(category: Category) -> string {
-    client "openai/gpt-4o"
-    prompt `Category: ${category}`
+    client: "openai/gpt-4o"
+    prompt: `Category: ${category}`
 }
 
 function main() -> string {
@@ -149,8 +149,8 @@ class C { x: string }
 client Fast = openai.OpenAiClient.new(model = "gpt-4o-mini");
 
 function Extract(raw: string) -> C {
-    client Fast
-    prompt `
+    client: Fast
+    prompt: `
         Extract from ${raw}.
         ${ctx.output_format}
     `
@@ -199,8 +199,8 @@ async fn test_render_prompt_with_inline_client_shorthand() {
 
     let source = r##"
 function Greet(name: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `Hello, ${name}!`
+    client: "openai/gpt-4o-mini"
+    prompt: `Hello, ${name}!`
 }
 
 function get_prompt() -> string {
@@ -248,8 +248,8 @@ async fn test_json_return_type_renders_valid_json_literal() {
 
     let source = r##"
 function ExtractAny() -> json {
-    client "openai/gpt-4o"
-    prompt `
+    client: "openai/gpt-4o"
+    prompt: `
         Return whatever JSON you like.
 
         ${ctx.output_format}

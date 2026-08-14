@@ -1,0 +1,54 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+604..613 'iac_chain': throws never
+638..839 '{\n   ...ped\n}': int[]
+644..654 'let mapped': int[]
+657..684 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
+657..698 'baml.i...3, 4])': baml.iter.ArrayIterator<int>
+657..705 'baml.i...filter': (self: baml.iter.ArrayIterator<int>, predicate: (int) -> bool throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never
+657..771 'baml.i...    })': baml.iter.Iterator<Error = never, Item = int>
+657..775 'baml.i...}).map': (self: baml.iter.Iterator<Error = never, Item = int>, fn: (int) -> int throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never
+657..815 'baml.i...    })': baml.iter.Iterator<Error = never, Item = int>
+657..823 'baml.i...ollect': (self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never
+657..825 'baml.i...lect()': int[]
+685..697 '[1, 2, 3, 4]': int[]
+686..687 '1': 1
+689..690 '2': 2
+692..693 '3': 3
+695..696 '4': 4
+706..770 '(x: in...n    }': (x: int) -> bool throws never
+723..770 '{\n   ...n    }': bool
+754..755 'x': int
+754..759 'x % 2': int
+754..764 'x % 2 == 0': bool
+758..759 '2': 2
+763..764 '0': 0
+776..814 '(x: in...n    }': (x: int) -> int throws never
+792..814 '{\n   ...n    }': int
+802..803 'x': int
+802..808 'x * 10': int
+806..808 '10': 10
+831..837 'mapped': int[]
+850..858 'iac_flat': throws never
+883..1090 '{\n   ...ned\n}': int[]
+889..902 'let flattened': int[]
+905..932 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
+905..943 'baml.i...2, 3])': baml.iter.ArrayIterator<int>
+905..952 'baml.i...at_map': (self: baml.iter.ArrayIterator<int>, fn: (int) -> baml.iter.Iterable<Error = never, Item = int> throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never
+905..1063 'baml.i...    })': baml.iter.Iterator<Error = never, Item = int>
+905..1071 'baml.i...ollect': (self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never
+905..1073 'baml.i...lect()': int[]
+933..942 '[1, 2, 3]': int[]
+934..935 '1': 1
+937..938 '2': 2
+940..941 '3': 3
+953..1062 '(x: in...n    }': (x: int) -> baml.iter.Iterable<Error = never, Item = int> throws never
+1011..1062 '{\n   ...n    }': int[]
+1045..1056 '[x, x + 10]': int[]
+1046..1047 'x': int
+1049..1050 'x': int
+1049..1055 'x + 10': int
+1053..1055 '10': 10
+1079..1088 'flattened': int[]

@@ -10,6 +10,6 @@ client BaseClient = openai.OpenAiClient.new(
 client MyClient = ai.clients.Retry.new(BaseClient, max_attempts = 3);
 
 function UseRetryClient(input: string) -> string {
-    client MyClient
-    prompt `echo ${input}`
+    client: MyClient
+    prompt: `echo ${input}`
 }

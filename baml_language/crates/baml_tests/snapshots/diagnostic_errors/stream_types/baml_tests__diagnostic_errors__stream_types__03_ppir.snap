@@ -219,12 +219,6 @@ class user.Container$stream {
   grid: user.TreeNode$stream[][]
   groups: map<string, user.TreeNode$stream[]>
 }
-class user.DynamicClass {
-  name: string
-}
-class user.DynamicClass$stream {
-  name: string | null
-}
 class user.Education {
   school: string
   year: int

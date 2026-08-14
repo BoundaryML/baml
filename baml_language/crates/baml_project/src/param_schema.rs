@@ -19,12 +19,11 @@
 
 use std::collections::BTreeMap;
 
+use baml_base::Literal as LiteralValue;
 use baml_compiler2_hir::{loc::FunctionLoc, package::PackageId};
-use baml_compiler2_tir::{
-    package_interface::{ExportedType, PackageInterface, package_interface},
-    ty::{FunctionParamMode, LiteralValue, QualifiedTypeName, Ty},
-};
+use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
 use baml_db::Name;
+use baml_type::{FunctionParamMode, QualifiedTypeName, Ty};
 use serde::Serialize;
 
 use crate::db::ProjectDatabase;
@@ -272,7 +271,7 @@ impl<'db> SchemaCx<'db, '_> {
                             .insert(name.clone(), TypeSchema::Class { fields: Vec::new() });
                         let fields = fields
                             .iter()
-                            .map(|(field_name, field_ty, _attrs)| FieldSchemaField {
+                            .map(|(field_name, field_ty)| FieldSchemaField {
                                 name: field_name.to_string(),
                                 schema: self.field_schema(field_ty, depth + 1),
                             })
@@ -814,8 +813,8 @@ mod tests {
 client GPT4 = openai.OpenAiClient.new(model = "gpt-4o");
 
 function Extract(text: string) -> string {
-  client GPT4
-  prompt `${text} ${ctx.output_format}`
+  client: GPT4
+  prompt: `${text} ${ctx.output_format}`
 }
 
 function Plain(x: int) -> int { x }

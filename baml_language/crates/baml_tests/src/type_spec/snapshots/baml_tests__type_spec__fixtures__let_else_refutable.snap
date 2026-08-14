@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+386..393 'le_pick': throws never
+434..513 '{\n   ...lue\n}': string
+440..451 'let o: LeOk': user.LeOk
+447..451 'LeOk': user.LeOk
+454..455 'r': user.LeErr | user.LeOk
+461..478 '{ retu...rr"; }': never
+470..475 '"err"': "err"
+504..511 'o.value': string
+524..531 'le_loop': throws never
+580..721 '{\n   ...acc\n}': string
+586..593 'let acc': string
+596..598 '""': ""
+609..617 'let item': user.LeErr | user.LeOk
+621..626 'items': (user.LeErr | user.LeOk)[]
+628..711 '{\n   ...n    }': void
+638..649 'let o: LeOk': user.LeOk
+645..649 'LeOk': user.LeOk
+652..656 'item': user.LeErr | user.LeOk
+662..675 '{ continue; }': never
+685..688 'acc': string
+691..694 'acc': string
+691..704 'acc + o.value': string
+697..704 'o.value': string
+716..719 'acc': string

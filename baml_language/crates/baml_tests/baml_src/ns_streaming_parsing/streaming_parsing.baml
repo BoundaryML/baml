@@ -19,11 +19,11 @@ class Doc {
 }
 
 function ExtractDoc(input: string) -> Doc {
-    client StreamParseClient
-    prompt `Say hello to ${input}`
+    client: StreamParseClient
+    prompt: `Say hello to ${input}`
 }
 
 function SayHello(input: string) -> string {
-    client StreamParseClient
-    prompt `Say hello to ${input}`
+    client: StreamParseClient
+    prompt: `Say hello to ${input}`
 }

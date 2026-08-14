@@ -9,23 +9,23 @@ function Foo2() -> string {
 }
 
 function FooBar(a: string, b: int | bool) -> int {
-  client Bar
-  prompt `
+  client: Bar
+  prompt: `
     fa ${a}
   `
 }
 
 
 function FooBar1(a: string, b: int | bool) -> int {
-  client Bar
-  prompt `
+  client: Bar
+  prompt: `
     fa ${a}
   `
 }
 
 function Bar1(a: string) -> int {
-  client Bar
-  prompt `
+  client: Bar
+  prompt: `
     fa ${a}
   `
 }

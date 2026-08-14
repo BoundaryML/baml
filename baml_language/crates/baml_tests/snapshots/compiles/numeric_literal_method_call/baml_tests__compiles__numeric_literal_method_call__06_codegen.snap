@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18580
 ---
 function user.BigintToStringBareLiteral() -> string {
     load_type 42n

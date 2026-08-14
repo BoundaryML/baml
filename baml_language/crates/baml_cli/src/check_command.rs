@@ -86,8 +86,8 @@ impl CheckArgs {
         // cache serving clean user files and the stdlib blob serving builtins,
         // this counts only the dirty files' scopes; a cold check walks every one.
         crate::bytecode_cache::cache_debug(format_args!(
-            "scope inferences: {} this process",
-            baml_db::baml_compiler2_tir::inference::scope_inferences()
+            "body inferences: {} this process",
+            baml_db::baml_compiler2_hir_ty::infer::body_inferences()
         ));
         if !diagnostics.is_empty() {
             let rendered = render_project_diagnostics(db, &diagnostics);

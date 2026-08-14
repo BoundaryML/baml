@@ -32,6 +32,7 @@ function baml._compare_shim(a: T, b: T) -> int  [builtin]
 function baml._float_total_cmp(a: float, b: float) -> int  [builtin]
 function baml._is_primitive_array(arr: T[]) -> bool  [builtin]
 function baml._rust_sort(arr: A) -> A  [builtin]
+function baml.compare(self: ?, other: Self) -> int  [missing]
 function baml.compare(self: ?, other: Self) -> int  [expr] {
   {  } if (self Lt other) {  } Neg 1 else if (self Gt other) {  } 1 else {  } 0
 }
@@ -44,6 +45,7 @@ function baml.compare(self: ?, other: Self) -> int  [expr] {
 function baml.compare(self: ?, other: Self) -> int  [expr] {
   {  } root._float_total_cmp(self, other)
 }
+function baml.sort(self: ?) -> Self  [missing]
 function baml.sort(self: ?) -> Self  [expr] {
   {  } if (root._is_primitive_array(self)) {  } root._rust_sort(self) else {  } self.sort_by((a: T, b: T) -> int throws T.CompareError { {  } root._compare_shim(a, b) })
 }
@@ -95,9 +97,11 @@ function baml.last_index_of(self: ?, item: T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.map(self: ?, f: (T) -> U throws E) -> U[]  [builtin]
+function baml.mean(self: ?) -> float  [missing]
 function baml.mean(self: ?) -> float  [expr] {
   {  } root._mean_float(self)
 }
+function baml.median(self: ?) -> float  [missing]
 function baml.median(self: ?) -> float  [expr] {
   {  } root._median_float(self)
 }
@@ -115,6 +119,7 @@ function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {
   { let n = self.length(); if (n Le 1) { return self }; let items = self.slice(0, n); let keys: U[] = []; for x in items { keys.push(key(x)) }; let order: int[] = []; let p = 0; while p Lt n { order.push(p); p Add= 1 }; order.sort_by((i: int, j: int) -> int throws U.CompareError { {  } match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } } }); let sorted: T[] = []; for i in order {  } match (items.at(i)) { null => {  }, item: T => { sorted.push(item) } }; self.clear(); for s in sorted { self.push(s) }; return self }
 }
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
+function baml.sum(self: ?) -> Self.Sum  [missing]
 function baml.sum(self: ?) -> int  [expr] {
   {  } root._sum_int(self)
 }
@@ -134,6 +139,7 @@ function baml._to_json_default(value: T) -> baml.json.json  [builtin]
 function baml._to_json_shim(value: T) -> baml.json.json  [builtin]
 function baml._to_string_default(value: T) -> string  [builtin]
 function baml._to_string_shim(value: T) -> string  [builtin]
+function baml.from_json(j: baml.json.json) -> Self  [missing]
 function baml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } root._to_json_default(self)
 }
@@ -1025,6 +1031,7 @@ function baml.iter.flatten(src: Iterator<Item = I, Error = E>) -> Iterator<Item 
 function baml.iter.for_each(self: ?, fn: (Self.Item) -> void throws E2) -> void  [expr] {
   { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => { fn(x) } } }
 }
+function baml.iter.iter(self: ?) -> Iterator<Item = Self.Item, Error = Self.Error>  [missing]
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
   {  } self
 }
@@ -1076,6 +1083,7 @@ function baml.iter.new(min: int, max: int, step: int = 1) -> baml.iter.Range  [e
 function baml.iter.new(value: T, count: int = ...) -> baml.iter.Repeat<T>  [expr] {
   {  } baml.iter.Repeat { value: value, count: count }
 }
+function baml.iter.next(self: ?) -> Self.Item | baml.iter.Done  [missing]
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
   { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr[self.idx]; self.idx Add= 1; return item }
 }
@@ -1306,7 +1314,35 @@ function baml.net.write(self: ?, data: uint8array, timeout: root.time.Duration? 
   {  } self._write(data, _timeout_nanos(timeout))
 }
 
+--- <builtin>/baml/ns_ops/bitwise.baml ---
+function baml.ops.bit_and(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.bit_and(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_and(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_and(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_and(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.bit_or(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_or(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.bit_xor(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.shl(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.shl(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.shr(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.shr(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: bigint) -> bigint  [builtin]
+
 --- <builtin>/baml/ns_ops/comparison.baml ---
+function baml.ops.eq(self: ?, other: Self) -> bool  [missing]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
@@ -1341,6 +1377,7 @@ function baml.ops.le(self: ?, other: Self) -> bool  [expr] {
 }
 function baml.ops.le(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.le(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.lt(self: ?, other: Self) -> bool  [missing]
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
@@ -1355,6 +1392,18 @@ function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
   {  } false
 }
 
+--- <builtin>/baml/ns_ops/index.baml ---
+function baml.ops.index(self: ?, idx: Idx) -> Self.Output  [missing]
+function baml.ops.index(self: ?, idx: int) -> T  [expr] {
+  {  } self[idx]
+}
+function baml.ops.index(self: ?, idx: string) -> V  [expr] {
+  {  } self[idx]
+}
+function baml.ops.index(self: ?, idx: int) -> int  [expr] {
+  {  } self[idx]
+}
+
 --- <builtin>/baml/ns_ops/math.baml ---
 function baml.ops.__union_add(a: unknown, b: unknown) -> unknown  [builtin]
 function baml.ops.__union_div(a: unknown, b: unknown) -> unknown  [builtin]
@@ -1362,6 +1411,7 @@ function baml.ops.__union_mul(a: unknown, b: unknown) -> unknown  [builtin]
 function baml.ops.__union_neg(a: unknown) -> unknown  [builtin]
 function baml.ops.__union_rem(a: unknown, b: unknown) -> unknown  [builtin]
 function baml.ops.__union_sub(a: unknown, b: unknown) -> unknown  [builtin]
+function baml.ops.add(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.add(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.add(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.add(self: ?, rhs: int) -> float  [builtin]
@@ -1370,6 +1420,7 @@ function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: string) -> string  [builtin]
+function baml.ops.div(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.div(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.div(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.div(self: ?, rhs: int) -> float  [builtin]
@@ -1377,6 +1428,7 @@ function baml.ops.div(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.div(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.div(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.div(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.mul(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.mul(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.mul(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.mul(self: ?, rhs: int) -> float  [builtin]
@@ -1384,9 +1436,11 @@ function baml.ops.mul(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.mul(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.mul(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.mul(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.neg(self: ?) -> Self.Output  [missing]
 function baml.ops.neg(self: ?) -> int  [builtin]
 function baml.ops.neg(self: ?) -> float  [builtin]
 function baml.ops.neg(self: ?) -> bigint  [builtin]
+function baml.ops.rem(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.rem(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.rem(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.rem(self: ?, rhs: int) -> float  [builtin]
@@ -1394,6 +1448,7 @@ function baml.ops.rem(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.rem(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.rem(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.rem(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.sub(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.sub(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.sub(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.sub(self: ?, rhs: int) -> float  [builtin]
@@ -1706,6 +1761,7 @@ function baml.random.new(seed: uint8array = SystemRandom.get().random(32)) -> ba
 function baml.random.new(seed: uint8array = SystemRandom.get().random(32)) -> baml.random.ChaCha20  [expr] {
   {  } ChaCha20._new(seed)
 }
+function baml.random.random(self: ?, bytes: int) -> uint8array  [missing]
 function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
 function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
 function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]

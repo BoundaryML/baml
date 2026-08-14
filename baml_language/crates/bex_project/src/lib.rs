@@ -36,10 +36,38 @@ mod bex;
 mod bex_lsp;
 mod fs;
 mod project;
+// BEP-066's runtime compiler is preserved in `runtime_compile.rs`, but its
+// compiler-core bridge is ported onto hir_ty in Slice 7. Keep Phase A
+// compiling without a compatibility facade for the deleted TIR crate.
+#[cfg(any())]
 mod runtime_compile;
 mod seed;
 
-pub use runtime_compile::{ProjectRuntimeCompiler, runtime_compiler};
+/// Phase-A placeholder while BEP-066's runtime compiler is ported to `hir_ty`.
+pub struct ProjectRuntimeCompiler;
+
+/// Return a compiler-neutral placeholder which fails runtime compilation with
+/// an explicit diagnostic until Slice 7 installs the real compiler bridge.
+pub fn runtime_compiler() -> Arc<dyn bex_engine::RuntimeCompiler> {
+    Arc::new(ProjectRuntimeCompiler)
+}
+
+impl bex_engine::RuntimeCompiler for ProjectRuntimeCompiler {
+    fn compile(
+        &self,
+        _request: bex_vm_types::RuntimeCompileRequest,
+    ) -> Result<bex_vm_types::RuntimeCompileArtifact, Vec<bex_vm_types::RuntimeCompileDiagnostic>>
+    {
+        Err(vec![bex_vm_types::RuntimeCompileDiagnostic {
+            code: "E_BEP066_PORT_IN_PROGRESS".to_string(),
+            message:
+                "runtime compilation is temporarily unavailable during the BEP-066 hir_ty port"
+                    .to_string(),
+            severity: bex_vm_types::RuntimeDiagnosticSeverity::Error,
+            span: None,
+        }])
+    }
+}
 
 pub struct BexArgs {
     /// Required values keyed by their type-level names and kept in declared order.

@@ -93,7 +93,7 @@ baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
-baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
+baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
@@ -176,6 +176,9 @@ ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
+# Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
+# crate rustc and rust-analyzer build their inference tables on.
+ena = "0.14"
 flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
@@ -189,6 +192,7 @@ indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
 infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+similar = "2"
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"

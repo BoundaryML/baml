@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+408..420 'filled_alias': throws never
+447..584 '{\n   ...rid\n}': int[][]
+453..460 'let row': int[]
+463..480 'baml.A...filled': (length: int, value: int) -> int[] throws never
+463..486 'baml.A...(2, 0)': int[]
+481..482 '2': 2
+484..485 '0': 0
+492..500 'let grid': int[][]
+503..520 'baml.A...filled': (length: int, value: int[]) -> int[][] throws never
+503..528 'baml.A..., row)': int[][]
+521..522 '3': 3
+524..527 'row': int[]
+534..539 'let n': int
+542..546 'grid': int[][]
+542..549 'grid[0]': int[]
+542..554 'grid[0].push': (self: int[], item: int) -> int throws never
+542..558 'grid[0...sh(99)': int
+547..548 '0': 0
+555..557 '99': 99
+578..582 'grid': int[][]

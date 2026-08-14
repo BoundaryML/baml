@@ -22,7 +22,6 @@ use crate::{
 const SOURCE_FIXTURES: &[&str] = &[
     "docstrings_etc",
     "function_calls",
-    "host_reflect",
     "llm_functions",
     "type_shapes",
     "unsupported_only",
@@ -31,7 +30,6 @@ const RUNTIME_GO_SUM: &str = include_str!("../../../sdks/go/baml_go/go.sum");
 const FIXTURES: &[&str] = &[
     "docstrings_etc",
     "function_calls",
-    "host_reflect",
     "llm_functions",
     "type_shapes",
     "unsupported_only",

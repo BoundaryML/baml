@@ -223,6 +223,21 @@ pub struct ResolvedAliases {
 }
 
 impl ResolvedAliases {
+    /// Build the environment from the collected alias targets, computing
+    /// the recursive set (DFS cycle detection) here - the one constructor,
+    /// so a caller cannot pair aliases with a stale recursive set.
+    pub fn from_aliases(aliases: HashMap<QualifiedTypeName, Ty>) -> ResolvedAliases {
+        let mut recursive = HashSet::new();
+        for name in aliases.keys() {
+            let mut visited = HashSet::new();
+            let mut stack = HashSet::new();
+            if has_cycle(name, &aliases, &mut visited, &mut stack) {
+                recursive.insert(name.clone());
+            }
+        }
+        ResolvedAliases { aliases, recursive }
+    }
+
     /// Lower a [`Ty`] into a [`RuntimeTy`] using this alias environment.
     ///
     /// This is the compiler's ergonomic entry point and asserts the conversion
@@ -407,6 +422,80 @@ fn lower_interface_to_runtime(
             .map(|(name, ty)| Ok((name.clone(), lower_to_runtime(ty, resolved)?)))
             .collect::<Result<Vec<_>, NotRuntimeTy>>()?,
     })
+}
+
+fn has_cycle(
+    name: &QualifiedTypeName,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    visited: &mut HashSet<QualifiedTypeName>,
+    stack: &mut HashSet<QualifiedTypeName>,
+) -> bool {
+    if stack.contains(name) {
+        return true;
+    }
+    if visited.contains(name) {
+        return false;
+    }
+    visited.insert(name.clone());
+    stack.insert(name.clone());
+    let result = aliases
+        .get(name)
+        .is_some_and(|ty| ty_has_cycle(ty, aliases, visited, stack));
+    stack.remove(name);
+    result
+}
+
+fn ty_has_cycle(
+    ty: &Ty,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    visited: &mut HashSet<QualifiedTypeName>,
+    stack: &mut HashSet<QualifiedTypeName>,
+) -> bool {
+    match ty {
+        Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+            ty_has_cycle(inner, aliases, visited, stack)
+        }
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+            ty_has_cycle(key, aliases, visited, stack)
+                || ty_has_cycle(value, aliases, visited, stack)
+        }
+        Ty::Union(types, _) => types
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Class(_, type_args, _) => type_args
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args
+                .iter()
+                .any(|t| ty_has_cycle(t, aliases, visited, stack))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| ty_has_cycle(ty, aliases, visited, stack))
+        }
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            ty_has_cycle(base, aliases, visited, stack)
+                || interface
+                    .tys()
+                    .any(|t| ty_has_cycle(t, aliases, visited, stack))
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| ty_has_cycle(&param.ty, aliases, visited, stack))
+                || ty_has_cycle(ret, aliases, visited, stack)
+                || ty_has_cycle(throws, aliases, visited, stack)
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]

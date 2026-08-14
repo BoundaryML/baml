@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6399
 ---
 function user.CatchAllPanicsTyped(x: int) -> string {
     load_var x

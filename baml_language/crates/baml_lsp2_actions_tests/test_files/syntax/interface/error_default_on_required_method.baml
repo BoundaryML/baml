@@ -15,9 +15,9 @@ class Dog {
 
 //----
 //- diagnostics
-// E0123
+// E0003
 //
-//   × `default.speak()` is invalid: method `speak` on interface `Animal` has no default body
+//   × unresolved name: `default.speak`
 //     ╭─[interface_error_default_on_required_method.baml:11:14]
 //  11 │       return default.speak()
 //     ·              ─────────────

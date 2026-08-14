@@ -256,8 +256,8 @@ test "prompt_interpolates_ctx_output_format" {
 }
 
 function PtRenderPerson() -> Person {
-    client "openai/gpt-4o-mini"
-    prompt `Make a person.${ctx.output_format}`
+    client: "openai/gpt-4o-mini"
+    prompt: `Make a person.${ctx.output_format}`
 }
 
 function pt_render_prompt_companion_output_format_fn() -> string {
@@ -276,9 +276,9 @@ test "render_prompt_companion_interpolates_ctx_output_format" {
 // built-in `prompt` tag above. This exercises the real @spec path instead of
 // constructing a prompt tag by hand.
 function PtStructuredGreeting(name: string) -> string {
-    client "openai/gpt-4o-mini"
-    tools []
-    prompt `${role("system")}Follow the rules.${role("user")}Hello ${name}.`
+    client: "openai/gpt-4o-mini"
+    tools: []
+    prompt: `${role("system")}Follow the rules.${role("user")}Hello ${name}.`
 }
 
 function pt_spec_prompt_messages_fn() -> ai.PromptMessage[] {
@@ -306,9 +306,9 @@ test "render_prompt_companion_returns_promptast_messages" {
 }
 
 function PtStructuredImage(photo: image) -> string {
-    client "openai/gpt-4o-mini"
-    tools []
-    prompt `${role("user")}Inspect ${photo}`
+    client: "openai/gpt-4o-mini"
+    tools: []
+    prompt: `${role("user")}Inspect ${photo}`
 }
 
 function pt_spec_prompt_media_fn() -> string {

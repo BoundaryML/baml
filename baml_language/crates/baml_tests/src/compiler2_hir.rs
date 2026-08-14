@@ -83,7 +83,7 @@ mod tests {
         let _file_a = db.add_file("a.baml", "class Foo { name string }");
         let _file_b = db.add_file(
             "b.baml",
-            "function bar(x: string) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }",
+            "function bar(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
 
         let user_pkg_id = PackageId::new(&db, Name::new("user"));
@@ -136,7 +136,7 @@ mod tests {
         let mut db = make_db();
         let _f = db.add_file(
             "methods.baml",
-            "class MyClass {\n  name string\n  function helper(x: string) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }\n}",
+            "class MyClass {\n  name string\n  function helper(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n}",
         );
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
@@ -237,7 +237,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "fn.baml",
-            "function greet(name: string) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }",
+            "function greet(name: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
 
         // Find the function via the firewall.
@@ -396,11 +396,8 @@ mod tests {
                 })
                 .expect("class in item tree");
             let data = baml_compiler2_ppir::item_data::class_data(&db, loc);
-            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
-                &db,
-                Definition::Class(loc),
-                &data.name,
-            );
+            let qtn =
+                baml_compiler2_hir_ty::lower::qualify_def(&db, Definition::Class(loc), &data.name);
             Ty::Class(qtn, vec![], TyAttr::default())
         };
         let iface = |iface_name: &str| {
@@ -411,7 +408,7 @@ mod tests {
                         == Name::new(iface_name)
                 })
                 .expect("interface in item tree");
-            let qtn = baml_compiler2_tir::interfaces::interface_loc_qtn(&db, loc)
+            let qtn = baml_compiler2_hir_ty::interfaces::interface_loc_qtn(&db, loc)
                 .expect("interface loc resolves to a qtn");
             baml_type::Interface {
                 name: qtn,
@@ -425,7 +422,7 @@ mod tests {
         // H2: Widget implements Printable, so the bounded blanket
         // `Loud for T extends Printable` applies.
         assert!(
-            baml_compiler2_tir::interfaces::get_implements_block(
+            baml_compiler2_hir_ty::interfaces::get_implements_block(
                 &db,
                 pkg_id,
                 &class_ty("Widget"),
@@ -439,7 +436,7 @@ mod tests {
         // H2: Plain does not implement Printable, so the bound fails and the
         // blanket must not apply.
         assert!(
-            baml_compiler2_tir::interfaces::get_implements_block(
+            baml_compiler2_hir_ty::interfaces::get_implements_block(
                 &db,
                 pkg_id,
                 &class_ty("Plain"),
@@ -461,7 +458,7 @@ mod tests {
             TyAttr::default(),
         );
         assert!(
-            baml_compiler2_tir::interfaces::get_implements_block(
+            baml_compiler2_hir_ty::interfaces::get_implements_block(
                 &db,
                 pkg_id,
                 &printable_existential,
@@ -482,7 +479,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "bindings.baml",
-            "function add(a: int, b: int) -> int { client \"openai/gpt-4o-mini\"\nprompt `hi` }",
+            "function add(a: int, b: int) -> int { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
 
         let index = file_semantic_index(&db, file);
@@ -564,15 +561,15 @@ mod tests {
         let mut db = make_db();
         let _file_a = db.add_file(
             "a.baml",
-            "function greet(x: string) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }",
+            "function greet(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
         let _file_b = db.add_file(
             "b.baml",
-            "function greet(y: int) -> int { client \"openai/gpt-4o-mini\"\nprompt `hey` }",
+            "function greet(y: int) -> int { client: \"openai/gpt-4o-mini\"\nprompt: `hey` }",
         );
         let _file_c = db.add_file(
             "c.baml",
-            "function greet(z: bool) -> bool { client \"openai/gpt-4o-mini\"\nprompt `yo` }",
+            "function greet(z: bool) -> bool { client: \"openai/gpt-4o-mini\"\nprompt: `yo` }",
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
@@ -790,7 +787,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "dup_method.baml",
-            "class Foo {\n  name string\n  function Bar(self) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }\n  function Bar(self) -> string { client \"openai/gpt-4o-mini\"\nprompt `bye` }\n}",
+            "class Foo {\n  name string\n  function Bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n  function Bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `bye` }\n}",
         );
 
         let index = file_semantic_index(&db, file);
@@ -1516,7 +1513,7 @@ function foo(user: User) -> string {
         let mut db = make_db();
         let file = db.add_file(
             "cross_kind.baml",
-            "class Foo {\n  bar string\n  function bar(self) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }\n}",
+            "class Foo {\n  bar string\n  function bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n}",
         );
 
         let index = file_semantic_index(&db, file);

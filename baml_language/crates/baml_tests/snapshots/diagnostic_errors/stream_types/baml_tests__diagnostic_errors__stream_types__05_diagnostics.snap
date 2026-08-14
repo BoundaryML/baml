@@ -28,8 +28,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [validation] E0011
 
   × name `Foo` defined 2 times as: class, type
-     ╭─[main.baml:145:6]
- 145 │ type Foo = int | string
+     ╭─[main.baml:138:6]
+ 138 │ type Foo = int | string
      ·      ─┬─
      ·       ╰── duplicate type definition
      ╰────
@@ -42,8 +42,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [validation] E0011
 
   × name `Bar` defined 2 times as: class, type
-     ╭─[main.baml:146:6]
- 146 │ type Bar = Foo | bool
+     ╭─[main.baml:139:6]
+ 139 │ type Bar = Foo | bool
      ·      ─┬─
      ·       ╰── duplicate type definition
      ╰────

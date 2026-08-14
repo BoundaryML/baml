@@ -7,8 +7,8 @@ client OpenAIImageResponses = openai.OpenAiClient.new(
 );
 
 function GenerateImage(prompt: string) -> image {
-  client OpenAIImageResponses
-  prompt `
+  client: OpenAIImageResponses
+  prompt: `
     Generate an image for this prompt:
     ${prompt}
 
@@ -17,8 +17,8 @@ function GenerateImage(prompt: string) -> image {
 }
 
 function GenerateImageSet(prompt: string) -> image[] {
-  client OpenAIImageResponses
-  prompt `
+  client: OpenAIImageResponses
+  prompt: `
     Generate multiple distinct image outputs for this prompt:
     ${prompt}
 
@@ -27,8 +27,8 @@ function GenerateImageSet(prompt: string) -> image[] {
 }
 
 function GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
-  client OpenAIImageResponses
-  prompt `
+  client: OpenAIImageResponses
+  prompt: `
     Generate a short narrative with text captions and image outputs for:
     ${prompt}
 

@@ -404,7 +404,7 @@ impl<'db> ImplIndex<'db> {
             .iter()
             .filter(|(imp, _)| {
                 crate::facts::impl_data(db, imp.loc())
-                    .is_some_and(|data| data.interface_loc() == Some(iface.loc()))
+                    .is_some_and(|data| data.interface == iface.loc())
             })
             .map(|(_, export)| export.id.clone())
             .collect();
@@ -495,7 +495,7 @@ fn function_export(
                 })
                 .collect(),
             returns: TyRef::of(&sig.return_type),
-            throws: TyRef::of(function.throws(db).effective),
+            throws: TyRef::of(&function.throws(db).effective),
         },
         source: source_export(db, function.file(db), function.span(db)),
     }
@@ -562,9 +562,7 @@ fn required_method_export(
 ///
 fn export_impl(db: &dyn Db, imp: Impl<'_>) -> Option<ImplExport> {
     let data = crate::facts::impl_data(db, imp.loc())?;
-    // Impls of a MOUNTED (source-less) interface are not exported through the
-    // tooling surface yet — the interface has no handle to link against.
-    let iface: crate::Interface<'_> = data.interface_loc()?.into();
+    let iface: crate::Interface<'_> = data.interface.into();
     let iface_qtn = iface.qualified_name(db);
     let pkg = baml_compiler2_hir::file_package::file_package(db, imp.file(db)).package;
 
@@ -713,7 +711,7 @@ fn export_item<'db>(
             }
         }
         Symbol::TypeAlias(alias) => ItemDetail::TypeAlias {
-            resolved: TyRef::of(alias.resolved(db)),
+            resolved: TyRef::of(&alias.resolved(db)),
         },
         Symbol::Function(function) => ItemDetail::Function {
             signature: function_export(db, function, false, None).signature,

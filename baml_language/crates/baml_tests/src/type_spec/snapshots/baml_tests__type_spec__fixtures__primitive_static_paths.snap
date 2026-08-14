@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+220..221 'f': throws never
+246..339 '{\n   ...  n\n}': float
+252..257 'let n': float
+260..269 'float.nan': () -> float throws never
+260..271 'float.nan()': float
+293..298 'let m': int
+301..314 'int.max_value': () -> int throws never
+301..316 'int.max_value()': int
+336..337 'n': float

@@ -15,17 +15,14 @@ function ThrowsMixed(x: int) -> string throws string | Errors {
 
 //----
 //- diagnostics
-// E0096
-//
-//   × declared throws is `string | Errors`, but this function may also throw `Errors.AuthError`
-//    ╭─[throw_throws_mixed.baml:9:47]
-//  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {
-//    ·                                               ───────────────
-//    ╰────
 // E0097
 //
 //   ⚠ extraneous throws declaration: Errors
-//    ╭─[throw_throws_mixed.baml:9:47]
-//  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {
-//    ·                                               ───────────────
-//    ╰────
+//     ╭─[throw_throws_mixed.baml:9:63]
+//   9 │ ╭─▶ function ThrowsMixed(x: int) -> string throws string | Errors {
+//  10 │ │     match (x) {
+//  11 │ │       0 => throw "oops",
+//  12 │ │       _ => throw Errors.AuthError
+//  13 │ │     }
+//  14 │ ╰─▶ }
+//     ╰────

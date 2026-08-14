@@ -658,7 +658,7 @@ pub struct LlmFunctionBody {
     /// Fields may appear in any order in the input; printing canonicalizes to
     /// client, tools, prompt.
     pub client: ClientField,
-    /// Optional `tools [a, b]` list (BEP spec mode).
+    /// Optional `tools: [a, b]` list (BEP spec mode).
     pub tools: Option<ToolsField>,
     pub prompt: PromptField,
     pub close_brace: t::RBrace,
@@ -794,7 +794,7 @@ impl Printable for LlmFunctionBody {
 #[derive(Debug)]
 pub struct ClientField {
     pub keyword: t::Client,
-    pub colon: Option<t::Colon>,
+    pub colon: t::Colon,
     pub name: ClientName,
 }
 
@@ -807,10 +807,7 @@ impl FromCST for ClientField {
 
         let keyword = it.expect_parse()?;
 
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
+        let colon = it.expect_parse()?;
 
         let name = it.expect_next("STRING_LITERAL, WORD, or PATH_EXPR")?;
         let name = match name.kind() {
@@ -855,12 +852,10 @@ impl KnownKind for ClientField {
 impl Printable for ClientField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
-        let colon_trailing = if let Some(colon) = &self.colon {
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            colon_trailing
-        } else {
-            &[][..]
-        };
+        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
+        printer.print_trivia_squished(keyword_trailing);
+        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
+        printer.print_trivia_squished(colon_leading);
         printer.print_str(": ");
         printer.print_trivia_squished(colon_trailing);
         let name_leading = printer.trivia.get_leading_for_element(&self.name);
@@ -879,7 +874,7 @@ impl Printable for ClientField {
 pub enum ClientName {
     Path(PathExpr),
     String(t::QuotedString),
-    /// An arbitrary ai.Client expression (`client openai.OpenAiClient.new(...)`).
+    /// An arbitrary ai.Client expression (`client: openai.OpenAiClient.new(...)`).
     Expr(Box<Expression>),
 }
 
@@ -911,7 +906,7 @@ impl Printable for ClientName {
 #[derive(Debug)]
 pub struct PromptField {
     pub prompt: t::Word,
-    pub colon: Option<t::Colon>,
+    pub colon: t::Colon,
     pub string: StringLiteralValue,
 }
 
@@ -925,10 +920,7 @@ impl FromCST for PromptField {
         // It's a word, but we should never be in a `PROMPT_FIELD` context if it's not a prompt
         let prompt = it.expect_parse()?;
 
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
+        let colon = it.expect_parse()?;
 
         let string = StringLiteralValue::from_cst(it.expect_next("a prompt string")?)?;
 
@@ -951,12 +943,10 @@ impl KnownKind for PromptField {
 impl Printable for PromptField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.prompt);
-        let colon_trailing = if let Some(colon) = &self.colon {
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            colon_trailing
-        } else {
-            &[][..]
-        };
+        let (_, prompt_trailing) = printer.trivia.get_for_range_split(self.prompt.span());
+        printer.print_trivia_squished(prompt_trailing);
+        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
+        printer.print_trivia_squished(colon_leading);
         printer.print_str(": ");
         printer.print_trivia_squished(colon_trailing);
         let string_leading = printer.trivia.get_leading_for_element(&self.string);
@@ -971,13 +961,13 @@ impl Printable for PromptField {
     }
 }
 
-/// Corresponds to a [`SyntaxKind::TOOLS_FIELD`] node: `tools [a, b]` in an
+/// Corresponds to a [`SyntaxKind::TOOLS_FIELD`] node: `tools: [a, b]` in an
 /// LLM function body (BEP spec mode). The value is an arbitrary expression
 /// producing the tool list.
 #[derive(Debug)]
 pub struct ToolsField {
     pub keyword: t::Word,
-    pub colon: Option<t::Colon>,
+    pub colon: t::Colon,
     pub value: Expression,
 }
 
@@ -991,10 +981,7 @@ impl FromCST for ToolsField {
         // It's a word; we are only in a TOOLS_FIELD context if it is `tools`.
         let keyword = it.expect_parse()?;
 
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
+        let colon = it.expect_parse()?;
 
         let value = Expression::from_cst(it.expect_next("a tools expression")?)?;
 
@@ -1017,12 +1004,10 @@ impl KnownKind for ToolsField {
 impl Printable for ToolsField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
-        let colon_trailing = if let Some(colon) = &self.colon {
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            colon_trailing
-        } else {
-            &[][..]
-        };
+        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
+        printer.print_trivia_squished(keyword_trailing);
+        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
+        printer.print_trivia_squished(colon_leading);
         printer.print_str(": ");
         printer.print_trivia_squished(colon_trailing);
         let value_leading = printer.trivia.get_leading_for_element(&self.value);
@@ -1155,9 +1140,6 @@ impl FromCST for ClassDecl {
                 }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
-                }
-                SyntaxKind::HEADER_COMMENT => {
-                    items.push(ClassItem::HeaderComment(t::HeaderComment::from_cst(elem)?));
                 }
                 SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {
                     // Stray delimiter not following a field - skip silently
@@ -1597,7 +1579,6 @@ pub enum ImplementsItem {
     FieldLink(InterfaceFieldLink, Option<ClassFieldDelimiter>),
     Field(ClassField, Option<ClassFieldDelimiter>),
     Function(FunctionDecl),
-    HeaderComment(t::HeaderComment),
 }
 
 impl ImplementsItem {
@@ -1627,10 +1608,6 @@ impl Printable for ImplementsItem {
                 info
             }
             ImplementsItem::Function(function) => function.print(shape, printer),
-            ImplementsItem::HeaderComment(header) => {
-                printer.print_raw_token(header);
-                PrintInfo::default_single_line()
-            }
         }
     }
 
@@ -1640,7 +1617,6 @@ impl Printable for ImplementsItem {
             ImplementsItem::FieldLink(link, _) => link.leftmost_token(),
             ImplementsItem::Field(field, _) => field.leftmost_token(),
             ImplementsItem::Function(function) => function.leftmost_token(),
-            ImplementsItem::HeaderComment(header) => header.span(),
         }
     }
 
@@ -1656,7 +1632,6 @@ impl Printable for ImplementsItem {
                 Self::delimiter_rightmost(delimiter.as_ref(), || field.rightmost_token())
             }
             ImplementsItem::Function(function) => function.rightmost_token(),
-            ImplementsItem::HeaderComment(header) => header.span(),
         }
     }
 }
@@ -1738,11 +1713,6 @@ impl FromCST for ImplementsBlock {
                 }
                 SyntaxKind::FUNCTION_DEF => {
                     items.push(ImplementsItem::Function(FunctionDecl::from_cst(elem)?));
-                }
-                SyntaxKind::HEADER_COMMENT => {
-                    items.push(ImplementsItem::HeaderComment(t::HeaderComment::from_cst(
-                        elem,
-                    )?));
                 }
                 SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {}
                 SyntaxKind::R_BRACE => {
@@ -1833,7 +1803,6 @@ pub enum ClassItem {
     Function(FunctionDecl),
     Implements(ImplementsBlock),
     BlockAttribute(BlockAttribute),
-    HeaderComment(t::HeaderComment),
     Unknown(TextRange),
 }
 
@@ -1845,9 +1814,6 @@ impl FromCST for ClassItem {
             SyntaxKind::IMPLEMENTS_BLOCK => ClassItem::Implements(ImplementsBlock::from_cst(elem)?),
             SyntaxKind::BLOCK_ATTRIBUTE => {
                 ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?)
-            }
-            SyntaxKind::HEADER_COMMENT => {
-                ClassItem::HeaderComment(t::HeaderComment::from_cst(elem)?)
             }
             found => {
                 return Err(StrongAstError::UnexpectedKindDesc {
@@ -1885,10 +1851,6 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.print(shape, printer),
             ClassItem::Implements(block) => block.print(shape, printer),
             ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
-            ClassItem::HeaderComment(header) => {
-                printer.print_raw_token(header);
-                PrintInfo::default_single_line()
-            }
             ClassItem::Unknown(range) => {
                 printer.print_input_range(*range);
                 PrintInfo::default_multi_lined()
@@ -1901,7 +1863,6 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.leftmost_token(),
             ClassItem::Implements(block) => block.leftmost_token(),
             ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
-            ClassItem::HeaderComment(header) => header.span(),
             ClassItem::Unknown(range) => *range,
         }
     }
@@ -1915,7 +1876,6 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.rightmost_token(),
             ClassItem::Implements(block) => block.rightmost_token(),
             ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
-            ClassItem::HeaderComment(header) => header.span(),
             ClassItem::Unknown(range) => *range,
         }
     }

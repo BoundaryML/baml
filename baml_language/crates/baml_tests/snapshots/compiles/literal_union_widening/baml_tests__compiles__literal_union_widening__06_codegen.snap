@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15078
 ---
 function user.annotatedLiteralUnion() -> int {
     load_const 1

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14284
 ---
 function user.test_captured_field_access(obj: Outer) -> string {
     load_var ?1

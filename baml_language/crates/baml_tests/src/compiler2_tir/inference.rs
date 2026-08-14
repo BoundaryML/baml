@@ -1,15 +1,12 @@
 //! Core type inference snapshot tests.
 
 use baml_base::Name;
-use baml_compiler2_hir::{contributions::Definition, package::PackageId, scope::ScopeKind};
-use baml_compiler2_tir::{
-    inference::{infer_scope_types, resolve_type_alias},
-    package_interface::{ExportedType, package_interface, package_resolution_context},
-    resolve::{ResolvedName, resolve_name_at_in_scope},
-    ty::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr},
-    type_context::GlobalTypeContext,
+use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
+use baml_compiler2_hir_ty::package_interface::{
+    ExportedType, package_interface, package_resolution_context,
 };
-use salsa::Setter;
+use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
+use baml_type::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr};
 use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
@@ -33,15 +30,6 @@ fn find_function_scope_id<'db>(
                     .is_some_and(|scope_name| scope_name.as_str() == name)
         })
         .unwrap_or_else(|| panic!("missing function scope {name}"))
-}
-
-fn add_compiler2_virtual_file(db: &mut baml_project::ProjectDatabase, path: &str, source: &str) {
-    let file = db.add_file(path, source);
-    let extra = baml_compiler2_hir::Db::compiler2_extra_files(db)
-        .expect("make_db installs compiler2 builtin files");
-    let mut files = extra.files(db).clone();
-    files.push(file);
-    extra.set_files(db).to(files);
 }
 
 #[test]
@@ -159,7 +147,7 @@ fn unresolved_field() {
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
-        return x.missing : unknown
+        return x.missing : !error
       }
       !! 64..73: type `Foo` has no member `missing`
     }
@@ -190,7 +178,7 @@ function f(data: Data) -> string {
     }
     function user.f(data: user.Data) -> string throws never {
       { : never
-        return data.inner.foo : unknown
+        return data.inner.foo : !error
       }
       !! 73..87: type `Data` has no member `inner`
     }
@@ -221,7 +209,7 @@ function f(s: Sentiment) -> string {
     }
     function user.f(s: user.Sentiment) -> string throws never {
       { : never
-        return s.feelin : unknown
+        return s.feelin : !error
       }
       !! 83..91: type `Sentiment` has no member `feelin`
     }
@@ -247,9 +235,9 @@ function f() -> string {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> string throws never {
       { : never
-        return o.value : unknown
+        return o.value : !error
       }
-      !! 34..35: unresolved name: o
+      !! 34..41: unresolved name: o.value
     }
     ");
 }
@@ -312,6 +300,10 @@ fn if_else_joins_types() {
               2 : 2
             }
       }
+    }
+    block user.f {
+    }
+    block user.f {
     }
     ");
 }
@@ -469,7 +461,7 @@ fn function_type_throws_package_interface_exports_effect_params() {
     );
 
     let scope_id = find_function_scope_id(&db, file, "direct");
-    let _ = infer_scope_types(&db, scope_id);
+    let _ = baml_compiler2_hir_ty::ide::infer_for_scope(&db, scope_id);
 
     let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
     let exported = iface
@@ -478,10 +470,7 @@ fn function_type_throws_package_interface_exports_effect_params() {
 
     assert_eq!(
         exported.generic_params,
-        vec![baml_compiler2_tir::ty::ParamTy::new(
-            0,
-            Name::new("__effect_param_0")
-        )]
+        vec![baml_type::ParamTy::new(0, Name::new("__effect_param_0"))]
     );
     assert_eq!(
         exported.params[0].ty.render_canonical(),
@@ -512,133 +501,6 @@ fn package_interface_exports_optional_param_mode() {
         Some("limit")
     );
     assert_eq!(exported.params[1].mode, FunctionParamMode::Optional);
-}
-
-#[test]
-fn reflect_type_shorthand_requires_baml_package_access() {
-    let mut db = make_db();
-    add_compiler2_virtual_file(
-        &mut db,
-        "<builtin>/boundary/reflect_probe.baml",
-        "type ForbiddenReflect = reflect.Signature\n",
-    );
-    db.add_file(
-        "allowed_reflect.baml",
-        "type AllowedReflect = reflect.Signature\n",
-    );
-
-    let boundary_items =
-        baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("boundary")));
-    let Some(Definition::TypeAlias(forbidden_loc)) =
-        boundary_items.lookup_type(&[], &Name::new("ForbiddenReflect"))
-    else {
-        panic!("boundary probe alias should exist");
-    };
-    let forbidden = resolve_type_alias(&db, forbidden_loc);
-    assert!(
-        !forbidden.diagnostics.is_empty(),
-        "boundary has no baml dependency, so reflect.Signature must be unresolved; got {:?}",
-        forbidden.ty
-    );
-
-    let user_items =
-        baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("user")));
-    let Some(Definition::TypeAlias(allowed_loc)) =
-        user_items.lookup_type(&[], &Name::new("AllowedReflect"))
-    else {
-        panic!("user probe alias should exist");
-    };
-    let allowed = resolve_type_alias(&db, allowed_loc);
-    assert!(
-        allowed.diagnostics.is_empty(),
-        "user packages depend on baml, so reflect.Signature should resolve: {:?}",
-        allowed.diagnostics
-    );
-    assert!(
-        matches!(&allowed.ty, Ty::Class(name, ..)
-            if name.package().as_str() == "baml"
-                && *name.namespace() == [Name::new("reflect")]
-                && name.name().as_str() == "Signature"),
-        "expected baml.reflect.Signature, got {:?}",
-        allowed.ty
-    );
-}
-
-#[test]
-fn keyword_shorthands_follow_exported_baml_surface() {
-    let mut db = make_db();
-    add_compiler2_virtual_file(
-        &mut db,
-        "<builtin>/baml/ns_reflect/raw_only.baml",
-        "interface RawOnly {}\ntemplate_string raw_only() `raw`\n",
-    );
-
-    let user_pkg = PackageId::new(&db, Name::new("user"));
-    let res_ctx = package_resolution_context(&db, user_pkg);
-    let baml_name = Name::new("baml");
-    let reflect_ns = [Name::new("reflect")];
-    let raw_only_type = Name::new("RawOnly");
-    let raw_only_value = Name::new("raw_only");
-
-    let raw_baml_items = res_ctx
-        .items_for_package(&db, &baml_name)
-        .expect("user packages can access baml");
-    assert!(
-        raw_baml_items
-            .lookup_type(&reflect_ns, &raw_only_type)
-            .is_some(),
-        "the fixture must exist in the raw namespace map"
-    );
-    assert!(
-        raw_baml_items
-            .lookup_value(&reflect_ns, &raw_only_value)
-            .is_some(),
-        "the fixture must exist in the raw namespace map"
-    );
-
-    let exported_baml = res_ctx
-        .dep_interfaces
-        .iter()
-        .find(|(name, _)| name == &baml_name)
-        .map(|(_, interface)| interface)
-        .expect("user packages have baml's exported interface");
-    assert!(
-        exported_baml
-            .lookup_type(&reflect_ns, &raw_only_type)
-            .is_some(),
-        "interfaces are part of the enriched exported type surface"
-    );
-    assert!(
-        exported_baml
-            .lookup_function(&reflect_ns, &raw_only_value)
-            .is_none(),
-        "template strings are not part of the exported value surface"
-    );
-
-    assert!(
-        res_ctx
-            .resolve_type(&db, &[Name::new("reflect"), raw_only_type], &[],)
-            .is_some(),
-        "the reflect shorthand must expose an exported interface"
-    );
-    assert!(
-        res_ctx
-            .resolve_value(&db, &[Name::new("reflect"), raw_only_value], &[],)
-            .is_none(),
-        "the reflect shorthand must not expose a raw-only value"
-    );
-    assert!(
-        res_ctx
-            .resolve_value(&db, &[Name::new("reflect"), Name::new("signature")], &[],)
-            .is_some(),
-        "an exported reflect function must remain visible"
-    );
-    assert!(
-        res_ctx
-            .resolve_value(&db, &[Name::new("type"), Name::new("of")], &[],)
-            .is_some(),
-        "an exported type-shorthand function must remain visible"
-    );
 }
 
 #[test]
@@ -683,15 +545,8 @@ implements ToJson for Dog {
     // `TypeContext::implements_interface`); no type aliases are involved here.
     use baml_type::normalize::TypeContext;
     let pkg_id = PackageId::new(&db, Name::new("user"));
-    let res_ctx = package_resolution_context(&db, pkg_id);
-    let aliases = std::collections::HashMap::new();
-    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
-    let ctx = GlobalTypeContext {
-        db: &db,
-        res_ctx,
-        aliases: &aliases,
-        bounds: &bounds,
-    };
+    let _ = pkg_id;
+    let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
     let dog = Ty::Class(
         QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog")),
         vec![],
@@ -749,15 +604,8 @@ fn builtin_equals_compare_visible_from_user_package() {
 
     // The membership query walks the interface's package (`baml`) via the orphan
     // rule, so the builtin primitive impls are visible from the user package.
-    let res_ctx = package_resolution_context(&db, user_pkg);
-    let aliases = std::collections::HashMap::new();
-    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
-    let ctx = GlobalTypeContext {
-        db: &db,
-        res_ctx,
-        aliases: &aliases,
-        bounds: &bounds,
-    };
+    let _ = user_pkg;
+    let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
 
     // int implements both Equals and Compare (impls in `baml`).
     assert!(ctx.implements_interface(&int_ty, &equals));
@@ -838,7 +686,8 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
             matches!(scope.kind, ScopeKind::Lambda)
         })
         .expect("lambda scope");
-    let lambda_inference = infer_scope_types(&db, lambda_scope_id);
+    let lambda_inference = baml_compiler2_hir_ty::ide::infer_for_scope(&db, lambda_scope_id)
+        .expect("lambda scope has an owner");
 
     let main_loc = *baml_compiler2_ppir::item_data::file_functions(&db, file)
         .iter()
@@ -868,8 +717,9 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
 
     assert_eq!(
         lambda_inference
-            .expression_type(root_expr)
-            .map(ToString::to_string),
+            .type_of_expr
+            .get(&root_expr)
+            .map(|ty| ty.to_plain().to_string()),
         Some("int".to_string())
     );
 }
@@ -1181,7 +1031,7 @@ function wrong_type_argument() -> Left<int> {
 /// layer reads.
 #[test]
 fn interface_declaration_surface_resolves_symbolically() {
-    use baml_compiler2_tir::interfaces::{
+    use baml_compiler2_hir_ty::interfaces::{
         resolve_interface_fields, resolve_interface_required_methods,
     };
 

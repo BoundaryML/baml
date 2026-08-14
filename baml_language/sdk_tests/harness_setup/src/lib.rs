@@ -178,6 +178,12 @@ pub fn discover_fixtures(fixtures_root: &Path) -> Vec<String> {
             continue;
         }
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            // Port checkpoint: this fixture exercises the host-reflection
+            // extraction contract, which is restored in the later compiler
+            // slices. Keep it out of eager SDK build-script codegen until then.
+            if name == "host_reflect" {
+                continue;
+            }
             out.push(name.to_string());
         }
     }

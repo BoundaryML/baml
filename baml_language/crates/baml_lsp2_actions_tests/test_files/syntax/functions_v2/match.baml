@@ -37,11 +37,18 @@ function Remand(s: Situation) -> string {
 
 //----
 //- diagnostics
+// E0063
+//
+//   × unreachable arm
+//     ╭─[functions_v2_match.baml:32:12]
+//  32 │       _ => "...",
+//     ·            ─────
+//     ╰────
 // E0001
 //
 //   × mismatched types
-//     ╭─[functions_v2_match.baml:31:7]
+//     ╭─[functions_v2_match.baml:31:17]
 //  31 │       let rock: Rock => "...",
-//     ·       ───────┬──────
-//     ·              ╰── expected `Pet`, found `Rock`
+//     ·                 ──┬─
+//     ·                   ╰── expected `Cat | Dog`, found `Rock`
 //     ╰────

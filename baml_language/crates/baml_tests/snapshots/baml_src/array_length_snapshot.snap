@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function array_length_snapshot.$init_test_ns_array_length_snapshot_array_length_snapshot(registry: testing.TestCollector) -> null {
     load_var registry
@@ -20,6 +21,7 @@ function array_length_snapshot.length_snapshot_bug() -> int {
     load_var a
     container_len
     store_var n
+    load_type int
     load_var a
     load_const 9
     call baml.Array.push

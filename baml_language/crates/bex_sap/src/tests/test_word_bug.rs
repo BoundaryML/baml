@@ -3,7 +3,7 @@
 //! with that one value quoted parses fine.
 //!
 //! Schema under test (annotations that don't affect coercion of these inputs —
-//! `@@dynamic`, `@description` — are omitted):
+//! block attributes and `@description` are omitted):
 //!
 //! ```baml
 //! class Word {

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16778
 ---
 function user.CallOpenAI(cfg: AppConfig) -> llm.openai.OpenAIResponse {
     load_const "response"

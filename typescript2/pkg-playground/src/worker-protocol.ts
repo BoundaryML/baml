@@ -808,7 +808,7 @@ export type WebSocketInMessage =
 // ---------------------------------------------------------------------------
 
 export type WorkerOutMessage =
-  | { type: 'ready' }
+  | { type: 'ready'; version?: string; commit?: string }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | ProfileArtifactChunkMessage
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }

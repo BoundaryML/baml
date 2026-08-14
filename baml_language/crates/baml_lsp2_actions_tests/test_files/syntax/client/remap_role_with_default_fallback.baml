@@ -11,8 +11,8 @@ client<llm> MyClient {
 }
 
 function TestRemapWithFallback(input: string) -> string {
-  client MyClient
-  prompt `
+  client: MyClient
+  prompt: `
     ${role("assistant")}
     This should fallback to system role and then be remapped to instructions: ${input}
   `
@@ -41,7 +41,7 @@ function TestRemapWithFallback(input: string) -> string {
 // E0003
 //
 //   × unresolved name: `MyClient`
-//     ╭─[client_remap_role_with_default_fallback.baml:14:10]
-//  14 │   client MyClient
-//     ·          ────────
+//     ╭─[client_remap_role_with_default_fallback.baml:14:11]
+//  14 │   client: MyClient
+//     ·           ────────
 //     ╰────

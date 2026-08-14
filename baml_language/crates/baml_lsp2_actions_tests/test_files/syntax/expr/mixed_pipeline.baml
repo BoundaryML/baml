@@ -1,6 +1,6 @@
 function LLM(x: int) -> int {
-    client GPT4o
-    prompt `Return ${x} ${ctx.output_format}`
+    client: GPT4o
+    prompt: `Return ${x} ${ctx.output_format}`
 }
 
 function UseLLM(x: int) -> int {

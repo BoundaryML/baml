@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+485..489 'main': throws never
+515..598 '{\n   ...bel\n}': string
+521..526 'let p': user.Phantom<!error>
+529..552 'Phanto..."hi" }': user.Phantom<!error>
+546..550 '"hi"': "hi"
+589..596 'p.label': string

@@ -8,8 +8,8 @@ async fn request_body(expr: &str) -> serde_json::Value {
     let source = format!(
         r#"
 function RequestShape() -> string {{
-  client "openai/gpt-4o-mini"
-  prompt `${{role("system")}}Follow the rules.${{role("user")}}Answer this.${{ctx.output_format}}`
+  client: "openai/gpt-4o-mini"
+  prompt: `${{role("system")}}Follow the rules.${{role("user")}}Answer this.${{ctx.output_format}}`
 }}
 
 function main() -> string {{

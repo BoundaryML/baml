@@ -20,8 +20,20 @@ function BasicIf() -> string {
 // E0001
 //
 //   × mismatched types
-//     ╭─[headers_basic_if.baml:14:5]
-//  14 │     z
-//     ·     ┬
-//     ·     ╰── expected `string`, found `int`
+//     ╭─[headers_basic_if.baml:2:30]
+//   2 │ ╭─▶ function BasicIf() -> string {
+//   3 │ │       let x = 1;
+//   4 │ │
+//   5 │ │       //# This is a named statement
+//   6 │ │       let z = if (true) {
+//   7 │ │           //# Then Statement
+//   8 │ │           12
+//   9 │ │       } else {
+//  10 │ │           //# Else Statement
+//  11 │ │           13
+//  12 │ │       };
+//  13 │ │
+//  14 │ │       z
+//  15 │ ├─▶ }
+//     · ╰──── expected `string`, found `int`
 //     ╰────

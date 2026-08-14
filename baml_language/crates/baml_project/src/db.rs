@@ -170,16 +170,6 @@ pub struct ProjectDatabase {
     /// handle would leave a stale memo on a reused database, e.g. the LSP's
     /// long-lived `ProjectDatabase`).
     seeded_callable_throws: Option<baml_workspace::SeededCallableThrows>,
-    /// Source-less dependency packages mounted as `borsh(PackageInterface)`
-    /// blobs, keyed by the mount alias (BEP-066 mounted-package linking).
-    ///
-    /// Same present-from-construction discipline as the `seeded_*` inputs
-    /// above: a real `#[salsa::input]` handle created **once** (empty) in the
-    /// constructors and thereafter mutated in place via its Salsa setter, so it
-    /// is always `Some` and `package_dependencies` / `package_interface` read
-    /// the mount map through a **tracked** dependency (an absent-then-added
-    /// handle would leave a stale memo on a reused database).
-    mounted_packages: Option<baml_workspace::MountedPackages>,
     /// Maps file paths to their `SourceFile` handles (user files only).
     ///
     /// `Arc`-wrapped (with `Arc::make_mut` at the mutation sites) so cloning a
@@ -235,10 +225,6 @@ impl baml_workspace::Db for ProjectDatabase {
     fn seeded_callable_throws(&self) -> Option<baml_workspace::SeededCallableThrows> {
         self.seeded_callable_throws
     }
-
-    fn mounted_packages(&self) -> Option<baml_workspace::MountedPackages> {
-        self.mounted_packages
-    }
 }
 
 #[salsa::db]
@@ -250,9 +236,6 @@ impl baml_compiler2_hir::Db for ProjectDatabase {
 
 #[salsa::db]
 impl baml_compiler2_ppir::Db for ProjectDatabase {}
-
-#[salsa::db]
-impl baml_compiler2_tir::Db for ProjectDatabase {}
 
 #[salsa::db]
 impl baml_compiler2_mir::Db for ProjectDatabase {}
@@ -327,7 +310,6 @@ impl ProjectDatabase {
             seeded_throw_facts: None,
             seeded_stdlib_interface: None,
             seeded_callable_throws: None,
-            mounted_packages: None,
             file_map: Arc::new(HashMap::new()),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: Arc::new(HashMap::new()),
@@ -342,10 +324,6 @@ impl ProjectDatabase {
             std::collections::BTreeMap::new(),
         ));
         db.seeded_callable_throws = Some(baml_workspace::SeededCallableThrows::new(
-            &db,
-            std::collections::BTreeMap::new(),
-        ));
-        db.mounted_packages = Some(baml_workspace::MountedPackages::new(
             &db,
             std::collections::BTreeMap::new(),
         ));
@@ -418,55 +396,6 @@ impl ProjectDatabase {
         seeds.set_by_path(self).to(by_path);
     }
 
-    /// Add a compiler2-only virtual source file (a `<builtin>/…` path) to the
-    /// `Compiler2ExtraFiles` input — the channel `compiler2_all_files` reads
-    /// builtin stubs from (ordinary project files with a `<builtin>/` path are
-    /// filtered out there).
-    ///
-    /// Fixture/testing hook (BEP-066 mounted-package linking): compiling library files under
-    /// `<builtin>/<pkg>/…` makes `file_package` assign them the package name
-    /// `<pkg>`, so a test can derive a real `PackageInterface` blob for a
-    /// package that is not `user` and mount it elsewhere. Requires
-    /// `set_project_root` to have run (it creates the input).
-    pub fn add_compiler2_virtual_file(
-        &mut self,
-        path: impl AsRef<std::path::Path>,
-        content: &str,
-    ) -> SourceFile {
-        let path = path.as_ref().to_path_buf();
-        let file = self.add_file_internal(&path, content, false);
-        let file_id = file.file_id(self);
-        Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
-        self.compiler2_file_map.insert(path, file);
-        let extra = self
-            .compiler2_extra_files
-            .expect("set_project_root creates the Compiler2ExtraFiles input");
-        let mut files = extra.files(self).clone();
-        files.push(file);
-        extra.set_files(self).to(files);
-        file
-    }
-
-    /// Mount source-less dependency packages as serialized `PackageInterface`
-    /// blobs, keyed by the mount alias (BEP-066 mounted-package linking); each value is
-    /// `borsh(PackageInterface)`.
-    ///
-    /// Mutates the always-present `MountedPackages` input (created in `new`)
-    /// through its Salsa setter, so it bumps the revision and correctly
-    /// invalidates any already-computed `package_dependencies` /
-    /// `package_interface` memo — safe to call before *or* after queries have
-    /// run. Aliases colliding with the reserved package set (the stdlib
-    /// packages, `user`, `root`, `env`) are ignored by the readers.
-    pub fn set_mounted_packages(
-        &mut self,
-        by_package: std::collections::BTreeMap<String, Vec<u8>>,
-    ) {
-        let mounts = self
-            .mounted_packages
-            .expect("MountedPackages input is created in ProjectDatabase::new");
-        mounts.set_by_package(self).to(by_package);
-    }
-
     /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
     pub fn get_source_files(&self) -> Vec<SourceFile> {
         let mut files: Vec<SourceFile> = self.file_map.values().copied().collect();
@@ -484,7 +413,6 @@ impl ProjectDatabase {
         &mut self,
         path: impl Into<std::path::PathBuf>,
         text: impl Into<String>,
-        is_session_submission: bool,
     ) -> SourceFile {
         let file_id = FileId::new(
             self.next_file_id
@@ -492,13 +420,7 @@ impl ProjectDatabase {
         );
 
         // Create a new SourceFile input
-        SourceFile::new(
-            self,
-            text.into(),
-            path.into(),
-            file_id,
-            is_session_submission,
-        )
+        SourceFile::new(self, text.into(), path.into(), file_id, false)
     }
 
     /// Add or update a file in the database.
@@ -508,34 +430,20 @@ impl ProjectDatabase {
     ///
     /// Returns the `SourceFile` handle.
     pub fn add_or_update_file(&mut self, path: &std::path::Path, content: &str) -> SourceFile {
-        self.add_or_update_file_with_kind(path, content, false)
-    }
-
-    fn add_or_update_file_with_kind(
-        &mut self,
-        path: &std::path::Path,
-        content: &str,
-        is_session_submission: bool,
-    ) -> SourceFile {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         if let Some(&existing_file) = self.file_map.get(&canonical_path) {
             // Update existing file using Salsa's setter
             existing_file.set_text(self).to(content.to_string());
             existing_file
-                .set_is_session_submission(self)
-                .to(is_session_submission);
-            existing_file
         } else {
             // Revive the tombstoned input if this path existed before —
             // creating a fresh input would leak the old one forever.
             let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
                 file.set_text(self).to(content.to_string());
-                file.set_is_session_submission(self)
-                    .to(is_session_submission);
                 file
             } else {
-                self.add_file_internal(&canonical_path, content, is_session_submission)
+                self.add_file_internal(&canonical_path, content)
             };
             let file_id = file.file_id(self);
 
@@ -569,15 +477,13 @@ impl ProjectDatabase {
 
             if let Some(&existing_file) = self.file_map.get(&canonical_path) {
                 existing_file.set_text(self).to(content.to_string());
-                existing_file.set_is_session_submission(self).to(false);
                 continue;
             }
             let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
                 file.set_text(self).to(content.to_string());
-                file.set_is_session_submission(self).to(false);
                 file
             } else {
-                self.add_file_internal(&canonical_path, content, false)
+                self.add_file_internal(&canonical_path, content)
             };
             let file_id = file.file_id(self);
             Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
@@ -667,7 +573,7 @@ impl ProjectDatabase {
         for builtin in baml_builtins2::ALL {
             let virtual_path = builtin.virtual_path();
             let path = PathBuf::from(&virtual_path);
-            let file = self.add_file_internal(&path, builtin.contents, false);
+            let file = self.add_file_internal(&path, builtin.contents);
             let file_id = file.file_id(self);
 
             Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
@@ -684,19 +590,6 @@ impl ProjectDatabase {
     /// This is an alias for `add_or_update_file` for API compatibility.
     pub fn add_file(&mut self, path: impl AsRef<std::path::Path>, content: &str) -> SourceFile {
         self.add_or_update_file(path.as_ref(), content)
-    }
-
-    /// Add compiler-generated source for a `Session.eval` submission.
-    ///
-    /// These transient files may contain root lets used to materialize
-    /// persistent session bindings. Ordinary project and runtime-package files
-    /// always go through [`Self::add_file`] and reject root lets.
-    pub fn add_session_file(
-        &mut self,
-        path: impl AsRef<std::path::Path>,
-        content: &str,
-    ) -> SourceFile {
-        self.add_or_update_file_with_kind(path.as_ref(), content, true)
     }
 
     /// Get all file paths currently tracked by the database.
@@ -1237,8 +1130,10 @@ impl ProjectDatabase {
     ) -> Vec<(u32, CfgCallTarget<'db>)> {
         use baml_compiler2_ast::Expr;
 
-        let inference = baml_compiler2_ppir::item_data::function_scope(self, caller)
-            .map(|scope| baml_compiler2_tir::inference::infer_scope_types(self, scope));
+        let inference = Some(baml_compiler2_hir_ty::infer::infer_body(
+            self,
+            baml_compiler2_hir::body::BodyOwnerId::Function(caller),
+        ));
         let mut calls = Vec::new();
         for (expr_id, expr) in body.exprs.iter() {
             let (callee, args) = match expr {
@@ -1304,12 +1199,12 @@ impl ProjectDatabase {
         callee_path: &[baml_db::Name],
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
         use baml_compiler2_hir::{contributions::Definition, file_package, package::PackageId};
-        use baml_compiler2_tir::package_interface::ResolvedSource;
+        use baml_compiler2_hir_ty::package_interface::ResolvedSource;
 
         let caller_package = file_package::file_package(self, caller_file);
         let package_id = PackageId::new(self, caller_package.package.clone());
         let resolution =
-            baml_compiler2_tir::package_interface::package_resolution_context(self, package_id);
+            baml_compiler2_hir_ty::package_interface::package_resolution_context(self, package_id);
         match resolution.resolve_value(self, callee_path, &caller_package.namespace_path) {
             Some((ResolvedSource::Item, Definition::Function(function))) => Some(function),
             _ => None,
@@ -1318,28 +1213,30 @@ impl ProjectDatabase {
 
     fn resolved_call_function<'db>(
         &'db self,
-        inference: &baml_compiler2_tir::inference::ScopeInference<'db>,
+        inference: &baml_compiler2_hir_ty::infer::InferenceResult<'db>,
         body: &baml_compiler2_ast::ExprBody,
         callee: baml_compiler2_ast::ExprId,
         dispatch_bindings: &CfgDispatchBindings,
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
         use baml_compiler2_ast::Expr;
-        use baml_compiler2_tir::inference::MemberResolution;
+        use baml_compiler2_hir_ty::infer::MemberResolution;
 
-        let resolution = inference.resolution(callee).or_else(|| {
+        let resolution = inference.member_resolutions.get(&callee).or_else(|| {
             inference
-                .path_member_resolution(callee)
-                .and_then(|resolutions| resolutions.last())
+                .path_resolutions
+                .get(&callee)
+                .and_then(|path| path.segments.last())
+                .and_then(|segment| segment.resolution.as_ref())
         });
 
         match resolution {
             Some(
-                MemberResolution::Free { func_loc }
-                | MemberResolution::BoundMethod { func_loc, .. }
-                | MemberResolution::UnboundMethod { func_loc, .. }
-                | MemberResolution::InterfaceConcreteMethod { func_loc, .. },
-            ) => Some(*func_loc),
-            Some(MemberResolution::InterfaceVirtualMethod { iface_loc, method }) => {
+                MemberResolution::Free { func }
+                | MemberResolution::BoundMethod { func, .. }
+                | MemberResolution::UnboundMethod { func, .. }
+                | MemberResolution::InterfaceConcreteMethod { func, .. },
+            ) => Some(*func),
+            Some(MemberResolution::InterfaceVirtualMethod { interface, method }) => {
                 let receiver = match &body.exprs[callee] {
                     Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
                         match &body.exprs[*base] {
@@ -1355,15 +1252,12 @@ impl ProjectDatabase {
                     _ => None,
                 }?;
                 let concrete = dispatch_bindings.get(receiver)?;
-                self.interface_method_impl_loc(concrete, *iface_loc, method)
+                self.interface_method_impl_loc(concrete, *interface, method)
             }
             Some(
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
-                | MemberResolution::InterfaceVirtualField { .. }
-                // A mounted (source-less) callee has no `FunctionLoc` in this
-                // database (BEP-066 mounted-package linking).
-                | MemberResolution::External(_),
+                | MemberResolution::InterfaceVirtualField { .. },
             )
             | None => None,
         }
@@ -1371,14 +1265,14 @@ impl ProjectDatabase {
 
     fn dispatch_bindings_for_call(
         &self,
-        inference: &baml_compiler2_tir::inference::ScopeInference<'_>,
+        inference: &baml_compiler2_hir_ty::infer::InferenceResult<'_>,
         body: &baml_compiler2_ast::ExprBody,
         call_expr: baml_compiler2_ast::ExprId,
         args: &[baml_compiler2_ast::CallArg],
         callee: baml_compiler2_hir::loc::FunctionLoc<'_>,
     ) -> CfgDispatchBindings {
         use baml_compiler2_ast::Expr;
-        use baml_compiler2_tir::inference::MemberResolution;
+        use baml_compiler2_hir_ty::infer::MemberResolution;
 
         let params = &baml_compiler2_ppir::item_data::function_data(self, callee).params;
         let callee_expr = match &body.exprs[call_expr] {
@@ -1386,10 +1280,12 @@ impl ProjectDatabase {
             _ => None,
         };
         let resolution = callee_expr.and_then(|callee_expr| {
-            inference.resolution(callee_expr).or_else(|| {
+            inference.member_resolutions.get(&callee_expr).or_else(|| {
                 inference
-                    .path_member_resolution(callee_expr)
-                    .and_then(|resolutions| resolutions.last())
+                    .path_resolutions
+                    .get(&callee_expr)
+                    .and_then(|path| path.segments.last())
+                    .and_then(|segment| segment.resolution.as_ref())
             })
         });
         // Call plans index only the arguments provided by the caller. A bound
@@ -1408,15 +1304,20 @@ impl ProjectDatabase {
             let Some(param) = params.get(param_index) else {
                 return;
             };
-            let Some(concrete) = inference.expression_type(arg_expr) else {
+            let Some(concrete) = inference.type_of_expr.get(&arg_expr) else {
                 return;
             };
-            bindings.insert(param.name.to_string(), concrete.clone());
+            bindings.insert(param.name.to_string(), concrete.to_plain());
         };
 
-        if let Some(plan) = inference.call_plan(call_expr) {
-            for (param_index, arg_expr) in plan.provided_param_args() {
-                record(param_index + implicit_self, arg_expr);
+        if let Some(plan) = inference.call_plans.get(&call_expr) {
+            for binding in &plan.bindings {
+                let baml_compiler2_hir_ty::infer::ParamBinding::Provided { param_index, arg } =
+                    binding
+                else {
+                    continue;
+                };
+                record(param_index + implicit_self, *arg);
             }
         } else {
             for (position, arg) in args.iter().enumerate() {
@@ -1437,37 +1338,37 @@ impl ProjectDatabase {
         iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
         method_name: &baml_db::Name,
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
-        let package = baml_compiler2_hir::file_package::file_package(self, iface_loc.file(self));
-        let package_id = baml_compiler2_hir::package::PackageId::new(self, package.package);
-        let aliases = baml_compiler2_tir::inference::package_resolved_aliases(self, package_id);
-        let res_ctx =
-            baml_compiler2_tir::package_interface::package_resolution_context(self, package_id);
-        let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
-        let type_context = baml_compiler2_tir::type_context::GlobalTypeContext {
-            db: self,
-            res_ctx,
-            aliases,
-            bounds: &bounds,
+        let interned = baml_compiler2_hir_ty::impls::try_interned_ty(concrete)?;
+        let method_of = |func_loc: &baml_compiler2_hir::loc::FunctionLoc<'db>| {
+            baml_compiler2_ppir::item_data::function_data(self, *func_loc).name == *method_name
         };
-        let mut methods = baml_compiler2_tir::interfaces::impls_for_type(
-            self,
-            package_id,
-            concrete,
-            aliases,
-            |actual, expected| baml_type::normalize::is_subtype(actual, expected, &type_context),
-        )
-        .into_iter()
-        .filter(|resolved| {
-            resolved
-                .data(self)
-                .is_some_and(|data| data.interface_loc() == Some(iface_loc))
-        })
-        .filter_map(|resolved| resolved.get_method(self, method_name));
+        let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(self, &interned)
+            .into_iter()
+            .filter(|resolved| {
+                baml_compiler2_hir_ty::interfaces::impl_data(self, resolved.block)
+                    .as_ref()
+                    .is_ok_and(|data| data.interface == iface_loc)
+            })
+            .filter_map(|resolved| {
+                // The impl's own override wins; an inherited interface
+                // default method fills the slot otherwise.
+                baml_compiler2_hir_ty::interfaces::impl_data(self, resolved.block)
+                    .as_ref()
+                    .ok()
+                    .and_then(|data| data.methods.iter().find(|loc| method_of(loc)).copied())
+                    .or_else(|| {
+                        baml_compiler2_ppir::item_data::interface_data(self, iface_loc)
+                            .default_methods
+                            .iter()
+                            .find(|loc| method_of(loc))
+                            .copied()
+                    })
+            });
         let method = methods.next()?;
         if methods.next().is_some() {
             return None;
         }
-        method.method_loc()
+        Some(method)
     }
 
     fn is_single_llm_graph(
@@ -1687,11 +1588,11 @@ impl ProjectDatabase {
             let name = baml_db::Name::from(token.text().to_string());
 
             let resolved =
-                baml_compiler2_tir::resolve::resolve_name_at(self, source_file, offset, &name);
+                baml_compiler2_ppir::resolve::resolve_name_at(self, source_file, offset, &name);
 
             match resolved {
-                baml_compiler2_tir::resolve::ResolvedName::Item(def)
-                | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => {
+                baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+                | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => {
                     use baml_compiler2_hir::contributions::Definition;
                     match &def {
                         Definition::Function(_) => {
@@ -1704,10 +1605,10 @@ impl ProjectDatabase {
                         }
                     }
                 }
-                baml_compiler2_tir::resolve::ResolvedName::Local { .. } => {
+                baml_compiler2_ppir::resolve::ResolvedName::Local { .. } => {
                     return self.cursor_context_for_local(source_file, offset);
                 }
-                baml_compiler2_tir::resolve::ResolvedName::Unknown => {
+                baml_compiler2_ppir::resolve::ResolvedName::Unknown => {
                     // Fall through to positional fallback below
                 }
             }
@@ -2684,8 +2585,8 @@ function Workflow(input: string) -> string {
             std::path::Path::new("/tmp/llm.baml"),
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 "##,
         );
@@ -2829,8 +2730,8 @@ function GuessingGame() -> string {
             std::path::Path::new("/tmp/wf.baml"),
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 
 function Workflow(input: string) -> string {
@@ -2876,8 +2777,8 @@ function Workflow(input: string) -> string {
             std::path::Path::new("/tmp/ns_workflows/ns_prompts/summarize.baml"),
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 "##,
         );
@@ -2922,8 +2823,8 @@ function Workflow(input: string) -> string {
             std::path::Path::new("/tmp/ns_http/fetch.baml"),
             r##"
 function fetch(input: string) -> string {
-    client UserClient
-    prompt `User fetch ${input}`
+    client: UserClient
+    prompt: `User fetch ${input}`
 }
 "##,
         );
@@ -3256,8 +3157,8 @@ test "renders workflow" {
         let path = std::path::Path::new("/tmp/llm.baml");
         let source = r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 "##;
         db.add_or_update_file(path, source);

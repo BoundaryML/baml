@@ -1,11 +1,11 @@
 function MakePoem(length: int) -> string {
-    client GPT4o
-    prompt `Write a poem ${length} lines long.`
+    client: GPT4o
+    prompt: `Write a poem ${length} lines long.`
 }
 
 function CombinePoems(poem1: string, poem2: string) -> string {
-    client GPT4o
-    prompt `Combine the following two poems into one poem.
+    client: GPT4o
+    prompt: `Combine the following two poems into one poem.
 
     Poem 1:
     ${poem1}
@@ -89,17 +89,17 @@ test TestMakePoem() {
 //     ╰────
 // E0003
 //
-//   × unresolved name: `poem`
-//     ╭─[expr_expr_full.baml:41:16]
-//  41 │   CombinePoems(poem, another)
-//     ·                ────
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:45:3]
+//  45 │   functions [Pipeline]
+//     ·   ─────────
 //     ╰────
-// E0003
+// E0002
 //
-//   × unresolved name: `another`
-//     ╭─[expr_expr_full.baml:41:22]
-//  41 │   CombinePoems(poem, another)
-//     ·                      ───────
+//   × unresolved type: args
+//     ╭─[expr_expr_full.baml:46:3]
+//  46 │   args { }
+//     ·   ────────
 //     ╰────
 // E0003
 //
@@ -111,15 +111,15 @@ test TestMakePoem() {
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:45:3]
-//  45 │   functions [Pipeline]
+//     ╭─[expr_expr_full.baml:50:3]
+//  50 │   functions [Pyramid]
 //     ·   ─────────
 //     ╰────
 // E0002
 //
 //   × unresolved type: args
-//     ╭─[expr_expr_full.baml:46:3]
-//  46 │   args { }
+//     ╭─[expr_expr_full.baml:51:3]
+//  51 │   args { }
 //     ·   ────────
 //     ╰────
 // E0003
@@ -132,20 +132,6 @@ test TestMakePoem() {
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:50:3]
-//  50 │   functions [Pyramid]
-//     ·   ─────────
-//     ╰────
-// E0002
-//
-//   × unresolved type: args
-//     ╭─[expr_expr_full.baml:51:3]
-//  51 │   args { }
-//     ·   ────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
 //     ╭─[expr_expr_full.baml:55:3]
 //  55 │   functions [OuterPyramid]
 //     ·   ─────────
@@ -156,6 +142,27 @@ test TestMakePoem() {
 //     ╭─[expr_expr_full.baml:56:3]
 //  56 │   args { }
 //     ·   ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:65:5]
+//  65 │     functions [MakePoem]
+//     ·     ─────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `args`
+//     ╭─[expr_expr_full.baml:66:5]
+//  66 │     args { length 4 }
+//     ·     ────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `length`
+//     ╭─[expr_expr_full.baml:66:12]
+//  66 │     args { length 4 }
+//     ·            ──────
 //     ╰────
 // E0003
 //
@@ -166,85 +173,15 @@ test TestMakePoem() {
 //     ╰────
 // E0003
 //
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:65:5]
-//  65 │     functions [MakePoem]
-//     ·     ─────────
+//   × unresolved name: `poem`
+//     ╭─[expr_expr_full.baml:41:16]
+//  41 │   CombinePoems(poem, another)
+//     ·                ────
 //     ╰────
 // E0003
 //
-//   × unresolved name: `args`
-//     ╭─[expr_expr_full.baml:66:5]
-//  66 │     args { length 4 }
-//     ·     ────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `length`
-//     ╭─[expr_expr_full.baml:66:12]
-//  66 │     args { length 4 }
-//     ·            ──────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:45:3]
-//  45 │   functions [Pipeline]
-//     ·   ─────────
-//     ╰────
-// E0002
-//
-//   × unresolved type: args
-//     ╭─[expr_expr_full.baml:46:3]
-//  46 │   args { }
-//     ·   ────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:50:3]
-//  50 │   functions [Pyramid]
-//     ·   ─────────
-//     ╰────
-// E0002
-//
-//   × unresolved type: args
-//     ╭─[expr_expr_full.baml:51:3]
-//  51 │   args { }
-//     ·   ────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:55:3]
-//  55 │   functions [OuterPyramid]
-//     ·   ─────────
-//     ╰────
-// E0002
-//
-//   × unresolved type: args
-//     ╭─[expr_expr_full.baml:56:3]
-//  56 │   args { }
-//     ·   ────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:65:5]
-//  65 │     functions [MakePoem]
-//     ·     ─────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `args`
-//     ╭─[expr_expr_full.baml:66:5]
-//  66 │     args { length 4 }
-//     ·     ────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `length`
-//     ╭─[expr_expr_full.baml:66:12]
-//  66 │     args { length 4 }
-//     ·            ──────
+//   × unresolved name: `another`
+//     ╭─[expr_expr_full.baml:41:22]
+//  41 │   CombinePoems(poem, another)
+//     ·                      ───────
 //     ╰────

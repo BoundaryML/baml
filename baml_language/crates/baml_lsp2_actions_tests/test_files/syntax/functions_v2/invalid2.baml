@@ -1,33 +1,29 @@
 function Foo1(arg: int) -> float {
-  client Foo
+  client: Foo
 }
 
 function Foo2(arg: int) -> float {
-  prompt `...`
+  prompt: `...`
 }
 
 function Foo3(arg: int) -> float {
-  client bar
-  prompt "..."
+  client: bar
+  prompt: "..."
 }
 
 
 function Foo4(arg: int) -> float {
-  client bar
-  prompt
-}
+  client: bar
+  prompt: }
 
 
 function Foo5(arg: int) -> float {
-  client
-  prompt `...`
+  client:   prompt: `...`
 }
 
 
 function Foo6(arg: int) -> float {
-  client
-  prompt
-}
+  client:   prompt: }
 
 //----
 //- diagnostics
@@ -50,32 +46,64 @@ function Foo6(arg: int) -> float {
 // E0010
 //
 //   × unexpected token
-//     ╭─[functions_v2_invalid2.baml:18:1]
-//  18 │ }
+//     ╭─[functions_v2_invalid2.baml:17:11]
+//  17 │   prompt: }
+//     ·           ┬
+//     ·           ╰── expected `prompt string`, found `'}'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[functions_v2_invalid2.baml:21:19]
+//  21 │   client:   prompt: `...`
+//     ·                   ┬
+//     ·                   ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found ':'`, found `':'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[functions_v2_invalid2.baml:21:21]
+//  21 │   client:   prompt: `...`
+//     ·                     ┬
+//     ·                     ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found '`'`, found `'`'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[functions_v2_invalid2.baml:21:22]
+//  21 │   client:   prompt: `...`
+//     ·                      ─┬─
+//     ·                       ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found '...'`, found `'...'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[functions_v2_invalid2.baml:21:25]
+//  21 │   client:   prompt: `...`
+//     ·                         ┬
+//     ·                         ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found '`'`, found `'`'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[functions_v2_invalid2.baml:22:1]
+//  22 │ }
 //     · ┬
-//     · ╰── expected `prompt string`, found `'}'`
+//     · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
 //     ╰────
 // E0010
 //
 //   × unexpected token
-//     ╭─[functions_v2_invalid2.baml:23:3]
-//  23 │   prompt `...`
-//     ·   ───┬──
-//     ·      ╰── expected `client value`, found `identifier`
+//     ╭─[functions_v2_invalid2.baml:26:19]
+//  26 │   client:   prompt: }
+//     ·                   ┬
+//     ·                   ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found ':'`, found `':'`
 //     ╰────
 // E0010
 //
 //   × unexpected token
-//     ╭─[functions_v2_invalid2.baml:29:3]
-//  29 │   prompt
-//     ·   ───┬──
-//     ·      ╰── expected `client value`, found `identifier`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[functions_v2_invalid2.baml:30:1]
-//  30 │ }
-//     · ┬
-//     · ╰── expected `prompt string`, found `'}'`
+//     ╭─[functions_v2_invalid2.baml:26:21]
+//  26 │   client:   prompt: }
+//     ·                     ┬
+//     ·                     ╰── expected `LLM function missing 'prompt' field`, found `'}'`
 //     ╰────

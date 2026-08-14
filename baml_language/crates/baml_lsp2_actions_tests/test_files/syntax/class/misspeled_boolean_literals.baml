@@ -21,14 +21,28 @@ class TestLiterals {
 // E0002
 //
 //   × unresolved type: True
-//    ╭─[class_misspeled_boolean_literals.baml:3:5]
+//    ╭─[class_misspeled_boolean_literals.baml:3:17]
 //  3 │   b "boolean" | True | False
-//    ·     ────────────────────────
+//    ·                 ────
 //    ╰────
 // E0002
 //
 //   × unresolved type: False
-//    ╭─[class_misspeled_boolean_literals.baml:3:5]
+//    ╭─[class_misspeled_boolean_literals.baml:3:24]
 //  3 │   b "boolean" | True | False
-//    ·     ────────────────────────
+//    ·                        ─────
+//    ╰────
+// E0002
+//
+//   × unresolved type: True
+//    ╭─[class_misspeled_boolean_literals.baml:1:1]
+//  1 │ class TestLiterals {
+//    · ▲
+//    ╰────
+// E0002
+//
+//   × unresolved type: False
+//    ╭─[class_misspeled_boolean_literals.baml:1:1]
+//  1 │ class TestLiterals {
+//    · ▲
 //    ╰────

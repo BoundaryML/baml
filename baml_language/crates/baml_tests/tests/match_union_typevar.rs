@@ -5,7 +5,7 @@
 //! is *not* unreachable just because `let s: string` and `null` arms precede
 //! it. The concrete arms must NOT over-claim the open `T` union member.
 //!
-//! See `union_targets_for_pattern` in `baml_compiler2_tir/src/builder.rs`.
+//! See the union-claim rules in `baml_compiler2_hir_ty/src/infer/pat.rs`.
 
 use baml_compiler_diagnostics::{DiagnosticId, Severity};
 use baml_project::{collect_diagnostics, testing::setup_test_db};

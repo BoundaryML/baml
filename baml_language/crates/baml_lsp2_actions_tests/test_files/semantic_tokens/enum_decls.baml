@@ -56,10 +56,10 @@ enum LongVariantPlusAttrs {
 }
 
 // ===== Block attribute on enum =====
-enum DynamicEnum {
+enum BlockAttributedEnum {
     X
     Y
-    @@dynamic
+    @@streaming
 }
 
 // ===== Trivia on enum declaration (line comments) =====
@@ -328,11 +328,11 @@ enum DottedAttrEnum {
 // enum_decls.baml:55:89 (string) len=9 "\"another\""
 // enum_decls.baml:58:1 (comment) len=38 "// ===== Block attribute on enum ====="
 // enum_decls.baml:59:1 (keyword) len=4 "enum"
-// enum_decls.baml:59:6 (enum) [declaration] len=11 "DynamicEnum"
+// enum_decls.baml:59:6 (enum) [declaration] len=19 "BlockAttributedEnum"
 // enum_decls.baml:60:5 (enumMember) [declaration] len=1 "X"
 // enum_decls.baml:61:5 (enumMember) [declaration] len=1 "Y"
 // enum_decls.baml:62:5 (decorator) len=2 "@@"
-// enum_decls.baml:62:7 (decorator) len=7 "dynamic"
+// enum_decls.baml:62:7 (decorator) len=9 "streaming"
 // enum_decls.baml:65:1 (comment) len=57 "// ===== Trivia on enum declaration (line comments) ====="
 // enum_decls.baml:66:1 (comment) len=25 "// 1 enum keyword leading"
 // enum_decls.baml:67:1 (keyword) len=4 "enum"

@@ -26,6 +26,14 @@ source: crates/baml_tests/src/generated_tests.rs
     ·         ────────────────────────────────
     ╰────
 
+  [type] E0063
+
+  × unreachable arm
+    ╭─[main.baml:16:14]
+ 16 │         _ => 0
+    ·              ─
+    ╰────
+
   [type] E0001
 
   × type `Response` expects 0 type argument(s), got 1

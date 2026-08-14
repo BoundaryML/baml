@@ -539,7 +539,7 @@ impl CacheContext {
 fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<String, Vec<u8>> {
     use baml_db::{
         Name, baml_compiler2_hir::package::PackageId,
-        baml_compiler2_tir::package_interface::package_interface,
+        baml_compiler2_hir_ty::package_interface::package_interface,
     };
     let mut out = std::collections::BTreeMap::new();
     for name in baml_builtins2::stdlib_package_names().iter().copied() {
@@ -1211,7 +1211,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 }
                 // An added function may shadow an existing callee, so callers'
                 // transitive throws can move — seed the taint closure.
-                let fresh = baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf);
+                let fresh = baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(db, *sf);
                 throws_taint.extend(throw_fn_names(&fresh.0));
                 fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh.0.clone());
             }
@@ -1226,7 +1226,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 // stored ones, seed the taint closure with both the fresh and
                 // the stored function names — a rename/removal shifts which
                 // callers resolve where.
-                let fresh = baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf);
+                let fresh = baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(db, *sf);
                 if fresh.0 != entry.throw_facts {
                     throws_taint.extend(throw_fn_names(&fresh.0));
                     throws_taint.extend(throw_fn_names(&entry.throw_facts));
@@ -1401,7 +1401,7 @@ fn project_callable_throws_seeds(
     if CacheContext::callable_throws_cache_disabled() {
         return std::collections::BTreeMap::new();
     }
-    use baml_db::baml_compiler2_tir::package_interface::CallableThrowsFragment;
+    use baml_db::baml_compiler2_hir_ty::package_interface::CallableThrowsFragment;
     let mut by_path = std::collections::BTreeMap::new();
     for (rel, fragment_bytes) in clean_fragments {
         if fragment_bytes.is_empty() {
@@ -1740,7 +1740,7 @@ impl CacheContext {
                     sig_referenced_names,
                     // Free: seeded files return their seeds verbatim, dirty
                     // files were extracted (and memoized) during the compile.
-                    throw_facts: baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(
+                    throw_facts: baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(
                         db, sf,
                     )
                     .0
@@ -2110,7 +2110,7 @@ impl CacheContext {
                 continue; // file removed — never seeded
             };
             let honest =
-                baml_db::baml_compiler2_tir::package_interface::file_callable_throws_fragment(
+                baml_db::baml_compiler2_hir_ty::package_interface::file_callable_throws_fragment(
                     db, sf,
                 );
             let honest_bytes = borsh::to_vec(honest).map_err(|e| {
@@ -2257,7 +2257,7 @@ impl CacheContext {
             && !fragment.is_empty()
         {
             let honest =
-                baml_db::baml_compiler2_tir::package_interface::file_callable_throws_fragment(
+                baml_db::baml_compiler2_hir_ty::package_interface::file_callable_throws_fragment(
                     honest_db, sf,
                 );
             let honest_bytes = borsh::to_vec(honest)?;
@@ -3273,7 +3273,7 @@ mod tests {
         // function still infers. If either key format drifted (rel vs abs, a
         // separator change) the seed would silently never apply and this fails.
         use baml_compiler2_hir::loc::FunctionLoc;
-        use baml_db::baml_compiler2_tir::callable::callable_throws;
+        use baml_db::baml_compiler2_hir_ty::callable::callable_throws;
 
         let mut db = build_db(&[(
             "a.baml",
@@ -3302,8 +3302,8 @@ mod tests {
             let f_loc = FunctionLoc::new(&db, file, f_id);
             let g_loc = FunctionLoc::new(&db, file, g_id);
             (
-                callable_throws(&db, f_loc).clone(),
-                callable_throws(&db, g_loc).clone(),
+                callable_throws(&db, f_loc).0.clone(),
+                callable_throws(&db, g_loc).0.clone(),
             )
         };
         assert_ne!(
@@ -3322,12 +3322,12 @@ mod tests {
         let f_loc = FunctionLoc::new(&db, file, f_id);
         let g_loc = FunctionLoc::new(&db, file, g_id);
         assert_eq!(
-            *callable_throws(&db, f_loc),
+            callable_throws(&db, f_loc).0,
             g_throws,
             "the seed must short-circuit: f returns the path-keyed seeded value"
         );
         assert_eq!(
-            *callable_throws(&db, g_loc),
+            callable_throws(&db, g_loc).0,
             g_throws,
             "an unseeded function still infers honestly"
         );
@@ -3727,9 +3727,8 @@ mod tests {
         use baml_db::{
             Name,
             baml_compiler2_hir::package::PackageId,
-            baml_compiler2_tir::{
-                package_interface::{PackageInterface, package_interface},
-                throw_inference::FunctionThrowSets,
+            baml_compiler2_hir_ty::package_interface::{
+                FunctionThrowSets, PackageInterface, package_interface,
             },
         };
 
@@ -3748,8 +3747,6 @@ mod tests {
                 direct: Default::default(),
                 transitive: Default::default(),
             },
-            namespaces: Default::default(),
-            impls: Default::default(),
         };
         let mut seed = std::collections::BTreeMap::new();
         seed.insert(

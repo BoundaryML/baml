@@ -674,7 +674,7 @@ pub(crate) fn check_throws_wildcard(
 ///   * the expression-context type positions — a call turbofish, an object
 ///     construction, a generic-apply value, an upcast target — handled during
 ///     inference (see the expression-context `_` hole policy in
-///     `baml_compiler2_tir`'s `builder.rs`).
+///     the retired TIR builder).
 ///
 /// Emits `WildcardTypeNotAllowed` for every occurrence at any depth.
 pub(crate) fn check_wildcard_type(

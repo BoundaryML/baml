@@ -820,14 +820,14 @@ impl RunArgs {
         // files, this counts only the dirty files' scopes; a cold compile walks
         // every scope.
         crate::bytecode_cache::cache_debug(format_args!(
-            "scope inferences: {} this process",
-            baml_db::baml_compiler2_tir::inference::scope_inferences()
+            "body inferences: {} this process",
+            baml_db::baml_compiler2_hir_ty::infer::body_inferences()
         ));
         // Warm-run evidence: with the stdlib interface seeded, this is 0 (the
         // seed served every stdlib package); a cold run reports up to 6.
         crate::bytecode_cache::cache_debug(format_args!(
             "stdlib interface: {} honest derivation(s) this process",
-            baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+            baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
         ));
         let program = compiled.program;
         let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
@@ -889,7 +889,10 @@ impl RunArgs {
     /// Evaluate a BAML expression.
     ///
     /// Wraps the expression in a synthetic `function $expr_main() { <body> }`
-    /// and compiles/runs it. If inside a project, project context is available.
+    /// and compiles/runs it. Expressions are first compiled with only the
+    /// standard library in scope, so unrelated project errors cannot block an
+    /// independent probe. If that fails and a project is available, retry with
+    /// project context so expressions can still reference project declarations.
     ///
     /// `expr_body` is the resolved expression text — already de-referenced
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
@@ -903,32 +906,58 @@ impl RunArgs {
         // `-> unknown` lets any return type through.
         let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
 
-        let (mut db, project_root) = if find_project_root_from(self.from.as_deref())?.is_some() {
-            let (db_with_project, root, baml_files) =
+        let discovered_root = find_project_root_from(self.from.as_deref())?;
+        let isolated_root = discovered_root
+            .clone()
+            .unwrap_or_else(|| std::env::temp_dir().join("baml_expr"));
+        if discovered_root.is_none() {
+            std::fs::create_dir_all(&isolated_root).ok();
+        }
+
+        // Fast and resilient path: most `-e` probes only need the standard
+        // library. Compiling them in an isolated database means neither loading
+        // nor diagnosing every project file, and therefore unrelated project
+        // errors cannot prevent evaluation.
+        let mut isolated_db = ProjectDatabase::new();
+        isolated_db.set_project_root(&isolated_root);
+        isolated_db.add_or_update_file(&isolated_root.join("__expr__.baml"), &synthetic);
+        let isolated_diagnostics = baml_project::collect_diagnostics(&isolated_db);
+        let isolated_has_errors = isolated_diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Severity::Error);
+
+        let db = if isolated_has_errors {
+            if discovered_root.is_none() {
+                self.render_and_bail_on_errors(
+                    &isolated_diagnostics,
+                    &isolated_db,
+                    "cannot evaluate expression: compilation errors",
+                    reporter,
+                )?;
+                unreachable!("isolated expression diagnostics contain an error");
+            }
+
+            // The expression may refer to project declarations. Preserve that
+            // existing behavior by retrying with the surrounding project only
+            // when the isolated compile proves it is necessary.
+            let (mut project_db, project_root, baml_files) =
                 load_project_or_default(self.from.as_deref())?;
             self.vlog(format_args!(
-                "Project context: loaded {} file(s)",
+                "Expression requires project context: loaded {} file(s)",
                 baml_files.len()
             ));
-            (db_with_project, root)
+            project_db.add_or_update_file(&project_root.join("__expr__.baml"), &synthetic);
+            self.check_project_diagnostics(
+                &project_db,
+                "cannot evaluate expression: compilation errors",
+                reporter,
+            )?;
+            project_db
         } else {
-            let tmp = std::env::temp_dir().join("baml_expr");
-            std::fs::create_dir_all(&tmp).ok();
-            let mut db = ProjectDatabase::new();
-            db.set_project_root(&tmp);
-            self.vlog(format_args!(
-                "Project context: none (standalone expression)"
-            ));
-            (db, tmp)
+            self.vlog(format_args!("Expression compiled without project context"));
+            isolated_db
         };
 
-        db.add_or_update_file(&project_root.join("__expr__.baml"), &synthetic);
-
-        self.check_project_diagnostics(
-            &db,
-            "cannot evaluate expression: compilation errors",
-            reporter,
-        )?;
         // BEP-027 §"`baml.argv`": `argv[1]` for `-e` is "the expression
         // source" — the loaded body text, not the `@path` reference. This
         // matches the inline case: `-e '2 + 2'` and `-e @file` (with

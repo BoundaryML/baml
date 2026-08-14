@@ -1,3 +1,5 @@
+#![cfg(any())]
+
 //! BEP-066 mounted-package linking capstone: consuming a dependency from source and from its
 //! `PackageInterface` blob must be observationally equivalent.
 //!

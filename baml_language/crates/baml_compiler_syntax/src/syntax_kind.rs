@@ -222,8 +222,8 @@ pub enum SyntaxKind {
     FUNCTION_TYPE_PARAM, // x: int (or just int)
 
     // Attributes
-    ATTRIBUTE,       // @alias("name")
-    BLOCK_ATTRIBUTE, // @@dynamic
+    ATTRIBUTE, // @alias("name")
+    BLOCK_ATTRIBUTE,
     ATTRIBUTE_ARGS,
 
     // Expressions (for attributes and function bodies)

@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+530..538 'describe': throws never
+568..591 '{\n   ...n    }': "thing"
+578..585 '"thing"': "thing"
+655..661 'iq_ref': throws never
+697..791 '{\n   ...  s\n}': string
+703..715 'let describe': (self: user.IqThing) -> string throws never
+718..740 'IqDesc...scribe': (self: user.IqThing) -> string throws never
+746..751 'let s': string
+754..762 'describe': (self: user.IqThing) -> string throws never
+754..765 'describe(t)': string
+763..764 't': user.IqThing
+788..789 's': string
+802..811 'iq_direct': throws never
+847..880 '{\n   ...(t)\n}': string
+853..875 'IqDesc...scribe': (self: user.IqThing) -> string throws never
+853..878 'IqDesc...ibe(t)': string
+876..877 't': user.IqThing
+993..1007 'iq_destructure': throws never
+1044..1103 '{\n   ...  }\n}': string
+1050..1101 'match ...n    }': string
+1057..1058 'a': user.IqAnimal
+1070..1087 'IqAnim...name }': user.IqAnimal
+1081..1085 'name': string
+1091..1095 'name': string
+1114..1120 'iq_use': throws never
+1154..1200 '{\n   ...{})\n}': string
+1160..1174 'iq_destructure': (a: user.IqAnimal) -> string throws never
+1160..1177 'iq_des...ure(d)': string
+1160..1198 'iq_des...ng {})': string
+1175..1176 'd': user.IqDog
+1180..1186 'iq_ref': (t: user.IqThing) -> string throws never
+1180..1198 'iq_ref...ng {})': string
+1187..1197 'IqThing {}': user.IqThing

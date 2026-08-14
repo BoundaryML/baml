@@ -1,3 +1,5 @@
+#![cfg(any())]
+
 //! BEP-066 mounted-package linking: CALLS into MOUNTED (source-less) packages, end to end —
 //! check → MIR → emit → link → run.
 //!

@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+374..381 'big_str': throws never
+407..462 '{\n   ...  s\n}': string
+413..418 'let s': string
+421..424 '42n': 42n
+421..434 '42n.to_string': (value: 42n) -> string throws never
+421..436 '42n.to_string()': string
+459..460 's': string
+473..482 'float_str': throws never
+516..586 '{\n   ...g()\n}': string
+522..527 'let t': string
+530..546 '(-0.5)...string': (value: -0.5) -> string throws never
+530..548 '(-0.5)...ring()': string
+531..535 '-0.5': -0.5
+532..535 '0.5': 0.5
+571..582 'f.to_string': (value: float) -> string throws never
+571..584 'f.to_string()': string
+597..604 'box_str': throws never
+641..662 '{\n   ...g()\n}': string
+647..658 'b.to_string': (value: user.TsfPlain) -> string throws never
+647..660 'b.to_string()': string
