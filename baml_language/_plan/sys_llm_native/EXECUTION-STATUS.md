@@ -88,3 +88,5 @@ fixes), 340ba4e2b (phase 2 deletion + phase 3 compiler fixes).
 - Leftovers (cosmetic): architecture.svg regen needs graphviz; ~75 provenance
   comments citing deleted sys_llm paths kept deliberately; ARCHITECTURE.md
   pre-existing drift; `.agents/` untracked (not ours).
+
+**2026-08-14 addendum**: user raised OpenAI limit + AWS SSO login (fixed duplicate [sso-session] in ~/.aws/config); full live profile: **20/20 passed in one run** — every provider verified against its real endpoint incl. both image-generation paths and Bedrock SigV4.
