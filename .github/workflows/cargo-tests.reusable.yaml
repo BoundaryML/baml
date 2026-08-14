@@ -269,91 +269,92 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-linux-musl.html
           if-no-files-found: ignore
 
-  # TODO(B-1545): Temporarily disabled due to flakiness; re-enable via https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
-  # cargo-test-macos:
-  #   name: "cargo test (aarch64-apple-darwin)"
-  #   # Skip in the merge queue: macos already ran on the PR. The merge_group
-  #   # event is inherited from ci.yaml through the workflow_call boundary.
-  #   if: ${{ github.event_name != 'merge_group' }}
-  #   runs-on: blacksmith-6vcpu-macos-latest
-  #   timeout-minutes: 35
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #       with:
-  #         persist-credentials: false
+  # macOS 26.3 arm64 has an Apple allocator corruption bug under O1 codegen that surfaces as nondeterministic invalid frees: https://github.com/rust-lang/rust/issues/150898
+  # Keep this pinned to macOS 15 until Blacksmith's macOS 26 image is >=26.4, then validate repeated trials before moving back to latest.
+  cargo-test-macos:
+    name: "cargo test (aarch64-apple-darwin)"
+    # Skip in the merge queue: macos already ran on the PR. The merge_group
+    # event is inherited from ci.yaml through the workflow_call boundary.
+    if: ${{ github.event_name != 'merge_group' }}
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-  #     - name: "Install Rust toolchain"
-  #       run: rustup show
-  #       working-directory: baml_language
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
 
-  #     - name: "Install tools (mise)"
-  #       uses: ./.github/actions/setup-mise
-  #       with:
-  #         install_args: "sccache direnv cargo:cargo-nextest"
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
 
-  #     - name: "Verify sccache"
-  #       run: sccache --version
+      - name: "Verify sccache"
+        run: sccache --version
 
-  #     - uses: Swatinem/rust-cache@v2
-  #       with:
-  #         workspaces: "baml_language -> target"
-  #         cache-all-crates: true
-  #         cache-targets: false
-  #         save-if: ${{ github.ref == 'refs/heads/canary' }}
-  #         shared-key: "macos-cargo"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "macos-cargo"
 
-  #     - name: "Load .envrc with direnv"
-  #       run: |
-  #         set -euo pipefail
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
 
-  #         direnv allow .envrc
-  #         direnv export gha >> "$GITHUB_ENV"
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
 
-  #     # Separate step so if fetch is slow, build is fast.
-  #     - name: "Fetch cargo dependencies"
-  #       run: cargo fetch
-  #       working-directory: baml_language
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
-  #     # Snapshot tests live in `baml_tests` and are exercised end-to-end by
-  #     # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
-  #     # and run in the dedicated `sdk-tests` matrix below. Skip both here —
-  #     # at the cargo level (`--exclude`), not a nextest `-E` filter, so their
-  #     # test binaries (the heaviest links in the workspace) aren't built.
-  #     - name: "Build tests with --timings"
-  #       run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
-  #       working-directory: baml_language
+      # Snapshot tests live in `baml_tests` and are exercised end-to-end by
+      # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
+      # and run in the dedicated `sdk-tests` matrix below. Skip both here —
+      # at the cargo level (`--exclude`), not a nextest `-E` filter, so their
+      # test binaries (the heaviest links in the workspace) aren't built.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
 
-  #     - name: "Run tests with nextest"
-  #       run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
-  #       working-directory: baml_language
+      - name: "Run tests with nextest"
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
 
-  #     - name: "Show sccache stats"
-  #       if: always()
-  #       run: sccache --show-stats
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
 
-  #     - name: "Dump sccache stats (json)"
-  #       if: always()
-  #       run: sccache --show-stats --stats-format json > sccache-stats-test-macos.json
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-macos.json
 
-  #     - name: "Upload sccache stats"
-  #       if: always()
-  #       uses: actions/upload-artifact@v7
-  #       with:
-  #         name: sccache-stats-test-macos
-  #         path: sccache-stats-test-macos.json
-  #         if-no-files-found: ignore
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-macos
+          path: sccache-stats-test-macos.json
+          if-no-files-found: ignore
 
-  #     - name: "Rename cargo timings"
-  #       if: always()
-  #       run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-macos.html
-  #       working-directory: baml_language
-  #     - name: "Upload cargo timings"
-  #       if: always()
-  #       uses: actions/upload-artifact@v7
-  #       with:
-  #         name: cargo-timings-test-macos
-  #         path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
-  #         if-no-files-found: ignore
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-macos.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-macos
+          path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
+          if-no-files-found: ignore
 
   cargo-test-windows:
     name: "cargo test (x86_64-pc-windows-msvc)"

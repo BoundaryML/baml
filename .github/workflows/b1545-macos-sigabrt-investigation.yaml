@@ -1,13 +1,8 @@
 name: "B-1545 macOS SIGABRT investigation (non-required)"
 
 on:
-  # A newly added workflow_dispatch workflow cannot be dispatched until it is
-  # present on the default branch. This branch-scoped push trigger makes the
-  # investigation runnable from its draft PR without creating a required
-  # signal or consuming macOS runners for unrelated branches.
-  push:
-    branches:
-      - "sxlijin/B-1545-investigate-macOS-SIGABRT"
+  # The branch-scoped push trigger used for initial investigation is removed
+  # before merge. Keep future trials explicit, bounded, and non-required.
   workflow_dispatch:
 
 permissions:
