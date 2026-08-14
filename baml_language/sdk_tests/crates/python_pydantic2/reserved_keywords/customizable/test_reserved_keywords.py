@@ -41,7 +41,9 @@ def test_lowercase_keyword_named_types_import_and_escape():
     assert import_.A.value == "A"
     assert lambda_ is int  # `type lambda = int` -> `lambda_: typing.TypeAlias = int`
     # Cross-reference escaping: PassHolder.p is typed as the escaped `pass_`.
-    assert "p" in PassHolder.model_fields
+    # The field name `p` is not a keyword, so only the resolved *type* can regress
+    # here; assert the annotation itself, not mere field presence.
+    assert PassHolder.model_fields["p"].annotation is pass_
 
 
 def test_lowercase_keyword_named_class_round_trips_through_engine():
