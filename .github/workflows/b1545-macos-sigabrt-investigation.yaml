@@ -175,7 +175,7 @@ jobs:
 
           # ReportCrash writes asynchronously after the child exits. Give it
           # a short, bounded window only when nextest failed.
-          if [[ -f "$diagnostic_dir/nextest-exit-status" ]] && [[ "$(< "$diagnostic_dir/nextest-exit-status")" != "0" ]]; then
+          if [[ ! -f "$diagnostic_dir/nextest-exit-status" ]] || [[ "$(< "$diagnostic_dir/nextest-exit-status")" != "0" ]]; then
             sleep 15
           fi
 
