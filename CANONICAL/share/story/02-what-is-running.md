@@ -11,11 +11,11 @@
 - The runtime produces the call tree itself rather than stitching emitted
   spans, so Studio says *run*, not *trace*.
 
-Doc 01 promised cheap summaries of every call and exact records of the
+Doc 01 described cheap summaries of every call and exact records of the
 interesting few. This doc defines the units involved: process, run, call,
 logical thread, and revision.
 
-## The toy program
+## The example program
 
 Every document in this set uses the same program. It processes a batch of
 customers (validate each email, classify with an LLM function, fall back
@@ -86,16 +86,16 @@ Process P   (one server process, running revision rev1)
 └── run2: ProcessCustomers([Dee], null)                         running
 ```
 
-Later docs represent exactly this picture at a million times the volume.
+Later docs represent this same picture at a million times the volume.
 
 ## Process
 
 A **process** is the operating-system process the program runs in: a
 server, a CLI invocation, a test runner. It hosts the BAML runtime, which
 records what executes inside it **[built]**. A process hosts zero or more
-runs; they start and finish independently, and `P` has finished `run1`
-while `run2` is still running. The process is the host, not the unit of
-work: `P` being alive says nothing about whether any work succeeded.
+runs; they start and finish independently. `P` has finished `run1` while
+`run2` is still running. The process is the host, not the unit of work:
+`P` being alive says nothing about whether any work succeeded.
 <!-- fresh definition (verified safe): "process" has no canonical glossary entry; composed from profiler-tape facts, proposed as a glossary addition -->
 
 ## Run
@@ -137,9 +137,9 @@ surface are not frozen yet; current code uses overlapping
 
 ### Runs are not processes
 
-`P` hosted a succeeded run, a running run, and a failed run at once, so
-the two concepts are visibly distinct. The process is where work happens;
-a run is one unit of that work with its own beginning, end, and outcome.
+`P` hosted a succeeded run, a running run, and a failed run at once. The
+process is where work happens; a run is one unit of that work with its
+own beginning, end, and outcome.
 
 ## Entrypoint, call, and child call
 
@@ -181,7 +181,7 @@ Doc 07 returns to this with the code-identity tables.
 
 The **call tree** (or *call structure*) is the full set of parent/child
 relationships among a run's calls: the indented picture above. The
-runtime does not reconstruct the tree from clues after the fact; it
+runtime does not reconstruct the tree from clues after the fact. It
 produces the tree, because it creates every call **[built]**. The "Runs,
 not traces" section below rests on this point.
 
@@ -210,9 +210,8 @@ type-definition edit produces a new revision. Deployment, release, and
 git labels are dimensions attached to a revision, not the identity
 itself. Every run records the revision that produced it **[built]**:
 `run1`, `run2`, and `run3` all ran on `rev1`, so when their behavior
-differs, the code is provably not the variable. Doc 07 covers how
-functions keep their identity across revisions and what a revision can
-and cannot prove.
+differs, the code is not the variable. Doc 07 covers how functions keep
+their identity across revisions and what a revision can and cannot prove.
 <!-- source: vocabulary-lifecycle pack (program snapshot, GLOS L53, PROD L42–54) -->
 
 ## Run boundaries
@@ -222,15 +221,15 @@ and cannot prove.
 Calls nest; runs do not. If the program calls another service that itself
 runs BAML, that service's work is a second run in its own process, linked
 to the first by an explicit relation rather than merged into one graph
-**[v1]**. Two processes have two clocks, and Studio refuses to stitch two
-clocks into one fictional timeline. `total_calls` never includes anything
-from a related run.
+**[v1]**. Two processes have two clocks, and Studio does not merge two
+clocks into one timeline. `total_calls` never includes anything from a
+related run.
 <!-- source: design/08 decision register ("Cross-process execution | Related runs with explicit links"), design/01 L25, glossary Run/Causal-run, verified; same-process "calls nest, runs do not" derives from the boundary definition and matches reader-brief total_calls semantics -->
 
 ### A long-running server hosts many runs
 
 Each hosted run finishes on its own schedule, and a run is visible while
-it is still running: `run2` shows up today, with its so-far numbers, not
+it is still running: `run2` appears today, with its so-far numbers, not
 after it ends **[built]**. If the process dies mid-run, the run does not
 get an invented ending: it is classified as crashed when read, from the
 absence of a recorded completion **[built]**.
@@ -240,7 +239,7 @@ absence of a recorded completion **[built]**.
 
 The industry word for the picture of one request's execution is a
 *trace*; doc 01 introduced how trace-shaped tools see the world. Studio
-does not use the term.
+does not use the term, for the following reasons.
 
 A trace is a *correlation*. Instrumented code emits spans, context IDs
 propagate across function and service hops, and a backend later stitches
@@ -263,11 +262,11 @@ land) **[v1]**.
 
 Calling this a "trace" would mislead in both directions. It would
 undersell the guarantee: readers would assume sampled, stitched,
-maybe-incomplete trees and design around *silent* holes that do not occur
-here. It would oversell the scope: "trace" implies one merged picture
-across services, which Studio refuses to fabricate; cross-process work is
-a *related run*, linked and separately clocked, never spliced into one
-timeline **[v1]**.
+possibly-incomplete trees and design around silent holes that do not
+occur here. It would oversell the scope: "trace" implies one merged
+picture across services, which Studio does not fabricate; cross-process
+work is a *related run*, linked and separately clocked, never spliced
+into one timeline **[v1]**.
 <!-- no-merged-clocks stance: vocabulary-lifecycle pack (PROD L25); the naming argument itself is fresh analysis; review -->
 
 The runtime sees every call the moment it happens but does not keep every
@@ -281,4 +280,4 @@ call. Doc 03 describes counting every call without storing every call.
 - **Call / child call**: one function invocation in a run; calls nest, runs do not.
 - **Call tree**: the parent/child structure of a run's calls, produced rather than reconstructed; any loss is declared, never silent.
 - **Logical thread**: a runtime-scheduled lane of concurrency; `spawn` creates one.
-- **Revision**: the exact compiled program a run executed (full story in doc 07).
+- **Revision**: the exact compiled program a run executed (details in doc 07).

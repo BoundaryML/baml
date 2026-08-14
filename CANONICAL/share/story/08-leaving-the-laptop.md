@@ -16,10 +16,10 @@
 
 ## One directory
 
-Every run so far (run1's eight calls, run3's unhandled `ValidationError`,
-the tape dumps `dump1` and `dump2`, the captured values) was recorded without
-touching the network, into a directory called `.baml/` next to the
-project. **[built]**
+Every run so far (run1's eight calls, run3's unhandled
+`ValidationError`, the tape dumps `dump1` and `dump2`, the captured
+values) was recorded without touching the network, into a directory
+called `.baml/` next to the project. **[built]**
 
 run1's and run3's evidence, simplified:
 
@@ -51,7 +51,7 @@ runs; once finished, it is only read, never modified. **[built]**
 The **content-addressed store (CAS)** holds captured values: the args,
 returns, and errors from doc 05. Values are stored under identifiers
 computed from their bytes, so identical values are stored once. This is
-the deduplication doc 05 promised. Ada's `Customer` record, captured in
+the deduplication doc 05 described. Ada's `Customer` record, captured in
 the root call's args and again in `ClassifyCustomer`'s args, is stored
 once. **[built]**
 
@@ -73,11 +73,11 @@ coordination protocol is needed to make retrying safe.
 Corrections are new facts. If run1's evidence later proves wrong or
 incomplete, nothing rewrites run1's files; a new fact (an
 `evidence_issues` row, from doc 06) is recorded next to them. Doc 06's
-honesty guarantee holds because originals cannot be quietly overwritten.
+guarantee holds because originals cannot be quietly overwritten.
 
-Everything downstream is rebuildable. Any summary, index, or table derived
-from sealed evidence can be discarded and rebuilt with identical results.
-The cloud design below leans on this.
+Everything downstream is rebuildable. Any summary, index, or table
+derived from sealed evidence can be discarded and rebuilt with identical
+results. The cloud design below depends on this.
 
 A crash mid-run does not corrupt evidence. The partly written file keeps
 its intact prefix, a torn final record is ignored, and the run is later
@@ -97,12 +97,13 @@ five steps:
 2. **Upload.** Chunks are uploaded to object storage (S3: durable file
    storage in the cloud).
 3. **Receipt.** The service verifies and records what it accepted, and
-   answers with an **upload receipt**: durable proof that these exact bytes
-   are now the cloud's responsibility.
+   answers with an **upload receipt**: durable proof that these exact
+   bytes are now the cloud's responsibility.
 4. **Reclaim.** Only receipted bytes may be reclaimed from local disk. No
    receipt, no deletion: the evidence stays on your machine.
 5. **Project.** The service reads accepted evidence and builds the query
-   tables from it. This rebuild-from-evidence step is called **projection**.
+   tables from it. This rebuild-from-evidence step is called
+   **projection**.
 
 ```mermaid
 flowchart LR
@@ -117,7 +118,7 @@ flowchart LR
 None of this is on the hot path: doc 03 established that the runtime does
 no filesystem or network work at call entry. Upload is a separate
 background component draining sealed files; a slow or absent network
-changes how full the spool gets, never how fast your calls run.
+changes how full the spool gets, never how fast calls run.
 <!-- capture-ingest fact pack: hot-path invariants; boundary "capture is not upload". -->
 
 ### Why reclaim waits for receipts
@@ -126,8 +127,8 @@ A successful upload call is not proof of delivery, because networks
 produce ambiguous outcomes: a timeout after the bytes arrived looks
 identical to a timeout before. The receipt is the one unambiguous fact,
 and local reclaim gates on it in order, so a later successful upload can
-never hide an earlier missing one. The result is the design's promise: no
-acknowledged evidence is ever silently lost. **[v1]**
+never hide an earlier missing one. The result is the design's guarantee:
+no acknowledged evidence is ever silently lost. **[v1]**
 <!-- studio-security fact pack: "No acknowledged silent loss" invariant. -->
 
 Status: the spool, uploader, and receipt machinery are target v1 work and
@@ -170,21 +171,21 @@ implementation default of the current build **[built]**, not a product
 promise. The playground also reads live in-process state, so local
 freshness is effectively immediate.
 
-Hosted, 250 ms is not a cloud write cadence. Chunks close by age and size;
-the exact thresholds are deliberately unfrozen, to be chosen by
+Hosted, 250 ms is not a cloud write cadence. Chunks close by age and
+size; the exact thresholds are deliberately unfrozen, to be chosen by
 benchmarks. As an order of magnitude, the queryable-in-seconds target
-below implies chunks leaving the machine every few seconds under load, but
-that is an expectation to validate, not a promise. **[open]** How quickly
-accepted evidence becomes queryable is likewise not frozen. The design
-carries a qualification target (accepted-to-queryable in seconds, p95
-under 5), a gate to measure before release, not a measured claim.
+below implies chunks leaving the machine every few seconds under load,
+but that is an expectation to validate, not a promise. **[open]** How
+quickly accepted evidence becomes queryable is likewise not frozen. The
+design carries a qualification target (accepted-to-queryable in seconds,
+p95 under 5), a gate to measure before release, not a measured claim.
 **[open]**
 
 The above covers finished runs. Whether the hosted view must also show
 *still-running* runs in v1 (and if so, when an active run first becomes
 visible in hosted queries) is an unresolved decision. **[open]** If
-required, the sketch is short-lived incremental rows, discarded soon after
-the sealed final aggregate arrives, so history is always read from
+required, the sketch is short-lived incremental rows, discarded soon
+after the sealed final aggregate arrives, so history is always read from
 immutable evidence. **[open]** Batching trades freshness latency against
 ingest cost. Retained detail is a separate dial: a slower cadence delays
 evidence, it does not thin it. **[v1]**
@@ -193,14 +194,14 @@ evidence, it does not thin it. **[v1]**
 
 ## Error storms
 
-An LLM provider outage that fails a million calls in an hour does not turn
-capture into a firehose while the system is already hurting.
+An LLM provider outage that fails a million calls in an hour does not
+turn capture into a firehose while the system is already under load.
 
 Locally, every capture mechanism is bounded by construction; no throttle
 is bolted on top. Counting is folding: a million failures are increments
 to the same few `calling_contexts` rows, not a million new rows. The
-rolling tape is fixed memory, and dumps are triggered and rate-limited (an
-implementation default). **[built]** On the current branch one
+rolling tape is fixed memory, and dumps are triggered and rate-limited
+(an implementation default). **[built]** On the current branch one
 root-observed error fires one dump; the exact dedup contract across
 rethrows is the question doc 04 left open. **[open]** Value capture
 follows the explicit policy matrix from doc 05: under overload it sheds
@@ -208,48 +209,49 @@ lower-priority bodies while counting the losses. The counters and loss
 markers exist today **[built]**, and making every such loss a queryable
 `evidence_issues` row is the v1 correctness gate doc 06 named. **[v1]**
 
-The designed policy has no bimodal "cheap normally, catastrophic under
+The designed policy has no bimodal "cheap normally, expensive under
 incidents" mode, with one exception today: a single hard cap, the fixed
 memory that buffers structural events, still aborts the process when
 exhausted instead of shedding. Replacing that abort with the typed shed
 policy is committed v1 work. **[v1]**
 
 If upload is configured, an outage grows the spool toward its budget. At
-that hard boundary the design prescribes a typed, predeclared choice: stop
-admitting new runs, reserve room to close the runs in flight, then apply
-one of three named behaviors: fail the run, abort the process, or continue
-with the run marked incomplete. Fail-the-run is the recommended default.
-Wiring that ladder is committed v1 work **[v1]**; which behavior is the
-default in each environment is an open policy decision. **[open]**
+that hard boundary the design prescribes a typed, predeclared choice:
+stop admitting new runs, reserve room to close the runs in flight, then
+apply one of three named behaviors: fail the run, abort the process, or
+continue with the run marked incomplete. Fail-the-run is the recommended
+default. Wiring that ladder is committed v1 work **[v1]**; which behavior
+is the default in each environment is an open policy decision. **[open]**
 
-How the hosted service handles an entire fleet storming at once (admission
-control, backpressure, deduplication) belongs to the internal cloud doc
-and is not reviewed here. The shape of the answer: the service protects
-accepted evidence first, slows its own projection work next, then pauses
-new upload authorizations, and finally tells clients to retry later, so
-storm bytes wait in local spools, durable and bounded. **[v1]** Details:
-`CANONICAL/design/05-capture-and-ingest.md`.
+How the hosted service handles an entire fleet storming at once
+(admission control, backpressure, deduplication) belongs to the internal
+cloud doc and is not reviewed here. The shape of the answer: the service
+protects accepted evidence first, slows its own projection work next,
+then pauses new upload authorizations, and finally tells clients to retry
+later, so storm bytes wait in local spools, durable and bounded. **[v1]**
+Details: `CANONICAL/design/05-capture-and-ingest.md`.
 
 ## Data lifetime
 
-Locally, disk is governed by budgets and reachability. Old run directories
-are pruned oldest-first under a size budget, and the value store is
-garbage-collected: a value survives while something retained points at it,
-and releasing a run releases its values. **[built]** The specific caps are
-implementation defaults, not policy. With upload configured, the receipt
-gate outranks the size budget: unreceipted bytes are never pruning
-candidates, so a stalled upload grows the spool toward its budget and
-lands in the error-storm ladder above; the design refuses new evidence
-before it deletes unshipped evidence. **[v1]**
+Locally, disk is governed by budgets and reachability. Old run
+directories are pruned oldest-first under a size budget, and the value
+store is garbage-collected: a value survives while something retained
+points at it, and releasing a run releases its values. **[built]** The
+specific caps are implementation defaults, not policy. With upload
+configured, the receipt gate outranks the size budget: unreceipted bytes
+are never pruning candidates, so a stalled upload grows the spool toward
+its budget and lands in the error-storm ladder above; the design refuses
+new evidence before it deletes unshipped evidence. **[v1]**
 
 Hosted, accepted evidence is immutable and kept indefinitely by default;
 routine maintenance is forbidden from evicting it. The only deletion path
 is explicit, authorized erasure: a verified workflow that denies access
 first, removes the data from every store, copy, and derived table, and
 reaches its terminal state only after per-store verification. Ordinary
-retention is not erasure, and erasure is not a best-effort delete. **[v1]**
-(Settled as D11 in the decision register; optional customer-configured
-retention windows are a deferred policy decision. **[open]**)
+retention is not erasure, and erasure is not a best-effort delete.
+**[v1]** (Settled as D11 in the decision register; optional
+customer-configured retention windows are a deferred policy decision.
+**[open]**)
 
 With no upload configured there are no receipts to wait for; local
 budgets alone govern the directory. Local-only operation is a first-class

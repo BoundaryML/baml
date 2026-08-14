@@ -16,29 +16,29 @@
 Every observability tool drops data sometimes: a buffer fills under load,
 or a process dies mid-write. Most tools drop silently. A dashboard shows
 90,000 calls instead of 100,000 with no indication the other 10,000
-existed; "it never happened" and "the record was lost" look identical. For
-an LLM application the ambiguity hits during incidents, when failure
-counts matter most.
+existed; "it never happened" and "the record was lost" look identical.
+For an LLM application the ambiguity appears during incidents, when
+failure counts matter most.
 <!-- framing per doc brief item 1; fresh phrasing: review -->
 
-Studio takes the opposite rule: **missing evidence is a first-class fact**.
-Everything Studio records about a program (aggregate rows, retained calls,
-tape dumps, captured values) is its **evidence**. When promised evidence
-is missing, the absence is itself recorded, counted, and queryable, like
-the data it stands in for.
+Studio's rule is the opposite: **missing evidence is a first-class
+fact**. Everything Studio records about a program (aggregate rows,
+retained calls, tape dumps, captured values) is its **evidence**. When
+promised evidence is missing, the absence is itself recorded, counted,
+and queryable, like the data it stands in for.
 
 ## Two different kinds of failure
 
 An *application error* is the program failing while Studio watched. In
-run `run1`, Bo's `ClassifyCustomer` call errored with a provider HTTP 500.
-The error is counted in the `calling_contexts` aggregate (`errored = 1` on
-the ClassifyCustomer context), the error value was captured under LLM
-capture policy, and the run's evidence is complete.
+run `run1`, Bo's `ClassifyCustomer` call errored with a provider HTTP
+500. The error is counted in the `calling_contexts` aggregate
+(`errored = 1` on the ClassifyCustomer context), the error value was
+captured under LLM capture policy, and the run's evidence is complete.
 
 An **evidence issue** is Studio failing to watch: somewhere between the
 call happening and the query, the recording machinery hit a limit, lost
 data, or produced something it cannot vouch for, even if the program ran
-flawlessly. These failures go in `evidence_issues`, not an `errors`
+correctly. These failures go in `evidence_issues`, not an `errors`
 table: "error" is the program's word, and the separate table keeps the
 two apart.
 
@@ -72,8 +72,8 @@ Four things belong in `evidence_issues`:
 
 Two kinds of apparent loss are deliberately *not* issues:
 
-- **Normal tape rotation.** The rolling tape overwriting its oldest events
-  is the design working as intended (doc 04); no issue row.
+- **Normal tape rotation.** The rolling tape overwriting its oldest
+  events is the design working as intended (doc 04); no issue row.
 - **Policy non-capture.** A helper's arguments not captured because
   capture policy says not to (doc 05) is a decision, not a loss; it
   appears as the per-value state `not_captured`, never as an issue.
@@ -81,11 +81,11 @@ Two kinds of apparent loss are deliberately *not* issues:
 A healthy run has zero rows in `evidence_issues`, so any row that appears
 signals a real problem.
 
-The runtime already counts most of these events (every bounded buffer that
-discards keeps a counter, and loss markers are written on several paths
-[built]), but not every loss path is consistently persisted into per-run,
-queryable diagnostics yet. Closing that gap, so every material loss
-becomes a queryable issue row, is a v1 correctness gate [v1].
+The runtime already counts most of these events (every bounded buffer
+that discards keeps a counter, and loss markers are written on several
+paths [built]), but not every loss path is consistently persisted into
+per-run, queryable diagnostics yet. Closing that gap, so every material
+loss becomes a queryable issue row, is a v1 correctness gate [v1].
 <!-- profiler-tape §4 "no silent truncation" + §6.10 -->
 
 ## Status and evidence are independent axes
@@ -106,7 +106,7 @@ imply data trustworthiness.
 
 The still-running `run2` is a third case: its evidence is *pending*, not
 incomplete. Counters for a running run are explicitly "so far"; running
-data never masquerades as final [v1].
+data is never presented as final [v1].
 <!-- query-system: pending, D15 -->
 
 ## One simple surface, many precise reasons
@@ -114,17 +114,17 @@ data never masquerades as final [v1].
 Evidence health has several dimensions: call-structure completeness,
 presence of each promised value, integrity of stored records, processing
 completion, and intactness of everything policy retained. The table
-schemas carry each as its own run-level state column (doc 09 calls these the
-run's **evidence axes**); each axis is a rollup of finer-grained per-call
-or per-value states. Doc 05 listed the per-value states (`available`,
-`not_captured`, `omitted`, `redacted`, `lost`, `truncated`, `corrupt`,
-`unsupported` (the machinery could not represent the value), plus
-`pending` while a run is open), defined so that no two different
+schemas carry each as its own run-level state column (doc 09 calls these
+the run's **evidence axes**); each axis is a rollup of finer-grained
+per-call or per-value states. Doc 05 listed the per-value states
+(`available`, `not_captured`, `omitted`, `redacted`, `lost`, `truncated`,
+`corrupt`, `unsupported` (the machinery could not represent the value),
+plus `pending` while a run is open), defined so that no two different
 situations collapse into one label [v1].
 
 A dashboard needs one label, not nine. The run's **evidence state**
-summarizes whether the promised evidence is ready and trustworthy: a small
-enum, on the order of *ready / partial / pending / unavailable /
+summarizes whether the promised evidence is ready and trustworthy: a
+small enum, on the order of *ready / partial / pending / unavailable /
 untrusted*, with the typed reasons one drill-down away. The exact enum,
 and the mapping from the fine-grained states onto it, is an open design
 decision [open]. The settled direction is a simple summary on top, typed
@@ -133,8 +133,8 @@ reasons preserved underneath.
 
 ## The query outcome: every answer grades itself
 
-Run-level evidence state covers one run. Most questions span many runs, so
-each answer must grade itself. Every query ends with exactly one typed
+Run-level evidence state covers one run. Most questions span many runs,
+so each answer must grade itself. Every query ends with exactly one typed
 **query outcome**, delivered alongside the rows rather than as a fake
 final row: whether the query completed, whether the answer was complete,
 and, when values were involved, how many were attempted, available, and
@@ -154,18 +154,18 @@ WHERE definition_key = 'ClassifyCustomer'
 
 The `status` filter is required: `call6` is also a retained
 `ClassifyCustomer` call, but it failed, and a failed call has an error
-value and no return (doc 05), so a question about return values must scope
-itself to calls that have one. Over the healthy runs the query touches one
-call, `call8`, its return is available, and the outcome confirms
-completeness. Widening the window to include `runX` adds two more
-succeeded retained `ClassifyCustomer` calls, so the query touches three,
-and the overload that dropped 10,000 records also lost one of their
-promised return values.
+value and no return (doc 05), so a question about return values must
+scope itself to calls that have one. Over the healthy runs the query
+touches one call, `call8`, its return is available, and the outcome
+confirms completeness. Widening the window to include `runX` adds two
+more succeeded retained `ClassifyCustomer` calls, so the query touches
+three, and the overload that dropped 10,000 records also lost one of
+their promised return values.
 
-The lost value does not become SQL `NULL`, which would conflate "the value
-was null" with "the evidence is missing" and return a count one short with
-no warning. It evaluates to a **typed unknown**: a marked non-answer
-carrying its reason, never `NULL`, never a silent non-match
+The lost value does not become SQL `NULL`, which would conflate "the
+value was null" with "the evidence is missing" and return a count one
+short with no warning. It evaluates to a **typed unknown**: a marked
+non-answer carrying its reason, never `NULL`, never a silent non-match
 [v1, settled decision D12]. A captured BAML `null` is ordinary data; the
 two are never confused. The outcome reconciles the totals:
 
@@ -215,15 +215,15 @@ rows [v1]. <!-- query-system: evidence_issues_v1 grouping -->
 
 ### Why self-reported failures are credible
 
-Losses are counted at the bound that causes them: a buffer that overwrites
-knows how many records it overwrote at the moment it does so. The design
-rule is that bounded never means silent: every limit has a counter, a
-marker, or an explicit error [v1]. Most limits meet the rule today
-[built], but a few internal counters can still saturate silently at
-extreme scale; marking those, like making every loss queryable, is part of
-the same v1 gate above. And the mandatory query outcome means a failure of
-the reporting channel surfaces as a missing outcome, not a plausible
-answer.
+Losses are counted at the bound that causes them: a buffer that
+overwrites knows how many records it overwrote at the moment it does so.
+The design rule is that bounded never means silent: every limit has a
+counter, a marker, or an explicit error [v1]. Most limits meet the rule
+today [built], but a few internal counters can still saturate silently at
+extreme scale; marking those, like making every loss queryable, is part
+of the same v1 gate above. And the mandatory query outcome means a
+failure of the reporting channel surfaces as a missing outcome, not a
+plausible answer.
 <!-- profiler-tape §4 -->
 
 ## Terms defined here

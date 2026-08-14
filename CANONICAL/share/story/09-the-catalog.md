@@ -119,7 +119,7 @@ name.
 
 **Grain.** One row per run, never per call.
 
-**Example rows** (toy program; process `P`, revision `rev1`):
+**Example rows** (example program; process `P`, revision `rev1`):
 
 | run_id | status | duration | entrypoint | total_calls | total_errors | value_state |
 |---|---|---|---|---|---|---|
@@ -188,8 +188,8 @@ a row per call.
 | context4 | … → ProcessCustomer → ClassifyCustomer | 3 | 2 | 1 | 8.20s | 0.02s | 8.18s |
 
 Ada, Bo, and Cy fold into one row per context; a million customers would
-too. `context4` is almost all await time: LLM latency is waiting, not
-computing.
+too. `context4` is almost all await time: most LLM latency is time spent
+waiting, not computing.
 
 **Answers:** which functions fail most, over *all* calls; where run time
 went, split into self and await; complete error rates. **Cannot answer:**
@@ -314,7 +314,7 @@ The argument object is name-keyed by declared parameter names
 at all, normalizes to those declared names rather than becoming a second
 stored shape **[open]**.
 
-Three rules make this honest. First, `=` means whole-value semantic
+Three rules apply. First, `=` means whole-value semantic
 equality: never partial-object matching, byte equality, or storage-ID
 equality **[v1]**. Second, resident filters run before any value is
 loaded; values load in bounded, deduplicated batches; and a `LIMIT` never
@@ -390,7 +390,7 @@ gap (doc 06).
 **Grain.** One immutable grouped summary: one source scope × kind ×
 reason, with a count.
 
-**Example row.** The three toy runs are healthy: zero rows, which is
+**Example row.** The three example runs are healthy: zero rows, which is
 itself the answer. The teaching row is doc 06's hypothetical overloaded
 run `runX`:
 
@@ -618,7 +618,7 @@ few); the rest is identity and health.
 `thread_edges`/`retained_threads` repeats the
 `calling_contexts`/`retained_calls` pattern for spawns.
 
-Each table had to earn its place against real queries; one did not. The
+Each table was justified against real queries; one was not. The
 internal proposal `cct_windows` would have stored time-bucketed aggregate
 deltas for "when did this spike?" charts. Its growth was active call-tree
 locations × elapsed time buckets; at the current local fold cadence one

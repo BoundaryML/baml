@@ -9,73 +9,72 @@ analysis (no recorded comparison exists in the corpus); marked inline. -->
 - Four questions follow an LLM misbehavior: counts across every call, the
   exact failing call in context, what data is missing, and which compiled
   code produced it.
-- Per-call records answer the first two at a cost that grows with
-  traffic; Studio rejects a default row per call.
+- Per-call records answer the first two at a cost that grows with traffic.
+  Studio does not create a row per call by default.
 - OTel, Langfuse, Logfire, and Braintrust are bolt-on record-per-operation
-  designs; none offers complete counting, loss accounting, and
+  designs. None provides complete counting, loss accounting, and
   compiled-version identity together.
-- Studio keeps bounded summaries of every call plus exact evidence for a
+- Studio keeps bounded summaries of every call, plus exact evidence for a
   policy-selected few.
 
 ## Four questions
 
-A small BAML program processes customer signups: one function takes a batch
-of customers and, for each, validates the email address and calls an LLM
-function to classify the customer as Approve, Review, or Reject.
-Yesterday's batch: Ada, Bo, and Cy. Bo's classification call failed (HTTP
-500 from the model provider); the code fell back to a safe default. Cy's
-call succeeded but took over six seconds. Doc 02 shows the program in full;
-the whole set uses it.
+A small BAML program processes customer signups: one function takes a
+batch of customers and, for each, validates the email address and calls an
+LLM function to classify the customer as Approve, Review, or Reject.
+Yesterday's batch contained Ada, Bo, and Cy. Bo's classification call
+failed (HTTP 500 from the model provider) and the code fell back to a safe
+default. Cy's call succeeded but took over six seconds. Doc 02 shows the
+program in full; every document in this set uses it.
 
-**1. What happened across every call?** Every call, not only the recorded
-ones. Did the classifier fail once today or a thousand times? Is six
-seconds an outlier or the new normal? These are counting questions; a count
-over a sample is a guess.
+**1. What happened across every call?** Did the classifier fail once today
+or a thousand times? Is six seconds an outlier or typical? These are
+counting questions, and a count over a sample is an estimate, not an
+answer.
 
 **2. Which exact call went wrong, and what surrounded it?** For Bo: the
 failing call, its actual input, the actual provider error, and what else
 the program was doing at that moment. Totals cannot answer this.
 
-**3. What is missing?** Acting on the first two answers requires a complete
-picture: did the collection machinery itself drop anything? A dashboard
-that silently omits lost data looks authoritative, making it worse than no
-dashboard.
+**3. What is missing?** Acting on the first two answers requires knowing
+whether the collection machinery itself dropped anything. A dashboard that
+silently omits lost data misleads the reader.
 
 **4. Which code produced it?** Behavior changed; did the code? Each
 observation should carry the exact compiled version that produced it, so
-"before vs after the change" is a query, not archaeology.
+before/after comparisons are a query rather than a reconstruction.
 
 Every telemetry system trades off across these four questions
 (**telemetry**: the data a system emits about its own execution). LLM
-applications make the trade-offs unusually painful, and each existing tool
+applications make the trade-offs unusually hard, and each existing tool
 gives up a property Studio requires.
 
 ## What LLM applications do to telemetry
 
-Ordinary web services stress telemetry lightly: the interesting data is
-mostly *shape* (status codes, latencies, counts) and payloads are small.
-LLM applications invert this in four ways.
+For ordinary web services, the interesting telemetry is mostly *shape*
+(status codes, latencies, counts) and payloads are small. LLM applications
+differ in four ways.
 
-**The interesting data is values.** An LLM misbehavior asks "why did it
-decide that?"; the answer lives in the exact prompt, the structured output,
-and the error body. For Bo, the useful evidence is the provider's error and
-the triggering input, not a status code.
+**The interesting data is values.** Diagnosing an LLM misbehavior requires
+the exact prompt, the structured output, and the error body. For Bo, the
+useful evidence is the provider's error and the triggering input, not a
+status code.
 
-**Values are big.** A rendered prompt is commonly kilobytes; contexts and
-structured outputs can be far larger. A pipeline built for 200-byte log
-lines refuses, truncates, or charges heavily for a 20 KB prompt, multiplied
-by every call.
+**Values are large.** A rendered prompt is commonly kilobytes; contexts
+and structured outputs can be far larger. A pipeline built for 200-byte
+log lines refuses, truncates, or charges heavily for a 20 KB prompt on
+every call.
 
 **Failures are bursty.** During a model-provider outage, calls fail
 everywhere at once, exactly when telemetry is under maximum load and most
-needed. A design that captures little in good times and floods in bad times
-behaves worst at the worst moment. <!-- founder-concerns:
+needed. A design that captures little in good times and floods in bad
+times performs worst when it matters most. <!-- founder-concerns:
 Aaron's error-storm concern; local answer in docs 03/04, hosted in 08 -->
 
 **Capture completeness is a first-class question.** People act on this
 data: refund a customer, roll back a model, declare an incident. That
-requires knowing the evidence is complete; question 3 is not optional in
-this domain.
+requires knowing whether the evidence is complete, so question 3 is not
+optional in this domain.
 
 ## The three-way tension
 
@@ -89,11 +88,11 @@ Three properties are needed at once:
    that follows program shape rather than call volume, no cost explosion
    during incidents.
 
-The natural first design, one record per call with its data attached,
-delivers the first two and fails the third: cost proportional to traffic
-by construction (doc 03).
+The most direct design, one record per call with its data attached,
+delivers the first two and fails the third: its cost is proportional to
+traffic by construction (doc 03).
 
-The industry's standard escapes each give up one property:
+The industry's standard alternatives each give up one property:
 
 ```text
 one record per call   ->  complete + exact,  cost unbounded
@@ -136,10 +135,10 @@ How each behaves on the properties Studio needs:
 | **Langfuse, Logfire** | one row per recorded step | traffic-proportional; record less or sample | inline payloads, costly at size | absent from the data | hand-maintained tag | no completeness contract |
 | **Braintrust** | one row per logged call | proportional to what is logged | per-call capture, the practical bar | out of frame | out of frame | silent about the rest |
 
-The short cells compress real nuance: OTel sampling turns "how many
-failures today?" into an estimate and loses rare events first; a Langfuse
+The short cells compress real nuance. OTel sampling turns "how many
+failures today?" into an estimate and loses rare events first. A Langfuse
 helper left undecorated does not exist in the data, so no counting
-question covers it; Braintrust answers "how good are my outputs?", not
+question covers it. Braintrust answers "how good are my outputs?", not
 "what happened across every call?". Logfire inherits the OTel span model,
 so its attribute-size and sampling constraints apply directly.
 
@@ -156,53 +155,52 @@ goals is to collect everything Braintrust does, and more.
 <!-- founder-concerns A2: recorded aspiration, not a recorded product
 analysis -->
 
-### The instrumentation bet
+### Instrumentation is chosen in advance
 
-Which trace was needed becomes clear only after the incident. Every
-instrument-first tool places that bet upfront (choose what to wrap, log,
-and sample), and the incident lands wherever nothing was looking. A system
-that counts every call and preserves interesting moments on its own
-removes the bet: what matters next month does not have to be known today.
+Which trace is needed becomes clear only after an incident. Every
+instrument-first tool requires choosing upfront what to wrap, log, and
+sample, and incidents regularly occur where nothing was instrumented. A
+system that counts every call and preserves interesting moments
+automatically does not require predicting what will matter.
 
 ### What all three share
 
-One architecture underlies all three: a library bolted onto the
-application emits one record per interesting operation to a backend. Three
-consequences cannot be patched from outside: cost proportional to traffic,
-so completeness is traded for affordability; values as blobs attached to
-records, truncated or dropped under pressure; a recording layer that
-neither sees what it did not wrap nor accounts for what it lost.
+One architecture underlies all three: a library added to the application
+emits one record per interesting operation to a backend. Three
+consequences cannot be fixed from outside: cost proportional to traffic,
+so completeness is traded for affordability; values stored as blobs
+attached to records, truncated or dropped under pressure; and a recording
+layer that neither sees what it did not wrap nor accounts for what it
+lost.
 <!-- fresh analysis: review; synthesis of the subsections above -->
 These are reasonable designs for tools that must work with any program in
-any language. The answer to "why not build on one of these?" is
-structural: the properties Studio needs are the properties a bolt-on
-cannot provide.
+any language. Studio does not build on one of them because the properties
+it needs are properties a bolt-on cannot provide.
 
-## The BAML wager
+## What the BAML runtime changes
 
 BAML programs run inside a runtime the language owns. The runtime sees
 every function call without wrapping, all spawned concurrent work and its
 suspensions, and every value crossing a function boundary as a typed BAML
-value, not a string blob. It knows the exact compiled program, down to a
-content hash, because it compiled it. This substrate is on the current
-branch today and always on **[built]**.
+value rather than a string blob. It knows the exact compiled program, down
+to a content hash, because it compiled it. This substrate is on the
+current branch today and always on **[built]**.
 <!-- vocabulary-lifecycle §8m: the branch has the
 profiler/CAS/history/fold substrate; ROOT ledger "Built core" -->
 
-Project Studio's wager: **telemetry should be a language feature, not a
-bolt-on.** An observer inside the runtime answers all four questions.
+Studio's position is that telemetry should be a language feature, not a
+bolt-on. An observer inside the runtime answers all four questions.
 In-process summaries count every call without shipping records anywhere
-(question 1). Evidence is selected on purpose, not by a 1% chance
+(question 1). Evidence is selected by policy, not by a 1% chance
 (question 2). The observer knows what it dropped, so "what is missing?"
 is a query (question 3). The runtime knows its compiled identity
-**[built]**, so no hand-updated version tag (question 4). Querying all of
-it in plain SQL through one `baml query` command is the committed v1
-target **[v1]**.
+**[built]**, so no hand-updated version tag is needed (question 4).
+Querying all of it in plain SQL through one `baml query` command is the
+committed v1 target **[v1]**.
 <!-- decisions-plan: D1–D16 settled; baml query not on the
 branch today -->
 
-The design is one idea used twice, and it is the spine of the whole set:
-**count everything, keep the interesting ones**.
+The design has two layers, used throughout this set:
 
 ```text
 layer 1: the complete layer
@@ -225,18 +223,18 @@ survives: Studio's design includes bounded, policy-aware OTLP export,
 explicitly lossy and never the source of truth **[v1]**.
 <!-- vocabulary-lifecycle §1 History verbs: Export emits
 JSON/JSONL/Parquet/OTLP projections, core bounded export; prior-art-history
-§5.6 --> Studio's data can be sent *to* an OTel world; it could not have
-been collected through one.
+§5.6 --> Studio's data can be exported *to* an OTel world; it could not
+have been collected through one.
 
 ## Runs, not traces
 
-The industry word "trace" would mislead here. A *trace* is a correlation:
-spans from scattered instrumentation, stitched together afterward by
-propagated IDs, usually sampled. Studio's unit is a **run**: the runtime's
-own record of one top-level execution, recorded whole by the runtime that
-executed it, with any loss declared by the recorder itself. Nothing needs
-stitching. Doc 02 defines runs precisely (with processes, calls, and
-threads) using the batch program above.
+Studio does not use the industry word "trace". A *trace* is a
+correlation: spans from scattered instrumentation, stitched together
+afterward by propagated IDs, usually sampled. Studio's unit is a **run**:
+the runtime's own record of one top-level execution, recorded whole by
+the runtime that executed it, with any loss declared by the recorder
+itself. Nothing needs stitching. Doc 02 defines runs precisely (with
+processes, calls, and threads) using the batch program above.
 
 ## Terms defined here
 

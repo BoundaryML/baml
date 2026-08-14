@@ -16,10 +16,10 @@ from the decisions-plan fact pack; skill-as-test framing from
 founder-concerns (Vaibhav #17). -->
 
 Everything between the rulers below is a **draft skill**: self-contained
-instructions an agent loads before querying Studio. If the skill reads
-clean on its own, the vocabulary compresses. If it needs the other ten
-docs, the names have failed and need revision before the table schemas
-freeze.
+instructions an agent loads before querying Studio. The skill doubles as
+an acceptance test for the vocabulary: if it is usable on its own, the
+terminology is sufficient; if it requires the other ten docs, the names
+need revision before the table-schema freeze.
 
 The skill targets the v1 table schemas. The SQL semantics are settled, but the
 `baml query` command that executes them is not on the branch today
@@ -161,7 +161,8 @@ the query outcome before reporting anything.
 
 ---
 
-The skill is about a hundred lines. Run against this set's toy program:
+The skill is about a hundred lines. Run against this set's example
+program:
 the first example returns three rows, `ClassifyCustomer` with Bo's handled
 failure from `run1` plus the two frames of Eve's one unhandled error from
 `run3`. The second, pointed at `run3`, returns `call3` and the root
@@ -171,10 +172,9 @@ all three are healthy.
 
 Every line traces to one doc: the terms to 02 through 07, the table
 schemas to 09, the rules and examples to 10, the outcome contract to 06.
-The skill
-adds nothing new, by design: the test is whether the names carry the
-system's meaning densely enough that a newcomer, human or agent, needs
-only this file. On this draft, they do.
+The skill adds nothing new, by design. The test is whether a newcomer,
+human or agent, can query Studio from this file alone; on this draft,
+they can.
 
 **Terms defined here:** none, deliberately. This doc compresses what the
 set already taught.

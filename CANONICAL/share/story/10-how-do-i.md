@@ -10,9 +10,9 @@
   in `retained_calls` are a policy-selected lower bound.
 - A result stream with no query outcome is not a successful answer.
 
-Docs 00–09 taught concepts; this doc gives recipes: the question in plain
-English, the SQL, the queried table's grain, why the query is fast, the
-answer's shape. A **complete** answer comes from the complete layer, where
+Docs 00–09 defined the concepts; this doc gives recipes: the question in
+plain English, the SQL, the queried table's grain, why the query is fast,
+and the answer's shape. A **complete** answer comes from the complete layer, where
 every call is counted; a **selected** answer from the retained layer,
 which keeps only interesting calls; a **bounded** answer from a tape dump,
 an exact slice around one moment.
@@ -120,7 +120,7 @@ cheap).
 Do not count rows in `retained_calls` for the failure panel: that counts
 *retained* failures, a policy-selected subset and a lower bound. Traffic
 and error totals always come from the complete layer. This is the most
-common trap in the table schemas.
+common mistake when using these tables.
 
 ## 3. Drill into one failure
 
@@ -256,7 +256,7 @@ ORDER BY input_tokens + output_tokens DESC;
 
 One row of `llm_usage` is one run × calling context × provider × model:
 aggregate arithmetic, no prompt bodies touched. Cost is your token price
-times these sums. The `token_state` filter excludes the toy `run1` row,
+times these sums. The `token_state` filter excludes the example `run1` row,
 whose state is `partial` because Bo's failed call reported no usage:
 absence of tokens is not zero tokens. A cost dashboard therefore needs a
 coverage panel:
@@ -284,7 +284,7 @@ ORDER BY tokens DESC
 LIMIT 20;
 ```
 
-The top (and only) toy row is the one the spend panel excluded: `run1`'s
+The top (and only) example row is the one the spend panel excluded: `run1`'s
 `ClassifyCustomer` context (`context4`), ranked by the tokens it did
 report. Take its (run, context) key and descend:
 
@@ -327,7 +327,7 @@ One row of `thread_edges` is one parent-context-to-spawned-function
 relationship per run: the complete layer's view of fan-out. The time range
 spans revisions, so grouping follows recipe 5's rule: `definition_key`
 through the `functions` join, never the per-revision `child_function_id`,
-which would split one logical function across revisions. On the toy data,
+which would split one logical function across revisions. On the example data,
 `WriteAuditLog` shows one cancellation: `run3`'s audit thread, cancelled
 when the run ended early. Cancellation is deliberately not a *default*
 tape trigger (doc 04; the trigger matrix is still freeze work **[open]**),
@@ -390,7 +390,7 @@ A dashboard built from these table schemas follows four rules:
   `projectedThrough` on any time-ranged panel (illustrative names; they
   freeze with table-schema v1 **[open]**).
 
-For doc 09's earn-its-keep test: recipes 1–8 exercise `runs`,
+Table coverage: recipes 1–8 exercise `runs`,
 `calling_contexts`, `retained_calls`, `tape_dumps`, `functions`,
 `llm_usage`, `thread_edges`, and `evidence_issues`. Three tables appear in
 no ranking recipe and serve navigation instead: `revisions` resolves a
@@ -402,8 +402,8 @@ drill-down counterpart, conditional with the other thread tables
 
 ## The agent loop
 
-The recipes are written for people, but the surface is deliberately
-agent-shaped **[v1]**. An agent's loop: discover the table schemas with
+The recipes are written for people, but the surface is designed to be
+used by agents as well **[v1]**. An agent's loop: discover the table schemas with
 `baml query --schema` (relations, grains, column semantics); query the
 complete layer first; descend to retained evidence only for examples;
 check the query outcome before asserting anything; cite claims by `run_id`
