@@ -352,25 +352,14 @@ mod contextual_keyword_identifier_tests {
 mod header_comment_position_tests {
     use super::*;
 
-    /// `//#` header comments must survive formatting in class bodies,
-    /// implements blocks, and between match arms — not only at statement
-    /// boundaries inside blocks.
+    /// `//#` header comments survive formatting before expression functions and remain structural
+    /// at executable statement and arm boundaries.
     #[test]
-    fn test_header_comments_in_member_positions() {
+    fn test_header_comments_in_expression_positions() {
         let source = concat!(
-            "class Dog {\n",
-            "    //# fields\n",
-            "    name: string,\n",
-            "    //# behavior\n",
-            "    implements Sound {\n",
-            "        //# conformance\n",
-            "        function sound(self) -> string {\n",
-            "            \"woof\"\n",
-            "        }\n",
-            "    }\n",
-            "}\n",
-            "\n",
+            "//# classify values\n",
             "function classify(n: int) -> string {\n",
+            "    //# statements\n",
             "    match (n) {\n",
             "        //# leading header\n",
             "        0 => \"zero\",\n",
@@ -381,11 +370,10 @@ mod header_comment_position_tests {
         );
         let options = FormatOptions::default();
         let formatted = format(source, &options)
-            .expect("formatter should accept header comments in member positions");
+            .expect("formatter should accept header comments in expression positions");
         for needle in [
-            "//# fields",
-            "//# behavior",
-            "//# conformance",
+            "//# classify values",
+            "//# statements",
             "//# leading header",
             "//# between arms",
         ] {
@@ -393,6 +381,22 @@ mod header_comment_position_tests {
         }
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_header_comments_in_declarations_are_rejected() {
+        for source in [
+            "interface Animal {\n    //# methods\n    function name(self) -> string\n}\n",
+            "//# generated text\nfunction generate() -> string {\n    client \"openai/gpt-4o\"\n    prompt `hello`\n}\n",
+        ] {
+            let error = format(source, &FormatOptions::default())
+                .expect_err("formatter should reject headers outside expression functions");
+
+            assert!(
+                format!("{error:?}")
+                    .contains("header comments (`//#`) are only allowed in expression functions")
+            );
+        }
     }
 }
 
