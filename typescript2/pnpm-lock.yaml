@@ -1001,6 +1001,9 @@ importers:
       '@codingame/monaco-vscode-api':
         specifier: ^25.1.2
         version: 25.1.2
+      '@codingame/monaco-vscode-editor-api':
+        specifier: ^25.1.2
+        version: 25.1.2
       '@codingame/monaco-vscode-environment-service-override':
         specifier: ^25.1.2
         version: 25.1.2
@@ -1032,6 +1035,9 @@ importers:
         specifier: ^25.1.2
         version: 25.1.2
       '@codingame/monaco-vscode-storage-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-textmate-service-override':
         specifier: ^25.1.2
         version: 25.1.2
       '@codingame/monaco-vscode-view-banner-service-override':

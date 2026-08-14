@@ -67,6 +67,15 @@ fn compile_baml_src() -> Program {
     baml_project::testing::compile_multi_file(&refs)
 }
 
+#[test]
+fn promptfiddle_demo_compiles() {
+    // This cross-workspace include is intentionally cursed: Prompt Fiddle owns
+    // the demo, while this existing test binary checks it without a second compiler build.
+    let source =
+        include_str!("../../../../typescript2/app-promptfiddle/src/playground/default.baml");
+    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", source)]);
+}
+
 /// Strip the `ns_` prefix from a directory segment if it names a valid namespace
 /// (BAML identifier: starts with a letter or `_`, rest alphanumeric or `_`),
 /// matching the compiler's `file_package` rule. Returns `None` otherwise.

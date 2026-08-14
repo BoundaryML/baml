@@ -83,6 +83,7 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
+            ':typescript2/app-promptfiddle/src/playground/default.baml' \
             ':scripts/baml-language-version' \
             ':scripts/baml-wrapper-version' \
             ':scripts/baml-release-manifests' \

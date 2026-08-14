@@ -40,6 +40,8 @@ onWasmPanic((message) => {
 
 import initWasm, {
   BamlWasmRuntime,
+  version as bamlVersion,
+  commitHash,
   getBuildTime,
   type LspNotification,
   type LspRequest,
@@ -214,7 +216,7 @@ async function executeExec(
   // Build the command line: program + args joined. just-bash executes this
   // as a shell script so we must quote args to prevent shell splitting.
   const quotedArgs = (args ?? [])
-    .map((a) => "'" + a.replace(/'/g, "'\\''") + "'")
+    .map((a) => `'${a.replace(/'/g, "'\\''")}'`)
     .join(' ');
   const commandLine = quotedArgs ? `${program} ${quotedArgs}` : program;
 
@@ -724,7 +726,7 @@ self.onmessage = async (event: MessageEvent) => {
     connection.listen();
 
     // 7. Notify main thread and push initial state
-    postOut({ type: 'ready' });
+    postOut({ commit: commitHash(), type: 'ready', version: bamlVersion() });
     postOut({ type: 'buildTime', value: getBuildTime() });
     // notifySourceChanged();
 
