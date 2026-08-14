@@ -60,22 +60,36 @@ function null_handling.$init_test_ns_null_handling_null_handling(registry: testi
     pop 1
     load_var registry
     load_const "root.null_handling"
-    load_const "combined_compound_assign_rhs_null_uses_fallback"
+    load_const "null_coalesce_rhs_reads_old_local_destination"
     make_closure .<lambda($init_test_ns_null_handling_null_handling, 8)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.null_handling"
-    load_const "combined_compound_assign_lhs_null_skips"
+    load_const "null_coalesce_rhs_reads_old_field_destination"
     make_closure .<lambda($init_test_ns_null_handling_null_handling, 9)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.null_handling"
-    load_const "multi_union_optional_access"
+    load_const "combined_compound_assign_rhs_null_uses_fallback"
     make_closure .<lambda($init_test_ns_null_handling_null_handling, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.null_handling"
+    load_const "combined_compound_assign_lhs_null_skips"
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.null_handling"
+    load_const "multi_union_optional_access"
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 12)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -101,28 +115,24 @@ function null_handling.nh_combined_lhs_null(node: null_handling.NhNode | null, i
     load_var items
     load_const 0
     load_array_element
-    store_var _6
     jump L3
 
   L2:
     load_const null
-    store_var _6
 
   L3:
-    load_var _6
-    store_var _5
-    load_var _6
+    store_var_load_var _6
     load_const null
     cmp_op ==
     pop_jump_if_false L4
     load_const 1
-    store_var _5
+    store_var _6
 
   L4:
     load_var node
     copy 0
     load_field .0
-    load_var _5
+    load_var _6
     bin_op +
     store_field .0
 
@@ -163,28 +173,24 @@ function null_handling.nh_combined_rhs_null(node: null_handling.NhNode | null, i
     load_var items
     load_const 0
     load_array_element
-    store_var _6
     jump L3
 
   L2:
     load_const null
-    store_var _6
 
   L3:
-    load_var _6
-    store_var _5
-    load_var _6
+    store_var_load_var _6
     load_const null
     cmp_op ==
     pop_jump_if_false L4
     load_const 1
-    store_var _5
+    store_var _6
 
   L4:
     load_var node
     copy 0
     load_field .0
-    load_var _5
+    load_var _6
     bin_op +
     store_field .0
 
@@ -301,15 +307,18 @@ function null_handling.nh_null_coalesce_lazy_non_null(value: int | null) -> int 
     store_var ?2
     load_const 0
     store_deref ?2
-    load_var2 1 1
+    load_var value
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_var counter
     make_closure .<lambda(nh_null_coalesce_lazy_non_null, 0)>, 1
     call_indirect
+    store_var _5
 
   L0:
+    load_var _5
     load_const 10
     mul_int
     load_deref ?2
@@ -323,19 +332,64 @@ function null_handling.nh_null_coalesce_null_lhs(value: int | null) -> int {
     store_var ?2
     load_const 0
     store_deref ?2
-    load_var2 1 1
+    load_var value
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_var counter
     make_closure .<lambda(nh_null_coalesce_null_lhs, 0)>, 1
     call_indirect
+    store_var _5
 
   L0:
+    load_var _5
     load_const 10
     mul_int
     load_deref ?2
     add_int
+    return
+}
+
+function null_handling.nh_null_coalesce_self_field(input: int | null) -> int {
+    load_const 9
+    load_const null
+    load_const null
+    load_const null
+    init_instance user.null_handling.NhNode .value, .next, .children, .labels
+    store_var node
+    load_var input
+    store_var_load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var node
+    load_field .value
+    store_var _3
+
+  L0:
+    load_var2 2 3
+    store_field .value
+    load_var node
+    load_field .value
+    return
+}
+
+function null_handling.nh_null_coalesce_self_local(input: int | null) -> int {
+    load_const 7
+    store_var value
+    load_var input
+    store_var_load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var value
+    store_var _3
+
+  L0:
+    load_var _3
+    store_var value
+    load_var value
     return
 }
 

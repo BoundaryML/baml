@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3212
 ---
 function baml.Array.at(self: #0[], index: int) -> #0 | null {
 }
@@ -2153,8 +2152,7 @@ function baml.env.get(key: string) -> string | null {
 function baml.env.get_or_panic(key: string) -> string {
     load_var key
     sys_op baml.env.get
-    store_var _2
-    load_var2 2 2
+    store_var_load_var _2
     load_const null
     cmp_op ==
     pop_jump_if_false L0
@@ -2162,8 +2160,10 @@ function baml.env.get_or_panic(key: string) -> string {
     load_var key
     bin_op +
     call baml.sys.panic
+    store_var _2
 
   L0:
+    load_var _2
     return
 }
 
@@ -2175,24 +2175,22 @@ function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
   L0:
     load_var key
     call baml.env.get_or_panic
-    store_var _0
-    jump L2
+    jump L3
 
   L1:
     load_var key
     sys_op baml.env.get
-    store_var _3
-    load_var _3
-    store_var _0
-    load_var _3
+    store_var_load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L2
     load_const ""
-    store_var _0
+    store_var _3
 
   L2:
-    load_var _0
+    load_var _3
+
+  L3:
     return
 }
 
@@ -6078,27 +6076,24 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_field ._nanoseconds
     load_var disambiguation
     sys_op baml.time._tz_to_instant
-    store_var _29
-    load_var _29
+    store_var _30
+    load_var _30
     load_const null
     cmp_op ==
     pop_jump_if_false L3
     jump L5
 
   L3:
-    load_var _29
-    store_var _35
-    load_var _35
-    store_var _34
-    load_var _35
+    load_var _30
+    store_var_load_var _36
     load_const null
     cmp_op ==
     pop_jump_if_false L4
     load_const 0n
-    store_var _34
+    store_var _36
 
   L4:
-    load_var _34
+    load_var _36
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
@@ -6150,18 +6145,15 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
 
   L10:
     load_var earlier
-    store_var _25
-    load_var _25
-    store_var _24
-    load_var _25
+    store_var_load_var _25
     load_const null
     cmp_op ==
     pop_jump_if_false L11
     load_const 0n
-    store_var _24
+    store_var _25
 
   L11:
-    load_var _24
+    load_var _25
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
@@ -6400,18 +6392,15 @@ function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.
 
   L0:
     load_var _3
-    store_var _9
-    load_var _9
-    store_var _8
-    load_var _9
+    store_var_load_var _9
     load_const null
     cmp_op ==
     pop_jump_if_false L1
     load_const 0
-    store_var _8
+    store_var _9
 
   L1:
-    load_var _8
+    load_var _9
     init_instance baml.time.TimeZoneOffset ._nanoseconds
     return
 
@@ -6895,41 +6884,36 @@ function baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    jump L2
 
   L0:
     load_var _2
-    store_var _8
-    load_var _8
-    store_var _0
-    load_var _8
+    store_var_load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const ""
+    store_var _9
+
+  L1:
+    load_var _9
+    jump L4
+
+  L2:
+    load_var self
+    load_field ._offset_ns
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L3
-    load_const ""
-    store_var _0
-    jump L3
-
-  L1:
-    load_var self
-    load_field ._offset_ns
-    store_var _5
-    load_var _5
-    store_var _4
-    load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
     load_const 0
-    store_var _4
-
-  L2:
-    load_var _4
-    init_instance baml.time.TimeZoneOffset ._nanoseconds
-    store_var _0
+    store_var _5
 
   L3:
-    load_var _0
+    load_var _5
+    init_instance baml.time.TimeZoneOffset ._nanoseconds
+
+  L4:
     return
 }
 
@@ -6944,78 +6928,65 @@ function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) 
 
   L0:
     load_var _2
-    store_var iana
-    load_var iana
-    store_var _10
-    load_var _10
-    store_var _9
-    load_var _10
+    store_var_load_var iana
+    store_var_load_var _11
     load_const null
     cmp_op ==
     pop_jump_if_false L1
     load_const ""
-    store_var _9
+    store_var _11
 
   L1:
-    load_var2 7 1
+    load_var2 6 1
     load_field ._nanoseconds
     sys_op baml.time._tz_offset_at
-    store_var _8
-    load_var _8
+    store_var _9
+    load_var _9
     load_const null
     cmp_op ==
     pop_jump_if_false L2
     jump L4
 
   L2:
-    load_var _8
-    store_var _20
-    load_var _20
-    store_var _19
-    load_var _20
+    load_var _9
+    store_var_load_var _23
     load_const null
     cmp_op ==
     pop_jump_if_false L3
     load_const 0
-    store_var _19
+    store_var _23
 
   L3:
-    load_var _19
+    load_var _23
     init_instance baml.time.TimeZoneOffset ._nanoseconds
     jump L8
 
   L4:
     load_var iana
-    store_var _16
-    load_var _16
-    store_var _15
-    load_var _16
+    store_var_load_var _18
     load_const null
     cmp_op ==
     pop_jump_if_false L5
     load_const ""
-    store_var _15
+    store_var _18
 
   L5:
-    load_var _15
+    load_var _18
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
 
   L6:
     load_var self
     load_field ._offset_ns
-    store_var _5
-    load_var _5
-    store_var _4
-    load_var _5
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L7
     load_const 0
-    store_var _4
+    store_var _5
 
   L7:
-    load_var _4
+    load_var _5
     init_instance baml.time.TimeZoneOffset ._nanoseconds
 
   L8:
