@@ -1,0 +1,233 @@
+name: "B-1545 macOS SIGABRT investigation (non-required)"
+
+on:
+  # A newly added workflow_dispatch workflow cannot be dispatched until it is
+  # present on the default branch. This branch-scoped push trigger makes the
+  # investigation runnable from its draft PR without creating a required
+  # signal or consuming macOS runners for unrelated branches.
+  push:
+    branches:
+      - "sxlijin/B-1545-investigate-macOS-SIGABRT"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: "b1545-macos-sigabrt-${{ github.ref }}"
+  cancel-in-progress: true
+
+env:
+  # Keep these values aligned with cargo-tests.reusable.yaml. The investigation
+  # workflow deliberately starts with the production job's build and test
+  # configuration before varying any factor.
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+  CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+  RUSTUP_MAX_RETRIES: 10
+  RUST_BACKTRACE: full
+
+jobs:
+  baseline:
+    name: "B-1545 investigation (non-required) / baseline ${{ matrix.trial }}"
+    runs-on: blacksmith-6vcpu-macos-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        trial: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "macos-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      - name: "Record runner and toolchain diagnostics"
+        run: |
+          set -euo pipefail
+
+          diagnostic_dir="$RUNNER_TEMP/b1545-diagnostics"
+          mkdir -p "$diagnostic_dir"
+          touch "$diagnostic_dir/investigation-start"
+
+          {
+            date -u
+            sw_vers
+            uname -a
+            sysctl -n hw.ncpu hw.logicalcpu hw.physicalcpu hw.memsize
+            sysctl kern.corefile kern.coredump kern.sugid_coredump 2>&1 || true
+            ulimit -a
+            df -h
+            vm_stat
+          } > "$diagnostic_dir/runner.txt" 2>&1
+
+          {
+            rustup show
+            rustc -vV
+            cargo -vV
+            cargo nextest --version
+            sccache --version
+            sccache --show-stats
+          } > "$diagnostic_dir/toolchain.txt" 2>&1
+
+          {
+            printf 'GITHUB_ACTIONS=%s\n' "$GITHUB_ACTIONS"
+            printf 'GITHUB_EVENT_NAME=%s\n' "$GITHUB_EVENT_NAME"
+            printf 'GITHUB_REF=%s\n' "$GITHUB_REF"
+            printf 'GITHUB_SHA=%s\n' "$GITHUB_SHA"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            printf 'RUNNER_ENVIRONMENT=%s\n' "$RUNNER_ENVIRONMENT"
+            printf 'RUNNER_NAME=%s\n' "$RUNNER_NAME"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUST_BACKTRACE=%s\n' "$RUST_BACKTRACE"
+            printf 'RUSTC_WRAPPER=%s\n' "${RUSTC_WRAPPER:-}"
+            printf 'SCCACHE_VERSION=%s\n' "${SCCACHE_VERSION:-}"
+            printf 'SCCACHE_S3_KEY_PREFIX=%s\n' "${SCCACHE_S3_KEY_PREFIX:-}"
+          } > "$diagnostic_dir/environment-allowlist.txt"
+
+          ulimit -c unlimited || true
+
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      - name: "Record nextest test metadata"
+        run: |
+          set -euo pipefail
+
+          cargo nextest list --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge --message-format json-pretty > "$RUNNER_TEMP/b1545-diagnostics/nextest-list.json"
+          cargo metadata --format-version 1 > "$RUNNER_TEMP/b1545-diagnostics/cargo-metadata.json"
+        working-directory: baml_language
+
+      - name: "Run tests with nextest (production baseline)"
+        run: |
+          set -euo pipefail
+
+          diagnostic_dir="$RUNNER_TEMP/b1545-diagnostics"
+          (
+            while true; do
+              date -u
+              sysctl -n vm.loadavg hw.memsize
+              vm_stat
+              ps -axo pid,ppid,%cpu,%mem,rss,vsz,state,etime,command
+              sleep 5
+            done
+          ) > "$diagnostic_dir/resources-during-nextest.txt" 2>&1 &
+          sampler_pid=$!
+          trap 'kill "$sampler_pid" 2>/dev/null || true; wait "$sampler_pid" 2>/dev/null || true' EXIT
+
+          set +e
+          cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge 2>&1 | tee "$diagnostic_dir/nextest-output.log"
+          nextest_status=${PIPESTATUS[0]}
+          set -e
+
+          kill "$sampler_pid" 2>/dev/null || true
+          wait "$sampler_pid" 2>/dev/null || true
+          trap - EXIT
+          exit "$nextest_status"
+        working-directory: baml_language
+
+      - name: "Collect post-test diagnostics"
+        if: always()
+        run: |
+          set -euo pipefail
+
+          diagnostic_dir="$RUNNER_TEMP/b1545-diagnostics"
+          crash_dir="$HOME/Library/Logs/DiagnosticReports"
+          mkdir -p "$diagnostic_dir/crash-reports" "$diagnostic_dir/nextest-state"
+
+          {
+            date -u
+            sysctl -n vm.loadavg hw.memsize
+            vm_stat
+            df -h
+            ps -axo pid,ppid,%cpu,%mem,rss,vsz,state,etime,command
+          } > "$diagnostic_dir/post-test-resources.txt" 2>&1
+
+          if [[ -d "$crash_dir" ]]; then
+            find "$crash_dir" -maxdepth 1 -type f -newer "$diagnostic_dir/investigation-start" -exec cp {} "$diagnostic_dir/crash-reports/" \;
+          fi
+
+          if [[ -d baml_language/target/nextest ]]; then
+            cp -R baml_language/target/nextest/. "$diagnostic_dir/nextest-state/"
+          fi
+
+          find /cores -maxdepth 1 -type f -newer "$diagnostic_dir/investigation-start" -exec cp {} "$diagnostic_dir/crash-reports/" \; 2>/dev/null || true
+          sccache --show-stats --stats-format json > "$diagnostic_dir/sccache-stats.json" 2>&1 || true
+          cp /tmp/sccache-baml.log "$diagnostic_dir/sccache.log" 2>/dev/null || true
+
+      - name: "Upload B-1545 investigation diagnostics"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "b1545-macos-baseline-${{ matrix.trial }}-${{ github.run_attempt }}"
+          path: ${{ runner.temp }}/b1545-diagnostics/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-macos.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "sccache-stats-test-macos-baseline-${{ matrix.trial }}-${{ github.run_attempt }}"
+          path: sccache-stats-test-macos.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-macos.html
+        working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "cargo-timings-test-macos-baseline-${{ matrix.trial }}-${{ github.run_attempt }}"
+          path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
+          if-no-files-found: ignore
