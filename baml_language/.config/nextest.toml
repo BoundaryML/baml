@@ -30,14 +30,6 @@ test-group = 'rust-sdk-fixture'
 filter = 'package(=sdk_test_csharp)'
 test-group = 'csharp-sdk-fixture'
 
-# Engine-backed tests have a substantial per-process footprint. Account for it
-# globally on macOS, where running one per CPU can exhaust the runner and abort
-# an otherwise healthy test process.
-[[profile.default.overrides]]
-filter = 'package(=bex_engine) | package(=baml_bridge)'
-platform = { host = 'cfg(target_os = "macos")' }
-threads-required = 3
-
 # Node TypeScript tests build only the native bridge and Node fixture packages.
 [scripts.setup.typescript_pnpm_unix]
 command = './sdk_tests/crates/typescript/setup.sh'
