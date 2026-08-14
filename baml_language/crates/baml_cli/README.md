@@ -14,7 +14,7 @@ Successful queries and GraphQL request failures use the standard GraphQL JSON re
 
 The schema is a stable GraphQL-facing snapshot, not a serialization of Salsa, CST, AST, HIR, or manifest structs. Renaming or reorganizing compiler internals therefore does not imply a schema change.
 
-The query root exposes `project`, `packages`, `files`, `definitions`, `classes`, `enums`, `functions`, `clients`, `generators`, and `tests`. Collection fields accept practical exact-match filters such as `name`, `kind`, or `path`; they deliberately do not implement a general text index. Results use deterministic source order with path and name tie-breakers.
+The query root exposes `project`, `packages`, `files`, `definitions`, `classes`, `enums`, `typeAliases`, `functions`, `clients`, `generators`, and `tests`. Collection fields accept practical exact-match filters such as `name`, `kind`, or `path`; they deliberately do not implement a general text index. Results use deterministic source order with path and name tie-breakers.
 
 Definitions expose names, qualified names, documentation where present, attributes where present, and source locations. Classes traverse to fields, enums to values, functions to parameters and return or throws types, tests to targeted functions, packages and files to their contained definitions, and every typed declaration traverses a recursive `TypeRef`. `TypeRef` includes a stable kind, source spelling, named path, nested element/key/value/member types as applicable, attributes, and location. Source locations use project-relative slash-separated paths plus 1-based start and end line and column values.
 

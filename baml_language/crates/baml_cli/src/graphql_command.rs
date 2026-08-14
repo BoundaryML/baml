@@ -25,7 +25,7 @@ use serde_json::{Value as JsonValue, json};
 use text_size::TextRange;
 
 /// Query a BAML project's source model with GraphQL.
-#[derive(Args, Clone, Debug)]
+#[derive(Args, Clone, Debug, Default)]
 #[command(after_long_help = "\
 Examples:
   Query classes and fields:
@@ -86,6 +86,7 @@ impl GraphqlArgs {
         }
     }
 
+    /// Execute the selected query, schema, or introspection mode.
     fn run_inner(&self) -> Result<crate::ExitCode> {
         let schema = schema();
         if self.schema {
@@ -182,6 +183,7 @@ impl GraphqlArgs {
         write_graphql_response(&response)
     }
 
+    /// Read the query document from its selected input source.
     fn read_query(&self) -> Result<String> {
         if let Some(query) = &self.query {
             return Ok(query.clone());
@@ -201,6 +203,7 @@ impl GraphqlArgs {
         Ok(query)
     }
 
+    /// Parse and validate the optional JSON variables object.
     fn parse_variables(&self) -> Result<Option<juniper::InputValue<DefaultScalarValue>>> {
         let Some(raw) = &self.variables else {
             return Ok(None);
@@ -217,6 +220,7 @@ impl GraphqlArgs {
 
 type Schema = RootNode<QueryRoot, EmptyMutation<GraphqlContext>, EmptySubscription<GraphqlContext>>;
 
+/// Construct the stateless GraphQL schema.
 fn schema() -> Schema {
     Schema::new(
         QueryRoot,
@@ -232,6 +236,7 @@ struct GraphqlContext {
 impl juniper::Context for GraphqlContext {}
 
 impl GraphqlContext {
+    /// Construct the projectless context used by introspection.
     fn empty() -> Self {
         Self {
             snapshot: Snapshot::empty(),
@@ -284,18 +289,21 @@ impl QueryRoot {
             .collect()
     }
 
+    /// Classes, optionally filtered by exact unqualified name.
     fn classes(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphClass> {
         filter_name(&context.snapshot.project.classes, name.as_deref(), |item| {
             &item.name
         })
     }
 
+    /// Enums, optionally filtered by exact unqualified name.
     fn enums(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphEnum> {
         filter_name(&context.snapshot.project.enums, name.as_deref(), |item| {
             &item.name
         })
     }
 
+    /// Type aliases, optionally filtered by exact unqualified name.
     fn type_aliases(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphTypeAlias> {
         filter_name(
             &context.snapshot.project.type_aliases,
@@ -304,6 +312,7 @@ impl QueryRoot {
         )
     }
 
+    /// User-defined functions, optionally filtered by exact unqualified name.
     fn functions(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphFunction> {
         filter_name(
             &context.snapshot.project.functions,
@@ -312,12 +321,14 @@ impl QueryRoot {
         )
     }
 
+    /// Clients, optionally filtered by exact unqualified name.
     fn clients(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphClient> {
         filter_name(&context.snapshot.project.clients, name.as_deref(), |item| {
             &item.name
         })
     }
 
+    /// Manifest generators, optionally filtered by exact name.
     fn generators(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphGenerator> {
         filter_name(
             &context.snapshot.project.generators,
@@ -326,6 +337,7 @@ impl QueryRoot {
         )
     }
 
+    /// Legacy declarative tests, optionally filtered by exact name.
     fn tests(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphTest> {
         filter_name(&context.snapshot.project.tests, name.as_deref(), |item| {
             &item.name
@@ -333,6 +345,7 @@ impl QueryRoot {
     }
 }
 
+/// Apply a shared optional exact-name filter while preserving source order.
 fn filter_name<'a, T>(
     items: &'a [T],
     name: Option<&str>,
@@ -633,6 +646,7 @@ struct Snapshot {
 }
 
 impl Snapshot {
+    /// Construct the projectless snapshot used only for schema introspection.
     fn empty() -> Self {
         Self {
             project: GraphProject {
@@ -653,6 +667,7 @@ impl Snapshot {
     }
 }
 
+/// Build the stable owned GraphQL model from compiler and manifest data.
 fn build_snapshot(
     db: &ProjectDatabase,
     root: &Path,
@@ -740,10 +755,12 @@ fn build_snapshot(
     Ok(Snapshot { project })
 }
 
+/// Convert one user source file and its AST into the public GraphQL model.
 fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourceFile {
     let source_path = file.path(db);
     let path = normalized_relative_path(&source_path, root);
     let source = file.text(db);
+    let line_index = LineIndex::new(source);
     let package_info = baml_compiler2_hir::file_package::file_package(db, file);
     let namespace = package_info
         .namespace_path
@@ -770,7 +787,7 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                     name: item.name.to_string(),
                     qualified_name: qualified_name(&namespace, item.name.as_str()),
                     documentation: item.docstring.clone(),
-                    attributes: graph_attributes(&path, source, &item.attributes),
+                    attributes: graph_attributes(&path, source, &line_index, &item.attributes),
                     generic_parameters: item
                         .generic_params
                         .iter()
@@ -782,18 +799,25 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                         .map(|field| GraphField {
                             name: field.name.to_string(),
                             documentation: field.docstring.clone(),
-                            attributes: graph_attributes(&path, source, &field.attributes),
-                            type_ref: graph_type_ref(&path, source, &field.type_expr),
-                            location: source_location(&path, source, field.span),
+                            attributes: graph_attributes(
+                                &path,
+                                source,
+                                &line_index,
+                                &field.attributes,
+                            ),
+                            type_ref: graph_type_ref(&path, source, &line_index, &field.type_expr),
+                            location: source_location(&path, source, &line_index, field.span),
                         })
                         .collect(),
                     methods: item
                         .methods
                         .iter()
                         .filter(|method| method.metadata.origin == FunctionOrigin::UserDefined)
-                        .map(|method| graph_function(&path, source, &namespace, method))
+                        .map(|method| {
+                            graph_function(&path, source, &line_index, &namespace, method)
+                        })
                         .collect(),
-                    location: source_location(&path, source, item.span),
+                    location: source_location(&path, source, &line_index, item.span),
                 };
                 output.definitions.push(class.summary());
                 output
@@ -828,18 +852,23 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                     name: item.name.to_string(),
                     qualified_name: qualified_name(&namespace, item.name.as_str()),
                     documentation: item.docstring.clone(),
-                    attributes: graph_attributes(&path, source, &item.attributes),
+                    attributes: graph_attributes(&path, source, &line_index, &item.attributes),
                     values: item
                         .variants
                         .iter()
                         .map(|value| GraphEnumValue {
                             name: value.name.to_string(),
                             documentation: value.docstring.clone(),
-                            attributes: graph_attributes(&path, source, &value.attributes),
-                            location: source_location(&path, source, value.span),
+                            attributes: graph_attributes(
+                                &path,
+                                source,
+                                &line_index,
+                                &value.attributes,
+                            ),
+                            location: source_location(&path, source, &line_index, value.span),
                         })
                         .collect(),
-                    location: source_location(&path, source, item.span),
+                    location: source_location(&path, source, &line_index, item.span),
                 };
                 output.definitions.push(graph_enum.summary());
                 output
@@ -862,14 +891,14 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                     type_ref: item
                         .type_expr
                         .as_ref()
-                        .map(|ty| graph_type_ref(&path, source, ty)),
-                    location: source_location(&path, source, item.span),
+                        .map(|ty| graph_type_ref(&path, source, &line_index, ty)),
+                    location: source_location(&path, source, &line_index, item.span),
                 };
                 output.definitions.push(alias.summary());
                 output.type_aliases.push(alias);
             }
             Item::Function(item) if item.metadata.origin == FunctionOrigin::UserDefined => {
-                let function = graph_function(&path, source, &namespace, item);
+                let function = graph_function(&path, source, &line_index, &namespace, item);
                 output.definitions.push(function.summary());
                 output
                     .definitions
@@ -893,10 +922,10 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                         .map(|property| GraphConfigEntry {
                             key: property.key.to_string(),
                             value: property.value.clone(),
-                            location: source_location(&path, source, property.span),
+                            location: source_location(&path, source, &line_index, property.span),
                         })
                         .collect(),
-                    location: source_location(&path, source, item.span),
+                    location: source_location(&path, source, &line_index, item.span),
                 };
                 output.definitions.push(client.summary());
                 output.clients.push(client);
@@ -906,7 +935,7 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                     name: item.name.to_string(),
                     qualified_name: qualified_name(&namespace, item.name.as_str()),
                     properties: Vec::new(),
-                    location: source_location(&path, source, item.span),
+                    location: source_location(&path, source, &line_index, item.span),
                 };
                 output.definitions.push(client.summary());
                 output.clients.push(client);
@@ -924,7 +953,7 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                             value_json: test_arg_json(value).to_string(),
                         })
                         .collect(),
-                    location: source_location(&path, source, item.span),
+                    location: source_location(&path, source, &line_index, item.span),
                 };
                 output.definitions.push(test.summary());
                 output.tests.push(test);
@@ -934,8 +963,8 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                 name: item.name.to_string(),
                 qualified_name: qualified_name(&namespace, item.name.as_str()),
                 documentation: item.docstring.clone(),
-                attributes: graph_attributes(&path, source, &item.attributes),
-                location: source_location(&path, source, item.span),
+                attributes: graph_attributes(&path, source, &line_index, &item.attributes),
+                location: source_location(&path, source, &line_index, item.span),
             }),
             Item::TemplateString(item) => output.definitions.push(GraphDefinition {
                 kind: DefinitionKind::TemplateString,
@@ -943,7 +972,7 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
                 qualified_name: qualified_name(&namespace, item.name.as_str()),
                 documentation: None,
                 attributes: Vec::new(),
-                location: source_location(&path, source, item.span),
+                location: source_location(&path, source, &line_index, item.span),
             }),
             Item::Function(_) | Item::Let(_) | Item::RetryPolicy(_) | Item::ImplementsFor(_) => {}
         }
@@ -951,9 +980,11 @@ fn build_file(db: &ProjectDatabase, root: &Path, file: SourceFile) -> GraphSourc
     output
 }
 
+/// Convert a user-defined function or method.
 fn graph_function(
     path: &str,
     source: &str,
+    line_index: &LineIndex,
     namespace: &[String],
     item: &FunctionDef,
 ) -> GraphFunction {
@@ -965,7 +996,7 @@ fn graph_function(
         name: item.name.to_string(),
         qualified_name: qualified_name(namespace, item.name.as_str()),
         documentation: item.docstring.clone(),
-        attributes: graph_attributes(path, source, &item.attributes),
+        attributes: graph_attributes(path, source, line_index, &item.attributes),
         generic_parameters: item
             .generic_params
             .iter()
@@ -979,26 +1010,27 @@ fn graph_function(
                 type_ref: param
                     .type_expr
                     .as_ref()
-                    .map(|ty| graph_type_ref(path, source, ty)),
+                    .map(|ty| graph_type_ref(path, source, line_index, ty)),
                 has_default: param.default.is_some(),
-                location: source_location(path, source, param.span),
+                location: source_location(path, source, line_index, param.span),
             })
             .collect(),
         return_type: item
             .return_type
             .as_ref()
-            .map(|ty| graph_type_ref(path, source, ty)),
+            .map(|ty| graph_type_ref(path, source, line_index, ty)),
         throws_type: item
             .throws
             .as_ref()
-            .map(|ty| graph_type_ref(path, source, ty)),
+            .map(|ty| graph_type_ref(path, source, line_index, ty)),
         is_llm,
         client_name,
-        location: source_location(path, source, item.span),
+        location: source_location(path, source, line_index, item.span),
     }
 }
 
-fn graph_type_ref(path: &str, source: &str, ty: &TypeExpr) -> GraphTypeRef {
+/// Convert a recursive compiler type expression into a stable type reference.
+fn graph_type_ref(path: &str, source: &str, line_index: &LineIndex, ty: &TypeExpr) -> GraphTypeRef {
     let mut output = GraphTypeRef {
         kind: TypeRefKind::Unknown,
         display: ty.to_string(),
@@ -1011,8 +1043,8 @@ fn graph_type_ref(path: &str, source: &str, ty: &TypeExpr) -> GraphTypeRef {
         parameter_types: Vec::new(),
         return_type: None,
         throws_type: None,
-        attributes: graph_attributes(path, source, ty.kind.attrs()),
-        location: source_location(path, source, ty.span),
+        attributes: graph_attributes(path, source, line_index, ty.kind.attrs()),
+        location: source_location(path, source, line_index, ty.span),
     };
     match &ty.kind {
         TypeExprKind::Path {
@@ -1031,7 +1063,7 @@ fn graph_type_ref(path: &str, source: &str, ty: &TypeExpr) -> GraphTypeRef {
                         .iter()
                         .map(|binding| binding.ty.as_ref()),
                 )
-                .map(|ty| graph_type_ref(path, source, ty))
+                .map(|ty| graph_type_ref(path, source, line_index, ty))
                 .collect();
         }
         TypeExprKind::AssociatedTypeProjection {
@@ -1042,10 +1074,10 @@ fn graph_type_ref(path: &str, source: &str, ty: &TypeExpr) -> GraphTypeRef {
         } => {
             output.kind = TypeRefKind::AssociatedType;
             output.name = Some(member.to_string());
-            output.element_type = Some(Box::new(graph_type_ref(path, source, base)));
+            output.element_type = Some(Box::new(graph_type_ref(path, source, line_index, base)));
             output.member_types = interface
                 .iter()
-                .map(|ty| graph_type_ref(path, source, ty))
+                .map(|ty| graph_type_ref(path, source, line_index, ty))
                 .collect();
         }
         TypeExprKind::Int { .. } => output.kind = TypeRefKind::Int,
@@ -1063,22 +1095,22 @@ fn graph_type_ref(path: &str, source: &str, ty: &TypeExpr) -> GraphTypeRef {
         }
         TypeExprKind::Optional { inner, .. } => {
             output.kind = TypeRefKind::Optional;
-            output.element_type = Some(Box::new(graph_type_ref(path, source, inner)));
+            output.element_type = Some(Box::new(graph_type_ref(path, source, line_index, inner)));
         }
         TypeExprKind::List { inner, .. } => {
             output.kind = TypeRefKind::List;
-            output.element_type = Some(Box::new(graph_type_ref(path, source, inner)));
+            output.element_type = Some(Box::new(graph_type_ref(path, source, line_index, inner)));
         }
         TypeExprKind::Map { key, value, .. } => {
             output.kind = TypeRefKind::Map;
-            output.key_type = Some(Box::new(graph_type_ref(path, source, key)));
-            output.value_type = Some(Box::new(graph_type_ref(path, source, value)));
+            output.key_type = Some(Box::new(graph_type_ref(path, source, line_index, key)));
+            output.value_type = Some(Box::new(graph_type_ref(path, source, line_index, value)));
         }
         TypeExprKind::Union { variants, .. } => {
             output.kind = TypeRefKind::Union;
             output.member_types = variants
                 .iter()
-                .map(|ty| graph_type_ref(path, source, ty))
+                .map(|ty| graph_type_ref(path, source, line_index, ty))
                 .collect();
         }
         TypeExprKind::Literal { value, .. } => {
@@ -1094,12 +1126,12 @@ fn graph_type_ref(path: &str, source: &str, ty: &TypeExpr) -> GraphTypeRef {
             output.kind = TypeRefKind::Function;
             output.parameter_types = params
                 .iter()
-                .map(|param| graph_type_ref(path, source, &param.ty))
+                .map(|param| graph_type_ref(path, source, line_index, &param.ty))
                 .collect();
-            output.return_type = Some(Box::new(graph_type_ref(path, source, ret)));
+            output.return_type = Some(Box::new(graph_type_ref(path, source, line_index, ret)));
             output.throws_type = throws
                 .as_ref()
-                .map(|ty| Box::new(graph_type_ref(path, source, ty)));
+                .map(|ty| Box::new(graph_type_ref(path, source, line_index, ty)));
         }
         TypeExprKind::BuiltinUnknown { .. } | TypeExprKind::Unknown { .. } => {
             output.kind = TypeRefKind::Unknown;
@@ -1112,7 +1144,13 @@ fn graph_type_ref(path: &str, source: &str, ty: &TypeExpr) -> GraphTypeRef {
     output
 }
 
-fn graph_attributes(path: &str, source: &str, attributes: &[RawAttribute]) -> Vec<GraphAttribute> {
+/// Convert raw source attributes without exposing compiler AST structs.
+fn graph_attributes(
+    path: &str,
+    source: &str,
+    line_index: &LineIndex,
+    attributes: &[RawAttribute],
+) -> Vec<GraphAttribute> {
     attributes
         .iter()
         .map(|attribute| GraphAttribute {
@@ -1123,20 +1161,22 @@ fn graph_attributes(path: &str, source: &str, attributes: &[RawAttribute]) -> Ve
                 .map(|argument| GraphAttributeArgument {
                     key: argument.key.as_ref().map(ToString::to_string),
                     value: argument.value.clone(),
-                    location: source_location(path, source, argument.span),
+                    location: source_location(path, source, line_index, argument.span),
                 })
                 .collect(),
-            location: source_location(path, source, attribute.span),
+            location: source_location(path, source, line_index, attribute.span),
         })
         .collect()
 }
 
+/// Read the project name and generator declarations from the manifest.
 fn build_generators(source: Option<&str>) -> Result<(Option<String>, Vec<GraphGenerator>)> {
     let Some(source) = source else {
         return Ok((None, Vec::new()));
     };
     let manifest =
         crate::manifest::parse(source).context("failed to parse baml.toml for GraphQL")?;
+    let line_index = LineIndex::new(source);
     let project_name = manifest.package.and_then(|package| package.name);
     let generators = manifest
         .generator
@@ -1150,13 +1190,14 @@ fn build_generators(source: Option<&str>) -> Result<(Option<String>, Vec<GraphGe
                 output_dir: generator.output_dir,
                 naming_convention: generator.naming_convention.map(|value| value.into_inner()),
                 sdk_import_path: generator.sdk_import_path.map(|value| value.into_inner()),
-                location: source_location("baml.toml", source, range),
+                location: source_location("baml.toml", source, &line_index, range),
             }
         })
         .collect();
     Ok((project_name, generators))
 }
 
+/// Convert manifest byte ranges to compiler-compatible text ranges.
 fn text_range(range: std::ops::Range<usize>) -> TextRange {
     TextRange::new(
         u32::try_from(range.start).unwrap_or(u32::MAX).into(),
@@ -1164,6 +1205,7 @@ fn text_range(range: std::ops::Range<usize>) -> TextRange {
     )
 }
 
+/// Convert legacy declarative test values to deterministic JSON.
 fn test_arg_json(value: &TestArgValue) -> JsonValue {
     match value {
         TestArgValue::Null => JsonValue::Null,
@@ -1272,6 +1314,7 @@ impl GraphTest {
     }
 }
 
+/// Construct a searchable definition projection for a richer entity.
 fn definition_summary(
     kind: DefinitionKind,
     name: &str,
@@ -1290,6 +1333,7 @@ fn definition_summary(
     }
 }
 
+/// Join a namespace and local name using the public dotted convention.
 fn qualified_name(namespace: &[String], name: &str) -> String {
     if namespace.is_empty() {
         name.to_string()
@@ -1298,11 +1342,43 @@ fn qualified_name(namespace: &[String], name: &str) -> String {
     }
 }
 
-fn source_location(path: &str, source: &str, range: TextRange) -> SourceLocation {
+/// Reusable line starts for location lookups within one source file.
+struct LineIndex {
+    line_starts: Vec<usize>,
+}
+
+impl LineIndex {
+    /// Index the byte offset at which each source line begins.
+    fn new(source: &str) -> Self {
+        let mut line_starts = vec![0];
+        line_starts.extend(source.match_indices('\n').map(|(index, _)| index + 1));
+        Self { line_starts }
+    }
+
+    /// Resolve a byte offset to a 1-based Unicode-aware line and column.
+    fn line_column(&self, source: &str, offset: usize) -> (i32, i32) {
+        let offset = floor_char_boundary(source, offset.min(source.len()));
+        let line = self.line_starts.partition_point(|start| *start <= offset);
+        let line_start = self.line_starts[line.saturating_sub(1)];
+        let column = source[line_start..offset].chars().count() + 1;
+        (
+            i32::try_from(line).unwrap_or(i32::MAX),
+            i32::try_from(column).unwrap_or(i32::MAX),
+        )
+    }
+}
+
+/// Convert a byte range into a public source location.
+fn source_location(
+    path: &str,
+    source: &str,
+    line_index: &LineIndex,
+    range: TextRange,
+) -> SourceLocation {
     let start = usize::from(range.start()).min(source.len());
     let end = usize::from(range.end()).min(source.len());
-    let (start_line, start_column) = line_column(source, start);
-    let (end_line, end_column) = line_column(source, end);
+    let (start_line, start_column) = line_index.line_column(source, start);
+    let (end_line, end_column) = line_index.line_column(source, end);
     SourceLocation {
         path: path.to_string(),
         start_line,
@@ -1312,22 +1388,7 @@ fn source_location(path: &str, source: &str, range: TextRange) -> SourceLocation
     }
 }
 
-fn line_column(source: &str, offset: usize) -> (i32, i32) {
-    let offset = floor_char_boundary(source, offset.min(source.len()));
-    let before = &source[..offset];
-    let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let column = before
-        .rsplit_once('\n')
-        .map_or(before, |(_, line)| line)
-        .chars()
-        .count()
-        + 1;
-    (
-        i32::try_from(line).unwrap_or(i32::MAX),
-        i32::try_from(column).unwrap_or(i32::MAX),
-    )
-}
-
+/// Move an arbitrary byte offset back to a safe UTF-8 boundary.
 fn floor_char_boundary(source: &str, mut offset: usize) -> usize {
     while !source.is_char_boundary(offset) {
         offset = offset.saturating_sub(1);
@@ -1335,6 +1396,7 @@ fn floor_char_boundary(source: &str, mut offset: usize) -> usize {
     offset
 }
 
+/// Produce a slash-separated project-relative path across OS path forms.
 fn normalized_relative_path(path: &Path, root: &Path) -> String {
     if let Ok(relative) = path.strip_prefix(root) {
         return normalize_path(relative);
@@ -1355,6 +1417,7 @@ fn normalized_relative_path(path: &Path, root: &Path) -> String {
     }
 }
 
+/// Normalize separators and Windows verbatim prefixes for GraphQL output.
 fn normalize_path(path: &Path) -> String {
     let path = path.to_string_lossy().replace('\\', "/");
     if let Some(path) = path.strip_prefix("//?/UNC/") {
@@ -1364,6 +1427,7 @@ fn normalize_path(path: &Path) -> String {
     }
 }
 
+/// Convert a compiler diagnostic into the deterministic error extension shape.
 fn diagnostic_json(
     db: &ProjectDatabase,
     root: &Path,
@@ -1375,9 +1439,11 @@ fn diagnostic_json(
             .get_source_files()
             .into_iter()
             .find(|file| file.file_id(db) == span.file_id)?;
+        let line_index = LineIndex::new(file.text(db));
         Some(source_location(
             &normalized_relative_path(path, root),
             file.text(db),
+            &line_index,
             span.range,
         ))
     });
@@ -1389,6 +1455,7 @@ fn diagnostic_json(
     })
 }
 
+/// Serialize a source location using GraphQL-style camelCase field names.
 fn location_json(location: SourceLocation) -> JsonValue {
     json!({
         "path": location.path,
@@ -1399,6 +1466,7 @@ fn location_json(location: SourceLocation) -> JsonValue {
     })
 }
 
+/// Write one compact standard GraphQL response and choose its exit code.
 fn write_graphql_response(
     response: &GraphQLResponse<DefaultScalarValue>,
 ) -> Result<crate::ExitCode> {
@@ -1414,6 +1482,7 @@ fn write_graphql_response(
     })
 }
 
+/// Write a deterministic command or BAML validation error on stdout.
 fn write_error_response(
     code: &str,
     message: &str,
@@ -1444,9 +1513,11 @@ mod tests {
 
     #[test]
     fn line_columns_are_one_based_and_unicode_aware() {
-        assert_eq!(line_column("αβ\nvalue", 0), (1, 1));
-        assert_eq!(line_column("αβ\nvalue", "α".len()), (1, 2));
-        assert_eq!(line_column("αβ\nvalue", "αβ\n".len()), (2, 1));
+        let source = "αβ\nvalue";
+        let line_index = LineIndex::new(source);
+        assert_eq!(line_index.line_column(source, 0), (1, 1));
+        assert_eq!(line_index.line_column(source, "α".len()), (1, 2));
+        assert_eq!(line_index.line_column(source, "αβ\n".len()), (2, 1));
     }
 
     #[test]
@@ -1458,6 +1529,35 @@ mod tests {
         let unc_path = Path::new(r"\\?\UNC\server\share\project\main.baml");
         let unc_root = Path::new(r"\\server\share\project");
         assert_eq!(normalized_relative_path(unc_path, unc_root), "main.baml");
+    }
+
+    #[test]
+    fn variables_must_be_a_json_object() {
+        let args = GraphqlArgs {
+            variables: Some("[1]".to_string()),
+            ..GraphqlArgs::default()
+        };
+        let error = args
+            .parse_variables()
+            .expect_err("array variables must be rejected");
+        assert!(error.to_string().contains("JSON object"), "{error:#}");
+    }
+
+    #[test]
+    fn missing_query_file_reports_its_path() {
+        let temp = tempfile::tempdir().expect("create temp directory");
+        let path = temp.path().join("missing.graphql");
+        let args = GraphqlArgs {
+            query_file: Some(path.clone()),
+            ..GraphqlArgs::default()
+        };
+        let error = args
+            .read_query()
+            .expect_err("missing query file must be rejected");
+        assert!(
+            format!("{error:#}").contains(&path.display().to_string()),
+            "{error:#}"
+        );
     }
 
     #[test]
