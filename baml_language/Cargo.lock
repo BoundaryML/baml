@@ -1096,6 +1096,7 @@ dependencies = [
  "anyhow",
  "axum",
  "baml_compiler2_visualization",
+ "baml_path",
  "baml_version",
  "base64",
  "bex_events",
@@ -1120,6 +1121,7 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
@@ -1141,6 +1143,14 @@ dependencies = [
  "libsui",
  "sys_native",
  "tokio",
+]
+
+[[package]]
+name = "baml_path"
+version = "0.0.0-beta"
+dependencies = [
+ "thiserror 2.0.18",
+ "vfs",
 ]
 
 [[package]]
@@ -1295,8 +1305,9 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_type",
+ "ignore",
  "salsa",
- "walkdir",
+ "tempfile",
 ]
 
 [[package]]
@@ -1437,6 +1448,7 @@ dependencies = [
  "baml_db",
  "baml_fmt",
  "baml_lsp2_actions",
+ "baml_path",
  "baml_project",
  "baml_type",
  "baml_version",

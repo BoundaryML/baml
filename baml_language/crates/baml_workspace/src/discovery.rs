@@ -1,64 +1,166 @@
 //! File discovery utilities.
 
-use walkdir::WalkDir;
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
+
+use ignore::WalkBuilder;
 
 /// Discover all BAML files in a project directory.
 ///
-/// Returns paths sorted for deterministic ordering.
-pub fn discover_baml_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+/// Standard ignore files and hidden entries are respected, directory links are
+/// followed, and individual traversal errors are skipped. The returned paths
+/// are sorted for deterministic ordering.
+pub fn discover_baml_files(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
-    for entry in WalkDir::new(root)
-        .follow_links(true)
-        .into_iter()
-        .filter_map(std::result::Result::ok)
-    {
+    let mut builder = WalkBuilder::new(root);
+    builder.standard_filters(true).follow_links(true);
+
+    for entry in builder.build().filter_map(Result::ok) {
         let path = entry.path();
-
-        // Skip hidden directories and common ignore patterns
-        if path.is_dir() {
-            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if name.starts_with('.') || name == "node_modules" || name == "target" {
-                continue;
-            }
-        }
-
-        // Collect .baml files
-        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("baml") {
-            files.push(path.to_path_buf());
+        if path.is_file() && path.extension() == Some(OsStr::new("baml")) {
+            files.push(entry.into_path());
         }
     }
 
-    files.sort(); // Ensure deterministic ordering
+    files.sort();
     files
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, io::Write};
+    use std::{fs, io, path::Path};
 
     use super::*;
 
+    fn write(path: &Path) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "// test\n").unwrap();
+    }
+
     #[test]
-    fn test_discovers_baml_files() {
-        let temp_dir = std::env::temp_dir().join("baml_workspace_test");
-        let _ = fs::remove_dir_all(&temp_dir);
-        fs::create_dir_all(&temp_dir).unwrap();
+    fn discovers_baml_files_in_deterministic_order() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let nested = root.join("nested/a.baml");
+        let top_level = root.join("z.baml");
+        write(&top_level);
+        write(&nested);
+        write(&root.join("not-baml.txt"));
 
-        // Create test files
-        let mut file1 = fs::File::create(temp_dir.join("test1.baml")).unwrap();
-        file1.write_all(b"// test").unwrap();
+        assert_eq!(discover_baml_files(root), vec![nested, top_level]);
+    }
 
-        let mut file2 = fs::File::create(temp_dir.join("test2.baml")).unwrap();
-        file2.write_all(b"// test").unwrap();
+    #[test]
+    fn respects_standard_ignores_and_gitignore_negation() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir(root.join(".git")).unwrap();
+        fs::write(
+            root.join(".gitignore"),
+            concat!(
+                "node_modules/\n",
+                "target/\n",
+                "generated/*\n",
+                "!generated/keep.baml\n",
+                "!main.baml\n",
+            ),
+        )
+        .unwrap();
+        fs::write(root.join(".ignore"), "local/\n").unwrap();
 
-        let files = discover_baml_files(&temp_dir);
+        let main = root.join("main.baml");
+        let kept = root.join("generated/keep.baml");
+        for path in [
+            &main,
+            &kept,
+            &root.join(".hidden/hidden.baml"),
+            &root.join("generated/drop.baml"),
+            &root.join("local/ignored.baml"),
+            &root.join("node_modules/pkg/ignored.baml"),
+            &root.join("target/debug/ignored.baml"),
+        ] {
+            write(path);
+        }
 
-        assert_eq!(files.len(), 2);
-        assert!(files.iter().any(|p| p.file_name().unwrap() == "test1.baml"));
-        assert!(files.iter().any(|p| p.file_name().unwrap() == "test2.baml"));
+        assert_eq!(discover_baml_files(root), vec![kept, main]);
+    }
 
-        // Cleanup
-        let _ = fs::remove_dir_all(&temp_dir);
+    #[test]
+    fn applies_gitignore_in_a_jj_repository() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir(root.join(".jj")).unwrap();
+        fs::write(root.join(".gitignore"), "ignored/\n!main.baml\n").unwrap();
+
+        let main = root.join("main.baml");
+        write(&main);
+        write(&root.join("ignored/ignored.baml"));
+
+        assert_eq!(discover_baml_files(root), vec![main]);
+    }
+
+    #[test]
+    fn missing_roots_are_empty() {
+        let temp = tempfile::tempdir().unwrap();
+        let missing = temp.path().join("missing");
+
+        assert!(discover_baml_files(&missing).is_empty());
+    }
+
+    #[cfg(any(unix, windows))]
+    fn link_directory(original: &Path, link: &Path) -> io::Result<()> {
+        #[cfg(unix)]
+        return std::os::unix::fs::symlink(original, link);
+
+        #[cfg(windows)]
+        return std::os::windows::fs::symlink_dir(original, link);
+    }
+
+    #[test]
+    #[cfg(any(unix, windows))]
+    fn follows_linked_directories() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("root");
+        let outside = temp.path().join("outside");
+        fs::create_dir(&root).unwrap();
+        write(&root.join("main.baml"));
+        write(&outside.join("linked.baml"));
+
+        if let Err(error) = link_directory(&outside, &root.join("linked")) {
+            #[cfg(windows)]
+            if error.raw_os_error() == Some(1314) {
+                // Windows requires Developer Mode or symlink privileges.
+                return;
+            }
+            panic!("failed to create directory link: {error}");
+        }
+
+        assert_eq!(
+            discover_baml_files(&root),
+            vec![root.join("linked/linked.baml"), root.join("main.baml")]
+        );
+    }
+
+    #[test]
+    #[cfg(any(unix, windows))]
+    fn skips_link_errors_and_keeps_discovered_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("root");
+        let main = root.join("main.baml");
+        write(&main);
+
+        if let Err(error) = link_directory(&root, &root.join("loop")) {
+            #[cfg(windows)]
+            if error.raw_os_error() == Some(1314) {
+                // Windows requires Developer Mode or symlink privileges.
+                return;
+            }
+            panic!("failed to create directory loop: {error}");
+        }
+
+        assert_eq!(discover_baml_files(&root), vec![main]);
     }
 }

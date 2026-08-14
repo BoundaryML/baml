@@ -1,5 +1,5 @@
 [package]
-name = "baml_workspace"
+name = "baml_path"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,6 +9,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
+description = "Typed native and virtual path handling for BAML"
 
 [lib]
 doctest = false
@@ -17,10 +18,8 @@ doctest = false
 workspace = true
 
 [dependencies]
-baml_base = { workspace = true }
-baml_type = { workspace = true }
-ignore = { workspace = true }
-salsa = { workspace = true }
+thiserror = { workspace = true }
+vfs = { workspace = true }
 
-[dev-dependencies]
-tempfile = { workspace = true }
+[package.metadata.ci]
+wasm_support = true
