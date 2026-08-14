@@ -856,6 +856,9 @@ navigation:
           - page: "Timeout Configuration"
             slug: timeouts
             path: 03-reference/baml/clients/timeouts.mdx
+          - page: "Connection Pooling"
+            slug: connection-pooling
+            path: 03-reference/baml/clients/connection-pooling.mdx
           - page: "Retry Policy"
             path: 03-reference/baml/clients/strategy/retry.mdx
           - page: "Fallback"

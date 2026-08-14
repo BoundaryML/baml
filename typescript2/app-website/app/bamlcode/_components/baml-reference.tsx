@@ -67,7 +67,8 @@ const SECTIONS: Section[] = [
   {
     snippets: [
       { code: 's.length()', note: 'number of characters' },
-      { code: 's.char_at(i)   s.substring(a, b)' },
+      { code: 's.at(i)', note: 'returns string? (null if out of range)' },
+      { code: 's.slice(a, b)' },
       { code: 's.split(",")   s.to_lower_case()' },
       { code: 'c.is_alphanumeric()   c == "a"' },
     ],

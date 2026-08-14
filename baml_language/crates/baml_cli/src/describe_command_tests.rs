@@ -1031,7 +1031,10 @@ fn render_describe_methods_respect_budget() {
         "generous budgets should still show full method details:\n{full}"
     );
 
-    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 97);
+    // A characterization value: it tracks `baml.String`'s rendered size, so a
+    // stdlib surface change moves it. What the test pins is the *property* the
+    // helper checks — the hinted budget is minimal and renders everything.
+    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 99);
 }
 
 #[test]

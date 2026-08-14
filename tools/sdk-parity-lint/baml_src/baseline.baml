@@ -9,7 +9,7 @@ function split_markdown_row(line: string, source: string) -> string[] {
     let escaped = false;
     let index = 1;
     while (index < line.length() - 1) {
-        let char = line.char_at(index);
+        let char = line.slice(index, index + 1);
         if (escaped) {
             current += char;
             escaped = false;

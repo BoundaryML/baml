@@ -2608,7 +2608,7 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     bb15: {
         _42 = copy _29;
         _43 = copy _23;
-        _41 = call const fn baml.String.substring(copy _1, copy _42, copy _43) -> [bb16];
+        _41 = call const fn baml.String.slice(copy _1, copy _42, copy _43) -> [bb16];
     }
 
     bb16: {
@@ -2939,7 +2939,7 @@ fn testing.pattern_may_match_descendant(pattern: string, prefix: string) -> bool
     bb2: {
         _6 = copy _4;
         _8 = copy _6;
-        _7 = call const fn baml.String.substring(copy _1, const 0_i64, copy _8) -> [bb3];
+        _7 = call const fn baml.String.slice(copy _1, const 0_i64, copy _8) -> [bb3];
     }
 
     bb3: {
@@ -4269,7 +4269,7 @@ fn testing.failure_matches_selected(selected: string, failed_names: string[]) ->
 
     bb6: {
         _9 = copy _10 - copy _11;
-        _8 = call const fn baml.String.substring(copy _1, const 0_i64, copy _9) -> [bb7];
+        _8 = call const fn baml.String.slice(copy _1, const 0_i64, copy _9) -> [bb7];
     }
 
     bb7: {

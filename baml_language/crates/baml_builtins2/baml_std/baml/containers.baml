@@ -274,9 +274,17 @@ class Array<T> {
     }
 
     /// Joins all elements into a string, separated by `separator`. Each element is converted to a string via its `to_string` representation.
-    //baml:vm
     function join(self, separator: string) -> string throws never {
-        $rust_function
+        match (self) {
+            [] => "",
+            [let first, ..let rest] => {
+                let joined = string.from(first);
+                for (let item in rest) {
+                    joined = joined + separator + string.from(item);
+                }
+                joined
+            },
+        }
     }
 
     /// Applies `f` to each element and returns an array of the results.

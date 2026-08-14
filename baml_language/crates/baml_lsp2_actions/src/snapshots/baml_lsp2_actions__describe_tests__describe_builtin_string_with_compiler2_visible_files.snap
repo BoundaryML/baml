@@ -38,17 +38,19 @@ methods:
   /// Splits the string into lines, recognizing both `\n` and `\r\n` as line
   function lines(self) -> string[]
   /// Returns the substring between two **character** offsets `[start, end)`.
-  function substring(self, start: int, end: int) -> string
+  function slice(self, start: int, end: int) -> string
   /// Replaces the first occurrence of `search` with `replacement`.
   function replace(self, search: string, replacement: string) -> string
   /// Returns the **character index** of the first occurrence of `search`, or
   function index_of(self, search: string) -> int | null
-  function char_at(self, index: int) -> string
-  function code_point_at(self, index: int) -> int
+  /// Returns the **character index** of the start of the last occurrence of `search`, or
+  function last_index_of(self, search: string) -> int | null
+  /// Returns the character at the given **codepoint index** as a
+  function at(self, index: int) -> string | null
+  /// Returns the **Unicode code point** of the character at the given codepoint
+  function code_point_at(self, index: int) -> int | null
   /// Returns a new string that repeats `self` the given number of times.
   function repeat(self, count: int) -> string
-  /// Returns true if the string contains the given `substring`.
-  function matches(self, substring: string) -> bool
   /// Replaces all occurrences of `search` with `replacement`.
   function replace_all(self, search: string, replacement: string) -> string
   /// Returns true if every character is numeric per Unicode (general categories

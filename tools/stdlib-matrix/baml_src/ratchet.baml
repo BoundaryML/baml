@@ -20,7 +20,7 @@ function short_sha(sha: string) -> string {
     if (sha.length() <= 12) {
         sha
     } else {
-        `${sha.substring(0, 12)}…`
+        `${sha.slice(0, 12)}…`
     }
 }
 

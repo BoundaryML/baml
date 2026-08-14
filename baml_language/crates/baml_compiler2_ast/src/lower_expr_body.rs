@@ -366,7 +366,7 @@ pub(crate) fn synthesize_llm_spec_body(
     client_spec: &crate::lower_cst::LlmClientSpec,
     out_type: Option<crate::ast::TypeExpr>,
     tools_value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
-    prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
+    prompt: &crate::lower_cst::LlmPromptLiteral,
     span: TextRange,
 ) -> (
     ExprBody,
@@ -409,11 +409,11 @@ pub(crate) fn synthesize_llm_spec_body(
     //
     // Binding references are span-position-checked against their `let`'s
     // visibility window, and the template's `${ctx.…}` interps keep their real
-    // source ranges inside the backtick — so the synthesized `let ctx` must
-    // sit at an empty range at the backtick's *start*, before every reference
+    // source ranges inside the literal — so the synthesized `let ctx` must sit
+    // at an empty range at the literal's *start*, before every reference
     // (mirrors the accumulator lets in `elaborate_tagged_body`).
     let of_param_name = Name::new(" __spec_output_format");
-    let prompt_lambda_span = prompt_backtick.syntax().span_range();
+    let prompt_lambda_span = prompt.span_range();
     let prompt_start = TextRange::empty(prompt_lambda_span.start());
     let of_ref = ctx.alloc_expr(Expr::Path(vec![of_param_name.clone()]), prompt_start);
     let spec_ctx_obj = ctx.alloc_expr(
@@ -448,7 +448,18 @@ pub(crate) fn synthesize_llm_spec_body(
     // structural until the Rust prompt assembler sees them. Rewrite the
     // prompt-local role constructor before name resolution; it is the same
     // binding that the public tag supplies to its body lambda.
-    let segments = ctx.lower_template_segments_checked(prompt_backtick);
+    //
+    // A quoted prompt is the degenerate template: regular string literals do
+    // not interpolate, so the decoded value is one text segment and every
+    // downstream step (role rewrite, tagged elaboration, assembly) is shared.
+    let segments = match prompt {
+        crate::lower_cst::LlmPromptLiteral::Backtick(lit) => {
+            ctx.lower_template_segments_checked(lit)
+        }
+        crate::lower_cst::LlmPromptLiteral::Quoted(lit) => {
+            vec![TemplateSegment::Text(lit.value())]
+        }
+    };
     let role_callees: Vec<ExprId> = ctx
         .exprs
         .iter()

@@ -154,7 +154,7 @@ export function qualify(symbol: BamlSymbol): { path: string; name: string } {
   // Members show owner-qualified; types and functions show namespace-qualified.
   const qualifiedPath = names.slice(0, -1).join('.');
   const prefix = qualifiedPath.length > 0 ? `${qualifiedPath}.` : '';
-  // A normalized owner (`string.char_at`) keeps the owner's own spelling.
+  // A normalized owner (`string.slice`) keeps the owner's own spelling.
   if (dot >= 0) {
     const owner = display.slice(0, dot);
     const ownerNames = names.slice(0, -1);
