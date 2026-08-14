@@ -716,7 +716,7 @@ function clip(text: string, budget: int) -> string {
     if (text.length() <= budget) {
         text
     } else {
-        `${text.substring(0, budget)}\n… truncated at ${budget} characters; ask something narrower to see the rest`
+        `${text.slice(0, budget)}\n… truncated at ${budget} characters; ask something narrower to see the rest`
     }
 }
 

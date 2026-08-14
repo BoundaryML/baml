@@ -130,7 +130,7 @@ test "comparable_user_class_custom_cmperror_propagates" {
     } catch (e) {
         ComparableCompareError => e.message
     };
-    assert.is_true(msg.matches("cannot compare null"))
+    assert.is_true(msg.includes("cannot compare null"))
 }
 
 // ─── Sortable: `sort` (Phase 3 — new path alongside the old `sort`) ─────────
@@ -280,7 +280,7 @@ test "sort_fallible_comparator_throw_rolls_back" {
     } catch (e) {
         ComparableCompareError => e.message
     };
-    assert.is_true(msg.matches("cannot compare null"));
+    assert.is_true(msg.includes("cannot compare null"));
     // rollback: original order intact
     let vals = xs.map((x: ComparableFlaky) -> int {
         if let v: int = x.value { v } else { -1 }
@@ -758,8 +758,8 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:133:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:133:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:133:20 (variable) len=3 "msg"
-// interfaces_sort_comparable.baml:133:24 (method) len=7 "matches"
-// interfaces_sort_comparable.baml:133:32 (string) len=21 "\"cannot compare null\""
+// interfaces_sort_comparable.baml:133:24 (method) len=8 "includes"
+// interfaces_sort_comparable.baml:133:33 (string) len=21 "\"cannot compare null\""
 // interfaces_sort_comparable.baml:136:1 (comment) len=105 "// ─── Sortable: `sort` (Phase 3 — new path alongside the old `sort`) ─────────"
 // interfaces_sort_comparable.baml:137:1 (comment) len=2 "//"
 // interfaces_sort_comparable.baml:138:1 (comment) len=78 "// Parity with the Phase 0 `sort()` corpus. These exercise `sort()` on *local*"
@@ -1191,8 +1191,8 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:283:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:283:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:283:20 (variable) len=3 "msg"
-// interfaces_sort_comparable.baml:283:24 (method) len=7 "matches"
-// interfaces_sort_comparable.baml:283:32 (string) len=21 "\"cannot compare null\""
+// interfaces_sort_comparable.baml:283:24 (method) len=8 "includes"
+// interfaces_sort_comparable.baml:283:33 (string) len=21 "\"cannot compare null\""
 // interfaces_sort_comparable.baml:284:5 (comment) len=34 "// rollback: original order intact"
 // interfaces_sort_comparable.baml:285:5 (keyword) len=3 "let"
 // interfaces_sort_comparable.baml:285:9 (variable) [declaration] len=4 "vals"

@@ -1832,11 +1832,13 @@ function csv.csv_excel_profile() -> string {
     store_var _14
     load_var out
     load_const 1
-    call baml.String.char_at
+    load_const 2
+    call baml.String.slice
     store_var _16
     load_var out
     load_const 2
-    call baml.String.char_at
+    load_const 3
+    call baml.String.slice
     store_var _17
     load_var _12
     load_const "#"
@@ -5451,7 +5453,8 @@ function csv.csv_writer_bom() -> string {
     store_var _10
     load_var out
     load_const 1
-    call baml.String.char_at
+    load_const 2
+    call baml.String.slice
     store_var _12
     load_var out
     load_const null
@@ -5549,7 +5552,8 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
     store_var _18
     load_var out
     load_const 1
-    call baml.String.char_at
+    load_const 2
+    call baml.String.slice
     store_var _20
     load_var2 5 6
     bin_op +

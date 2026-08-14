@@ -91,7 +91,9 @@ function baml.has(self: ?, key: K) -> bool  [builtin]
 function baml.includes(self: ?, item: T) -> bool  [builtin]
 function baml.index_of(self: ?, item: T) -> int?  [builtin]
 function baml.insert(self: ?, item: T, idx: int) -> int  [builtin]
-function baml.join(self: ?, separator: string) -> string  [builtin]
+function baml.join(self: ?, separator: string) -> string  [expr] {
+  {  } match (self) { [] => "", [first, ..rest] => { let joined = string.from(first); for item in rest { joined = joined Add separator Add string.from(item) } } joined }
+}
 function baml.keys(self: ?) -> K[]  [builtin]
 function baml.last_index_of(self: ?, item: T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
@@ -1267,7 +1269,7 @@ function baml.json.from_json(j: baml.json.json) -> T  [builtin]
 function baml.json.from_string(s: string) -> T  [builtin]
 function baml.json.parse(s: string) -> baml.json.json  [builtin]
 function baml.json.path(j: baml.json.json, selector: string) -> T  [expr] {
-  { if (Not selector.starts_with(".") Or selector.starts_with("[")) { throw baml.json.JsonPathError { message: "selector must sta..." Add selector Add "'", selector: selector } }; let current: baml.json.json = j; let i = 0; while i Lt selector.length() { let marker = selector.substring(i, i Add 1); if (marker Eq ".") { i Add= 1; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "." And selector.substring(i, i Add 1) Ne "[" { i Add= 1 }; if (i Gt start) { current = _path_field(current, selector.substring(start, i), selector) }; continue }; if (marker Ne "[") { throw baml.json.JsonPathError { message: "expected '.' or '..." Add i.to_string(), selector: selector } }; i Add= 1; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let first = selector.substring(i, i Add 1); if (first Eq "\"" Or first Eq "'") { let quote = first; i Add= 1; let key = ""; let closed = false; while i Lt selector.length() { let ch = selector.substring(i, i Add 1); if (ch Eq "\\") { if (i Add 1 Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated esca...", selector: selector } }; key = key Add selector.substring(i Add 1, i Add 2); i Add= 2; continue }; if (ch Eq quote) { closed = true; i Add= 1; break }; key = key Add ch; i Add= 1 }; if (Not closed Or i Ge selector.length() Or selector.substring(i, i Add 1) Ne "]") { throw baml.json.JsonPathError { message: "unterminated quot...", selector: selector } }; i Add= 1; current = _path_field(current, key, selector); continue }; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "]" { i Add= 1 }; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let token = selector.substring(start, i); i Add= 1; let idx = int.parse(token) catch (_) { root.errors.ParseError => { throw baml.json.JsonPathError { message: "bad bracket token '[" Add token Add "]'", selector: selector } } }; current = _path_index(current, idx, selector) } } to(current) catch (_) { baml.json.JsonDecodeError => { throw baml.json.JsonPathError { message: "leaf does not coe...", selector: selector } } }
+  { if (Not selector.starts_with(".") Or selector.starts_with("[")) { throw baml.json.JsonPathError { message: "selector must sta..." Add selector Add "'", selector: selector } }; let current: baml.json.json = j; let i = 0; while i Lt selector.length() { let marker = selector.slice(i, i Add 1); if (marker Eq ".") { i Add= 1; let start = i; while i Lt selector.length() And selector.slice(i, i Add 1) Ne "." And selector.slice(i, i Add 1) Ne "[" { i Add= 1 }; if (i Gt start) { current = _path_field(current, selector.slice(start, i), selector) }; continue }; if (marker Ne "[") { throw baml.json.JsonPathError { message: "expected '.' or '..." Add i.to_string(), selector: selector } }; i Add= 1; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let first = selector.slice(i, i Add 1); if (first Eq "\"" Or first Eq "'") { let quote = first; i Add= 1; let key = ""; let closed = false; while i Lt selector.length() { let ch = selector.slice(i, i Add 1); if (ch Eq "\\") { if (i Add 1 Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated esca...", selector: selector } }; key = key Add selector.slice(i Add 1, i Add 2); i Add= 2; continue }; if (ch Eq quote) { closed = true; i Add= 1; break }; key = key Add ch; i Add= 1 }; if (Not closed Or i Ge selector.length() Or selector.slice(i, i Add 1) Ne "]") { throw baml.json.JsonPathError { message: "unterminated quot...", selector: selector } }; i Add= 1; current = _path_field(current, key, selector); continue }; let start = i; while i Lt selector.length() And selector.slice(i, i Add 1) Ne "]" { i Add= 1 }; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let token = selector.slice(start, i); i Add= 1; let idx = int.parse(token) catch (_) { root.errors.ParseError => { throw baml.json.JsonPathError { message: "bad bracket token '[" Add token Add "]'", selector: selector } } }; current = _path_index(current, idx, selector) } } to(current) catch (_) { baml.json.JsonDecodeError => { throw baml.json.JsonPathError { message: "leaf does not coe...", selector: selector } } }
 }
 function baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T  [expr] {
   {  } path(j, selector) catch (_) { baml.json.JsonPathError => default }
@@ -1500,7 +1502,6 @@ function baml.ops.add(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
-function baml.ops.add(self: ?, rhs: string) -> string  [builtin]
 function baml.ops.div(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.div(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.div(self: ?, rhs: float) -> float  [builtin]
@@ -2467,11 +2468,14 @@ class baml.String {
 }
 class baml.String$stream {
 }
+function baml.add(self: ?, rhs: string) -> string  [expr] {
+  {  } `...`
+}
+function baml.at(self: ?, index: int) -> string?  [builtin]
 function baml.byte_length(self: ?) -> int  [builtin]
-function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
 function baml.chars(self: ?) -> string[]  [builtin]
-function baml.code_point_at(self: ?, index: int) -> int  [builtin]
+function baml.code_point_at(self: ?, index: int) -> int?  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from(value: T) -> string  [expr] {
   {  } root._to_string_shim(value)
@@ -2498,15 +2502,15 @@ function baml.is_lowercase(self: ?) -> bool  [builtin]
 function baml.is_numeric(self: ?) -> bool  [builtin]
 function baml.is_uppercase(self: ?) -> bool  [builtin]
 function baml.is_whitespace(self: ?) -> bool  [builtin]
+function baml.last_index_of(self: ?, search: string) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.lines(self: ?) -> string[]  [builtin]
-function baml.matches(self: ?, substring: string) -> bool  [builtin]
 function baml.repeat(self: ?, count: int) -> string  [builtin]
 function baml.replace(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.replace_all(self: ?, search: string, replacement: string) -> string  [builtin]
+function baml.slice(self: ?, start: int, end: int) -> string  [builtin]
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
 function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
-function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
 function baml.to_code_points(self: ?) -> int[]  [builtin]
 function baml.to_lower_case(self: ?) -> string  [builtin]
 function baml.to_upper_case(self: ?) -> string  [builtin]

@@ -245,6 +245,13 @@ impl BexStr {
         Some(bytecount::num_chars(&self.as_bytes()[..byte_idx]))
     }
 
+    /// Finds the *last* occurrence of `needle` and returns the codepoint index
+    /// of its start, or `None`.
+    pub fn char_last_index_of(&self, needle: &str) -> Option<usize> {
+        let byte_idx = self.as_str().rfind(needle)?;
+        Some(bytecount::num_chars(&self.as_bytes()[..byte_idx]))
+    }
+
     /// Repeats this string `n` times.
     pub fn repeat(&self, n: usize) -> BexStr {
         BexStr::from(self.as_str().repeat(n))

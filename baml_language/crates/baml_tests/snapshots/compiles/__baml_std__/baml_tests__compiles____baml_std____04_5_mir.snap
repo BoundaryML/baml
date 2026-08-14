@@ -717,7 +717,129 @@ fn .<lambda(Array.sort_by_key, 0)>(i: int, j: int) -> int {
 
 fn baml.Array.slice = builtin(vm)
 
-fn baml.Array.join = builtin(vm)
+fn baml.Array.join(self: baml.Array, separator: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.Array // self // param
+    let _2: string // separator // param
+    let _3: bool
+    let _4: int
+    let _5: bool
+    let _6: bool
+    let _7: int
+    let _8: bool
+    let _9: int
+    let _10: int
+    let _11: T
+    let _12: T // first
+    let _13: T[]
+    let _14: int
+    let _15: T[] // rest
+    let _16: string // joined
+    let _17: T
+    let _18: type
+    let _19: T[]
+    let _20: baml.iter.Iterator<Error = never, Item = T>
+    let _21: unknown
+    let _22: bool
+    let _23: T
+    let _24: T // item
+    let _25: string
+    let _26: string
+    let _27: string
+    let _28: T
+    let _29: type
+
+    bb0: {
+        _3 = is_type_tag(copy _1, LIST);
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = len(_1);
+        _5 = copy _4 == const 0_i64;
+        branch copy _5 -> [bb14, bb2];
+    }
+
+    bb2: {
+        _6 = is_type_tag(copy _1, LIST);
+        branch copy _6 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _7 = len(_1);
+        _8 = copy _7 >= const 1_i64;
+        branch copy _8 -> [bb5, bb4];
+    }
+
+    bb4: {
+        unreachable;
+    }
+
+    bb5: {
+        _9 = const 0_i64;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _10 = const 0_i64;
+        _11 = copy _1[_10];
+        _12 = copy _11;
+        _14 = len(_1);
+        _13 = call const fn baml.Array.slice(copy _1, const 1_i64, copy _14) -> [bb7];
+    }
+
+    bb7: {
+        _15 = copy _13;
+        _17 = copy _12;
+        _18 = load_type(#0);
+        _16 = call const fn baml.String.from<copy _18>(copy _17) -> [bb8];
+    }
+
+    bb8: {
+        _19 = copy _15;
+        _20 = virtual_call iter as baml.iter.Iterable<Error = never, Item = #0>(copy _19) -> [bb9];
+    }
+
+    bb9: {
+        _21 = virtual_call next as baml.iter.Iterator<Error = never, Item = #0>(copy _20) -> [bb10];
+    }
+
+    bb10: {
+        _22 = is_type(copy _21, baml.iter.Done);
+        branch copy _22 -> [bb13, bb11];
+    }
+
+    bb11: {
+        _23 = copy _21;
+        fresh_cell(_24);
+        _24 = copy _23;
+        _26 = copy _16;
+        _25 = copy _26 + copy _2;
+        _28 = copy _24;
+        _29 = load_type(#0);
+        _27 = call const fn baml.String.from<copy _29>(copy _28) -> [bb12];
+    }
+
+    bb12: {
+        _16 = copy _25 + copy _27;
+        goto -> bb9;
+    }
+
+    bb13: {
+        _0 = copy _16;
+        goto -> bb15;
+    }
+
+    bb14: {
+        _0 = const "";
+        goto -> bb15;
+    }
+
+    bb15: {
+        return;
+    }
+}
 
 fn baml.Array.map = builtin(vm)
 
@@ -5821,7 +5943,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _15 = copy _10;
         _17 = copy _10;
         _16 = copy _17 + const 1_i64;
-        _14 = call const fn baml.String.substring(copy _2, copy _15, copy _16) -> [bb10];
+        _14 = call const fn baml.String.slice(copy _2, copy _15, copy _16) -> [bb10];
     }
 
     bb10: {
@@ -5851,7 +5973,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _52 = copy _10;
         _54 = copy _10;
         _53 = copy _54 + const 1_i64;
-        _51 = call const fn baml.String.substring(copy _2, copy _52, copy _53) -> [bb15];
+        _51 = call const fn baml.String.slice(copy _2, copy _52, copy _53) -> [bb15];
     }
 
     bb15: {
@@ -5889,7 +6011,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _106 = copy _10;
         _108 = copy _10;
         _107 = copy _108 + const 1_i64;
-        _105 = call const fn baml.String.substring(copy _2, copy _106, copy _107) -> [bb22];
+        _105 = call const fn baml.String.slice(copy _2, copy _106, copy _107) -> [bb22];
     }
 
     bb22: {
@@ -5914,7 +6036,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     bb26: {
         _114 = copy _100;
         _115 = copy _10;
-        _113 = call const fn baml.String.substring(copy _2, copy _114, copy _115) -> [bb27];
+        _113 = call const fn baml.String.slice(copy _2, copy _114, copy _115) -> [bb27];
     }
 
     bb27: {
@@ -5961,7 +6083,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _66 = copy _10;
         _68 = copy _10;
         _67 = copy _68 + const 1_i64;
-        _65 = call const fn baml.String.substring(copy _2, copy _66, copy _67) -> [bb35];
+        _65 = call const fn baml.String.slice(copy _2, copy _66, copy _67) -> [bb35];
     }
 
     bb35: {
@@ -6015,7 +6137,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _94 = copy _10;
         _96 = copy _10;
         _95 = copy _96 + const 1_i64;
-        _93 = call const fn baml.String.substring(copy _2, copy _94, copy _95) -> [bb44];
+        _93 = call const fn baml.String.slice(copy _2, copy _94, copy _95) -> [bb44];
     }
 
     bb44: {
@@ -6056,7 +6178,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _78 = copy _79 + const 1_i64;
         _81 = copy _10;
         _80 = copy _81 + const 2_i64;
-        _77 = call const fn baml.String.substring(copy _2, copy _78, copy _80) -> [bb51];
+        _77 = call const fn baml.String.slice(copy _2, copy _78, copy _80) -> [bb51];
     }
 
     bb51: {
@@ -6106,7 +6228,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _27 = copy _10;
         _29 = copy _10;
         _28 = copy _29 + const 1_i64;
-        _26 = call const fn baml.String.substring(copy _2, copy _27, copy _28) -> [bb60];
+        _26 = call const fn baml.String.slice(copy _2, copy _27, copy _28) -> [bb60];
     }
 
     bb60: {
@@ -6122,7 +6244,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _31 = copy _10;
         _33 = copy _10;
         _32 = copy _33 + const 1_i64;
-        _30 = call const fn baml.String.substring(copy _2, copy _31, copy _32) -> [bb63];
+        _30 = call const fn baml.String.slice(copy _2, copy _31, copy _32) -> [bb63];
     }
 
     bb63: {
@@ -6145,7 +6267,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _37 = copy _9;
         _39 = copy _20;
         _40 = copy _10;
-        _38 = call const fn baml.String.substring(copy _2, copy _39, copy _40) -> [bb67];
+        _38 = call const fn baml.String.slice(copy _2, copy _39, copy _40) -> [bb67];
     }
 
     bb67: {
@@ -7090,8 +7212,6 @@ fn baml.ops.Multiply<bigint>$for$int.mul = builtin(vm)
 fn baml.ops.Divide<bigint>$for$int.div = builtin(vm)
 
 fn baml.ops.Remainder<bigint>$for$int.rem = builtin(vm)
-
-fn baml.ops.Add<string>$for$string.add = builtin(vm)
 
 fn baml.ops.__union_add = builtin(vm)
 
@@ -11202,19 +11322,19 @@ fn baml.String.chars = builtin(vm)
 
 fn baml.String.lines = builtin(vm)
 
-fn baml.String.substring = builtin(vm)
+fn baml.String.slice = builtin(vm)
 
 fn baml.String.replace = builtin(vm)
 
 fn baml.String.index_of = builtin(vm)
 
-fn baml.String.char_at = builtin(vm)
+fn baml.String.last_index_of = builtin(vm)
+
+fn baml.String.at = builtin(vm)
 
 fn baml.String.code_point_at = builtin(vm)
 
 fn baml.String.repeat = builtin(vm)
-
-fn baml.String.matches = builtin(vm)
 
 fn baml.String.replace_all = builtin(vm)
 
@@ -11261,6 +11381,36 @@ fn baml.String.from_utf8 = builtin(vm)
 fn baml.String.to_code_points = builtin(vm)
 
 fn baml.String.from_code_points = builtin(vm)
+
+fn baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // self // param
+    let _2: string // rhs // param
+    let _3: string
+    let _4: type
+    let _5: string
+    let _6: type
+
+    bb0: {
+        _4 = load_type(string);
+        _3 = call const fn baml.String.from<copy _4>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _6 = load_type(string);
+        _5 = call const fn baml.String.from<copy _6>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _3 + copy _5;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
 
 fn baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string {
     // Locals:
