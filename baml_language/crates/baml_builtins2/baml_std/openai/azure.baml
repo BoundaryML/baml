@@ -37,9 +37,13 @@ class AzureClient {
     api_version: string?,
     // Full override of the deployment base, e.g. through a private endpoint or
     // gateway. Mutually exclusive with resource_name/deployment_id.
-    base_url: string?,
+    base_url: ai.Credential?,
 
-    api_key: string?,
+    api_key: ai.Credential?,
+    // DEPRECATED — names of environment variables to read INSTEAD, at request
+    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
+    // variable inline and are read at request time just the same; these are
+    // kept for compatibility and are consulted after an explicit credential.
     api_key_env: string?,
     base_url_env: string?,
 
@@ -59,8 +63,8 @@ class AzureClient {
         resource_name: string? = null,
         deployment_id: string? = null,
         api_version: string? = "2024-10-21",
-        base_url: string? = null,
-        api_key: string? = null,
+        base_url: ai.Credential? = null,
+        api_key: ai.Credential? = null,
         api_key_env: string? = null,
         base_url_env: string? = null,
         request_body: baml.json.json? = null,
@@ -95,14 +99,20 @@ class AzureClient {
     }
 
     function resolved_api_key(self) -> string? {
-        root.internal.chat_resolve_api_key(self.api_key, self.api_key_env, "AZURE_OPENAI_API_KEY")
+        root.internal.chat_resolve_api_key(
+            ai.wire.resolve_credential(self.api_key, null),
+            self.api_key_env,
+            "AZURE_OPENAI_API_KEY",
+        )
     }
 
     // base_url XOR (resource_name AND deployment_id). The engine reports this
     // at compile time with per-key spans; a BAML constructor can only report it
     // when the request is built, so the message names every accepted shape.
     function resolved_base_url(self) -> string {
-        if let explicit: string = self.base_url {
+        // A `base_url = env.NAME` ref resolves here, at request time; an unset
+        // variable behaves exactly like no base_url at all.
+        if let explicit: string = ai.wire.resolve_credential(self.base_url, null) {
             if (self.resource_name != null || self.deployment_id != null) {
                 throw baml.errors.InvalidArgument {
                     message: "openai.AzureClient takes base_url OR both resource_name and deployment_id, not both",

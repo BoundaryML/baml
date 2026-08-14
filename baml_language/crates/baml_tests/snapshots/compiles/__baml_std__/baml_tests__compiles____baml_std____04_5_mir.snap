@@ -2803,6 +2803,87 @@ fn baml.env.get_or_panic(key: string) -> string {
     }
 }
 
+fn baml.env.Ref.get(self: baml.env.Ref) -> string | null {
+    // Locals:
+    let _0: string | null // _0 // return
+    let _1: baml.env.Ref // self // param
+    let _2: string
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = sys_op const fn baml.env.get(copy _2) -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.env.Ref.get_or_panic(self: baml.env.Ref) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.env.Ref // self // param
+    let _2: string
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = call const fn baml.env.get_or_panic(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.env.Ref.or(self: baml.env.Ref, fallback: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.env.Ref // self // param
+    let _2: string // fallback // param
+    let _3: string | null
+    let _4: string
+    let _5: bool
+
+    bb0: {
+        _4 = copy _1.0;
+        _3 = sys_op const fn baml.env.get(copy _4) -> bb1;
+    }
+
+    bb1: {
+        _5 = copy _3 == const null;
+        branch copy _5 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = copy _3;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = copy _2;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.env.ref(name: string) -> baml.env.Ref {
+    // Locals:
+    let _0: baml.env.Ref // _0 // return
+    let _1: string // name // param
+
+    bb0: {
+        _0 = baml.env.Ref { copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
     // Locals:
     let _0: string // _0 // return

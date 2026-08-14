@@ -741,6 +741,12 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 ///
 /// Kept in sync with the builtin provider packages (`baml_std/openai` etc.)
 /// and the user-land `resolve()` convention.
+///
+/// DRIFT HAZARD — this compile-time `"provider/model"` prefix map is mirrored
+/// at runtime by `ai.clients.resolve` (baml_std `ai/ns_clients/clients.baml`),
+/// which handles the same shorthand when the `client:` value is a dynamic
+/// string / `baml.env.Ref` instead of a literal. Add a prefix in one place and
+/// you must add it in the other.
 pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
     let (prefix, _model) = client.split_once('/')?;
     match prefix {
@@ -770,8 +776,11 @@ pub(crate) enum LlmClientSpec {
         class: &'static str,
         model: String,
     },
-    /// An arbitrary expression evaluating to `ai.Client` (a declared client
-    /// name, a constructor call, a wrapper, ...).
+    /// An arbitrary expression evaluating to `ai.ClientSelector` (a declared
+    /// client name, a constructor call, a wrapper, a runtime
+    /// `"provider/model"` string, an `env.X` reference, ...). Wrapped in
+    /// `ai.clients.resolve(...)` by `synthesize_llm_spec_body` and resolved
+    /// when the function is called.
     Expr(rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>),
 }
 

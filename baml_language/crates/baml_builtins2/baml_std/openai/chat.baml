@@ -10,15 +10,15 @@
 
 class ChatClient {
     model: string,
-    // null resolves OPENAI_API_KEY at request time; construction never touches
-    // env, so declaring/constructing a client is always safe.
-    api_key: string?,
-    base_url: string?,
-    // Names of environment variables to read INSTEAD, at request time. A
-    // `client Name = ...` declaration is evaluated during `$init`, which cannot
-    // run io sysops — so a declaration can never read env itself. Naming the
-    // variable keeps the declaration pure while still letting a deployment (or
-    // a replay harness) point the client somewhere else.
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
+    // time), or null to resolve OPENAI_API_KEY at request time. Construction
+    // never touches env, so declaring/constructing a client is always safe.
+    api_key: ai.Credential?,
+    base_url: ai.Credential?,
+    // DEPRECATED — names of environment variables to read INSTEAD, at request
+    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
+    // variable inline and are read at request time just the same; these are
+    // kept for compatibility and are consulted after an explicit credential.
     api_key_env: string?,
     base_url_env: string?,
 
@@ -42,8 +42,8 @@ class ChatClient {
 
     function new(
         model: string = "gpt-4o-mini",
-        api_key: string? = null,
-        base_url: string? = null,
+        api_key: ai.Credential? = null,
+        base_url: ai.Credential? = null,
         api_key_env: string? = null,
         base_url_env: string? = null,
         request_body: baml.json.json? = null,
@@ -78,13 +78,17 @@ class ChatClient {
     // else the provider's canonical one. Null is reported as a configuration
     // error when the request is built, naming OPENAI_API_KEY.
     function resolved_api_key(self) -> string? {
-        root.internal.chat_resolve_api_key(self.api_key, self.api_key_env, "OPENAI_API_KEY")
+        root.internal.chat_resolve_api_key(
+            ai.wire.resolve_credential(self.api_key, null),
+            self.api_key_env,
+            "OPENAI_API_KEY",
+        )
     }
 
     // The request-time base URL, or the provider default.
     function resolved_base_url(self) -> string {
         root.internal.chat_resolve_base_url(
-            self.base_url,
+            ai.wire.resolve_credential(self.base_url, null),
             self.base_url_env,
             "https://api.openai.com/v1",
         )

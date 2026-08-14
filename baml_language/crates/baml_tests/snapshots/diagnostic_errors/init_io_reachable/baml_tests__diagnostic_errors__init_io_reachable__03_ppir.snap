@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.load_secret() -> string  [expr] {
+  {  } baml.env.get_or_panic("OPENAI_API_KEY")
+}
+function user.pick_eager(eager: string, lazy: () -> string throws baml.errors.Io | baml.errors.ParseError) -> string  [expr] {
+  {  } eager
+}

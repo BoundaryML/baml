@@ -15,8 +15,12 @@
 
 class OllamaClient {
     model: string,
-    base_url: string?,
-    api_key: string?,
+    base_url: ai.Credential?,
+    api_key: ai.Credential?,
+    // DEPRECATED — names of environment variables to read INSTEAD, at request
+    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
+    // variable inline and are read at request time just the same; these are
+    // kept for compatibility and are consulted after an explicit credential.
     api_key_env: string?,
     base_url_env: string?,
 
@@ -32,8 +36,8 @@ class OllamaClient {
 
     function new(
         model: string,
-        base_url: string? = null,
-        api_key: string? = null,
+        base_url: ai.Credential? = null,
+        api_key: ai.Credential? = null,
         api_key_env: string? = null,
         base_url_env: string? = null,
         request_body: baml.json.json? = null,
@@ -63,12 +67,16 @@ class OllamaClient {
     }
 
     function resolved_api_key(self) -> string? {
-        root.internal.chat_resolve_api_key(self.api_key, self.api_key_env, null)
+        root.internal.chat_resolve_api_key(
+            ai.wire.resolve_credential(self.api_key, null),
+            self.api_key_env,
+            null,
+        )
     }
 
     function resolved_base_url(self) -> string {
         root.internal.chat_resolve_base_url(
-            self.base_url,
+            ai.wire.resolve_credential(self.base_url, null),
             self.base_url_env,
             "http://localhost:11434/v1",
         )

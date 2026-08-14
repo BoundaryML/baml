@@ -82,9 +82,11 @@ namespace baml.csv:
   function write<T>
   function writer
 namespace baml.env:
+  class Ref { methods: [get, get_or_panic, or] }
   function get
   function get_or_panic
   function get_or_panic_lenient
+  function ref
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }

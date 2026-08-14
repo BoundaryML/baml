@@ -523,12 +523,30 @@ function baml.csv.writer(file: root.fs.File, options: baml.csv.WriterOptions? = 
 }
 
 --- <builtin>/baml/ns_env/env.baml ---
+class baml.env.Ref {
+  name: string
+}
+class baml.env.Ref$stream {
+  name: string | null
+}
 function baml.env.get(key: string) -> string?  [builtin]
+function baml.env.get(self: ?) -> string?  [expr] {
+  {  } root.env.get(self.name)
+}
 function baml.env.get_or_panic(key: string) -> string  [expr] {
   {  } get(key) NullCoalesce root.sys.panic("env var not found: " Add key)
 }
+function baml.env.get_or_panic(self: ?) -> string  [expr] {
+  {  } root.env.get_or_panic(self.name)
+}
 function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string  [expr] {
   {  } if (lenient) {  } get(key) NullCoalesce "" else {  } get_or_panic(key)
+}
+function baml.env.or(self: ?, fallback: string) -> string  [expr] {
+  {  } root.env.get(self.name) NullCoalesce fallback
+}
+function baml.env.ref(name: string) -> baml.env.Ref  [expr] {
+  {  } baml.env.Ref { name: name }
 }
 
 --- <builtin>/baml/ns_errors/error_context.baml ---

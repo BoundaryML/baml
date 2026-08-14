@@ -59,8 +59,16 @@ class ai.clients.RoundRobin$stream {
   members: root.Client[]
   counter: int | null
 }
+type ai.clients.ClientSelector = root.Client | string | baml.env.Ref
+type ai.clients.ClientSelector$stream = root.Client | string | baml.env.Ref$stream
 function ai.clients._attempt(self: ?, input: root.ModelTurnInput, remaining: int) -> root.ModelTurn  [expr] {
   {  } self.inner.invoke(input) catch_all (e) { f: root.errors.Failure => {  } if (remaining Gt 1 And f.retry_safety() Eq root.errors.RetrySafety.Safe And self.retry_if(f)) { let attempt = self.max_attempts Sub remaining Add 1; let _ = baml.sys.sleep(baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f))) catch_all (se) { _ => null } } self._attempt(input, remaining Sub 1) else { throw e }, _ => throw e }
+}
+function ai.clients._from_shorthand(shorthand: string) -> root.Client  [expr] {
+  { let separator = shorthand.index_of("/") } if let index: int = separator { let prefix = shorthand.substring(0, index); let model = shorthand.substring(index Add 1, shorthand.length()); let selected: root.Client? = match (prefix) { "openai" => openai.ResponsesClient.new(model = model), "openai-chat" => openai.ChatClient.new(model = model), "openai-images" => openai.ImageClient.new(model = model), "azure" => openai.AzureClient.new(model = model), "ollama" => openai.OllamaClient.new(model = model), "openrouter" => openai.OpenRouterClient.new(model = model), "anthropic" => anthropic.AnthropicClient.new(model = model), "google" => google.GoogleClient.new(model = model), "vertex" => google.VertexClient.new(model = model), "bedrock" => aws.BedrockClient.new(model = model), "ai-gateway-images" => vercel.AiGatewayImageClient.new(model = model), "claude-code" => claude_code.ClaudeCodeClient.new(model = model), _ => null } } if let built: root.Client = selected {  } built else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } } else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } }
+}
+function ai.clients._shorthand_prefixes() -> string  [expr] {
+  {  } ["openai", "openai-chat", "openai-images", "azure", "ollama", "openrouter", "anthropic", "google", "vertex", "bedrock", "ai-gateway-images", "claude-code"].join(", ")
 }
 function ai.clients._try(self: ?, input: root.ModelTurnInput, index: int) -> root.ModelTurn  [expr] {
   {  } match (self.members.at(index)) { c: root.Client => {  } c.invoke(input) catch_all (e) { f: root.errors.Failure => {  } if (index Add 1 Lt self.members.length() And f.retry_safety() Eq root.errors.RetrySafety.Safe) {  } self._try(input, index Add 1) else { throw e }, _ => throw e }, null => { throw baml.errors.InvalidArgument { message: "Fallback needs at..." } } }
@@ -97,6 +105,9 @@ function ai.clients.new(inner: root.Client, max_attempts: int = 3, retry_if: (ro
 }
 function ai.clients.new(members: root.Client[]) -> ai.clients.RoundRobin  [expr] {
   { if (members.length() Eq 0) { throw baml.errors.InvalidArgument { message: "RoundRobin needs ..." } } } ai.clients.RoundRobin { members: members, counter: 0 }
+}
+function ai.clients.resolve(selector: ai.clients.ClientSelector) -> root.Client  [expr] {
+  {  } match (selector) { shorthand: string => _from_shorthand(shorthand), named: baml.env.Ref => {  } if let value: string = named.get() {  } _from_shorthand(value) else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } }, existing: root.Client => existing }
 }
 
 --- <builtin>/ai/ns_content/content.baml ---
@@ -579,11 +590,17 @@ function ai.wire._resolve_pending_call(pending: string[], id: string) -> null  [
 function ai.wire._wire_blocks(content: root.content.Block[], keep_reasoning: bool) -> root.content.Block[]  [expr] {
   { let out: root.content.Block[] = []; for block in content { match (block) { text: root.content.Text => { if (text.text.trim() Ne "") { out.push(text) } } null, reasoning: root.content.Reasoning => { if (keep_reasoning) { out.push(reasoning) } } null, use: root.content.ToolUse => { out.push(use) } null, media: root.content.Media => null } } } out
 }
+function ai.wire.credential_sources(cred: root.Credential?, legacy_env: string?, canonical_env: string?) -> string  [expr] {
+  { let names: string[] = []; if let named: baml.env.Ref = cred { names.push(named.name) }; if let legacy: string = legacy_env { names.push(legacy) }; if let canonical: string = canonical_env { names.push(canonical) } } if (names.length() Eq 0) {  } "(no environment v..." else {  } names.join(", ")
+}
 function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.json?) -> baml.json.json  [expr] {
   {  } match (overrides) { null => base, _ => _merge_json(base, overrides) }
 }
 function ai.wire.render_output_format(t: type) -> string  [expr] {
   {  } baml.prompt.render_output_format(t)
+}
+function ai.wire.resolve_credential(cred: root.Credential?, env_fallback: string?) -> string?  [expr] {
+  { let explicit: string? = match (cred) { literal: string => {  } if (literal.trim() Eq "") {  } null else {  } literal, named: baml.env.Ref => named.get(), null => null }; if let value: string = explicit { return value }; if let fallback: string = env_fallback { return baml.env.get(fallback) } } null
 }
 function ai.wire.resolve_media(media: ai.MediaPart, fetch_url: bool) -> ai.wire.ResolvedMedia  [expr] {
   {  } match (media) { image: baml.media.Image => { let source = image.file() NullCoalesce image.url() NullCoalesce "" } _resolve_media_content(image.url(), image.file(), image.base64(), _media_mime_type(image.mime_type(), source, "image"), fetch_url), audio: baml.media.Audio => { let source = audio.file() NullCoalesce audio.url() NullCoalesce "" } _resolve_media_content(audio.url(), audio.file(), audio.base64(), _media_mime_type(audio.mime_type(), source, "audio"), fetch_url), video: baml.media.Video => { let source = video.file() NullCoalesce video.url() NullCoalesce "" } _resolve_media_content(video.url(), video.file(), video.base64(), _media_mime_type(video.mime_type(), source, "video"), fetch_url), pdf: baml.media.Pdf => { let source = pdf.file() NullCoalesce pdf.url() NullCoalesce "" } _resolve_media_content(pdf.url(), pdf.file(), pdf.base64(), _media_mime_type(pdf.mime_type(), source, "pdf"), fetch_url) }
@@ -702,6 +719,10 @@ class ai.PromptMessage$stream {
   parts: ai.PromptPart$stream[]
   metadata: map<string, baml.json.json$stream>
 }
+type ai.ClientSelector = root.clients.ClientSelector
+type ai.ClientSelector$stream = root.clients.ClientSelector$stream
+type ai.Credential = string | baml.env.Ref
+type ai.Credential$stream = string | baml.env.Ref$stream
 type ai.MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
 type ai.MediaPart$stream = baml.media.Image$stream | baml.media.Audio$stream | baml.media.Video$stream | baml.media.Pdf$stream
 type ai.PromptPart = string | ai.MediaPart

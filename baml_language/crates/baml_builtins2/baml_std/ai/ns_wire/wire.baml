@@ -2,6 +2,73 @@
 // output-format text, and tool schema lowering.
 // Mirrors _planv2/pages/02_guides/03_clients/03_writing_a_client.md.
 
+/// Collapse a client's `root.Credential?` option to the value to put on the
+/// wire, reading the environment at REQUEST time (never at construction).
+///
+///   * a literal string resolves to itself, unless it is blank — a
+///     whitespace-only credential is treated as "not configured" so the rest of
+///     the chain can supply one;
+///   * a `baml.env.Ref` resolves to `ref.get()` — `null` when the named
+///     variable is unset, which lets the caller continue down its own chain (or
+///     raise the same error it raises for an unconfigured option);
+///   * `null` falls back to `env_fallback`, the provider's canonical variable
+///     name, looked up with `baml.env.get`. A `null` `env_fallback` means the
+///     provider has no canonical variable and the result is `null`.
+///
+/// Clients keep their own chain around this: explicit credential (here) →
+/// legacy `*_env` name → canonical variable (here, as `env_fallback`).
+function resolve_credential(cred: root.Credential?, env_fallback: string?) -> string? {
+    let explicit: string? = match (cred) {
+        let literal: string => {
+            if (literal.trim() == "") {
+                null
+            } else {
+                literal
+            }
+        },
+        let named: baml.env.Ref => named.get(),
+        null => null,
+    };
+    if let value: string = explicit {
+        return value;
+    }
+    if let fallback: string = env_fallback {
+        return baml.env.get(fallback);
+    }
+    null
+}
+
+/// The environment variables a credential chain consulted, as a readable list,
+/// for the "no credential configured" error a client raises when the whole
+/// chain came back empty.
+///
+/// The point is the `Ref` arm: `api_key = env.MY_KEY` pointing at an UNSET
+/// variable resolves to `null` and falls through to the rest of the chain, so
+/// without this the error would name only the provider's canonical variable and
+/// never mention the one the caller actually asked for. Values are never
+/// included — only names.
+function credential_sources(
+    cred: root.Credential?,
+    legacy_env: string?,
+    canonical_env: string?,
+) -> string {
+    let names: string[] = [];
+    if let named: baml.env.Ref = cred {
+        names.push(named.name);
+    }
+    if let legacy: string = legacy_env {
+        names.push(legacy);
+    }
+    if let canonical: string = canonical_env {
+        names.push(canonical);
+    }
+    if (names.length() == 0) {
+        "(no environment variable was named)"
+    } else {
+        names.join(", ")
+    }
+}
+
 // Send, classify non-2xx via root.errors.classify_http, decode the body as T.
 // T = json-shaped envelope class; unknown fields are ignored by the decoder.
 function send_as<T>(req: baml.http.Request, provider: string) -> T {

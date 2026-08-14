@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 19115
 ---
 function $init() -> null {
     call $init_let_0
@@ -74,6 +73,9 @@ function user.AskDocs$spec(query: string, max_results: int, filter: string) -> a
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _6
+    load_global user.TestClient
+    call ai.clients.resolve
+    store_var _8
     load_const "AskDocs"
     load_deref ?1
     load_deref ?2
@@ -87,8 +89,7 @@ function user.AskDocs$spec(query: string, max_results: int, filter: string) -> a
     load_var2 1 2
     load_var filter
     make_closure .<lambda(AskDocs$spec, 0)>, 3
-    load_var _6
-    load_global user.TestClient
+    load_var2 4 5
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

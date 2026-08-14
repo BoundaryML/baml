@@ -2146,6 +2146,42 @@ function baml.csv.writer(file: baml.fs.File, options: baml.csv.WriterOptions | n
 function baml.deep_copy(value: #0) -> #0 {
 }
 
+function baml.env.Ref.get(self: baml.env.Ref) -> string | null {
+    load_var self
+    load_field .name
+    sys_op baml.env.get
+    return
+}
+
+function baml.env.Ref.get_or_panic(self: baml.env.Ref) -> string {
+    load_var self
+    load_field .name
+    call baml.env.get_or_panic
+    return
+}
+
+function baml.env.Ref.or(self: baml.env.Ref, fallback: string) -> string {
+    load_var self
+    load_field .name
+    sys_op baml.env.get
+    store_var _3
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _3
+    jump L2
+
+  L1:
+    load_var fallback
+
+  L2:
+    return
+}
+
 function baml.env.get(key: string) -> string | null {
 }
 
@@ -2201,6 +2237,12 @@ function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
     load_const ""
 
   L4:
+    return
+}
+
+function baml.env.ref(name: string) -> baml.env.Ref {
+    load_var name
+    init_instance baml.env.Ref .name
     return
 }
 

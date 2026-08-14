@@ -2,9 +2,9 @@
 //!
 //! Every test in this file requires `std::env::set_var` on the host before
 //! execution. BAML's stdlib is read-only over the environment
-//! (`baml.env.get` / `baml.env.get_or_panic` only), so tests that establish
-//! sentinel values must run in Rust. The first three tests additionally pin
-//! bytecode with insta snapshots, which requires a compiled artifact.
+//! (`baml.env.get` / `baml.env.get_or_panic` / `baml.env.ref` only), so tests
+//! that establish sentinel values must run in Rust. Three of them additionally
+//! pin bytecode with insta snapshots, which requires a compiled artifact.
 
 #![allow(unsafe_code)]
 
@@ -59,27 +59,53 @@ async fn env_get_existing_var() {
     );
 }
 
+/// `env.X` is a LATE-BOUND reference: it desugars to `baml.env.ref("X")`,
+/// which builds a `baml.env.Ref` carrying the variable NAME only. Nothing is
+/// read until the reference is used, so the value never lands in a constructed
+/// value and a host may load secrets after the runtime initializes.
 #[tokio::test]
 async fn env_sugar_existing_var() {
     unsafe { std::env::set_var("BAML_TEST_SUGAR_VAR", "sugar_value") };
     let output = baml_test!(
         r#"
             function main() -> string {
-                env.BAML_TEST_SUGAR_VAR
+                env.BAML_TEST_SUGAR_VAR.get_or_panic()
             }
         "#
     );
 
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("sugar_value".to_string().into()))
+    );
+}
+
+/// The bare sugar yields the reference itself — the name, not the secret.
+#[tokio::test]
+async fn env_sugar_is_a_late_bound_ref() {
+    unsafe { std::env::set_var("BAML_TEST_SUGAR_REF_VAR", "never-captured") };
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                env.BAML_TEST_SUGAR_REF_VAR.name
+            }
+        "#
+    );
+
+    // The desugar itself: `baml.env.ref("NAME")`, not an eager read.
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        load_const "BAML_TEST_SUGAR_VAR"
-        call baml.env.get_or_panic
+        load_const "BAML_TEST_SUGAR_REF_VAR"
+        call baml.env.ref
+        load_field .name
         return
     }
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("sugar_value".to_string().into()))
+        Ok(BexExternalValue::String(
+            "BAML_TEST_SUGAR_REF_VAR".to_string().into()
+        ))
     );
 }
 

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 15456
 ---
 === MIR2 ===
 fn user.ExtractInvoice(text: string, client: null | ai.Client) -> Invoice {
@@ -103,6 +102,7 @@ fn user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: ai.Client
 
     bb0: {
         _2 = { const "text": copy _1 }: map<string, unknown>;
@@ -112,11 +112,15 @@ fn user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<Invoice> { const "ExtractInvoice", copy _2, copy _3, copy _4, const item user.GPT4o };
-        goto -> bb2;
+        _6 = call const fn ai.clients.resolve(const item user.GPT4o) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<Invoice> { const "ExtractInvoice", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

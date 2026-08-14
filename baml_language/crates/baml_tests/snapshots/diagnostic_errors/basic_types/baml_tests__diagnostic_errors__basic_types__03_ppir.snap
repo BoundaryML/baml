@@ -36,7 +36,7 @@ function user.GetMixedList$render_prompt() -> ai.Prompt  [expr] {
   GetMixedList$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
 function user.GetMixedList$spec() -> ai.FunctionSpec<int | string[]>  [expr] {
-  ai.FunctionSpec { spec_name: "GetMixedList", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get mixed list";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 }
+  ai.FunctionSpec { spec_name: "GetMixedList", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get mixed list";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
 }
 function user.GetMixedList$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<int | string[], int | string[]>  [expr] {
   ai.stream.from_spec(GetMixedList$spec(), client = client)
@@ -51,7 +51,7 @@ function user.GetMixedMap$render_prompt() -> ai.Prompt  [expr] {
   GetMixedMap$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
 function user.GetMixedMap$spec() -> ai.FunctionSpec<map<string, int | string>>  [expr] {
-  ai.FunctionSpec { spec_name: "GetMixedMap", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get mixed map";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 }
+  ai.FunctionSpec { spec_name: "GetMixedMap", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get mixed map";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
 }
 function user.GetMixedMap$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<map<string, int | string>, map<string, int | string>>  [expr] {
   ai.stream.from_spec(GetMixedMap$spec(), client = client)
@@ -66,7 +66,7 @@ function user.GetStatus$render_prompt() -> ai.Prompt  [expr] {
   GetStatus$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
 function user.GetStatus$spec() -> ai.FunctionSpec<Status>  [expr] {
-  ai.FunctionSpec { spec_name: "GetStatus", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get status";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 }
+  ai.FunctionSpec { spec_name: "GetStatus", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get status";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
 }
 function user.GetStatus$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<Status | null, Status>  [expr] {
   ai.stream.from_spec(GetStatus$spec(), client = client)

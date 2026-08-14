@@ -100,6 +100,426 @@ fn ai.Journal.append_all(self: ai.Journal, events: (ai.events.AssistantMessage |
     }
 }
 
+fn ai.clients._shorthand_prefixes() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string[]
+    let _2: type
+
+    bb0: {
+        _1 = [const "openai", const "openai-chat", const "openai-images", const "azure", const "ollama", const "openrouter", const "anthropic", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
+        _2 = load_type(string);
+        _0 = call const fn baml.Array.join<copy _2>(copy _1, const ", ") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn ai.clients._from_shorthand(shorthand: string) -> ai.Client {
+    // Locals:
+    let _0: ai.Client // _0 // return
+    let _1: string // shorthand // param
+    let _2: int | null // separator
+    let _3: int | null
+    let _4: int // index
+    let _5: string // prefix
+    let _6: int
+    let _7: string // model
+    let _8: int
+    let _9: int
+    let _10: int
+    let _11: null | ai.Client // selected
+    let _12: bool
+    let _13: string
+    let _14: bool
+    let _15: string
+    let _16: bool
+    let _17: string
+    let _18: bool
+    let _19: string
+    let _20: bool
+    let _21: string
+    let _22: bool
+    let _23: string
+    let _24: bool
+    let _25: string
+    let _26: bool
+    let _27: string
+    let _28: bool
+    let _29: string
+    let _30: bool
+    let _31: string
+    let _32: bool
+    let _33: string
+    let _34: bool
+    let _35: string
+    let _36: null | ai.Client
+    let _37: ai.Client // built
+    let _38: ai.errors.InvalidRequest
+    let _39: string
+    let _40: string
+    let _41: string
+    let _42: string
+    let _43: string
+    let _44: string
+    let _45: string
+    let _46: string
+    let _47: string
+    let _48: string
+    let _49: type
+    let _50: string
+    let _51: type
+    let _52: string
+    let _53: string
+    let _54: type
+    let _55: string
+    let _56: string
+    let _57: type
+    let _58: ai.errors.InvalidRequest
+    let _59: string
+    let _60: string
+    let _61: string
+    let _62: string
+    let _63: type
+    let _64: string
+    let _65: string
+    let _66: type
+
+    bb0: {
+        _2 = call const fn baml.String.index_of(copy _1, const "/") -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb6, bb2];
+    }
+
+    bb2: {
+        _63 = load_type(string);
+        _62 = call const fn baml.String.from<copy _63>(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _61 = const "client \"" + copy _62;
+        _60 = copy _61 + const "\" is not a \"provider/model\" string (no \"/\"); valid prefixes are ";
+        _65 = call const fn ai.clients._shorthand_prefixes() -> [bb4];
+    }
+
+    bb4: {
+        _66 = load_type(string);
+        _64 = call const fn baml.String.from<copy _66>(copy _65) -> [bb5];
+    }
+
+    bb5: {
+        _59 = copy _60 + copy _64;
+        _58 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _59, const null };
+        throw copy _58;
+    }
+
+    bb6: {
+        _4 = copy _3;
+        _6 = copy _4;
+        _5 = call const fn baml.String.substring(copy _1, const 0_i64, copy _6) -> [bb7];
+    }
+
+    bb7: {
+        _9 = copy _4;
+        _8 = copy _9 + const 1_i64;
+        _10 = call const fn baml.String.length(copy _1) -> [bb8];
+    }
+
+    bb8: {
+        _7 = call const fn baml.String.substring(copy _1, copy _8, copy _10) -> [bb9];
+    }
+
+    bb9: {
+        _12 = copy _5 == const "openai";
+        branch copy _12 -> [bb33, bb10];
+    }
+
+    bb10: {
+        _14 = copy _5 == const "openai-chat";
+        branch copy _14 -> [bb32, bb11];
+    }
+
+    bb11: {
+        _16 = copy _5 == const "openai-images";
+        branch copy _16 -> [bb31, bb12];
+    }
+
+    bb12: {
+        _18 = copy _5 == const "azure";
+        branch copy _18 -> [bb30, bb13];
+    }
+
+    bb13: {
+        _20 = copy _5 == const "ollama";
+        branch copy _20 -> [bb29, bb14];
+    }
+
+    bb14: {
+        _22 = copy _5 == const "openrouter";
+        branch copy _22 -> [bb28, bb15];
+    }
+
+    bb15: {
+        _24 = copy _5 == const "anthropic";
+        branch copy _24 -> [bb27, bb16];
+    }
+
+    bb16: {
+        _26 = copy _5 == const "google";
+        branch copy _26 -> [bb26, bb17];
+    }
+
+    bb17: {
+        _28 = copy _5 == const "vertex";
+        branch copy _28 -> [bb25, bb18];
+    }
+
+    bb18: {
+        _30 = copy _5 == const "bedrock";
+        branch copy _30 -> [bb24, bb19];
+    }
+
+    bb19: {
+        _32 = copy _5 == const "ai-gateway-images";
+        branch copy _32 -> [bb23, bb20];
+    }
+
+    bb20: {
+        _34 = copy _5 == const "claude-code";
+        branch copy _34 -> [bb22, bb21];
+    }
+
+    bb21: {
+        _11 = const null;
+        goto -> bb34;
+    }
+
+    bb22: {
+        _35 = copy _7;
+        _11 = call const fn claude_code.ClaudeCodeClient.new(copy _35, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb23: {
+        _33 = copy _7;
+        _11 = call const fn vercel.AiGatewayImageClient.new(copy _33, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb24: {
+        _31 = copy _7;
+        _11 = call const fn aws.BedrockClient.new(copy _31, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb25: {
+        _29 = copy _7;
+        _11 = call const fn google.VertexClient.new(copy _29, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb26: {
+        _27 = copy _7;
+        _11 = call const fn google.GoogleClient.new(copy _27, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb27: {
+        _25 = copy _7;
+        _11 = call const fn anthropic.AnthropicClient.new(copy _25, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb28: {
+        _23 = copy _7;
+        _11 = call const fn openai.OpenRouterClient.new(copy _23, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb29: {
+        _21 = copy _7;
+        _11 = call const fn openai.OllamaClient.new(copy _21, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb30: {
+        _19 = copy _7;
+        _11 = call const fn openai.AzureClient.new(copy _19, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb31: {
+        _17 = copy _7;
+        _11 = call const fn openai.ImageClient.new(copy _17, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb32: {
+        _15 = copy _7;
+        _11 = call const fn openai.ChatClient.new(copy _15, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb33: {
+        _13 = copy _7;
+        _11 = call const fn openai.ResponsesClient.new(copy _13, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+    }
+
+    bb34: {
+        _36 = copy _11;
+        _36 = narrow_bind copy _36 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "Client" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb41, bb35];
+    }
+
+    bb35: {
+        _48 = copy _5;
+        _49 = load_type(string);
+        _47 = call const fn baml.String.from<copy _49>(copy _48) -> [bb36];
+    }
+
+    bb36: {
+        _46 = const "no builtin provider for prefix \"" + copy _47;
+        _45 = copy _46 + const "\" in client \"";
+        _51 = load_type(string);
+        _50 = call const fn baml.String.from<copy _51>(copy _1) -> [bb37];
+    }
+
+    bb37: {
+        _44 = copy _45 + copy _50;
+        _43 = copy _44 + const "\"; valid prefixes are ";
+        _53 = call const fn ai.clients._shorthand_prefixes() -> [bb38];
+    }
+
+    bb38: {
+        _54 = load_type(string);
+        _52 = call const fn baml.String.from<copy _54>(copy _53) -> [bb39];
+    }
+
+    bb39: {
+        _42 = copy _43 + copy _52;
+        _41 = copy _42 + const " (for any other OpenAI-compatible endpoint, build openai.GenericClient.new(base_url = ..., model = \"";
+        _56 = copy _7;
+        _57 = load_type(string);
+        _55 = call const fn baml.String.from<copy _57>(copy _56) -> [bb40];
+    }
+
+    bb40: {
+        _40 = copy _41 + copy _55;
+        _39 = copy _40 + const "\"))";
+        _38 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _39, const null };
+        throw copy _38;
+    }
+
+    bb41: {
+        _37 = copy _36;
+        _0 = copy _37;
+        goto -> bb42;
+    }
+
+    bb42: {
+        return;
+    }
+}
+
+fn ai.clients.resolve(selector: string | baml.env.Ref | ai.Client) -> ai.Client {
+    // Locals:
+    let _0: ai.Client // _0 // return
+    let _1: string | baml.env.Ref | ai.Client // selector // param
+    let _2: string | baml.env.Ref | ai.Client
+    let _3: string // shorthand
+    let _4: string
+    let _5: string | baml.env.Ref | ai.Client
+    let _6: baml.env.Ref // named
+    let _7: string | null
+    let _8: string | null
+    let _9: string // value
+    let _10: string
+    let _11: ai.errors.InvalidRequest
+    let _12: string
+    let _13: string
+    let _14: string
+    let _15: string
+    let _16: string
+    let _17: string
+    let _18: string
+    let _19: string
+    let _20: type
+    let _21: string
+    let _22: string
+    let _23: type
+    let _24: string
+    let _25: string
+    let _26: type
+    let _27: ai.Client // existing
+
+    bb0: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb11, bb1];
+    }
+
+    bb1: {
+        _5 = copy _1;
+        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["env"], name: "Ref" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+    }
+
+    bb2: {
+        _27 = copy _1;
+        _0 = copy _27;
+        goto -> bb12;
+    }
+
+    bb3: {
+        _6 = copy _5;
+        _7 = call const fn baml.env.Ref.get(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _8 = copy _7;
+        _8 = narrow_bind copy _8 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb10, bb5];
+    }
+
+    bb5: {
+        _19 = copy _6.0;
+        _20 = load_type(string);
+        _18 = call const fn baml.String.from<copy _20>(copy _19) -> [bb6];
+    }
+
+    bb6: {
+        _17 = const "client selector env." + copy _18;
+        _16 = copy _17 + const " is not set: point it at a \"provider/model\" string (valid prefixes are ";
+        _22 = call const fn ai.clients._shorthand_prefixes() -> [bb7];
+    }
+
+    bb7: {
+        _23 = load_type(string);
+        _21 = call const fn baml.String.from<copy _23>(copy _22) -> [bb8];
+    }
+
+    bb8: {
+        _15 = copy _16 + copy _21;
+        _14 = copy _15 + const "), or give the client: position a value with a fallback — env.";
+        _25 = copy _6.0;
+        _26 = load_type(string);
+        _24 = call const fn baml.String.from<copy _26>(copy _25) -> [bb9];
+    }
+
+    bb9: {
+        _13 = copy _14 + copy _24;
+        _12 = copy _13 + const ".get() ?? \"openai/gpt-4o-mini\"";
+        _11 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _12, const null };
+        throw copy _11;
+    }
+
+    bb10: {
+        _9 = copy _8;
+        _10 = copy _9;
+        _0 = call const fn ai.clients._from_shorthand(copy _10) -> [bb12];
+    }
+
+    bb11: {
+        _3 = copy _2;
+        _4 = copy _3;
+        _0 = call const fn ai.clients._from_shorthand(copy _4) -> [bb12];
+    }
+
+    bb12: {
+        return;
+    }
+}
+
 fn ai.clients.default_retry_judgment(f: ai.errors.Failure) -> bool {
     // Locals:
     let _0: bool // _0 // return
@@ -3795,6 +4215,184 @@ fn ai.tools.Toolbox.is_empty(self: ai.tools.Toolbox) -> bool {
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn ai.wire.resolve_credential(cred: string | null | baml.env.Ref, env_fallback: string | null) -> string | null {
+    // Locals:
+    let _0: string | null // _0 // return
+    let _1: string | null | baml.env.Ref // cred // param
+    let _2: string | null // env_fallback // param
+    let _3: string | null // explicit
+    let _4: string | null | baml.env.Ref
+    let _5: string // literal
+    let _6: bool
+    let _7: string
+    let _8: string | null | baml.env.Ref
+    let _9: baml.env.Ref // named
+    let _10: string | null
+    let _11: string // value
+    let _12: string | null
+    let _13: string // fallback
+    let _14: string
+
+    bb0: {
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb4, bb1];
+    }
+
+    bb1: {
+        _8 = copy _1;
+        _8 = narrow_bind copy _8 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["env"], name: "Ref" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+    }
+
+    bb2: {
+        _3 = const null;
+        goto -> bb8;
+    }
+
+    bb3: {
+        _9 = copy _8;
+        _3 = call const fn baml.env.Ref.get(copy _9) -> [bb8];
+    }
+
+    bb4: {
+        _5 = copy _4;
+        _7 = call const fn baml.String.trim(copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _6 = copy _7 == const "";
+        branch copy _6 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _3 = copy _5;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _3 = const null;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _10 = copy _3;
+        _10 = narrow_bind copy _10 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb12, bb9];
+    }
+
+    bb9: {
+        _12 = copy _2;
+        _12 = narrow_bind copy _12 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb11, bb10];
+    }
+
+    bb10: {
+        _0 = const null;
+        goto -> bb13;
+    }
+
+    bb11: {
+        _13 = copy _12;
+        _14 = copy _13;
+        _0 = sys_op const fn baml.env.get(copy _14) -> bb13;
+    }
+
+    bb12: {
+        _11 = copy _10;
+        _0 = copy _11;
+        goto -> bb13;
+    }
+
+    bb13: {
+        return;
+    }
+}
+
+fn ai.wire.credential_sources(cred: string | null | baml.env.Ref, legacy_env: string | null, canonical_env: string | null) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string | null | baml.env.Ref // cred // param
+    let _2: string | null // legacy_env // param
+    let _3: string | null // canonical_env // param
+    let _4: string[] // names
+    let _5: string | null | baml.env.Ref
+    let _6: baml.env.Ref // named
+    let _7: int
+    let _8: string
+    let _9: type
+    let _10: string | null
+    let _11: string // legacy
+    let _12: int
+    let _13: string
+    let _14: type
+    let _15: string | null
+    let _16: string // canonical
+    let _17: int
+    let _18: string
+    let _19: type
+    let _20: bool
+    let _21: int
+    let _22: type
+
+    bb0: {
+        _4 = []: string[];
+        _5 = copy _1;
+        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["env"], name: "Ref" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb1, bb2];
+    }
+
+    bb1: {
+        _6 = copy _5;
+        _8 = copy _6.0;
+        _9 = load_type(string);
+        _7 = call const fn baml.Array.push<copy _9>(copy _4, copy _8) -> [bb2];
+    }
+
+    bb2: {
+        _10 = copy _2;
+        _10 = narrow_bind copy _10 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb4];
+    }
+
+    bb3: {
+        _11 = copy _10;
+        _13 = copy _11;
+        _14 = load_type(string);
+        _12 = call const fn baml.Array.push<copy _14>(copy _4, copy _13) -> [bb4];
+    }
+
+    bb4: {
+        _15 = copy _3;
+        _15 = narrow_bind copy _15 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb5, bb6];
+    }
+
+    bb5: {
+        _16 = copy _15;
+        _18 = copy _16;
+        _19 = load_type(string);
+        _17 = call const fn baml.Array.push<copy _19>(copy _4, copy _18) -> [bb6];
+    }
+
+    bb6: {
+        _21 = len(_4);
+        goto -> bb7;
+    }
+
+    bb7: {
+        _20 = copy _21 == const 0_i64;
+        branch copy _20 -> [bb9, bb8];
+    }
+
+    bb8: {
+        _22 = load_type(string);
+        _0 = call const fn baml.Array.join<copy _22>(copy _4, const ", ") -> [bb10];
+    }
+
+    bb9: {
+        _0 = const "(no environment variable was named)";
+        goto -> bb10;
+    }
+
+    bb10: {
         return;
     }
 }

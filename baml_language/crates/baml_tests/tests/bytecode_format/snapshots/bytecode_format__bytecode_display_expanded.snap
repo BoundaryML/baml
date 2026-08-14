@@ -10,7 +10,7 @@ function user.User.promote(self: User, bonus: int) -> Report {
        5    store_field 1           (age)
 
   10   6    load_var2 1 2           
-       7    call 1255 ntypeargs=0   (user.score)
+       7    call 1264 ntypeargs=0   (user.score)
        8    store_var 3             (base)
 
   11   9    load_var 3              (base)

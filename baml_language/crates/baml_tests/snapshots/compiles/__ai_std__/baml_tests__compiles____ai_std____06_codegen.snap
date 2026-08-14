@@ -2644,6 +2644,446 @@ function ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, i
     return
 }
 
+function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
+    load_var shorthand
+    load_const "/"
+    call baml.String.index_of
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type string
+    load_var shorthand
+    call baml.String.from
+    store_var _62
+    call ai.clients._shorthand_prefixes
+    store_var _65
+    load_type string
+    load_var _65
+    call baml.String.from
+    store_var _64
+    load_const "ai.clients"
+    load_const null
+    load_const "client \""
+    load_var _62
+    bin_op +
+    load_const "\" is not a \"provider/model\" string (no \"/\"); valid prefixes are "
+    bin_op +
+    load_var _64
+    bin_op +
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L1:
+    load_var _3
+    store_var index
+    load_var shorthand
+    load_const 0
+    load_var index
+    call baml.String.substring
+    store_var prefix
+    load_var index
+    load_const 1
+    add_int
+    store_var _8
+    load_var shorthand
+    call baml.String.length
+    store_var _10
+    load_var2 1 6
+    load_var _10
+    call baml.String.substring
+    store_var model
+    load_var prefix
+    load_const "openai"
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L25
+
+  L2:
+    load_var prefix
+    load_const "openai-chat"
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L24
+
+  L3:
+    load_var prefix
+    load_const "openai-images"
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L23
+
+  L4:
+    load_var prefix
+    load_const "azure"
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L22
+
+  L5:
+    load_var prefix
+    load_const "ollama"
+    cmp_op ==
+    pop_jump_if_false L6
+    jump L21
+
+  L6:
+    load_var prefix
+    load_const "openrouter"
+    cmp_op ==
+    pop_jump_if_false L7
+    jump L20
+
+  L7:
+    load_var prefix
+    load_const "anthropic"
+    cmp_op ==
+    pop_jump_if_false L8
+    jump L19
+
+  L8:
+    load_var prefix
+    load_const "google"
+    cmp_op ==
+    pop_jump_if_false L9
+    jump L18
+
+  L9:
+    load_var prefix
+    load_const "vertex"
+    cmp_op ==
+    pop_jump_if_false L10
+    jump L17
+
+  L10:
+    load_var prefix
+    load_const "bedrock"
+    cmp_op ==
+    pop_jump_if_false L11
+    jump L16
+
+  L11:
+    load_var prefix
+    load_const "ai-gateway-images"
+    cmp_op ==
+    pop_jump_if_false L12
+    jump L15
+
+  L12:
+    load_var prefix
+    load_const "claude-code"
+    cmp_op ==
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_const null
+    jump L26
+
+  L14:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call claude_code.ClaudeCodeClient.new
+    jump L26
+
+  L15:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call vercel.AiGatewayImageClient.new
+    jump L26
+
+  L16:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call aws.BedrockClient.new
+    jump L26
+
+  L17:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    jump L26
+
+  L18:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    jump L26
+
+  L19:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    jump L26
+
+  L20:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.OpenRouterClient.new
+    jump L26
+
+  L21:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.OllamaClient.new
+    jump L26
+
+  L22:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.AzureClient.new
+    jump L26
+
+  L23:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ImageClient.new
+    jump L26
+
+  L24:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ChatClient.new
+    jump L26
+
+  L25:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+
+  L26:
+    store_var _36
+    load_var _36
+    narrow_bind ai.Client, slot=8
+    pop_jump_if_false L27
+    jump L28
+
+  L27:
+    load_type string
+    load_var prefix
+    call baml.String.from
+    store_var _47
+    load_type string
+    load_var shorthand
+    call baml.String.from
+    store_var _50
+    call ai.clients._shorthand_prefixes
+    store_var _53
+    load_type string
+    load_var _53
+    call baml.String.from
+    store_var _52
+    load_type string
+    load_var model
+    call baml.String.from
+    store_var _55
+    load_const "ai.clients"
+    load_const null
+    load_const "no builtin provider for prefix \""
+    load_var _47
+    bin_op +
+    load_const "\" in client \""
+    bin_op +
+    load_var _50
+    bin_op +
+    load_const "\"; valid prefixes are "
+    bin_op +
+    load_var _52
+    bin_op +
+    load_const " (for any other OpenAI-compatible endpoint, build openai.GenericClient.new(base_url = ..., model = \""
+    bin_op +
+    load_var _55
+    bin_op +
+    load_const "\"))"
+    bin_op +
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L28:
+    load_var _36
+    return
+}
+
+function ai.clients._shorthand_prefixes() -> string {
+    load_type string
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
+    load_const ", "
+    call baml.Array.join
+    return
+}
+
 function ai.clients.default_retry_judgment(f: ai.errors.Failure) -> bool {
     load_var f
     store_var _2
@@ -2682,6 +3122,86 @@ function ai.clients.default_retry_judgment(f: ai.errors.Failure) -> bool {
 
   L5:
     load_const false
+
+  L6:
+    return
+}
+
+function ai.clients.resolve(selector: ai.Client | string | baml.env.Ref) -> ai.Client {
+    load_var selector
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var selector
+    store_var _5
+    load_var _5
+    narrow_bind baml.env.Ref, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var selector
+    jump L6
+
+  L2:
+    load_var _5
+    store_var named
+    load_var named
+    call baml.env.Ref.get
+    store_var _8
+    load_var _8
+    narrow_bind string, slot=5
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_type string
+    load_var named
+    load_field .name
+    call baml.String.from
+    store_var _18
+    call ai.clients._shorthand_prefixes
+    store_var _22
+    load_type string
+    load_var _22
+    call baml.String.from
+    store_var _21
+    load_type string
+    load_var named
+    load_field .name
+    call baml.String.from
+    store_var _24
+    load_const "ai.clients"
+    load_const null
+    load_const "client selector env."
+    load_var _18
+    bin_op +
+    load_const " is not set: point it at a \"provider/model\" string (valid prefixes are "
+    bin_op +
+    load_var _21
+    bin_op +
+    load_const "), or give the client: position a value with a fallback — env."
+    bin_op +
+    load_var _24
+    bin_op +
+    load_const ".get() ?? \"openai/gpt-4o-mini\""
+    bin_op +
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L4:
+    load_var _8
+    call ai.clients._from_shorthand
+    jump L6
+
+  L5:
+    load_var _2
+    call ai.clients._from_shorthand
 
   L6:
     return
@@ -5485,6 +6005,67 @@ function ai.wire._wire_blocks(content: (ai.content.Text | ai.content.Reasoning |
     return
 }
 
+function ai.wire.credential_sources(cred: string | baml.env.Ref | null, legacy_env: string | null, canonical_env: string | null) -> string {
+    load_type string
+    alloc_array 0
+    store_var names
+    load_var cred
+    store_var _5
+    load_var _5
+    narrow_bind baml.env.Ref, slot=5
+    pop_jump_if_false L0
+    load_type string
+    load_var2 4 5
+    load_field .name
+    call baml.Array.push
+    pop 1
+
+  L0:
+    load_var legacy_env
+    store_var _10
+    load_var _10
+    narrow_bind string, slot=6
+    pop_jump_if_false L1
+    load_type string
+    load_var2 4 6
+    call baml.Array.push
+    pop 1
+
+  L1:
+    load_var canonical_env
+    store_var _15
+    load_var _15
+    narrow_bind string, slot=7
+    pop_jump_if_false L2
+    load_type string
+    load_var2 4 7
+    call baml.Array.push
+    pop 1
+
+  L2:
+    load_var names
+    container_len
+    store_var _21
+    load_var _21
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_type string
+    load_var names
+    load_const ", "
+    call baml.Array.join
+    jump L5
+
+  L4:
+    load_const "(no environment variable was named)"
+
+  L5:
+    return
+}
+
 function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.json | null) -> baml.json.json {
     load_var overrides
     load_const null
@@ -5507,6 +6088,84 @@ function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.j
 function ai.wire.render_output_format(t: type) -> string {
     load_var t
     sys_op baml.prompt.render_output_format
+    return
+}
+
+function ai.wire.resolve_credential(cred: string | baml.env.Ref | null, env_fallback: string | null) -> string | null {
+    load_var cred
+    store_var _4
+    load_var _4
+    narrow_bind string, slot=4
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var cred
+    store_var _8
+    load_var _8
+    narrow_bind baml.env.Ref, slot=6
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    store_var explicit
+    jump L6
+
+  L2:
+    load_var _8
+    call baml.env.Ref.get
+    store_var explicit
+    jump L6
+
+  L3:
+    load_var _4
+    store_var literal
+    load_var literal
+    call baml.String.trim
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var literal
+    store_var explicit
+    jump L6
+
+  L5:
+    load_const null
+    store_var explicit
+
+  L6:
+    load_var explicit
+    store_var _10
+    load_var _10
+    narrow_bind string, slot=7
+    pop_jump_if_false L7
+    jump L10
+
+  L7:
+    load_var env_fallback
+    store_var _12
+    load_var _12
+    narrow_bind string, slot=8
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_const null
+    jump L11
+
+  L9:
+    load_var _12
+    sys_op baml.env.get
+    jump L11
+
+  L10:
+    load_var _10
+
+  L11:
     return
 }
 

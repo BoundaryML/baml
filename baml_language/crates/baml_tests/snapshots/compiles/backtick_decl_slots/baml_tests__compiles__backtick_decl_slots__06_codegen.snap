@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4292
 ---
 function $init() -> null {
     call $init_let_0
@@ -66,6 +65,9 @@ function user.Greet$spec(name: string) -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.Fast
+    call ai.clients.resolve
+    store_var _6
     load_const "Greet"
     load_deref ?1
     load_const "name"
@@ -74,8 +76,7 @@ function user.Greet$spec(name: string) -> ai.FunctionSpec<string> {
     alloc_map 1
     load_var name
     make_closure .<lambda(Greet$spec, 0)>, 1
-    load_var _4
-    load_global user.Fast
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

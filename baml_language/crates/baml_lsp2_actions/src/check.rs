@@ -184,6 +184,43 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }
+        // TOP-LEVEL DECLARATION effect diagnostics: io reachable from a
+        // `client`/`let` initializer, which `$init` cannot run (E0158).
+        //
+        // Parse-tainted declarations are skipped for the same reason inference
+        // findings are above: recovery rebuilds a broken initializer into some
+        // other expression, and reporting what THAT reaches is noise on top of
+        // the syntax error the user actually needs to see.
+        for &let_loc in baml_compiler2_ppir::item_data::file_lets(db, file) {
+            let tainted_decl = baml_compiler2_ppir::body_scope(
+                db,
+                baml_compiler2_hir::body::BodyOwnerId::Let(let_loc),
+            )
+            .is_some_and(|scope| {
+                let idx = scope.file_scope_id(db).index() as usize;
+                idx < index.scopes.len() && {
+                    let descendants = &index.scopes[idx].descendants;
+                    tainted.contains(&idx)
+                        || (descendants.start.index()..descendants.end.index())
+                            .any(|i| tainted.contains(&(i as usize)))
+                }
+            });
+            if tainted_decl {
+                continue;
+            }
+            for (range, error) in
+                baml_compiler2_hir_ty::init_io::let_init_io_diagnostics(db, let_loc)
+            {
+                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                    message: error.to_string(),
+                    error,
+                    range,
+                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    related: Vec::new(),
+                };
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
         // CLASS generic-bound diagnostics.
         for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
             for (range, error) in
@@ -1359,6 +1396,8 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::MissingAssociatedTypeBindings { .. }
         | TirTypeError::AmbiguousInterfacePatternBindings { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::InterfaceProjectionBase { .. } => DiagnosticId::InterfaceProjectionBase,
+        // `$init` effect rules.
+        TirTypeError::InitIoNotAllowed { .. } => DiagnosticId::InitIoNotAllowed,
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,

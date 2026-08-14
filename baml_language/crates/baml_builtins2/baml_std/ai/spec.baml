@@ -3,6 +3,27 @@
 // No journal, no conversation, no wire state.
 // Mirrors _planv2/pages/02_guides/02_specs_and_runners/01_specs.md.
 
+/// A client credential (or endpoint) option: either the literal value, or a
+/// LATE-BOUND `baml.env.Ref` naming the environment variable that holds it.
+///
+/// Every provider client's `api_key` / `base_url` is `Credential?`, so all
+/// three shapes are accepted positionally:
+///
+///     api_key = "sk-..."                  // literal
+///     api_key = env.OPENAI_API_KEY        // late-bound ref, read per request
+///     api_key = null                      // fall back to the canonical env var
+///
+/// A `Ref` carries the variable's NAME only, never its value: a constructed
+/// client never holds the secret, and the read happens at request time — after
+/// `$init` (which cannot do io) and after a host has loaded its secrets.
+/// `ai.wire.resolve_credential` collapses the union to `string?`.
+type Credential = string | baml.env.Ref;
+
+/// What a `client:` position accepts. Defined in `ai/ns_clients/clients.baml`
+/// next to `ai.clients.resolve`, which consumes it; re-exported here so the
+/// package-root name `ai.ClientSelector` reads alongside `ai.Client`.
+type ClientSelector = root.clients.ClientSelector;
+
 /// Provider-neutral media retained inside a rendered prompt.
 type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf;
 

@@ -61,15 +61,16 @@ class ToolChoice {
 
 class AnthropicClient {
     model: string,
-    // null resolves from the environment at request time; construction
-    // never touches env, so declaring/constructing a client is always safe.
-    api_key: string?,
-    base_url: string?,
-    // Names of environment variables to read INSTEAD, at request time.
-    // A `client Name = ...` declaration is evaluated during `$init`, which
-    // cannot run io sysops — so a declaration can never read env itself.
-    // Naming the variable keeps the declaration pure while still letting a
-    // deployment (or a replay harness) point the client somewhere else.
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
+    // time), or null to resolve ANTHROPIC_API_KEY at request time. Construction
+    // never touches env, so declaring/constructing a client is always safe —
+    // and a `Ref` keeps the secret out of the client value entirely.
+    api_key: ai.Credential?,
+    base_url: ai.Credential?,
+    // DEPRECATED — names of environment variables to read INSTEAD, at request
+    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
+    // variable inline and are read at request time just the same; these are
+    // kept for compatibility and are consulted after an explicit credential.
     api_key_env: string?,
     base_url_env: string?,
 
@@ -106,8 +107,8 @@ class AnthropicClient {
     // truncates ordinary structured answers.
     function new(
         model: string = "claude-haiku-4-5",
-        api_key: string? = null,
-        base_url: string? = null,
+        api_key: ai.Credential? = null,
+        base_url: ai.Credential? = null,
         api_key_env: string? = null,
         base_url_env: string? = null,
         max_tokens: int = 8192,
@@ -149,7 +150,7 @@ class AnthropicClient {
     // bypassed this client's own `invoke` normalize wrapper and turned the one
     // misconfiguration every deployment hits first into a process-level failure.
     function resolved_api_key(self) -> string {
-        if let k: string = self.api_key {
+        if let k: string = ai.wire.resolve_credential(self.api_key, null) {
             return k;
         }
         if let name: string = self.api_key_env {
@@ -161,13 +162,13 @@ class AnthropicClient {
             return v;
         }
         throw baml.errors.InvalidArgument {
-            message: `anthropic needs an API key: pass api_key, or set ANTHROPIC_API_KEY (or name another variable with api_key_env)`,
+            message: `anthropic needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, self.api_key_env, "ANTHROPIC_API_KEY")}`,
         }
     }
 
     // The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
-        if let u: string = self.base_url {
+        if let u: string = ai.wire.resolve_credential(self.base_url, null) {
             return u;
         }
         if let name: string = self.base_url_env {

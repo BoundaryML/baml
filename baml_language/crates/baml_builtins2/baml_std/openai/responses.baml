@@ -24,15 +24,18 @@
 // configuring a string list of provider finish reasons.
 class ResponsesClient {
     model: string,
-    // null resolves OPENAI_API_KEY at request time; construction never
-    // touches env, so declaring/constructing a client is always safe.
-    api_key: string?,
-    base_url: string?,
-    // Names of environment variables to read INSTEAD, at request time.
-    // A `client Name = ...` declaration is evaluated during `$init`, which
-    // cannot run io sysops — so a declaration can never read env itself.
-    // Naming the variable keeps the declaration pure while still letting a
-    // deployment (or a replay harness) point the client somewhere else.
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref`, read at
+    // request time), or null to resolve OPENAI_API_KEY at request time.
+    // Construction never touches env, so declaring/constructing a client is
+    // always safe — and a `Ref` keeps the secret out of the client value.
+    api_key: ai.Credential?,
+    base_url: ai.Credential?,
+    // DEPRECATED — names of environment variables to read INSTEAD, at request
+    // time. `api_key = env.NAME` says the same thing inline and is preferred;
+    // these are kept for compatibility and are consulted after an explicit
+    // credential. (A `client Name = ...` declaration is evaluated during
+    // `$init`, which cannot run io sysops, which is why naming a variable —
+    // rather than reading one — was needed in the first place.)
     api_key_env: string?,
     base_url_env: string?,
 
@@ -66,8 +69,8 @@ class ResponsesClient {
 
     function new(
         model: string = "gpt-4o-mini",
-        api_key: string? = null,
-        base_url: string? = null,
+        api_key: ai.Credential? = null,
+        base_url: ai.Credential? = null,
         api_key_env: string? = null,
         base_url_env: string? = null,
         temperature: float? = null,
@@ -102,10 +105,11 @@ class ResponsesClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the named env
-    // var, else the provider's canonical one.
+    // The request-time credential: an explicit value (a literal, or the value
+    // of the variable an `env.NAME` ref points at), else the named env var,
+    // else the provider's canonical one. Nothing here runs before the request.
     function resolved_api_key(self) -> string {
-        if let k: string = self.api_key {
+        if let k: string = ai.wire.resolve_credential(self.api_key, null) {
             return k;
         }
         if let name: string = self.api_key_env {
@@ -118,7 +122,7 @@ class ResponsesClient {
 
     // The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
-        if let u: string = self.base_url {
+        if let u: string = ai.wire.resolve_credential(self.base_url, null) {
             return u;
         }
         if let name: string = self.base_url_env {

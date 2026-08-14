@@ -31,13 +31,16 @@ class VertexClient {
     // Express-mode API key (opt-in; there is deliberately no ambient env
     // fallback, so an unrelated GOOGLE_API_KEY cannot downgrade a
     // project-scoped client).
-    api_key: string?,
+    // A literal string or `env.NAME` (a late-bound `baml.env.Ref` read at
+    // request time); null keeps OAuth2 credentials as the path.
+    api_key: ai.Credential?,
     // Replaces the whole `…/publishers/google/models` prefix; the caller owns
     // the path from there on.
-    base_url: string?,
-    // Names of environment variables to read INSTEAD, at request time — a
-    // `client Name = ...` declaration is evaluated during `$init`, which
-    // cannot read env itself.
+    base_url: ai.Credential?,
+    // DEPRECATED — names of environment variables to read INSTEAD, at request
+    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
+    // variable inline and are read at request time just the same; these are
+    // kept for compatibility and are consulted after an explicit credential.
     api_key_env: string?,
     base_url_env: string?,
 
@@ -62,8 +65,8 @@ class VertexClient {
         location: string? = null,
         credentials_json: string? = null,
         credentials_file: string? = null,
-        api_key: string? = null,
-        base_url: string? = null,
+        api_key: ai.Credential? = null,
+        base_url: ai.Credential? = null,
         api_key_env: string? = null,
         base_url_env: string? = null,
         request_body: baml.json.json? = null,
@@ -103,7 +106,7 @@ class VertexClient {
     // The express-mode key, or null for OAuth2. Unlike the other providers
     // this may legitimately be absent: credentials are the normal path.
     function resolved_api_key(self) -> string? {
-        if let k: string = self.api_key {
+        if let k: string = ai.wire.resolve_credential(self.api_key, null) {
             return k;
         }
         if let name: string = self.api_key_env {
@@ -114,7 +117,7 @@ class VertexClient {
 
     // The request-time base URL, or null to build one from project + location.
     function resolved_base_url(self) -> string? {
-        if let u: string = self.base_url {
+        if let u: string = ai.wire.resolve_credential(self.base_url, null) {
             return u;
         }
         if let name: string = self.base_url_env {

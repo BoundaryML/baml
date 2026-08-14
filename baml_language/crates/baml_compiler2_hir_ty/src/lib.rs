@@ -33,6 +33,7 @@ pub mod facts;
 pub mod ide;
 pub mod impls;
 pub mod infer;
+pub mod init_io;
 pub mod interfaces;
 pub mod lower;
 pub mod method_resolution;

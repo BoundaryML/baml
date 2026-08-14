@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18703
 ---
 === MIR2 ===
 fn user.AskO1(question: string, client: null | ai.Client) -> string {
@@ -103,6 +102,7 @@ fn user.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: ai.Client
 
     bb0: {
         _2 = { const "question": copy _1 }: map<string, unknown>;
@@ -112,11 +112,15 @@ fn user.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<string> { const "AskO1", copy _2, copy _3, copy _4, const item user.O1Client };
-        goto -> bb2;
+        _6 = call const fn ai.clients.resolve(const item user.O1Client) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<string> { const "AskO1", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -325,6 +329,7 @@ fn user.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: ai.Client
 
     bb0: {
         _2 = { const "question": copy _1 }: map<string, unknown>;
@@ -334,11 +339,15 @@ fn user.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<string> { const "AskGpt4o", copy _2, copy _3, copy _4, const item user.Gpt4oClient };
-        goto -> bb2;
+        _6 = call const fn ai.clients.resolve(const item user.Gpt4oClient) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<string> { const "AskGpt4o", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

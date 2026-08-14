@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 26154
 ---
 function $init() -> null {
     call $init_let_0
@@ -86,6 +85,9 @@ function user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<Sentiment>
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.GPT4o
+    call ai.clients.resolve
+    store_var _6
     load_const "ClassifySentiment"
     load_deref ?1
     load_const "text"
@@ -94,8 +96,7 @@ function user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<Sentiment>
     alloc_map 1
     load_var text
     make_closure .<lambda(ClassifySentiment$spec, 0)>, 1
-    load_var _4
-    load_global user.GPT4o
+    load_var2 2 3
     load_type Sentiment
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -177,6 +178,9 @@ function user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.GPT4o
+    call ai.clients.resolve
+    store_var _6
     load_const "ClassifySentiment2"
     load_deref ?1
     load_const "text"
@@ -185,8 +189,7 @@ function user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
     alloc_map 1
     load_var text
     make_closure .<lambda(ClassifySentiment2$spec, 0)>, 1
-    load_var _4
-    load_global user.GPT4o
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -300,6 +303,9 @@ function user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<s
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_global user.GPT4o
+    call ai.clients.resolve
+    store_var _7
     load_const "GenerateTests"
     load_deref ?1
     load_deref ?2
@@ -310,8 +316,7 @@ function user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<s
     alloc_map 2
     load_var2 1 2
     make_closure .<lambda(GenerateTests$spec, 0)>, 2
-    load_var _5
-    load_global user.GPT4o
+    load_var2 3 4
     load_type string[]
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

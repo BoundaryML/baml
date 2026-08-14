@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0158
+
+  × client `DirectEnvRead` reaches `baml.env.get`, which performs io, through `baml.env.get_or_panic` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at
+  │ request time instead — e.g. `env.X` (a late-bound reference) or the client's `*_env` option
+    ╭─[init_io.baml:16:15]
+ 16 │     api_key = baml.env.get_or_panic("OPENAI_API_KEY"),
+    ·               ─────────────────────
+    ╰────
+
+  [type] E0158
+
+  × client `RawSysop` calls `baml.env.get`, which performs io — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at request time instead — e.g. `env.X` (a
+  │ late-bound reference) or the client's `*_env` option
+    ╭─[init_io.baml:24:15]
+ 24 │     api_key = baml.env.get("OPENAI_API_KEY") ?? "unset",
+    ·               ────────────
+    ╰────
+
+  [type] E0158
+
+  × client `ViaHelper` reaches `baml.env.get`, which performs io, through `load_secret` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at request time
+  │ instead — e.g. `env.X` (a late-bound reference) or the client's `*_env` option
+    ╭─[init_io.baml:34:15]
+ 34 │     api_key = load_secret(),
+    ·               ───────────
+    ╰────
+
+  [type] E0158
+
+  × client `ViaFetch` reaches `baml.http._fetch`, which performs io, through `baml.http.fetch` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at
+  │ request time instead — e.g. `env.X` (a late-bound reference) or the client's `*_env` option
+    ╭─[init_io.baml:40:15]
+ 40 │     api_key = baml.http.fetch("https://vault.example/key").text(),
+    ·               ───────────────
+    ╰────
+
+  [type] E0158
+
+  × client `InvokedThunk` reaches `baml.env.get`, which performs io, through `baml.env.get_or_panic` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at
+  │ request time instead — e.g. `env.X` (a late-bound reference) or the client's `*_env` option
+    ╭─[init_io.baml:48:24]
+ 48 │     api_key = (() -> { baml.env.get_or_panic("OPENAI_API_KEY") })(),
+    ·                        ─────────────────────
+    ╰────

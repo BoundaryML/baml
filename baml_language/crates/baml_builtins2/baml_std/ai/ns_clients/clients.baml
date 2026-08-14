@@ -1,6 +1,117 @@
 // Reliability composes at the client boundary: wrapper clients.
 // Mirrors _planv2/pages/02_guides/03_clients/04_reliability.md.
 
+// ---------------------------------------------------------------------------
+// Dynamic client selection.
+//
+// A `client:` position accepts more than a constructed client: the same
+// "provider/model" shorthand the compiler understands, and a late-bound
+// `baml.env.Ref` so a deployment can pick its model with an environment
+// variable that is read at CALL time rather than snapshotted during `$init`.
+
+/// What a `client:` position accepts: an already-built client, a
+/// `"provider/model"` shorthand string, or a `baml.env.Ref` naming a variable
+/// that holds one. `ai.clients.resolve` turns any of them into a `root.Client`.
+type ClientSelector = root.Client | string | baml.env.Ref;
+
+/// The `"provider/model"` prefixes `resolve` understands, for error messages.
+function _shorthand_prefixes() -> string {
+    [
+        "openai",
+        "openai-chat",
+        "openai-images",
+        "azure",
+        "ollama",
+        "openrouter",
+        "anthropic",
+        "google",
+        "vertex",
+        "bedrock",
+        "ai-gateway-images",
+        "claude-code",
+    ].join(", ")
+}
+
+// !!! DRIFT HAZARD !!!
+// This is the RUNTIME half of the "provider/model" shorthand map. Its
+// compile-time twin is `spec_client_provider` in
+// `crates/baml_compiler2_ast/src/lower_cst.rs`, which lowers a literal
+// `client "openai/gpt-4o-mini"` straight to a constructor call. The two maps
+// must list the SAME prefixes and pick the SAME class for each one — a
+// `client:` written as a literal and the identical string arriving here at
+// runtime have to select the same client. Change one, change the other, and
+// update `_shorthand_prefixes` above.
+function _from_shorthand(shorthand: string) -> root.Client {
+    let separator = shorthand.index_of("/");
+    if let index: int = separator {
+        let prefix = shorthand.substring(0, index);
+        let model = shorthand.substring(index + 1, shorthand.length());
+        let selected: root.Client? = match (prefix) {
+            "openai" => openai.ResponsesClient.new(model = model),
+            "openai-chat" => openai.ChatClient.new(model = model),
+            "openai-images" => openai.ImageClient.new(model = model),
+            "azure" => openai.AzureClient.new(model = model),
+            "ollama" => openai.OllamaClient.new(model = model),
+            "openrouter" => openai.OpenRouterClient.new(model = model),
+            "anthropic" => anthropic.AnthropicClient.new(model = model),
+            "google" => google.GoogleClient.new(model = model),
+            "vertex" => google.VertexClient.new(model = model),
+            "bedrock" => aws.BedrockClient.new(model = model),
+            "ai-gateway-images" => vercel.AiGatewayImageClient.new(model = model),
+            "claude-code" => claude_code.ClaudeCodeClient.new(model = model),
+            _ => null,
+        };
+        if let built: root.Client = selected {
+            built
+        } else {
+            throw root.errors.InvalidRequest {
+                provider: "ai.clients",
+                status_code: null,
+                detail: `no builtin provider for prefix "${prefix}" in client "${shorthand}"; valid prefixes are ${_shorthand_prefixes()} (for any other OpenAI-compatible endpoint, build openai.GenericClient.new(base_url = ..., model = "${model}"))`,
+                raw_body: null,
+            }
+        }
+    } else {
+        throw root.errors.InvalidRequest {
+            provider: "ai.clients",
+            status_code: null,
+            detail: `client "${shorthand}" is not a "provider/model" string (no "/"); valid prefixes are ${_shorthand_prefixes()}`,
+            raw_body: null,
+        }
+    }
+}
+
+/// Resolve a `ClientSelector` to the client to call, at CALL time.
+///
+///   * a `root.Client` is returned unchanged (identity);
+///   * a string is the `"provider/model"` shorthand, constructed here — the
+///     runtime twin of the compiler's literal-`client:` lowering. An unknown
+///     prefix throws `root.errors.InvalidRequest` listing the valid ones;
+///   * a `baml.env.Ref` is read now and its value takes the string path. An
+///     UNSET variable is a typed `root.errors.InvalidRequest` naming it — not
+///     a panic, so a `catch_all` at the call boundary can still fall back.
+///
+/// This is what makes `client: env.MODEL.get() ?? "openai/gpt-4o-mini"` work:
+/// nothing about the selection is decided until the call happens.
+function resolve(selector: ClientSelector) -> root.Client {
+    match (selector) {
+        let shorthand: string => _from_shorthand(shorthand),
+        let named: baml.env.Ref => {
+            if let value: string = named.get() {
+                _from_shorthand(value)
+            } else {
+                throw root.errors.InvalidRequest {
+                    provider: "ai.clients",
+                    status_code: null,
+                    detail: `client selector env.${named.name} is not set: point it at a "provider/model" string (valid prefixes are ${_shorthand_prefixes()}), or give the client: position a value with a fallback — env.${named.name}.get() ?? "openai/gpt-4o-mini"`,
+                    raw_body: null,
+                }
+            }
+        },
+        let existing: root.Client => existing,
+    }
+}
+
 // The default judgment: a request the provider rejected does not become
 // valid by resending.
 function default_retry_judgment(f: root.errors.Failure) -> bool {

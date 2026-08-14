@@ -25,12 +25,17 @@
 class AiGatewayImageClient {
     // The gateway model id, e.g. "bfl/flux-2-pro" — sent as `ai-model-id`.
     model: string,
-    // null resolves AI_GATEWAY_API_KEY at request time; construction never
-    // touches env, so declaring/constructing a client is always safe.
-    api_key: string?,
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
+    // time), or null to resolve AI_GATEWAY_API_KEY at request time.
+    // Construction never touches env, so declaring/constructing a client is
+    // always safe.
+    api_key: ai.Credential?,
     // Defaults to https://ai-gateway.vercel.sh/v4/ai.
-    base_url: string?,
-    // Names of environment variables to read INSTEAD, at request time.
+    base_url: ai.Credential?,
+    // DEPRECATED — names of environment variables to read INSTEAD, at request
+    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
+    // variable inline and are read at request time just the same; these are
+    // kept for compatibility and are consulted after an explicit credential.
     api_key_env: string?,
     base_url_env: string?,
 
@@ -55,8 +60,8 @@ class AiGatewayImageClient {
 
     function new(
         model: string = "openai/gpt-image-1",
-        api_key: string? = null,
-        base_url: string? = null,
+        api_key: ai.Credential? = null,
+        base_url: ai.Credential? = null,
         api_key_env: string? = null,
         base_url_env: string? = null,
         n: int? = null,
@@ -89,7 +94,7 @@ class AiGatewayImageClient {
     // A missing credential is a catchable ai.errors.InvalidRequest rather than
     // a panic, so the caller's `catch_all` can fall back to another client.
     function resolved_api_key(self) -> string {
-        if let key: string = self.api_key {
+        if let key: string = ai.wire.resolve_credential(self.api_key, null) {
             return key;
         }
         if let name: string = self.api_key_env {
@@ -103,14 +108,14 @@ class AiGatewayImageClient {
         throw ai.errors.InvalidRequest {
             provider: "ai-gateway-images",
             status_code: null,
-            detail: "no AI Gateway API key: set the client's api_key, point api_key_env at a variable that is set, or export AI_GATEWAY_API_KEY",
+            detail: `no AI Gateway API key: set the client's api_key (a literal or env.NAME), or export one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, self.api_key_env, "AI_GATEWAY_API_KEY")}`,
             raw_body: null,
         }
     }
 
     // The request-time base URL, or null for the gateway default.
     function resolved_base_url(self) -> string? {
-        if let url: string = self.base_url {
+        if let url: string = ai.wire.resolve_credential(self.base_url, null) {
             return url;
         }
         if let name: string = self.base_url_env {

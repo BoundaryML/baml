@@ -347,6 +347,14 @@ pub enum DiagnosticId {
     /// the interface explicitly takes a qualified projection
     /// (`(Base as Iterator).Element`). Rust's E0223 analog.
     InterfaceProjectionBase,
+
+    // `$init` effect rules (E0158)
+    /// A top-level declaration's initializer (`client Foo = …`, `let x = …`)
+    /// reaches an io sysop. These run in the synthesized `$init` chainer at
+    /// engine creation, on a path that cannot suspend, so the io aborts engine
+    /// construction with an opaque `InitFailed` instead of raising a catchable
+    /// BAML error.
+    InitIoNotAllowed,
 }
 
 impl DiagnosticId {
@@ -548,6 +556,11 @@ impl DiagnosticId {
             DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
             DiagnosticId::InterfaceProjectionBase => "E0156",
+
+            // `$init` effect rules. E0155 is unassigned but skipped: E0157 was
+            // already the high-water mark when this was added, and codes are
+            // allocated forward so a reader can date them.
+            DiagnosticId::InitIoNotAllowed => "E0158",
         }
     }
 }
