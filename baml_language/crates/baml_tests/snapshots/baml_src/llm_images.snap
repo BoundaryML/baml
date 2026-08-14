@@ -18,123 +18,186 @@ function llm_images.$init_test_ns_llm_images_images(registry: testing.TestCollec
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_passthrough"
+    load_const "openai_images_url_mode_inlines"
     make_closure .<lambda($init_test_ns_llm_images_images, 2)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_list_output"
+    load_const "openai_images_url_fetch_failure"
     make_closure .<lambda($init_test_ns_llm_images_images, 3)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_union_output"
+    load_const "openai_images_passthrough"
     make_closure .<lambda($init_test_ns_llm_images_images, 4)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_exactly_one_error"
+    load_const "openai_images_list_output"
     make_closure .<lambda($init_test_ns_llm_images_images, 5)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_no_data_error"
+    load_const "openai_images_union_output"
     make_closure .<lambda($init_test_ns_llm_images_images, 6)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_media_input_rejected"
+    load_const "openai_images_mixed_shape_error"
     make_closure .<lambda($init_test_ns_llm_images_images, 7)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_http_error_taxonomy"
+    load_const "openai_images_exactly_one_error"
     make_closure .<lambda($init_test_ns_llm_images_images, 8)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "gateway_images_request_shape"
+    load_const "openai_images_no_data_error"
     make_closure .<lambda($init_test_ns_llm_images_images, 9)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "gateway_images_output_format_mime"
+    load_const "openai_images_media_input_rejected"
     make_closure .<lambda($init_test_ns_llm_images_images, 10)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "gateway_images_data_url_payload"
+    load_const "openai_images_http_error_taxonomy"
     make_closure .<lambda($init_test_ns_llm_images_images, 11)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "gateway_images_no_images_error"
+    load_const "gateway_images_request_shape"
     make_closure .<lambda($init_test_ns_llm_images_images, 12)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "gateway_images_http_error_taxonomy"
+    load_const "gateway_images_output_format_mime"
     make_closure .<lambda($init_test_ns_llm_images_images, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_default_endpoint"
+    load_const "gateway_images_data_url_payload"
     make_closure .<lambda($init_test_ns_llm_images_images, 14)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "gateway_images_default_endpoint"
+    load_const "gateway_images_data_url_not_base64"
     make_closure .<lambda($init_test_ns_llm_images_images, 15)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "openai_images_streaming_unsupported"
+    load_const "gateway_images_usage"
     make_closure .<lambda($init_test_ns_llm_images_images, 16)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_images"
-    load_const "gateway_images_streaming_unsupported"
+    load_const "gateway_images_warning_lines"
     make_closure .<lambda($init_test_ns_llm_images_images, 17)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "gateway_images_image_input_files"
+    make_closure .<lambda($init_test_ns_llm_images_images, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "gateway_images_audio_input_rejected"
+    make_closure .<lambda($init_test_ns_llm_images_images, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "gateway_images_no_images_error"
+    make_closure .<lambda($init_test_ns_llm_images_images, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "gateway_images_http_error_taxonomy"
+    make_closure .<lambda($init_test_ns_llm_images_images, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "openai_images_default_endpoint"
+    make_closure .<lambda($init_test_ns_llm_images_images, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "gateway_images_default_endpoint"
+    make_closure .<lambda($init_test_ns_llm_images_images, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "openai_images_streaming_unsupported"
+    make_closure .<lambda($init_test_ns_llm_images_images, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "gateway_images_streaming_unsupported"
+    make_closure .<lambda($init_test_ns_llm_images_images, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_images"
+    load_const "missing_key"
+    make_closure .<lambda($init_test_ns_llm_images_images, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_set_at
+    pop 1
     call testing.Sequential
-    store_var _40
+    store_var _58
     load_var registry
     load_const "root.llm_images"
     load_const "live"
-    make_closure .<lambda($init_test_ns_llm_images_images, 18)>, 0
-    load_var _40
+    make_closure .<lambda($init_test_ns_llm_images_images, 29)>, 0
+    load_var _58
     call testing.TestCollector.register_test_set_at
     pop 1
     load_const null
@@ -161,7 +224,7 @@ function llm_images.GatewayDraw(subject: string, client: ai.Client | null) -> im
     call user.llm_images.GatewayDraw$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -265,7 +328,7 @@ function llm_images.GatewayDrawSet(subject: string, client: ai.Client | null) ->
     call user.llm_images.GatewayDrawSet$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image[], Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image[]>>
+    load_type ai.Runner<image[], Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -349,6 +412,219 @@ function llm_images.GatewayDrawSet$stream(subject: string, client: ai.stream.Str
     return
 }
 
+function llm_images.GatewayRedraw(source: image, subject: string, client: ai.Client | null) -> image {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type image
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _6
+    load_var2 1 2
+    call user.llm_images.GatewayRedraw$spec
+    store_var _8
+    load_var2 5 6
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var _5
+    load_field .value
+    return
+}
+
+function llm_images.GatewayRedraw$parse(json: string) -> image {
+    load_type image
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_images.GatewayRedraw$render_prompt(source: image, subject: string) -> ai.Prompt {
+    load_var2 1 2
+    call user.llm_images.GatewayRedraw$spec
+    store_var _3
+    load_type image
+    call ai.wire.render_output_format
+    store_var _4
+    load_type image
+    load_var2 3 4
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_images.GatewayRedraw$spec(source: image, subject: string) -> ai.FunctionSpec<image> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _5
+    load_const "openai/gpt-image-1"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call vercel.AiGatewayImageClient.new
+    store_var _7
+    load_const "GatewayRedraw"
+    load_deref ?1
+    load_deref ?2
+    load_const "source"
+    load_const "subject"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    load_var2 1 2
+    make_closure .<lambda(GatewayRedraw$spec, 0)>, 2
+    load_var2 3 4
+    load_type image
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_images.GatewayRedraw$stream(source: image, subject: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image, image> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    call user.llm_images.GatewayRedraw$spec
+    store_var _5
+    load_type image
+    load_type image
+    load_var2 4 3
+    call ai.stream.from_spec
+    return
+}
+
+function llm_images.GatewayRedrawAudio(clip: audio, client: ai.Client | null) -> image {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type image
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var clip
+    call user.llm_images.GatewayRedrawAudio$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_images.GatewayRedrawAudio$parse(json: string) -> image {
+    load_type image
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_images.GatewayRedrawAudio$render_prompt(clip: audio) -> ai.Prompt {
+    load_var clip
+    call user.llm_images.GatewayRedrawAudio$spec
+    store_var _2
+    load_type image
+    call ai.wire.render_output_format
+    store_var _3
+    load_type image
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_images.GatewayRedrawAudio$spec(clip: audio) -> ai.FunctionSpec<image> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "openai/gpt-image-1"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call vercel.AiGatewayImageClient.new
+    store_var _6
+    load_const "GatewayRedrawAudio"
+    load_deref ?1
+    load_const "clip"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var clip
+    make_closure .<lambda(GatewayRedrawAudio$spec, 0)>, 1
+    load_var2 2 3
+    load_type image
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_images.GatewayRedrawAudio$stream(clip: audio, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image, image> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var clip
+    call user.llm_images.GatewayRedrawAudio$spec
+    store_var _4
+    load_type image
+    load_type image
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
 function llm_images.ImagesDraw(subject: string, client: ai.Client | null) -> image {
     load_var client
     load_const <omitted>
@@ -369,7 +645,7 @@ function llm_images.ImagesDraw(subject: string, client: ai.Client | null) -> ima
     call user.llm_images.ImagesDraw$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -479,7 +755,7 @@ function llm_images.ImagesDrawOrSay(subject: string, client: ai.Client | null) -
     call user.llm_images.ImagesDrawOrSay$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string | image, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string | image>>
+    load_type ai.Runner<string | image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string | image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -589,7 +865,7 @@ function llm_images.ImagesDrawSet(subject: string, client: ai.Client | null) -> 
     call user.llm_images.ImagesDrawSet$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image[], Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image[]>>
+    load_type ai.Runner<image[], Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -699,7 +975,7 @@ function llm_images.ImagesRedraw(source: image, subject: string, client: ai.Clie
     call user.llm_images.ImagesRedraw$spec
     store_var _8
     load_var2 5 6
-    load_type ai.Runner<image, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _5
@@ -813,7 +1089,7 @@ function llm_images.LiveDrawSquare(client: ai.Client | null) -> image {
     call user.llm_images.LiveDrawSquare$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<image, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
@@ -967,12 +1243,88 @@ function llm_images._stream_openai_images() -> string {
     return
 }
 
+function llm_images.gateway_images_audio_input_rejected() -> string {
+    load_const "bfl/flux-2-pro"
+    load_const "test-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call vercel.AiGatewayImageClient.new
+    store_var cl
+    load_const "aGVsbG8="
+    load_const "audio/mpeg"
+    call baml.media.Audio.from_base64
+    call user.llm_images.GatewayRedrawAudio$spec
+    store_var _7
+    load_type image
+    load_var _7
+    call user.llm_images._images_turn_input
+    store_var _6
+    load_var2 1 3
+    call vercel.internal.gateway_images_render
+    jump L2
+    load_var e
+    store_var _10
+    load_var _10
+    narrow_bind ai.errors.InvalidRequest, slot=5
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw_if_panic
+    load_type ai.errors.NetworkFailure | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.json.JsonSerializationError
+    load_var e
+    call baml.String.from
+    store_var _13
+    load_type string
+    load_var _13
+    call baml.String.from
+    store_var _12
+    load_const "unexpected error class: "
+    load_var _12
+    bin_op +
+    jump L3
+
+  L1:
+    load_var _10
+    load_field .detail
+    jump L3
+
+  L2:
+    load_field .url
+
+  L3:
+    return
+}
+
+function llm_images.gateway_images_data_url_not_base64() -> string {
+    load_const "{\"images\":[\"data:image/png,rawpixels\"]}"
+    call user.llm_mock.MockResponse.ok
+    store_var _3
+    load_type string
+    load_type never
+    load_var _3
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(gateway_images_data_url_not_base64, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
 function llm_images.gateway_images_data_url_payload() -> string {
     load_const "{\"images\":[\"data:image/webp;base64,aGVsbG8=\"]}"
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1098,6 +1450,91 @@ function llm_images.gateway_images_http_error_taxonomy() -> string {
     return
 }
 
+function llm_images.gateway_images_image_input_files() -> string {
+    load_const "{\"images\":[\"d29ybGQ=\"]}"
+    call user.llm_mock.MockResponse.ok
+    store_var _3
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var _3
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(gateway_images_image_input_files, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_images.gateway_images_missing_key() -> string {
+    load_const "bfl/flux-2-pro"
+    load_const <omitted>
+    load_const "http://127.0.0.1:1/v4/ai"
+    load_const "BAML_TEST_NO_SUCH_GATEWAY_KEY"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call vercel.AiGatewayImageClient.new
+    store_var cl
+    load_type image
+    load_const <omitted>
+    load_var cl
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_const "a lamp"
+    call user.llm_images.GatewayDraw$spec
+    store_var _8
+    load_var2 4 5
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    call baml.media.Image.base64
+    jump L2
+    load_var e
+    store_var _9
+    load_var _9
+    narrow_bind ai.errors.InvalidRequest, slot=6
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw_if_panic
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_var e
+    call baml.String.from
+    store_var _15
+    load_type string
+    load_var _15
+    call baml.String.from
+    store_var _14
+    load_const "unexpected error class: "
+    load_var _14
+    bin_op +
+    jump L2
+
+  L1:
+    load_type string
+    load_var _9
+    load_field .provider
+    call baml.String.from
+    store_var _11
+    load_const "InvalidRequest "
+    load_var _11
+    bin_op +
+
+  L2:
+    return
+}
+
 function llm_images.gateway_images_no_images_error() -> string {
     load_const "{\"images\":[],\"providerMetadata\":{}}"
     call user.llm_mock.MockResponse.ok
@@ -1117,7 +1554,7 @@ function llm_images.gateway_images_output_format_mime() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1131,7 +1568,7 @@ function llm_images.gateway_images_request_shape() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1161,6 +1598,55 @@ function llm_images.gateway_images_streaming_unsupported() -> string {
     load_field .client_id
 
   L2:
+    return
+}
+
+function llm_images.gateway_images_usage() -> string {
+    load_const "{\"images\":[\"aGVsbG8=\"],\"warnings\":[{\"type\":\"unsupported\",\"feature\":\"seed\",\"details\":\"the provider ignores seed\"},{\"type\":\"martian\",\"hue\":7}],\"usage\":{\"inputTokens\":12,\"outputTokens\":34,\"totalTokens\":46}}"
+    call user.llm_mock.MockResponse.ok
+    store_var _3
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_var _3
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(gateway_images_usage, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_images.gateway_images_warning_lines() -> string {
+    load_const "unsupported"
+    load_const "seed"
+    load_const "the provider ignores seed"
+    load_const null
+    load_const null
+    init_instance vercel.internal.GwImagesWarning .type, .feature, .details, .setting, .message
+    call vercel.internal.gateway_images_warning_text
+    store_var _2
+    load_const "deprecated"
+    load_const null
+    load_const null
+    load_const "aspectRatio"
+    load_const "use size instead"
+    init_instance vercel.internal.GwImagesWarning .type, .feature, .details, .setting, .message
+    call vercel.internal.gateway_images_warning_text
+    store_var _4
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance vercel.internal.GwImagesWarning .type, .feature, .details, .setting, .message
+    call vercel.internal.gateway_images_warning_text
+    store_var _6
+    load_type string
+    load_var2 1 2
+    load_var _6
+    load_type string
+    alloc_array 3
+    load_const "\n"
+    call baml.Array.join
     return
 }
 
@@ -1205,7 +1691,7 @@ function llm_images.live_openai_images_draws() -> string {
     call user.llm_images.LiveDrawSquare$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
@@ -1252,7 +1738,7 @@ function llm_images.openai_images_dalle_response_format() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1344,7 +1830,7 @@ function llm_images.openai_images_list_output() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1363,6 +1849,97 @@ function llm_images.openai_images_media_input_rejected() -> string {
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(openai_images_media_input_rejected, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_images.openai_images_missing_key() -> string {
+    load_const "gpt-image-1"
+    load_const <omitted>
+    load_const "http://127.0.0.1:1/v1"
+    load_const "BAML_TEST_NO_SUCH_OPENAI_IMAGES_KEY"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ImageClient.new
+    store_var cl
+    load_type image
+    load_const <omitted>
+    load_var cl
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_const "a lamp"
+    call user.llm_images.ImagesDraw$spec
+    store_var _8
+    load_var2 4 5
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    call baml.media.Image.base64
+    jump L2
+    load_var e
+    store_var _9
+    load_var _9
+    narrow_bind ai.errors.InvalidRequest, slot=6
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw_if_panic
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_var e
+    call baml.String.from
+    store_var _15
+    load_type string
+    load_var _15
+    call baml.String.from
+    store_var _14
+    load_const "unexpected error class: "
+    load_var _14
+    bin_op +
+    jump L2
+
+  L1:
+    load_type string
+    load_var _9
+    load_field .provider
+    call baml.String.from
+    store_var _11
+    load_const "InvalidRequest "
+    load_var _11
+    bin_op +
+
+  L2:
+    return
+}
+
+function llm_images.openai_images_mixed_shape_error() -> string {
+    call user.llm_images.images_two_png
+    call user.llm_mock.MockResponse.ok
+    store_var _3
+    load_type string
+    load_type never
+    load_var _3
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(openai_images_mixed_shape_error, 0)>, 0
     call user.llm_mock.mock_json_serve
     return
 }
@@ -1386,7 +1963,7 @@ function llm_images.openai_images_passthrough() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1400,7 +1977,7 @@ function llm_images.openai_images_request_shape() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1438,11 +2015,46 @@ function llm_images.openai_images_union_output() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(openai_images_union_output, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_images.openai_images_url_fetch_failure() -> string {
+    load_const 404
+    load_const "{\"error\":\"expired\"}"
+    call user.llm_mock.MockResponse.error
+    store_var _2
+    load_type string
+    load_type baml.errors.Io
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(openai_images_url_fetch_failure, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_images.openai_images_url_mode_inlines() -> string {
+    load_const 200
+    load_const "hello"
+    load_const "image/jpeg"
+    load_const "content-type"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.llm_mock.MockResponse.with_headers
+    store_var _2
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.UnknownError | ai.errors.Failure
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(openai_images_url_mode_inlines, 0)>, 0
     call user.llm_mock.mock_json_serve
     return
 }

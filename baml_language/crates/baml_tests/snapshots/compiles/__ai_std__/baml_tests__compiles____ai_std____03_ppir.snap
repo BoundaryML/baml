@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 2444
 ---
 === PPIR ===
 
@@ -219,8 +218,17 @@ class ai.errors.ToolFailedError$stream {
   cause: Failure | null
 }
 enum ai.errors.RetrySafety {Safe, Unknown, Unsafe}
-function ai.errors.classify_http(provider: string, status_code: int, body: string) -> Failure  [expr] {
-  {  } if (status_code Eq 429) {  } ai.errors.RateLimited { provider: provider, retry_after_ms: null, raw_body: body } else if (status_code Eq 408 Or status_code Ge 500) {  } ai.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: body } else {  } ai.errors.InvalidRequest { provider: provider, status_code: status_code, detail: `...`, raw_body: body }
+function ai.errors._header(headers: map<string, string>, lower: string, canonical: string) -> string?  [expr] {
+  {  } headers.get(lower) NullCoalesce headers.get(canonical)
+}
+function ai.errors._int_header(headers: map<string, string>, lower: string, canonical: string) -> int?  [expr] {
+  { if let raw: string = _header(headers, lower, canonical) { let parsed: int? = baml.Int.parse(raw.trim()) catch (e) { baml.errors.ParseError => null } } if let value: int = parsed {  } if (value Ge 0) { return value } } null
+}
+function ai.errors._retry_after_ms(headers: map<string, string>?) -> int?  [expr] {
+  { if let h: map<string, string> = headers { if let ms: int = _int_header(h, "retry-after-ms", "Retry-After-Ms") { return ms } } if let seconds: int = _int_header(h, "retry-after", "Retry-After") { return seconds Mul 1000 } } null
+}
+function ai.errors.classify_http(provider: string, status_code: int, body: string, headers: map<string, string>? = null) -> Failure  [expr] {
+  {  } if (status_code Eq 429) {  } ai.errors.RateLimited { provider: provider, retry_after_ms: _retry_after_ms(headers), raw_body: body } else if (status_code Eq 408 Or status_code Ge 500) {  } ai.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: body } else {  } ai.errors.InvalidRequest { provider: provider, status_code: status_code, detail: `...`, raw_body: body }
 }
 function ai.errors.normalize(error: unknown) -> Failure | baml.errors.UnknownError  [expr] {
   {  } match (error) { failure: Failure => failure, unknown_error: baml.errors.UnknownError => unknown_error, _ => baml.errors.UnknownError { data: error, message: [error.to_string()] } }
@@ -438,6 +446,8 @@ class ai.stream.TurnStream {
   _input_tokens: int?
   _output_tokens: int?
   _done: bool
+  _require_terminal: string?
+  _saw_terminal: bool
 }
 class ai.stream.TurnStream$stream {
   _sse: baml.http.SseStream$stream | null
@@ -451,9 +461,14 @@ class ai.stream.TurnStream$stream {
   _input_tokens: int | null
   _output_tokens: int | null
   _done: bool | null
+  _require_terminal: string | null
+  _saw_terminal: bool | null
 }
 type ai.stream.StreamEvent = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
 type ai.stream.StreamEvent$stream = ai.stream.TextDelta$stream | ai.stream.TurnMeta$stream | ai.stream.TurnDone$stream
+function ai.stream._check_terminal(self: ?) -> null  [expr] {
+  {  } if let provider: string = self._require_terminal { if (Not self._saw_terminal) { let partial: string? = if (self._text Eq "") {  } null else {  } self._text; throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: partial } } } null else {  } null
+}
 function ai.stream._finish(self: ?) -> null  [expr] {
   { self._done = true } if let sse: baml.http.SseStream = self._sse {  } sse.close() else {  } null
 }
@@ -464,20 +479,20 @@ function ai.stream.final(self: ?) -> TFinal  [expr] {
   { while Not self._finished {  } match (self._next_text()) { null => { self._finished = true }, s: string => { self._text = self._text Add s } } } baml.sap.__parse_final(self._text, self._cache)
 }
 function ai.stream.final_turn(self: ?) -> root.ModelTurn  [expr] {
-  { while true { match (self.next()) { d: ai.stream.Done => { break }, _ => null } }; let usage: root.events.Usage? = if (self._input_tokens Ne null Or self._output_tokens Ne null) {  } root.events.Usage { input_tokens: self._input_tokens NullCoalesce 0, output_tokens: self._output_tokens NullCoalesce 0, cached_input_tokens: null, reasoning_tokens: null } else {  } null } root.ModelTurn { content: [root.content.Text { text: self._text }], stop_reason: self._stop_reason NullCoalesce root.content.StopReason.Complete, usage: usage }
+  { while true { match (self.next()) { d: ai.stream.Done => { break }, _ => null } }; let _ = self._check_terminal(); let usage: root.events.Usage? = if (self._input_tokens Ne null Or self._output_tokens Ne null) {  } root.events.Usage { input_tokens: self._input_tokens NullCoalesce 0, output_tokens: self._output_tokens NullCoalesce 0, cached_input_tokens: null, reasoning_tokens: null } else {  } null } root.ModelTurn { content: [root.content.Text { text: self._text }], stop_reason: self._stop_reason NullCoalesce root.content.StopReason.Complete, usage: usage }
 }
 function ai.stream.from_chunks(chunks: string[]) -> ai.stream.TurnStream  [expr] {
-  {  } ai.stream.TurnStream { _sse: null, _decode: null, _chunks: chunks, _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false }
+  {  } ai.stream.TurnStream { _sse: null, _decode: null, _chunks: chunks, _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: null, _saw_terminal: false }
 }
 function ai.stream.from_spec(spec: root.FunctionSpec<TFinal>, client: StreamingClient? = null) -> ai.stream.Stream<TStream, TFinal>  [expr] {
   { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: root.Client => c.id() }; let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt_template, journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }); let _ = provider } ai.stream.Stream { _next_text: () -> { {  } match (turns.next()) { d: ai.stream.Done => null, s: string => s } }, _cache: baml.sap.__new_parse_cache(), _text: "", _finished: false }
 }
-function ai.stream.from_sse(sse: baml.http.SseStream, decode: (string) -> ai.stream.StreamEvent[] throws unknown) -> ai.stream.TurnStream  [expr] {
-  {  } ai.stream.TurnStream { _sse: sse, _decode: decode, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false }
+function ai.stream.from_sse(sse: baml.http.SseStream, decode: (string) -> ai.stream.StreamEvent[] throws unknown, require_terminal: string? = null) -> ai.stream.TurnStream  [expr] {
+  {  } ai.stream.TurnStream { _sse: sse, _decode: decode, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: require_terminal, _saw_terminal: false }
 }
 function ai.stream.invoke_stream(self: ?, input: root.ModelTurnInput) -> ai.stream.TurnStream  [missing]
 function ai.stream.next(self: ?) -> string | ai.stream.Done  [expr] {
-  { while true { if (self._done) { return ai.stream.Done {  } }; if (self._pcursor Lt self._pending.length()) { let e = self._pending.at(self._pcursor); self._pcursor Add= 1; match (e) { d: ai.stream.TextDelta => { self._text = `...`; return d.text }, m: ai.stream.TurnMeta => { if let s: root.content.StopReason = m.stop_reason { self._stop_reason = s }; if let i: int = m.input_tokens { self._input_tokens = i }; if let o: int = m.output_tokens { self._output_tokens = o } } null, d: ai.stream.TurnDone => { let _ = self._finish(); return ai.stream.Done {  } }, null => null }; continue }; match (self._sse) { sse: baml.http.SseStream => { match (sse.next()) { null => { let _ = self._finish(); return ai.stream.Done {  } }, batch: string => { if let decode: (string) -> ai.stream.StreamEvent[] throws unknown = self._decode { for e in decode(batch) { self._pending.push(e) } } null else {  } null } null } } null, null => {  } match (self._chunks.at(self._cursor)) { c: string => { self._cursor Add= 1; self._text = `...`; return c }, null => { let _ = self._finish(); return ai.stream.Done {  } } } } } } baml.sys.panic("unreachable")
+  { while true { if (self._done) { return ai.stream.Done {  } }; if (self._pcursor Lt self._pending.length()) { let e = self._pending.at(self._pcursor); self._pcursor Add= 1; match (e) { d: ai.stream.TextDelta => { self._text = `...`; return d.text }, m: ai.stream.TurnMeta => { if let s: root.content.StopReason = m.stop_reason { self._stop_reason = s }; if let i: int = m.input_tokens { self._input_tokens = i }; if let o: int = m.output_tokens { self._output_tokens = o } } null, d: ai.stream.TurnDone => { self._saw_terminal = true; let _ = self._finish(); return ai.stream.Done {  } }, null => null }; continue }; match (self._sse) { sse: baml.http.SseStream => { match (sse.next()) { null => { let _ = self._finish(); let _ = self._check_terminal(); return ai.stream.Done {  } }, batch: string => { if let decode: (string) -> ai.stream.StreamEvent[] throws unknown = self._decode { for e in decode(batch) { self._pending.push(e) } } null else {  } null } null } } null, null => {  } match (self._chunks.at(self._cursor)) { c: string => { self._cursor Add= 1; self._text = `...`; return c }, null => { let _ = self._finish(); return ai.stream.Done {  } } } } } } baml.sys.panic("unreachable")
 }
 function ai.stream.next(self: ?) -> TStream | ai.stream.Done  [expr] {
   { while true { if (self._finished) { return ai.stream.Done {  } } } match (self._next_text()) { null => { self._finished = true; return ai.stream.Done {  } }, s: string => { self._text = self._text Add s; let parsed: TStream | baml.sap.NoYield = baml.sap.__parse_partial(self._text, self._cache) } match (parsed) { baml.sap.NoYield => {  }, p: TStream => { return p } } } } baml.sys.panic("unreachable")
@@ -577,7 +592,7 @@ function ai.wire.sanitize_for_client(j: root.Journal, client_id: string) -> root
   { let out: root.events.Event[] = []; let pending: string[] = []; for event in j.entries() { match (event) { assistant: root.events.AssistantMessage => { let _ = _flush_orphaned_calls(out, pending); let blocks = _wire_blocks(assistant.content, assistant.client_id Eq client_id); if (blocks.length() Gt 0) { out.push(root.events.AssistantMessage { content: blocks, client_id: assistant.client_id }); for block in blocks {  } if let use: root.content.ToolUse = block { pending.push(use.id) } } null else {  } null } null, user: root.events.UserMessage => { let _ = _flush_orphaned_calls(out, pending); out.push(user) } null, completed: root.events.ToolCompleted => { let _ = _resolve_pending_call(pending, completed.id); out.push(completed) } null, failed: root.events.ToolFailed => { let _ = _resolve_pending_call(pending, failed.id); out.push(failed) } null, _ => { out.push(event) } null } }; let _ = _flush_orphaned_calls(out, pending) } root.Journal { log: out }
 }
 function ai.wire.send_as(req: baml.http.Request, provider: string) -> T  [expr] {
-  { let resp = baml.http.send(req) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text) } } baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }
+  { let resp = baml.http.send(req) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers) } } baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }
 }
 
 --- <builtin>/ai/runner.baml ---
@@ -743,6 +758,9 @@ class ai.ModelTurnInput$stream {
 }
 function ai.id(self: ?) -> string  [missing]
 function ai.invoke(self: ?, input: ai.ModelTurnInput) -> ai.ModelTurn  [missing]
+function ai.media(self: ?) -> MediaPart[]  [expr] {
+  { let out: MediaPart[] = []; for b in self.content {  } if let m: root.content.Media = b { out.push(m.media) } } out
+}
 function ai.terminal_text(self: ?) -> string?  [expr] {
   { let out: string? = null; for b in self.content {  } if let t: root.content.Text = b { out = t.text } } out
 }

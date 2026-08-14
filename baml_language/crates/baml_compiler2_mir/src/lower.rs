@@ -7111,7 +7111,7 @@ impl<'db> LoweringContext<'db> {
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
                 let erased;
-                let t = if baml_compiler2_tir::generics::contains_error_recovery(t) {
+                let t = if baml_type_runtime::contains_error_recovery(t) {
                     erased = Tir2Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     };
@@ -7265,7 +7265,7 @@ impl<'db> LoweringContext<'db> {
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
                 let erased;
-                let t = if baml_compiler2_tir::generics::contains_error_recovery(t) {
+                let t = if baml_type_runtime::contains_error_recovery(t) {
                     erased = Tir2Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     };
@@ -7390,7 +7390,7 @@ impl<'db> LoweringContext<'db> {
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
                 let erased;
-                let t = if baml_compiler2_tir::generics::contains_error_recovery(t) {
+                let t = if baml_type_runtime::contains_error_recovery(t) {
                     erased = Tir2Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     };

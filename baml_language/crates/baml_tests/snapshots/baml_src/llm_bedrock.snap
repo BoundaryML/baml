@@ -32,196 +32,360 @@ function llm_bedrock.$init_test_ns_llm_bedrock_bedrock(registry: testing.TestCol
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_inference_config"
+    load_const "bedrock_assistant_first_no_system"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 4)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_inference_config_partial"
+    load_const "bedrock_assistant_first_with_system"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 5)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_max_tokens_overflow_rejected"
+    load_const "bedrock_inference_config"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 6)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_multi_turn"
+    load_const "bedrock_inference_config_partial"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 7)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_tool_config"
+    load_const "bedrock_max_tokens_overflow_rejected"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 8)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_tool_choice_modes"
+    load_const "bedrock_multi_turn"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 9)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_no_tool_config_without_tools"
+    load_const "bedrock_tool_config"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 10)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_tool_replay"
+    load_const "bedrock_tool_choice_modes"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 11)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_cache_points"
+    load_const "bedrock_no_tool_config_without_tools"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 12)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_additional_model_request_fields"
+    load_const "bedrock_tool_replay"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_request_body_merge"
+    load_const "bedrock_tool_replay_null_arg"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 14)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_headers_and_query"
+    load_const "bedrock_tool_result_status_gating"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 15)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_image_base64"
+    load_const "bedrock_cache_points"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 16)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_video_s3"
+    load_const "bedrock_additional_model_request_fields"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 17)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_non_s3_video_rejected"
+    load_const "bedrock_request_body_merge"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 18)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_unsupported_image_format_rejected"
+    load_const "bedrock_headers_and_query"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 19)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_parse_text_and_usage"
+    load_const "bedrock_image_base64"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 20)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_parse_stop_reasons"
+    load_const "bedrock_video_s3"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 21)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_parse_tool_use"
+    load_const "bedrock_non_s3_video_rejected"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 22)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_parse_reasoning"
+    load_const "bedrock_unsupported_image_format_rejected"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 23)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_parse_empty_and_malformed"
+    load_const "bedrock_audio_s3"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 24)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_parse_no_usage"
+    load_const "bedrock_audio_base64"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 25)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_invoke_against_mock"
+    load_const "bedrock_local_rejection_identity"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 26)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_request_is_signed"
+    load_const "bedrock_parse_text_and_usage"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 27)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_error_taxonomy"
+    load_const "bedrock_parse_stop_reasons"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 28)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_bedrock"
-    load_const "bedrock_garbage_body"
+    load_const "bedrock_parse_malformed_stop"
     make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 29)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.llm_bedrock"
+    load_const "bedrock_parse_tool_use"
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_bedrock"
+    load_const "bedrock_parse_reasoning"
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_bedrock"
+    load_const "bedrock_parse_empty_and_malformed"
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_bedrock"
+    load_const "bedrock_parse_no_usage"
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_bedrock"
+    load_const "bedrock_invoke_against_mock"
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_bedrock"
+    load_const "bedrock_request_is_signed"
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_bedrock"
+    load_const "bedrock_error_taxonomy"
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_bedrock"
+    load_const "bedrock_garbage_body"
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     call testing.Sequential
-    store_var _64
+    store_var _80
     load_var registry
     load_const "root.llm_bedrock"
     load_const "live"
-    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 30)>, 0
-    load_var _64
+    make_closure .<lambda($init_test_ns_llm_bedrock_bedrock, 38)>, 0
+    load_var _80
     call testing.TestCollector.register_test_set_at
     pop 1
     load_const null
+    return
+}
+
+function llm_bedrock.BedrockAssistantFirst(hint: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var hint
+    call user.llm_bedrock.BedrockAssistantFirst$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_bedrock.BedrockAssistantFirst$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_bedrock.BedrockAssistantFirst$render_prompt(hint: string) -> ai.Prompt {
+    load_var hint
+    call user.llm_bedrock.BedrockAssistantFirst$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_bedrock.BedrockAssistantFirst$spec(hint: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "BedrockAssistantFirst"
+    load_deref ?1
+    load_const "hint"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var hint
+    make_closure .<lambda(BedrockAssistantFirst$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_bedrock.BedrockAssistantFirst$stream(hint: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var hint
+    call user.llm_bedrock.BedrockAssistantFirst$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
     return
 }
 
@@ -245,7 +409,7 @@ function llm_bedrock.BedrockClip(clip: video, client: ai.Client | null) -> strin
     call user.llm_bedrock.BedrockClip$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -353,7 +517,7 @@ function llm_bedrock.BedrockEcho(question: string, client: ai.Client | null) -> 
     call user.llm_bedrock.BedrockEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -441,6 +605,222 @@ function llm_bedrock.BedrockEcho$stream(question: string, client: ai.stream.Stre
     return
 }
 
+function llm_bedrock.BedrockListen(clip: audio, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var clip
+    call user.llm_bedrock.BedrockListen$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_bedrock.BedrockListen$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_bedrock.BedrockListen$render_prompt(clip: audio) -> ai.Prompt {
+    load_var clip
+    call user.llm_bedrock.BedrockListen$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_bedrock.BedrockListen$spec(clip: audio) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "BedrockListen"
+    load_deref ?1
+    load_const "clip"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var clip
+    make_closure .<lambda(BedrockListen$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_bedrock.BedrockListen$stream(clip: audio, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var clip
+    call user.llm_bedrock.BedrockListen$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function llm_bedrock.BedrockSystemThenAssistant(hint: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var hint
+    call user.llm_bedrock.BedrockSystemThenAssistant$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_bedrock.BedrockSystemThenAssistant$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_bedrock.BedrockSystemThenAssistant$render_prompt(hint: string) -> ai.Prompt {
+    load_var hint
+    call user.llm_bedrock.BedrockSystemThenAssistant$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_bedrock.BedrockSystemThenAssistant$spec(hint: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "BedrockSystemThenAssistant"
+    load_deref ?1
+    load_const "hint"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var hint
+    make_closure .<lambda(BedrockSystemThenAssistant$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_bedrock.BedrockSystemThenAssistant$stream(hint: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var hint
+    call user.llm_bedrock.BedrockSystemThenAssistant$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
 function llm_bedrock.BedrockUserOnly(question: string, client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
@@ -461,7 +841,7 @@ function llm_bedrock.BedrockUserOnly(question: string, client: ai.Client | null)
     call user.llm_bedrock.BedrockUserOnly$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -569,7 +949,7 @@ function llm_bedrock.BedrockVision(picture: image, client: ai.Client | null) -> 
     call user.llm_bedrock.BedrockVision$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -677,7 +1057,7 @@ function llm_bedrock.LiveBedrockEcho(question: string, client: ai.Client | null)
     call user.llm_bedrock.LiveBedrockEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -793,6 +1173,23 @@ function llm_bedrock._body(client: aws.BedrockClient, input: ai.ModelTurnInput) 
     call aws.internal.build_request
     load_field .body
     call baml.json.parse
+    return
+}
+
+function llm_bedrock._build_label(client: aws.BedrockClient, input: ai.ModelTurnInput) -> string {
+    load_var2 1 2
+    call aws.internal.build_request
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    call user.llm_bedrock._failure_label
+    jump L1
+
+  L0:
+    load_field .url
+
+  L1:
     return
 }
 
@@ -964,11 +1361,96 @@ function llm_bedrock._parse(raw: string) -> ai.ModelTurn {
     return
 }
 
+function llm_bedrock._replay_status(model: string) -> string {
+    load_var model
+    load_const "us-east-1"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call aws.BedrockClient.new
+    store_var cl
+    load_var cl
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_const "go"
+    call user.llm_bedrock.BedrockUserOnly$spec
+    store_var _16
+    call user.llm_bedrock._weather_tools
+    store_var _18
+    load_var _16
+    load_const "tu_1"
+    load_const "get_weather"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    init_instance ai.content.ToolUse .id, .name, .args
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    alloc_array 1
+    load_var _9
+    init_instance ai.events.AssistantMessage .content, .client_id
+    load_const "tu_1"
+    load_const "upstream down"
+    init_instance ai.events.ToolFailed .id, .message
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 2
+    init_instance ai.Journal .log
+    load_var _18
+    call user.llm_bedrock._turn_input
+    store_var _15
+    load_var2 2 5
+    call user.llm_bedrock._body
+    store_var body
+    load_type string
+    load_var body
+    load_const ".messages[2].content[0].toolResult.status"
+    load_const "ABSENT"
+    call baml.json.path_or
+    return
+}
+
 function llm_bedrock._stop_label(turn: ai.ModelTurn) -> string {
     load_type ai.content.StopReason
     load_var turn
     load_field .stop_reason
     call baml.String.from
+    return
+}
+
+function llm_bedrock._stop_or_failure(raw: string) -> string {
+    load_type string
+    load_var raw
+    call baml.String.from
+    store_var _4
+    load_const "{\"output\":{\"message\":{\"content\":[{\"text\":\"x\"}]}},\"stopReason\":\""
+    load_var _4
+    bin_op +
+    load_const "\"}"
+    bin_op +
+    call user.llm_bedrock._parse
+    call user.llm_bedrock._stop_label
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    call user.llm_bedrock._failure_label
+
+  L0:
     return
 }
 
@@ -1079,6 +1561,225 @@ function llm_bedrock.bedrock_additional_model_request_fields() -> string {
     load_var2 9 11
     load_type string
     alloc_array 2
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_bedrock.bedrock_assistant_first_no_system() -> string {
+    load_const "carry on"
+    call user.llm_bedrock.BedrockAssistantFirst$spec
+    store_var _2
+    call user.llm_bedrock._empty_journal
+    store_var _3
+    call user.llm_bedrock._no_tools
+    store_var _4
+    load_var2 2 3
+    load_var _4
+    call user.llm_bedrock._turn_input
+    store_var input
+    load_const null
+    call user.llm_bedrock._client
+    load_var input
+    call user.llm_bedrock._body
+    store_var body
+    load_type string
+    load_var body
+    load_const ".messages[0].role"
+    call baml.json.path
+    store_var _9
+    load_type string
+    load_var body
+    load_const ".messages[0].content[0].text"
+    call baml.json.path
+    store_var _12
+    load_type string
+    load_var body
+    load_const ".messages[1].role"
+    call baml.json.path
+    store_var _15
+    load_type string
+    load_var body
+    load_const ".messages[1].content[0].text"
+    call baml.json.path
+    call baml.String.trim
+    store_var _18
+    load_var body
+    load_const ".messages"
+    call user.llm_bedrock._array_len
+    store_var _23
+    load_type int
+    load_var _23
+    call baml.String.from
+    store_var _22
+    load_var body
+    load_const "system"
+    call user.llm_bedrock._mentions
+    store_var _27
+    load_type bool
+    load_var _27
+    call baml.String.from
+    store_var _26
+    load_type string
+    load_var2 6 7
+    load_var2 8 9
+    load_var2 10 12
+    load_type string
+    alloc_array 6
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_bedrock.bedrock_assistant_first_with_system() -> string {
+    load_const "carry on"
+    call user.llm_bedrock.BedrockSystemThenAssistant$spec
+    store_var _2
+    call user.llm_bedrock._empty_journal
+    store_var _3
+    call user.llm_bedrock._no_tools
+    store_var _4
+    load_var2 2 3
+    load_var _4
+    call user.llm_bedrock._turn_input
+    store_var input
+    load_const null
+    call user.llm_bedrock._client
+    load_var input
+    call user.llm_bedrock._body
+    store_var body
+    load_type string
+    load_var body
+    load_const ".messages[0].role"
+    call baml.json.path
+    store_var _9
+    load_type string
+    load_var body
+    load_const ".messages[0].content[0].text"
+    call baml.json.path
+    call baml.String.trim
+    store_var _12
+    load_type string
+    load_var body
+    load_const ".messages[1].role"
+    call baml.json.path
+    store_var _16
+    load_var body
+    load_const ".messages"
+    call user.llm_bedrock._array_len
+    store_var _20
+    load_type int
+    load_var _20
+    call baml.String.from
+    store_var _19
+    load_var body
+    load_const "system"
+    call user.llm_bedrock._mentions
+    store_var _24
+    load_type bool
+    load_var _24
+    call baml.String.from
+    store_var _23
+    load_type string
+    load_var2 6 7
+    load_var2 8 9
+    load_var _23
+    load_type string
+    alloc_array 5
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_bedrock.bedrock_audio_base64() -> string {
+    load_const "SGVsbG8="
+    load_const "audio/opus"
+    call baml.media.Audio.from_base64
+    call user.llm_bedrock.BedrockListen$spec
+    store_var _3
+    call user.llm_bedrock._empty_journal
+    store_var _5
+    call user.llm_bedrock._no_tools
+    store_var _6
+    load_var2 2 3
+    load_var _6
+    call user.llm_bedrock._turn_input
+    store_var input
+    load_const null
+    call user.llm_bedrock._client
+    load_var input
+    call user.llm_bedrock._body
+    store_var body
+    load_type string
+    load_var body
+    load_const ".messages[0].content[1].audio.format"
+    call baml.json.path
+    store_var _11
+    load_type string
+    load_var body
+    load_const ".messages[0].content[1].audio.source.bytes"
+    call baml.json.path
+    store_var _14
+    load_var body
+    load_const "s3Location"
+    call user.llm_bedrock._mentions
+    store_var _18
+    load_type bool
+    load_var _18
+    call baml.String.from
+    store_var _17
+    load_type string
+    load_var2 6 7
+    load_var _17
+    load_type string
+    alloc_array 3
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_bedrock.bedrock_audio_s3() -> string {
+    load_const "s3://bucket/take.mp3"
+    load_const "audio/mpeg"
+    call baml.media.Audio.from_url
+    call user.llm_bedrock.BedrockListen$spec
+    store_var _3
+    call user.llm_bedrock._empty_journal
+    store_var _5
+    call user.llm_bedrock._no_tools
+    store_var _6
+    load_var2 2 3
+    load_var _6
+    call user.llm_bedrock._turn_input
+    store_var input
+    load_const null
+    call user.llm_bedrock._client
+    load_var input
+    call user.llm_bedrock._body
+    store_var body
+    load_type string
+    load_var body
+    load_const ".messages[0].content[1].audio.format"
+    call baml.json.path
+    store_var _11
+    load_type string
+    load_var body
+    load_const ".messages[0].content[1].audio.source.s3Location.uri"
+    call baml.json.path
+    store_var _14
+    load_var body
+    load_const "bytes"
+    call user.llm_bedrock._mentions
+    store_var _18
+    load_type bool
+    load_var _18
+    call baml.String.from
+    store_var _17
+    load_type string
+    load_var2 6 7
+    load_var _17
+    load_type string
+    alloc_array 3
     load_const "|"
     call baml.Array.join
     return
@@ -1679,6 +2380,94 @@ function llm_bedrock.bedrock_invoke_against_mock() -> string {
     return
 }
 
+function llm_bedrock.bedrock_local_rejection_identity() -> string {
+    load_const "SGVsbG8="
+    load_const "image/tiff"
+    call baml.media.Image.from_base64
+    store_var tiff
+    load_const "SGVsbG8="
+    load_const "audio/basic"
+    call baml.media.Audio.from_base64
+    store_var ogg
+    call user.llm_bedrock._model
+    load_const "us-east-1"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const 2147483648
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call aws.BedrockClient.new
+    store_var over
+    load_const "hi"
+    call user.llm_bedrock.BedrockUserOnly$spec
+    store_var _6
+    call user.llm_bedrock._empty_journal
+    store_var _7
+    call user.llm_bedrock._no_tools
+    store_var _8
+    load_var2 5 6
+    load_var _8
+    call user.llm_bedrock._turn_input
+    store_var plain
+    load_const null
+    call user.llm_bedrock._client
+    store_var _11
+    load_var tiff
+    call user.llm_bedrock.BedrockVision$spec
+    store_var _13
+    call user.llm_bedrock._empty_journal
+    store_var _15
+    call user.llm_bedrock._no_tools
+    store_var _16
+    load_var2 11 12
+    load_var _16
+    call user.llm_bedrock._turn_input
+    store_var _12
+    load_var2 9 10
+    call user.llm_bedrock._build_label
+    store_var _10
+    load_const null
+    call user.llm_bedrock._client
+    store_var _18
+    load_var ogg
+    call user.llm_bedrock.BedrockListen$spec
+    store_var _20
+    call user.llm_bedrock._empty_journal
+    store_var _22
+    call user.llm_bedrock._no_tools
+    store_var _23
+    load_var2 17 18
+    load_var _23
+    call user.llm_bedrock._turn_input
+    store_var _19
+    load_var2 15 16
+    call user.llm_bedrock._build_label
+    store_var _17
+    load_var2 3 4
+    call user.llm_bedrock._build_label
+    store_var _24
+    load_type string
+    load_var2 8 14
+    load_var _24
+    load_type string
+    alloc_array 3
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
 function llm_bedrock.bedrock_max_tokens_overflow_rejected() -> string {
     call user.llm_bedrock._model
     load_const "us-east-1"
@@ -1717,7 +2506,7 @@ function llm_bedrock.bedrock_max_tokens_overflow_rejected() -> string {
     jump L0
     load_var e
     throw_if_panic
-    load_type unknown
+    load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.json.JsonSerializationError
     load_var e
     call baml.String.from
     jump L1
@@ -1870,7 +2659,7 @@ function llm_bedrock.bedrock_non_s3_video_rejected() -> string {
     jump L0
     load_var e
     throw_if_panic
-    load_type unknown
+    load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.json.JsonSerializationError
     load_var e
     call baml.String.from
     jump L1
@@ -1910,6 +2699,37 @@ function llm_bedrock.bedrock_parse_empty_and_malformed() -> string {
     load_var2 4 2
     load_type string
     alloc_array 2
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_bedrock.bedrock_parse_malformed_stop() -> string {
+    load_const "malformed_model_output"
+    call user.llm_bedrock._stop_or_failure
+    store_var _2
+    load_const "malformed_tool_use"
+    call user.llm_bedrock._stop_or_failure
+    store_var _3
+    load_const "malformed_model_output"
+    call aws.internal.stop_reason
+    store_var _5
+    load_type ai.content.StopReason
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "malformed_tool_use"
+    call aws.internal.stop_reason
+    store_var _8
+    load_type ai.content.StopReason
+    load_var _8
+    call baml.String.from
+    store_var _7
+    load_type string
+    load_var2 1 2
+    load_var2 3 5
+    load_type string
+    alloc_array 4
     load_const "|"
     call baml.Array.join
     return
@@ -1989,40 +2809,47 @@ function llm_bedrock.bedrock_parse_stop_reasons() -> string {
     call user.llm_bedrock._stop_label
     store_var _11
     load_const "{\"output\":{\"message\":{\"content\":[{\"text\":\"x\"}]}},\"stopReason\":"
-    load_const "\"tool_use\"}"
+    load_const "\"model_context_window_exceeded\"}"
     bin_op +
     call user.llm_bedrock._parse
     call user.llm_bedrock._stop_label
     store_var _15
     load_const "{\"output\":{\"message\":{\"content\":[{\"text\":\"x\"}]}},\"stopReason\":"
-    load_const "\"content_filtered\"}"
+    load_const "\"tool_use\"}"
     bin_op +
     call user.llm_bedrock._parse
     call user.llm_bedrock._stop_label
     store_var _19
     load_const "{\"output\":{\"message\":{\"content\":[{\"text\":\"x\"}]}},\"stopReason\":"
-    load_const "\"guardrail_intervened\"}"
+    load_const "\"content_filtered\"}"
     bin_op +
     call user.llm_bedrock._parse
     call user.llm_bedrock._stop_label
     store_var _23
     load_const "{\"output\":{\"message\":{\"content\":[{\"text\":\"x\"}]}},\"stopReason\":"
-    load_const "\"something_new\"}"
+    load_const "\"guardrail_intervened\"}"
     bin_op +
     call user.llm_bedrock._parse
     call user.llm_bedrock._stop_label
     store_var _27
-    load_const "{\"output\":{\"message\":{\"content\":[{\"text\":\"x\"}]}}}"
+    load_const "{\"output\":{\"message\":{\"content\":[{\"text\":\"x\"}]}},\"stopReason\":"
+    load_const "\"something_new\"}"
+    bin_op +
     call user.llm_bedrock._parse
     call user.llm_bedrock._stop_label
     store_var _31
+    load_const "{\"output\":{\"message\":{\"content\":[{\"text\":\"x\"}]}}}"
+    call user.llm_bedrock._parse
+    call user.llm_bedrock._stop_label
+    store_var _35
     load_type string
     load_var2 1 2
     load_var2 3 4
     load_var2 5 6
     load_var2 7 8
+    load_var _35
     load_type string
-    alloc_array 8
+    alloc_array 9
     load_const "|"
     call baml.Array.join
     return
@@ -2762,6 +3589,85 @@ function llm_bedrock.bedrock_tool_replay() -> string {
     return
 }
 
+function llm_bedrock.bedrock_tool_replay_null_arg() -> string {
+    call user.llm_bedrock._model
+    store_var _9
+    load_type string
+    load_var _9
+    call baml.String.from
+    store_var _8
+    load_const null
+    call user.llm_bedrock._client
+    store_var _15
+    load_const "go"
+    call user.llm_bedrock.BedrockUserOnly$spec
+    store_var _17
+    call user.llm_bedrock._weather_tools
+    store_var _19
+    load_var _17
+    load_const "tu_1"
+    load_const "get_weather"
+    load_const "SF"
+    load_const null
+    load_const "city"
+    load_const "filter"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    init_instance ai.content.ToolUse .id, .name, .args
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    alloc_array 1
+    load_const "bedrock/"
+    load_var _8
+    bin_op +
+    init_instance ai.events.AssistantMessage .content, .client_id
+    load_const "tu_1"
+    load_const "sunny"
+    init_instance ai.events.ToolCompleted .id, .output
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 2
+    init_instance ai.Journal .log
+    load_var _19
+    call user.llm_bedrock._turn_input
+    store_var _16
+    load_var2 4 5
+    call user.llm_bedrock._body
+    store_var body
+    load_type baml.json.json
+    load_var body
+    load_const ".messages[1].content[0].toolUse.input"
+    call baml.json.path
+    call baml.json.stringify
+    return
+}
+
+function llm_bedrock.bedrock_tool_result_status_gating() -> string {
+    call user.llm_bedrock._model
+    call user.llm_bedrock._replay_status
+    store_var _2
+    load_const "us.amazon.nova-lite-v1:0"
+    call user.llm_bedrock._replay_status
+    store_var _4
+    load_const "arn:aws:bedrock:us-west-2:123456789012:foundation-model/anthropic.claude-sonnet-4-5"
+    call user.llm_bedrock._replay_status
+    store_var _5
+    load_const "mistral.mistral-large-2407-v1:0"
+    call user.llm_bedrock._replay_status
+    store_var _6
+    load_const "meta.llama3-1-70b-instruct-v1:0"
+    call user.llm_bedrock._replay_status
+    store_var _7
+    load_type string
+    load_var2 1 2
+    load_var2 3 4
+    load_var _7
+    load_type string
+    alloc_array 5
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
 function llm_bedrock.bedrock_unsupported_image_format_rejected() -> string {
     load_const "SGVsbG8="
     load_const "image/tiff"
@@ -2783,7 +3689,7 @@ function llm_bedrock.bedrock_unsupported_image_format_rejected() -> string {
     jump L0
     load_var e
     throw_if_panic
-    load_type unknown
+    load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.json.JsonSerializationError
     load_var e
     call baml.String.from
     jump L1
@@ -2890,7 +3796,7 @@ function llm_bedrock.live_bedrock_answers() -> bool {
     call user.llm_bedrock.LiveBedrockEcho$spec
     store_var _10
     load_var2 6 7
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var result

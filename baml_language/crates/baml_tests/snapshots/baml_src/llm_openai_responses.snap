@@ -46,74 +46,130 @@ function llm_openai_responses.$init_test_ns_llm_openai_responses_responses(regis
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_usage_details"
+    load_const "oai_tool_schema_keeps_nulls"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 6)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_sparse_usage"
+    load_const "oai_message_metadata_on_content_part"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 7)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_http_error_taxonomy"
+    load_const "oai_usage_details"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 8)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_stream_text"
+    load_const "oai_sparse_usage"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 9)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_stream_text_done_only"
+    load_const "oai_bad_tool_arguments"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 10)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_stream_failed_event"
+    load_const "oai_http_error_taxonomy"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 11)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_stream_error_event"
+    load_const "oai_stream_text"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 12)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_stream_status_error"
+    load_const "oai_stream_text_done_only"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_openai_responses"
-    load_const "oai_stream_decoder_buffers"
+    load_const "oai_stream_failed_event"
     make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 14)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.llm_openai_responses"
+    load_const "oai_stream_failed_event_permanent"
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_responses"
+    load_const "oai_stream_truncated"
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_responses"
+    load_const "oai_stream_refusal"
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_responses"
+    load_const "oai_stream_incomplete"
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_responses"
+    load_const "oai_stream_error_event"
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_responses"
+    load_const "oai_stream_status_error"
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_responses"
+    load_const "oai_stream_decoder_buffers"
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_responses"
+    load_const "oai_stream_content_index_parts"
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     call testing.Sequential
-    store_var _34
+    store_var _50
     load_var registry
     load_const "root.llm_openai_responses"
     load_const "live"
-    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 15)>, 0
-    load_var _34
+    make_closure .<lambda($init_test_ns_llm_openai_responses_responses, 23)>, 0
+    load_var _50
     call testing.TestCollector.register_test_set_at
     pop 1
     load_const null
@@ -140,7 +196,7 @@ function llm_openai_responses.OaiEcho(question: string, client: ai.Client | null
     call user.llm_openai_responses.OaiEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -249,7 +305,7 @@ function llm_openai_responses.OaiLook(pic: image, clip: audio, doc: pdf, client:
     call user.llm_openai_responses.OaiLook$spec
     store_var _9
     load_var2 6 7
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _6
@@ -350,6 +406,114 @@ function llm_openai_responses.OaiLook$stream(pic: image, clip: audio, doc: pdf, 
     return
 }
 
+function llm_openai_responses.OaiMetaEcho(question: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var question
+    call user.llm_openai_responses.OaiMetaEcho$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_openai_responses.OaiMetaEcho$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_openai_responses.OaiMetaEcho$render_prompt(question: string) -> ai.Prompt {
+    load_var question
+    call user.llm_openai_responses.OaiMetaEcho$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_openai_responses.OaiMetaEcho$spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "OaiMetaEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(OaiMetaEcho$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_openai_responses.OaiMetaEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.llm_openai_responses.OaiMetaEcho$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
 function llm_openai_responses.OaiPicture(subject: string, client: ai.Client | null) -> image {
     load_var client
     load_const <omitted>
@@ -370,7 +534,7 @@ function llm_openai_responses.OaiPicture(subject: string, client: ai.Client | nu
     call user.llm_openai_responses.OaiPicture$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -478,7 +642,7 @@ function llm_openai_responses.OaiSystemLook(pic: image, client: ai.Client | null
     call user.llm_openai_responses.OaiSystemLook$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -613,6 +777,7 @@ function llm_openai_responses._oai_batch(payloads: string[]) -> string {
     load_const null
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 5
     call baml.Array.push
     pop 1
@@ -726,14 +891,14 @@ function llm_openai_responses._oai_error_name(error: unknown) -> string {
 
 function llm_openai_responses._oai_first_text(events: (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[]) -> string {
     load_var events
-    load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone>
+    load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
 
   L0:
     load_var _2
-    load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone>
+    load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -775,6 +940,29 @@ function llm_openai_responses._oai_input(spec: ai.FunctionSpec<string>, journal:
     load_var2 4 2
     load_var2 3 5
     init_instance ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type
+    return
+}
+
+function llm_openai_responses._oai_invoke_text(cl: openai.ResponsesClient, input: ai.ModelTurnInput) -> string {
+    load_var2 1 2
+    load_type ai.Client
+    load_const "invoke"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    call ai.ModelTurn.terminal_text
+    store_var _3
+    load_var _3
+    store_var _0
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _0
+
+  L0:
+    load_var _0
     return
 }
 
@@ -850,7 +1038,7 @@ function llm_openai_responses._oai_run(cl: openai.ResponsesClient) -> string {
     call user.llm_openai_responses.OaiEcho$spec
     store_var _5
     load_var2 3 4
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var result
@@ -880,8 +1068,76 @@ function llm_openai_responses._oai_stream_final(cl: openai.ResponsesClient) -> s
     return
 }
 
+function llm_openai_responses._oai_stream_turn(cl: openai.ResponsesClient) -> string {
+    load_const "Say pong."
+    call user.llm_openai_responses.OaiEcho$spec
+    store_var spec
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var empty
+    load_type string
+    load_var spec
+    call ai.Journal.new
+    store_var _8
+    load_var2 2 6
+    load_var empty
+    call user.llm_openai_responses._oai_input
+    store_var _6
+    load_var2 1 5
+    load_type ai.stream.StreamingClient
+    load_const "invoke_stream"
+    virtual_call nargs=2 ntypeargs=0
+    store_var stream
+    load_var stream
+    call ai.stream.TurnStream.final_turn
+    store_var turn
+    load_type ai.content.StopReason
+    load_var turn
+    load_field .stop_reason
+    call baml.String.from
+    store_var _14
+    load_var turn
+    call ai.ModelTurn.terminal_text
+    store_var _19
+    load_var _19
+    store_var _18
+    load_var _19
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _18
+
+  L0:
+    load_type string
+    load_var _18
+    call baml.String.from
+    store_var _17
+    load_var _14
+    load_const "|"
+    bin_op +
+    load_var _17
+    bin_op +
+    return
+}
+
 function llm_openai_responses._oai_text_response() -> string {
     load_const "{\"id\":\"resp_1\",\"model\":\"gpt-4o-mini\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"pong\"}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":1,\"total_tokens\":4,\"input_tokens_details\":{\"cached_tokens\":2},\"output_tokens_details\":{\"reasoning_tokens\":7}}}"
+    return
+}
+
+function llm_openai_responses.oai_bad_tool_arguments() -> string {
+    load_const "{\"status\":\"completed\",\"output\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":\"not json\"}]}"
+    call user.llm_mock.MockResponse.ok
+    store_var _3
+    load_type string
+    load_type baml.errors.InvalidArgument
+    load_var _3
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(oai_bad_tool_arguments, 0)>, 0
+    call user.llm_mock.mock_json_serve
     return
 }
 
@@ -909,7 +1165,7 @@ function llm_openai_responses.oai_image_generation() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _2
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
     load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -932,7 +1188,7 @@ function llm_openai_responses.oai_live_answers() -> bool {
     call user.llm_openai_responses.OaiEcho$spec
     store_var _5
     load_var2 2 4
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var result
@@ -984,7 +1240,7 @@ function llm_openai_responses.oai_live_generates_image() -> bool {
     call user.llm_openai_responses.OaiPicture$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<image, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var picture
@@ -1120,12 +1376,98 @@ function llm_openai_responses.oai_media_role_rejected() -> string {
     return
 }
 
+function llm_openai_responses.oai_message_metadata_on_content_part() -> string {
+    load_const "Say pong."
+    call user.llm_openai_responses.OaiMetaEcho$spec
+    store_var spec
+    load_const "gpt-4o-mini"
+    load_const "test-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var cl
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var empty
+    load_type string
+    load_var spec
+    call ai.Journal.new
+    store_var _9
+    load_var2 1 5
+    load_var empty
+    call user.llm_openai_responses._oai_input
+    store_var _7
+    load_var2 2 4
+    call openai.internal.openai_render
+    load_field .body
+    call baml.json.parse
+    store_var body
+    load_type string
+    load_var body
+    load_const ".input[0].role"
+    load_const "-"
+    call baml.json.path_or
+    store_var _18
+    load_type string
+    load_var _18
+    call baml.String.from
+    store_var _17
+    load_type string
+    load_var body
+    load_const ".input[0].content[0].cache_hint"
+    load_const "-"
+    call baml.json.path_or
+    store_var _24
+    load_type string
+    load_var _24
+    call baml.String.from
+    store_var _23
+    load_type string
+    load_var body
+    load_const ".input[1].content[0].cache_hint"
+    load_const "-"
+    call baml.json.path_or
+    store_var _30
+    load_type string
+    load_var _30
+    call baml.String.from
+    store_var _29
+    load_type string
+    load_const "system_role="
+    load_var _17
+    bin_op +
+    load_const "system_hint="
+    load_var _23
+    bin_op +
+    load_const "user_hint="
+    load_var _29
+    bin_op +
+    load_type string
+    alloc_array 3
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
 function llm_openai_responses.oai_passthrough() -> string {
     call user.llm_openai_responses._oai_text_response
     call user.llm_mock.MockResponse.ok
     store_var _2
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
     load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1139,7 +1481,7 @@ function llm_openai_responses.oai_request_shape() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _2
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
     load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1153,12 +1495,103 @@ function llm_openai_responses.oai_sparse_usage() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _2
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
     load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(oai_sparse_usage, 0)>, 0
     call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_openai_responses.oai_stream_content_index_parts() -> string {
+    call openai.internal.OaStreamState.new
+    store_var state
+    load_const "response.output_text.delta"
+    load_const "msg_1"
+    load_const 0
+    load_const "one"
+    load_const "type"
+    load_const "item_id"
+    load_const "content_index"
+    load_const "delta"
+    load_type string
+    load_type unknown
+    alloc_map 4
+    call user.llm_openai_responses._oai_json
+    store_var _8
+    load_const "response.output_text.done"
+    load_const "msg_1"
+    load_const 0
+    load_const "one"
+    load_const "type"
+    load_const "item_id"
+    load_const "content_index"
+    load_const "text"
+    load_type string
+    load_type unknown
+    alloc_map 4
+    call user.llm_openai_responses._oai_json
+    store_var _10
+    load_const "response.output_text.done"
+    load_const "msg_1"
+    load_const 1
+    load_const "two"
+    load_const "type"
+    load_const "item_id"
+    load_const "content_index"
+    load_const "text"
+    load_type string
+    load_type unknown
+    alloc_map 4
+    call user.llm_openai_responses._oai_json
+    store_var _12
+    load_var2 3 4
+    load_var _12
+    load_type string
+    alloc_array 3
+    call user.llm_openai_responses._oai_batch
+    load_var state
+    call openai.internal._openai_decode_batch
+    store_var events
+    load_type string
+    alloc_array 0
+    store_var texts
+    load_var events
+    load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _17
+
+  L0:
+    load_var _17
+    load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _18
+    load_var _18
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _18
+    store_var _22
+    load_var _22
+    narrow_bind ai.stream.TextDelta, slot=9
+    pop_jump_if_false L0
+    load_type string
+    load_var2 6 9
+    load_field .text
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_type string
+    load_var texts
+    load_const "+"
+    call baml.Array.join
     return
 }
 
@@ -1301,6 +1734,54 @@ function llm_openai_responses.oai_stream_failed_event() -> string {
     return
 }
 
+function llm_openai_responses.oai_stream_failed_event_permanent() -> string {
+    load_const "{\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"invalid_prompt\",\"message\":\"bad prompt\"}}}"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_type string
+    load_type never
+    load_var _3
+    load_type string
+    alloc_array 1
+    make_closure .<lambda(oai_stream_failed_event_permanent, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_openai_responses.oai_stream_incomplete() -> string {
+    load_const "{\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"content_index\":0,\"delta\":\"par\"}"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_const "{\"type\":\"response.incomplete\",\"response\":{\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"par\"}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":9}}}"
+    call user.llm_mock.sse_data
+    store_var _4
+    load_type string
+    load_type unknown
+    load_var2 1 2
+    load_type string
+    alloc_array 2
+    make_closure .<lambda(oai_stream_incomplete, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_openai_responses.oai_stream_refusal() -> string {
+    load_const "{\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"I cannot help with that.\"}]}]}}"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_type string
+    load_type unknown
+    load_var _3
+    load_type string
+    alloc_array 1
+    make_closure .<lambda(oai_stream_refusal, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
 function llm_openai_responses.oai_stream_status_error() -> string {
     load_const 401
     load_const "{\"error\":{\"message\":\"bad key\"}}"
@@ -1333,7 +1814,7 @@ function llm_openai_responses.oai_stream_text() -> string {
     call user.llm_mock.sse_data
     store_var _7
     load_type string
-    load_type never
+    load_type unknown
     load_var2 1 2
     load_var2 3 4
     load_var _7
@@ -1353,13 +1834,95 @@ function llm_openai_responses.oai_stream_text_done_only() -> string {
     call user.llm_mock.sse_data
     store_var _4
     load_type string
-    load_type never
+    load_type unknown
     load_var2 1 2
     load_type string
     alloc_array 2
     make_closure .<lambda(oai_stream_text_done_only, 0)>, 0
     load_const <omitted>
     call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_openai_responses.oai_stream_truncated() -> string {
+    load_const "{\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"content_index\":0,\"delta\":\"par\"}"
+    call user.llm_mock.sse_data
+    store_var _2
+    load_type string
+    load_type never
+    load_var _2
+    load_type string
+    alloc_array 1
+    make_closure .<lambda(oai_stream_truncated, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_openai_responses.oai_tool_schema_keeps_nulls() -> string {
+    load_const "Say pong."
+    call user.llm_openai_responses.OaiEcho$spec
+    store_var spec
+    load_const "lookup"
+    load_const "Look something up"
+    load_const "object"
+    load_const "string"
+    load_const null
+    load_const "type"
+    load_const "default"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    load_const "city"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_type string
+    alloc_array 0
+    load_const null
+    load_const "type"
+    load_const "properties"
+    load_const "required"
+    load_const "const"
+    load_type string
+    load_type unknown
+    alloc_map 4
+    make_closure .<lambda(oai_tool_schema_keeps_nulls, 0)>, 0
+    load_const <omitted>
+    call ai.tools.raw_tool
+    load_type ai.tools.Tool
+    alloc_array 1
+    call ai.tools.Toolbox.new
+    store_var toolbox
+    load_const "gpt-4o-mini"
+    load_const "test-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var cl
+    load_type string
+    load_var spec
+    call ai.Journal.new
+    store_var _19
+    load_var2 1 5
+    load_var toolbox
+    call user.llm_openai_responses._oai_input
+    store_var _17
+    load_var2 3 4
+    call openai.internal.openai_render
+    load_field .body
     return
 }
 
@@ -1438,7 +2001,7 @@ function llm_openai_responses.oai_usage_details() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _2
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
     load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1

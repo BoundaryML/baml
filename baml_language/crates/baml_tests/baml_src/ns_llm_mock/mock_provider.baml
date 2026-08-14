@@ -163,7 +163,7 @@ class MockJsonServer {
 function mock_json_serve<T, E>(
     responses: MockResponse[],
     body: (mock: MockJsonServer) -> T throws E,
-) -> T throws E {
+) -> T throws E | baml.errors.Io {
     let mock = MockJsonServer {
         server: baml.http.Server.bind("127.0.0.1:0"),
         responses: responses,
@@ -233,7 +233,7 @@ function mock_sse_serve<T, E>(
     events: string[],
     body: (mock: MockSseServer) -> T throws E,
     chunk_delay_ms: int = 10,
-) -> T throws E {
+) -> T throws E | baml.errors.Io {
     let mock = MockSseServer {
         server: baml.http.Server.bind("127.0.0.1:0"),
         events: events,

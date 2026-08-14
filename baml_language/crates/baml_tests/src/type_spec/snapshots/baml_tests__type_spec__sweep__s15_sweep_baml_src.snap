@@ -1,10 +1,9 @@
 ---
 source: crates/baml_tests/src/type_spec/sweep.rs
-assertion_line: 128
 expression: report
 ---
-files: 118
-typed nodes: 62044
+files: 130
+typed nodes: 78677
 hir_ty error-channel entries: 0
 panics: 0
 

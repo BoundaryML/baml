@@ -157,8 +157,7 @@ function media_union_narrowing.audio_is_audio() -> string {
     call user.media_union_narrowing.an_audio
     store_var v
     load_var v
-    pop 1
-    load_const false
+    is_type image
     pop_jump_if_false L0
     jump L1
 
@@ -196,8 +195,7 @@ function media_union_narrowing.audio_is_audio() -> string {
     call baml.String.from
     store_var _11
     load_var v
-    pop 1
-    load_const false
+    is_type video
     pop_jump_if_false L6
     jump L7
 
@@ -216,8 +214,7 @@ function media_union_narrowing.audio_is_audio() -> string {
     call baml.String.from
     store_var _15
     load_var v
-    pop 1
-    load_const false
+    is_type pdf
     pop_jump_if_false L9
     jump L10
 
@@ -354,8 +351,7 @@ function media_union_narrowing.image_is_image() -> string {
     call baml.String.from
     store_var _7
     load_var v
-    pop 1
-    load_const false
+    is_type audio
     pop_jump_if_false L3
     jump L4
 
@@ -374,8 +370,7 @@ function media_union_narrowing.image_is_image() -> string {
     call baml.String.from
     store_var _11
     load_var v
-    pop 1
-    load_const false
+    is_type video
     pop_jump_if_false L6
     jump L7
 
@@ -394,8 +389,7 @@ function media_union_narrowing.image_is_image() -> string {
     call baml.String.from
     store_var _15
     load_var v
-    pop 1
-    load_const false
+    is_type pdf
     pop_jump_if_false L9
     jump L10
 
@@ -500,6 +494,7 @@ function media_union_narrowing.iterate_string_or_image() -> string {
     load_var _7
     call user.media_union_narrowing.string_or_image_match
     store_var _12
+    load_type string
     load_var2 3 6
     call baml.Array.push
     pop 1
@@ -540,8 +535,7 @@ function media_union_narrowing.media_array_is_tests() -> string {
     call baml.String.from
     store_var _10
     load_var imgs
-    pop 1
-    load_const false
+    is_type audio[]
     pop_jump_if_false L3
     jump L4
 
@@ -560,8 +554,7 @@ function media_union_narrowing.media_array_is_tests() -> string {
     call baml.String.from
     store_var _14
     load_var imgs
-    pop 1
-    load_const false
+    is_type string[]
     pop_jump_if_false L6
     jump L7
 
@@ -621,8 +614,7 @@ function media_union_narrowing.media_vs_non_media() -> string {
     call user.media_union_narrowing.an_image
     store_var img
     load_var img
-    pop 1
-    load_const false
+    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -641,8 +633,7 @@ function media_union_narrowing.media_vs_non_media() -> string {
     call baml.String.from
     store_var _8
     load_var img
-    pop 1
-    load_const false
+    is_type int
     pop_jump_if_false L3
     jump L4
 
@@ -661,8 +652,7 @@ function media_union_narrowing.media_vs_non_media() -> string {
     call baml.String.from
     store_var _12
     load_const "aGVsbG8="
-    pop 1
-    load_const false
+    is_type image
     pop_jump_if_false L6
     jump L7
 
@@ -681,8 +671,7 @@ function media_union_narrowing.media_vs_non_media() -> string {
     call baml.String.from
     store_var _16
     load_const 42
-    pop 1
-    load_const false
+    is_type image
     pop_jump_if_false L9
     jump L10
 
@@ -800,8 +789,7 @@ function media_union_narrowing.pdf_is_pdf() -> string {
     call user.media_union_narrowing.a_pdf
     store_var v
     load_var v
-    pop 1
-    load_const false
+    is_type image
     pop_jump_if_false L0
     jump L1
 
@@ -820,8 +808,7 @@ function media_union_narrowing.pdf_is_pdf() -> string {
     call baml.String.from
     store_var _7
     load_var v
-    pop 1
-    load_const false
+    is_type audio
     pop_jump_if_false L3
     jump L4
 
@@ -840,8 +827,7 @@ function media_union_narrowing.pdf_is_pdf() -> string {
     call baml.String.from
     store_var _11
     load_var v
-    pop 1
-    load_const false
+    is_type video
     pop_jump_if_false L6
     jump L7
 
@@ -1096,8 +1082,7 @@ function media_union_narrowing.video_is_video() -> string {
     call user.media_union_narrowing.a_video
     store_var v
     load_var v
-    pop 1
-    load_const false
+    is_type image
     pop_jump_if_false L0
     jump L1
 
@@ -1116,8 +1101,7 @@ function media_union_narrowing.video_is_video() -> string {
     call baml.String.from
     store_var _7
     load_var v
-    pop 1
-    load_const false
+    is_type audio
     pop_jump_if_false L3
     jump L4
 
@@ -1155,8 +1139,7 @@ function media_union_narrowing.video_is_video() -> string {
     call baml.String.from
     store_var _15
     load_var v
-    pop 1
-    load_const false
+    is_type pdf
     pop_jump_if_false L9
     jump L10
 

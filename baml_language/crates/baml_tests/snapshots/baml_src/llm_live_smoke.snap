@@ -35,7 +35,7 @@ function llm_live_smoke.LiveSmokeAnthropic(question: string, client: ai.Client |
     call user.llm_live_smoke.LiveSmokeAnthropic$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -142,7 +142,7 @@ function llm_live_smoke.LiveSmokeGoogle(question: string, client: ai.Client | nu
     call user.llm_live_smoke.LiveSmokeGoogle$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -249,7 +249,7 @@ function llm_live_smoke.LiveSmokeOpenAi(question: string, client: ai.Client | nu
     call user.llm_live_smoke.LiveSmokeOpenAi$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

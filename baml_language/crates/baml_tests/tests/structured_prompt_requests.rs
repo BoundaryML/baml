@@ -32,7 +32,7 @@ function main() -> string {{
     serde_json::from_str(&body).expect("provider request body should be valid JSON")
 }
 
-async fn media_request_body(expr: &str, include_video: bool) -> serde_json::Value {
+async fn media_request_body(expr: &str, include_video: bool, include_audio: bool) -> serde_json::Value {
     let video_parameter = if include_video { ", movie: video" } else { "" };
     let video_prompt = if include_video { "${movie}" } else { "" };
     let video_argument = if include_video {
@@ -40,18 +40,27 @@ async fn media_request_body(expr: &str, include_video: bool) -> serde_json::Valu
     } else {
         ""
     };
+    // Anthropic's Messages API has no audio input block; its lowering rejects
+    // audio parts, so that provider's shape test opts out of the audio param.
+    let audio_parameter = if include_audio { ", sound: audio" } else { "" };
+    let audio_prompt = if include_audio { "${sound}:" } else { "" };
+    let audio_argument = if include_audio {
+        r#"audio.from_base64("audio-data", "audio/mpeg"),"#
+    } else {
+        ""
+    };
     let source = format!(
         r#"
-function MediaShape(photo: image, sound: audio, document: pdf{video_parameter}) -> string {{
+function MediaShape(photo: image{audio_parameter}, document: pdf{video_parameter}) -> string {{
   client "google/gemini-2.5-flash"
   tools []
-  prompt `${{role("user")}}Inspect:${{photo}}:${{sound}}:${{document}}:{video_prompt}`
+  prompt `${{role("user")}}Inspect:${{photo}}:{audio_prompt}${{document}}:{video_prompt}`
 }}
 
 function main() -> string {{
   let spec = MediaShape$spec(
     image.from_base64("image-data", "image/png"),
-    audio.from_base64("audio-data", "audio/mpeg"),
+    {audio_argument}
     pdf.from_base64("pdf-data", "application/pdf")
     {video_argument}
   )
@@ -148,6 +157,7 @@ async fn openai_lowers_image_audio_and_pdf_parts() {
     input,
   )"#,
         false,
+        true,
     )
     .await;
     let parts = body["input"][0]["content"]
@@ -172,13 +182,14 @@ async fn openai_lowers_image_audio_and_pdf_parts() {
 }
 
 #[tokio::test]
-async fn anthropic_lowers_image_audio_and_pdf_parts() {
+async fn anthropic_lowers_image_and_pdf_parts() {
     let body = media_request_body(
         r#"anthropic.internal._anthropic_request(
     anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),
     input,
     false,
   )"#,
+        false,
         false,
     )
     .await;
@@ -193,8 +204,46 @@ async fn anthropic_lowers_image_audio_and_pdf_parts() {
     };
     assert_eq!(by_type("image")["source"]["type"], "base64");
     assert_eq!(by_type("image")["source"]["data"], "image-data");
-    assert_eq!(by_type("input_audio")["source"]["data"], "audio-data");
     assert_eq!(by_type("document")["source"]["data"], "pdf-data");
+}
+
+// The Messages API has no audio input content block; the lowering rejects it
+// with a typed error instead of inventing a wire shape.
+#[tokio::test]
+async fn anthropic_rejects_audio_parts() {
+    let source = r#"
+function AudioShape(sound: audio) -> string {
+  client "google/gemini-2.5-flash"
+  tools []
+  prompt `${role("user")}Listen:${sound}`
+}
+
+function main() -> string {
+  let spec = AudioShape$spec(audio.from_base64("audio-data", "audio/mpeg"))
+  let input = ai.ModelTurnInput {
+    prompt: spec.prompt_template,
+    journal: ai.Journal { log: [] },
+    toolbox: ai.tools.Toolbox.new([]),
+    output_type: reflect.type_of<string>(),
+  }
+  anthropic.internal._anthropic_request(
+    anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),
+    input,
+    false,
+  ).body catch_all (e) {
+    _ => e.to_string(),
+  }
+}
+"#;
+    let output = baml_test!(source);
+    let message = match output.result {
+        Ok(BexExternalValue::String(message)) => message.to_string(),
+        other => panic!("expected the rejection message, got {other:?}"),
+    };
+    assert!(
+        message.contains("audio"),
+        "expected an audio rejection, got: {message}"
+    );
 }
 
 #[tokio::test]
@@ -204,6 +253,7 @@ async fn google_lowers_every_supported_media_part() {
     google.GoogleClient.new(model = "gemini-test", api_key = "test-key"),
     input,
   )"#,
+        true,
         true,
     )
     .await;

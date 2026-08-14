@@ -80,7 +80,7 @@ function llm_mock.MockEcho(question: string, client: ai.Client | null) -> string
     call user.llm_mock.MockEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -546,7 +546,7 @@ function llm_mock.example_openai_non_streaming() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -566,7 +566,7 @@ function llm_mock.example_openai_streaming() -> string {
     call user.llm_mock.sse_data
     store_var _5
     load_type string
-    load_type never
+    load_type unknown
     load_var2 1 2
     load_var _5
     load_type string

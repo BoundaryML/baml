@@ -561,7 +561,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _89
+    store_var _90
     load_var2 33 28
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
@@ -617,8 +617,8 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _77
-    load_var _77
+    store_var _78
+    load_var _78
     load_const "the model declined to answer"
     load_const null
     init_instance ai.errors.Refused .provider, .reason, .raw_body
@@ -629,7 +629,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _74
+    store_var _75
     load_var2 31 28
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
@@ -889,8 +889,8 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     pop 1
     load_var parts
     container_len
-    store_var _53
-    load_var _53
+    store_var _58
+    load_var _58
     load_const 1
     cmp_int_op !=
     pop_jump_if_false L5
@@ -900,24 +900,24 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_const null
     store_var only
     load_var parts
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _93
+    store_var _98
 
   L6:
-    load_var _93
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_var _98
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _94
-    load_var _94
+    store_var _99
+    load_var _99
     is_type baml.iter.Done
     pop_jump_if_false L7
     jump L8
 
   L7:
-    load_var _94
+    load_var _99
     store_var only
     jump L6
 
@@ -937,78 +937,78 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_type string
     load_var kind
     call baml.String.from
-    store_var _79
+    store_var _84
     load_var t
     call baml.TypeValue.baml.ToString.to_string
-    store_var _83
+    store_var _88
     load_type string
-    load_var _83
+    load_var _88
     call baml.String.from
-    store_var _82
+    store_var _87
     load_var parts
     container_len
-    store_var _86
+    store_var _91
     load_type int
-    load_var _86
+    load_var _91
     call baml.String.from
-    store_var _85
+    store_var _90
     load_type string
     load_var kind
     call baml.String.from
-    store_var _88
+    store_var _93
     load_const "Expected zero or one "
-    load_var _79
+    load_var _84
     bin_op +
     load_const " output for "
     bin_op +
-    load_var _82
+    load_var _87
     bin_op +
     load_const ", got "
     bin_op +
-    load_var _85
+    load_var _90
     bin_op +
     load_const ". Use "
     bin_op +
-    load_var _88
+    load_var _93
     bin_op +
     load_const "[] for multiple outputs."
     bin_op +
-    store_var _55
+    store_var _60
     jump L12
 
   L11:
     load_type string
     load_var kind
     call baml.String.from
-    store_var _63
+    store_var _68
     load_var parts
     container_len
-    store_var _67
+    store_var _72
     load_type int
-    load_var _67
+    load_var _72
     call baml.String.from
-    store_var _66
+    store_var _71
     load_type string
     load_var kind
     call baml.String.from
-    store_var _69
+    store_var _74
     load_const "Expected exactly one "
-    load_var _63
+    load_var _68
     bin_op +
     load_const " output, got "
     bin_op +
-    load_var _66
+    load_var _71
     bin_op +
     load_const ". Use "
     bin_op +
-    load_var _69
+    load_var _74
     bin_op +
     load_const "[] for multiple outputs."
     bin_op +
-    store_var _55
+    store_var _60
 
   L12:
-    load_var2 3 22
+    load_var2 3 24
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
@@ -1042,16 +1042,27 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     jump L17
 
   L16:
+    load_var t
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _42
+    load_type string
+    load_var _42
+    call baml.String.from
+    store_var _41
     load_var items
     container_len
-    store_var _40
+    store_var _45
     load_type int
-    load_var _40
+    load_var _45
     call baml.String.from
-    store_var _39
+    store_var _44
     load_var provider
-    load_const "Expected one text or image output for string | image, got "
-    load_var _39
+    load_const "Expected one text or image output for "
+    load_var _41
+    bin_op +
+    load_const ", got "
+    bin_op +
+    load_var _44
     bin_op +
     load_const " parts. Use (image | string)[] to preserve mixed outputs."
     bin_op +
@@ -1068,14 +1079,14 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_const null
     store_var only
     load_var items
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _28
 
   L19:
     load_var _28
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _29
@@ -1109,33 +1120,33 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_type string
     load_var kind
     call baml.String.from
-    store_var _107
+    store_var _112
     load_var t
     call baml.TypeValue.baml.ToString.to_string
-    store_var _111
+    store_var _116
     load_type string
-    load_var _111
+    load_var _116
     call baml.String.from
-    store_var _110
+    store_var _115
     load_type baml.json.JsonDecodeError
     load_var e
     call baml.String.from
-    store_var _114
+    store_var _119
     load_type string
-    load_var _114
+    load_var _119
     call baml.String.from
-    store_var _113
+    store_var _118
     load_var provider
     load_const "the "
-    load_var _107
+    load_var _112
     bin_op +
     load_const " output did not fit "
     bin_op +
-    load_var _110
+    load_var _115
     bin_op +
     load_const ": "
     bin_op +
-    load_var _113
+    load_var _118
     bin_op +
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
@@ -1463,14 +1474,53 @@ function ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Image | baml.medi
     store_var out
     load_var self
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _5
+    store_var _9
+    load_var _9
+    narrow_bind ai.content.Media, slot=5
+    pop_jump_if_false L0
+    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_var2 2 5
+    load_field .media
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null {
+    load_const null
+    store_var out
+    load_var self
+    load_field .content
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1501,14 +1551,14 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
     store_var out
     load_var self
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1548,14 +1598,14 @@ function ai.Prompt.text(self: ai.Prompt) -> string {
 
 function ai._media_all_text(items: baml.json.json[]) -> bool {
     load_var items
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
 
   L0:
     load_var _2
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -1616,14 +1666,14 @@ function ai._media_join_text(items: baml.json.json[]) -> baml.json.json {
     load_const ""
     store_var out
     load_var items
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -1654,14 +1704,14 @@ function ai._media_mixed_parts(turn: ai.ModelTurn) -> baml.json.json[] {
     store_var items
     load_var turn
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1682,11 +1732,11 @@ function ai._media_mixed_parts(turn: ai.ModelTurn) -> baml.json.json[] {
 
   L2:
     load_var b
-    store_var _16
-    load_var _16
+    store_var _17
+    load_var _17
     narrow_bind ai.content.Media, slot=8
     pop_jump_if_false L0
-    load_var _16
+    load_var _17
     store_var m
     load_var m
     call ai.content.Media.kind
@@ -1695,7 +1745,8 @@ function ai._media_mixed_parts(turn: ai.ModelTurn) -> baml.json.json[] {
     pop_jump_if_false L0
     load_var m
     call ai._media_envelope
-    store_var _21
+    store_var _22
+    load_type baml.json.json
     load_var2 2 10
     call baml.Array.push
     pop 1
@@ -1709,6 +1760,7 @@ function ai._media_mixed_parts(turn: ai.ModelTurn) -> baml.json.json[] {
     load_const ""
     cmp_op !=
     pop_jump_if_false L0
+    load_type baml.json.json
     load_var2 2 7
     load_field .text
     call baml.Array.push
@@ -1726,14 +1778,14 @@ function ai._media_of_kind(turn: ai.ModelTurn, kind: string) -> baml.json.json[]
     store_var out
     load_var turn
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
 
   L0:
     load_var _5
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
@@ -1758,6 +1810,7 @@ function ai._media_of_kind(turn: ai.ModelTurn, kind: string) -> baml.json.json[]
     load_var m
     call ai._media_envelope
     store_var _15
+    load_type baml.json.json
     load_var2 3 8
     call baml.Array.push
     pop 1
@@ -1773,14 +1826,14 @@ function ai._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: stri
     store_var unexpected
     load_var turn
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -2782,63 +2835,187 @@ function ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFail
     return
 }
 
-function ai.errors.classify_http(provider: string, status_code: int, body: string) -> ai.errors.Failure {
-    load_var status_code
-    load_const 429
-    cmp_int_op ==
+function ai.errors._header(headers: map<string, string>, lower: string, canonical: string) -> string | null {
+    load_type string
+    load_type string
+    load_var2 1 2
+    call baml.Map.get
+    store_var _4
+    load_var2 4 4
+    load_const null
+    cmp_op ==
     pop_jump_if_false L0
-    jump L5
+    load_type string
+    load_type string
+    load_var2 1 3
+    call baml.Map.get
 
   L0:
-    load_var status_code
-    load_const 408
-    cmp_int_op ==
-    jump_if_false L1
+    return
+}
+
+function ai.errors._int_header(headers: map<string, string>, lower: string, canonical: string) -> int | null {
+    load_var2 1 2
+    load_var canonical
+    call ai.errors._header
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=4
+    pop_jump_if_false L3
+    load_var _5
+    call baml.String.trim
+    call baml.Int.parse
+    store_var parsed
+    jump L2
+    load_var e
+    is_type baml.errors.ParseError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const null
+    store_var parsed
+
+  L2:
+    load_var parsed
+    store_var _11
+    load_var _11
+    narrow_bind int, slot=7
+    pop_jump_if_false L3
+    load_var _11
+    store_var_load_var value
+    load_const 0
+    cmp_int_op >=
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const null
+    jump L5
+
+  L4:
+    load_var value
+
+  L5:
+    return
+}
+
+function ai.errors._retry_after_ms(headers: map<string, string> | null) -> int | null {
+    load_var headers
+    store_var _2
+    load_var _2
+    narrow_bind map<string, string>, slot=2
+    pop_jump_if_false L1
+    load_var _2
+    store_var_load_var h
+    load_const "retry-after-ms"
+    load_const "Retry-After-Ms"
+    call ai.errors._int_header
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=4
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var h
+    load_const "retry-after"
+    load_const "Retry-After"
+    call ai.errors._int_header
+    store_var _10
+    load_var _10
+    narrow_bind int, slot=5
+    pop_jump_if_false L1
     jump L2
 
   L1:
+    load_const null
+    jump L4
+
+  L2:
+    load_var _10
+    load_const 1000
+    mul_int
+    jump L4
+
+  L3:
+    load_var _6
+
+  L4:
+    return
+}
+
+function ai.errors.classify_http(provider: string, status_code: int, body: string, headers: map<string, string> | null) -> ai.errors.Failure {
+    load_var headers
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var headers
+
+  L0:
+    load_var status_code
+    load_const 429
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var status_code
+    load_const 408
+    cmp_int_op ==
+    jump_if_false L2
+    jump L3
+
+  L2:
     pop 1
     load_var status_code
     load_const 500
     cmp_int_op >=
 
-  L2:
-    pop_jump_if_false L3
-    jump L4
-
   L3:
-    load_type int
-    load_var status_code
-    call baml.String.from
-    store_var _11
-    load_var2 1 2
-    load_const "http "
-    load_var _11
-    bin_op +
-    load_var body
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    jump L6
+    pop_jump_if_false L4
+    jump L5
 
   L4:
     load_type int
     load_var status_code
     call baml.String.from
-    store_var _8
+    store_var _14
+    load_var2 1 2
+    load_const "http "
+    load_var _14
+    bin_op +
+    load_var body
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    jump L7
+
+  L5:
+    load_type int
+    load_var status_code
+    call baml.String.from
+    store_var _11
     load_var provider
     load_const "http "
-    load_var _8
+    load_var _11
     bin_op +
     load_var body
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
-    jump L6
+    jump L7
 
-  L5:
-    load_var provider
-    load_const null
+  L6:
+    load_var headers
+    call ai.errors._retry_after_ms
+    store_var _7
+    load_var2 1 5
     load_var body
     init_instance ai.errors.RateLimited .provider, .retry_after_ms, .raw_body
 
-  L6:
+  L7:
     return
 }
 
@@ -3641,6 +3818,72 @@ function ai.stream.Stream.next(self: ai.stream.Stream<#0, #1>) -> #0 | ai.stream
     return
 }
 
+function ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> null {
+    load_var self
+    load_field ._require_terminal
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L3
+
+  L1:
+    load_var _3
+    store_var provider
+    load_var self
+    load_field ._saw_terminal
+    unary_op !
+    pop_jump_if_false L2
+    jump L4
+
+  L2:
+    load_const null
+
+  L3:
+    return
+
+  L4:
+    load_var self
+    load_field ._text
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var self
+    load_field ._text
+    store_var partial
+    jump L7
+
+  L6:
+    load_const null
+    store_var partial
+
+  L7:
+    load_var self
+    load_field ._text
+    call baml.String.length
+    store_var _15
+    load_type int
+    load_var _15
+    call baml.String.from
+    store_var _14
+    load_var provider
+    load_const "stream ended before the provider's terminal event: the connection closed after "
+    load_var _14
+    bin_op +
+    load_const " characters of assistant text with no end-of-turn event, so the turn is truncated"
+    bin_op +
+    load_var partial
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+}
+
 function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null {
     load_var self
     load_const true
@@ -3678,6 +3921,9 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
 
   L1:
     load_var self
+    call ai.stream.TurnStream._check_terminal
+    pop 1
+    load_var self
     load_field ._input_tokens
     load_const null
     call baml.ops.equals_equals
@@ -3705,28 +3951,28 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
   L5:
     load_var self
     load_field ._input_tokens
+    store_var _13
+    load_var _13
     store_var _12
-    load_var _12
-    store_var _11
-    load_var _12
+    load_var _13
     load_const null
     cmp_op ==
     pop_jump_if_false L6
     load_const 0
-    store_var _11
+    store_var _12
 
   L6:
     load_var self
     load_field ._output_tokens
+    store_var _16
+    load_var _16
     store_var _15
-    load_var _15
-    store_var _14
-    load_var _15
+    load_var _16
     load_const null
     cmp_op ==
     pop_jump_if_false L7
     load_const 0
-    store_var _14
+    store_var _15
 
   L7:
     load_var2 4 6
@@ -3738,16 +3984,16 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
   L8:
     load_var self
     load_field ._stop_reason
+    store_var _22
+    load_var _22
     store_var _21
-    load_var _21
-    store_var _20
-    load_var _21
+    load_var _22
     load_const null
     cmp_op ==
     pop_jump_if_false L9
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
-    store_var _20
+    store_var _21
 
   L9:
     load_var self
@@ -3773,11 +4019,21 @@ function ai.stream.TurnStream.from_chunks(chunks: string[]) -> ai.stream.TurnStr
     load_const null
     load_const null
     load_const false
-    init_instance ai.stream.TurnStream ._sse, ._decode, ._chunks, ._cursor, ._pending, ._pcursor, ._text, ._stop_reason, ._input_tokens, ._output_tokens, ._done
+    load_const null
+    load_const false
+    init_instance ai.stream.TurnStream ._sse, ._decode, ._chunks, ._cursor, ._pending, ._pcursor, ._text, ._stop_reason, ._input_tokens, ._output_tokens, ._done, ._require_terminal, ._saw_terminal
     return
 }
 
-function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws unknown) -> ai.stream.TurnStream {
+function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws unknown, require_terminal: string | null) -> ai.stream.TurnStream {
+    load_var require_terminal
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var require_terminal
+
+  L0:
     load_var2 1 2
     load_type string
     alloc_array 0
@@ -3790,7 +4046,9 @@ function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string
     load_const null
     load_const null
     load_const false
-    init_instance ai.stream.TurnStream ._sse, ._decode, ._chunks, ._cursor, ._pending, ._pcursor, ._text, ._stop_reason, ._input_tokens, ._output_tokens, ._done
+    load_var require_terminal
+    load_const false
+    init_instance ai.stream.TurnStream ._sse, ._decode, ._chunks, ._cursor, ._pending, ._pcursor, ._text, ._stop_reason, ._input_tokens, ._output_tokens, ._done, ._require_terminal, ._saw_terminal
     return
 }
 
@@ -3840,8 +4098,8 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_var self
     load_field ._cursor
     call baml.Array.at
-    store_var _58
-    load_var _58
+    store_var _59
+    load_var _59
     narrow_bind string, slot=20
     pop_jump_if_false L6
     jump L7
@@ -3854,7 +4112,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     jump L21
 
   L7:
-    load_var _58
+    load_var _59
     store_var c
     load_var self
     copy 0
@@ -3866,13 +4124,13 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_var self
     load_field ._text
     call baml.String.from
-    store_var _60
+    store_var _61
     load_type string
     load_var c
     call baml.String.from
-    store_var _63
+    store_var _64
     load_var2 1 22
-    load_var _63
+    load_var _64
     bin_op +
     store_field ._text
     load_var c
@@ -3891,8 +4149,8 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
   L9:
     load_var self
     load_field ._decode
-    store_var _40
-    load_var _40
+    store_var _41
+    load_var _41
     narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws unknown, slot=17
     pop_jump_if_false L0
     load_var2 16 17
@@ -3900,15 +4158,15 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _45
+    store_var _46
 
   L10:
-    load_var _45
+    load_var _46
     load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _46
-    load_var _46
+    store_var _47
+    load_var _47
     is_type baml.iter.Done
     pop_jump_if_false L11
     jump L0
@@ -3917,7 +4175,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var self
     load_field ._pending
-    load_var _46
+    load_var _47
     call baml.Array.push
     pop 1
     jump L10
@@ -3925,6 +4183,9 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
   L12:
     load_var self
     call ai.stream.TurnStream._finish
+    pop 1
+    load_var self
+    call ai.stream.TurnStream._check_terminal
     pop 1
     alloc_instance ai.stream.Done
     jump L21
@@ -3964,6 +4225,9 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_var _30
     narrow_bind ai.stream.TurnDone, slot=14
     pop_jump_if_false L0
+    load_var self
+    load_const true
+    store_field ._saw_terminal
     load_var self
     call ai.stream.TurnStream._finish
     pop 1
@@ -4481,6 +4745,7 @@ function ai.wire._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.Us
     jump L2
 
   L1:
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 1 4
     load_const "No result provided"
     init_instance ai.events.ToolFailed .id, .message
@@ -5082,14 +5347,14 @@ function ai.wire._wire_blocks(content: (ai.content.Text | ai.content.Reasoning |
     alloc_array 0
     store_var out
     load_var content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -5110,28 +5375,30 @@ function ai.wire._wire_blocks(content: (ai.content.Text | ai.content.Reasoning |
 
   L2:
     load_var block
-    store_var _16
-    load_var _16
+    store_var _17
+    load_var _17
     narrow_bind ai.content.Reasoning, slot=9
     pop_jump_if_false L3
     jump L4
 
   L3:
     load_var block
-    store_var _20
-    load_var _20
+    store_var _22
+    load_var _22
     narrow_bind ai.content.ToolUse, slot=11
     pop_jump_if_false L0
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
     load_var2 3 11
     call baml.Array.push
     pop 1
     jump L0
 
   L4:
-    load_var _16
+    load_var _17
     store_var reasoning
     load_var keep_reasoning
     pop_jump_if_false L0
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
     load_var2 3 10
     call baml.Array.push
     pop 1
@@ -5145,6 +5412,7 @@ function ai.wire._wire_blocks(content: (ai.content.Text | ai.content.Reasoning |
     load_const ""
     cmp_op !=
     pop_jump_if_false L0
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
     load_var2 3 8
     call baml.Array.push
     pop 1
@@ -5406,14 +5674,14 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     store_var pending
     load_var j
     call ai.Journal.entries
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -5434,64 +5702,68 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
 
   L2:
     load_var event
-    store_var _36
-    load_var _36
+    store_var _38
+    load_var _38
     narrow_bind ai.events.UserMessage, slot=15
     pop_jump_if_false L3
     jump L8
 
   L3:
     load_var event
-    store_var _43
-    load_var _43
+    store_var _46
+    load_var _46
     narrow_bind ai.events.ToolCompleted, slot=17
     pop_jump_if_false L4
     jump L7
 
   L4:
     load_var event
-    store_var _50
-    load_var _50
+    store_var _54
+    load_var _54
     narrow_bind ai.events.ToolFailed, slot=19
     pop_jump_if_false L5
     jump L6
 
   L5:
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 3 7
     call baml.Array.push
     pop 1
     jump L0
 
   L6:
-    load_var _50
+    load_var _54
     store_var failed
     load_var2 4 20
     load_field .id
     call ai.wire._resolve_pending_call
     pop 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 3 20
     call baml.Array.push
     pop 1
     jump L0
 
   L7:
-    load_var _43
+    load_var _46
     store_var completed
     load_var2 4 18
     load_field .id
     call ai.wire._resolve_pending_call
     pop 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 3 18
     call baml.Array.push
     pop 1
     jump L0
 
   L8:
-    load_var _36
+    load_var _38
     store_var user
     load_var2 3 4
     call ai.wire._flush_orphaned_calls
     pop 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 3 16
     call baml.Array.push
     pop 1
@@ -5518,6 +5790,7 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     load_const 0
     cmp_int_op >
     pop_jump_if_false L0
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 3 10
     load_var assistant
     load_field .client_id
@@ -5525,28 +5798,29 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     call baml.Array.push
     pop 1
     load_var blocks
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _27
+    store_var _28
 
   L10:
-    load_var _27
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media>
+    load_var _28
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _28
-    load_var _28
+    store_var _29
+    load_var _29
     is_type baml.iter.Done
     pop_jump_if_false L11
     jump L0
 
   L11:
-    load_var _28
-    store_var _32
-    load_var _32
+    load_var _29
+    store_var _33
+    load_var _33
     narrow_bind ai.content.ToolUse, slot=14
     pop_jump_if_false L10
+    load_type string
     load_var2 4 14
     load_field .id
     call baml.Array.push
@@ -5623,7 +5897,8 @@ function ai.wire.send_as(req: baml.http.Request, provider: string) -> #0 {
   L4:
     load_var2 2 3
     load_field .status_code
-    load_var text
+    load_var2 7 3
+    load_field .headers
     call ai.errors.classify_http
     throw
 }

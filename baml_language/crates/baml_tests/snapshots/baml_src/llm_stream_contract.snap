@@ -289,10 +289,11 @@ function llm_stream_contract.contract_decode(batch: string) -> (ai.stream.TextDe
     store_var chunk
     load_var chunk
     load_field .delta
-    store_var _23
-    load_var _23
+    store_var _24
+    load_var _24
     narrow_bind string, slot=9
     pop_jump_if_false L5
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var2 2 9
     init_instance ai.stream.TextDelta .text
     call baml.Array.push
@@ -301,10 +302,11 @@ function llm_stream_contract.contract_decode(batch: string) -> (ai.stream.TextDe
   L5:
     load_var chunk
     load_field .stop
-    store_var _29
-    load_var _29
+    store_var _31
+    load_var _31
     narrow_bind string, slot=10
     pop_jump_if_false L0
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var out
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
@@ -316,6 +318,7 @@ function llm_stream_contract.contract_decode(batch: string) -> (ai.stream.TextDe
     jump L0
 
   L6:
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var out
     alloc_instance ai.stream.TurnDone
     call baml.Array.push
@@ -352,6 +355,7 @@ function llm_stream_contract.contract_deltas_then_outcome(base_url: string) -> s
     jump L2
 
   L1:
+    load_type string
     load_var2 3 4
     call baml.Array.push
     pop 1

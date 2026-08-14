@@ -163,13 +163,104 @@ function llm_openai_chat.$init_test_ns_llm_openai_chat_openai_chat(registry: tes
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_pdf_url_is_inlined"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_pdf_base64_and_unfetchable"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_tool_schema_keeps_nulls"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_truncated_stream_throws"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_terminated_stream_still_completes"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_metadata_rides_last_content_part"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_ollama_inlines_image_urls"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_rate_limit_carries_retry_after"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_bad_tool_arguments_throw"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_stream_surfaces_refusal"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_stream_rejects_corrupt_chunk"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_stream_skips_keepalive"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_openai_chat"
+    load_const "chat_parses_audio_output"
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     call testing.Sequential
-    store_var _50
+    store_var _76
     load_var registry
     load_const "root.llm_openai_chat"
     load_const "live"
-    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 23)>, 0
-    load_var _50
+    make_closure .<lambda($init_test_ns_llm_openai_chat_openai_chat, 36)>, 0
+    load_var _76
     call testing.TestCollector.register_test_set_at
     pop 1
     load_const null
@@ -196,7 +287,7 @@ function llm_openai_chat.ChatBare(question: string, client: ai.Client | null) ->
     call user.llm_openai_chat.ChatBare$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -284,6 +375,222 @@ function llm_openai_chat.ChatBare$stream(question: string, client: ai.stream.Str
     return
 }
 
+function llm_openai_chat.ChatCached(question: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var question
+    call user.llm_openai_chat.ChatCached$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_openai_chat.ChatCached$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_openai_chat.ChatCached$render_prompt(question: string) -> ai.Prompt {
+    load_var question
+    call user.llm_openai_chat.ChatCached$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_openai_chat.ChatCached$spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "ChatCached"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(ChatCached$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_openai_chat.ChatCached$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.llm_openai_chat.ChatCached$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function llm_openai_chat.ChatDoc(doc: pdf, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var doc
+    call user.llm_openai_chat.ChatDoc$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_openai_chat.ChatDoc$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_openai_chat.ChatDoc$render_prompt(doc: pdf) -> ai.Prompt {
+    load_var doc
+    call user.llm_openai_chat.ChatDoc$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_openai_chat.ChatDoc$spec(doc: pdf) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "ChatDoc"
+    load_deref ?1
+    load_const "doc"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var doc
+    make_closure .<lambda(ChatDoc$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_openai_chat.ChatDoc$stream(doc: pdf, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var doc
+    call user.llm_openai_chat.ChatDoc$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
 function llm_openai_chat.ChatEcho(question: string, client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
@@ -304,7 +611,7 @@ function llm_openai_chat.ChatEcho(question: string, client: ai.Client | null) ->
     call user.llm_openai_chat.ChatEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -412,7 +719,7 @@ function llm_openai_chat.ChatVision(photo: image, client: ai.Client | null) -> s
     call user.llm_openai_chat.ChatVision$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -497,6 +804,54 @@ function llm_openai_chat.ChatVision$stream(photo: image, client: ai.stream.Strea
     load_type string
     load_var2 3 2
     call ai.stream.from_spec
+    return
+}
+
+function llm_openai_chat._chat_cached_input() -> ai.ModelTurnInput {
+    load_const "hi"
+    call user.llm_openai_chat.ChatCached$spec
+    store_var spec
+    load_var spec
+    load_field .prompt_template
+    store_var _2
+    load_type string
+    load_var spec
+    call ai.FunctionSpec.tools
+    store_var _5
+    load_type string
+    load_var spec
+    call ai.FunctionSpec.output_type
+    store_var _7
+    load_var _2
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    init_instance ai.Journal .log
+    load_var2 3 4
+    init_instance ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type
+    return
+}
+
+function llm_openai_chat._chat_doc_input(doc: pdf) -> ai.ModelTurnInput {
+    load_var doc
+    call user.llm_openai_chat.ChatDoc$spec
+    store_var spec
+    load_var spec
+    load_field .prompt_template
+    store_var _3
+    load_type string
+    load_var spec
+    call ai.FunctionSpec.tools
+    store_var _6
+    load_type string
+    load_var spec
+    call ai.FunctionSpec.output_type
+    store_var _8
+    load_var _3
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    init_instance ai.Journal .log
+    load_var2 4 5
+    init_instance ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type
     return
 }
 
@@ -863,6 +1218,20 @@ function llm_openai_chat.chat_azure_url_auth_and_max_tokens() -> string {
     return
 }
 
+function llm_openai_chat.chat_bad_tool_arguments_throw() -> string {
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"chat_get_weather\",\"arguments\":\"{not json\"}}]},\"finish_reason\":\"tool_calls\"}]}"
+    call user.llm_mock.MockResponse.ok
+    store_var _3
+    load_type string
+    load_type baml.json.JsonSerializationError
+    load_var _3
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(chat_bad_tool_arguments_throw, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
 function llm_openai_chat.chat_classifies_http_errors() -> string {
     load_const 400
     load_const "{\"error\":{\"message\":\"bad model\"}}"
@@ -1019,7 +1388,7 @@ function llm_openai_chat.chat_generic_omits_stream_options() -> string {
     call user.llm_mock.sse_data
     store_var _3
     load_type string
-    load_type never
+    load_type unknown
     load_var2 1 2
     load_type string
     alloc_array 2
@@ -1079,6 +1448,23 @@ function llm_openai_chat.chat_media_parts() -> string {
     load_type llm_mock.MockResponse
     alloc_array 2
     make_closure .<lambda(chat_media_parts, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_openai_chat.chat_metadata_rides_last_content_part() -> string {
+    call user.llm_openai_chat._chat_ok_body
+    call user.llm_mock.MockResponse.ok
+    store_var _2
+    call user.llm_openai_chat._chat_ok_body
+    call user.llm_mock.MockResponse.ok
+    store_var _4
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var2 1 2
+    load_type llm_mock.MockResponse
+    alloc_array 2
+    make_closure .<lambda(chat_metadata_rides_last_content_part, 0)>, 0
     call user.llm_mock.mock_json_serve
     return
 }
@@ -1158,6 +1544,33 @@ function llm_openai_chat.chat_ollama_defaults() -> string {
     return
 }
 
+function llm_openai_chat.chat_ollama_inlines_image_urls() -> string {
+    load_const 200
+    load_const "PNGDATA"
+    load_const "image/png"
+    load_const "content-type"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.llm_mock.MockResponse.with_headers
+    store_var _2
+    call user.llm_openai_chat._chat_ok_body
+    call user.llm_mock.MockResponse.ok
+    store_var _4
+    call user.llm_openai_chat._chat_ok_body
+    call user.llm_mock.MockResponse.ok
+    store_var _6
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var2 1 2
+    load_var _6
+    load_type llm_mock.MockResponse
+    alloc_array 3
+    make_closure .<lambda(chat_ollama_inlines_image_urls, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
 function llm_openai_chat.chat_openai_message_text() -> string {
     call user.llm_openai_chat._chat_ok_body
     call user.llm_mock.MockResponse.ok
@@ -1214,6 +1627,20 @@ function llm_openai_chat.chat_openrouter_request_shape() -> string {
     return
 }
 
+function llm_openai_chat.chat_parses_audio_output() -> string {
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"audio\":{\"id\":\"audio_1\",\"data\":\"UE5HREFUQQ==\",\"transcript\":\"hello there\",\"expires_at\":1}},\"finish_reason\":\"stop\"}]}"
+    call user.llm_mock.MockResponse.ok
+    store_var _3
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_var _3
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(chat_parses_audio_output, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
 function llm_openai_chat.chat_parses_tool_calls() -> string {
     load_const "{\"id\":\"chatcmpl-2\",\"model\":\"gpt-4o-mini\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_9\",\"type\":\"function\",\"function\":{\"name\":\"chat_get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}"
     call user.llm_mock.MockResponse.ok
@@ -1224,6 +1651,63 @@ function llm_openai_chat.chat_parses_tool_calls() -> string {
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(chat_parses_tool_calls, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_openai_chat.chat_pdf_base64_and_unfetchable() -> string {
+    call user.llm_openai_chat._chat_ok_body
+    call user.llm_mock.MockResponse.ok
+    store_var _2
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(chat_pdf_base64_and_unfetchable, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_openai_chat.chat_pdf_url_is_inlined() -> string {
+    load_const 200
+    load_const "%PDF-1.4"
+    load_const "application/pdf"
+    load_const "content-type"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.llm_mock.MockResponse.with_headers
+    store_var _2
+    call user.llm_openai_chat._chat_ok_body
+    call user.llm_mock.MockResponse.ok
+    store_var _4
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var2 1 2
+    load_type llm_mock.MockResponse
+    alloc_array 2
+    make_closure .<lambda(chat_pdf_url_is_inlined, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_openai_chat.chat_rate_limit_carries_retry_after() -> string {
+    load_const 429
+    load_const "{\"error\":{\"message\":\"slow down\"}}"
+    load_const "3"
+    load_const "retry-after"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.llm_mock.MockResponse.with_headers
+    store_var _2
+    load_type string
+    load_type never
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(chat_rate_limit_carries_retry_after, 0)>, 0
     call user.llm_mock.mock_json_serve
     return
 }
@@ -1247,7 +1731,7 @@ function llm_openai_chat.chat_runs_through_the_agent() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _2
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
     load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1273,7 +1757,7 @@ function llm_openai_chat.chat_sse_assembles_tool_calls() -> string {
     call user.llm_mock.sse_data
     store_var _6
     load_type string
-    load_type baml.errors.Io | baml.errors.Timeout | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError
+    load_type ai.errors.ParseFailed | baml.errors.Io | baml.errors.Timeout | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError
     load_var2 1 2
     load_var2 3 4
     load_var _6
@@ -1302,7 +1786,7 @@ function llm_openai_chat.chat_sse_decodes_text_and_usage() -> string {
     call user.llm_mock.sse_data
     store_var _6
     load_type string
-    load_type never
+    load_type unknown
     load_var2 1 2
     load_var2 3 4
     load_var _6
@@ -1329,6 +1813,110 @@ function llm_openai_chat.chat_stream_classifies_http_errors() -> string {
     return
 }
 
+function llm_openai_chat.chat_stream_rejects_corrupt_chunk() -> string {
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"a\"}}]}"
+    call user.llm_mock.sse_data
+    store_var _2
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{\"cont"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"b\"}}]}"
+    call user.llm_mock.sse_data
+    store_var _4
+    load_const "[DONE]"
+    call user.llm_mock.sse_data
+    store_var _5
+    load_type string
+    load_type never
+    load_var2 1 2
+    load_var2 3 4
+    load_type string
+    alloc_array 4
+    make_closure .<lambda(chat_stream_rejects_corrupt_chunk, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_openai_chat.chat_stream_skips_keepalive() -> string {
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"a\"}}]}"
+    call user.llm_mock.sse_data
+    store_var _2
+    load_const "OPENROUTER PROCESSING"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"b\"}}]}"
+    call user.llm_mock.sse_data
+    store_var _4
+    load_const "[DONE]"
+    call user.llm_mock.sse_data
+    store_var _5
+    load_type string
+    load_type unknown
+    load_var2 1 2
+    load_var2 3 4
+    load_type string
+    alloc_array 4
+    make_closure .<lambda(chat_stream_skips_keepalive, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_openai_chat.chat_stream_surfaces_refusal() -> string {
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"refusal\":\"I cannot help with that.\"}}]}"
+    call user.llm_mock.sse_data
+    store_var _2
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_const "[DONE]"
+    call user.llm_mock.sse_data
+    store_var _4
+    load_type string
+    load_type unknown
+    load_var2 1 2
+    load_var _4
+    load_type string
+    alloc_array 3
+    make_closure .<lambda(chat_stream_surfaces_refusal, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_openai_chat.chat_terminated_stream_still_completes() -> string {
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"}}]}"
+    call user.llm_mock.sse_data
+    store_var _2
+    load_const "[DONE]"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_type string
+    load_type unknown
+    load_var2 1 2
+    load_type string
+    alloc_array 2
+    make_closure .<lambda(chat_terminated_stream_still_completes, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_openai_chat.chat_tool_schema_keeps_nulls() -> string {
+    call user.llm_openai_chat._chat_ok_body
+    call user.llm_mock.MockResponse.ok
+    store_var _2
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(chat_tool_schema_keeps_nulls, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
 function llm_openai_chat.chat_tools_and_journal_replay() -> string {
     call user.llm_openai_chat._chat_ok_body
     call user.llm_mock.MockResponse.ok
@@ -1340,6 +1928,21 @@ function llm_openai_chat.chat_tools_and_journal_replay() -> string {
     alloc_array 1
     make_closure .<lambda(chat_tools_and_journal_replay, 0)>, 0
     call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_openai_chat.chat_truncated_stream_throws() -> string {
+    load_const "{\"id\":\"c\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"par\"}}]}"
+    call user.llm_mock.sse_data
+    store_var _2
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_var _2
+    load_type string
+    alloc_array 1
+    make_closure .<lambda(chat_truncated_stream_throws, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
     return
 }
 
@@ -1371,7 +1974,7 @@ function llm_openai_chat.live_openai_chat_answers() -> bool {
     call user.llm_openai_chat.ChatEcho$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var result
@@ -1447,7 +2050,7 @@ function llm_openai_chat.live_openrouter_answers() -> bool {
     call user.llm_openai_chat.ChatEcho$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var result

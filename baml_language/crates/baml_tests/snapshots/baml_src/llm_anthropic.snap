@@ -123,67 +123,123 @@ function llm_anthropic.$init_test_ns_llm_anthropic_anthropic_client(registry: te
     pop 1
     load_var registry
     load_const "root.llm_anthropic"
-    load_const "anthropic_stream_error_overloaded"
+    load_const "anthropic_stream_truncated"
     make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 17)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_anthropic"
-    load_const "anthropic_stream_error_rate_limit"
+    load_const "anthropic_stream_error_overloaded"
     make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 18)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_anthropic"
-    load_const "anthropic_stream_error_auth"
+    load_const "anthropic_stream_error_rate_limit"
     make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 19)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_anthropic"
-    load_const "anthropic_stream_http_error_401"
+    load_const "anthropic_stream_error_auth"
     make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 20)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_anthropic"
-    load_const "anthropic_stream_http_error_429"
+    load_const "anthropic_stream_http_error_401"
     make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 21)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_anthropic"
-    load_const "anthropic_stream_http_error_500"
+    load_const "anthropic_stream_http_error_429"
     make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 22)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_anthropic"
-    load_const "anthropic_decode_tool_stream"
+    load_const "anthropic_stream_http_error_500"
     make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 23)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.llm_anthropic"
-    load_const "anthropic_decode_skips_garbage"
+    load_const "anthropic_decode_tool_stream"
     make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 24)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.llm_anthropic"
+    load_const "anthropic_decode_skips_garbage"
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_anthropic"
+    load_const "anthropic_audio_input_rejected"
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_anthropic"
+    load_const "anthropic_svg_image_rejected"
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_anthropic"
+    load_const "anthropic_png_image_block"
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_anthropic"
+    load_const "anthropic_missing_key_resolve"
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_anthropic"
+    load_const "anthropic_missing_key_invoke"
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_anthropic"
+    load_const "anthropic_replayed_tool_args_keep_nulls"
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_anthropic"
+    load_const "anthropic_reasoning_tokens"
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     call testing.Sequential
-    store_var _54
+    store_var _70
     load_var registry
     load_const "root.llm_anthropic"
     load_const "live"
-    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 25)>, 0
-    load_var _54
+    make_closure .<lambda($init_test_ns_llm_anthropic_anthropic_client, 33)>, 0
+    load_var _70
     call testing.TestCollector.register_test_set_at
     pop 1
     load_const null
@@ -209,7 +265,7 @@ function llm_anthropic.AnthAssistantFirst(client: ai.Client | null) -> string {
     call user.llm_anthropic.AnthAssistantFirst$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
@@ -308,7 +364,7 @@ function llm_anthropic.AnthLiveAsk(question: string, client: ai.Client | null) -
     call user.llm_anthropic.AnthLiveAsk$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -415,7 +471,7 @@ function llm_anthropic.AnthLiveTools(question: string, client: ai.Client | null)
     call user.llm_anthropic.AnthLiveTools$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -508,7 +564,7 @@ function llm_anthropic.AnthMockAsk(question: string, client: ai.Client | null) -
     call user.llm_anthropic.AnthMockAsk$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -615,7 +671,7 @@ function llm_anthropic.AnthMockCached(question: string, client: ai.Client | null
     call user.llm_anthropic.AnthMockCached$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -702,6 +758,113 @@ function llm_anthropic.AnthMockCached$stream(question: string, client: ai.stream
     return
 }
 
+function llm_anthropic.AnthMockListen(clip: audio, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var clip
+    call user.llm_anthropic.AnthMockListen$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_anthropic.AnthMockListen$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_anthropic.AnthMockListen$render_prompt(clip: audio) -> ai.Prompt {
+    load_var clip
+    call user.llm_anthropic.AnthMockListen$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_anthropic.AnthMockListen$spec(clip: audio) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "claude-haiku-4-5"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    store_var _6
+    load_const "AnthMockListen"
+    load_deref ?1
+    load_const "clip"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var clip
+    make_closure .<lambda(AnthMockListen$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_anthropic.AnthMockListen$stream(clip: audio, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var clip
+    call user.llm_anthropic.AnthMockListen$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
 function llm_anthropic.AnthMockPlain(client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
@@ -721,7 +884,7 @@ function llm_anthropic.AnthMockPlain(client: ai.Client | null) -> string {
     call user.llm_anthropic.AnthMockPlain$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
@@ -820,7 +983,7 @@ function llm_anthropic.AnthMockTools(question: string, client: ai.Client | null)
     call user.llm_anthropic.AnthMockTools$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -893,6 +1056,113 @@ function llm_anthropic.AnthMockTools$spec(question: string) -> ai.FunctionSpec<s
     return
 }
 
+function llm_anthropic.AnthMockVision(picture: image, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var picture
+    call user.llm_anthropic.AnthMockVision$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_anthropic.AnthMockVision$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_anthropic.AnthMockVision$render_prompt(picture: image) -> ai.Prompt {
+    load_var picture
+    call user.llm_anthropic.AnthMockVision$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_anthropic.AnthMockVision$spec(picture: image) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "claude-haiku-4-5"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    store_var _6
+    load_const "AnthMockVision"
+    load_deref ?1
+    load_const "picture"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var picture
+    make_closure .<lambda(AnthMockVision$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_anthropic.AnthMockVision$stream(picture: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var picture
+    call user.llm_anthropic.AnthMockVision$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
 function llm_anthropic.anth_batch(payloads: string[]) -> string {
     load_type map<string, unknown>
     alloc_array 0
@@ -940,6 +1210,7 @@ function llm_anthropic.anth_batch(payloads: string[]) -> string {
     load_const null
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 5
     call baml.Array.push
     pop 1
@@ -1078,6 +1349,26 @@ function llm_anthropic.anth_failure_label(e: unknown) -> string {
     return
 }
 
+function llm_anthropic.anth_invoke_label(cl: anthropic.AnthropicClient, input: ai.ModelTurnInput) -> string {
+    load_var2 1 2
+    load_type ai.Client
+    load_const "invoke"
+    virtual_call nargs=2 ntypeargs=0
+    store_var turn
+    load_var turn
+    load_field .content
+    container_len
+    store_var _5
+    load_type int
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "blocks="
+    load_var _4
+    bin_op +
+    return
+}
+
 function llm_anthropic.anth_live_answers() -> bool {
     load_const "Say pong."
     load_const <omitted>
@@ -1128,6 +1419,26 @@ function llm_anthropic.anth_live_tool_round_trip() -> bool {
     return
 }
 
+function llm_anthropic.anth_missing_key_client() -> anthropic.AnthropicClient {
+    load_const "claude-haiku-4-5"
+    load_const <omitted>
+    load_const "http://127.0.0.1:1"
+    load_const "BAML_ANTHROPIC_KEY_THAT_IS_NEVER_SET"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    return
+}
+
 function llm_anthropic.anth_render_body(cl: anthropic.AnthropicClient, spec: ai.FunctionSpec<string>, journal: ai.Journal) -> baml.json.json {
     load_var spec
     load_field .prompt_template
@@ -1163,6 +1474,27 @@ function llm_anthropic.anth_stream_value(cl: anthropic.AnthropicClient) -> strin
     load_type string
     load_var stream
     call ai.stream.Stream.final
+    return
+}
+
+function llm_anthropic.anth_turn_input(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
+    load_var spec
+    load_field .prompt_template
+    store_var _3
+    load_type string
+    load_var spec
+    call ai.FunctionSpec.tools
+    store_var _6
+    load_type string
+    load_var spec
+    call ai.FunctionSpec.output_type
+    store_var _8
+    load_var _3
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    init_instance ai.Journal .log
+    load_var2 3 4
+    init_instance ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type
     return
 }
 
@@ -1246,6 +1578,48 @@ function llm_anthropic.anthropic_assistant_first_gets_leading_user() -> string {
     return
 }
 
+function llm_anthropic.anthropic_audio_input_rejected() -> string {
+    load_const "QUJD"
+    load_const "audio/mp3"
+    call baml.media.Audio.from_base64
+    store_var clip
+    load_const "claude-haiku-4-5"
+    load_const "test-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    store_var cl
+    load_var clip
+    call user.llm_anthropic.AnthMockListen$spec
+    store_var _7
+    load_var2 2 4
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    init_instance ai.Journal .log
+    call user.llm_anthropic.anth_render_body
+    call baml.json.stringify
+    jump L0
+    load_var e
+    throw_if_panic
+    load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.json.JsonParseError | baml.json.JsonSerializationError
+    load_var e
+    call baml.String.from
+
+  L0:
+    return
+}
+
 function llm_anthropic.anthropic_cache_control_placement() -> string {
     load_const "ok"
     load_const "end_turn"
@@ -1253,7 +1627,7 @@ function llm_anthropic.anthropic_cache_control_placement() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1276,14 +1650,14 @@ function llm_anthropic.anthropic_decode_skips_garbage() -> string {
     store_var seen
     load_var2 2 1
     call anthropic.internal.anthropic_decode_batch
-    load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone>
+    load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
   L0:
     load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone>
+    load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -1298,6 +1672,7 @@ function llm_anthropic.anthropic_decode_skips_garbage() -> string {
     load_var _13
     narrow_bind ai.stream.TextDelta, slot=6
     pop_jump_if_false L0
+    load_type string
     load_var2 3 6
     load_field .text
     call baml.Array.push
@@ -1324,7 +1699,7 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     load_const "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"hmm\"}}"
     load_const "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig1\"}}"
     load_const "{\"type\":\"ping\"}"
-    load_const "{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":42,\"cache_read_input_tokens\":9}}"
+    load_const "{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":42,\"cache_read_input_tokens\":9,\"output_tokens_details\":{\"thinking_tokens\":13}}}"
     load_const "{\"type\":\"message_stop\"}"
     load_type string
     alloc_array 11
@@ -1335,14 +1710,14 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     store_var seen
     load_var2 2 1
     call anthropic.internal.anthropic_decode_batch
-    load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone>
+    load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
   L0:
     load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone>
+    load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -1363,13 +1738,14 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
 
   L2:
     load_var ev
-    store_var _20
-    load_var _20
+    store_var _21
+    load_var _21
     narrow_bind ai.stream.TurnMeta, slot=9
     pop_jump_if_false L3
     jump L4
 
   L3:
+    load_type string
     load_var seen
     load_const "done"
     call baml.Array.push
@@ -1377,72 +1753,73 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     jump L0
 
   L4:
-    load_var _20
+    load_var _21
     store_var m
     load_var m
     load_field .stop_reason
+    store_var _31
+    load_var _31
     store_var _30
-    load_var _30
-    store_var _29
-    load_var _30
+    load_var _31
     load_const null
     cmp_op ==
     pop_jump_if_false L5
     load_const "-"
-    store_var _29
+    store_var _30
 
   L5:
-    load_type ai.content.StopReason | string
-    load_var _29
+    load_type string | ai.content.StopReason
+    load_var _30
     call baml.String.from
-    store_var _28
+    store_var _29
     load_var m
     load_field .input_tokens
+    store_var _36
+    load_var _36
     store_var _35
-    load_var _35
-    store_var _34
-    load_var _35
+    load_var _36
     load_const null
     cmp_op ==
     pop_jump_if_false L6
     load_const 1
     unary_op -
-    store_var _34
+    store_var _35
 
   L6:
     load_type int
-    load_var _34
+    load_var _35
     call baml.String.from
-    store_var _33
+    store_var _34
     load_var m
     load_field .output_tokens
+    store_var _41
+    load_var _41
     store_var _40
-    load_var _40
-    store_var _39
-    load_var _40
+    load_var _41
     load_const null
     cmp_op ==
     pop_jump_if_false L7
     load_const 1
     unary_op -
-    store_var _39
+    store_var _40
 
   L7:
     load_type int
-    load_var _39
+    load_var _40
     call baml.String.from
-    store_var _38
+    store_var _39
+    load_type string
     load_var seen
     load_const "meta:"
-    load_var _28
+    load_var _29
     bin_op +
     load_const "/"
     bin_op +
-    load_var _33
+    load_var _34
     bin_op +
     load_const "/"
     bin_op +
-    load_var _38
+    load_var _39
     bin_op +
     call baml.Array.push
     pop 1
@@ -1454,6 +1831,7 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     load_field .text
     call baml.String.from
     store_var _17
+    load_type string
     load_var seen
     load_const "text:"
     load_var _17
@@ -1471,50 +1849,51 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     load_type baml.iter.Iterable<Error = never, Item = ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _46
+    store_var _49
 
   L10:
-    load_var _46
+    load_var _49
     load_type baml.iter.Iterator<Error = never, Item = ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _47
-    load_var _47
+    store_var _50
+    load_var _50
     is_type baml.iter.Done
     pop_jump_if_false L11
     jump L12
 
   L11:
-    load_var _47
+    load_var _50
     store_var u
     load_type string
     load_var u
     load_field .id
     call baml.String.from
-    store_var _56
+    store_var _59
     load_type string
     load_var u
     load_field .name
     call baml.String.from
-    store_var _59
+    store_var _62
     load_type map<string, unknown>
     load_var u
     load_field .args
     call baml.json.to_json
     call baml.json.stringify
-    store_var _63
+    store_var _66
     load_type string
-    load_var _63
+    load_var _66
     call baml.String.from
-    store_var _62
+    store_var _65
+    load_type string
     load_var2 20 24
     load_const "/"
     bin_op +
-    load_var _59
+    load_var _62
     bin_op +
     load_const "/"
     bin_op +
-    load_var _62
+    load_var _65
     bin_op +
     call baml.Array.push
     pop 1
@@ -1525,127 +1904,148 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     load_var seen
     load_const ","
     call baml.Array.join
-    store_var _71
+    store_var _75
     load_type string
-    load_var _71
+    load_var _75
     call baml.String.from
-    store_var _70
+    store_var _74
     load_type string
     load_var state
     load_field .thinking
     call baml.String.from
-    store_var _75
+    store_var _79
     load_type string
     load_var state
     load_field .signature
     call baml.String.from
-    store_var _79
+    store_var _83
     load_type string
     load_var calls
     load_const ";"
     call baml.Array.join
-    store_var _84
+    store_var _88
     load_type string
-    load_var _84
+    load_var _88
     call baml.String.from
-    store_var _83
+    store_var _87
     load_var state
     load_field .cache_read_input_tokens
-    store_var _90
-    load_var _90
-    store_var _89
-    load_var _90
+    store_var _94
+    load_var _94
+    store_var _93
+    load_var _94
     load_const null
     cmp_op ==
     pop_jump_if_false L13
     load_const 1
     unary_op -
-    store_var _89
+    store_var _93
 
   L13:
     load_type int
-    load_var _89
+    load_var _93
     call baml.String.from
-    store_var _88
+    store_var _92
     load_var state
     load_field .cache_creation_input_tokens
-    store_var _96
-    load_var _96
-    store_var _95
-    load_var _96
+    store_var _100
+    load_var _100
+    store_var _99
+    load_var _100
     load_const null
     cmp_op ==
     pop_jump_if_false L14
     load_const 1
     unary_op -
-    store_var _95
+    store_var _99
 
   L14:
     load_type int
-    load_var _95
+    load_var _99
     call baml.String.from
-    store_var _94
+    store_var _98
     load_var state
-    load_field .stop_reason_raw
-    store_var _102
-    load_var _102
-    store_var _101
-    load_var _102
+    load_field .reasoning_tokens
+    store_var _106
+    load_var _106
+    store_var _105
+    load_var _106
     load_const null
     cmp_op ==
     pop_jump_if_false L15
-    load_const "-"
-    store_var _101
+    load_const 1
+    unary_op -
+    store_var _105
 
   L15:
-    load_type string
-    load_var _101
+    load_type int
+    load_var _105
     call baml.String.from
-    store_var _100
+    store_var _104
     load_var state
-    load_field .model
-    store_var _108
-    load_var _108
-    store_var _107
-    load_var _108
+    load_field .stop_reason_raw
+    store_var _112
+    load_var _112
+    store_var _111
+    load_var _112
     load_const null
     cmp_op ==
     pop_jump_if_false L16
     load_const "-"
-    store_var _107
+    store_var _111
 
   L16:
     load_type string
-    load_var _107
+    load_var _111
     call baml.String.from
-    store_var _106
+    store_var _110
+    load_var state
+    load_field .model
+    store_var _118
+    load_var _118
+    store_var _117
+    load_var _118
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L17
+    load_const "-"
+    store_var _117
+
+  L17:
+    load_type string
+    load_var _117
+    call baml.String.from
+    store_var _116
     load_type string
     load_const "events="
-    load_var _70
+    load_var _74
     bin_op +
     load_const "thinking="
-    load_var _75
-    bin_op +
-    load_const "signature="
     load_var _79
     bin_op +
-    load_const "calls="
+    load_const "signature="
     load_var _83
     bin_op +
+    load_const "calls="
+    load_var _87
+    bin_op +
     load_const "cache_read="
-    load_var _88
+    load_var _92
     bin_op +
     load_const "cache_create="
-    load_var _94
+    load_var _98
+    bin_op +
+    load_const "reasoning="
+    load_var _104
     bin_op +
     load_const "raw_stop="
-    load_var _100
+    load_var _110
     bin_op +
     load_const "model="
-    load_var _106
+    load_var _116
     bin_op +
     load_type string
-    alloc_array 8
+    alloc_array 9
     load_const "|"
     call baml.Array.join
     return
@@ -1663,6 +2063,108 @@ function llm_anthropic.anthropic_http_error(status: int) -> string {
     alloc_array 1
     make_closure .<lambda(anthropic_http_error, 0)>, 0
     call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_anthropic.anthropic_missing_key_invoke() -> string {
+    call user.llm_anthropic.anth_missing_key_client
+    store_var cl
+    call user.llm_anthropic.AnthMockPlain$spec
+    call user.llm_anthropic.anth_turn_input
+    store_var _5
+    load_var2 1 4
+    call user.llm_anthropic.anth_invoke_label
+    store_var outcome
+    jump L0
+    load_var e
+    throw_if_panic
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_var e
+    call baml.String.from
+    store_var _8
+    load_type string
+    load_var _8
+    call baml.String.from
+    store_var _7
+    load_const "caught:"
+    load_var _7
+    bin_op +
+    store_var outcome
+
+  L0:
+    load_const "ANTHROPIC_API_KEY"
+    sys_op baml.env.get
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var outcome
+    jump L3
+
+  L2:
+    load_type string
+    load_var outcome
+    call baml.String.from
+    store_var _15
+    load_const "key-present:"
+    load_var _15
+    bin_op +
+
+  L3:
+    return
+}
+
+function llm_anthropic.anthropic_missing_key_resolve() -> string {
+    call user.llm_anthropic.anth_missing_key_client
+    call anthropic.AnthropicClient.resolved_api_key
+    store_var outcome
+    jump L0
+    load_var e
+    throw_if_panic
+    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError
+    load_var e
+    call baml.String.from
+    store_var _5
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "caught:"
+    load_var _4
+    bin_op +
+    store_var outcome
+
+  L0:
+    load_const "ANTHROPIC_API_KEY"
+    sys_op baml.env.get
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var outcome
+    jump L5
+
+  L2:
+    load_var outcome
+    load_const "caught:"
+    call baml.String.starts_with
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "resolved-from-env"
+    jump L5
+
+  L4:
+    load_var outcome
+
+  L5:
     return
 }
 
@@ -1760,12 +2262,103 @@ function llm_anthropic.anthropic_params_and_passthrough() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(anthropic_params_and_passthrough, 0)>, 0
     call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_anthropic.anthropic_png_image_block() -> string {
+    load_const "SGVsbG8="
+    load_const "image/png"
+    call baml.media.Image.from_base64
+    store_var picture
+    load_const "claude-haiku-4-5"
+    load_const "test-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    store_var cl
+    load_var picture
+    call user.llm_anthropic.AnthMockVision$spec
+    store_var _5
+    load_var2 2 4
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    init_instance ai.Journal .log
+    call user.llm_anthropic.anth_render_body
+    store_var body
+    load_type string
+    load_var body
+    load_const ".messages[0].content[1].type"
+    load_const "-"
+    call baml.json.path_or
+    store_var _12
+    load_type string
+    load_var _12
+    call baml.String.from
+    store_var _11
+    load_type string
+    load_var body
+    load_const ".messages[0].content[1].source.type"
+    load_const "-"
+    call baml.json.path_or
+    store_var _18
+    load_type string
+    load_var _18
+    call baml.String.from
+    store_var _17
+    load_type string
+    load_var body
+    load_const ".messages[0].content[1].source.media_type"
+    load_const "-"
+    call baml.json.path_or
+    store_var _24
+    load_type string
+    load_var _24
+    call baml.String.from
+    store_var _23
+    load_type string
+    load_var body
+    load_const ".messages[0].content[1].source.data"
+    load_const "-"
+    call baml.json.path_or
+    store_var _30
+    load_type string
+    load_var _30
+    call baml.String.from
+    store_var _29
+    load_type string
+    load_const "type="
+    load_var _11
+    bin_op +
+    load_const "src="
+    load_var _17
+    bin_op +
+    load_const "mime="
+    load_var _23
+    bin_op +
+    load_const "data="
+    load_var _29
+    bin_op +
+    load_type string
+    alloc_array 4
+    load_const "|"
+    call baml.Array.join
     return
 }
 
@@ -1847,6 +2440,109 @@ function llm_anthropic.anthropic_reasoning_only_turn_is_dropped() -> string {
     return
 }
 
+function llm_anthropic.anthropic_reasoning_tokens() -> string {
+    load_const "{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-haiku-4-5\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":9,\"output_tokens\":30,\"output_tokens_details\":{\"thinking_tokens\":21}}}"
+    call user.llm_mock.MockResponse.ok
+    store_var _3
+    load_type string
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_var _3
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(anthropic_reasoning_tokens, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_anthropic.anthropic_replayed_tool_args_keep_nulls() -> string {
+    load_const "claude-haiku-4-5"
+    load_const "test-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    store_var cl
+    load_const "weather?"
+    call user.llm_anthropic.AnthMockTools$spec
+    store_var _12
+    load_var2 1 3
+    load_const "t1"
+    load_const "anth_weather"
+    load_const "SF"
+    load_const null
+    load_const "city"
+    load_const "unit"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    init_instance ai.content.ToolUse .id, .name, .args
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    alloc_array 1
+    load_const "anthropic/claude-haiku-4-5"
+    init_instance ai.events.AssistantMessage .content, .client_id
+    load_const "t1"
+    load_const "sunny in SF"
+    init_instance ai.events.ToolCompleted .id, .output
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 2
+    init_instance ai.Journal .log
+    call user.llm_anthropic.anth_render_body
+    store_var body
+    load_type string
+    load_var body
+    load_const ".messages[1].content[0].input.city"
+    load_const "-"
+    call baml.json.path_or
+    store_var _17
+    load_type string
+    load_var _17
+    call baml.String.from
+    store_var _16
+    load_var body
+    call baml.json.stringify
+    load_const "\"unit\":null"
+    call baml.String.includes
+    store_var _23
+    load_type bool
+    load_var _23
+    call baml.String.from
+    store_var _22
+    load_var body
+    call baml.json.stringify
+    load_const "\"temperature\":null"
+    call baml.String.includes
+    store_var _29
+    load_type bool
+    load_var _29
+    call baml.String.from
+    store_var _28
+    load_type string
+    load_const "city="
+    load_var _16
+    bin_op +
+    load_const "unit_present="
+    load_var _22
+    bin_op +
+    load_const "has_top_null="
+    load_var _28
+    bin_op +
+    load_type string
+    alloc_array 3
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
 function llm_anthropic.anthropic_request_shape() -> string {
     load_const "pong"
     load_const "end_turn"
@@ -1854,7 +2550,7 @@ function llm_anthropic.anthropic_request_shape() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1953,7 +2649,7 @@ function llm_anthropic.anthropic_stream_text() -> string {
     call user.llm_mock.sse_event
     store_var _9
     load_type string
-    load_type never
+    load_type unknown
     load_var2 1 2
     load_var2 3 4
     load_var2 5 6
@@ -1963,6 +2659,68 @@ function llm_anthropic.anthropic_stream_text() -> string {
     make_closure .<lambda(anthropic_stream_text, 0)>, 0
     load_const <omitted>
     call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_anthropic.anthropic_stream_truncated() -> string {
+    load_const "message_start"
+    load_const "{\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"model\":\"claude-haiku-4-5\",\"usage\":{\"input_tokens\":5}}}"
+    call user.llm_mock.sse_event
+    store_var _2
+    load_const "content_block_delta"
+    load_const "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"par\"}}"
+    call user.llm_mock.sse_event
+    store_var _3
+    load_type string
+    load_type never
+    load_var2 1 2
+    load_type string
+    alloc_array 2
+    make_closure .<lambda(anthropic_stream_truncated, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_anthropic.anthropic_svg_image_rejected() -> string {
+    load_const "PHN2Zy8+"
+    load_const "image/svg+xml"
+    call baml.media.Image.from_base64
+    store_var picture
+    load_const "claude-haiku-4-5"
+    load_const "test-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    store_var cl
+    load_var picture
+    call user.llm_anthropic.AnthMockVision$spec
+    store_var _7
+    load_var2 2 4
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    init_instance ai.Journal .log
+    call user.llm_anthropic.anth_render_body
+    call baml.json.stringify
+    jump L0
+    load_var e
+    throw_if_panic
+    load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.json.JsonParseError | baml.json.JsonSerializationError
+    load_var e
+    call baml.String.from
+
+  L0:
     return
 }
 
@@ -1976,7 +2734,7 @@ function llm_anthropic.anthropic_tool_round_trip() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _5
     load_type string
-    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonParseError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonParseError | ai.errors.Failure
     load_var2 1 2
     load_type llm_mock.MockResponse
     alloc_array 2
