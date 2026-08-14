@@ -1248,11 +1248,20 @@ impl<'db> LowerCtx<'db> {
             .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
             && self.can_access_package(&Name::new("baml"))
         {
+            let baml_package = Name::new("baml");
             let baml_items = baml_compiler2_ppir::package_items(
                 self.db,
-                PackageId::new(self.db, Name::new("baml")),
+                PackageId::new(self.db, baml_package.clone()),
             );
-            if let Some(def) = baml_items.lookup_type(&segments[..segments.len() - 1], item) {
+            let namespace = &segments[..segments.len() - 1];
+            let visible = self.package_items.package == baml_package
+                || crate::package_interface::package_interface(
+                    self.db,
+                    PackageId::new(self.db, baml_package),
+                )
+                .lookup_type(namespace, item)
+                .is_some();
+            if visible && let Some(def) = baml_items.lookup_type(namespace, item) {
                 return Some(ResolvedTypeDefinition::Source(def));
             }
         }
@@ -1312,11 +1321,20 @@ impl<'db> LowerCtx<'db> {
             .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
             && self.can_access_package(&Name::new("baml"))
         {
+            let baml_package = Name::new("baml");
             let baml_items = baml_compiler2_ppir::package_items(
                 self.db,
-                PackageId::new(self.db, Name::new("baml")),
+                PackageId::new(self.db, baml_package.clone()),
             );
-            if let Some(def) = baml_items.lookup_value(&segments[..segments.len() - 1], item) {
+            let namespace = &segments[..segments.len() - 1];
+            let visible = self.package_items.package == baml_package
+                || crate::package_interface::package_interface(
+                    self.db,
+                    PackageId::new(self.db, baml_package),
+                )
+                .lookup_function(namespace, item)
+                .is_some();
+            if visible && let Some(def) = baml_items.lookup_value(namespace, item) {
                 return Some(def);
             }
         }

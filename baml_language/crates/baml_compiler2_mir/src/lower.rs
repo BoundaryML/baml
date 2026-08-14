@@ -937,6 +937,13 @@ fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy
         // the shared `ENUM` tag can't express, so always take the precise chain.
         RuntimeTy::EnumVariant(..) => false,
         RuntimeTy::Class(name, args, _) => {
+            // Reflection-kind classes are transparent views over an
+            // `Object::Type`: their precise `is` test inspects the wrapped
+            // realized type, while `TypeTag` sees only the outer `TYPE` tag.
+            // A tag switch would therefore miss every kind arm.
+            if baml_type::type_kind::is_type_kind_class(name) {
+                return false;
+            }
             if args.is_empty() {
                 return true;
             }
@@ -2862,6 +2869,12 @@ impl<'db> LoweringContext<'db> {
         member: &Name,
     ) -> Option<InterfaceTypeView> {
         match ty {
+            Tir2Ty::TypeAlias(qtn, _) if !self.resolved_aliases.recursive.contains(qtn) => self
+                .resolved_aliases
+                .aliases
+                .get(qtn)
+                .and_then(|target| self.interface_dispatch_target_for_member(target, member)),
+            Tir2Ty::Union(members, _) => self.union_virtual_dispatch_view(members, member),
             Tir2Ty::Interface(qtn, type_args, associated_bindings, _) => {
                 Some((qtn.clone(), type_args.clone(), associated_bindings.clone()))
             }

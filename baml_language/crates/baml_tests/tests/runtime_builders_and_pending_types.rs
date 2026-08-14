@@ -15,8 +15,8 @@ async fn self_recursive_employee_renders_and_parses() {
         );
 
         function Extract<T>() -> T {
-            client TestClient
-            prompt `${ctx.output_format}`
+            client: TestClient
+            prompt: `${ctx.output_format}`
         }
 
         function main() -> string {
@@ -112,8 +112,8 @@ async fn frozen_mutation_and_unresolved_call_name_the_builder() {
         );
 
         function Extract<T>() -> T {
-            client TestClient
-            prompt `${ctx.output_format}`
+            client: TestClient
+            prompt: `${ctx.output_format}`
         }
 
         function main() -> string {

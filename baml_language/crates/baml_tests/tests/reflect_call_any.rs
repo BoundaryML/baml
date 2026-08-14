@@ -516,8 +516,8 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
 );
 
         function Classify<T>(input: string) -> T {
-            client TestClient
-            prompt `Choose a category for ${input}.\n${ctx.output_format}`
+            client: TestClient
+            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
         }
 
         function main() -> string {
@@ -567,8 +567,8 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
 );
 
         function Classify<T>(input: string) -> T {
-            client TestClient
-            prompt `Choose a category for ${input}.\n${ctx.output_format}`
+            client: TestClient
+            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
         }
 
         function main() -> string {
@@ -647,8 +647,8 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
 );
 
         function Classify<T>(input: string) -> T {
-            client TestClient
-            prompt `Choose a category for ${input}.\n${ctx.output_format}`
+            client: TestClient
+            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
         }
 
         function main() -> string throws never {
@@ -690,8 +690,8 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
 );
 
         function Classify<T>(input: string) -> T {
-            client TestClient
-            prompt `${input} ${ctx.output_format}`
+            client: TestClient
+            prompt: `${input} ${ctx.output_format}`
         }
 
         function main() -> null {

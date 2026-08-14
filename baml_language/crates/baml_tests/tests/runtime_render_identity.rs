@@ -15,8 +15,8 @@ async fn non_equivalent_same_name_runtime_classes_fail_before_render() {
 );
 
         function Render<T>() -> T {
-            client TestClient
-            prompt `${ctx.output_format}`
+            client: TestClient
+            prompt: `${ctx.output_format}`
         }
 
         function main() -> string throws baml.reflect.errors.CompilationError {
@@ -61,8 +61,8 @@ async fn recursive_and_equivalent_same_name_runtime_classes_still_render() {
 );
 
         function Render<T>() -> T {
-            client TestClient
-            prompt `${ctx.output_format}`
+            client: TestClient
+            prompt: `${ctx.output_format}`
         }
 
         function main() -> string {

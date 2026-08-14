@@ -82,8 +82,8 @@ client RuntimeEnumClient = openai.OpenAiClient.new(
 );
 
 function RuntimeClassify<T>(input: string) -> T {
-    client RuntimeEnumClient
-    prompt `Choose a category for ${input}.\n${ctx.output_format}`
+    client: RuntimeEnumClient
+    prompt: `Choose a category for ${input}.\n${ctx.output_format}`
 }
 
 function runtime_enum_llm_companions_compile() -> string {

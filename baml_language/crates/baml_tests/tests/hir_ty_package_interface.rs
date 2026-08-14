@@ -312,6 +312,117 @@ function bad(
 }
 
 #[test]
+fn reflect_type_shorthand_requires_baml_package_access() {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(std::path::Path::new(
+        "/hir-ty-reflect-shorthand-package-access",
+    ));
+    let boundary_file = db.add_compiler2_virtual_file(
+        "<builtin>/boundary/reflect_probe.baml",
+        "type ForbiddenReflect = reflect.Signature\n",
+    );
+    let user_file = db.add_file(
+        "allowed_reflect.baml",
+        "type AllowedReflect = reflect.Signature\n",
+    );
+
+    let boundary_alias = *baml_compiler2_ppir::item_data::file_type_aliases(&db, boundary_file)
+        .first()
+        .expect("boundary alias");
+    let boundary_errors =
+        baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, boundary_alias);
+    assert!(
+        !boundary_errors.is_empty(),
+        "boundary has no baml dependency, so reflect.Signature must be unresolved"
+    );
+
+    let user_alias = *baml_compiler2_ppir::item_data::file_type_aliases(&db, user_file)
+        .first()
+        .expect("user alias");
+    let user_errors =
+        baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, user_alias);
+    assert!(user_errors.is_empty(), "{user_errors:?}");
+    assert_eq!(
+        baml_compiler2_hir_ty::lower::type_alias_value(&db, user_alias)
+            .to_plain()
+            .render_canonical(),
+        "baml.reflect.Signature"
+    );
+}
+
+#[test]
+fn keyword_shorthands_follow_the_exported_baml_surface() {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(std::path::Path::new(
+        "/hir-ty-reflect-shorthand-export-surface",
+    ));
+    db.add_compiler2_virtual_file(
+        "<builtin>/baml/ns_reflect/raw_only.baml",
+        "interface RawOnly {}\nclient raw_only = openai.OpenAiClient.new(model = \"gpt-4\");\n",
+    );
+    db.add_file(
+        "main.baml",
+        r#"
+type ExportedShorthandType = reflect.RawOnly
+
+function exported_shorthand_value() -> type throws never {
+    reflect.literal.new(1).as_type()
+}
+
+function raw_only_value_must_stay_hidden() -> string throws never {
+    reflect.raw_only
+}
+"#,
+    );
+
+    let user_pkg = PackageId::new(&db, Name::new("user"));
+    let context = package_resolution_context(&db, user_pkg);
+    let baml_items =
+        baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("baml")));
+    assert!(
+        baml_items
+            .lookup_type(&[Name::new("reflect")], &Name::new("RawOnly"))
+            .is_some()
+    );
+    assert!(
+        baml_items
+            .lookup_value(&[Name::new("reflect")], &Name::new("raw_only"))
+            .is_some()
+    );
+    let exported_baml = context
+        .dep_interfaces
+        .iter()
+        .find(|(name, _)| name.as_str() == "baml")
+        .map(|(_, interface)| interface)
+        .expect("user package can access baml");
+    assert!(
+        exported_baml
+            .lookup_type(&[Name::new("reflect")], &Name::new("RawOnly"))
+            .is_some()
+    );
+    assert!(
+        exported_baml
+            .lookup_function(&[Name::new("reflect")], &Name::new("raw_only"))
+            .is_none()
+    );
+
+    let errors: Vec<_> = collect_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    let shorthand_errors: Vec<_> = errors
+        .iter()
+        .filter(|message| message.contains("reflect.raw_only"))
+        .collect();
+    assert_eq!(
+        shorthand_errors.len(),
+        1,
+        "the raw-only value must not leak through shorthand: {errors:#?}"
+    );
+}
+
+#[test]
 fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less() {
     let errors = error_messages(WITNESS_CONSUMER);
     assert!(errors.is_empty(), "{errors:#?}");

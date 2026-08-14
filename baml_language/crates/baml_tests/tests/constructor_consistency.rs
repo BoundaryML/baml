@@ -94,10 +94,10 @@ function old_value_reader(value: unknown) -> type {
     );
 
     for reader in ["type_of", "type_of_value"] {
-        let expected = format!("unresolved name: `{reader}`");
+        let expected = format!("unresolved name: `reflect.{reader}`");
         let matching = errors
             .iter()
-            .filter(|(_, message)| message == &expected)
+            .filter(|(code, message)| code == "E0003" && message == &expected)
             .collect::<Vec<_>>();
         assert_eq!(
             matching.len(),
