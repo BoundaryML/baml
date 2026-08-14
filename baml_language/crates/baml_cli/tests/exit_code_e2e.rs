@@ -495,7 +495,7 @@ fn test_no_project_error_recommends_project() {
 
     assert!(!output.status.success(), "unexpected success: {stderr}");
     assert!(
-        stderr.contains("--project <PATH>"),
+        stderr.contains("--project <DIR>"),
         "unexpected error: {stderr}"
     );
     assert!(
@@ -552,14 +552,16 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
-/// The `--project <PATH>` invocation recommended by project discovery accepts
-/// an explicit BAML file outside a marked project.
+/// The `--project <DIR>` invocation recommended by project discovery accepts
+/// an explicit source directory outside a marked project.
 #[test]
-fn test_accepts_explicit_file_as_project_path() {
+fn test_accepts_explicit_source_directory_as_project() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
+    let source_dir = tmp.path().join("sources");
+    std::fs::create_dir(&source_dir).unwrap();
     std::fs::write(
-        tmp.path().join("standalone.baml"),
+        source_dir.join("standalone.baml"),
         r#"
 function add(a: int, b: int) -> int { a + b }
 
@@ -570,11 +572,11 @@ test "adds" {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--project", "standalone.baml"]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project", "sources"]);
 
     assert!(
         output.status.success(),
-        "Expected explicit project path to succeed, got: {:?}\nstdout: {}\nstderr: {}",
+        "Expected explicit source directory to succeed, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
