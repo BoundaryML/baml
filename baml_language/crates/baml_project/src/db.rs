@@ -1303,7 +1303,11 @@ impl ProjectDatabase {
             Some(
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
-                | MemberResolution::InterfaceVirtualField { .. },
+                | MemberResolution::InterfaceVirtualField { .. }
+                | MemberResolution::External(_)
+                | MemberResolution::ExternalField { .. }
+                | MemberResolution::ExternalVariant { .. }
+                | MemberResolution::ExternalInterfaceVirtualField { .. },
             )
             | None => None,
         }
@@ -1390,15 +1394,16 @@ impl ProjectDatabase {
         };
         let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(self, &interned)
             .into_iter()
-            .filter(|resolved| {
-                baml_compiler2_hir_ty::interfaces::impl_data(self, resolved.block)
+            .filter_map(|resolved| resolved.source_block())
+            .filter(|block| {
+                baml_compiler2_hir_ty::interfaces::impl_data(self, *block)
                     .as_ref()
                     .is_ok_and(|data| data.interface == iface_loc)
             })
-            .filter_map(|resolved| {
+            .filter_map(|block| {
                 // The impl's own override wins; an inherited interface
                 // default method fills the slot otherwise.
-                baml_compiler2_hir_ty::interfaces::impl_data(self, resolved.block)
+                baml_compiler2_hir_ty::interfaces::impl_data(self, block)
                     .as_ref()
                     .ok()
                     .and_then(|data| data.methods.iter().find(|loc| method_of(loc)).copied())

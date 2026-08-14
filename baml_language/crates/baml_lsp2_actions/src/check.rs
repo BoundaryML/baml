@@ -742,6 +742,22 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                 let base = &segments[0];
                 let member = &segments[1];
                 if let Some(bounds) = generic_bounds.get(base) {
+                    // The legacy structural renderer below is loc-based. A
+                    // mounted bound has no InterfaceLoc; hir_ty's ordinary
+                    // projection lowering owns its loc-free requires walk and
+                    // diagnostics, so do not manufacture an "unknown" here.
+                    let has_mounted_bound = bounds.iter().any(|bound| {
+                        let TypeExprKind::Path { segments, .. } = &bound.kind else {
+                            return false;
+                        };
+                        segments.first().is_some_and(|package| {
+                            baml_compiler2_hir_ty::package_interface::mounted_interface(db, package)
+                                .is_some()
+                        })
+                    });
+                    if has_mounted_bound {
+                        return;
+                    }
                     // `T extends A & B` — the member may come from any conjunct,
                     // so the declarers are collected across the whole conjunction:
                     // none means unknown, two or more is ambiguous. The compiler
@@ -1274,6 +1290,9 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
             runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
+        }
+        TirTypeError::MountedPackageCallUnsupported { path } => {
+            runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,

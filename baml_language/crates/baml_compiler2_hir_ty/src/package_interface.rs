@@ -66,6 +66,10 @@ pub struct PackageInterface {
     /// Complete namespace set, including namespaces whose only declaration is
     /// an interface. A source-less resolver cannot reconstruct this from HIR.
     pub namespaces: BTreeSet<Vec<Name>>,
+    /// Every implementation block in this package, normalized to its free,
+    /// location-free matching shape. Mounted consumers use these rows in the
+    /// same impl registry as source-backed blocks.
+    pub impls: Vec<ExportedImpl>,
 }
 
 /// A type exported from a package.
@@ -112,6 +116,29 @@ pub struct ExportedAssociatedType {
     pub name: Name,
     pub bound: Option<baml_type::Interface>,
     pub default: Option<Ty>,
+}
+
+/// A location-free implementation block. All types are lowered over
+/// `generic_params`; matching binds those rigid parameters exactly as the
+/// source registry binds an `ImplFacts` row.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedImpl {
+    pub interface: baml_type::Interface,
+    pub for_ty_pattern: Ty,
+    pub generic_params: Vec<ParamTy>,
+    pub param_bounds: Vec<Vec<baml_type::Interface>>,
+    pub associated_types: Vec<(Name, Ty)>,
+    pub field_links: Vec<(Name, Name)>,
+    pub origin: ExportedImplOrigin,
+    pub methods: Vec<ExportedFunction>,
+}
+
+/// Source provenance is retained only for diagnostics. Resolution and
+/// dispatch deliberately treat both forms identically.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub enum ExportedImplOrigin {
+    InBodyClass { class_qtn: QualifiedTypeName },
+    OutOfBody,
 }
 
 /// A function exported from a package (free function or method).
@@ -166,6 +193,7 @@ pub enum ResolvedSource {
 }
 
 /// Common output for resolved function signatures.
+#[derive(Clone)]
 pub struct ResolvedFunction {
     pub name: Name,
     pub params: Vec<FunctionParamTy>,
@@ -193,7 +221,7 @@ pub struct ResolvedMethod {
     pub class_generic_params: Vec<ParamTy>,
 }
 
-fn resolved_exported_function(
+pub(crate) fn resolved_exported_function(
     function: &ExportedFunction,
     owner_generic_params: Vec<ParamTy>,
     owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,
@@ -943,6 +971,76 @@ pub fn package_interface<'db>(
     fold_package_interface(db, pkg_id)
 }
 
+/// Lower the package's implementation registry into a canonical, loc-free
+/// export. Malformed headers have no `ImplFacts` row and are skipped; their
+/// source diagnostics remain owned by the declaration checker.
+fn exported_impls<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    pkg_id: PackageId<'db>,
+) -> Vec<ExportedImpl> {
+    use baml_compiler2_ppir::item_data::ImplSubjectData;
+
+    let mut rows = Vec::new();
+    for &block in crate::impls::package_impl_locs(db, pkg_id) {
+        let Some(facts) = crate::impls::impl_facts(db, block) else {
+            continue;
+        };
+        let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+        let generic_params: Vec<ParamTy> = facts
+            .generic_params
+            .iter()
+            .map(|(param, _)| param.clone())
+            .collect();
+        let param_bounds = facts
+            .generic_params
+            .iter()
+            .map(|(_, bounds)| bounds.iter().map(plain_interface).collect())
+            .collect();
+        let methods = facts
+            .methods
+            .iter()
+            .map(|&method| {
+                let name = baml_compiler2_ppir::item_data::function_data(db, method)
+                    .name
+                    .clone();
+                exported_function(db, method, &name, generic_params.len())
+            })
+            .collect();
+        let origin = match &data.subject {
+            ImplSubjectData::InClass {
+                class,
+                out_of_body: false,
+            } => ExportedImplOrigin::InBodyClass {
+                class_qtn: crate::lower::class_qualified_name(db, *class),
+            },
+            ImplSubjectData::InClass {
+                out_of_body: true, ..
+            }
+            | ImplSubjectData::Free { .. } => ExportedImplOrigin::OutOfBody,
+        };
+        rows.push(ExportedImpl {
+            interface: plain_interface(&facts.interface),
+            for_ty_pattern: facts.for_ty_pattern.to_plain(),
+            generic_params,
+            param_bounds,
+            associated_types: facts
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                .collect(),
+            field_links: data
+                .field_links
+                .iter()
+                .map(|link| (link.interface_field.clone(), link.class_field.clone()))
+                .collect(),
+            origin,
+            methods,
+        });
+    }
+    rows.sort_by_cached_key(|row| borsh::to_vec(row).expect("ExportedImpl serializes"));
+    rows
+}
+
 /// Fold each file's `file_interface_fragment` into the whole-package interface.
 ///
 /// Winner selection is driven by the resolved `pkg_items.namespaces` (the
@@ -988,6 +1086,7 @@ fn fold_package_interface<'db>(
         functions,
         throw_sets,
         namespaces: pkg_items.namespaces.keys().cloned().collect(),
+        impls: exported_impls(db, pkg_id),
     }
 }
 

@@ -260,7 +260,9 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         out.pat_types.insert(pat, ty.to_plain());
     }
     for (&expr, resolution) in &result.member_resolutions {
-        out.resolutions.insert(expr, convert_resolution(resolution));
+        if let Some(resolution) = convert_resolution(resolution) {
+            out.resolutions.insert(expr, resolution);
+        }
     }
     for (&expr, path) in &result.path_resolutions {
         if let Some(root) = path.segments.first() {
@@ -275,7 +277,7 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         // absent, so MIR falls back, rather than misaligned.
         let members: Option<Vec<MemberResolution<'db>>> = path.segments[1..]
             .iter()
-            .map(|segment| segment.resolution.as_ref().map(convert_resolution))
+            .map(|segment| segment.resolution.as_ref().and_then(convert_resolution))
             .collect();
         if let Some(members) = members {
             out.path_member_resolutions.insert(expr, members);
@@ -365,8 +367,10 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
     out
 }
 
-fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> MemberResolution<'db> {
-    match resolution {
+fn convert_resolution<'db>(
+    resolution: &hir_infer::MemberResolution<'db>,
+) -> Option<MemberResolution<'db>> {
+    Some(match resolution {
         hir_infer::MemberResolution::Field { class, field } => MemberResolution::Field {
             class_loc: *class,
             field_name: field.clone(),
@@ -409,5 +413,12 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             field_index: *field_index,
             field: field.clone(),
         },
-    }
+        // Slice 7 expands MIR's provider vocabulary with these loc-free
+        // identities. Until then, absence is safer than fabricating source
+        // locations in a fresh consumer database.
+        hir_infer::MemberResolution::External(_)
+        | hir_infer::MemberResolution::ExternalField { .. }
+        | hir_infer::MemberResolution::ExternalVariant { .. }
+        | hir_infer::MemberResolution::ExternalInterfaceVirtualField { .. } => return None,
+    })
 }

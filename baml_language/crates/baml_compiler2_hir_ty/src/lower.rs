@@ -563,45 +563,29 @@ impl<'db> LowerCtx<'db> {
         base: &Ty,
         member: &Name,
     ) -> Option<baml_type::interned::InterfaceRef> {
-        let declares = |name: &TypeName| -> bool {
-            let def = self
-                .package_items
-                .lookup_type(name.namespace(), name.name())
-                .or_else(|| {
-                    let package = baml_compiler2_hir::package::PackageId::new(
-                        self.db,
-                        name.package().clone(),
-                    );
-                    baml_compiler2_ppir::package_items(self.db, package)
-                        .lookup_type(name.namespace(), name.name())
-                });
-            match def {
-                Some(Definition::Interface(interface)) => {
-                    baml_compiler2_ppir::item_data::interface_data(self.db, interface)
-                        .associated_types
-                        .iter()
-                        .any(|assoc| assoc.name == *member)
-                }
-                _ => false,
-            }
+        let declares = |target: &baml_type::interned::InterfaceRef| {
+            crate::interfaces::interface_declares_member(self.db, &target.name, member)
         };
         match base.kind() {
             TyKind::TypeVar(param, _) => {
                 let candidates: Vec<&baml_type::interned::InterfaceRef> = self
                     .bounds
                     .get(param)
-                    .map(|bounds| bounds.iter().filter(|b| declares(&b.name)).collect())
+                    .map(|bounds| bounds.iter().filter(|bound| declares(bound)).collect())
                     .unwrap_or_default();
                 match candidates.as_slice() {
                     [only] => Some((*only).clone()),
                     _ => None,
                 }
             }
-            TyKind::Interface(name, args, pins, _) => Some(baml_type::interned::InterfaceRef::new(
-                name.clone(),
-                args.to_vec().into_boxed_slice(),
-                pins.to_vec(),
-            )),
+            TyKind::Interface(name, args, pins, _) => {
+                let target = baml_type::interned::InterfaceRef::new(
+                    name.clone(),
+                    args.to_vec().into_boxed_slice(),
+                    pins.to_vec(),
+                );
+                declares(&target).then_some(target)
+            }
             // A chained step (`T.Item.Sub`): the previous member's
             // declared bound (`type Item extends J`), realized at its
             // qualifier, is what declares the next member.
@@ -615,12 +599,13 @@ impl<'db> LowerCtx<'db> {
                 let bound =
                     crate::impls::realized_assoc_bound(self.db, &target, prev_base, prev_member)?;
                 match bound.kind() {
-                    TyKind::Interface(name, args, pins, _) if declares(name) => {
-                        Some(baml_type::interned::InterfaceRef::new(
+                    TyKind::Interface(name, args, pins, _) => {
+                        let target = baml_type::interned::InterfaceRef::new(
                             name.clone(),
                             args.to_vec().into_boxed_slice(),
                             pins.to_vec(),
-                        ))
+                        );
+                        declares(&target).then_some(target)
                     }
                     _ => None,
                 }
@@ -632,7 +617,7 @@ impl<'db> LowerCtx<'db> {
             _ if Some(base) == self.self_ty.as_ref() => self
                 .self_impl_target
                 .as_ref()
-                .filter(|target| declares(&target.name))
+                .filter(|target| declares(target))
                 .cloned(),
             _ => None,
         }
@@ -1338,10 +1323,43 @@ impl<'db> LowerCtx<'db> {
         None
     }
 
+    /// Source-less free-function lookup. Kept separate from
+    /// [`Self::resolve_value`] so source consumers that require a real loc can
+    /// remain explicit; inference tries the source road first, then this one.
+    pub fn resolve_exported_value(
+        &self,
+        segments: &[Name],
+    ) -> Option<crate::package_interface::ResolvedFunction> {
+        if segments.len() < 2
+            || !baml_compiler2_hir::package::is_mounted_package(self.db, &segments[0])
+            || !self.can_access_package(&segments[0])
+        {
+            return None;
+        }
+        let (item, namespace) = segments[1..].split_last()?;
+        let interface = crate::package_interface::mounted_interface(self.db, &segments[0])?;
+        let function = interface.lookup_function(namespace, item)?;
+        Some(crate::package_interface::resolved_exported_function(
+            function,
+            Vec::new(),
+            Vec::new(),
+        ))
+    }
+
     /// Type-namespace resolution, exposed for constructor and member typing.
     pub fn resolve_type_definition(&self, segments: &[Name]) -> Option<Definition<'db>> {
         match self.resolve_type(segments) {
             Some(ResolvedTypeDefinition::Source(def)) => Some(def),
+            _ => None,
+        }
+    }
+
+    pub fn resolve_exported_type_definition(
+        &self,
+        segments: &[Name],
+    ) -> Option<Box<crate::package_interface::ExportedType>> {
+        match self.resolve_type(segments) {
+            Some(ResolvedTypeDefinition::Exported(exported)) => Some(exported),
             _ => None,
         }
     }

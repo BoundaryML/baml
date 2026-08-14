@@ -15,7 +15,7 @@ that code exists.
 | --- | --- | --- | --- |
 | [ ] | I-01 | 3, 4, 7 | Loc-free external calls preserve a symbolic free/method/interface target, receiver mode, user generic frames and bounds, and linkability through inference and MIR. |
 | [x] | I-02 | 3, 6 | Mounted aliases and enum variants are supplied by `PackageInterface` to the same fact consumers as source-backed definitions. |
-| [ ] | I-03 | 3, 6 | Mounted interface associated-type lookup closes transitively over `requires` with cycle termination. |
+| [x] | I-03 | 3, 6 | Mounted interface associated-type lookup closes transitively over `requires` with cycle termination. |
 | [x] | L-01 | 3 | Type lookup distinguishes source-backed definitions from source-less exported types without reaching into absent dependency source. |
 | [x] | L-02 | 3 | Foreign classes, interfaces, enums, aliases, and variants receive the same kind and arity validation as local definitions. |
 | [x] | L-03 | 3, 6 | Foreign interface pins validate names and duplicates, realize defaults with symbolic `Self`, and diagnose missing required bindings. |
@@ -26,7 +26,7 @@ that code exists.
 | [ ] | B-01 | 2, 4 | Runtime slots and loc-free callables are isolated per body/default run and survive only in durable result tables. |
 | [x] | B-02 | 5 | Inference-time type lowering sees declared generics plus the active scoped overlay. |
 | [x] | B-03 | 4 | Only the special `Session.eval` result slot defaults an uninferable generic to `unknown`; ordinary slots keep current errors. |
-| [ ] | B-04 | 3, 4 | Mounted owner/function generics and bounds instantiate normally, synthetic effect parameters do not affect user arity, and bound receivers seed owner substitutions. |
+| [x] | B-04 | 3, 4 | Mounted owner/function generics and bounds instantiate normally, synthetic effect parameters do not affect user arity, and bound receivers seed owner substitutions. |
 | [x] | B-05 | 2, 4 | Written type arguments retain ordered static/runtime provenance; runtime operands use a bound-or-`unknown` occurrence type and never become solver variables. |
 | [x] | B-06 | 4 | A bare value in a generic slot reports the targeted “requires `unreflect`” diagnostic. |
 | [x] | B-07 | 4 | Every runtime operand is inferred and checked below primitive `type`, with normal error/pending cascade suppression. |
@@ -37,9 +37,9 @@ that code exists.
 | [x] | B-12 | 2, 5 | Default and forward-reference traversal visits hidden operands exactly once and default inference cannot leak per-body external-call state. |
 | [x] | B-13 | 5 | A runtime type binding installs a statement-identity rigid parameter, validates its value, and cannot escape its lexical block. |
 | [x] | B-14 | 4 | Sealed reflection-kind classes cannot be object-constructed in inferred or expected-type paths. |
-| [ ] | B-15 | 3, 6 | Source-less mounted free functions, types, variants, and UFCS methods resolve exclusively from `PackageInterface`, after real-name resolution. |
-| [ ] | B-16 | 3, 6 | Mounted fields and bound/unbound methods specialize receiver generics and preserve direct-method or interface-slot dispatch identity. |
-| [ ] | B-17 | 3, 6 | Mounted builtins without a loc-free link contract are reserved and fail with the targeted unsupported-call diagnostic, including optional calls. |
+| [x] | B-15 | 3, 6 | Source-less mounted free functions, types, variants, and UFCS methods resolve exclusively from `PackageInterface`, after real-name resolution. |
+| [x] | B-16 | 3, 6 | Mounted fields and bound/unbound methods specialize receiver generics and preserve direct-method or interface-slot dispatch identity. |
+| [x] | B-17 | 3, 6 | Mounted builtins without a loc-free link contract are reserved and fail with the targeted unsupported-call diagnostic, including optional calls. |
 | [x] | B-18 | 4 | Streaming calls reject runtime type-argument slots. |
 | [x] | B-19 | 4 | `from_json` reconstruction runs only for an all-static type-argument plan. |
 | [x] | B-20 | 3 | Expression inference uses the same shadow-preserving `baml.reflect/type/json` fallback as type lowering. |
