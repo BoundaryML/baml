@@ -89,6 +89,15 @@ impl ResolvedOpenAI {
     }
 
     pub fn supports_streaming(&self) -> bool {
+        if self
+            .properties
+            .get("model")
+            .and_then(serde_json::Value::as_str)
+            == Some("whisper-1")
+        {
+            return false;
+        }
+
         match self.supported_request_modes.stream {
             Some(v) => v,
             None => !self.is_o1_model(),
@@ -417,17 +426,12 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
 
         let http_config = properties.ensure_http_config("openai");
 
-        let mut instance = Self::create_common(
+        Self::create_common(
             properties,
             Some(either::Either::Left(base_url)),
             api_key,
             http_config,
-        )?;
-        instance.supported_request_modes = SupportedRequestModes {
-            stream: Some(false),
-        };
-
-        Ok(instance)
+        )
     }
 
     /// Creates an OpenRouter client with sensible defaults.
@@ -558,15 +562,15 @@ mod tests {
     }
 
     #[test]
-    fn transcriptions_defaults_to_openai_base_url_api_key_and_no_streaming() {
+    fn transcriptions_defaults_to_openai_base_url_api_key_and_streaming() {
         let resolved = resolve_transcriptions(IndexMap::new());
 
         assert_eq!(resolved.base_url, "https://api.openai.com/v1");
         let api_key = resolved.api_key.as_ref().expect("api key should default");
         assert_eq!(api_key.api_key.expose_secret(), "test-openai-key");
         assert_eq!(api_key.provenance.as_deref(), Some("OPENAI_API_KEY"));
-        assert_eq!(resolved.supported_request_modes.stream, Some(false));
-        assert!(!resolved.supports_streaming());
+        assert_eq!(resolved.supported_request_modes.stream, None);
+        assert!(resolved.supports_streaming());
     }
 
     #[test]
@@ -580,17 +584,28 @@ mod tests {
         let resolved = resolve_transcriptions(options);
 
         assert_eq!(resolved.base_url, "http://localhost:1234/custom/v1");
-        assert!(!resolved.supports_streaming());
+        assert!(resolved.supports_streaming());
     }
 
     #[test]
-    fn transcriptions_forces_streaming_off_even_when_enabled() {
+    fn transcriptions_respects_explicit_streaming_override() {
         let mut options = IndexMap::new();
-        options.insert("supports_streaming".to_string(), option_bool(true));
+        options.insert("supports_streaming".to_string(), option_bool(false));
 
         let resolved = resolve_transcriptions(options);
 
         assert_eq!(resolved.supported_request_modes.stream, Some(false));
+        assert!(!resolved.supports_streaming());
+    }
+
+    #[test]
+    fn whisper_transcriptions_do_not_stream() {
+        let mut options = IndexMap::new();
+        options.insert("model".to_string(), option_string("whisper-1"));
+        options.insert("supports_streaming".to_string(), option_bool(true));
+
+        let resolved = resolve_transcriptions(options);
+
         assert!(!resolved.supports_streaming());
     }
 }

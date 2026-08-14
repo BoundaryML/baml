@@ -13,7 +13,9 @@ use serde::de::DeserializeOwned;
 use super::{
     anthropic::response_handler::scan_anthropic_response_stream,
     google::response_handler::scan_google_response_stream,
-    openai::response_handler::scan_openai_chat_completion_stream,
+    openai::response_handler::{
+        scan_openai_chat_completion_stream, scan_openai_transcription_stream,
+    },
     request::{
         build_and_log_outbound_request, execute_request, to_prompt, EitherResponse, RequestBuilder,
         ResponseType,
@@ -28,38 +30,6 @@ use crate::{
     tracingv2::storage::storage::BAML_TRACER,
     RuntimeContext,
 };
-
-fn response_type_supports_streaming(response_type: &ResponseType) -> bool {
-    match response_type {
-        ResponseType::OpenAI
-        | ResponseType::OpenAIResponses
-        | ResponseType::Anthropic
-        | ResponseType::Google
-        | ResponseType::Vertex => true,
-        ResponseType::OpenAITranscription => false,
-    }
-}
-
-fn unsupported_streaming_error(
-    client_name: &str,
-    request_options: &BamlMap<String, serde_json::Value>,
-    prompt: &internal_baml_jinja::RenderedPrompt,
-    start_time: &web_time::SystemTime,
-    start_instant: &web_time::Instant,
-    model_name: &Option<String>,
-) -> LLMErrorResponse {
-    LLMErrorResponse {
-        client: client_name.to_string(),
-        model: model_name.clone(),
-        prompt: prompt.clone(),
-        start_time: *start_time,
-        latency: start_instant.elapsed(),
-        request_options: request_options.clone(),
-        message: "OpenAI audio transcription does not support streaming".to_string(),
-        code: ErrorCode::NotSupported,
-        raw_response: None,
-    }
-}
 
 /// Represents the result of processing a stream event
 #[derive(Debug)]
@@ -79,20 +49,6 @@ pub async fn make_stream_request(
     response_type: ResponseType,
     runtime_context: &impl HttpContext,
 ) -> StreamResponse {
-    if !response_type_supports_streaming(&response_type) {
-        let start_time_system = web_time::SystemTime::now();
-        let start_time_instant = web_time::Instant::now();
-        let rendered_prompt = to_prompt(prompt);
-        return Err(LLMResponse::LLMFailure(unsupported_streaming_error(
-            &client.context().name,
-            client.request_options(),
-            &rendered_prompt,
-            &start_time_system,
-            &start_time_instant,
-            &model_name,
-        )));
-    }
-
     let (start_time_system, start_time_instant, built_req) =
         build_and_log_outbound_request(client, prompt, true, true, runtime_context).await?;
 
@@ -307,14 +263,16 @@ pub async fn make_stream_request(
                             accumulated,
                             event_body,
                         ),
-                        ResponseType::OpenAITranscription => Err(unsupported_streaming_error(
+                        ResponseType::OpenAITranscription => scan_openai_transcription_stream(
                             &client_name,
                             &params,
                             &prompt,
                             &start_time_system,
                             &start_time_instant,
                             &model_name,
-                        )),
+                            accumulated,
+                            event_body,
+                        ),
                     };
                     if let Err(e) = update {
                         std::future::ready(Some(LLMResponse::LLMFailure(e)))
@@ -327,124 +285,4 @@ pub async fn make_stream_request(
                 },
             ),
     ))
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use baml_ids::HttpRequestId;
-    use baml_types::BamlMap;
-    use indexmap::IndexMap;
-    use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
-
-    use super::*;
-    use crate::internal::llm_client::{
-        traits::{HttpContext, WithClient},
-        AllowedRoleMetadata, ErrorCode, LLMResponse, ModelFeatures, ResolveMediaUrls,
-    };
-
-    struct NeverBuildClient {
-        context: RenderContext_Client,
-        model_features: ModelFeatures,
-        request_options: BamlMap<String, serde_json::Value>,
-    }
-
-    impl NeverBuildClient {
-        fn new() -> Self {
-            Self {
-                context: RenderContext_Client {
-                    name: "transcription-test".to_string(),
-                    provider: "openai-transcriptions".to_string(),
-                    default_role: "user".to_string(),
-                    allowed_roles: vec![],
-                    options: IndexMap::new(),
-                    remap_role: HashMap::new(),
-                },
-                model_features: ModelFeatures {
-                    completion: false,
-                    chat: true,
-                    max_one_system_prompt: false,
-                    resolve_audio_urls: ResolveMediaUrls::SendBase64,
-                    resolve_image_urls: ResolveMediaUrls::SendBase64,
-                    resolve_pdf_urls: ResolveMediaUrls::SendBase64,
-                    resolve_video_urls: ResolveMediaUrls::SendBase64,
-                    allowed_metadata: AllowedRoleMetadata::All,
-                },
-                request_options: BamlMap::new(),
-            }
-        }
-    }
-
-    impl WithClient for NeverBuildClient {
-        fn context(&self) -> &RenderContext_Client {
-            &self.context
-        }
-
-        fn model_features(&self) -> &ModelFeatures {
-            &self.model_features
-        }
-    }
-
-    impl RequestBuilder for NeverBuildClient {
-        async fn build_request(
-            &self,
-            _prompt: either::Either<&String, &[RenderedChatMessage]>,
-            _allow_proxy: bool,
-            _stream: bool,
-            _expose_secrets: bool,
-        ) -> Result<reqwest::RequestBuilder> {
-            panic!("transcription streaming must fail before building an HTTP request")
-        }
-
-        fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
-            &self.request_options
-        }
-
-        fn http_client(&self) -> &reqwest::Client {
-            panic!("transcription streaming must fail before accessing the HTTP client")
-        }
-
-        fn http_config(&self) -> &internal_llm_client::HttpConfig {
-            panic!("transcription streaming must fail before reading HTTP config")
-        }
-    }
-
-    struct UnusedHttpContext;
-
-    impl HttpContext for UnusedHttpContext {
-        fn http_request_id(&self) -> &HttpRequestId {
-            panic!("transcription streaming must fail before reading HTTP request id")
-        }
-
-        fn runtime_context(&self) -> &RuntimeContext {
-            panic!("transcription streaming must fail before reading runtime context")
-        }
-    }
-
-    #[tokio::test]
-    async fn transcription_streaming_unsupported_fails_before_http() {
-        let client = NeverBuildClient::new();
-        let messages: Vec<RenderedChatMessage> = vec![];
-
-        let response = make_stream_request(
-            &client,
-            either::Right(messages.as_slice()),
-            Some("gpt-4o-transcribe".to_string()),
-            ResponseType::OpenAITranscription,
-            &UnusedHttpContext,
-        )
-        .await;
-
-        let failure = match response {
-            Err(LLMResponse::LLMFailure(failure)) => failure,
-            Err(other) => panic!("expected LLMFailure, got {other:?}"),
-            Ok(_) => panic!("expected unsupported-streaming failure"),
-        };
-
-        assert_eq!(failure.client, "transcription-test");
-        assert_eq!(failure.model.as_deref(), Some("gpt-4o-transcribe"));
-        assert!(failure.message.contains("does not support streaming"));
-        assert_eq!(failure.code, ErrorCode::NotSupported);
-    }
 }

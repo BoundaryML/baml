@@ -10,13 +10,14 @@ use baml_runtime::{
     client_registry::{ClientProperty, ClientProvider},
     internal::llm_client::{
         primitive::LLMPrimitiveProvider,
-        traits::{HttpContext, WithSingleCallable},
+        traits::{HttpContext, WithSingleCallable, WithStreamable},
         LLMResponse,
     },
     RuntimeContext,
 };
 use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
 use base64::{prelude::BASE64_STANDARD, Engine};
+use futures::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::TypeIR;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage, RenderedPrompt};
@@ -27,7 +28,7 @@ use wiremock::{
     Mock, MockServer, Request, ResponseTemplate,
 };
 
-const MODEL: &str = "gpt-4o-transcribe";
+const MODEL: &str = "gpt-transcribe";
 const EXPECTED_TRANSCRIPT: &str = "the transcript";
 const AUDIO_MIME: &str = "audio/mpeg";
 const EXPECTED_FILENAME: &str = "audio.mp3";
@@ -45,6 +46,7 @@ async fn openai_transcriptions_audio_returns_transcript_through_real_http() {
             expected_model: MODEL.to_string(),
             expected_filename: EXPECTED_FILENAME.to_string(),
             expected_mime: AUDIO_MIME.to_string(),
+            expected_stream: false,
             observation: request_observation.clone(),
         })
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -91,7 +93,84 @@ async fn openai_transcriptions_audio_returns_transcript_through_real_http() {
     assert_eq!(observed.file_count, 1);
     assert_eq!(observed.model, Some(MODEL.to_string()));
     assert!(!observed.part_names.iter().any(|name| name == "messages"));
-    assert!(!observed.part_names.iter().any(|name| name == "stream"));
+    assert_eq!(observed.stream, None);
+}
+
+#[tokio::test]
+async fn openai_transcriptions_streams_deltas_through_real_http() {
+    let audio_bytes = b"fake mp3 bytes for the streaming transcription closure";
+    let request_observation = Arc::new(Mutex::new(None));
+    let server = MockServer::start().await;
+    let sse_body = concat!(
+        "event: transcript.text.delta\n",
+        "data: {\"type\":\"transcript.text.delta\",\"delta\":\"the \"}\n\n",
+        "event: transcript.text.delta\n",
+        "data: {\"type\":\"transcript.text.delta\",\"delta\":\"transcript\"}\n\n",
+        "event: transcript.text.done\n",
+        "data: {\"type\":\"transcript.text.done\",\"text\":\"the transcript\",\"usage\":{\"type\":\"tokens\",\"input_tokens\":12,\"output_tokens\":2,\"total_tokens\":14}}\n\n"
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/audio/transcriptions"))
+        .and(TranscriptionMultipartMatcher {
+            expected_file_bytes: audio_bytes.to_vec(),
+            expected_model: MODEL.to_string(),
+            expected_filename: EXPECTED_FILENAME.to_string(),
+            expected_mime: AUDIO_MIME.to_string(),
+            expected_stream: true,
+            observation: request_observation.clone(),
+        })
+        .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let runtime_context = runtime_context();
+    let client_property = transcription_client_property(server.uri());
+    let client = LLMPrimitiveProvider::try_from((&client_property, &runtime_context))
+        .expect("openai-transcriptions test client should construct");
+    let ctx = TestHttpContext::new(runtime_context);
+    let prompt = RenderedPrompt::Chat(vec![RenderedChatMessage {
+        role: "user".to_string(),
+        allow_duplicate_role: false,
+        parts: vec![ChatMessagePart::Media(BamlMedia::base64(
+            BamlMediaType::Audio,
+            BASE64_STANDARD.encode(audio_bytes),
+            Some(AUDIO_MIME.to_string()),
+        ))],
+    }]);
+
+    let mut stream = client
+        .stream(&ctx, &prompt)
+        .await
+        .expect("transcription stream should start");
+    let mut responses = Vec::new();
+    while let Some(response) = stream.next().await {
+        match response {
+            LLMResponse::Success(response) => responses.push(response),
+            other => panic!("expected successful transcription stream event, got {other:?}"),
+        }
+    }
+
+    server.verify().await;
+
+    assert_eq!(responses.len(), 3);
+    let final_response = responses
+        .last()
+        .expect("stream should emit a final response");
+    assert_eq!(final_response.content, EXPECTED_TRANSCRIPT);
+    assert_eq!(final_response.model, MODEL);
+    assert!(final_response.metadata.baml_is_complete);
+    assert_eq!(final_response.metadata.prompt_tokens, Some(12));
+    assert_eq!(final_response.metadata.output_tokens, Some(2));
+    assert_eq!(final_response.metadata.total_tokens, Some(14));
+
+    let observed = request_observation
+        .lock()
+        .expect("request observation lock poisoned")
+        .clone()
+        .expect("multipart matcher should have observed the request");
+    assert_eq!(observed.stream.as_deref(), Some("true"));
 }
 
 fn transcription_client_property(base_url: String) -> ClientProperty {
@@ -159,6 +238,7 @@ struct TranscriptionMultipartMatcher {
     expected_model: String,
     expected_filename: String,
     expected_mime: String,
+    expected_stream: bool,
     observation: Arc<Mutex<Option<ObservedMultipartRequest>>>,
 }
 
@@ -189,11 +269,16 @@ impl wiremock::Match for TranscriptionMultipartMatcher {
             .iter()
             .find(|part| part.name.as_deref() == Some("model"))
             .map(|part| String::from_utf8_lossy(&part.body).to_string());
+        let stream = parts
+            .iter()
+            .find(|part| part.name.as_deref() == Some("stream"))
+            .map(|part| String::from_utf8_lossy(&part.body).to_string());
 
         let observed = ObservedMultipartRequest {
             saw_multipart_content_type: content_type.starts_with("multipart/form-data"),
             file_count: file_parts.len(),
             model: model.clone(),
+            stream: stream.clone(),
             part_names,
         };
         *self
@@ -210,9 +295,10 @@ impl wiremock::Match for TranscriptionMultipartMatcher {
             && file_part.content_type.as_deref() == Some(self.expected_mime.as_str())
             && file_part.body == self.expected_file_bytes
             && model.as_deref() == Some(self.expected_model.as_str())
+            && stream.as_deref() == self.expected_stream.then_some("true")
             && !parts
                 .iter()
-                .any(|part| matches!(part.name.as_deref(), Some("messages") | Some("stream")))
+                .any(|part| part.name.as_deref() == Some("messages"))
     }
 }
 
@@ -221,6 +307,7 @@ struct ObservedMultipartRequest {
     saw_multipart_content_type: bool,
     file_count: usize,
     model: Option<String>,
+    stream: Option<String>,
     part_names: Vec<String>,
 }
 

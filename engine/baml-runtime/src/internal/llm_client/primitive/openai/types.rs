@@ -19,6 +19,37 @@ pub struct TranscriptionParts {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TranscriptionResponse {
     pub text: String,
+    pub usage: Option<TranscriptionUsage>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum TranscriptionUsage {
+    Tokens {
+        input_tokens: u64,
+        output_tokens: u64,
+        total_tokens: u64,
+        input_token_details: Option<Value>,
+    },
+    Duration {
+        seconds: f64,
+    },
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(tag = "type")]
+pub enum TranscriptionStreamEvent {
+    #[serde(rename = "transcript.text.delta")]
+    Delta { delta: String },
+    #[serde(rename = "transcript.text.done")]
+    Done {
+        text: String,
+        usage: Option<TranscriptionUsage>,
+    },
+    #[serde(rename = "transcript.text.segment")]
+    Segment,
+    #[serde(other)]
+    Unknown,
 }
 
 pub fn build_transcription_parts(
@@ -63,29 +94,22 @@ pub fn build_transcription_parts(
     };
 
     let mut fields = BamlMap::new();
-    fields.insert(
-        "model".to_string(),
-        required_string_field(properties, "model")?,
-    );
+    let model = required_string_field(properties, "model")?;
+    fields.insert("model".to_string(), model.clone());
 
     let property_prompt = optional_string_field(properties, "prompt")?;
     if property_prompt.is_some() && !text_parts.is_empty() {
         bail!("OpenAI transcription prompt is ambiguous: both properties.prompt and rendered text were provided");
     }
-    if text_parts.len() > 1 {
-        bail!(
-            "OpenAI transcription prompt text is ambiguous: expected at most one non-empty text part, got {}",
-            text_parts.len()
-        );
-    }
-    if let Some(prompt) = property_prompt.or_else(|| text_parts.pop()) {
+    let rendered_prompt = (!text_parts.is_empty()).then(|| text_parts.join("\n"));
+    if let Some(prompt) = property_prompt.or(rendered_prompt) {
         fields.insert("prompt".to_string(), prompt);
     }
 
     if let Some(language) = optional_string_field(properties, "language")? {
         fields.insert("language".to_string(), language);
     }
-    if let Some(response_format) = optional_response_format(properties)? {
+    if let Some(response_format) = optional_response_format(properties, &model)? {
         fields.insert("response_format".to_string(), response_format);
     }
     if let Some(temperature) = optional_temperature(properties)? {
@@ -156,13 +180,23 @@ fn optional_string_field(
     }
 }
 
-fn optional_response_format(properties: &BamlMap<String, Value>) -> Result<Option<String>> {
+fn optional_response_format(
+    properties: &BamlMap<String, Value>,
+    model: &str,
+) -> Result<Option<String>> {
     match properties.get("response_format") {
-        Some(Value::String(value)) if value == "json" || value == "verbose_json" => {
-            Ok(Some(value.clone()))
-        }
+        Some(Value::String(value))
+            if value == "json"
+                || (value == "verbose_json"
+                    && !matches!(
+                        model,
+                        "gpt-4o-transcribe"
+                            | "gpt-4o-mini-transcribe"
+                            | "gpt-4o-mini-transcribe-2025-12-15"
+                            | "gpt-4o-transcribe-diarize"
+                    )) => Ok(Some(value.clone())),
         Some(Value::String(value)) => bail!(
-            "OpenAI transcription response_format must be `json` or `verbose_json`, got `{value}`"
+            "OpenAI transcription response_format `{value}` is not supported by model `{model}` in BAML; use `json`"
         ),
         Some(_) => bail!("OpenAI transcription field `response_format` must be a string"),
         None => Ok(None),
@@ -616,7 +650,7 @@ mod transcription_parts_tests {
         let audio_bytes = b"fake mp3 bytes".to_vec();
         let audio_b64 = BASE64_STANDARD.encode(&audio_bytes);
         let properties = props(&[
-            ("model", json!("gpt-4o-transcribe")),
+            ("model", json!("whisper-1")),
             ("language", json!("en")),
             ("response_format", json!("verbose_json")),
             ("temperature", json!(0.25)),
@@ -629,7 +663,7 @@ mod transcription_parts_tests {
         assert_eq!(parts.file_bytes, audio_bytes);
         assert_eq!(parts.filename, "audio.mp3");
         assert_eq!(parts.mime, "audio/mpeg");
-        assert_eq!(parts.fields.get("model").unwrap(), "gpt-4o-transcribe");
+        assert_eq!(parts.fields.get("model").unwrap(), "whisper-1");
         assert_eq!(parts.fields.get("language").unwrap(), "en");
         assert_eq!(parts.fields.get("response_format").unwrap(), "verbose_json");
         assert_eq!(parts.fields.get("temperature").unwrap(), "0.25");
@@ -652,6 +686,38 @@ mod transcription_parts_tests {
         assert_eq!(
             parts.fields.get("prompt").map(String::as_str),
             Some("Use the product spelling from the clip.")
+        );
+    }
+
+    #[test]
+    fn transcription_parts_joins_text_from_multi_part_chat_messages() {
+        let audio_b64 = BASE64_STANDARD.encode(b"audio bytes");
+        let properties = props(&[("model", json!("gpt-transcribe"))]);
+        let messages = vec![
+            text_message("Use the product spelling from the clip."),
+            RenderedChatMessage {
+                role: "user".to_string(),
+                allow_duplicate_role: false,
+                parts: vec![
+                    ChatMessagePart::Text("Transcribe this recording.".to_string()),
+                    ChatMessagePart::Media(BamlMedia::base64(
+                        BamlMediaType::Audio,
+                        audio_b64,
+                        Some("audio/wav".to_string()),
+                    )),
+                    ChatMessagePart::Text("Preserve punctuation.".to_string()),
+                ],
+            },
+        ];
+
+        let parts = build_transcription_parts(&properties, either::Right(messages.as_slice()))
+            .expect("multi-part chat text should map to one transcription prompt");
+
+        assert_eq!(
+            parts.fields.get("prompt").map(String::as_str),
+            Some(
+                "Use the product spelling from the clip.\nTranscribe this recording.\nPreserve punctuation."
+            )
         );
     }
 
@@ -737,15 +803,6 @@ mod transcription_parts_tests {
                 ],
                 "prompt",
             ),
-            (
-                valid_props,
-                vec![
-                    text_message("first prompt"),
-                    text_message("second prompt"),
-                    audio_message(audio_b64, "audio/wav"),
-                ],
-                "ambiguous",
-            ),
         ];
 
         for (properties, messages, expected_message) in cases {
@@ -771,6 +828,10 @@ mod transcription_parts_tests {
             (("response_format", json!("text")), "response_format"),
             (("response_format", json!("srt")), "response_format"),
             (("response_format", json!("vtt")), "response_format"),
+            (
+                ("response_format", json!("verbose_json")),
+                "response_format",
+            ),
             (("messages", json!([])), "messages"),
             (("stream", json!(false)), "stream"),
         ];

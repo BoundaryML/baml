@@ -490,10 +490,12 @@ impl RequestBuilder for OpenAIClient {
         }
 
         if matches!(strategy, ProviderStrategy::TranscriptionsApi) {
+            let mut parts = build_transcription_parts(&self.properties.properties, prompt)?;
             if stream {
-                anyhow::bail!("OpenAI audio transcriptions do not support streaming");
+                parts
+                    .fields
+                    .insert("stream".to_string(), "true".to_string());
             }
-            let parts = build_transcription_parts(&self.properties.properties, prompt)?;
             return attach_transcription_body(req, parts);
         }
 

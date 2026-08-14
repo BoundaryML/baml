@@ -251,7 +251,7 @@ mod tests {
             .expect("openai-transcriptions options should resolve");
 
         assert_eq!(resolved.base_url, "https://api.openai.com/v1");
-        assert_eq!(resolved.supported_request_modes.stream, Some(false));
-        assert!(!resolved.supports_streaming());
+        assert_eq!(resolved.supported_request_modes.stream, None);
+        assert!(resolved.supports_streaming());
     }
 }
