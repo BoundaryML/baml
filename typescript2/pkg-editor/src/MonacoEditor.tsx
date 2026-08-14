@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Keep the existing public module path.
+// biome-ignore-all lint/suspicious/noExplicitAny: Monaco's dynamic editor and filesystem internals are not publicly typed.
 /**
  * MonacoEditor — BAML editor with file tree (explorer) and LSP.
  *
@@ -17,12 +19,17 @@
  *     WebSocket to a real server). See `@b/pkg-editor/remote`.
  */
 
-import { useEffect, useRef, useState, type FC } from 'react';
+import { type FC, useEffect, useRef, useState } from 'react';
 import './views-workbench.css';
-import { type IFileWriteOptions } from '@codingame/monaco-vscode-files-service-override';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
-import { isMediaPath, mimeFromPath, toDataUrl, fromDataUrl } from './media';
-import type { EditorBackend, EditorConnection, WorkbenchHandle } from './backend';
+import type { IFileWriteOptions } from '@codingame/monaco-vscode-files-service-override';
+import type {
+  EditorBackend,
+  EditorConnection,
+  WorkbenchHandle,
+} from './backend';
+import { fromDataUrl, isMediaPath, mimeFromPath, toDataUrl } from './media';
+import monospaceDarkTheme from './themes/monospace/monospace-dark.json';
 
 declare const __DEV__: boolean | undefined;
 declare const process: { env: { NODE_ENV?: string } } | undefined;
@@ -31,7 +38,9 @@ function isDevelopmentBuild(): boolean {
   if (typeof __DEV__ !== 'undefined') {
     return __DEV__;
   }
-  return typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
+  return (
+    typeof process !== 'undefined' && process.env.NODE_ENV === 'development'
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -85,65 +94,188 @@ function createWorkspaceContent(workspacePath: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Loading skeleton — matches "Default Dark Modern" so the transition is smooth.
+// Loading skeleton matches Monospace Dark so the transition is smooth.
 // Token colors are inline because they're hardcoded to the pre-workbench theme;
-// structural layout uses Tailwind.
+// structural layout is package-owned CSS.
 // ---------------------------------------------------------------------------
 
 const sk = {
-  bg: '#1f1f1f', sidebar: '#181818', sidebarBorder: '#2b2b2b',
-  lineNum: '#6e7681', text: '#9da5b4', keyword: '#569cd6',
-  string: '#ce9178', comment: '#6a9955',
+  accent: '#a87ffb',
+  activityInactive: '#738295',
+  bg: '#171f2b',
+  border: '#333e4f',
+  comment: '#7f8d9f',
+  keyword: '#fd8da3',
+  lineNum: '#475365',
+  sidebar: '#10151d',
+  status: '#1f2939',
+  statusForeground: '#a4afbd',
+  string: '#77d5a3',
+  text: '#d9dfe7',
 } as const;
 
-const SkeletonLine: FC<{ indent?: number; tokens: Array<{ w: number; color: string }> }> = ({ indent = 0, tokens }) => (
-  <div className="flex items-center h-[21px]" style={{ paddingLeft: indent * 16 }}>
+const SkeletonLine: FC<{
+  indent?: number;
+  tokens: Array<{ w: number; color: string }>;
+}> = ({ indent = 0, tokens }) => (
+  <div
+    className="baml-editor-skeleton-line"
+    style={{ paddingLeft: indent * 16 }}
+  >
     {tokens.map((t, i) => (
-      <div key={i} className="h-2.5 rounded-sm opacity-35 mr-2" style={{ width: t.w, background: t.color }} />
+      <div
+        className="baml-editor-skeleton-token"
+        // biome-ignore lint/suspicious/noArrayIndexKey: Skeleton tokens are a static ordered list.
+        key={i}
+        style={{ background: t.color, width: t.w }}
+      />
     ))}
   </div>
 );
 
 const EditorSkeleton: FC<{ height: string }> = ({ height }) => (
-  <div className="w-full flex font-mono overflow-hidden bg-[#1f1f1f]" style={{ height }}>
-    {/* Sidebar skeleton */}
-    <div className="w-[200px] shrink-0 py-2.5 bg-[#181818] border-r border-[#2b2b2b]">
-      <div className="px-3 mb-2.5">
-        <div className="w-20 h-[9px] rounded-sm opacity-20 bg-[#9da5b4]" />
-      </div>
-      {[90, 70, 110, 60].map((w, i) => (
-        <div key={i} className="py-0.5 px-3 pl-5">
-          <div className="h-[9px] rounded-sm opacity-15 bg-[#9da5b4]" style={{ width: w }} />
-        </div>
-      ))}
+  <div
+    aria-hidden="true"
+    className="baml-editor-skeleton"
+    style={{ background: sk.bg, height }}
+  >
+    <div
+      className="baml-editor-skeleton-titlebar"
+      style={{ background: sk.bg, borderColor: sk.border }}
+    >
+      <div
+        className="baml-editor-skeleton-window-title"
+        style={{ background: sk.text }}
+      />
     </div>
 
-    {/* Editor skeleton */}
-    <div className="flex-1 flex min-w-0">
-      {/* Gutter */}
-      <div className="w-12 shrink-0 pt-3 bg-[#1f1f1f]">
-        {Array.from({ length: 12 }, (_, i) => (
-          <div key={i} className="h-[21px] flex items-center justify-end pr-3">
-            <div className="w-2.5 h-2 rounded-sm opacity-25 bg-[#6e7681]" />
+    <div className="baml-editor-skeleton-main">
+      <div
+        className="baml-editor-skeleton-activitybar"
+        style={{ background: sk.bg, borderColor: sk.border }}
+      >
+        {[0, 1, 2, 3].map((item) => (
+          <div className="baml-editor-skeleton-activity-item" key={item}>
+            {item === 0 && (
+              <div
+                className="baml-editor-skeleton-activity-indicator"
+                style={{ background: sk.accent }}
+              />
+            )}
+            <div
+              className="baml-editor-skeleton-activity-icon"
+              style={{ background: item === 0 ? sk.text : sk.activityInactive }}
+            />
           </div>
         ))}
       </div>
 
-      {/* Code area */}
-      <div className="flex-1 pt-3 pl-2">
-        <SkeletonLine tokens={[{ w: 48, color: sk.comment }]} />
-        <SkeletonLine tokens={[{ w: 55, color: sk.keyword }, { w: 80, color: sk.text }]} />
-        <SkeletonLine indent={1} tokens={[{ w: 45, color: sk.keyword }, { w: 60, color: sk.text }]} />
-        <SkeletonLine indent={1} tokens={[{ w: 50, color: sk.keyword }, { w: 90, color: sk.string }]} />
-        <SkeletonLine tokens={[{ w: 10, color: sk.text }]} />
-        <SkeletonLine tokens={[]} />
-        <SkeletonLine tokens={[{ w: 42, color: sk.keyword }, { w: 70, color: sk.text }]} />
-        <SkeletonLine indent={1} tokens={[{ w: 60, color: sk.keyword }, { w: 50, color: sk.text }]} />
-        <SkeletonLine indent={1} tokens={[{ w: 55, color: sk.string }, { w: 80, color: sk.string }]} />
-        <SkeletonLine indent={1} tokens={[{ w: 40, color: sk.keyword }, { w: 100, color: sk.string }]} />
-        <SkeletonLine tokens={[{ w: 10, color: sk.text }]} />
-        <SkeletonLine tokens={[]} />
+      <div
+        className="baml-editor-skeleton-sidebar"
+        style={{ background: sk.sidebar, borderColor: sk.border }}
+      >
+        <div className="baml-editor-skeleton-sidebar-title-row">
+          <div
+            className="baml-editor-skeleton-sidebar-title"
+            style={{ background: sk.text }}
+          />
+        </div>
+        {[90, 70, 110, 60].map((w, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Skeleton rows are a static ordered list.
+          <div className="baml-editor-skeleton-sidebar-row" key={i}>
+            <div
+              className="baml-editor-skeleton-sidebar-file"
+              style={{ background: sk.text, width: w }}
+            />
+          </div>
+        ))}
       </div>
+
+      <div className="baml-editor-skeleton-editor">
+        <div
+          className="baml-editor-skeleton-gutter"
+          style={{ background: sk.bg }}
+        >
+          {Array.from({ length: 12 }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: Skeleton lines are a static ordered list.
+            <div className="baml-editor-skeleton-gutter-line" key={i}>
+              <div
+                className="baml-editor-skeleton-line-number"
+                style={{ background: sk.lineNum }}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="baml-editor-skeleton-code">
+          <SkeletonLine tokens={[{ color: sk.comment, w: 48 }]} />
+          <SkeletonLine
+            tokens={[
+              { color: sk.keyword, w: 55 },
+              { color: sk.text, w: 80 },
+            ]}
+          />
+          <SkeletonLine
+            indent={1}
+            tokens={[
+              { color: sk.keyword, w: 45 },
+              { color: sk.text, w: 60 },
+            ]}
+          />
+          <SkeletonLine
+            indent={1}
+            tokens={[
+              { color: sk.keyword, w: 50 },
+              { color: sk.string, w: 90 },
+            ]}
+          />
+          <SkeletonLine tokens={[{ color: sk.text, w: 10 }]} />
+          <SkeletonLine tokens={[]} />
+          <SkeletonLine
+            tokens={[
+              { color: sk.keyword, w: 42 },
+              { color: sk.text, w: 70 },
+            ]}
+          />
+          <SkeletonLine
+            indent={1}
+            tokens={[
+              { color: sk.keyword, w: 60 },
+              { color: sk.text, w: 50 },
+            ]}
+          />
+          <SkeletonLine
+            indent={1}
+            tokens={[
+              { color: sk.string, w: 55 },
+              { color: sk.string, w: 80 },
+            ]}
+          />
+          <SkeletonLine
+            indent={1}
+            tokens={[
+              { color: sk.keyword, w: 40 },
+              { color: sk.string, w: 100 },
+            ]}
+          />
+          <SkeletonLine tokens={[{ color: sk.text, w: 10 }]} />
+          <SkeletonLine tokens={[]} />
+        </div>
+      </div>
+    </div>
+
+    <div
+      className="baml-editor-skeleton-statusbar"
+      style={{ background: sk.status, borderColor: sk.border }}
+    >
+      <div
+        className="baml-editor-skeleton-status-item"
+        style={{ background: sk.statusForeground, width: 44 }}
+      />
+      <div
+        className="baml-editor-skeleton-status-item"
+        style={{ background: sk.statusForeground, width: 92 }}
+      />
     </div>
   </div>
 );
@@ -152,7 +284,17 @@ const EditorSkeleton: FC<{ height: string }> = ({ height }) => (
 // Component
 // ---------------------------------------------------------------------------
 
-export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, backend, workspaceRoot = '/workspace', height = '100%', onBlobUrlsChange, autoSaveDelayMs, showSaveHint, onUnsavedChange }) => {
+export const MonacoEditor: FC<MonacoEditorProps> = ({
+  files,
+  onFilesChange,
+  backend,
+  workspaceRoot = '/workspace',
+  height = '100%',
+  onBlobUrlsChange,
+  autoSaveDelayMs,
+  showSaveHint,
+  onUnsavedChange,
+}) => {
   /** Marks a file (by uri string) as saved/clean — set by the save-hint setup so
    *  the disk-change handler can clear externally-applied edits from the hint. */
   const markFileSavedRef = useRef<(uriString: string) => void>(() => {});
@@ -172,7 +314,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
   /** Active backend connection (LSP transport + runtime). */
   const currentConnRef = useRef<EditorConnection | null>(null);
   /** Disposables tied to the current connection (language client + connection). */
-  const connDisposablesRef = useRef<Array<{ dispose: () => void | Promise<void> }>>([]);
+  const connDisposablesRef = useRef<
+    Array<{ dispose: () => void | Promise<void> }>
+  >([]);
   /** Increments each time we connect; used as React key to force ExecutionPanel remount. */
   const connectionVersionRef = useRef(0);
   /** Callback to restart the connection; set once `connect` is defined. */
@@ -187,6 +331,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
   backendRef.current = backend;
   filesRef.current = files;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The workbench lifecycle is intentionally mount-only.
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -200,9 +345,13 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
 
       // Parallel-import: VS Code API shim + service overrides together
       const [
-        { MonacoVscodeApiWrapper, defaultHtmlAugmentationInstructions, defaultViewsInit },
+        {
+          MonacoVscodeApiWrapper,
+          defaultHtmlAugmentationInstructions,
+          defaultViewsInit,
+        },
         { createDefaultLocaleConfiguration },
-        { useWorkerFactory, Worker: WorkerRef },
+        { useWorkerFactory: configureWorkerFactory, Worker: WorkerRef },
         keybindingsOverride,
         lifecycleOverride,
         localizationOverride,
@@ -212,7 +361,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
         statusBarOverride,
         titleBarOverride,
         environmentOverride,
-        remoteAgentOverride,
         searchOverride,
         outlineOverride,
         secretStorageOverride,
@@ -232,7 +380,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
         import('@codingame/monaco-vscode-view-status-bar-service-override'),
         import('@codingame/monaco-vscode-view-title-bar-service-override'),
         import('@codingame/monaco-vscode-environment-service-override'),
-        import('@codingame/monaco-vscode-remote-agent-service-override'),
         import('@codingame/monaco-vscode-search-service-override'),
         import('@codingame/monaco-vscode-outline-service-override'),
         import('@codingame/monaco-vscode-secret-storage-service-override'),
@@ -244,19 +391,27 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       if (disposed || !containerRef.current) return;
 
       // Workspace root (absolute path the in-memory FS is rooted at).
-      const root = (workspaceRoot.replace(/\/+$/, '') || '') || '/workspace';
+      const root = workspaceRoot.replace(/\/+$/, '') || '' || '/workspace';
       const rootPrefix = `${root}/`;
       const workspaceConfigPath = `${root}.code-workspace`;
 
       // Set up in-memory filesystem
-      const workspaceFolderUri = vscode.Uri.file(root);
       const workspaceFileUri = vscode.Uri.file(workspaceConfigPath);
 
-      const { InMemoryFileSystemProvider, registerFileSystemOverlay, FileChangeType } = filesOverride;
+      const {
+        InMemoryFileSystemProvider,
+        registerFileSystemOverlay,
+        FileChangeType,
+      } = filesOverride;
       const rawFs = new InMemoryFileSystemProvider();
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
-      const writeOpts: IFileWriteOptions = { atomic: false, unlock: false, create: true, overwrite: true };
+      const writeOpts: IFileWriteOptions = {
+        atomic: false,
+        create: true,
+        overwrite: true,
+        unlock: false,
+      };
 
       // Sandbox: only allow operations inside the workspace root (plus its config file).
       const WORKSPACE_ROOT = root;
@@ -265,20 +420,28 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       /** Returns true if the path is inside /workspace or is the workspace config file. */
       const isAllowedPath = (uri: { path: string }): boolean => {
         const p = uri.path;
-        return p === WORKSPACE_ROOT || p.startsWith(WORKSPACE_ROOT + '/') || p === WORKSPACE_CONFIG;
+        return (
+          p === WORKSPACE_ROOT ||
+          p.startsWith(`${WORKSPACE_ROOT}/`) ||
+          p === WORKSPACE_CONFIG
+        );
       };
 
       /** Throws if the path is outside the sandbox. */
       const assertAllowed = (uri: { path: string }, op: string): void => {
         if (!isAllowedPath(uri)) {
-          throw new Error(`Sandbox violation: ${op} not allowed outside ${WORKSPACE_ROOT} (got ${uri.path})`);
+          throw new Error(
+            `Sandbox violation: ${op} not allowed outside ${WORKSPACE_ROOT} (got ${uri.path})`,
+          );
         }
       };
 
       /** Throws if trying to delete/rename the workspace root itself. */
       const assertNotRoot = (uri: { path: string }, op: string): void => {
         if (uri.path === WORKSPACE_ROOT) {
-          throw new Error(`Sandbox violation: cannot ${op} the workspace root directory`);
+          throw new Error(
+            `Sandbox violation: cannot ${op} the workspace root directory`,
+          );
         }
       };
 
@@ -289,25 +452,29 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
           if (typeof val !== 'function') return val;
 
           switch (prop) {
-            case 'writeFile': return (uri: any, content: any, opts: any) => {
-              assertAllowed(uri, 'writeFile');
-              return target.writeFile(uri, content, opts);
-            };
-            case 'mkdir': return (uri: any) => {
-              assertAllowed(uri, 'mkdir');
-              return target.mkdir(uri);
-            };
-            case 'delete': return (uri: any, opts: any) => {
-              assertAllowed(uri, 'delete');
-              assertNotRoot(uri, 'delete');
-              return target.delete(uri, opts);
-            };
-            case 'rename': return (from: any, to: any, opts: any) => {
-              assertAllowed(from, 'rename (source)');
-              assertNotRoot(from, 'rename');
-              assertAllowed(to, 'rename (target)');
-              return target.rename(from, to, opts);
-            };
+            case 'writeFile':
+              return (uri: any, content: any, opts: any) => {
+                assertAllowed(uri, 'writeFile');
+                return target.writeFile(uri, content, opts);
+              };
+            case 'mkdir':
+              return (uri: any) => {
+                assertAllowed(uri, 'mkdir');
+                return target.mkdir(uri);
+              };
+            case 'delete':
+              return (uri: any, opts: any) => {
+                assertAllowed(uri, 'delete');
+                assertNotRoot(uri, 'delete');
+                return target.delete(uri, opts);
+              };
+            case 'rename':
+              return (from: any, to: any, opts: any) => {
+                assertAllowed(from, 'rename (source)');
+                assertNotRoot(from, 'rename');
+                assertAllowed(to, 'rename (target)');
+                return target.rename(from, to, opts);
+              };
             default:
               return val.bind(target);
           }
@@ -324,7 +491,11 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
         for (let i = 2; i <= rootParts.length; i++) {
           const dir = rootParts.slice(0, i).join('/');
           if (!dir) continue;
-          try { await rawFs.mkdir(vscode.Uri.file(dir)); } catch { /* already exists */ }
+          try {
+            await rawFs.mkdir(vscode.Uri.file(dir));
+          } catch {
+            /* already exists */
+          }
         }
       }
 
@@ -335,22 +506,36 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       blobUrlsRef.current = blobUrlMap;
 
       for (const [filename, content] of Object.entries(allFiles)) {
-        const absPath = filename.startsWith(rootPrefix) ? filename : `${rootPrefix}${filename}`;
+        const absPath = filename.startsWith(rootPrefix)
+          ? filename
+          : `${rootPrefix}${filename}`;
         const parts = absPath.split('/');
         for (let i = 2; i < parts.length; i++) {
           const parentPath = parts.slice(0, i).join('/');
           try {
             await fileSystemProvider.mkdir(vscode.Uri.file(parentPath));
-          } catch { /* already exists */ }
+          } catch {
+            /* already exists */
+          }
         }
 
         if (isMediaPath(filename)) {
           const bytes = fromDataUrl(content);
-          await fileSystemProvider.writeFile(vscode.Uri.file(absPath), bytes, writeOpts);
+          await fileSystemProvider.writeFile(
+            vscode.Uri.file(absPath),
+            bytes,
+            writeOpts,
+          );
           const mime = mimeFromPath(filename);
-          blobUrlMap[filename] = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: mime }));
+          blobUrlMap[filename] = URL.createObjectURL(
+            new Blob([new Uint8Array(bytes)], { type: mime }),
+          );
         } else {
-          await fileSystemProvider.writeFile(vscode.Uri.file(absPath), encoder.encode(content), writeOpts);
+          await fileSystemProvider.writeFile(
+            vscode.Uri.file(absPath),
+            encoder.encode(content),
+            writeOpts,
+          );
         }
       }
       onBlobUrlsChangeRef.current?.({ ...blobUrlMap });
@@ -363,32 +548,116 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       );
       registerFileSystemOverlay(1, fileSystemProvider);
 
-      const windowLabel = backendRef.current.windowLabel ?? 'BAML Playground';
+      const windowLabel = backendRef.current.windowLabel;
 
       // Init VS Code API wrapper and start the workbench
       const apiWrapper = new MonacoVscodeApiWrapper({
         $type: 'extended',
-        viewsConfig: {
-          $type: 'ViewsService',
-          htmlContainer: containerRef.current,
-          htmlAugmentationInstructions: defaultHtmlAugmentationInstructions,
-          viewsInitFunc: defaultViewsInit,
-        },
-        workspaceConfig: {
-          enableWorkspaceTrust: true,
-          windowIndicator: { label: windowLabel, tooltip: '', command: '' },
-          workspaceProvider: {
-            trusted: true,
-            async open() { return true; },
-            workspace: { workspaceUri: workspaceFileUri },
+        extensions: [
+          {
+            config: {
+              contributes: {
+                commands: [
+                  {
+                    command: 'baml.openPlayground',
+                    title: 'BAML: Open Playground',
+                  },
+                  {
+                    command: 'baml.previewImage',
+                    title: 'BAML: Preview Image',
+                  },
+                ],
+                grammars: [
+                  {
+                    language: 'baml',
+                    path: './baml.tmLanguage.json',
+                    scopeName: 'source.baml',
+                  },
+                ],
+                languages: [
+                  {
+                    aliases: ['BAML', 'baml'],
+                    configuration: './language-configuration.json',
+                    extensions: ['.baml'],
+                    id: 'baml',
+                  },
+                ],
+                themes: [
+                  {
+                    id: 'monospace-dark',
+                    label: 'Monospace Dark',
+                    path: './monospace-dark.json',
+                    uiTheme: 'vs-dark',
+                  },
+                ],
+              },
+              engines: { vscode: '*' },
+              name: 'baml-playground',
+              publisher: 'boundaryml',
+              version: '1.0.0',
+            },
+            filesOrContents: new Map<string, string | URL>([
+              ['./baml.tmLanguage.json', JSON.stringify(bamlTmLanguageGrammar)],
+              ['./monospace-dark.json', JSON.stringify(monospaceDarkTheme)],
+              [
+                './language-configuration.json',
+                JSON.stringify({
+                  autoClosingPairs: [
+                    ['{', '}'],
+                    ['[', ']'],
+                    ['(', ')'],
+                    { close: '"', open: '"' },
+                    ['#"', '"#'],
+                    ["'", "'"],
+                    ['{#', '}'],
+                    ['{//', '//}'],
+                  ],
+                  brackets: [
+                    ['{', '}'],
+                    ['[', ']'],
+                    ['(', ')'],
+                  ],
+                  comments: {
+                    blockComment: ['{//', '//}'],
+                    lineComment: '//',
+                  },
+                  surroundingPairs: [
+                    ['{', '}'],
+                    ['[', ']'],
+                    ['(', ')'],
+                    ['"', '"'],
+                    ["'", "'"],
+                  ],
+                }),
+              ],
+            ]),
           },
-          configurationDefaults: {
-            'window.title': 'BAML Playground${separator}${dirty}${activeEditorShort}',
-          },
-          productConfiguration: {
-            nameShort: 'BAML Playground',
-            nameLong: 'BAML Playground',
-          },
+        ],
+        monacoWorkerFactory: () => {
+          // Custom worker factory: the `new URL(..., import.meta.url)` patterns
+          // must be in OUR source code (the consuming app transpiles pkg-editor)
+          // so the bundler can resolve them at build time into proper asset URLs.
+          // eslint-disable-next-line react-hooks/rules-of-hooks -- not a React hook
+          configureWorkerFactory({
+            workerLoaders: {
+              editorWorkerService: () =>
+                new WorkerRef(
+                  new URL(
+                    '@codingame/monaco-vscode-editor-api/esm/vs/editor/editor.worker.js',
+                    import.meta.url,
+                  ),
+                  { type: 'module' },
+                ),
+              TextMateWorker: () =>
+                new WorkerRef(
+                  new URL(
+                    '@codingame/monaco-vscode-textmate-service-override/worker',
+                    import.meta.url,
+                  ),
+                  { type: 'module' },
+                ),
+            },
+          });
         },
         serviceOverrides: {
           ...keybindingsOverride.default(),
@@ -398,107 +667,75 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
           ...statusBarOverride.default(),
           ...titleBarOverride.default(),
           ...explorerOverride.default(),
-          ...remoteAgentOverride.default(),
           ...environmentOverride.default(),
           ...secretStorageOverride.default(),
           ...storageOverride.default(),
           ...searchOverride.default(),
           ...outlineOverride.default(),
         },
-        monacoWorkerFactory: () => {
-          // Custom worker factory — the `new URL(..., import.meta.url)` patterns
-          // must be in OUR source code (the consuming app transpiles pkg-editor)
-          // so the bundler can resolve them at build time into proper asset URLs.
-          // eslint-disable-next-line react-hooks/rules-of-hooks -- not a React hook
-          useWorkerFactory({
-            workerLoaders: {
-              editorWorkerService: () => new WorkerRef(
-                new URL('@codingame/monaco-vscode-editor-api/esm/vs/editor/editor.worker.js', import.meta.url),
-                { type: 'module' },
-              ),
-              TextMateWorker: () => new WorkerRef(
-                new URL('@codingame/monaco-vscode-textmate-service-override/worker', import.meta.url),
-                { type: 'module' },
-              ),
-            },
-          });
-        },
         userConfiguration: {
           json: JSON.stringify({
-            'workbench.colorTheme': 'Default Dark Modern',
-            'window.commandCenter': false,
-            'workbench.layoutControl.enabled': false,
+            'editor.fontSize': 13,
+            'editor.formatOnSave': true,
+            'editor.lineHeight': 1.6,
+            'editor.minimap.enabled': false,
+            'editor.padding.top': 12,
+            'editor.renderLineHighlight': 'line',
+            'editor.scrollBeyondLastLine': false,
             'editor.semanticHighlighting.enabled': true,
             'editor.semanticTokenColorCustomizations': {
               rules: {
                 'namespace:baml': '#808080CC',
               },
             },
-            'editor.wordBasedSuggestions': 'off',
-            'editor.minimap.enabled': false,
-            'editor.scrollBeyondLastLine': false,
-            'editor.fontSize': 13,
-            'editor.lineHeight': 1.6,
             'editor.tabSize': 2,
-            'editor.renderLineHighlight': 'line',
-            'editor.padding.top': 12,
+            'editor.wordBasedSuggestions': 'off',
+            'window.commandCenter': false,
+            'window.titleSeparator': ' - ',
+            'workbench.colorTheme': 'monospace-dark',
+            'workbench.layoutControl.enabled': false,
             ...(autoSaveDelayMs != null
-              ? { 'files.autoSave': 'afterDelay', 'files.autoSaveDelay': autoSaveDelayMs }
+              ? {
+                  'files.autoSave': 'afterDelay',
+                  'files.autoSaveDelay': autoSaveDelayMs,
+                }
               : {}),
           }),
         },
-        extensions: [{
-          config: {
-            name: 'baml-playground',
-            publisher: 'boundaryml',
-            version: '1.0.0',
-            engines: { vscode: '*' },
-            contributes: {
-              commands: [
-                { command: 'baml.openPlayground', title: 'BAML: Open Playground' },
-                { command: 'baml.previewImage', title: 'BAML: Preview Image' },
-              ],
-              languages: [{
-                id: 'baml',
-                extensions: ['.baml'],
-                aliases: ['BAML', 'baml'],
-                configuration: './language-configuration.json',
-              }],
-              grammars: [{
-                language: 'baml',
-                scopeName: 'source.baml',
-                path: './baml.tmLanguage.json',
-              }],
-            },
+        viewsConfig: {
+          $type: 'ViewsService',
+          htmlAugmentationInstructions: defaultHtmlAugmentationInstructions,
+          htmlContainer: containerRef.current,
+          viewsInitFunc: defaultViewsInit,
+        },
+        workspaceConfig: {
+          enableWorkspaceTrust: true,
+          ...(windowLabel
+            ? {
+                windowIndicator: {
+                  command: '',
+                  label: windowLabel,
+                  tooltip: '',
+                },
+              }
+            : {}),
+          configurationDefaults: {
+            'window.title':
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code expands these placeholders.
+              'BAML Playground${separator}${dirty}${activeEditorShort}',
           },
-          filesOrContents: new Map<string, string | URL>([
-            ['./baml.tmLanguage.json', JSON.stringify(bamlTmLanguageGrammar)],
-            ['./language-configuration.json', JSON.stringify({
-              comments: {
-                lineComment: '//',
-                blockComment: ['{//', '//}'],
-              },
-              brackets: [['{', '}'], ['[', ']'], ['(', ')']],
-              autoClosingPairs: [
-                ['{', '}'],
-                ['[', ']'],
-                ['(', ')'],
-                { open: '"', close: '"' },
-                ['#"', '"#'],
-                ["'", "'"],
-                ['{#', '}'],
-                ['{//', '//}'],
-              ],
-              surroundingPairs: [
-                ['{', '}'],
-                ['[', ']'],
-                ['(', ')'],
-                ['"', '"'],
-                ["'", "'"],
-              ],
-            })],
-          ]),
-        }],
+          productConfiguration: {
+            nameLong: 'BAML Playground',
+            nameShort: 'BAML Playground',
+          },
+          workspaceProvider: {
+            async open() {
+              return true;
+            },
+            trusted: true,
+            workspace: { workspaceUri: workspaceFileUri },
+          },
+        },
       });
 
       await apiWrapper.start();
@@ -506,7 +743,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
 
       // Register the ExecutionPanel as a custom editor pane in the workbench.
       // This must happen after start() so the workbench services are available.
-      const { registerExecutionPanelPane } = await import('./ExecutionPanelPane');
+      const { registerExecutionPanelPane } = await import(
+        './ExecutionPanelPane'
+      );
       await registerExecutionPanelPane();
 
       // ── Image preview pane ─────────────────────────────────────────
@@ -518,27 +757,51 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       // every time a new image is opened and loads content from liveFiles
       // (media files are stored as data URLs) or falls back to rawFs.
       {
-        const { SimpleEditorPane, SimpleEditorInput, registerEditorPane, EditorInputCapabilities } =
-          await import('@codingame/monaco-vscode-api/service-override/tools/views');
-        const { StandaloneServices: SS } = await import('@codingame/monaco-vscode-api');
+        const {
+          SimpleEditorPane,
+          SimpleEditorInput,
+          registerEditorPane,
+          EditorInputCapabilities,
+        } = await import(
+          '@codingame/monaco-vscode-api/service-override/tools/views'
+        );
+        const { StandaloneServices: SS } = await import(
+          '@codingame/monaco-vscode-api'
+        );
         const { IEditorService } = await import(
           '@codingame/monaco-vscode-api/vscode/vs/workbench/services/editor/common/editorService.service'
         );
 
         const IMAGE_PANE_ID = 'baml.imagePreview';
-        const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
+        const IMAGE_EXTS = new Set([
+          'png',
+          'jpg',
+          'jpeg',
+          'gif',
+          'webp',
+          'svg',
+          'bmp',
+          'ico',
+        ]);
         const WORKSPACE_PREFIX = rootPrefix;
 
         class ImagePreviewInput extends SimpleEditorInput {
           constructor(uri: any) {
             super(uri);
-            const name = String(uri.path ?? '').split('/').pop() ?? 'Image';
+            const name =
+              String(uri.path ?? '')
+                .split('/')
+                .pop() ?? 'Image';
             this.setName(name);
             this.setTitle(name);
             this.addCapability(EditorInputCapabilities.Readonly);
           }
-          get typeId() { return IMAGE_PANE_ID; }
-          get editorId() { return IMAGE_PANE_ID; }
+          get typeId() {
+            return IMAGE_PANE_ID;
+          }
+          get editorId() {
+            return IMAGE_PANE_ID;
+          }
         }
 
         class ImagePreviewPane extends SimpleEditorPane {
@@ -580,7 +843,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
 
             if (!dataUrl) {
               try {
-                const bytes: Uint8Array = await Promise.resolve(rawFs.readFile(uri));
+                const bytes: Uint8Array = await Promise.resolve(
+                  rawFs.readFile(uri),
+                );
                 dataUrl = toDataUrl(bytes, mimeFromPath(String(uri.path)));
               } catch (err) {
                 console.error('[ImagePreview] readFile failed:', err);
@@ -600,7 +865,11 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
             el.appendChild(img);
             this._img = img;
 
-            return { dispose() { img.remove(); } };
+            return {
+              dispose() {
+                img.remove();
+              },
+            };
           }
 
           layout(dimension: Dimension) {
@@ -624,25 +893,38 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
           }
         }
 
-        registerEditorPane(IMAGE_PANE_ID, 'Image Preview', ImagePreviewPane as any, [ImagePreviewInput]);
+        registerEditorPane(
+          IMAGE_PANE_ID,
+          'Image Preview',
+          ImagePreviewPane as any,
+          [ImagePreviewInput],
+        );
 
         const editorService = SS.get(IEditorService);
         const origOpen = editorService.openEditor.bind(editorService);
 
         // @ts-expect-error override openEditor is expliclity desisred due to override
-        editorService.openEditor = function (input: any, optionsOrGroup?: any, group?: any) {
+        editorService.openEditor = (
+          input: any,
+          optionsOrGroup?: any,
+          group?: any,
+        ) => {
           const resource = input?.resource ?? input?.original?.resource;
           const ext = resource?.path?.split('.')?.pop()?.toLowerCase() ?? '';
           if (resource && IMAGE_EXTS.has(ext)) {
-            return origOpen(new ImagePreviewInput(resource), optionsOrGroup, group);
+            return origOpen(
+              new ImagePreviewInput(resource),
+              optionsOrGroup,
+              group,
+            );
           }
           return origOpen(input, optionsOrGroup, group);
         };
 
         vscode.commands.registerCommand('baml.previewImage', (uri?: any) => {
-          if (!uri) uri = vscode.window.activeTextEditor?.document.uri;
-          if (!uri) return;
-          editorService.openEditor(new ImagePreviewInput(uri));
+          const imageUri = uri ?? vscode.window.activeTextEditor?.document.uri;
+          if (!imageUri) return;
+          editorService.openEditor(new ImagePreviewInput(imageUri));
         });
       }
 
@@ -650,7 +932,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       // Without this, MarkdownRendererService._defaultCodeBlockRenderer is undefined
       // and all code fences in hover widgets render as empty <span> elements.
       {
-        const { StandaloneServices } = await import('@codingame/monaco-vscode-api');
+        const { StandaloneServices } = await import(
+          '@codingame/monaco-vscode-api'
+        );
         const { IMarkdownRendererService } = await import(
           '@codingame/monaco-vscode-api/vscode/vs/platform/markdown/browser/markdownRenderer.service'
         );
@@ -664,7 +948,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
           '@codingame/monaco-vscode-api/vscode/vs/editor/common/languages/language.service'
         );
 
-        const markdownService = StandaloneServices.get(IMarkdownRendererService);
+        const markdownService = StandaloneServices.get(
+          IMarkdownRendererService,
+        );
         const codeBlockRenderer = new EditorMarkdownCodeBlockRenderer(
           StandaloneServices.get(IConfigurationService),
           StandaloneServices.get(ILanguageService),
@@ -677,14 +963,17 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       await new Promise((r) => setTimeout(r, 150));
       if (disposed) return;
 
-      // Close any stale editors restored from a previous session so we start clean.
-      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      // Close stale editors and collapse restored groups so the initial split is deterministic.
+      await vscode.commands.executeCommand('workbench.action.closeAllGroups');
       if (disposed) return;
 
       // Determine which file to show — prefer main.baml, fall back to first text file
-      const fileNames = Object.keys(allFiles).filter(f => !isMediaPath(f));
-      const firstFileIndex = fileNames.findIndex(path => path.endsWith('main.baml'));
-      const firstFile = firstFileIndex !== -1 ? fileNames[firstFileIndex] : fileNames[0];
+      const fileNames = Object.keys(allFiles).filter((f) => !isMediaPath(f));
+      const firstFileIndex = fileNames.findIndex((path) =>
+        path.endsWith('main.baml'),
+      );
+      const firstFile =
+        firstFileIndex !== -1 ? fileNames[firstFileIndex] : fileNames[0];
       const firstFileUri = vscode.Uri.file(`${rootPrefix}${firstFile}`);
 
       // Open the document and show it in the editor
@@ -693,8 +982,14 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       await vscode.window.showTextDocument(firstFileUri);
       if (disposed) return;
 
+      await vscode.commands.executeCommand('baml.openPlayground');
+      if (disposed) return;
+
       // Focus Explorer so file tree shows
-      vscode.commands.executeCommand('workbench.view.explorer').then(() => {}, () => {});
+      vscode.commands.executeCommand('workbench.view.explorer').then(
+        () => {},
+        () => {},
+      );
 
       // Workbench ready — editor is visible, hide skeleton
       setReady(true);
@@ -706,7 +1001,8 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       // layout (no visible status bar). Externally-applied edits (pushed from
       // disk) are cleared via markFileSavedRef so they don't read as "unsaved".
       if (showSaveHint) {
-        const refresh = () => onUnsavedChangeRef.current?.(unsavedFilesRef.current.size > 0);
+        const refresh = () =>
+          onUnsavedChangeRef.current?.(unsavedFilesRef.current.size > 0);
         const onChange = vscode.workspace.onDidChangeTextDocument((e) => {
           if (e.document.uri.path.endsWith('.baml')) {
             unsavedFilesRef.current.add(e.document.uri.toString());
@@ -755,7 +1051,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
           URL.revokeObjectURL(blobUrlMap[filename]);
         }
         const mime = mimeFromPath(filename);
-        blobUrlMap[filename] = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: mime }));
+        blobUrlMap[filename] = URL.createObjectURL(
+          new Blob([new Uint8Array(bytes)], { type: mime }),
+        );
         onBlobUrlsChangeRef.current?.({ ...blobUrlMap });
       };
 
@@ -769,30 +1067,43 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       };
 
       // Listen for text changes from the editor (any .baml file)
-      const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
-        const filename = uriToFilename(e.document.uri);
-        if (filename && filename.endsWith('.baml')) {
-          liveFiles[filename] = e.document.getText();
-          pushUpdate();
-        }
-      });
+      const changeSubscription = vscode.workspace.onDidChangeTextDocument(
+        (e) => {
+          const filename = uriToFilename(e.document.uri);
+          if (filename?.endsWith('.baml')) {
+            liveFiles[filename] = e.document.getText();
+            pushUpdate();
+          }
+        },
+      );
       disposables.push({ dispose: () => changeSubscription.dispose() });
 
       // Cursor position tracking for playground navigation
       let cursorDebounceTimer: ReturnType<typeof setTimeout> | undefined;
-      const cursorSubscription = vscode.window.onDidChangeTextEditorSelection((e: import('vscode').TextEditorSelectionChangeEvent) => {
-        const filename = uriToFilename(e.textEditor.document.uri);
-        if (!filename || !filename.endsWith('.baml')) return;
+      const cursorSubscription = vscode.window.onDidChangeTextEditorSelection(
+        (e: import('vscode').TextEditorSelectionChangeEvent) => {
+          const filename = uriToFilename(e.textEditor.document.uri);
+          if (!filename || !filename.endsWith('.baml')) return;
 
-        clearTimeout(cursorDebounceTimer);
-        cursorDebounceTimer = setTimeout(() => {
-          const pos = e.selections[0]?.active;
-          if (!pos) return;
-          // VS Code API positions are 0-indexed, matching lsp_types::Position.
-          currentConnRef.current?.onCursorMoved?.(filename, pos.line, pos.character);
-        }, 50);
+          clearTimeout(cursorDebounceTimer);
+          cursorDebounceTimer = setTimeout(() => {
+            const pos = e.selections[0]?.active;
+            if (!pos) return;
+            // VS Code API positions are 0-indexed, matching lsp_types::Position.
+            currentConnRef.current?.onCursorMoved?.(
+              filename,
+              pos.line,
+              pos.character,
+            );
+          }, 50);
+        },
+      );
+      disposables.push({
+        dispose: () => {
+          clearTimeout(cursorDebounceTimer);
+          cursorSubscription.dispose();
+        },
       });
-      disposables.push({ dispose: () => { clearTimeout(cursorDebounceTimer); cursorSubscription.dispose(); } });
 
       // Listen for file creation/deletion at the FS level
       const fsWatcher = fileSystemProvider.onDidChangeFile((events) => {
@@ -809,18 +1120,29 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
             delete liveFiles[filename];
             if (isMedia) removeBlobUrl(filename);
             pushUpdate();
-          } else if (event.type === FileChangeType.UPDATED || event.type === FileChangeType.ADDED) {
+          } else if (
+            event.type === FileChangeType.UPDATED ||
+            event.type === FileChangeType.ADDED
+          ) {
             const fileUri = vscode.Uri.file(`${rootPrefix}${filename}`);
-            fileSystemProvider.readFile(fileUri).then((bytes: Uint8Array) => {
-              if (disposed) return;
-              if (isMedia) {
-                liveFiles[filename] = toDataUrl(bytes, mimeFromPath(filename));
-                updateBlobUrl(filename, bytes);
-              } else {
-                liveFiles[filename] = decoder.decode(bytes);
-              }
-              pushUpdate();
-            }).catch(() => { /* file may not be readable yet */ });
+            fileSystemProvider
+              .readFile(fileUri)
+              .then((bytes: Uint8Array) => {
+                if (disposed) return;
+                if (isMedia) {
+                  liveFiles[filename] = toDataUrl(
+                    bytes,
+                    mimeFromPath(filename),
+                  );
+                  updateBlobUrl(filename, bytes);
+                } else {
+                  liveFiles[filename] = decoder.decode(bytes);
+                }
+                pushUpdate();
+              })
+              .catch(() => {
+                /* file may not be readable yet */
+              });
           }
         }
       });
@@ -834,15 +1156,16 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       // Handle given to backends so they can reflect server/worker-side
       // changes back into the editor without re-running workbench setup.
       const handle: WorkbenchHandle = {
-        vscode,
-        liveFiles,
-        fileSystemProvider,
-        encoder,
         decoder,
-        updateBlobUrl,
-        removeBlobUrl,
-        notifyFilesChanged: (files) => onFilesChangeRef.current(files ?? { ...liveFiles }),
+        encoder,
+        fileSystemProvider,
         isDisposed: () => disposed,
+        liveFiles,
+        notifyFilesChanged: (files) =>
+          onFilesChangeRef.current(files ?? { ...liveFiles }),
+        removeBlobUrl,
+        updateBlobUrl,
+        vscode,
       };
 
       // ════════════════════════════════════════════════════════════════
@@ -852,23 +1175,32 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       const connect = async () => {
         if (disposed) return;
 
-        const { LanguageClientWrapper } = await import('monaco-languageclient/lcwrapper');
+        const { LanguageClientWrapper } = await import(
+          'monaco-languageclient/lcwrapper'
+        );
         if (disposed) return;
 
         const conn = await backendRef.current.connect(handle);
-        if (disposed) { await conn.dispose(); return; }
+        if (disposed) {
+          await conn.dispose();
+          return;
+        }
         currentConnRef.current = conn;
 
         const lcWrapper = new LanguageClientWrapper({
-          languageId: 'baml',
           clientOptions: {
             documentSelector: ['baml'],
           },
           connection: conn.lcConnection,
+          languageId: 'baml',
         });
 
         await lcWrapper.start();
-        if (disposed) { await lcWrapper.dispose(); await conn.dispose(); return; }
+        if (disposed) {
+          await lcWrapper.dispose();
+          await conn.dispose();
+          return;
+        }
 
         connDisposablesRef.current.push(
           { dispose: () => lcWrapper.dispose() },
@@ -909,23 +1241,36 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
                   await fileSystemProvider.writeFile(
                     fileUri,
                     encoder.encode(params.text),
-                    { create: true, overwrite: true, unlock: false, atomic: false },
+                    {
+                      atomic: false,
+                      create: true,
+                      overwrite: true,
+                      unlock: false,
+                    },
                   );
                 }
                 // The applyEdit above counts as a text change; clear it from the
                 // unsaved indicator since this content came FROM disk.
                 markFileSavedRef.current(target);
               } catch (err) {
-                console.error('[MonacoEditor] applying external file change failed:', err);
+                console.error(
+                  '[MonacoEditor] applying external file change failed:',
+                  err,
+                );
               }
             },
           );
-          connDisposablesRef.current.push({ dispose: () => diskChangeSub.dispose() });
+          connDisposablesRef.current.push({
+            dispose: () => diskChangeSub.dispose(),
+          });
         }
 
-        const { setRuntimePort, setReloadCallback, setNavigateToSource } = await import('./ExecutionPanelPane');
+        const { setRuntimePort, setReloadCallback, setNavigateToSource } =
+          await import('./ExecutionPanelPane');
 
-        setRuntimePort(conn.runtimePort, { connectionVersion: connectionVersionRef.current });
+        setRuntimePort(conn.runtimePort, {
+          connectionVersion: connectionVersionRef.current,
+        });
         setReloadCallback(() => restartRef.current?.());
         setNavigateToSource(async (source) => {
           if (!source.filePath) {
@@ -952,9 +1297,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
             visibleEditor?.document ??
             (await vscode.workspace.openTextDocument(targetUri));
           const editor = await vscode.window.showTextDocument(document, {
-            viewColumn: sourceViewColumn,
             preserveFocus: false,
             preview: false,
+            viewColumn: sourceViewColumn,
           });
 
           // The language server also sends line/column/endLine/endColumn unchanged in
@@ -993,7 +1338,10 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
           for (const d of toDispose) {
             try {
               const r = d.dispose();
-              if (r != null && typeof (r as { then?: unknown }).then === 'function') {
+              if (
+                r != null &&
+                typeof (r as { then?: unknown }).then === 'function'
+              ) {
                 await (r as Promise<unknown>);
               }
             } catch {
@@ -1027,13 +1375,21 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       const toDispose = connDisposablesRef.current;
       connDisposablesRef.current = [];
       for (const d of toDispose) {
-        try { void d.dispose(); } catch { /* no-op */ }
+        try {
+          void d.dispose();
+        } catch {
+          /* no-op */
+        }
       }
       for (const d of disposables) {
-        try { d.dispose(); } catch { /* no-op */ }
+        try {
+          d.dispose();
+        } catch {
+          /* no-op */
+        }
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isDev = isDevelopmentBuild();
@@ -1047,17 +1403,22 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
         </div>
       )}
       {/* Actual workbench mounts here */}
-      <div ref={containerRef} className="nokey w-full h-full relative overflow-hidden" />
+      <div
+        className="nokey w-full h-full relative overflow-hidden"
+        ref={containerRef}
+      />
       {/* Dev-only: reload button (client-only to avoid hydration mismatch) */}
       {mounted && isDev && backend.supportsReload && (
         <button
-          type="button"
-          onClick={() => restartRef.current?.()}
           className="absolute bottom-2 right-2 z-10 flex items-center gap-2 rounded px-2 py-1 font-mono text-xs text-neutral-400 bg-black/50 border border-neutral-700 text-left cursor-pointer hover:bg-black/70 hover:border-neutral-600 transition-colors"
+          onClick={() => restartRef.current?.()}
           title="Click to reconnect the BAML backend (loads fresh WASM)."
+          type="button"
         >
           <span>Reconnect</span>
-          <span className="text-sky-400/80" title="Connection count">#{connectionCount}</span>
+          <span className="text-sky-400/80" title="Connection count">
+            #{connectionCount}
+          </span>
         </button>
       )}
     </div>
