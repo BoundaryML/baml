@@ -219,9 +219,14 @@ fn filename_for_mime(mime: &str) -> String {
         .unwrap_or("mpeg")
         .split(';')
         .next()
-        .unwrap_or("mpeg");
-    let extension = match subtype {
-        "mpeg" => "mp3",
+        .unwrap_or("mpeg")
+        .trim()
+        .to_ascii_lowercase();
+    let extension = match subtype.as_str() {
+        "mpeg" | "mp3" | "x-mp3" => "mp3",
+        "wav" | "wave" | "x-wav" | "vnd.wave" => "wav",
+        "mp4" | "m4a" | "x-m4a" => "m4a",
+        "flac" | "x-flac" => "flac",
         other => other,
     };
     format!("audio.{extension}")
@@ -616,7 +621,7 @@ mod transcription_parts_tests {
     use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
     use serde_json::json;
 
-    use super::build_transcription_parts;
+    use super::{build_transcription_parts, filename_for_mime};
 
     fn audio_message(base64: String, mime: &str) -> RenderedChatMessage {
         RenderedChatMessage {
@@ -669,6 +674,15 @@ mod transcription_parts_tests {
         assert_eq!(parts.fields.get("temperature").unwrap(), "0.25");
         assert!(!parts.fields.contains_key("messages"));
         assert!(!parts.fields.contains_key("stream"));
+    }
+
+    #[test]
+    fn transcription_filename_normalizes_common_mime_aliases() {
+        assert_eq!(filename_for_mime("audio/x-wav"), "audio.wav");
+        assert_eq!(filename_for_mime("audio/vnd.wave"), "audio.wav");
+        assert_eq!(filename_for_mime("audio/x-m4a"), "audio.m4a");
+        assert_eq!(filename_for_mime("audio/x-flac"), "audio.flac");
+        assert_eq!(filename_for_mime("audio/MPEG; codecs=mp3"), "audio.mp3");
     }
 
     #[test]

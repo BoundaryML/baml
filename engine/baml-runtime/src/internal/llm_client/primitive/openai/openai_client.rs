@@ -414,16 +414,37 @@ fn attach_transcription_body(
     req: reqwest::RequestBuilder,
     parts: TranscriptionParts,
 ) -> Result<reqwest::RequestBuilder> {
-    let file = reqwest::multipart::Part::bytes(parts.file_bytes)
-        .file_name(parts.filename)
-        .mime_str(&parts.mime)?;
-    let mut form = reqwest::multipart::Form::new().part("file", file);
+    let mime = parts.mime.parse::<mime::Mime>()?.to_string();
+    let boundary = format!("----baml-transcription-{}", uuid::Uuid::new_v4());
+    let mut body = Vec::new();
 
     for (key, value) in parts.fields {
-        form = form.text(key, value);
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        body.extend_from_slice(
+            format!("Content-Disposition: form-data; name=\"{key}\"\r\n\r\n").as_bytes(),
+        );
+        body.extend_from_slice(value.as_bytes());
+        body.extend_from_slice(b"\r\n");
     }
 
-    Ok(req.multipart(form))
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        format!(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"{}\"\r\n",
+            parts.filename
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(format!("Content-Type: {mime}\r\n\r\n").as_bytes());
+    body.extend_from_slice(&parts.file_bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+    Ok(req
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(body))
 }
 
 impl RequestBuilder for OpenAIClient {
@@ -1220,6 +1241,20 @@ mod tests {
             .expect("multipart request should set content-type");
         assert!(content_type.starts_with("multipart/form-data"));
         assert!(!content_type.starts_with("application/json"));
+
+        let body = request
+            .body()
+            .and_then(reqwest::Body::as_bytes)
+            .expect("multipart body should remain available for tracing and curl rendering");
+        assert!(body
+            .windows(b"fake mp3 bytes".len())
+            .any(|window| window == b"fake mp3 bytes"));
+        assert!(body
+            .windows(b"name=\"model\"".len())
+            .any(|window| window == b"name=\"model\""));
+        assert!(body
+            .windows(b"gpt-4o-transcribe".len())
+            .any(|window| window == b"gpt-4o-transcribe"));
     }
 
     #[test]
