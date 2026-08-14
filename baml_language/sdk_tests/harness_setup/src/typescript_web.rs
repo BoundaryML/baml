@@ -13,11 +13,11 @@ use sdkgen_typescript_shared::{sdkgen_typescript::NamingConvention, sdkgen_types
 
 use super::typescript::{
     CACHE_ENV_VAR, CACHE_SUBDIR, TEST_RUNTIME, clean_generated, copy_customizable,
-    has_vitest_tests, rewrite_test_bridge_imports, write_codegen_output,
+    has_vitest_tests, rewrite_test_bridge_imports,
 };
 use crate::{
     BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, watch_dir,
+    load_fixture, watch_dir, write_codegen_output,
 };
 
 const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package_web.json");
@@ -93,8 +93,8 @@ fn codegen_fixture(
         &loaded.baml_bytecode,
         NamingConvention::PreserveCase,
     );
-    write_codegen_output(web.join("baml_sdk"), output.clone(), fixture, diagnostics);
-    write_codegen_output(workers.join("baml_sdk"), output, fixture, diagnostics);
+    write_codegen_output(&web.join("baml_sdk"), output.clone(), fixture, diagnostics);
+    write_codegen_output(&workers.join("baml_sdk"), output, fixture, diagnostics);
 
     for runtime in [&web, &workers] {
         if custom.exists() {
@@ -200,7 +200,6 @@ mod {name} {{
             buffer.push_str(
                 r#"
     #[test]
-    #[ignore = "typescript/web runtime lands in the Web implementation change"]
     fn vitest_web() {
         cmd("pnpm exec vitest run --config vitest.web.config.ts");
     }
@@ -211,7 +210,6 @@ mod {name} {{
             buffer.push_str(
                 r#"
     #[test]
-    #[ignore = "typescript/web runtime lands in the Web implementation change"]
     fn vitest_workers() {
         cmd("pnpm exec vitest run --config vitest.workers.config.ts");
     }

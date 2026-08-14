@@ -1,13 +1,14 @@
-//! Throws-contract `Raises:` docstring coverage.
+//! Throws-contract documentation coverage.
 //!
 //! Pins how the generator renders the inferred throws contract
-//! (`callable_throws`) into a Google-style `Raises:` block on generated
-//! functions' documentation, using **unqualified** type names. python splits
-//! that surface between the runtime `__doc__` (free functions, read by
-//! `inspect.getdoc`) and the `.pyi` stub (methods); in Rust the `///` doc
-//! comments in the generated source are the single surface for both, so
-//! every case asserts on that source text (the test cwd is the generated
-//! crate root).
+//! (`callable_throws`) into generated documentation, using **unqualified**
+//! type names. python renders a Google-style `Raises:` block, split between
+//! the runtime `__doc__` (free functions) and the `.pyi` stub (methods);
+//! ADAPTATION(rust): the Rust rendering is the idiomatic `# Errors` rustdoc
+//! section (the one `clippy::missing_errors_doc` asks for) on the `///`
+//! docs — the single surface for functions and methods alike — so every
+//! case asserts on the generated source text (the test cwd is the
+//! generated crate root).
 
 use baml_sdk::raises_test::{DocLoader, InferredThrow, LoadDoc, PureLen, Reparse};
 
@@ -53,7 +54,7 @@ fn _getdoc(src: &str, marker: &str) -> Option<String> {
 }
 
 #[test]
-fn test_imports() {
+fn test_raises_imports() {
     // python asserts the generated symbols import; in Rust the `use` above
     // resolving at compile time is the assertion. Touch each symbol so the
     // imports are exercised.
@@ -62,66 +63,66 @@ fn test_imports() {
 }
 
 #[test]
-fn test_union_throws_lists_all_names() {
+fn test_raises_union_throws_lists_all_names() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn LoadDoc(").expect("no doc comment on LoadDoc");
     assert!(
         doc.trim_end()
-            .ends_with("Raises:\n    ParseError, TimeoutError"),
+            .ends_with("# Errors\n\nThrows `ParseError`, `TimeoutError`."),
         "{doc:?}"
     );
 }
 
 #[test]
-fn test_async_sibling_also_has_raises() {
+fn test_raises_async_sibling_also_has_raises() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn LoadDoc_async(").expect("no doc comment on LoadDoc_async");
     assert!(
         doc.trim_end()
-            .ends_with("Raises:\n    ParseError, TimeoutError"),
+            .ends_with("# Errors\n\nThrows `ParseError`, `TimeoutError`."),
         "{doc:?}"
     );
 }
 
 #[test]
-fn test_single_throws() {
+fn test_raises_single_throws() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn Reparse(").expect("no doc comment on Reparse");
     assert!(
-        doc.trim_end().ends_with("Raises:\n    ParseError"),
+        doc.trim_end().ends_with("# Errors\n\nThrows `ParseError`."),
         "{doc:?}"
     );
 }
 
 #[test]
-fn test_summary_precedes_raises_block() {
+fn test_raises_summary_precedes_raises_block() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn LoadDoc(").expect("no doc comment on LoadDoc");
     assert!(doc.starts_with("Load a document from a path."), "{doc:?}");
-    assert!(doc.contains("\n\nRaises:\n"), "{doc:?}");
+    assert!(doc.contains("\n\n# Errors\n"), "{doc:?}");
 }
 
 #[test]
-fn test_inferred_contract_without_clause_still_raises() {
+fn test_raises_inferred_contract_without_clause_still_raises() {
     // No written `throws` clause, but the body throws ParseError — the
-    // inferred contract (callable_throws) still surfaces a Raises block.
+    // inferred contract (callable_throws) still surfaces an Errors section.
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn InferredThrow(").expect("no doc comment on InferredThrow");
     assert!(
-        doc.trim_end().ends_with("Raises:\n    ParseError"),
+        doc.trim_end().ends_with("# Errors\n\nThrows `ParseError`."),
         "{doc:?}"
     );
 }
 
 #[test]
-fn test_non_throwing_function_has_no_raises_block() {
+fn test_raises_non_throwing_function_has_no_raises_block() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn PureLen(").unwrap_or_default();
-    assert!(!doc.contains("Raises:"), "{doc:?}");
+    assert!(!doc.contains("# Errors"), "{doc:?}");
 }
 
 #[test]
-fn test_method_raises_block_in_pyi() {
+fn test_raises_method_raises_block_in_pyi() {
     // python carries method `Raises:` blocks in the .pyi (the pyright/IDE
     // surface) only, with the runtime `.py` __doc__ trailer reserved for
     // free functions.
@@ -132,19 +133,19 @@ fn test_method_raises_block_in_pyi() {
 
     let load_block = _def_block(&src, "fn load(");
     assert!(
-        load_block.contains("Raises:") && load_block.contains("ParseError"),
+        load_block.contains("# Errors") && load_block.contains("`ParseError`"),
         "{load_block}"
     );
 
     let create_block = _def_block(&src, "fn create(");
     assert!(
-        create_block.contains("Raises:") && create_block.contains("TimeoutError"),
+        create_block.contains("# Errors") && create_block.contains("`TimeoutError`"),
         "{create_block}"
     );
 }
 
 /// The generated source's member block for `marker`: the attached `///` doc
-/// comment (which is where Rust carries `Raises:`) plus the marker itself.
+/// comment (which is where Rust carries `# Errors`) plus the marker itself.
 /// (python slices the `.pyi` source from `marker` down to the next
 /// def/decorator line because a docstring sits *inside* a python `def`; Rust
 /// doc comments *precede* the item, so the block is collected upward.)

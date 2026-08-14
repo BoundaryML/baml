@@ -128,6 +128,9 @@ impl PartialOrd for BamlFqn {
 pub(crate) enum CppNameKind {
     Namespace,
     Function,
+    /// A static or instance method (class-scoped callable). Wire identity
+    /// is the class symbol; the emitter appends `.member` for dispatch.
+    Method,
     Class,
     Enum,
     EnumVariant,
@@ -147,6 +150,7 @@ impl CppNameKind {
         matches!(
             self,
             CppNameKind::EnumVariant
+                | CppNameKind::Method
                 | CppNameKind::Field
                 | CppNameKind::Parameter
                 | CppNameKind::Setter
@@ -165,6 +169,9 @@ impl CppNameKind {
             CppNameKind::Parameter => 7,
             CppNameKind::OptsStruct => 8,
             CppNameKind::Setter => 9,
+            // New kinds append (typed-hash suffixes embed the tag; existing
+            // numbers must never move).
+            CppNameKind::Method => 10,
         }
     }
 }
@@ -306,7 +313,7 @@ impl GeneratorIdent {
             GeneratorIdent::WriterParam => "w",
             GeneratorIdent::SetterValueParam => "v",
             GeneratorIdent::OptsParam => "opts",
-            GeneratorIdent::EnsureRuntime => "EnsureRuntime",
+            GeneratorIdent::EnsureRuntime => "ensure_runtime",
             GeneratorIdent::DetailNamespace => "detail",
         }
     }

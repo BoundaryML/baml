@@ -1,14 +1,27 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 6009
 ---
 === MIR2 ===
-fn user.BacktickEquality() -> bool {
+fn user.BacktickOneLiner() -> string {
     // Locals:
-    let _0: bool // _0 // return
+    let _0: string // _0 // return
 
     bb0: {
-        _0 = const true;
+        _0 = const "hello world";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickStandardEscapes() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "line\nbreak\twith\rcr\0nul";
         goto -> bb1;
     }
 
@@ -45,12 +58,54 @@ fn user.BacktickEscapedDollar() -> string {
     }
 }
 
-fn user.BacktickEscapedInterpStaysLiteral() -> string {
+fn user.BacktickMultiline() -> string {
     // Locals:
     let _0: string // _0 // return
 
     bb0: {
-        _0 = const "literal: ${ignored}";
+        _0 = const "first line\nsecond line\nthird line";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickMultilineWithBlankLines() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "para one\n\npara two";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickMultiTickTwo() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "inline `code` here";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickMultiTickThree() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "nested ``double`` ticks";
         goto -> bb1;
     }
 
@@ -89,28 +144,118 @@ fn user.BacktickInCondition() -> int {
     }
 }
 
-fn user.BacktickInterpBlockBody(items: int[]) -> string {
+fn user.BacktickEquality() -> bool {
     // Locals:
-    let _0: string // _0 // return
-    let _1: int[] // items // param
-    let _2: string
-    let _3: int
-    let _4: int // first
-    let _5: int[]
-    let _6: 0
-    let _7: type
+    let _0: bool // _0 // return
 
     bb0: {
-        _5 = copy _1;
-        _6 = const 0_i64;
-        _4 = copy _5[_6];
-        _3 = copy _4;
-        _7 = load_type(int);
-        _2 = call const fn baml.String.from<copy _7>(copy _3) -> [bb1];
+        _0 = const true;
+        goto -> bb1;
     }
 
     bb1: {
-        _0 = const "head: " + copy _2;
+        return;
+    }
+}
+
+fn user.BacktickPassThrough(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickLiteralAsArg() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = call const fn user.BacktickPassThrough(const "forwarded") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickInterpSimple(name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // name // param
+    let _2: string
+    let _3: string
+    let _4: type
+
+    bb0: {
+        _4 = load_type(string);
+        _3 = call const fn baml.String.from<copy _4>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _2 = const "Hello, " + copy _3;
+        _0 = copy _2 + const "!";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.BacktickInterpMultiple(first: string, last: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // first // param
+    let _2: string // last // param
+    let _3: string
+    let _4: string
+    let _5: type
+    let _6: string
+    let _7: type
+
+    bb0: {
+        _5 = load_type(string);
+        _4 = call const fn baml.String.from<copy _5>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _4 + const " ";
+        _7 = load_type(string);
+        _6 = call const fn baml.String.from<copy _7>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _3 + copy _6;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.BacktickInterpInt(n: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // n // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(int);
+        _2 = call const fn baml.String.from<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const "count: " + copy _2;
         goto -> bb2;
     }
 
@@ -141,32 +286,6 @@ fn user.BacktickInterpBool(b: bool) -> string {
     }
 }
 
-fn user.BacktickInterpCallsFn() -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string
-    let _2: string
-    let _3: type
-
-    bb0: {
-        _2 = call const fn user.bangs(const 3_i64) -> [bb1];
-    }
-
-    bb1: {
-        _3 = load_type(string);
-        _1 = call const fn baml.String.from<copy _3>(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        _0 = const "done" + copy _1;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.BacktickInterpFloat(x: float) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -189,24 +308,91 @@ fn user.BacktickInterpFloat(x: float) -> string {
     }
 }
 
-fn user.BacktickInterpInt(n: int) -> string {
+fn user.BacktickInterpBlockBody(items: int[]) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: int // n // param
+    let _1: int[] // items // param
     let _2: string
-    let _3: type
+    let _3: int
+    let _4: int // first
+    let _5: int[]
+    let _6: 0
+    let _7: type
 
     bb0: {
-        _3 = load_type(int);
-        _2 = call const fn baml.String.from<copy _3>(copy _1) -> [bb1];
+        _5 = copy _1;
+        _6 = const 0_i64;
+        _4 = copy _5[_6];
+        _3 = copy _4;
+        _7 = load_type(int);
+        _2 = call const fn baml.String.from<copy _7>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = const "count: " + copy _2;
+        _0 = const "head: " + copy _2;
         goto -> bb2;
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn user.bangs(n: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // n // param
+    let _2: bool
+    let _3: string
+    let _4: int
+
+    bb0: {
+        _2 = copy _1 <= const 0_i64;
+        branch copy _2 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1 - const 1_i64;
+        _3 = call const fn user.bangs(copy _4) -> [bb2];
+    }
+
+    bb2: {
+        _0 = const "!" + copy _3;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const "";
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.BacktickInterpCallsFn() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn user.bangs(const 3_i64) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(string);
+        _1 = call const fn baml.String.from<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        _0 = const "done" + copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -245,68 +431,13 @@ fn user.BacktickInterpMultiline(name: string, count: int) -> string {
     }
 }
 
-fn user.BacktickInterpMultiple(first: string, last: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // first // param
-    let _2: string // last // param
-    let _3: string
-    let _4: string
-    let _5: type
-    let _6: string
-    let _7: type
-
-    bb0: {
-        _5 = load_type(string);
-        _4 = call const fn baml.String.from<copy _5>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _3 = copy _4 + const " ";
-        _7 = load_type(string);
-        _6 = call const fn baml.String.from<copy _7>(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        _0 = copy _3 + copy _6;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.BacktickInterpSimple(name: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // name // param
-    let _2: string
-    let _3: string
-    let _4: type
-
-    bb0: {
-        _4 = load_type(string);
-        _3 = call const fn baml.String.from<copy _4>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _2 = const "Hello, " + copy _3;
-        _0 = copy _2 + const "!";
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.BacktickLiteralAsArg() -> string {
+fn user.BacktickEscapedInterpStaysLiteral() -> string {
     // Locals:
     let _0: string // _0 // return
 
     bb0: {
-        _0 = call const fn user.BacktickPassThrough(const "forwarded") -> [bb1];
+        _0 = const "literal: ${ignored}";
+        goto -> bb1;
     }
 
     bb1: {
@@ -333,11 +464,11 @@ fn user.BacktickM3ForLoop(xs: string[]) -> string {
 
     bb0: {
         _2 = const "";
-        _3 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _1) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -429,138 +560,6 @@ fn user.BacktickM3IfElseChain(n: int) -> string {
     }
 
     bb5: {
-        return;
-    }
-}
-
-fn user.BacktickMultiTickThree() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "nested ``double`` ticks";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.BacktickMultiTickTwo() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "inline `code` here";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.BacktickMultiline() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "first line\nsecond line\nthird line";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.BacktickMultilineWithBlankLines() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "para one\n\npara two";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.BacktickOneLiner() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "hello world";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.BacktickPassThrough(s: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // s // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.BacktickStandardEscapes() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "line\nbreak\twith\rcr\0nul";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.bangs(n: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // n // param
-    let _2: bool
-    let _3: string
-    let _4: int
-
-    bb0: {
-        _2 = copy _1 <= const 0_i64;
-        branch copy _2 -> [bb3, bb1];
-    }
-
-    bb1: {
-        _4 = copy _1 - const 1_i64;
-        _3 = call const fn user.bangs(copy _4) -> [bb2];
-    }
-
-    bb2: {
-        _0 = const "!" + copy _3;
-        goto -> bb4;
-    }
-
-    bb3: {
-        _0 = const "";
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

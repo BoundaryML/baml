@@ -29,6 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Start deployment
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: bobheadxi/deployments@v1
         id: deployment
         with:
@@ -36,20 +37,22 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           env: docs-${{ inputs.is_canary && 'prod' || 'dev' }}
 
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          node-action-version: 'v6'
-          install-dependencies: false
+          node-version: '20'
 
       - name: Install Fern
         run: npm install -g fern-api
 
+      - name: Check documentation
+        run: fern check --strict-broken-links
+
       - name: Generate preview URL
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
         run: |
-          fern check --strict-broken-links
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
             OUTPUT=$(fern generate --docs 2>&1) || true
           else
@@ -60,13 +63,14 @@ jobs:
           echo "🌿 Preview your docs: $URL" | tee preview_url.txt
 
       - name: Comment URL in PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: marocchino/sticky-pull-request-comment@v3.0.5
         with:
           header: docs-preview
           path: preview_url.txt
 
       - name: Extract docs URL
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         id: docs_url
         run: |
           if [ -f preview_url.txt ]; then
@@ -78,7 +82,7 @@ jobs:
 
       - name: Update deployment status
         uses: bobheadxi/deployments@v1
-        if: always()
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           step: finish
           token: ${{ secrets.GITHUB_TOKEN }}

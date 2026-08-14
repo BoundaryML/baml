@@ -24,10 +24,7 @@ use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::{SyntaxToken, TokenAtOffset};
 use baml_compiler2_ast::{TypeExpr, TypeExprKind};
 use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
-use baml_compiler2_tir::{
-    ty::{QualifiedTypeName, Ty, TyRenderStrategy},
-    user_facing::humanize_type_string,
-};
+use baml_type::{QualifiedTypeName, Ty, TyRenderStrategy, user_facing::humanize_type_string};
 use text_size::{TextRange, TextSize};
 
 use crate::Db;
@@ -113,7 +110,7 @@ pub fn definition_span<'db>(
 /// current package + namespace so qualified names collapse to the shortest
 /// unambiguous form (bare when in scope, `root.path` when not, the dependency
 /// package prefix for cross-package types). Implements [`TyRenderStrategy`] so
-/// the structural walk lives once in `baml_compiler2_tir`.
+/// the structural walk lives once in `baml_type`.
 struct TyDisplayContext<'db> {
     current_package: Name,
     current_namespace: Vec<Name>,
@@ -170,7 +167,7 @@ impl TyDisplayContext<'_> {
     }
 
     /// Render `ty` in this file's context — the LSP hover/completion form.
-    /// The structural walk lives once in `baml_compiler2_tir`; this context
+    /// The structural walk lives once in `baml_type`; this context
     /// only supplies the name/policy decisions via [`TyRenderStrategy`].
     fn display_ty(&self, ty: &Ty) -> String {
         ty.render_with(self)
@@ -183,7 +180,7 @@ impl TyRenderStrategy for TyDisplayContext<'_> {
     }
 
     fn type_var(&self, name: &Name) -> String {
-        if baml_compiler2_tir::ty::is_synthetic_effect_param(name) {
+        if baml_type::is_synthetic_effect_param(name) {
             "callback".to_string()
         } else {
             name.to_string()
@@ -208,7 +205,7 @@ impl TyRenderStrategy for PlainTyRender {
     }
 
     fn type_var(&self, name: &Name) -> String {
-        if baml_compiler2_tir::ty::is_synthetic_effect_param(name) {
+        if baml_type::is_synthetic_effect_param(name) {
             "callback".to_string()
         } else {
             name.to_string()
@@ -399,4 +396,154 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         TypeExprKind::Error { .. } | TypeExprKind::Unknown { .. } => "unknown".to_string(),
     };
     humanize_type_string(&rendered)
+}
+
+fn type_ref_needs_postfix_parens(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+) -> bool {
+    use baml_compiler2_hir::type_ref::TypeRefKind;
+    matches!(
+        store[id].kind,
+        TypeRefKind::Union { .. } | TypeRefKind::Function { .. }
+    )
+}
+
+fn display_type_ref_as_postfix_base(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+) -> String {
+    let rendered = display_type_ref(store, id);
+    if type_ref_needs_postfix_parens(store, id) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
+
+fn display_type_ref_as_function_result(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+) -> String {
+    use baml_compiler2_hir::type_ref::TypeRefKind;
+    let rendered = display_type_ref(store, id);
+    if matches!(store[id].kind, TypeRefKind::Function { .. }) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
+
+/// The firewall-arena twin of [`display_type_expr`]: format a `TypeRef` as a
+/// brief source-level type string (last path segment only, generics dropped),
+/// arm-for-arm identical to [`display_type_expr`]. For callers holding firewall
+/// data (`FunctionData::type_refs`, `InterfaceData::type_refs`, …) rather than
+/// AST nodes. NOTE: this is deliberately NOT
+/// [`TypeRefStore::display`](baml_compiler2_hir::type_ref::TypeRefStore::display),
+/// which is the *full* `Display` form (whole path + generic args).
+pub fn display_type_ref(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+) -> String {
+    use baml_compiler2_hir::type_ref::TypeRefKind as K;
+    let rendered = match &store[id].kind {
+        K::Path { segments, .. } => segments
+            .last()
+            .map(|n| n.as_str().to_string())
+            .unwrap_or_else(|| "unknown".to_string()),
+        // A projection has no brief form — render it fully, matching the AST path's
+        // `te.to_string()`.
+        K::AssociatedTypeProjection { .. } => store.display(id).to_string(),
+        K::Int => "int".to_string(),
+        K::Bigint => "bigint".to_string(),
+        K::Float => "float".to_string(),
+        K::String => "string".to_string(),
+        K::Bool => "bool".to_string(),
+        K::Null => "null".to_string(),
+        K::Uint8Array => "uint8array".to_string(),
+        K::Media { kind } => format!("{kind:?}").to_lowercase(),
+        K::Optional { inner } => format!("{}?", display_type_ref_as_postfix_base(store, *inner)),
+        K::List { inner } => format!("{}[]", display_type_ref_as_postfix_base(store, *inner)),
+        K::Map { key, value } => format!(
+            "map<{}, {}>",
+            display_type_ref(store, *key),
+            display_type_ref(store, *value)
+        ),
+        K::Union { variants } => variants
+            .iter()
+            .map(|&v| display_type_ref(store, v))
+            .collect::<Vec<_>>()
+            .join(" | "),
+        K::Literal { value } => value.to_string(),
+        K::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            let ps: Vec<String> = params
+                .iter()
+                .map(|p| {
+                    p.name
+                        .as_ref()
+                        .map(|n| {
+                            let optional = if p.optional { "?" } else { "" };
+                            format!("{}{}: {}", n, optional, display_type_ref(store, p.ty))
+                        })
+                        .unwrap_or_else(|| display_type_ref(store, p.ty))
+                })
+                .collect();
+            let throws = throws
+                .map(|t| display_type_ref(store, t))
+                .map(|throws| format!(" throws {throws}"))
+                .unwrap_or_default();
+            format!(
+                "({}) -> {}{}",
+                ps.join(", "),
+                display_type_ref_as_function_result(store, *ret),
+                throws
+            )
+        }
+        K::BuiltinUnknown => "unknown".to_string(),
+        K::Never => "never".to_string(),
+        K::Void => "void".to_string(),
+        K::Type => "type".to_string(),
+        K::Rust => "$rust_type".to_string(),
+        K::Infer => "_".to_string(),
+        K::Error | K::Unknown => "unknown".to_string(),
+    };
+    humanize_type_string(&rendered)
+}
+
+// ── function_at_scope_range ───────────────────────────────────────────────────
+
+/// Resolve the function whose declaration span equals `range`, preferring the
+/// user-authored declaration.
+///
+/// Span equality alone is ambiguous: an LLM function's synthesized companions
+/// (`{parent}$parse`, `{parent}$stream`, …) share their parent's declaration
+/// span, so every companion matches too. Picking by origin makes the
+/// user-authored preference explicit instead of leaning on the enumeration's
+/// name tiebreak (a companion's `{parent}$…` name happens to sort after its
+/// parent's, but that is a naming convention, not a contract).
+pub(crate) fn function_at_scope_range(
+    db: &dyn crate::Db,
+    file: SourceFile,
+    range: TextRange,
+) -> Option<baml_compiler2_hir::loc::FunctionLoc<'_>> {
+    use baml_compiler2_ast::ast::FunctionOrigin;
+    baml_compiler2_ppir::item_data::file_functions(db, file)
+        .iter()
+        .copied()
+        .filter(|&loc| baml_compiler2_ppir::item_data::function_source_map(db, loc).span == range)
+        .min_by_key(|&loc| {
+            match baml_compiler2_ppir::item_data::function_data(db, loc)
+                .metadata
+                .origin
+            {
+                FunctionOrigin::UserDefined => 0u8,
+                FunctionOrigin::Companion => 1,
+                FunctionOrigin::Internal => 2,
+                FunctionOrigin::AutoDerive => 3,
+            }
+        })
 }

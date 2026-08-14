@@ -152,6 +152,9 @@ pub struct ProgramImplRuleFrag {
     pub interface_assoc: Vec<(Name, TyTemplate)>,
     /// Method name to its symbolic implementation.
     pub methods: Vec<(Name, ProgramMethodImplFrag)>,
+    /// See [`RuntimeImplRule::field_links`](crate::types::RuntimeImplRule::field_links).
+    /// Slot indices are layout, not symbols, so they survive relinking unchanged.
+    pub field_links: Box<[u32]>,
 }
 
 /// Symbolic twin of `ProgramMethodImpl`: `fqn` is the callee function's
@@ -203,12 +206,10 @@ pub struct CompilationUnit {
     // --- side-table fragments the whole-program passes consume at link ---
     /// This unit's symbolic contribution to its package's structure.
     pub package_fragment: ProgramPackageFrag,
-    /// Pass-5 template-string `{% macro %}` fragments defined in this file.
-    pub template_macros: Vec<String>,
     /// Pass-8 compiled test cases defined in this file.
     pub test_cases: Vec<TestCase>,
     /// `borsh(CallableThrowsFragment)` for this file. Opaque bytes
-    /// because `bex_vm_types` sits below `baml_compiler2_tir`, which owns the
+    /// because `bex_vm_types` sits below `baml_compiler2_hir_ty`, which owns the
     /// typed fragment — the same decoupling as the stdlib-interface blob. Empty
     /// for builtins (their interface rides in the stdlib blob) and for any file
     /// whose fragment failed to serialize. Populated by `decompose_units`;

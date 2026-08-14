@@ -1,0 +1,307 @@
+/* Shared "Try BAML" install unit. Light only — the core site is not dark mode.
+   Used by /quickstart and the /explore "Try it out!" section. */
+
+.unit {
+  max-width: 560px;
+  overflow: hidden;
+  font-family: inherit;
+  background: #fffdf7;
+  border: 1px solid #d8cfbd;
+  border-radius: 10px;
+}
+
+.head {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f6f1e4;
+  border-bottom: 1px solid #e7e2d6;
+}
+.tab {
+  padding: 4px 13px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #6f6a63;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  transition:
+    color 130ms ease,
+    background 130ms ease;
+}
+.tab:hover {
+  color: #1a1612;
+  background: rgba(26, 22, 18, 0.04);
+}
+.tab[aria-selected="true"] {
+  color: #6d28d9;
+  background: rgba(109, 40, 217, 0.1);
+}
+.tab[aria-selected="true"]:hover {
+  background: rgba(109, 40, 217, 0.14);
+}
+.copyBtn {
+  padding: 3px 9px;
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: #6f6a63;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #d8cfbd;
+  border-radius: 6px;
+}
+.copyBtn:hover {
+  color: #1a1612;
+}
+
+.body {
+  min-height: 236px;
+  padding: 0.85rem 0.95rem 0.95rem;
+  font-size: 13px;
+  line-height: 1.75;
+  color: #1a1612;
+}
+/* Compact variant (top of /explore): drops the tabbed header and the tall
+   min-height so it reads as a quick install pointer, not the full unit. */
+.compact .body {
+  min-height: 0;
+}
+
+.opt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  margin: 15px 0 4px;
+}
+.opt:first-child {
+  margin-top: 0;
+}
+.optCap,
+.optLabel {
+  font-size: 10px;
+  color: #6f6a63;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.optCap {
+  margin-right: 0.15rem;
+}
+.optLabel {
+  margin: 15px 0 4px;
+}
+.optBtn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 3px 9px;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: #6f6a63;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+.optBtn svg {
+  width: 11px;
+  height: 11px;
+}
+.optBtn:hover {
+  color: #1a1612;
+}
+.optBtn[aria-selected="true"] {
+  color: #6d28d9;
+  background: #fffdf7;
+  border-color: #d8cfbd;
+}
+.optBtn[aria-selected="true"] svg {
+  color: #6d28d9;
+}
+.optBtn:focus-visible {
+  outline: 2px solid #6d28d9;
+  outline-offset: 2px;
+}
+
+/* host-language logos in the "call from" row, sized to match the inline svgs */
+.optBtn .logo {
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+}
+
+/* Footer on the compact unit: where to go once BAML runs. */
+.next {
+  padding: 7px 0.95rem 8px;
+  margin: 0;
+  font-size: 11px;
+  color: #6f6a63;
+  letter-spacing: 0.02em;
+  background: #f6f1e4;
+  border-top: 1px solid #e7e2d6;
+}
+.next a {
+  color: #6d28d9;
+  text-decoration: none;
+}
+.next a:hover {
+  text-decoration: underline;
+}
+
+.row {
+  font-family:
+    var(--font-geist-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo,
+    Consolas, monospace;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.sh {
+  color: #6d28d9;
+}
+.cmt {
+  color: #8a8580;
+}
+
+/* Terminal output under a command. Indented to the width of the `$ ` prompt so
+   it reads as a reply rather than another thing to run. */
+.out {
+  padding-left: 2ch;
+  color: #8a8580;
+}
+
+.sect {
+  position: relative;
+}
+.sectCopy {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  padding: 3px 4px;
+  color: #8a8580;
+  cursor: pointer;
+  background: #fffdf7;
+  border: 0;
+  border-radius: 6px;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
+}
+.sectCopy svg {
+  width: 13px;
+  height: 13px;
+}
+.sect:hover .sectCopy,
+.sectCopy:focus-visible {
+  opacity: 1;
+}
+.sectCopy:hover {
+  color: #6d28d9;
+}
+.sectCopy.ok {
+  color: #6d28d9;
+  opacity: 1;
+}
+
+.agentPane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: flex-start;
+}
+.promptLead {
+  font-size: 10px;
+  color: #6f6a63;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.promptWrap {
+  position: relative;
+  max-height: 150px;
+  overflow: hidden;
+  transition: max-height 220ms ease;
+}
+.promptWrap.expanded {
+  max-height: 1200px;
+}
+.promptWrap:not(.expanded)::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 46px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(to bottom, transparent, #fffdf7);
+}
+.promptBox {
+  font-size: 12.5px;
+  line-height: 1.66;
+  color: #1a1612;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.bin {
+  color: #6d28d9;
+}
+.agentActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.agentCopy {
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 12px;
+  color: #6d28d9;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #6d28d9;
+  border-radius: 8px;
+  transition:
+    background 130ms ease,
+    color 130ms ease;
+}
+.agentCopy:hover {
+  color: #fffdf7;
+  background: #6d28d9;
+}
+.agentCopy:focus-visible {
+  outline: 2px solid #6d28d9;
+  outline-offset: 2px;
+}
+.agentExpand {
+  padding: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  color: #6f6a63;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+.agentExpand:hover {
+  color: #1a1612;
+}
+.agentExpand:focus-visible {
+  outline: 2px solid #6d28d9;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promptWrap,
+  .sectCopy,
+  .optBtn,
+  .agentCopy {
+    transition: none;
+  }
+}

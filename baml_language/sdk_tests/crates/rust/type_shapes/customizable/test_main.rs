@@ -17,12 +17,12 @@
 )]
 
 #[test]
-fn test_root_imports_cleanly() {
+fn test_main_root_imports_cleanly() {
     use baml_sdk as _;
 }
 
 #[test]
-fn test_all_namespaces_reachable() {
+fn test_main_all_namespaces_reachable() {
     use baml_sdk::a as _;
     use baml_sdk::aliases as _;
     use baml_sdk::aliases_consumer as _;
@@ -43,16 +43,16 @@ fn test_all_namespaces_reachable() {
 }
 
 #[test]
-fn test_root_foo_reachable() {
+fn test_main_root_foo_reachable() {
     use baml_sdk::Foo as _;
 }
 
 #[test]
-fn test_lorem_resume_reachable() {
+fn test_main_lorem_resume_reachable() {
     use baml_sdk::lorem::Resume as _;
 }
 
 #[test]
-fn test_deep_namespace_thing_reachable() {
+fn test_main_deep_namespace_thing_reachable() {
     use baml_sdk::a::b::Thing as _;
 }

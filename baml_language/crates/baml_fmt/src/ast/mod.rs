@@ -315,34 +315,6 @@ impl SyntaxNodeIter {
 
     /// Consumes the next element and checks it:
     /// - If there are no more elements, returns [`StrongAstError::MissingExpectedElement`].
-    /// - If the element is not a node, returns [`StrongAstError::ShouldBeNode`].
-    /// - If the element is a node but not of the expected kind, returns [`StrongAstError::UnexpectedKind`].
-    /// - Otherwise, returns the node.
-    ///
-    /// Consumes an element even if it returns an error.
-    pub fn expect_node_of_kind(&mut self, kind: SyntaxKind) -> Result<SyntaxNode, StrongAstError> {
-        let Some(elem) = self.next() else {
-            return Err(StrongAstError::missing(kind, self.parent));
-        };
-        let SyntaxElement::Node(node) = elem else {
-            return Err(StrongAstError::ShouldBeNode {
-                at: elem.text_range(),
-            });
-        };
-
-        if node.kind() == kind {
-            Ok(node)
-        } else {
-            Err(StrongAstError::UnexpectedKind {
-                expected: kind,
-                found: node.kind(),
-                at: node.text_range(),
-            })
-        }
-    }
-
-    /// Consumes the next element and checks it:
-    /// - If there are no more elements, returns [`StrongAstError::MissingExpectedElement`].
     /// - Otherwise, the element will parse as the given type.
     ///
     /// Consumes an element even if it returns an error.
@@ -403,21 +375,6 @@ impl SyntaxNodeIter {
     /// This is a convenience method equivalent to [`SyntaxNodeIter::next_if`] with `elem.kind() == kind`.
     pub fn next_if_kind(&mut self, kind: SyntaxKind) -> Option<SyntaxElement> {
         self.next_if(|elem| elem.kind() == kind)
-    }
-
-    /// Peeks at the next element and:
-    /// - If there is no next element, returns `None`.
-    /// - Calls the given function with the next element, if it returns `Some(t)` then the element is consumed and `Some(t)` is returned.
-    /// - Otherwise, the next element is not consumed and `None` is returned.
-    pub fn next_if_and_map<T, F: FnOnce(&SyntaxElement) -> Option<T>>(
-        &mut self,
-        f: F,
-    ) -> Option<T> {
-        if let Some(peeked) = self.peek().and_then(f) {
-            self.peeked = None;
-            return Some(peeked);
-        }
-        None
     }
 }
 impl Iterator for SyntaxNodeIter {

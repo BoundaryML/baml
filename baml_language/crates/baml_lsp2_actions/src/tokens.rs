@@ -18,6 +18,7 @@
 //!   definition.
 
 use baml_base::{Name, SourceFile};
+use baml_compiler_diagnostics::{HighlightAttributes, HighlightColor, HighlightStyle};
 use baml_compiler_syntax::{
     SyntaxKind, SyntaxNode, SyntaxToken,
     ast::{
@@ -25,7 +26,7 @@ use baml_compiler_syntax::{
         ObjectField, TypeExpr,
     },
 };
-use baml_compiler2_tir::resolve::{
+use baml_compiler2_ppir::resolve::{
     resolve_enum_variant, resolve_field, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
 };
 use rowan::{NodeOrToken, WalkEvent, ast::AstNode};
@@ -146,6 +147,53 @@ impl SemanticTokenType {
             Self::EscapeSequence => "escapeSequence",
             Self::Boolean => "boolean",
         }
+    }
+}
+
+/// Terminal style for a semantic token.
+///
+/// The named ANSI palette stays legible on light and dark backgrounds.
+/// Modifiers overlay attributes the same way editor themes do.
+pub fn semantic_highlight_style(
+    token_type: SemanticTokenType,
+    modifiers: ModifierSet,
+) -> HighlightStyle {
+    use SemanticTokenType as T;
+
+    let (foreground, base_dim) = match token_type {
+        T::Keyword | T::Modifier => (Some(HighlightColor::Magenta), false),
+        T::Class | T::Struct | T::Interface | T::Enum | T::Type | T::TypeParameter => {
+            (Some(HighlightColor::Yellow), false)
+        }
+        T::Function | T::Method | T::Macro => (Some(HighlightColor::BrightBlue), false),
+        T::EnumMember | T::Property => (Some(HighlightColor::Cyan), false),
+        T::Parameter => (Some(HighlightColor::Yellow), true),
+        T::Namespace => (Some(HighlightColor::BrightCyan), false),
+        T::String | T::Regexp => (Some(HighlightColor::Green), false),
+        T::EscapeSequence => (Some(HighlightColor::BrightMagenta), false),
+        T::Number | T::Boolean => (Some(HighlightColor::BrightYellow), false),
+        T::Comment => (None, true),
+        T::Decorator => (Some(HighlightColor::Magenta), true),
+        T::Operator => (None, true),
+        T::Variable | T::Event => (None, false),
+    };
+    let declaration = modifiers.contains(ModifierSet::DECLARATION);
+    let mut attributes = HighlightAttributes::empty();
+    if declaration {
+        attributes.insert(HighlightAttributes::BOLD);
+    }
+    if base_dim && !declaration {
+        attributes.insert(HighlightAttributes::DIM);
+    }
+    if modifiers.contains(ModifierSet::DEFAULT_LIBRARY) {
+        attributes.insert(HighlightAttributes::ITALIC);
+    }
+    if modifiers.contains(ModifierSet::DEPRECATED) {
+        attributes.insert(HighlightAttributes::STRIKETHROUGH);
+    }
+    HighlightStyle {
+        foreground,
+        attributes,
     }
 }
 
@@ -341,6 +389,7 @@ pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
     };
     let mut out = Vec::new();
     walk.run(&root, &mut out);
+    out.sort_by_key(|token| (token.range.start(), token.range.end()));
     out
 }
 
@@ -368,6 +417,7 @@ pub fn semantic_tokens_in_range(
     walk.run(&root, &mut out);
     // The range gate is per-subtree; trim the boundary tokens to exactly `range`.
     out.retain(|t| range.intersect(t.range).is_some());
+    out.sort_by_key(|token| (token.range.start(), token.range.end()));
     out
 }
 
@@ -490,6 +540,12 @@ impl Walk<'_> {
             }
             return;
         }
+        if kind == SyntaxKind::DOT {
+            if let Some(class) = self.path_namespace_separator(token) {
+                emit(token.text_range(), class, out);
+                return;
+            }
+        }
         let token_type = if kind.is_keyword() {
             SemanticTokenType::Keyword
         } else if kind.is_operator() {
@@ -505,6 +561,35 @@ impl Walk<'_> {
             return;
         };
         emit(token.text_range(), plain(token_type), out);
+    }
+
+    /// Classify a `.` inside a value-position path as part of the namespace
+    /// prefix only when everything to its left resolves as a real namespace.
+    /// Member/enum/associated-type separators remain ordinary operators.
+    fn path_namespace_separator(&self, token: &SyntaxToken) -> Option<Class> {
+        let parent = token.parent()?;
+        if parent.kind() != SyntaxKind::PATH_EXPR {
+            return None;
+        }
+
+        let mut names = Vec::new();
+        for element in parent.children_with_tokens() {
+            match element {
+                NodeOrToken::Token(t) if t.text_range() == token.text_range() => break,
+                NodeOrToken::Token(t) if t.kind().is_trivia() || t.kind() == SyntaxKind::DOT => {}
+                NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD => {
+                    names.push(Name::new(t.text()));
+                }
+                // A generic argument list or any other structure before this
+                // separator means its left side is a type/value, not a namespace.
+                _ => return None,
+            }
+        }
+
+        (!names.is_empty())
+            .then(|| resolve_namespace_prefix(self.db, self.file, &names))
+            .flatten()
+            .map(classify::namespace_class)
     }
 
     /// A structural primitive for the wholesale handlers: walk a node's direct
@@ -540,6 +625,7 @@ impl Walk<'_> {
             if let NodeOrToken::Token(t) = &children[i] {
                 if t.kind() == SyntaxKind::WORD {
                     let mut segments = vec![t.clone()];
+                    let mut separators = Vec::new();
                     let mut j = i + 1;
                     while let (Some(NodeOrToken::Token(dot)), Some(NodeOrToken::Token(word))) =
                         (children.get(j), children.get(j + 1))
@@ -547,11 +633,11 @@ impl Walk<'_> {
                         if dot.kind() != SyntaxKind::DOT || word.kind() != SyntaxKind::WORD {
                             break;
                         }
-                        emit(dot.text_range(), plain(SemanticTokenType::Operator), out);
+                        separators.push(dot.clone());
                         segments.push(word.clone());
                         j += 2;
                     }
-                    self.type_run(&segments, out);
+                    self.type_run(&segments, &separators, out);
                     i = j;
                     continue;
                 }
@@ -565,7 +651,12 @@ impl Walk<'_> {
     }
 
     /// Classify one (possibly dotted) type name run.
-    fn type_run(&self, segments: &[SyntaxToken], out: &mut Vec<SemanticToken>) {
+    fn type_run(
+        &self,
+        segments: &[SyntaxToken],
+        separators: &[SyntaxToken],
+        out: &mut Vec<SemanticToken>,
+    ) {
         if let [single] = segments {
             let class = classify_type_token(
                 self.db,
@@ -580,16 +671,25 @@ impl Walk<'_> {
         // value-position index does — a real namespace (builtin-flagged) or, if
         // not a namespace (e.g. the base type of an associated-type path), a
         // type. Never a blindly-guessed namespace.
+        debug_assert_eq!(separators.len() + 1, segments.len());
         let names: Vec<Name> = segments.iter().map(|t| Name::new(t.text())).collect();
         let (leaf, prefix) = segments.split_last().expect("non-empty run");
         for (i, seg) in prefix.iter().enumerate() {
-            let class = match resolve_namespace_prefix(self.db, self.file, &names[0..=i]) {
+            let namespace = resolve_namespace_prefix(self.db, self.file, &names[0..=i]);
+            let class = match namespace {
                 Some(builtin) => classify::namespace_class(builtin),
                 None => {
                     classify_type_token(self.db, self.file, seg.text(), seg.text_range().start())
                 }
             };
             emit(seg.text_range(), class, out);
+            emit(
+                separators[i].text_range(),
+                namespace
+                    .map(classify::namespace_class)
+                    .unwrap_or_else(|| plain(SemanticTokenType::Operator)),
+                out,
+            );
         }
         let resolved = resolve_path_at(self.db, self.file, leaf.text_range().start(), &names, None);
         let class = classify::classify_resolved(&resolved).unwrap_or_else(|| {

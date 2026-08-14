@@ -1,54 +1,63 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match_subtype(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_subtype_narrow_default"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_widened_default"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_falls_through_on_non"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_concrete_discriminates_int"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_concrete_discriminates_string"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_switch_discriminates_int"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_switch_discriminates_string"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_switch_prims_still_dispatch"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -102,16 +111,8 @@ function generic_match_subtype.concrete_switch_string_fn() -> string {
 }
 
 function generic_match_subtype.generic_match_falls_through_on_non_fn() -> int {
+    load_type generic_match_subtype.Shape
     alloc_instance user.generic_match_subtype.Non
-    store_var o
-    load_type generic_match_subtype.Shape | generic_match_subtype.Sq
-    load_var o
-    load_const 7
-    init_instance user.generic_match_subtype.Sq .s
-    call user.generic_match_subtype.unwrap_or
-    pop 1
-    load_type generic_match_subtype.Shape | generic_match_subtype.Sq
-    load_var o
     load_const 7
     init_instance user.generic_match_subtype.Sq .s
     call user.generic_match_subtype.unwrap_or
@@ -129,13 +130,7 @@ function generic_match_subtype.generic_match_subtype_narrow_default_fn() -> int 
     init_instance user.generic_match_subtype.Sq .s
     call user.generic_match_subtype.mk
     store_var o
-    load_type generic_match_subtype.Shape | generic_match_subtype.Sq
-    load_var o
-    load_const 0
-    init_instance user.generic_match_subtype.Sq .s
-    call user.generic_match_subtype.unwrap_or
-    pop 1
-    load_type generic_match_subtype.Shape | generic_match_subtype.Sq
+    load_type generic_match_subtype.Shape
     load_var o
     load_const 0
     init_instance user.generic_match_subtype.Sq .s
@@ -167,7 +162,7 @@ function generic_match_subtype.generic_match_widened_default_fn() -> int {
     return
 }
 
-function generic_match_subtype.mk(v: T) -> generic_match_subtype.Opt<T> | generic_match_subtype.Non {
+function generic_match_subtype.mk(v: #0) -> generic_match_subtype.Opt<#0> | generic_match_subtype.Non {
     load_var v
     load_type #0
     init_instance<1> user.generic_match_subtype.Opt .value
@@ -176,7 +171,9 @@ function generic_match_subtype.mk(v: T) -> generic_match_subtype.Opt<T> | generi
 
 function generic_match_subtype.pick_concrete(x: generic_match_subtype.Foo<int> | generic_match_subtype.Foo<string>) -> string {
     load_var x
-    is_type generic_match_subtype.Foo<...>
+    store_var _2
+    load_var _2
+    narrow_bind generic_match_subtype.Foo<...>, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -193,25 +190,33 @@ function generic_match_subtype.pick_concrete(x: generic_match_subtype.Foo<int> |
 
 function generic_match_subtype.pick_concrete_switch(x: generic_match_subtype.Foo<int> | generic_match_subtype.Foo<string> | int | string | bool) -> string {
     load_var x
-    is_type generic_match_subtype.Foo<...>
+    store_var _2
+    load_var _2
+    narrow_bind generic_match_subtype.Foo<...>, slot=2
     pop_jump_if_false L0
     jump L7
 
   L0:
     load_var x
-    is_type generic_match_subtype.Foo<...>
+    store_var _3
+    load_var _3
+    narrow_bind generic_match_subtype.Foo<...>, slot=3
     pop_jump_if_false L1
     jump L6
 
   L1:
     load_var x
-    is_type int
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=4
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var x
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=5
     pop_jump_if_false L3
     jump L4
 
@@ -238,9 +243,11 @@ function generic_match_subtype.pick_concrete_switch(x: generic_match_subtype.Foo
     return
 }
 
-function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<T> | generic_match_subtype.Non, default: T) -> T {
+function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<#0> | generic_match_subtype.Non, default: #0) -> #0 {
     load_var o
-    is_type generic_match_subtype.Opt<...>
+    store_var _3
+    load_var _3
+    narrow_bind generic_match_subtype.Opt<...>, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -249,7 +256,7 @@ function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<T> | gener
     jump L2
 
   L1:
-    load_var o
+    load_var _3
     load_field .value
 
   L2:

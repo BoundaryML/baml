@@ -14,126 +14,44 @@
 
 use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 
-use baml_db::SourceFile;
+use baml_db::{
+    SourceFile,
+    baml_compiler_diagnostics::{
+        DiagnosticIdentifierKind, DiagnosticMessageHighlighter, DiagnosticMessageKind,
+        HighlightAttributes, HighlightColor, HighlightSpan,
+    },
+};
 use baml_lsp2_actions::{
-    DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType, semantic_tokens,
+    DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType, semantic_highlight_style,
+    semantic_tokens,
 };
 use baml_project::ProjectDatabase;
 use console::Style;
 use text_size::{TextRange, TextSize};
 
-// ── Output mode (color / hyperlinks) ───────────────────────────────────────────
-
-/// When to emit color and hyperlinks. Mirrors the conventional `--color` flag.
-#[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ColorChoice {
-    /// Color on an interactive terminal; off when piped or inside an AI agent.
-    #[default]
-    Auto,
-    /// Always emit color/hyperlinks.
-    Always,
-    /// Never emit color/hyperlinks.
-    Never,
-}
-
-/// Environment variables that signal a non-interactive AI agent is capturing
-/// output, where ANSI color and hyperlinks are noise rather than UI. Sourced
-/// from each agent's docs and from maintained detection matrices
-/// (`@vercel/detect-agent`, Bun's agent checks).
-const AGENT_ENV_VARS: &[&str] = &[
-    "CLAUDECODE",      // Claude Code (code.claude.com/docs/en/env-vars)
-    "CODEX_SANDBOX",   // OpenAI Codex CLI (set in its sandbox)
-    "PI_CODING_AGENT", // Pi (earendil-works/pi)
-    "OPENCODE_CLIENT", // opencode
-    "AI_AGENT",        // @vercel/detect-agent universal var (+ custom agents)
-    "CURSOR_TRACE_ID", // Cursor agent terminal
-    "REPL_ID",         // Replit
-    "AGENT",           // generic (Codex `AGENT=codex`, Bun)
-];
-
-fn env_truthy(var: &str) -> bool {
-    std::env::var(var).is_ok_and(|v| !v.is_empty() && v != "0")
-}
-
-/// Whether output is being captured by a known AI coding agent.
-fn running_in_agent() -> bool {
-    AGENT_ENV_VARS.iter().any(|var| env_truthy(var))
-}
-
-/// Resolve color/hyperlink output once at startup, applying the decision to both
-/// stdout and stderr so the two streams agree (avoids leaking codes into a
-/// redirected stream or dropping color on a redirected sibling).
-pub fn init_color(choice: ColorChoice) {
-    match choice {
-        ColorChoice::Always => {
-            console::set_colors_enabled(true);
-            console::set_colors_enabled_stderr(true);
-        }
-        ColorChoice::Never => {
-            console::set_colors_enabled(false);
-            console::set_colors_enabled_stderr(false);
-        }
-        ColorChoice::Auto => {
-            // An explicit `CLICOLOR_FORCE` (honored by console's defaults) always
-            // wins; only suppress for agents when color was not force-requested.
-            if !env_truthy("CLICOLOR_FORCE") && running_in_agent() {
-                console::set_colors_enabled(false);
-                console::set_colors_enabled_stderr(false);
-            }
-            // Otherwise leave console's per-stream TTY / NO_COLOR / CLICOLOR defaults.
-        }
-    }
-}
-
-/// Style for a semantic token, honoring its modifiers.
-///
-/// Colors are restricted to the terminal's *named* ANSI palette plus the
-/// dim/bold attributes — never fixed 256-color values and never a concrete
-/// white/black — so the theme decides what every color looks like and output
-/// stays legible on light and dark backgrounds alike. Modifiers overlay
-/// attributes the way editor themes do: declarations are bold, stdlib
-/// entities italic, deprecated ones struck through.
-///
-/// Styling is **forced** so emission is decided by the caller per output stream
-/// (gating on `colors_enabled()` for stdout vs `colors_enabled_stderr()` for
-/// stderr), not by console's ambient stdout flag.
 fn style_for(token_type: SemanticTokenType, modifiers: ModifierSet) -> Style {
-    use SemanticTokenType as T;
-    // (base color, dimmed) — dim is a *base* trait of quiet token types, kept
-    // separate so a declaration can trade it for bold instead of stacking the
-    // two contradictory weights.
-    let (style, base_dim) = match token_type {
-        T::Keyword | T::Modifier => (Style::new().magenta(), false),
-        T::Class | T::Struct | T::Interface | T::Enum | T::Type | T::TypeParameter => {
-            (Style::new().yellow(), false)
-        }
-        T::Function | T::Method | T::Macro => (Style::new().blue().bright(), false),
-        T::EnumMember | T::Property => (Style::new().cyan(), false),
-        T::Parameter => (Style::new().yellow(), true),
-        T::Namespace => (Style::new().cyan().bright(), false),
-        T::String | T::Regexp => (Style::new().green(), false),
-        T::EscapeSequence => (Style::new().magenta().bright(), false),
-        T::Number | T::Boolean => (Style::new().yellow().bright(), false),
-        T::Comment => (Style::new(), true),
-        T::Decorator => (Style::new().magenta(), true),
-        T::Operator => (Style::new(), true),
-        // Ordinary names keep the terminal's default foreground: forcing any
-        // concrete color here would assume a background.
-        T::Variable | T::Event => (Style::new(), false),
+    let spec = semantic_highlight_style(token_type, modifiers);
+    let mut style = match spec.foreground {
+        Some(HighlightColor::Green) => Style::new().green(),
+        Some(HighlightColor::Yellow) => Style::new().yellow(),
+        Some(HighlightColor::Magenta) => Style::new().magenta(),
+        Some(HighlightColor::Cyan) => Style::new().cyan(),
+        Some(HighlightColor::BrightYellow) => Style::new().yellow().bright(),
+        Some(HighlightColor::BrightBlue) => Style::new().blue().bright(),
+        Some(HighlightColor::BrightMagenta) => Style::new().magenta().bright(),
+        Some(HighlightColor::BrightCyan) => Style::new().cyan().bright(),
+        None => Style::new(),
     };
-    let declaration = modifiers.contains(ModifierSet::DECLARATION);
-    let mut style = if base_dim && !declaration {
-        style.dim()
-    } else {
-        style
-    };
-    if declaration {
+    if spec.attributes.contains(HighlightAttributes::BOLD) {
         style = style.bold();
     }
-    if modifiers.contains(ModifierSet::DEFAULT_LIBRARY) {
+    if spec.attributes.contains(HighlightAttributes::DIM) {
+        style = style.dim();
+    }
+    if spec.attributes.contains(HighlightAttributes::ITALIC) {
         style = style.italic();
     }
-    if modifiers.contains(ModifierSet::DEPRECATED) {
+    if spec.attributes.contains(HighlightAttributes::STRIKETHROUGH) {
         style = style.strikethrough();
     }
     style.force_styling(true)
@@ -216,6 +134,11 @@ fn highlight_name_padded(name: &str, leaf_kind: DefinitionKind, width: usize) ->
 ///
 /// Always emits color; callers go through [`Painter::fragment`], which gates.
 fn highlight_str(text: &str) -> String {
+    let toks = classify_fragment(text);
+    styled_from_tokens(text, 0, &toks)
+}
+
+fn classify_fragment(text: &str) -> Vec<SemanticToken> {
     thread_local! {
         static SCRATCH_DB: RefCell<ProjectDatabase> = RefCell::new({
             let mut db = ProjectDatabase::new();
@@ -228,8 +151,77 @@ fn highlight_str(text: &str) -> String {
         let file = db.add_or_update_file(Path::new("/baml-fragment-scratch/fragment.baml"), text);
         let mut toks = semantic_tokens(db, file).clone();
         toks.sort_by_key(|t| t.range.start());
-        styled_from_tokens(text, 0, &toks)
+        toks
     })
+}
+
+#[derive(Default)]
+pub struct MessageHighlighter {
+    cache: RefCell<HashMap<(DiagnosticMessageKind, String), Vec<HighlightSpan>>>,
+}
+
+impl DiagnosticMessageHighlighter for MessageHighlighter {
+    fn highlight(&self, kind: DiagnosticMessageKind, text: &str) -> Vec<HighlightSpan> {
+        let key = (kind, text.to_string());
+        if let Some(cached) = self.cache.borrow().get(&key) {
+            return cached.clone();
+        }
+        let highlights = match kind {
+            DiagnosticMessageKind::TypeExpression => {
+                let prefix = "type __Diagnostic = ";
+                let source = format!("{prefix}{text}");
+                fragment_spans(&source, prefix.len(), text.len())
+            }
+            DiagnosticMessageKind::Code => {
+                let prefix = "function __Diagnostic() -> null { ";
+                let source = format!("{prefix}{text}; null }}");
+                fragment_spans(&source, prefix.len(), text.len())
+            }
+            DiagnosticMessageKind::Identifier(kind) => {
+                let token_type = match kind {
+                    DiagnosticIdentifierKind::Type => SemanticTokenType::Type,
+                    DiagnosticIdentifierKind::Function => SemanticTokenType::Function,
+                    DiagnosticIdentifierKind::Field => SemanticTokenType::Property,
+                    DiagnosticIdentifierKind::Variable => SemanticTokenType::Variable,
+                    DiagnosticIdentifierKind::EnumVariant => SemanticTokenType::EnumMember,
+                    DiagnosticIdentifierKind::Attribute => SemanticTokenType::Decorator,
+                };
+                (!text.is_empty())
+                    .then(|| HighlightSpan {
+                        range: TextRange::new(0.into(), fragment_text_size(text.len())),
+                        style: semantic_highlight_style(token_type, ModifierSet::empty()),
+                    })
+                    .into_iter()
+                    .collect()
+            }
+        };
+        self.cache.borrow_mut().insert(key, highlights.clone());
+        highlights
+    }
+}
+
+fn fragment_spans(source: &str, fragment_start: usize, fragment_len: usize) -> Vec<HighlightSpan> {
+    let fragment_end = fragment_start + fragment_len;
+    classify_fragment(source)
+        .into_iter()
+        .filter_map(|token| {
+            let start: usize = token.range.start().into();
+            let end: usize = token.range.end().into();
+            let start = start.max(fragment_start);
+            let end = end.min(fragment_end);
+            (start < end).then(|| HighlightSpan {
+                range: TextRange::new(
+                    fragment_text_size(start - fragment_start),
+                    fragment_text_size(end - fragment_start),
+                ),
+                style: semantic_highlight_style(token.token_type, token.modifiers),
+            })
+        })
+        .collect()
+}
+
+fn fragment_text_size(size: usize) -> TextSize {
+    TextSize::from(u32::try_from(size).expect("diagnostic fragment exceeds 4 GiB"))
 }
 
 /// Render `slice` (the source text starting at byte offset `slice_start`) with
@@ -298,28 +290,33 @@ fn file_uri(path: &Path) -> String {
 /// helpers never have to guess which stream they're feeding (which previously
 /// risked leaking codes into a redirected sibling stream).
 pub struct Painter {
-    enabled: bool,
+    color: bool,
+    hyperlinks: bool,
 }
 
 impl Painter {
     /// Painter for stdout-bound output.
     pub fn stdout() -> Self {
+        let policy = crate::output::policy().stdout;
         Self {
-            enabled: console::colors_enabled(),
+            color: policy.color,
+            hyperlinks: policy.hyperlinks,
         }
     }
 
     /// Painter for stderr-bound output.
     pub fn stderr() -> Self {
+        let policy = crate::output::policy().stderr;
         Self {
-            enabled: console::colors_enabled_stderr(),
+            color: policy.color,
+            hyperlinks: policy.hyperlinks,
         }
     }
 
     /// Whether this stream renders color. Also gates the verbatim-vs-cleaned body
     /// rendering fork in `describe` (a behavior choice, not just a color toggle).
     pub fn enabled(&self) -> bool {
-        self.enabled
+        self.color
     }
 
     /// A dotted name: namespace-colored qualifiers, leaf colored by `leaf_kind`.
@@ -329,7 +326,7 @@ impl Painter {
 
     /// Like [`Painter::fqn`] but the leaf kind is optional (`None` => namespace).
     pub fn fqn_opt(&self, name: &str, leaf_kind: Option<DefinitionKind>) -> String {
-        if self.enabled {
+        if self.color {
             highlight_fqn_opt(name, leaf_kind)
         } else {
             name.to_string()
@@ -338,7 +335,7 @@ impl Painter {
 
     /// A name whose *visible* width is padded to `width` columns.
     pub fn name_padded(&self, name: &str, leaf_kind: DefinitionKind, width: usize) -> String {
-        if self.enabled {
+        if self.color {
             highlight_name_padded(name, leaf_kind, width)
         } else {
             format!("{name:<width$}")
@@ -348,7 +345,7 @@ impl Painter {
     /// A definition-kind label padded to `width` columns, colored by kind.
     pub fn kind_label(&self, kind: DefinitionKind, width: usize) -> String {
         let label = kind.as_str();
-        if self.enabled {
+        if self.color {
             kind_style(kind)
                 .apply_to(format!("{label:<width$}"))
                 .to_string()
@@ -359,7 +356,7 @@ impl Painter {
 
     /// An arbitrary BAML fragment with no source backing (signatures, examples).
     pub fn fragment(&self, text: &str) -> String {
-        if self.enabled {
+        if self.color {
             highlight_str(text)
         } else {
             text.to_string()
@@ -368,7 +365,7 @@ impl Painter {
 
     /// `text` styled as a keyword (for keyword-doc headers).
     pub fn keyword(&self, text: &str) -> String {
-        if self.enabled {
+        if self.color {
             style_for_plain(SemanticTokenType::Keyword)
                 .apply_to(text)
                 .to_string()
@@ -378,12 +375,12 @@ impl Painter {
     }
 
     /// A `display:line_label` location, rendered as a clickable `file://`
-    /// hyperlink when this stream is colored and `abs_path` is a real (absolute)
+    /// hyperlink when enabled and `abs_path` is a real (absolute)
     /// file. Plain `display:line_label` otherwise (pipes / JSON / tests / builtin
     /// `<...>` paths).
     pub fn location(&self, abs_path: &Path, display: &str, line_label: &str) -> String {
         let text = format!("{display}:{line_label}");
-        if self.enabled && abs_path.is_absolute() {
+        if self.hyperlinks && abs_path.is_absolute() {
             osc8(&file_uri(abs_path), &text)
         } else {
             text
@@ -418,6 +415,16 @@ impl<'db> Highlighter<'db> {
         let rc: Rc<[SemanticToken]> = toks.into();
         self.cache.borrow_mut().insert(file, Rc::clone(&rc));
         rc
+    }
+
+    pub fn spans(&self, file: SourceFile) -> Vec<HighlightSpan> {
+        self.tokens(file)
+            .iter()
+            .map(|token| HighlightSpan {
+                range: token.range,
+                style: semantic_highlight_style(token.token_type, token.modifiers),
+            })
+            .collect()
     }
 
     /// Highlight the verbatim source slice `file.text()[range]`.
@@ -471,10 +478,13 @@ fn push_styled(out: &mut String, seg: &str, style: &Style) {
 mod tests {
     use std::path::Path;
 
+    use baml_db::baml_compiler_diagnostics::{
+        DiagnosticMessageHighlighter, DiagnosticMessageKind, HighlightColor,
+    };
     use baml_lsp2_actions::{ModifierSet, SemanticTokenType};
     use baml_project::ProjectDatabase;
 
-    use super::{Highlighter, highlight_str, style_for};
+    use super::{Highlighter, MessageHighlighter, highlight_str, style_for};
 
     /// One rendering effect of an SGR escape, decoded from its parameter list.
     /// Modeling decoded effects (not raw byte fragments) keeps the assertions
@@ -565,6 +575,28 @@ mod tests {
         );
     }
 
+    #[test]
+    fn diagnostic_spans_use_describe_palette() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new("/test"));
+        let file = db.add_or_update_file(Path::new("/test/main.baml"), "class Foo {}\n");
+        let highlighter = Highlighter::new(&db);
+        let span = highlighter
+            .spans(file)
+            .into_iter()
+            .find(|span| span.range == text_size::TextRange::new(6.into(), 9.into()))
+            .expect("class name has a semantic token");
+        assert_eq!(
+            span.style.foreground,
+            Some(baml_db::baml_compiler_diagnostics::HighlightColor::Yellow)
+        );
+        assert!(
+            span.style
+                .attributes
+                .contains(baml_db::baml_compiler_diagnostics::HighlightAttributes::BOLD)
+        );
+    }
+
     /// The whole palette must be background-agnostic: named ANSI colors and
     /// attributes only — no fixed 256-color values, no truecolor, no forced
     /// white/black.
@@ -638,5 +670,32 @@ function make(v: int) -> Point {
             effects_at(&out, "member").is_empty(),
             "member on unresolved receiver styled: {out:?}"
         );
+    }
+
+    #[test]
+    fn diagnostic_type_fragments_use_describe_highlighting() {
+        let highlighter = MessageHighlighter::default();
+        let string = highlighter.highlight(DiagnosticMessageKind::TypeExpression, "\"not an int\"");
+        let int = highlighter.highlight(DiagnosticMessageKind::TypeExpression, "int");
+
+        assert_eq!(string.len(), 1);
+        assert_eq!(string[0].style.foreground, Some(HighlightColor::Green));
+        assert_eq!(int.len(), 1);
+        assert_eq!(int[0].style.foreground, Some(HighlightColor::Yellow));
+        assert!(
+            int[0]
+                .style
+                .attributes
+                .contains(baml_db::baml_compiler_diagnostics::HighlightAttributes::ITALIC)
+        );
+    }
+
+    #[test]
+    fn diagnostic_code_fragments_use_describe_highlighting() {
+        let highlighter = MessageHighlighter::default();
+        let string = highlighter.highlight(DiagnosticMessageKind::Code, "\"not an int\"");
+
+        assert_eq!(string.len(), 1);
+        assert_eq!(string[0].style.foreground, Some(HighlightColor::Green));
     }
 }

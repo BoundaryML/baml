@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["vite/client"]
+  },
+  "extends": "../tsconfig.base.json",
+  "include": ["src"]
+}

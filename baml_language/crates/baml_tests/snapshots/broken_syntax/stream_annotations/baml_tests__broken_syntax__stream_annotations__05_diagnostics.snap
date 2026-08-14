@@ -2,222 +2,200 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: Unknown attribute `@stream.starts_as`
-    ╭─[ main.baml:22:17 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.starts_as`
+    ╭─[main.baml:22:17]
  22 │     name string @stream.starts_as("Loading...")
-    │                 ───────────────┬───────────────  
-    │                                ╰───────────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                 ───────────────┬───────────────
+    ·                                ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-    ╭─[ main.baml:23:15 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+    ╭─[main.baml:23:15]
  23 │     gpa float @stream.not_null
-    │               ────────┬───────  
-    │                       ╰───────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·               ────────┬───────
+    ·                       ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-    ╭─[ main.baml:24:32 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+    ╭─[main.baml:24:32]
  24 │     certifications Education[] @stream.type(Education[])
-    │                                ───────────┬──────────  
-    │                                           ╰──────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                                ───────────┬──────────
+    ·                                           ╰── unknown attribute
+    ╰────
 
-  [parse] error: Expected ')', found '['
-    ╭─[ main.baml:24:54 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:24:54]
  24 │     certifications Education[] @stream.type(Education[])
-    │                                                      ┬  
-    │                                                      ╰── Expected ')', found '['
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                                      ┬
+    ·                                                      ╰── expected `')'`, found `'['`
+    ╰────
 
-  [parse] error: Expected Unexpected token in class body, found ')'
-    ╭─[ main.baml:24:56 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:24:56]
  24 │     certifications Education[] @stream.type(Education[])
-    │                                                        ┬  
-    │                                                        ╰── Expected Unexpected token in class body, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                                        ┬
+    ·                                                        ╰── expected `Unexpected token in class body`, found `')'`
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-    ╭─[ main.baml:25:21 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+    ╭─[main.baml:25:21]
  25 │     internal string @stream.type(never)
-    │                     ─────────┬─────────  
-    │                              ╰─────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                     ─────────┬─────────
+    ·                              ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-    ╭─[ main.baml:33:28 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+    ╭─[main.baml:33:28]
  33 │     id string @stream.done @stream.not_null
-    │                            ────────┬───────  
-    │                                    ╰───────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                            ────────┬───────
+    ·                                    ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.starts_as`
-    ╭─[ main.baml:45:13 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.starts_as`
+    ╭─[main.baml:45:13]
  45 │     y float @stream.starts_as(null)
-    │             ───────────┬───────────  
-    │                        ╰───────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·             ───────────┬───────────
+    ·                        ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-    ╭─[ main.baml:74:15 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+    ╭─[main.baml:74:15]
  74 │     gpa float @stream.not_null
-    │               ────────┬───────  
-    │                       ╰───────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·               ────────┬───────
+    ·                       ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.starts_as`
-    ╭─[ main.baml:75:18 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.starts_as`
+    ╭─[main.baml:75:18]
  75 │     title string @stream.starts_as("Loading...")
-    │                  ───────────────┬───────────────  
-    │                                 ╰───────────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                  ───────────────┬───────────────
+    ·                                 ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-    ╭─[ main.baml:76:24 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+    ╭─[main.baml:76:24]
  76 │     internal_id string @stream.type(never)
-    │                        ─────────┬─────────  
-    │                                 ╰─────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                        ─────────┬─────────
+    ·                                 ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-    ╭─[ main.baml:77:31 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+    ╭─[main.baml:77:31]
  77 │     token string @stream.done @stream.not_null
-    │                               ────────┬───────  
-    │                                       ╰───────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                               ────────┬───────
+    ·                                       ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.starts_as`
-    ╭─[ main.baml:89:19 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.starts_as`
+    ╭─[main.baml:89:19]
  89 │     status Status @stream.starts_as("Status.Loading")
-    │                   ─────────────────┬─────────────────  
-    │                                    ╰─────────────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                   ─────────────────┬─────────────────
+    ·                                    ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-    ╭─[ main.baml:96:20 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+    ╭─[main.baml:96:20]
  96 │     items Person[] @stream.type(string)
-    │                    ──────────┬─────────  
-    │                              ╰─────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                    ──────────┬─────────
+    ·                              ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-    ╭─[ main.baml:97:19 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+    ╭─[main.baml:97:19]
  97 │     maybe string? @stream.type(int)
-    │                   ────────┬────────  
-    │                           ╰────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                   ────────┬────────
+    ·                           ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-    ╭─[ main.baml:98:21 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+    ╭─[main.baml:98:21]
  98 │     internal string @stream.type(never)
-    │                     ─────────┬─────────  
-    │                              ╰─────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                     ─────────┬─────────
+    ·                              ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-    ╭─[ main.baml:99:27 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+    ╭─[main.baml:99:27]
  99 │     data map<string, int> @stream.type(never)
-    │                           ─────────┬─────────  
-    │                                    ╰─────────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                           ─────────┬─────────
+    ·                                    ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-     ╭─[ main.baml:106:28 ]
-     │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+     ╭─[main.baml:106:28]
  106 │     not_null_string string @stream.not_null
-     │                            ────────┬───────  
-     │                                    ╰───────── unknown attribute
-     │ 
-     │ Note: Error code: E0015
-─────╯
+     ·                            ────────┬───────
+     ·                                    ╰── unknown attribute
+     ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-     ╭─[ main.baml:107:26 ]
-     │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+     ╭─[main.baml:107:26]
  107 │     not_null_class Inner @stream.not_null
-     │                          ────────┬───────  
-     │                                  ╰───────── unknown attribute
-     │ 
-     │ Note: Error code: E0015
-─────╯
+     ·                          ────────┬───────
+     ·                                  ╰── unknown attribute
+     ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-     ╭─[ main.baml:108:43 ]
-     │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+     ╭─[main.baml:108:43]
  108 │     done_and_not_null string @stream.done @stream.not_null
-     │                                           ────────┬───────  
-     │                                                   ╰───────── unknown attribute
-     │ 
-     │ Note: Error code: E0015
-─────╯
+     ·                                           ────────┬───────
+     ·                                                   ╰── unknown attribute
+     ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-     ╭─[ main.baml:109:23 ]
-     │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+     ╭─[main.baml:109:23]
  109 │     type_never string @stream.type(never)
-     │                       ─────────┬─────────  
-     │                                ╰─────────── unknown attribute
-     │ 
-     │ Note: Error code: E0015
-─────╯
+     ·                       ─────────┬─────────
+     ·                                ╰── unknown attribute
+     ╰────
 
-  [hir] error: Unknown attribute `@stream.type`
-     ╭─[ main.baml:110:33 ]
-     │
+  [hir] E0015
+
+  × unknown attribute `@stream.type`
+     ╭─[main.baml:110:33]
  110 │     type_never_literal "resume" @stream.type(never)
-     │                                 ─────────┬─────────  
-     │                                          ╰─────────── unknown attribute
-     │ 
-     │ Note: Error code: E0015
-─────╯
+     ·                                 ─────────┬─────────
+     ·                                          ╰── unknown attribute
+     ╰────

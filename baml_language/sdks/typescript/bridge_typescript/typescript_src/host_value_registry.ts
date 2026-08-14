@@ -83,6 +83,11 @@ export function registerHostOpaque(value: unknown): HandleKey {
     return key;
 }
 
+/** Roll back an opaque registration that was never transferred to Rust. */
+export function releaseHostOpaque(key: HandleKey): void {
+    hostValueMap.delete(handleKeyToBigint(key));
+}
+
 /**
  * Look up a host-registered JS value by key. Returns `undefined` when:
  * - the key is the reserved sentinel `0n` (no real value was registered);

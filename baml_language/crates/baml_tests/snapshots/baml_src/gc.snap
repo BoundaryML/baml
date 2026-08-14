@@ -3,16 +3,18 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function gc.$init_test_ns_gc_gc(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.gc"
     load_const "test_heavy_allocation_loop"
     make_closure .<lambda($init_test_ns_gc_gc, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.gc"
     load_const "test_map_survives_gc_during_operations"
     make_closure .<lambda($init_test_ns_gc_gc, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

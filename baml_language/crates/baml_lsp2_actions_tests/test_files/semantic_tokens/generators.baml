@@ -27,24 +27,22 @@ generator ts_target {
 
 //----
 //- diagnostics
-// warning: `generator target` is ignored: code generators are configured in `baml.toml` now. Move it to a `[generator.<name>]` section in baml.toml.
-//    ╭─[ generators.baml:6:1 ]
-//    │
+// E0017
+//
+//   ⚠ `generator target` is ignored: code generators are configured in `baml.toml` now. Move it to a `[generator.<name>]` section in `baml.toml`.
+//    ╭─[generators.baml:6:1]
 //  6 │ generator target {
-//    │ ────────┬───────
-//    │         ╰───────── move this to baml.toml
-//    │
-//    │ Note: Error code: E0017
-// ───╯
-// warning: `generator ts_target` is ignored: code generators are configured in `baml.toml` now. Move it to a `[generator.<name>]` section in baml.toml.
-//     ╭─[ generators.baml:21:1 ]
-//     │
+//    · ────────┬───────
+//    ·         ╰── move this to baml.toml
+//    ╰────
+// E0017
+//
+//   ⚠ `generator ts_target` is ignored: code generators are configured in `baml.toml` now. Move it to a `[generator.<name>]` section in `baml.toml`.
+//     ╭─[generators.baml:21:1]
 //  21 │ generator ts_target {
-//     │ ─────────┬─────────
-//     │          ╰─────────── move this to baml.toml
-//     │
-//     │ Note: Error code: E0017
-// ────╯
+//     · ─────────┬─────────
+//     ·          ╰── move this to baml.toml
+//     ╰────
 //
 //- semantic_tokens
 // generators.baml:1:1 (comment) len=74 "// Codegen for the Python host: `baml generate` emits the typed `baml_sdk`"

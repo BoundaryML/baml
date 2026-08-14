@@ -42,3 +42,9 @@ function test_mixed() -> int {
     let b = (x: int) => int { x + 2 }
     a(0) + b(0)
 }
+
+// The same unambiguous JS/TS spelling is accepted in a top-level signature;
+// the formatter repairs it to the canonical thin arrow.
+function test_top_level_fat_arrow(x: int) => int {
+    x + 1
+}

@@ -315,11 +315,11 @@ impl Hir2Diagnostic {
 
                 let kinds_match = rest.iter().all(|s| s.kind == first.kind);
                 let message = if kinds_match {
-                    format!("Duplicate {} `{}`{}", first.kind, qualified, in_scope)
+                    format!("duplicate {} `{}`{}", first.kind, qualified, in_scope)
                 } else {
                     let kind_list: Vec<&str> = sites.iter().map(|s| s.kind.as_str()).collect();
                     format!(
-                        "Name `{}`{} defined {} times as: {}",
+                        "name `{}`{} defined {} times as: {}",
                         qualified,
                         in_scope,
                         sites.len(),
@@ -350,7 +350,7 @@ impl Hir2Diagnostic {
             } => Diagnostic::error(
                 DiagnosticId::UnknownAttribute,
                 format!(
-                    "Unknown attribute `@@{}`. Valid builtin internal attributes are: {}",
+                    "unknown attribute `@@{}`. Valid builtin internal attributes are: {}",
                     attr_name,
                     valid_attributes.join(", ")
                 ),
@@ -359,7 +359,7 @@ impl Hir2Diagnostic {
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::UnknownTypeAttribute { attr_name, span } => Diagnostic::error(
                 DiagnosticId::UnknownAttribute,
-                format!("Unknown attribute `@{attr_name}`"),
+                format!("unknown attribute `@{attr_name}`"),
             )
             .with_primary(Span { file_id, range: *span }, "unknown attribute")
             .with_phase(DiagnosticPhase::Hir),
@@ -371,7 +371,7 @@ impl Hir2Diagnostic {
             } => Diagnostic::error(
                 DiagnosticId::InvalidAttributeContext,
                 format!(
-                    "Attribute `@@{attr_name}` is not valid on {context}. Allowed contexts: {allowed_contexts}",
+                    "attribute `@@{attr_name}` is not valid on {context}. Allowed contexts: {allowed_contexts}",
                 ),
             )
             .with_primary(
@@ -384,7 +384,7 @@ impl Hir2Diagnostic {
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::BuiltinOnlySyntax { feature, span } => Diagnostic::error(
                 DiagnosticId::InvalidAttributeContext,
-                format!("Builtin-only syntax `{feature}` is only allowed in builtin stdlib files"),
+                format!("builtin-only syntax `{feature}` is only allowed in builtin stdlib files"),
             )
             .with_primary(
                 Span {
@@ -412,7 +412,7 @@ impl Hir2Diagnostic {
                 let rest = sites.get(1..).unwrap_or(&[]);
                 let mut diag = Diagnostic::error(
                     DiagnosticId::DuplicateBinding,
-                    format!("Duplicate binding `{name}` in pattern"),
+                    format!("duplicate binding `{name}` in pattern"),
                 )
                 .with_secondary(
                     Span { file_id, range: first },
@@ -431,7 +431,7 @@ impl Hir2Diagnostic {
                 let rest = sites.get(1..).unwrap_or(&[]);
                 let mut diag = Diagnostic::error(
                     DiagnosticId::DuplicateField,
-                    format!("Duplicate field `{name}` in class destructure pattern"),
+                    format!("duplicate field `{name}` in class destructure pattern"),
                 )
                 .with_secondary(
                     Span {
@@ -460,7 +460,7 @@ impl Hir2Diagnostic {
                 let rest = sites.get(1..).unwrap_or(&[]);
                 let mut diag = Diagnostic::error(
                     DiagnosticId::DuplicateFieldAlias,
-                    format!("Duplicate serialized key `{key}` in {container}"),
+                    format!("duplicate serialized key `{key}` in {container}"),
                 )
                 .with_secondary(
                     Span {
@@ -485,7 +485,7 @@ impl Hir2Diagnostic {
                 let rest = sites.get(1..).unwrap_or(&[]);
                 let mut diag = Diagnostic::error(
                     DiagnosticId::DuplicateAttribute,
-                    format!("Duplicate attribute `@{attr_name}`"),
+                    format!("duplicate attribute `@{attr_name}`"),
                 )
                 .with_secondary(
                     Span {
@@ -517,7 +517,7 @@ impl Hir2Diagnostic {
                 Diagnostic::error(
                     DiagnosticId::DuplicateBinding,
                     format!(
-                        "Or-pattern alternatives must bind the same names. \
+                        "or-pattern alternatives must bind the same names. \
                          Inconsistent across branches: {names_str}",
                     ),
                 )

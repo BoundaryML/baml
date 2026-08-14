@@ -27,7 +27,7 @@ pub struct ClassField {
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
     /// Type identity: carries short name, module path, and display name.
-    /// Use `name.display_name` for the display string (e.g. "baml.llm.OrchestrationStep" or "Person").
+    /// Use `name.display_name` for the display string (e.g. "ai.PromptMessage" or "Person").
     pub name: baml_type::TypeName,
 
     /// Class fields with type and schema metadata.

@@ -3,76 +3,102 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function shell.$init_test_ns_shell_shell(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.shell"
     load_const "shell_echo"
     make_closure .<lambda($init_test_ns_shell_shell, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "shell_failing_command"
     make_closure .<lambda($init_test_ns_shell_shell, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "shell_with_variable"
     make_closure .<lambda($init_test_ns_shell_shell, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "shell_ok_method_success"
     make_closure .<lambda($init_test_ns_shell_shell, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "shell_ok_method_failure"
     make_closure .<lambda($init_test_ns_shell_shell, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "shell_stdout_bytes"
     make_closure .<lambda($init_test_ns_shell_shell, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "shell_nonexistent_command"
     make_closure .<lambda($init_test_ns_shell_shell, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "b251_concat_println_then_shell"
     make_closure .<lambda($init_test_ns_shell_shell, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "b251_println_twice_then_shell"
     make_closure .<lambda($init_test_ns_shell_shell, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "b251_multi_let_then_shell"
     make_closure .<lambda($init_test_ns_shell_shell, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "b251_println_discarded_then_shell"
     make_closure .<lambda($init_test_ns_shell_shell, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.shell"
     load_const "exec_echo"
     make_closure .<lambda($init_test_ns_shell_shell, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "pid_is_positive"
+    make_closure .<lambda($init_test_ns_shell_shell, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "pid_is_stable"
+    make_closure .<lambda($init_test_ns_shell_shell, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

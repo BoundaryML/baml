@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+531..536 'hello': throws never
+566..594 '{\n   ...     }': "hi"
+580..584 '"hi"': "hi"
+613..614 'f': throws never
+632..684 '{\n   ...  e\n}': user.Greet
+638..650 'let e: Greet': user.Greet
+645..650 'Greet': user.Greet
+653..654 'g': user.Guy
+681..682 'e': user.Greet
+865..877 'join_absorbs': throws never
+914..981 '{\n   ...  u\n}': user.Greet
+920..925 'let u': user.Greet
+928..951 'if (c)... { e }': user.Greet
+932..933 'c': bool
+935..940 '{ g }': user.Guy
+937..938 'g': user.Guy
+946..951 '{ e }': user.Greet
+948..949 'e': user.Greet
+978..979 'u': user.Greet

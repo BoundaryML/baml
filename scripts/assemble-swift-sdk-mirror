@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Assemble the public github.com/BoundaryML/baml-swift package mirror.
+
+Mirrors the shape of `assemble-go-sdk-mirror`: produces a self-contained
+tree that is rsynced into the passive baml-swift repo by the release
+pipeline's publish-swift-sdk job. Unlike Go (pure source), the Swift
+package references a prebuilt XCFramework binary hosted as an asset on
+the monorepo's baml-language-<version> release — so this script stamps
+the release asset URL + SwiftPM checksum into Package.swift. It does NOT
+build the binary; the release pipeline builds it separately.
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+from pathlib import Path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--zip-url", required=True, help="URL of the XCFramework zip release asset")
+    parser.add_argument("--checksum", required=True, help="SwiftPM checksum (sha256) of the zip")
+    args = parser.parse_args()
+
+    repository = Path(__file__).resolve().parents[1]
+    swift_root = repository / "baml_language" / "sdks" / "swift"
+    dist = swift_root / "mirror"
+    runtime_sources = swift_root / "Sources" / "BamlBridge"
+    destination = args.out.resolve()
+    if destination == repository or repository in destination.parents:
+        raise SystemExit("--out must be outside the source repository")
+    # A caller can choose a fresh staging directory cheaply. Refusing every
+    # existing path avoids turning a forgeable marker into deletion authority.
+    if destination.exists():
+        raise SystemExit(f"--out must not already exist: {destination}")
+    # The dist/ tree is the source of truth for the mirror's non-generated
+    # files: Package.swift template, README, .gitignore.
+    shutil.copytree(
+        dist,
+        destination,
+        symlinks=False,
+        ignore=shutil.ignore_patterns(".DS_Store", "__pycache__", "*.pyc"),
+    )
+    # The hand-written runtime package, copied verbatim.
+    shutil.copytree(runtime_sources, destination / "Sources" / "BamlBridge", symlinks=False)
+
+    # Stamp Package.swift placeholders.
+    manifest = destination / "Package.swift"
+    text = manifest.read_text(encoding="utf-8")
+    for placeholder, value in (
+        ("__ZIP_URL__", args.zip_url),
+        ("__CHECKSUM__", args.checksum),
+        ("__SOURCE_SHA__", args.source_sha),
+        ("__VERSION__", args.version),
+    ):
+        if placeholder not in text:
+            raise SystemExit(f"Package.swift is missing placeholder {placeholder}")
+        text = text.replace(placeholder, value)
+    manifest.write_text(text, encoding="utf-8")
+
+    (destination / "SOURCE_SHA").write_text(args.source_sha + "\n", encoding="utf-8")
+
+    # Belt-and-braces: no symlinks, no stray build output in the mirror.
+    for path in destination.rglob("*"):
+        if path.is_symlink():
+            raise SystemExit(f"mirror must not contain symlinks: {path}")
+        if path.name in {".build", ".swiftpm", "Binaries"}:
+            raise SystemExit(f"mirror must not contain build output: {path}")
+
+
+if __name__ == "__main__":
+    main()

@@ -13,7 +13,10 @@
 
 use std::{collections::BTreeMap, fmt::Write};
 
-use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
+use crate::{
+    rust_ident::{rust_field_ident, rust_field_value_ident},
+    types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage},
+};
 
 // ============================================================================
 // Fallibility
@@ -104,11 +107,15 @@ impl ClassNamespaceNode<'_> {
     }
 }
 
-fn build_class_namespace_tree(class_defs: &[NativeClassDef]) -> ClassNamespaceNode<'_> {
+fn build_class_namespace_tree<'a>(
+    class_defs: &'a [NativeClassDef],
+    package: &str,
+) -> ClassNamespaceNode<'a> {
     let mut root = ClassNamespaceNode::new();
+    let prefix = format!("{package}.");
     for def in class_defs {
         // namespace_prefix is e.g. "baml.media", "baml.errors", "baml"
-        let rest = def.namespace_prefix.strip_prefix("baml.").unwrap_or("");
+        let rest = def.namespace_prefix.strip_prefix(&prefix).unwrap_or("");
         if rest.is_empty() {
             // Root-level class
             root.classes.insert(def.name.clone(), def);
@@ -134,34 +141,45 @@ fn build_class_namespace_tree(class_defs: &[NativeClassDef]) -> ClassNamespaceNo
 /// - `baml.Array.length` → class `Array` at root, method `length`
 /// - `baml.media.Pdf.url` → namespace `media`, class `Pdf`, method `url`
 /// - `baml.deep_copy` → root free function
-/// - `baml.sys.now_ms` → namespace `sys`, free function `now_ms`
-fn build_namespace_tree(builtins: &[NativeBuiltin]) -> NamespaceNode<'_> {
+/// - `baml.sys.argv` → namespace `sys`, free function `argv`
+fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> NamespaceNode<'a> {
     let mut root = NamespaceNode::new();
+    let prefix = format!("{package}.");
 
     for b in builtins {
-        let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
+        let rest = b.path.strip_prefix(&prefix).unwrap_or(&b.path);
         let segments: Vec<&str> = rest.split('.').collect();
-        let baml_method_name = segments.last().unwrap().to_string();
-        let rust_method_name = camel_to_snake(&baml_method_name);
+        let last_idx = segments.len() - 1;
+
+        // The class is the first uppercase segment before the final method
+        // segment (if any). Everything after the class is the dispatch key:
+        // a method declared inside an `implements I { ... }` block keeps the
+        // interface segment in its runtime path (`...{Class}.I.method`), so the
+        // class dispatch must match on `I.method`. The Rust method name comes
+        // from the final segment alone so it stays a valid identifier.
+        let class_idx = segments[..last_idx]
+            .iter()
+            .position(|s| s.starts_with(|c: char| c.is_uppercase()));
+
+        let (ns_segments, class_name, baml_method_name): (Vec<&str>, Option<&str>, String) =
+            match class_idx {
+                Some(ci) => (
+                    segments[..ci].to_vec(),
+                    Some(segments[ci]),
+                    segments[ci + 1..].join("."),
+                ),
+                None => (
+                    segments[..last_idx].to_vec(),
+                    None,
+                    segments[last_idx].to_string(),
+                ),
+            };
 
         let entry = BuiltinEntry {
             builtin: b,
             baml_method_name,
-            rust_method_name,
+            rust_method_name: camel_to_snake(segments[last_idx]),
         };
-
-        let prefix_segments = &segments[..segments.len() - 1];
-
-        let mut ns_segments: Vec<&str> = Vec::new();
-        let mut class_name: Option<&str> = None;
-
-        for &seg in prefix_segments {
-            if seg.starts_with(|c: char| c.is_uppercase()) {
-                class_name = Some(seg);
-                break;
-            }
-            ns_segments.push(seg);
-        }
 
         let node = root.get_or_create_namespace(&ns_segments);
 
@@ -219,7 +237,8 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     writeln!(out, "{indent}impl<'a> {class_name}<'a> {{").unwrap();
 
     for field in &def.fields {
-        let field_name = &field.name;
+        let raw_name = &field.name;
+        let field_name = rust_field_ident(raw_name);
         match &field.field_type {
             BamlType::RustType => {
                 // Generic downcast accessor: fn _data<T: 'static>(&self, vm: &BexVm) -> &T
@@ -236,7 +255,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    .expect(\"{class_name}.{field_name}: downcast failed\")"
+                    "{inner2}    .expect(\"{class_name}.{raw_name}: downcast failed\")"
                 )
                 .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
@@ -251,7 +270,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
+                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{raw_name}: expected Int\"))"
                 )
                 .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
@@ -272,13 +291,13 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner2}        bex_vm_types::Object::Float(f) => *f,").unwrap();
                 writeln!(
                     out,
-                    "{inner2}        _ => panic!(\"{class_name}.{field_name}: expected Float\"),"
+                    "{inner2}        _ => panic!(\"{class_name}.{raw_name}: expected Float\"),"
                 )
                 .unwrap();
                 writeln!(out, "{inner2}    }},").unwrap();
                 writeln!(
                     out,
-                    "{inner2}    None => panic!(\"{class_name}.{field_name}: expected Float\"),"
+                    "{inner2}    None => panic!(\"{class_name}.{raw_name}: expected Float\"),"
                 )
                 .unwrap();
                 writeln!(out, "{inner2}}}").unwrap();
@@ -294,7 +313,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
+                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{raw_name}: expected Bool\"))"
                 )
                 .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
@@ -314,7 +333,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    .expect(\"{class_name}.{field_name}: expected String\")"
+                    "{inner2}    .expect(\"{class_name}.{raw_name}: expected String\")"
                 )
                 .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
@@ -333,7 +352,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    .expect(\"{class_name}.{field_name}: expected Array\")"
+                    "{inner2}    .expect(\"{class_name}.{raw_name}: expected Array\")"
                 )
                 .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
@@ -352,7 +371,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    .expect(\"{class_name}.{field_name}: expected Map\")"
+                    "{inner2}    .expect(\"{class_name}.{raw_name}: expected Map\")"
                 )
                 .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
@@ -360,7 +379,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             BamlType::Optional(inner_ty) => {
                 // For optional fields, return Option<T> with appropriate accessor
                 let (ret_type, some_expr) =
-                    view_optional_type_and_expr(class_name, field_name, inner_ty, field.index);
+                    view_optional_type_and_expr(class_name, raw_name, inner_ty, field.index);
                 writeln!(
                     out,
                     "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> {ret_type} {{"
@@ -404,13 +423,13 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}        _ => panic!(\"{class_name}.{field_name}: expected Bigint\"),"
+                    "{inner2}        _ => panic!(\"{class_name}.{raw_name}: expected Bigint\"),"
                 )
                 .unwrap();
                 writeln!(out, "{inner2}    }},").unwrap();
                 writeln!(
                     out,
-                    "{inner2}    None => panic!(\"{class_name}.{field_name}: expected Bigint\"),"
+                    "{inner2}    None => panic!(\"{class_name}.{raw_name}: expected Bigint\"),"
                 )
                 .unwrap();
                 writeln!(out, "{inner2}}}").unwrap();
@@ -514,7 +533,12 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     writeln!(out, "{indent}pub struct {class_name} {{").unwrap();
     for field in &def.fields {
         let rust_type = copy_field_type(&field.field_type);
-        writeln!(out, "{inner}pub {}: {rust_type},", field.name).unwrap();
+        writeln!(
+            out,
+            "{inner}pub {}: {rust_type},",
+            rust_field_ident(&field.name)
+        )
+        .unwrap();
     }
     writeln!(out, "{indent}}}\n").unwrap();
 
@@ -530,8 +554,12 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 
     // Convert each field to a Value
     for field in &def.fields {
-        let conversion = copy_field_to_value(&field.name, &field.field_type);
-        writeln!(out, "{inner2}let f_{} = {conversion};", field.name).unwrap();
+        let value_ident = rust_field_value_ident(&field.name);
+        let conversion = copy_field_to_value(
+            &rust_field_ident(&field.name).to_string(),
+            &field.field_type,
+        );
+        writeln!(out, "{inner2}let {value_ident} = {conversion};").unwrap();
     }
 
     // Build the fields vec
@@ -544,7 +572,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
         if i > 0 {
             out.push_str(", ");
         }
-        write!(out, "f_{}", field.name).unwrap();
+        write!(out, "{}", rust_field_value_ident(&field.name)).unwrap();
     }
     out.push_str("]))\n");
     writeln!(out, "{inner}}}").unwrap();
@@ -656,6 +684,12 @@ fn class_dispatch_name(namespace_prefix: &str, class_name: &str) -> String {
     }
 }
 
+/// The root trait name for a stdlib package: `baml` → `BamlPackageBaml`,
+/// `reflect` → `BamlPackageReflect`.
+fn package_trait_name(package: &str) -> String {
+    format!("BamlPackage{}", to_pascal_case(package))
+}
+
 fn namespace_trait_name(name: &str) -> String {
     let pascal = to_pascal_case(name);
     format!("BamlNamespace{pascal}")
@@ -685,8 +719,21 @@ fn namespace_dispatch_name(name: &str) -> String {
 /// - `Type` from `bex_vm_types`
 /// - `MediaKind` from `baml_type`
 pub fn generate_native_trait(builtins: &[NativeBuiltin], class_defs: &[NativeClassDef]) -> String {
-    let tree = build_namespace_tree(builtins);
-    let class_tree = build_class_namespace_tree(class_defs);
+    generate_native_trait_for(baml_builtins2::PACKAGE_BAML, builtins, class_defs)
+}
+
+/// [`generate_native_trait`] for one stdlib package: emits that package's
+/// `BamlPackage<Pascal>` root trait (with its `get_native_fn` dispatcher) over
+/// the builtins extracted for it. Adding a `$rust_function` to the package's
+/// `.baml` source adds a required trait method, so a missing Rust
+/// implementation is a compile error rather than a runtime lookup miss.
+pub fn generate_native_trait_for(
+    package: &str,
+    builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+) -> String {
+    let tree = build_namespace_tree(builtins, package);
+    let class_tree = build_class_namespace_tree(class_defs, package);
     let mut out = String::new();
 
     // Emit view and copy modules first (they are referenced by trait signatures later)
@@ -694,7 +741,7 @@ pub fn generate_native_trait(builtins: &[NativeBuiltin], class_defs: &[NativeCla
     emit_copy_module(&mut out, &class_tree);
 
     emit_subtree_traits(&mut out, &tree, "");
-    emit_root_trait(&mut out, &tree);
+    emit_root_trait(&mut out, &tree, package);
 
     out
 }
@@ -860,7 +907,8 @@ fn emit_namespace_trait(out: &mut String, ns_name: &str, node: &NamespaceNode) {
 // Root trait emission (BamlPackageBaml)
 // ============================================================================
 
-fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
+fn emit_root_trait(out: &mut String, root: &NamespaceNode, package: &str) {
+    let trait_name = package_trait_name(package);
     let mut supertraits: Vec<String> = Vec::new();
 
     for class_name in root.classes.keys() {
@@ -871,10 +919,10 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
     }
 
     if supertraits.is_empty() {
-        out.push_str("pub trait BamlPackageBaml {\n");
+        writeln!(out, "pub trait {trait_name} {{").unwrap();
     } else {
         let bounds = supertraits.join(" + ");
-        writeln!(out, "pub trait BamlPackageBaml: {bounds} {{").unwrap();
+        writeln!(out, "pub trait {trait_name}: {bounds} {{").unwrap();
     }
 
     for entry in &root.free_fns {
@@ -889,7 +937,12 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
     }
 
     out.push_str("    fn get_native_fn(path: &str) -> Option<NativeFunction> {\n");
-    out.push_str("        let rest = path.strip_prefix(\"baml.\")?;\n");
+    writeln!(
+        out,
+        "        let rest = path.strip_prefix({:?})?;",
+        format!("{package}.")
+    )
+    .unwrap();
     out.push_str("        match rest.split_once('.') {\n");
 
     for class_name in root.classes.keys() {
@@ -1118,10 +1171,10 @@ fn constructor_media_class(b: &NativeBuiltin) -> Option<&str> {
     {
         return None;
     }
-    let rest = b.path.strip_prefix("baml.")?;
-    let segments: Vec<&str> = rest.split('.').collect();
-    // Need at least 2 segments for ClassName.method (e.g. "media.Pdf.from_url")
-    if segments.len() < 2 {
+    // Indexed from the end, so this needs no package knowledge: the class is
+    // always the segment before the method (`baml.media.Pdf.from_url`).
+    let segments: Vec<&str> = b.path.split('.').collect();
+    if segments.len() < 3 {
         return None;
     }
     let class_seg = segments[segments.len() - 2];
@@ -1138,10 +1191,14 @@ fn constructor_media_class(b: &NativeBuiltin) -> Option<&str> {
 }
 
 fn constructor_media_namespace(b: &NativeBuiltin) -> &str {
-    let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
-    let segments: Vec<&str> = rest.split('.').collect();
-    // segments = ["media", "Pdf", "from_url"] → namespace = "media"
-    if segments.len() >= 3 { segments[0] } else { "" }
+    // `baml.media.Pdf.from_url` → `media`: the segment before the class,
+    // indexed from the end so no package prefix is assumed.
+    let segments: Vec<&str> = b.path.split('.').collect();
+    if segments.len() >= 4 {
+        segments[segments.len() - 3]
+    } else {
+        ""
+    }
 }
 
 // ============================================================================
@@ -2329,10 +2386,6 @@ mod tests {
         assert!(
             output.contains("fn deep_copy(vm: &mut BexVm, value: &Value) -> Value;"),
             "BamlPackageBaml should have deep_copy:\n{output}"
-        );
-        assert!(
-            output.contains("fn deep_equals(vm: &BexVm, a: &Value, b: &Value) -> bool;"),
-            "BamlPackageBaml should have deep_equals with &BexVm:\n{output}"
         );
     }
 

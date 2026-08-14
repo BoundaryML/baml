@@ -173,480 +173,187 @@ function foo() -> int {
 
 //----
 //- diagnostics
-// error: Expected block after if condition, found ')'
-//    ╭─[ parens.baml:9:11 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[parens.baml:9:11]
 //  9 │    if true) { }
-//    │           ┬
-//    │           ╰── Expected block after if condition, found ')'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected expression, found ')'
-//    ╭─[ parens.baml:9:11 ]
-//    │
-//  9 │    if true) { }
-//    │           ┬
-//    │           ╰── Expected expression, found ')'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected ')', found '{'
-//     ╭─[ parens.baml:11:13 ]
-//     │
+//    ·           ┬
+//    ·           ╰── expected `block after if condition`, found `')'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:11:13]
 //  11 │    if (true { }
-//     │             ┬
-//     │             ╰── Expected ')', found '{'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected ')', found '{'
-//     ╭─[ parens.baml:17:16 ]
-//     │
+//     ·             ┬
+//     ·             ╰── expected `')'`, found `'{'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:17:16]
 //  17 │    while (true {}
-//     │                ┬
-//     │                ╰── Expected ')', found '{'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after while condition, found ')'
-//     ╭─[ parens.baml:19:14 ]
-//     │
+//     ·                ┬
+//     ·                ╰── expected `')'`, found `'{'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:19:14]
 //  19 │    while true) {}
-//     │              ┬
-//     │              ╰── Expected block after while condition, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ')'
-//     ╭─[ parens.baml:19:14 ]
-//     │
-//  19 │    while true) {}
-//     │              ┬
-//     │              ╰── Expected expression, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected 'let', found ';'
-//     ╭─[ parens.baml:25:8 ]
-//     │
+//     ·              ┬
+//     ·              ╰── expected `block after while condition`, found `')'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:25:8]
 //  25 │    for ;; { }
-//     │        ┬
-//     │        ╰── Expected 'let', found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected pattern, found ';'
-//     ╭─[ parens.baml:25:8 ]
-//     │
-//  25 │    for ;; { }
-//     │        ┬
-//     │        ╰── Expected pattern, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected in, found ';'
-//     ╭─[ parens.baml:25:9 ]
-//     │
-//  25 │    for ;; { }
-//     │         ┬
-//     │         ╰── Expected in, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ';'
-//     ╭─[ parens.baml:25:9 ]
-//     │
-//  25 │    for ;; { }
-//     │         ┬
-//     │         ╰── Expected expression, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected ')', found for
-//     ╭─[ parens.baml:29:4 ]
-//     │
+//     ·        ┬
+//     ·        ╰── expected `'('`, found `';'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:27:12]
+//  27 │    for (;; {}
+//     ·            ┬
+//     ·            ╰── expected `')'`, found `'{'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:29:8]
 //  29 │    for ;;) {}
-//     │    ─┬─
-//     │     ╰─── Expected ')', found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found for
-//     ╭─[ parens.baml:29:4 ]
-//     │
-//  29 │    for ;;) {}
-//     │    ─┬─
-//     │     ╰─── Expected block after for expression, found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected 'let', found ';'
-//     ╭─[ parens.baml:29:8 ]
-//     │
-//  29 │    for ;;) {}
-//     │        ┬
-//     │        ╰── Expected 'let', found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected pattern, found ';'
-//     ╭─[ parens.baml:29:8 ]
-//     │
-//  29 │    for ;;) {}
-//     │        ┬
-//     │        ╰── Expected pattern, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected in, found ';'
-//     ╭─[ parens.baml:29:9 ]
-//     │
-//  29 │    for ;;) {}
-//     │         ┬
-//     │         ╰── Expected in, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ';'
-//     ╭─[ parens.baml:29:9 ]
-//     │
-//  29 │    for ;;) {}
-//     │         ┬
-//     │         ╰── Expected expression, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found ')'
-//     ╭─[ parens.baml:29:10 ]
-//     │
-//  29 │    for ;;) {}
-//     │          ┬
-//     │          ╰── Expected block after for expression, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ')'
-//     ╭─[ parens.baml:29:10 ]
-//     │
-//  29 │    for ;;) {}
-//     │          ┬
-//     │          ╰── Expected expression, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected ')', found for
-//     ╭─[ parens.baml:39:4 ]
-//     │
+//     ·        ┬
+//     ·        ╰── expected `'('`, found `';'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:39:4]
 //  39 │    for ;;i += x) {}
-//     │    ─┬─
-//     │     ╰─── Expected ')', found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found for
-//     ╭─[ parens.baml:39:4 ]
-//     │
+//     ·    ─┬─
+//     ·     ╰── expected `')'`, found `for`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:39:8]
 //  39 │    for ;;i += x) {}
-//     │    ─┬─
-//     │     ╰─── Expected block after for expression, found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected 'let', found ';'
-//     ╭─[ parens.baml:39:8 ]
-//     │
-//  39 │    for ;;i += x) {}
-//     │        ┬
-//     │        ╰── Expected 'let', found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected pattern, found ';'
-//     ╭─[ parens.baml:39:8 ]
-//     │
-//  39 │    for ;;i += x) {}
-//     │        ┬
-//     │        ╰── Expected pattern, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected in, found ';'
-//     ╭─[ parens.baml:39:9 ]
-//     │
-//  39 │    for ;;i += x) {}
-//     │         ┬
-//     │         ╰── Expected in, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ';'
-//     ╭─[ parens.baml:39:9 ]
-//     │
-//  39 │    for ;;i += x) {}
-//     │         ┬
-//     │         ╰── Expected expression, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found identifier
-//     ╭─[ parens.baml:39:10 ]
-//     │
-//  39 │    for ;;i += x) {}
-//     │          ┬
-//     │          ╰── Expected block after for expression, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ')'
-//     ╭─[ parens.baml:39:16 ]
-//     │
-//  39 │    for ;;i += x) {}
-//     │                ┬
-//     │                ╰── Expected expression, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected 'let', found ';'
-//     ╭─[ parens.baml:41:8 ]
-//     │
+//     ·        ┬
+//     ·        ╰── expected `'('`, found `';'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:41:8]
 //  41 │    for ;;i += x {}
-//     │        ┬
-//     │        ╰── Expected 'let', found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected pattern, found ';'
-//     ╭─[ parens.baml:41:8 ]
-//     │
-//  41 │    for ;;i += x {}
-//     │        ┬
-//     │        ╰── Expected pattern, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected in, found ';'
-//     ╭─[ parens.baml:41:9 ]
-//     │
-//  41 │    for ;;i += x {}
-//     │         ┬
-//     │         ╰── Expected in, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ';'
-//     ╭─[ parens.baml:41:9 ]
-//     │
-//  41 │    for ;;i += x {}
-//     │         ┬
-//     │         ╰── Expected expression, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found identifier
-//     ╭─[ parens.baml:41:10 ]
-//     │
-//  41 │    for ;;i += x {}
-//     │          ┬
-//     │          ╰── Expected block after for expression, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected ')', found for
-//     ╭─[ parens.baml:49:4 ]
-//     │
+//     ·        ┬
+//     ·        ╰── expected `'('`, found `';'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:49:4]
 //  49 │    for ;;i = x) {}
-//     │    ─┬─
-//     │     ╰─── Expected ')', found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found for
-//     ╭─[ parens.baml:49:4 ]
-//     │
+//     ·    ─┬─
+//     ·     ╰── expected `')'`, found `for`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:49:8]
 //  49 │    for ;;i = x) {}
-//     │    ─┬─
-//     │     ╰─── Expected block after for expression, found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected 'let', found ';'
-//     ╭─[ parens.baml:49:8 ]
-//     │
-//  49 │    for ;;i = x) {}
-//     │        ┬
-//     │        ╰── Expected 'let', found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected pattern, found ';'
-//     ╭─[ parens.baml:49:8 ]
-//     │
-//  49 │    for ;;i = x) {}
-//     │        ┬
-//     │        ╰── Expected pattern, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected in, found ';'
-//     ╭─[ parens.baml:49:9 ]
-//     │
-//  49 │    for ;;i = x) {}
-//     │         ┬
-//     │         ╰── Expected in, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ';'
-//     ╭─[ parens.baml:49:9 ]
-//     │
-//  49 │    for ;;i = x) {}
-//     │         ┬
-//     │         ╰── Expected expression, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found identifier
-//     ╭─[ parens.baml:49:10 ]
-//     │
-//  49 │    for ;;i = x) {}
-//     │          ┬
-//     │          ╰── Expected block after for expression, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ')'
-//     ╭─[ parens.baml:49:15 ]
-//     │
-//  49 │    for ;;i = x) {}
-//     │               ┬
-//     │               ╰── Expected expression, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected 'let', found ';'
-//     ╭─[ parens.baml:51:8 ]
-//     │
+//     ·        ┬
+//     ·        ╰── expected `'('`, found `';'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:51:8]
 //  51 │    for ;;i = x {}
-//     │        ┬
-//     │        ╰── Expected 'let', found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected pattern, found ';'
-//     ╭─[ parens.baml:51:8 ]
-//     │
-//  51 │    for ;;i = x {}
-//     │        ┬
-//     │        ╰── Expected pattern, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected in, found ';'
-//     ╭─[ parens.baml:51:9 ]
-//     │
-//  51 │    for ;;i = x {}
-//     │         ┬
-//     │         ╰── Expected in, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ';'
-//     ╭─[ parens.baml:51:9 ]
-//     │
-//  51 │    for ;;i = x {}
-//     │         ┬
-//     │         ╰── Expected expression, found ';'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found identifier
-//     ╭─[ parens.baml:51:10 ]
-//     │
-//  51 │    for ;;i = x {}
-//     │          ┬
-//     │          ╰── Expected block after for expression, found identifier
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found for
-//     ╭─[ parens.baml:57:4 ]
-//     │
+//     ·        ┬
+//     ·        ╰── expected `'('`, found `';'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:57:21]
 //  57 │    for (let a in as {}
-//     │    ─┬─
-//     │     ╰─── Expected block after for expression, found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected ')', found for
-//     ╭─[ parens.baml:59:4 ]
-//     │
+//     ·                     ┬
+//     ·                     ╰── expected `')'`, found `'{'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[parens.baml:59:19]
 //  59 │    for let a in as) {}
-//     │    ─┬─
-//     │     ╰─── Expected ')', found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found for
-//     ╭─[ parens.baml:59:4 ]
-//     │
-//  59 │    for let a in as) {}
-//     │    ─┬─
-//     │     ╰─── Expected block after for expression, found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found ')'
-//     ╭─[ parens.baml:59:19 ]
-//     │
-//  59 │    for let a in as) {}
-//     │                   ┬
-//     │                   ╰── Expected block after for expression, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found ')'
-//     ╭─[ parens.baml:59:19 ]
-//     │
-//  59 │    for let a in as) {}
-//     │                   ┬
-//     │                   ╰── Expected expression, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: assignment is not allowed in expression position; assignment is a statement
-//     ╭─[ parens.baml:35:11 ]
-//     │
+//     ·                   ┬
+//     ·                   ╰── expected `block after for expression`, found `')'`
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:35:11]
 //  35 │    for (;;i += x) {}
-//     │           ───┬──
-//     │              ╰──── assignment not allowed here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: assignment is not allowed in expression position; assignment is a statement
-//     ╭─[ parens.baml:37:11 ]
-//     │
+//     ·           ───┬──
+//     ·              ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:37:11]
 //  37 │    for (;;i += x {}
-//     │           ────┬────
-//     │               ╰────── assignment not allowed here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: assignment is not allowed in expression position; assignment is a statement
-//     ╭─[ parens.baml:45:11 ]
-//     │
+//     ·           ────┬────
+//     ·               ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:39:10]
+//  39 │    for ;;i += x) {}
+//     ·          ───┬──
+//     ·             ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:41:10]
+//  41 │    for ;;i += x {}
+//     ·          ───┬──
+//     ·             ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:45:11]
 //  45 │    for (;;i = x) {}
-//     │           ──┬──
-//     │             ╰──── assignment not allowed here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: assignment is not allowed in expression position; assignment is a statement
-//     ╭─[ parens.baml:47:11 ]
-//     │
+//     ·           ──┬──
+//     ·             ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:47:11]
 //  47 │    for (;;i = x {}
-//     │           ────┬───
-//     │               ╰───── assignment not allowed here
-//     │
-//     │ Note: Error code: E0010
-// ────╯
+//     ·           ────┬───
+//     ·               ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:49:10]
+//  49 │    for ;;i = x) {}
+//     ·          ──┬──
+//     ·            ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:51:10]
+//  51 │    for ;;i = x {}
+//     ·          ──┬──
+//     ·            ╰── assignment not allowed here
+//     ╰────

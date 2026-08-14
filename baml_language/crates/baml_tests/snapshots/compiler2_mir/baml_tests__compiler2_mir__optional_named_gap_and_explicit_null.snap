@@ -1,32 +1,6 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
 ---
-fn user.explicit_null() -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-
-    bb0: {
-        _0 = call const fn user.is_null(const null) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.omitted_middle() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = call const fn user.score(const "cats", const <omitted>, const "recent") -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.score(query: string, max_results: int, filter: string | null) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -101,6 +75,32 @@ fn user.is_null(value: int | null) -> bool {
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.omitted_middle() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = call const fn user.score(const "cats", const <omitted>, const "recent") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.explicit_null() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = call const fn user.is_null(const null) -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }

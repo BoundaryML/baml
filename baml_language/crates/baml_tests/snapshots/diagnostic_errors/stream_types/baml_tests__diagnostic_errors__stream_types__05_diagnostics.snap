@@ -2,50 +2,44 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] error: Duplicate class `Inner`
-    ╭─[ complex.baml:7:7 ]
-    │
-  7 │ class Inner {
-    │       ──┬──  
-    │         ╰──── first defined as class here
-    │
-    ├─[ main.baml:31:7 ]
-    │
+  [validation] E0011
+
+  × duplicate class `Inner`
+    ╭─[main.baml:31:7]
  31 │ class Inner {
-    │       ──┬──  
-    │         ╰──── duplicate class definition
-    │ 
-    │ Note: Error code: E0011
-────╯
+    ·       ──┬──
+    ·         ╰── duplicate class definition
+    ╰────
+  ╰─▶   ☞ first defined as class here
+         ╭─[complex.baml:7:7]
+       7 │ class Inner {
+         ·       ─────
+         ╰────
 
-  [validation] error: Name `Foo` defined 2 times as: class, type
-     ╭─[ basic.baml:1:7 ]
-     │
-   1 │ class Foo {
-     │       ─┬─  
-     │        ╰─── first defined as class here
-     │
-     ├─[ main.baml:145:6 ]
-     │
- 145 │ type Foo = int | string
-     │      ─┬─  
-     │       ╰─── duplicate type definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
+  [validation] E0011
 
-  [validation] error: Name `Bar` defined 2 times as: class, type
-     ╭─[ basic.baml:8:7 ]
-     │
-   8 │ class Bar {
-     │       ─┬─  
-     │        ╰─── first defined as class here
-     │
-     ├─[ main.baml:146:6 ]
-     │
- 146 │ type Bar = Foo | bool
-     │      ─┬─  
-     │       ╰─── duplicate type definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
+  × name `Foo` defined 2 times as: class, type
+     ╭─[main.baml:138:6]
+ 138 │ type Foo = int | string
+     ·      ─┬─
+     ·       ╰── duplicate type definition
+     ╰────
+  ╰─▶   ☞ first defined as class here
+         ╭─[basic.baml:1:7]
+       1 │ class Foo {
+         ·       ───
+         ╰────
+
+  [validation] E0011
+
+  × name `Bar` defined 2 times as: class, type
+     ╭─[main.baml:139:6]
+ 139 │ type Bar = Foo | bool
+     ·      ─┬─
+     ·       ╰── duplicate type definition
+     ╰────
+  ╰─▶   ☞ first defined as class here
+         ╭─[basic.baml:8:7]
+       8 │ class Bar {
+         ·       ───
+         ╰────

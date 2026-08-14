@@ -1,0 +1,18 @@
+{
+  "slug": "climbing-stairs",
+  "id": 70,
+  "title": "Climbing Stairs",
+  "difficulty": "Easy",
+  "category": "Dynamic Programming",
+  "statement": "You are climbing a staircase that takes `n` steps to reach the top. Each time you can climb either `1` or `2` steps. In how many **distinct ways** can you climb to the top?\n\n**Example**\n\n```\nn = 2  => 2   // (1+1), (2)\nn = 3  => 3   // (1+1+1), (1+2), (2+1)\n```",
+  "signature": "function ClimbStairs(n: int) -> int",
+  "starter": "function ClimbStairs(n: int) -> int {\n  // Return the number of distinct ways to climb n steps (1 or 2 at a time).\n  return 0;\n}",
+  "solution": "function ClimbStairs(n: int) -> int {\n  if (n <= 2) {\n    return n;\n  }\n  let a = 1;\n  let b = 2;\n  let i = 3;\n  while (i <= n) {\n    let c = a + b;\n    a = b;\n    b = c;\n    i += 1;\n  }\n  return b;\n}",
+  "tests": [
+    { "call": "ClimbStairs(2)", "expected": "2" },
+    { "call": "ClimbStairs(3)", "expected": "3" },
+    { "call": "ClimbStairs(5)", "expected": "8" },
+    { "call": "ClimbStairs(1)", "expected": "1", "hidden": true },
+    { "call": "ClimbStairs(10)", "expected": "89", "hidden": true }
+  ]
+}

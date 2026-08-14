@@ -142,12 +142,177 @@ impl TypeRefStore {
         self.types.iter()
     }
 
-    pub fn len(&self) -> usize {
+    #[cfg(test)]
+    fn len(&self) -> usize {
         self.types.len()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.types.is_empty()
+    /// A [`Display`](std::fmt::Display) view of `id`, rendering BAML source-like text.
+    ///
+    /// Byte-identical to [`ast::TypeExpr`](baml_compiler2_ast::ast::TypeExpr)'s
+    /// `Display`. The arena split moved impl/interface *targets* from spanned
+    /// `TypeExpr`s (which formatted directly) to [`TypeRefId`]s, but the mangled
+    /// `Interface$for$Target` / `Target.method` names built from those targets
+    /// are a cross-module contract — MIR, emit, and the runtime must agree on the
+    /// exact string. Rendering the target here, rather than re-deriving it from
+    /// resolved types, keeps those names identical to the pre-split output.
+    pub fn display(&self, id: TypeRefId) -> TypeRefDisplay<'_> {
+        TypeRefDisplay { store: self, id }
+    }
+}
+
+/// A [`Display`](std::fmt::Display) view of one [`TypeRef`] node, resolving child ids through its
+/// owning [`TypeRefStore`]. Built by [`TypeRefStore::display`].
+///
+/// The formatting mirrors `ast::TypeExprKind`'s `Display` arm-for-arm; the two
+/// must stay in lockstep so mangled names survive the arena split unchanged.
+pub struct TypeRefDisplay<'a> {
+    store: &'a TypeRefStore,
+    id: TypeRefId,
+}
+
+impl std::fmt::Display for TypeRefDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn needs_parens(store: &TypeRefStore, id: TypeRefId) -> bool {
+            matches!(
+                store[id].kind,
+                TypeRefKind::Union { .. } | TypeRefKind::Function { .. }
+            )
+        }
+
+        fn write_postfix_base(
+            store: &TypeRefStore,
+            id: TypeRefId,
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
+            if needs_parens(store, id) {
+                write!(f, "({})", store.display(id))
+            } else {
+                write!(f, "{}", store.display(id))
+            }
+        }
+
+        let store = self.store;
+        match &store[self.id].kind {
+            TypeRefKind::Path {
+                segments,
+                generic_args,
+                associated_type_bindings,
+            } => {
+                let path = segments
+                    .iter()
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                write!(f, "{path}")?;
+                if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
+                    write!(f, "<")?;
+                    let mut first = true;
+                    for &arg in generic_args {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{}", store.display(arg))?;
+                    }
+                    for binding in associated_type_bindings {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{} = {}", binding.name, store.display(binding.ty))?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            TypeRefKind::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+            } => {
+                if let Some(interface) = interface {
+                    write!(
+                        f,
+                        "({} as {}).{member}",
+                        store.display(*base),
+                        store.display(*interface)
+                    )
+                } else {
+                    write_postfix_base(store, *base, f)?;
+                    write!(f, ".{member}")
+                }
+            }
+            TypeRefKind::Int => write!(f, "int"),
+            TypeRefKind::Bigint => write!(f, "bigint"),
+            TypeRefKind::Float => write!(f, "float"),
+            TypeRefKind::String => write!(f, "string"),
+            TypeRefKind::Bool => write!(f, "bool"),
+            TypeRefKind::Null => write!(f, "null"),
+            TypeRefKind::Never => write!(f, "never"),
+            TypeRefKind::Void => write!(f, "void"),
+            TypeRefKind::Uint8Array => write!(f, "uint8array"),
+            TypeRefKind::Media { kind } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
+            TypeRefKind::Optional { inner } => {
+                write_postfix_base(store, *inner, f)?;
+                write!(f, "?")
+            }
+            TypeRefKind::List { inner } => {
+                write_postfix_base(store, *inner, f)?;
+                write!(f, "[]")
+            }
+            TypeRefKind::Map { key, value } => {
+                write!(f, "map<{}, {}>", store.display(*key), store.display(*value))
+            }
+            TypeRefKind::Union { variants } => {
+                for (i, &v) in variants.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " | ")?;
+                    }
+                    if matches!(store[v].kind, TypeRefKind::Function { .. }) {
+                        write!(f, "({})", store.display(v))?;
+                    } else {
+                        write!(f, "{}", store.display(v))?;
+                    }
+                }
+                Ok(())
+            }
+            TypeRefKind::Literal { value } => write!(f, "{value}"),
+            TypeRefKind::Function {
+                params,
+                ret,
+                throws,
+            } => {
+                write!(f, "(")?;
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if let Some(name) = &p.name {
+                        let optional = if p.optional { "?" } else { "" };
+                        write!(f, "{}{}: {}", name.as_str(), optional, store.display(p.ty))?;
+                    } else {
+                        write!(f, "{}", store.display(p.ty))?;
+                    }
+                }
+                write!(f, ") -> ")?;
+                if matches!(store[*ret].kind, TypeRefKind::Function { .. }) {
+                    write!(f, "({})", store.display(*ret))?;
+                } else {
+                    write!(f, "{}", store.display(*ret))?;
+                }
+                if let Some(throws) = throws {
+                    write!(f, " throws {}", store.display(*throws))?;
+                }
+                Ok(())
+            }
+            TypeRefKind::BuiltinUnknown => write!(f, "unknown"),
+            TypeRefKind::Type => write!(f, "type"),
+            TypeRefKind::Rust => write!(f, "$rust_type"),
+            TypeRefKind::Error => write!(f, "error"),
+            TypeRefKind::Unknown => write!(f, "?"),
+            TypeRefKind::Infer => write!(f, "_"),
+        }
     }
 }
 
@@ -443,5 +608,131 @@ mod tests {
         );
 
         assert_ne!(int_keyed, bool_keyed);
+    }
+
+    /// `TypeRefStore::display` exists so the mangled `Interface$for$Target` /
+    /// `Target.method` names built from impl/interface targets survive the arena
+    /// split unchanged. That only holds if it renders byte-for-byte the same text
+    /// as `ast::TypeExpr`'s `Display` — assert exactly that over the paren- and
+    /// recursion-sensitive shapes (the primitive/literal/media arms are verbatim
+    /// copies, so they need no separate guard).
+    #[test]
+    fn display_is_byte_identical_to_ast() {
+        use baml_compiler2_ast::ast::{AssociatedTypeBinding, FunctionTypeParam};
+
+        let sp = span(0, 0);
+        let prim = |k: TypeExprKind| k.at(sp);
+        let path = |name: &str| {
+            TypeExprKind::Path {
+                segments: name.split('.').map(Name::new).collect(),
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![],
+            }
+            .at(sp)
+        };
+        let func = |params, ret, throws| {
+            TypeExprKind::Function {
+                params,
+                ret: Box::new(ret),
+                throws,
+                attrs: vec![],
+            }
+            .at(sp)
+        };
+
+        let cases: Vec<TypeExpr> = vec![
+            prim(TypeExprKind::Int { attrs: vec![] }),
+            prim(TypeExprKind::String { attrs: vec![] }),
+            path("User"),
+            path("baml.http.Request"),
+            // `Stream<int, Item = string>` — generic args plus an assoc binding.
+            TypeExprKind::Path {
+                segments: vec![Name::new("Stream")],
+                generic_args: vec![prim(TypeExprKind::Int { attrs: vec![] })],
+                associated_type_bindings: vec![AssociatedTypeBinding {
+                    name: Name::new("Item"),
+                    ty: Box::new(prim(TypeExprKind::String { attrs: vec![] })),
+                }],
+                attrs: vec![],
+            }
+            .at(sp),
+            // `int?`, `int[]`, `map<string, int[]>`.
+            TypeExprKind::Optional {
+                inner: Box::new(prim(TypeExprKind::Int { attrs: vec![] })),
+                attrs: vec![],
+            }
+            .at(sp),
+            TypeExprKind::List {
+                inner: Box::new(prim(TypeExprKind::Int { attrs: vec![] })),
+                attrs: vec![],
+            }
+            .at(sp),
+            map_of_string_to_int_list(0, vec![]),
+            // `int | string`, and `int | (() -> void)` (union parenthesizes fns).
+            TypeExprKind::Union {
+                variants: vec![
+                    prim(TypeExprKind::Int { attrs: vec![] }),
+                    prim(TypeExprKind::String { attrs: vec![] }),
+                ],
+                attrs: vec![],
+            }
+            .at(sp),
+            TypeExprKind::Union {
+                variants: vec![
+                    prim(TypeExprKind::Int { attrs: vec![] }),
+                    func(vec![], prim(TypeExprKind::Void { attrs: vec![] }), None),
+                ],
+                attrs: vec![],
+            }
+            .at(sp),
+            // `(a: int, b?: string) -> bool throws MyError`.
+            func(
+                vec![
+                    FunctionTypeParam {
+                        name: Some(Name::new("a")),
+                        optional: false,
+                        ty: prim(TypeExprKind::Int { attrs: vec![] }),
+                    },
+                    FunctionTypeParam {
+                        name: Some(Name::new("b")),
+                        optional: true,
+                        ty: prim(TypeExprKind::String { attrs: vec![] }),
+                    },
+                ],
+                prim(TypeExprKind::Bool { attrs: vec![] }),
+                Some(Box::new(path("MyError"))),
+            ),
+            // `() -> (() -> void)` — a function return parenthesizes a function.
+            func(
+                vec![],
+                func(vec![], prim(TypeExprKind::Void { attrs: vec![] }), None),
+                None,
+            ),
+            // `T.Item` and `(T as Iterator).Item`.
+            TypeExprKind::AssociatedTypeProjection {
+                base: Box::new(path("T")),
+                interface: None,
+                member: Name::new("Item"),
+                attrs: vec![],
+            }
+            .at(sp),
+            TypeExprKind::AssociatedTypeProjection {
+                base: Box::new(path("T")),
+                interface: Some(Box::new(path("Iterator"))),
+                member: Name::new("Item"),
+                attrs: vec![],
+            }
+            .at(sp),
+        ];
+
+        for te in &cases {
+            let (store, _, root) = lower(te);
+            assert_eq!(
+                format!("{te}"),
+                format!("{}", store.display(root)),
+                "TypeRef Display must byte-match ast::TypeExpr Display",
+            );
+        }
     }
 }

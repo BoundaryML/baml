@@ -81,22 +81,6 @@ fn decode_regular_string_literal_text(text: &str) -> String {
     }
 }
 
-fn decode_raw_string_literal_text(text: &str) -> Option<String> {
-    let trimmed = text.trim();
-    let hash_count = trimmed.chars().take_while(|&c| c == '#').count();
-    if hash_count == 0 {
-        return None;
-    }
-
-    let rest = &trimmed[hash_count..];
-    let closing = format!("\"{}", &trimmed[..hash_count]);
-    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
-        return None;
-    }
-
-    Some(rest[1..rest.len() - 1 - hash_count].to_string())
-}
-
 /// Trait for all AST nodes.
 pub trait BamlAstNode: AstNode<Language = crate::BamlLanguage> {
     /// Get the syntax kind of this node.
@@ -170,22 +154,17 @@ ast_node!(ConfigItem, CONFIG_ITEM);
 ast_node!(ConfigValue, CONFIG_VALUE);
 ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
+ast_node!(ToolsField, TOOLS_FIELD);
+ast_node!(SpecExpr, SPEC_EXPR);
+ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
 ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
 ast_node!(BacktickText, BACKTICK_TEXT);
 ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
-// Jinja template components (inside raw strings)
-ast_node!(JinjaExpression, TEMPLATE_INTERPOLATION);
-ast_node!(JinjaStatement, TEMPLATE_CONTROL);
-ast_node!(JinjaComment, TEMPLATE_COMMENT);
-ast_node!(PromptText, PROMPT_TEXT);
-
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
-ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
-ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);
 
@@ -288,14 +267,6 @@ impl UnionMemberParts {
         Some(rowan::TextRange::new(start, end))
     }
 
-    /// Get the first WORD token's text, if any.
-    pub fn first_word(&self) -> Option<&str> {
-        self.tokens
-            .iter()
-            .find(|t| t.kind() == SyntaxKind::WORD)
-            .map(rowan::SyntaxToken::text)
-    }
-
     /// Get the full dotted name (all WORD tokens joined by DOTs).
     ///
     /// For `baml.http.Request` returns `Some("baml.http.Request")`.
@@ -316,42 +287,12 @@ impl UnionMemberParts {
         collect_postfix_modifiers(self.tokens.iter().map(SyntaxToken::kind))
     }
 
-    /// Count the number of `[]` array modifiers on this union member.
-    ///
-    /// For `int` returns 0, for `int[]` returns 1, for `int[][]` returns 2.
-    pub fn array_depth(&self) -> usize {
-        self.postfix_modifiers()
-            .iter()
-            .filter(|m| **m == TypePostFixModifier::Array)
-            .count()
-    }
-
-    /// Check if this union member has a trailing `?` (optional modifier).
-    pub fn is_optional(&self) -> bool {
-        self.postfix_modifiers()
-            .contains(&TypePostFixModifier::Optional)
-    }
-
-    /// Check if this member contains a `STRING_LITERAL` child node.
-    pub fn has_string_literal(&self) -> bool {
-        self.child_nodes
-            .iter()
-            .any(|n| n.kind() == SyntaxKind::STRING_LITERAL)
-    }
-
     /// Get the string literal value if this member is a string literal type.
     pub fn string_literal(&self) -> Option<String> {
         self.child_nodes
             .iter()
             .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
             .map(|n| decode_regular_string_literal_text(&n.text().to_string()))
-    }
-
-    /// Check if this member contains a `TYPE_EXPR` child node (parenthesized type).
-    pub fn has_type_expr(&self) -> bool {
-        self.child_nodes
-            .iter()
-            .any(|n| n.kind() == SyntaxKind::TYPE_EXPR)
     }
 
     /// Get the `TYPE_EXPR` child node if present (for parenthesized types).
@@ -511,59 +452,6 @@ impl TypeExpr {
             .any(|t| t.kind() == SyntaxKind::PIPE)
     }
 
-    /// Check if this type has a trailing `?` (optional modifier).
-    pub fn is_optional(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .last()
-            .is_some_and(|t| t.kind() == SyntaxKind::QUESTION)
-    }
-
-    /// Check if this type has trailing `[]` (array modifier).
-    ///
-    /// For `int[]?`, this returns true (array comes before optional).
-    pub fn is_array(&self) -> bool {
-        self.array_depth() > 0
-    }
-
-    /// Count the number of `[]` array modifiers.
-    ///
-    /// For `int` returns 0.
-    /// For `int[]` returns 1.
-    /// For `int[][]` returns 2.
-    /// For `int[]?` returns 1 (optional is separate).
-    pub fn array_depth(&self) -> usize {
-        let tokens: Vec<_> = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|t| !t.kind().is_trivia())
-            .collect();
-
-        let mut depth = 0;
-        let mut i = tokens.len();
-
-        // Skip trailing ? if present
-        if i > 0 && tokens[i - 1].kind() == SyntaxKind::QUESTION {
-            i -= 1;
-        }
-
-        // Count [] pairs from the end
-        while i >= 2 {
-            if tokens[i - 1].kind() == SyntaxKind::R_BRACKET
-                && tokens[i - 2].kind() == SyntaxKind::L_BRACKET
-            {
-                depth += 1;
-                i -= 2;
-            } else {
-                break;
-            }
-        }
-
-        depth
-    }
-
     /// Get the postfix modifiers (`[]` and `?`) in application order (innermost first).
     ///
     /// For `int` returns `[]`.
@@ -640,18 +528,6 @@ impl TypeExpr {
         }
 
         None
-    }
-
-    /// Get all child `TypeExpr` nodes.
-    ///
-    /// For union types where the parser creates child `TYPE_EXPR` for each member,
-    /// this returns those members. Returns empty vec if no children.
-    pub fn child_type_exprs(&self) -> Vec<TypeExpr> {
-        self.syntax
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-            .map(|n| TypeExpr { syntax: n })
-            .collect()
     }
 
     /// Get the `TYPE_ARGS` node for generic types like `map<K, V>`.
@@ -807,13 +683,6 @@ impl TypeExpr {
         members
     }
 
-    /// Get the text range of this type expression.
-    ///
-    /// This is useful for error reporting and span creation.
-    pub fn text_range(&self) -> rowan::TextRange {
-        self.syntax.text_range()
-    }
-
     /// Check if this is a function type: `(x: int, y: int) -> bool` or `(int) -> bool`.
     ///
     /// A function type has:
@@ -875,14 +744,6 @@ impl TypeExpr {
     pub fn function_throws_type(&self) -> Option<TypeExpr> {
         self.function_throws_clause()
             .and_then(|clause| clause.type_expr())
-    }
-
-    /// Get all attributes attached to this type expression.
-    ///
-    /// These are ATTRIBUTE nodes that are direct children of the `TYPE_EXPR` node.
-    /// The parser creates these for type-level annotations like `@stream.done`.
-    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
-        self.syntax.children().filter_map(Attribute::cast)
     }
 }
 
@@ -1007,7 +868,6 @@ impl AstNode for LetStmt {
 ast_node!(IfExpr, IF_EXPR);
 ast_node!(WhileStmt, WHILE_STMT);
 ast_node!(WhileLetStmt, WHILE_LET_STMT);
-ast_node!(ForExpr, FOR_EXPR);
 ast_node!(BlockExpr, BLOCK_EXPR);
 ast_node!(ReturnStmt, RETURN_STMT);
 ast_node!(ThrowStmt, THROW_STMT);
@@ -1072,11 +932,6 @@ impl FunctionDef {
         self.syntax.children().find_map(TypeExpr::cast)
     }
 
-    /// Get the function body (generic, could be any type).
-    pub fn body(&self) -> Option<FunctionBody> {
-        self.syntax.children().find_map(FunctionBody::cast)
-    }
-
     /// Get the LLM function body if this is an LLM function.
     pub fn llm_body(&self) -> Option<LlmFunctionBody> {
         self.syntax.children().find_map(LlmFunctionBody::cast)
@@ -1085,16 +940,6 @@ impl FunctionDef {
     /// Get the expression function body if this is an expression function.
     pub fn expr_body(&self) -> Option<ExprFunctionBody> {
         self.syntax.children().find_map(ExprFunctionBody::cast)
-    }
-
-    /// Check if this is an LLM function.
-    pub fn is_llm_function(&self) -> bool {
-        self.llm_body().is_some()
-    }
-
-    /// Check if this is an expression function.
-    pub fn is_expr_function(&self) -> bool {
-        self.expr_body().is_some()
     }
 
     /// Get the throws clause if present (BEP-007).
@@ -1128,24 +973,106 @@ impl TemplateStringDef {
 impl LlmFunctionBody {
     /// Get the client field if present.
     ///
-    /// For `function Foo() -> string { client GPT4 ... }`, returns the `client GPT4` field.
+    /// For `function Foo() -> string { client: GPT4 ... }`, returns the `client: GPT4` field.
     pub fn client_field(&self) -> Option<ClientField> {
         self.syntax.children().find_map(ClientField::cast)
     }
 
     /// Get the prompt field if present.
     ///
-    /// For `function Foo() -> string { ... prompt #"..."# }`, returns the `prompt #"..."#` field.
+    /// For `function Foo() -> string { ... prompt: #"..."# }`, returns the `prompt: #"..."#` field.
     pub fn prompt_field(&self) -> Option<PromptField> {
         self.syntax.children().find_map(PromptField::cast)
+    }
+
+    /// Get the tools field if present.
+    ///
+    /// For `function Foo() -> T { ... tools: [a, b] ... }`, returns the
+    /// `tools: [a, b]` field.
+    pub fn tools_field(&self) -> Option<ToolsField> {
+        self.syntax.children().find_map(ToolsField::cast)
+    }
+}
+
+impl ClientValueDef {
+    /// The declared client name (`Fast` in `client Fast = <expr>;`).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
+    }
+
+    /// The initializer — the first element after the `=` (a node, or a bare
+    /// identifier/literal token).
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        let mut seen_equals = false;
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) if seen_equals => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind() == SyntaxKind::EQUALS {
+                        seen_equals = true;
+                        continue;
+                    }
+                    if seen_equals && !t.kind().is_trivia() && t.kind() != SyntaxKind::SEMICOLON {
+                        return Some(el);
+                    }
+                }
+                rowan::NodeOrToken::Node(_) => {}
+            }
+        }
+        None
+    }
+}
+
+impl ToolsField {
+    /// The tools value expression — the first child node after the `tools`
+    /// keyword and colon (usually an `ARRAY_LITERAL`).
+    pub fn expr(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+
+    /// The tools value as a node-or-token element. A bare dot-free
+    /// identifier (`tools: my_tools`) is emitted by the parser as a WORD
+    /// token with no wrapping node, so [`Self::expr`] alone would miss it
+    /// and the field would silently lower to an empty toolbox.
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        let mut seen_keyword = false;
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind().is_trivia() || t.kind() == SyntaxKind::COLON {
+                        continue;
+                    }
+                    // The leading `tools` keyword lexes as a WORD; everything
+                    // after it (and the colon) is the value.
+                    if !seen_keyword && t.kind() == SyntaxKind::WORD && t.text() == "tools" {
+                        seen_keyword = true;
+                        continue;
+                    }
+                    return Some(el);
+                }
+            }
+        }
+        None
+    }
+}
+
+impl SpecExpr {
+    /// The base expression the postfix `@spec` was applied to (a `PATH_EXPR`
+    /// naming an LLM function).
+    pub fn base(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
     }
 }
 
 impl ClientField {
     /// Get the client name token if it's a simple identifier.
     ///
-    /// For `client GPT4`, returns the `GPT4` token.
-    /// For `client "openai/gpt-4o"`, returns None (use `name_or_string()` instead).
+    /// For `client: GPT4`, returns the `GPT4` token.
+    /// For `client: "openai/gpt-4o"`, returns None (use `name_or_string()` instead).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
@@ -1153,14 +1080,38 @@ impl ClientField {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// Get the client value as a string, whether it's an identifier or a string literal.
+    /// Get the client value as a string, whether it's an identifier, an
+    /// unquoted shorthand, or a string literal.
     ///
-    /// For `client GPT4`, returns "GPT4".
-    /// For `client "openai/gpt-4o"`, returns "openai/gpt-4o".
+    /// For `client: GPT4`, returns "GPT4".
+    /// For `client: "openai/gpt-4o"`, returns "openai/gpt-4o".
+    /// For `client: openai/gpt-4o` (unquoted shorthand), returns
+    /// "openai/gpt-4o" — the parser consumes the whole shorthand as value
+    /// tokens, and truncating to the first WORD would silently resolve the
+    /// provider prefix alone.
     pub fn value(&self) -> Option<String> {
-        // First try to get it as a simple identifier (WORD token)
-        if let Some(token) = self.name() {
-            return Some(token.text().to_string());
+        // Try token form first: concatenate every non-trivia value token after
+        // the `client` keyword and the leading colon. Only the FIRST
+        // colon is field syntax — later ones belong to the value (model ids
+        // like `ollama/llama3:8b`). A single WORD yields the plain identifier;
+        // a multi-token run reproduces the unquoted shorthand (its source has
+        // no interior whitespace).
+        let mut value = String::new();
+        let mut leading_colon_eaten = false;
+        for token in self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| !t.kind().is_trivia() && t.kind() != SyntaxKind::KW_CLIENT)
+        {
+            if token.kind() == SyntaxKind::COLON && value.is_empty() && !leading_colon_eaten {
+                leading_colon_eaten = true;
+                continue;
+            }
+            value.push_str(token.text());
+        }
+        if !value.is_empty() {
+            return Some(value);
         }
 
         // Otherwise, try to get it as a string literal
@@ -1170,22 +1121,38 @@ impl ClientField {
 
         None
     }
+
+    /// The client value as a node-or-token element: a `STRING_LITERAL` node
+    /// for the `"provider/model"` form, any other node for an expression
+    /// (`client: my_client()`), or a bare identifier token (`client: Fast`).
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind().is_trivia()
+                        || matches!(t.kind(), SyntaxKind::KW_CLIENT | SyntaxKind::COLON)
+                    {
+                        continue;
+                    }
+                    return Some(el);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl PromptField {
-    /// Get the raw string literal node containing the prompt.
-    ///
-    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node
-    /// (the legacy Jinja form). Returns `None` for a new-mode backtick prompt.
+    /// Get a legacy raw-string prompt for migration diagnostics.
     pub fn raw_string(&self) -> Option<RawStringLiteral> {
         self.syntax.children().find_map(RawStringLiteral::cast)
     }
 
-    /// Get the backtick string literal node containing a new-mode prompt.
+    /// Get the backtick string literal node containing the prompt.
     ///
-    /// For `` prompt `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
-    /// BEP-049 (M5f): a backtick prompt compiles to a prompt-tag closure instead
-    /// of a stored Jinja template. Returns `None` for a `#"..."#` prompt.
+    /// For `` prompt: `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
+    /// A backtick prompt compiles to a prompt-tag closure.
     pub fn backtick_string(&self) -> Option<BacktickStringLiteral> {
         self.syntax.children().find_map(BacktickStringLiteral::cast)
     }
@@ -1202,11 +1169,6 @@ impl StringLiteral {
 }
 
 impl BacktickStringLiteral {
-    /// Get the full text including the surrounding backtick runs.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-
     /// Number of backticks in the opening (and closing) delimiter.
     ///
     /// Returns 0 if the syntax is malformed (no opening backtick).
@@ -1229,59 +1191,18 @@ impl BacktickStringLiteral {
         count
     }
 
-    /// Inner content between the opening and closing backtick runs, before any
-    /// escape decoding or dedenting. Returns `None` if the node is malformed
-    /// (missing opening or closing run).
-    pub fn raw_inner(&self) -> Option<String> {
-        let text = self.syntax.text().to_string();
-        let n = self.delimiter_count();
-        if n == 0 || text.len() < 2 * n {
-            return None;
-        }
-        // Strip N leading + N trailing backticks. Closing presence is enforced
-        // by the parser (anchored-close rule).
-        let opener_end = n;
-        let closer_start = text.len().saturating_sub(n);
-        if opener_end > closer_start {
-            return None;
-        }
-        Some(text[opener_end..closer_start].to_string())
-    }
-
-    /// Whether the literal spans multiple source lines (and therefore qualifies
-    /// for auto-dedent under §12).
-    pub fn is_multiline(&self) -> bool {
-        self.raw_inner().map(|s| s.contains('\n')).unwrap_or(false)
-    }
-
-    /// The decoded value of the backtick string, with escapes resolved and (if
-    /// multi-line) dedented per `baml_base::dedent::preprocess_template`.
-    ///
-    /// **Treats `${...}` sequences as literal text** — this is the pre-interp
-    /// view, preserved as a fallback for callers that haven't migrated to
-    /// [`Self::segments`]. New code should prefer `segments()` so interpolated
-    /// expressions are surfaced as host AST nodes.
-    pub fn value(&self) -> String {
-        let Some(inner) = self.raw_inner() else {
-            return String::new();
-        };
-        let decoded = unescape_backtick_string_literal(&inner);
-        if decoded.contains('\n') {
-            baml_base::dedent::preprocess_template(&decoded)
-        } else {
-            decoded
-        }
-    }
-
     /// Split the literal into the alternating text and interpolation segments
     /// that downstream lowerers consume.
     ///
     /// For `` `Hello, ${user.name}!` `` returns:
     /// `[Text("Hello, "), Interp(<${user.name}>), Text("!")]`.
     ///
-    /// Text segments are escape-decoded; multi-line content is dedented per
-    /// BEP §12 (interpolations do not affect the min-indent calculation per
-    /// §12 rule 8 — "Whitespace inside `${...}` is preserved verbatim").
+    /// Multi-line content is dedented per BEP §12 (see
+    /// [`baml_base::dedent::dedent_backtick`]) with interpolations excluded from
+    /// the min-indent calculation (§12 rule 8 — "Whitespace inside `${...}` is
+    /// preserved verbatim"), §13 block-tag whitespace control is applied, and
+    /// then text segments are escape-decoded. Only *layout* is stripped: an
+    /// authored `\n` at the end of a literal survives.
     pub fn segments(&self) -> Vec<BacktickSegment> {
         build_segment_tree(&mut self.flat_parts().into_iter().peekable())
     }
@@ -1298,9 +1219,10 @@ impl BacktickStringLiteral {
     }
 
     /// Pass (1) of the two-pass build: walk the CST into a flat `FlatPart`
-    /// stream (text + interp + block-tag opens/closes) with whole-literal
-    /// dedent and §13 whitespace control. Pass (2) — lifting matched
-    /// open/close pairs into nested For / If segments — is `build_segment_tree`.
+    /// stream (text + interp + block-tag opens/closes) with whole-literal §12
+    /// dedent, §13 whitespace control, and escape decoding — in that order.
+    /// Pass (2) — lifting matched open/close pairs into nested For / If
+    /// segments — is `build_segment_tree`.
     fn flat_parts(&self) -> Vec<FlatPart> {
         let n = self.delimiter_count();
         if n == 0 {
@@ -1380,20 +1302,22 @@ impl BacktickStringLiteral {
             parts.push(FlatPart::Text(current_text));
         }
 
-        // Decode escapes per text chunk.
-        for p in &mut parts {
-            if let FlatPart::Text(s) = p {
-                *s = unescape_backtick_string_literal(s);
-            }
-        }
+        // Everything from here through §13 whitespace control runs on the *raw*
+        // chunk text, with escapes still encoded. Both are source-layout rules,
+        // and an authored `\n` is content, not layout. Decoding first would turn
+        // it into a real newline that the dedent's edge handling and §13's
+        // line scan could then read as a line break of the layout — which is
+        // exactly how `` `${host}\n` `` used to lose its trailing newline.
 
-        // Dedent across the whole literal if any text chunk contains a
-        // newline. Replace each non-text part with a single-char placeholder
-        // so they don't influence min-indent, then split the dedented
-        // result back into text segments and reattach the parts in order.
+        // §12 dedent across the whole literal. Replace each non-text part with
+        // a single-char placeholder so an interpolation neither contributes to
+        // the min-indent nor has its own lines re-indented (§12 rule 8:
+        // "Whitespace inside `${...}` is preserved verbatim"), then split the
+        // dedented result back into text segments and reattach the parts in
+        // order.
         let needs_dedent = parts
             .iter()
-            .any(|p| matches!(p, FlatPart::Text(s) if s.contains('\n')));
+            .any(|p| matches!(p, FlatPart::Text(s) if s.contains(['\n', '\r'])));
         if needs_dedent {
             // Pick a placeholder that doesn't appear in user content
             // (ultrareview bug_006). Walk the PUA range U+E000..U+F8FF and
@@ -1422,7 +1346,7 @@ impl BacktickStringLiteral {
                     }
                 }
             }
-            let dedented = baml_base::dedent::preprocess_template(&joined);
+            let dedented = baml_base::dedent::dedent_backtick(&joined);
             let pieces: Vec<&str> = dedented.split(placeholder).collect();
 
             // Rebuild `parts` in dedented order: one text piece per gap,
@@ -1455,6 +1379,14 @@ impl BacktickStringLiteral {
         // block tags consume nothing. Applied to the flat sequence before
         // hierarchical lifting so it works uniformly across nested blocks.
         apply_block_tag_whitespace_rule(&mut parts);
+
+        // Escapes decode last, once every layout rule has run. `\n`/`\t`
+        // sequences produced here are user content and are never trimmed.
+        for p in &mut parts {
+            if let FlatPart::Text(s) = p {
+                *s = unescape_backtick_string_literal(s);
+            }
+        }
         parts
     }
 }
@@ -1845,110 +1777,6 @@ pub struct BacktickIfBranch {
     pub body: Vec<BacktickSegment>,
 }
 
-impl RawStringLiteral {
-    /// Get the full text of the raw string literal, including delimiters.
-    ///
-    /// For `#"Hello"#`, returns `#"Hello"#`.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-
-    /// Get all Jinja expressions in the raw string.
-    ///
-    /// For `#"Hello {{ name }}"#`, returns the `{{ name }}` node.
-    pub fn jinja_expressions(&self) -> impl Iterator<Item = JinjaExpression> {
-        self.syntax.children().filter_map(JinjaExpression::cast)
-    }
-
-    /// Get all Jinja statements in the raw string.
-    ///
-    /// For `#"{% if x %}...{% endif %}"#`, returns the `{% if x %}` and `{% endif %}` nodes.
-    pub fn jinja_statements(&self) -> impl Iterator<Item = JinjaStatement> {
-        self.syntax.children().filter_map(JinjaStatement::cast)
-    }
-
-    /// Get all Jinja comments in the raw string.
-    ///
-    /// For `#"{# comment #}"#`, returns the `{# comment #}` node.
-    pub fn jinja_comments(&self) -> impl Iterator<Item = JinjaComment> {
-        self.syntax.children().filter_map(JinjaComment::cast)
-    }
-
-    /// Get all prompt text nodes in the raw string.
-    ///
-    /// For `#"Hello {{ name }}"#`, returns the `Hello ` text node.
-    pub fn prompt_texts(&self) -> impl Iterator<Item = PromptText> {
-        self.syntax.children().filter_map(PromptText::cast)
-    }
-}
-
-impl JinjaExpression {
-    /// Get the inner text of the Jinja expression, without the {{ }} delimiters.
-    ///
-    /// For `{{ input.name }}`, returns `input.name` (with whitespace trimmed).
-    pub fn inner_text(&self) -> String {
-        let text = self.syntax.text().to_string();
-        // Strip {{ and }}
-        if text.starts_with("{{") && text.ends_with("}}") {
-            text[2..text.len() - 2].trim().to_string()
-        } else {
-            text
-        }
-    }
-
-    /// Get the full text of the Jinja expression, including {{ }} delimiters.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-}
-
-impl JinjaStatement {
-    /// Get the inner text of the Jinja statement, without the {% %} delimiters.
-    ///
-    /// For `{% if condition %}`, returns `if condition` (with whitespace trimmed).
-    pub fn inner_text(&self) -> String {
-        let text = self.syntax.text().to_string();
-        // Strip {% and %}
-        if text.starts_with("{%") && text.ends_with("%}") {
-            text[2..text.len() - 2].trim().to_string()
-        } else {
-            text
-        }
-    }
-
-    /// Get the full text of the Jinja statement, including {% %} delimiters.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-}
-
-impl JinjaComment {
-    /// Get the inner text of the Jinja comment, without the {# #} delimiters.
-    ///
-    /// For `{# this is a comment #}`, returns `this is a comment` (with whitespace trimmed).
-    pub fn inner_text(&self) -> String {
-        let text = self.syntax.text().to_string();
-        // Strip {# and #}
-        if text.starts_with("{#") && text.ends_with("#}") {
-            text[2..text.len() - 2].trim().to_string()
-        } else {
-            text
-        }
-    }
-
-    /// Get the full text of the Jinja comment, including {# #} delimiters.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-}
-
-impl PromptText {
-    /// Get the text content.
-    pub fn text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-}
-
 impl Parameter {
     /// Get the parameter name.
     pub fn name(&self) -> Option<SyntaxToken> {
@@ -2049,11 +1877,6 @@ impl ClassDef {
     /// Get all `implements I { ... }` blocks declared inside the class body.
     pub fn implements_blocks(&self) -> impl Iterator<Item = ImplementsBlock> {
         self.syntax.children().filter_map(ImplementsBlock::cast)
-    }
-
-    /// Get block attributes (@@dynamic).
-    pub fn block_attributes(&self) -> impl Iterator<Item = BlockAttribute> {
-        self.syntax.children().filter_map(BlockAttribute::cast)
     }
 }
 
@@ -2172,14 +1995,6 @@ impl InterfaceFieldLink {
             }
         }
         None
-    }
-
-    /// Span of the contextual `as` keyword when present.
-    pub fn as_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::KW_AS)
     }
 }
 
@@ -2340,11 +2155,6 @@ impl Field {
     pub fn ty(&self) -> Option<TypeExpr> {
         self.syntax.children().find_map(TypeExpr::cast)
     }
-
-    /// Get field attributes (@alias, @description, etc.).
-    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
-        self.syntax.children().filter_map(Attribute::cast)
-    }
 }
 
 impl EnumDef {
@@ -2359,23 +2169,9 @@ impl EnumDef {
             .nth(0) // Get the first WORD (enum keyword is KW_ENUM, not WORD)
     }
 
-    /// Check if this enum has a body (braces).
-    /// Malformed enums from error recovery may not have braces.
-    pub fn has_body(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|t| t.kind() == SyntaxKind::L_BRACE)
-    }
-
     /// Get all variants.
     pub fn variants(&self) -> impl Iterator<Item = EnumVariant> {
         self.syntax.children().filter_map(EnumVariant::cast)
-    }
-
-    /// Get block attributes.
-    pub fn block_attributes(&self) -> impl Iterator<Item = BlockAttribute> {
-        self.syntax.children().filter_map(BlockAttribute::cast)
     }
 }
 
@@ -2435,69 +2231,6 @@ impl ConfigBlock {
     pub fn items(&self) -> impl Iterator<Item = ConfigItem> {
         self.syntax.children().filter_map(ConfigItem::cast)
     }
-
-    /// Get all `type_builder` blocks inside this config block.
-    pub fn type_builder_blocks(&self) -> impl Iterator<Item = TypeBuilderBlock> {
-        self.syntax.children().filter_map(TypeBuilderBlock::cast)
-    }
-}
-
-impl TypeBuilderBlock {
-    /// Get the `type_builder` keyword token.
-    pub fn keyword(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::KW_TYPE_BUILDER)
-    }
-
-    /// Get all class definitions (non-dynamic).
-    pub fn classes(&self) -> impl Iterator<Item = ClassDef> {
-        self.syntax
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::CLASS_DEF)
-            .filter_map(ClassDef::cast)
-    }
-
-    /// Get all enum definitions (non-dynamic).
-    pub fn enums(&self) -> impl Iterator<Item = EnumDef> {
-        self.syntax
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::ENUM_DEF)
-            .filter_map(EnumDef::cast)
-    }
-
-    /// Get all dynamic type definitions (dynamic class or dynamic enum).
-    pub fn dynamic_types(&self) -> impl Iterator<Item = DynamicTypeDef> {
-        self.syntax.children().filter_map(DynamicTypeDef::cast)
-    }
-
-    /// Get all type alias definitions.
-    pub fn type_aliases(&self) -> impl Iterator<Item = TypeAliasDef> {
-        self.syntax.children().filter_map(TypeAliasDef::cast)
-    }
-}
-
-impl DynamicTypeDef {
-    /// Get the class definition inside this dynamic type def (if it's a dynamic class).
-    pub fn class(&self) -> Option<ClassDef> {
-        self.syntax.children().find_map(ClassDef::cast)
-    }
-
-    /// Get the enum definition inside this dynamic type def (if it's a dynamic enum).
-    pub fn enum_def(&self) -> Option<EnumDef> {
-        self.syntax.children().find_map(EnumDef::cast)
-    }
-
-    /// Check if this is a dynamic class.
-    pub fn is_class(&self) -> bool {
-        self.class().is_some()
-    }
-
-    /// Check if this is a dynamic enum.
-    pub fn is_enum(&self) -> bool {
-        self.enum_def().is_some()
-    }
 }
 
 impl ConfigItem {
@@ -2529,15 +2262,6 @@ impl ConfigItem {
             })
     }
 
-    /// Get the text range of the config value, regardless of whether it's a WORD or `STRING_LITERAL`.
-    /// This is useful for error reporting when the value type doesn't matter.
-    pub fn value_text_range(&self) -> Option<rowan::TextRange> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-            .map(|config_value| config_value.text_range())
-    }
-
     /// Get the typed `ConfigValue` child, if present.
     pub fn config_value(&self) -> Option<ConfigValue> {
         self.syntax.children().find_map(ConfigValue::cast)
@@ -2556,13 +2280,6 @@ impl ConfigItem {
         self.syntax.children().find_map(ConfigBlock::cast)
     }
 
-    /// Check if this config item has a `CONFIG_VALUE` child (vs a nested `CONFIG_BLOCK`).
-    pub fn has_value(&self) -> bool {
-        self.syntax
-            .children()
-            .any(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-    }
-
     /// Get the integer value if this is an integer literal.
     pub fn value_int(&self) -> Option<i64> {
         self.syntax
@@ -2575,33 +2292,6 @@ impl ConfigItem {
                     .find(|token| token.kind() == SyntaxKind::INTEGER_LITERAL)
                     .and_then(|token| token.text().parse().ok())
             })
-    }
-
-    /// Check if the value starts with a minus sign (for negative numbers).
-    pub fn is_negative(&self) -> bool {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-            .map(|config_value| {
-                config_value
-                    .descendants_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .any(|token| token.kind() == SyntaxKind::MINUS)
-            })
-            .unwrap_or(false)
-    }
-
-    /// Check if the value is an array literal.
-    pub fn is_array(&self) -> bool {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-            .map(|config_value| {
-                config_value
-                    .children()
-                    .any(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
-            })
-            .unwrap_or(false)
     }
 
     /// Get the `CONFIG_VALUE` syntax node if present.
@@ -2672,18 +2362,6 @@ impl ConfigItem {
         )
     }
 
-    /// Get the raw `SyntaxNode` for the array literal, if this value is an array.
-    pub fn array_node(&self) -> Option<SyntaxNode> {
-        let config_value = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)?;
-
-        config_value
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
-    }
-
     /// Check if this config item's key matches the given name.
     ///
     /// This is a convenience method to avoid the common pattern:
@@ -2699,11 +2377,6 @@ impl ConfigItem {
     /// ```
     pub fn matches_key(&self, name: &str) -> bool {
         self.key().is_some_and(|k| k.text() == name)
-    }
-
-    /// Get attributes attached to this config item (e.g., `args { ... } @some_attr(...)`).
-    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
-        self.syntax.children().filter_map(Attribute::cast)
     }
 }
 
@@ -2742,38 +2415,9 @@ impl TestDef {
             .nth(0) // Get the first WORD (test keyword is KW_TEST, not WORD)
     }
 
-    /// Get the function name that this test is for (first function only).
-    /// Pattern: `test <TestName> { functions [<FunctionName>] ... }`
-    pub fn function_name(&self) -> Option<SyntaxToken> {
-        self.function_names().into_iter().next()
-    }
-
-    /// Get all function names that this test is for.
-    /// Pattern: `test <TestName> { functions [<Func1>, <Func2>, ...] ... }`
-    pub fn function_names(&self) -> Vec<SyntaxToken> {
-        // Look for a ConfigItem with key "functions" and extract all function names.
-        // The function names are inside a CONFIG_VALUE child node, not in attributes.
-        self.function_config_item()
-            .and_then(|item| {
-                // Find the CONFIG_VALUE child (excludes attributes which are siblings)
-                item.syntax()
-                    .children()
-                    .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-            })
-            .map(|config_value| {
-                config_value
-                    .descendants_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .filter(|token| token.kind() == SyntaxKind::WORD)
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
     /// Get complete function references from the legacy `function(s)` config.
     ///
-    /// Unlike [`Self::function_names`], this preserves qualified references
-    /// such as `workflows.Classify` as one value.
+    /// Preserves qualified references such as `workflows.Classify` as one value.
     pub fn function_reference_names(&self) -> Vec<String> {
         let Some(value) = self
             .function_config_item()
@@ -2824,32 +2468,22 @@ impl TypeAliasDef {
 }
 
 impl BlockAttribute {
-    /// Get the first segment of the attribute name (e.g., "dynamic" from @@dynamic).
+    /// Get the first segment of the attribute name.
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
     }
 
     /// Get the full attribute name including dot-separated modifiers.
-    /// For @@stream.done returns "stream.done", for @@dynamic returns "dynamic".
+    /// For `@@stream.done`, returns `stream.done`.
     pub fn full_name(&self) -> Option<String> {
         let segments: Vec<String> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
             .map(|token| token.text().to_string())
             .collect();
 
@@ -2858,181 +2492,6 @@ impl BlockAttribute {
         } else {
             Some(segments.join("."))
         }
-    }
-
-    /// Get the text range covering the full attribute name (including modifiers).
-    pub fn full_name_range(&self) -> Option<rowan::TextRange> {
-        let tokens: Vec<_> = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD
-                        | SyntaxKind::KW_DYNAMIC
-                        | SyntaxKind::KW_THROWS
-                        | SyntaxKind::DOT
-                )
-            })
-            .collect();
-
-        if tokens.is_empty() {
-            return None;
-        }
-
-        let first = tokens.first()?;
-        let last = tokens.last()?;
-
-        Some(rowan::TextRange::new(
-            first.text_range().start(),
-            last.text_range().end(),
-        ))
-    }
-
-    /// Check if block attribute has arguments (parentheses with content).
-    pub fn has_args(&self) -> bool {
-        self.syntax
-            .children()
-            .any(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-    }
-
-    /// Get the text range of the argument node (for error reporting).
-    pub fn args_span(&self) -> Option<rowan::TextRange> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-            .map(|args| args.text_range())
-    }
-
-    /// Get the first string argument value (unquoted).
-    /// Returns None if no `ATTRIBUTE_ARGS` or no string literal found.
-    /// Preserves internal whitespace within the string.
-    pub fn string_arg(&self) -> Option<String> {
-        let args = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)?;
-
-        // First, try to find a STRING_LITERAL or RAW_STRING_LITERAL node and extract its content
-        for child in args.children() {
-            match child.kind() {
-                SyntaxKind::STRING_LITERAL => {
-                    return Some(decode_regular_string_literal_text(
-                        &child.text().to_string(),
-                    ));
-                }
-                SyntaxKind::RAW_STRING_LITERAL => {
-                    if let Some(value) = decode_raw_string_literal_text(&child.text().to_string()) {
-                        return Some(value);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Fallback: collect non-structural tokens (for unquoted strings)
-        let result: String = args
-            .descendants_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                !matches!(
-                    token.kind(),
-                    SyntaxKind::WHITESPACE
-                        | SyntaxKind::NEWLINE
-                        | SyntaxKind::LINE_COMMENT
-                        | SyntaxKind::BLOCK_COMMENT
-                        | SyntaxKind::QUOTE
-                        | SyntaxKind::L_PAREN
-                        | SyntaxKind::R_PAREN
-                        | SyntaxKind::COMMA
-                )
-            })
-            .map(|token| token.text().to_string())
-            .collect();
-
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
-    }
-
-    /// Check if the argument is a valid string literal (not an expression or identifier).
-    pub fn arg_is_string_literal(&self) -> bool {
-        let Some(args) = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-        else {
-            return false;
-        };
-
-        args.descendants_with_tokens().any(|child| {
-            matches!(
-                child.kind(),
-                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-            )
-        })
-    }
-
-    /// Get all argument nodes in this attribute.
-    ///
-    /// Each argument is one of:
-    /// - `STRING_LITERAL` for `"quoted"`
-    /// - `RAW_STRING_LITERAL` for `#"raw"#`
-    /// - `EXPR` for `{{ jinja }}`
-    /// - `UNQUOTED_STRING` for bare words
-    pub fn args(&self) -> impl Iterator<Item = SyntaxNode> + '_ {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-            .into_iter()
-            .flat_map(|args| args.children())
-            .filter(|child| {
-                matches!(
-                    child.kind(),
-                    SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                        | SyntaxKind::EXPR
-                        | SyntaxKind::UNQUOTED_STRING
-                )
-            })
-    }
-
-    /// Count the number of arguments.
-    pub fn arg_count(&self) -> usize {
-        self.args().count()
-    }
-
-    /// Check if this attribute has exactly one argument that is a string literal.
-    pub fn has_single_string_arg(&self) -> bool {
-        self.arg_count() == 1 && self.arg_is_string_literal()
-    }
-
-    /// Check if the argument is a string literal or unquoted string (not an expression).
-    pub fn arg_is_string_or_unquoted(&self) -> bool {
-        let Some(args) = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-        else {
-            return false;
-        };
-
-        args.descendants_with_tokens().any(|child| {
-            matches!(
-                child.kind(),
-                SyntaxKind::STRING_LITERAL
-                    | SyntaxKind::RAW_STRING_LITERAL
-                    | SyntaxKind::UNQUOTED_STRING
-            )
-        })
-    }
-
-    /// Check if this attribute has exactly one argument that is a string literal or unquoted string.
-    pub fn has_single_string_or_unquoted_arg(&self) -> bool {
-        self.arg_count() == 1 && self.arg_is_string_or_unquoted()
     }
 }
 
@@ -3062,530 +2521,6 @@ impl Attribute {
             Some(segments.join("."))
         }
     }
-
-    /// Get the text range covering the full attribute name (including modifiers).
-    /// For @stream.done returns the range from "stream" to "done".
-    pub fn full_name_range(&self) -> Option<rowan::TextRange> {
-        let tokens: Vec<_> = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
-            .collect();
-
-        if tokens.is_empty() {
-            return None;
-        }
-
-        let first = tokens.first()?;
-        let last = tokens.last()?;
-
-        Some(rowan::TextRange::new(
-            first.text_range().start(),
-            last.text_range().end(),
-        ))
-    }
-
-    /// Check if attribute has arguments (parentheses with content).
-    pub fn has_args(&self) -> bool {
-        self.syntax
-            .children()
-            .any(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-    }
-
-    /// Get the text range of the argument node (for error reporting).
-    pub fn args_span(&self) -> Option<rowan::TextRange> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-            .map(|args| args.text_range())
-    }
-
-    /// Get the first string argument value (unquoted).
-    /// Returns None if no `ATTRIBUTE_ARGS` or no string literal found.
-    /// For @alias("foo") returns Some("foo").
-    /// Preserves internal whitespace within the string.
-    pub fn string_arg(&self) -> Option<String> {
-        let args = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)?;
-
-        // First, try to find a STRING_LITERAL or RAW_STRING_LITERAL node and extract its content
-        for child in args.children() {
-            match child.kind() {
-                SyntaxKind::STRING_LITERAL => {
-                    return Some(decode_regular_string_literal_text(
-                        &child.text().to_string(),
-                    ));
-                }
-                SyntaxKind::RAW_STRING_LITERAL => {
-                    if let Some(value) = decode_raw_string_literal_text(&child.text().to_string()) {
-                        return Some(value);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Fallback: collect non-structural tokens (for unquoted strings)
-        let result: String = args
-            .descendants_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                !matches!(
-                    token.kind(),
-                    SyntaxKind::WHITESPACE
-                        | SyntaxKind::NEWLINE
-                        | SyntaxKind::LINE_COMMENT
-                        | SyntaxKind::BLOCK_COMMENT
-                        | SyntaxKind::QUOTE
-                        | SyntaxKind::L_PAREN
-                        | SyntaxKind::R_PAREN
-                        | SyntaxKind::COMMA
-                )
-            })
-            .map(|token| token.text().to_string())
-            .collect();
-
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
-    }
-
-    /// Check if the argument is a valid string literal (not an expression or identifier).
-    /// Returns true if the argument contains `STRING_LITERAL` or `RAW_STRING_LITERAL`.
-    pub fn arg_is_string_literal(&self) -> bool {
-        let Some(args) = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-        else {
-            return false;
-        };
-
-        // Check if we have a STRING_LITERAL or RAW_STRING_LITERAL node/token
-        args.descendants_with_tokens().any(|child| {
-            matches!(
-                child.kind(),
-                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-            )
-        })
-    }
-
-    /// Get all argument nodes in this attribute.
-    ///
-    /// Each argument is one of:
-    /// - `STRING_LITERAL` for `"quoted"`
-    /// - `RAW_STRING_LITERAL` for `#"raw"#`
-    /// - `EXPR` for `{{ jinja }}`
-    /// - `UNQUOTED_STRING` for bare words
-    pub fn args(&self) -> impl Iterator<Item = SyntaxNode> + '_ {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-            .into_iter()
-            .flat_map(|args| args.children())
-            .filter(|child| {
-                matches!(
-                    child.kind(),
-                    SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                        | SyntaxKind::EXPR
-                        | SyntaxKind::UNQUOTED_STRING
-                )
-            })
-    }
-
-    /// Count the number of arguments.
-    pub fn arg_count(&self) -> usize {
-        self.args().count()
-    }
-
-    /// Check if this attribute has exactly one argument that is a string literal.
-    pub fn has_single_string_arg(&self) -> bool {
-        self.arg_count() == 1 && self.arg_is_string_literal()
-    }
-
-    /// Check if the argument is a string literal or unquoted string (not an expression).
-    pub fn arg_is_string_or_unquoted(&self) -> bool {
-        let Some(args) = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-        else {
-            return false;
-        };
-
-        args.descendants_with_tokens().any(|child| {
-            matches!(
-                child.kind(),
-                SyntaxKind::STRING_LITERAL
-                    | SyntaxKind::RAW_STRING_LITERAL
-                    | SyntaxKind::UNQUOTED_STRING
-            )
-        })
-    }
-
-    /// Check if this attribute has exactly one argument that is a string literal or unquoted string.
-    pub fn has_single_string_or_unquoted_arg(&self) -> bool {
-        self.arg_count() == 1 && self.arg_is_string_or_unquoted()
-    }
-
-    /// Get the `ATTRIBUTE_ARGS` syntax node as-is (for deferred parsing).
-    ///
-    /// Returns the raw `SyntaxNode` for the argument list. Used by PPIR to
-    /// clone the CST node for deferred parsing in later phases.
-    pub fn arg_syntax_node(&self) -> Option<SyntaxNode> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-    }
-}
-
-impl WhileStmt {
-    /// Get the condition expression.
-    /// The condition is the first child expression of the while statement.
-    pub fn condition(&self) -> Option<SyntaxNode> {
-        self.syntax.children().next()
-    }
-
-    /// Get the body block expression.
-    /// The body is the second child (`BLOCK_EXPR`) of the while statement.
-    pub fn body(&self) -> Option<BlockExpr> {
-        self.syntax.children().find_map(BlockExpr::cast)
-    }
-}
-
-impl WhileLetStmt {
-    /// Get the refutable pattern (the first `PATTERN` child). Mirrors the
-    /// `IF_LET_EXPR` layout: `PATTERN`, scrutinee expr, then `BLOCK_EXPR`.
-    pub fn pattern(&self) -> Option<SyntaxNode> {
-        self.syntax
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PATTERN)
-    }
-
-    /// Get the scrutinee expression (the expression after `=`). It is the
-    /// first child that is neither the `PATTERN` nor the body `BLOCK_EXPR`.
-    pub fn scrutinee(&self) -> Option<SyntaxNode> {
-        self.syntax
-            .children()
-            .find(|n| !matches!(n.kind(), SyntaxKind::PATTERN | SyntaxKind::BLOCK_EXPR))
-    }
-
-    /// Get the body block expression (the `BLOCK_EXPR` child).
-    pub fn body(&self) -> Option<BlockExpr> {
-        self.syntax.children().find_map(BlockExpr::cast)
-    }
-}
-
-impl IfExpr {
-    /// Get the condition expression.
-    /// The condition is the first child expression of the if expression.
-    pub fn condition(&self) -> Option<SyntaxNode> {
-        self.syntax.children().next()
-    }
-
-    /// Get the then branch block expression.
-    /// The then branch is the first `BLOCK_EXPR` child.
-    pub fn then_branch(&self) -> Option<BlockExpr> {
-        self.syntax.children().find_map(BlockExpr::cast)
-    }
-
-    /// Get the else branch, which could be another `IfExpr` (else if) or a `BlockExpr` (else).
-    pub fn else_branch(&self) -> Option<SyntaxNode> {
-        let children: Vec<_> = self.syntax.children().collect();
-        // If there are more than 2 children, the third one is the else branch
-        children.get(2).cloned()
-    }
-}
-
-impl ForExpr {
-    /// Check if this is an iterator-style for loop (has 'in' keyword).
-    pub fn is_iterator_style(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::KW_IN)
-    }
-
-    /// Get the let statement (initializer) if present.
-    /// Used for both `for (let i in ...)` and `for (let i = 0; ...)`.
-    pub fn let_stmt(&self) -> Option<LetStmt> {
-        self.syntax.children().find_map(LetStmt::cast)
-    }
-
-    /// Get the loop variable name (for simple `for i in ...` without let).
-    pub fn loop_var(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
-    }
-
-    /// Get the iterator expression (for iterator-style loops).
-    /// This is the expression after `in` keyword.
-    pub fn iterator(&self) -> Option<SyntaxNode> {
-        // Find expression after the 'in' keyword
-        // The iterator is not a LET_STMT and not a BLOCK_EXPR
-        self.syntax
-            .children()
-            .find(|n| !matches!(n.kind(), SyntaxKind::LET_STMT | SyntaxKind::BLOCK_EXPR))
-    }
-
-    /// Get the condition expression (for C-style loops).
-    /// This is the expression between the first and second semicolon.
-    pub fn condition(&self) -> Option<SyntaxNode> {
-        if self.is_iterator_style() {
-            return None;
-        }
-        // For C-style, condition is after the initializer's semicolon, before the second semicolon.
-        // Note: If there's a LET_STMT, its trailing semicolon is INSIDE the LET_STMT node.
-        // So for `for (let i = 0; ; update)`:
-        //   - LET_STMT contains `let i = 0;` (first semicolon inside)
-        //   - Sibling semicolon (second semicolon overall)
-        //   - update expression
-        // For `for (; cond; update)`:
-        //   - First sibling semicolon
-        //   - condition expression
-        //   - Second sibling semicolon
-        //   - update expression
-
-        let has_initializer = self.let_stmt().is_some();
-        let mut sibling_semicolon_count = 0;
-
-        for element in self.syntax.children_with_tokens() {
-            match element {
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::SEMICOLON {
-                        sibling_semicolon_count += 1;
-                    }
-                }
-                rowan::NodeOrToken::Node(node) => {
-                    // Skip LET_STMT (initializer) and BLOCK_EXPR (body)
-                    if matches!(node.kind(), SyntaxKind::LET_STMT | SyntaxKind::BLOCK_EXPR) {
-                        continue;
-                    }
-                    // Condition position depends on whether there's an initializer:
-                    // - With initializer: after LET_STMT, before first sibling semicolon
-                    // - Without initializer: after first sibling semicolon, before second
-                    let condition_position = i32::from(!has_initializer);
-                    if sibling_semicolon_count == condition_position {
-                        return Some(node);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    /// Get a bare token as condition (for C-style loops like `for (; false;)`).
-    /// Used when `condition()` returns None but there's a literal token between semicolons.
-    pub fn condition_token(&self) -> Option<SyntaxToken> {
-        if self.is_iterator_style() {
-            return None;
-        }
-        // Only look for tokens if there's no expression node
-        if self.condition().is_some() {
-            return None;
-        }
-
-        // Condition position depends on whether there's an initializer.
-        // With initializer (LET_STMT contains first semicolon):
-        //   condition is BEFORE first sibling semicolon
-        // Without initializer:
-        //   condition is AFTER first sibling semicolon, BEFORE second
-
-        let has_initializer = self.let_stmt().is_some();
-        let mut sibling_semicolon_count = 0;
-        let mut after_let_stmt = !has_initializer;
-
-        for element in self.syntax.children_with_tokens() {
-            match element {
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::SEMICOLON {
-                        sibling_semicolon_count += 1;
-                        // Check if we're past the condition position
-                        if has_initializer && sibling_semicolon_count >= 1 {
-                            return None; // Past condition position for initializer case
-                        }
-                        if !has_initializer && sibling_semicolon_count >= 2 {
-                            return None; // Past condition position for no-initializer case
-                        }
-                    } else if after_let_stmt {
-                        // Check for condition token
-                        let in_condition_position = if has_initializer {
-                            sibling_semicolon_count == 0
-                        } else {
-                            sibling_semicolon_count == 1
-                        };
-                        if in_condition_position {
-                            match token.kind() {
-                                SyntaxKind::WORD
-                                | SyntaxKind::INTEGER_LITERAL
-                                | SyntaxKind::FLOAT_LITERAL => {
-                                    return Some(token);
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-                rowan::NodeOrToken::Node(node) => {
-                    if node.kind() == SyntaxKind::LET_STMT {
-                        after_let_stmt = true;
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    /// Get the update expression (for C-style loops).
-    /// This is the expression after the second semicolon.
-    pub fn update(&self) -> Option<SyntaxNode> {
-        if self.is_iterator_style() {
-            return None;
-        }
-        // For C-style, update is after the condition's semicolon.
-        // Note: If there's a LET_STMT, its trailing semicolon is INSIDE the LET_STMT node.
-        // So for `for (let i = 0; ; update)`:
-        //   - LET_STMT contains first semicolon
-        //   - Sibling semicolon count 1 marks end of condition position
-        //   - update expression is at sibling_semicolon_count == 1
-        // For `for (; cond; update)`:
-        //   - update expression is at sibling_semicolon_count == 2
-
-        let has_initializer = self.let_stmt().is_some();
-        let mut sibling_semicolon_count = 0;
-
-        for element in self.syntax.children_with_tokens() {
-            match element {
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::SEMICOLON {
-                        sibling_semicolon_count += 1;
-                    }
-                }
-                rowan::NodeOrToken::Node(node) => {
-                    // Skip LET_STMT (initializer) and BLOCK_EXPR (body)
-                    if matches!(node.kind(), SyntaxKind::LET_STMT | SyntaxKind::BLOCK_EXPR) {
-                        continue;
-                    }
-                    // Update position depends on whether there's an initializer:
-                    // - With initializer: after first sibling semicolon
-                    // - Without initializer: after second sibling semicolon
-                    let update_position = if has_initializer { 1 } else { 2 };
-                    if sibling_semicolon_count == update_position {
-                        return Some(node);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    /// Get the body block expression.
-    pub fn body(&self) -> Option<BlockExpr> {
-        self.syntax.children().find_map(BlockExpr::cast)
-    }
-}
-
-impl LetStmt {
-    /// Get the variable name.
-    pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
-    }
-
-    /// Get the type annotation, if present.
-    pub fn ty(&self) -> Option<TypeExpr> {
-        self.syntax.children().find_map(TypeExpr::cast)
-    }
-
-    /// Get the initializer expression as a node.
-    /// This finds the first child node that is an expression (not `TYPE_EXPR`).
-    pub fn initializer(&self) -> Option<SyntaxNode> {
-        self.syntax.children().find(|n| {
-            matches!(
-                n.kind(),
-                SyntaxKind::EXPR
-                    | SyntaxKind::BINARY_EXPR
-                    | SyntaxKind::UNARY_EXPR
-                    | SyntaxKind::CALL_EXPR
-                    | SyntaxKind::PATH_EXPR
-                    | SyntaxKind::FIELD_ACCESS_EXPR
-                    | SyntaxKind::UPCAST_EXPR
-                    | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
-                    | SyntaxKind::INDEX_EXPR
-                    | SyntaxKind::OPTIONAL_INDEX_EXPR
-                    | SyntaxKind::OPTIONAL_CALL_EXPR
-                    | SyntaxKind::TAGGED_TEMPLATE_EXPR
-                    | SyntaxKind::IF_EXPR
-                    | SyntaxKind::IF_LET_EXPR
-                    | SyntaxKind::MATCH_EXPR
-                    | SyntaxKind::CATCH_EXPR
-                    | SyntaxKind::THROW_EXPR
-                    | SyntaxKind::SPAWN_EXPR
-                    | SyntaxKind::AWAIT_EXPR
-                    | SyntaxKind::BLOCK_EXPR
-                    | SyntaxKind::PAREN_EXPR
-                    | SyntaxKind::ARRAY_LITERAL
-                    | SyntaxKind::OBJECT_LITERAL
-                    | SyntaxKind::MAP_LITERAL
-                    | SyntaxKind::STRING_LITERAL
-                    | SyntaxKind::RAW_STRING_LITERAL
-            )
-        })
-    }
-
-    /// Get the initializer as a token (for direct literals like integers, bools, null,
-    /// or simple variable references).
-    /// Returns the literal/identifier token if the initializer is a simple token.
-    pub fn initializer_token(&self) -> Option<SyntaxToken> {
-        // We need to find tokens AFTER the '=' sign, since the first WORD is the variable name
-        let mut seen_equals = false;
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                if token.kind() == SyntaxKind::EQUALS {
-                    seen_equals = true;
-                    return false;
-                }
-                // Only consider tokens after the '='
-                if !seen_equals {
-                    return false;
-                }
-                match token.kind() {
-                    SyntaxKind::INTEGER_LITERAL
-                    | SyntaxKind::FLOAT_LITERAL
-                    | SyntaxKind::STRING_LITERAL
-                    | SyntaxKind::RAW_STRING_LITERAL => true,
-                    // WORD tokens can be boolean/null literals or variable references
-                    SyntaxKind::WORD => true,
-                    _ => false,
-                }
-            })
-    }
-}
-
-impl ReturnStmt {
-    /// Get the return value expression, if present.
-    pub fn value(&self) -> Option<SyntaxNode> {
-        self.syntax.children().next()
-    }
-}
-
-impl ThrowStmt {
-    /// Get the throw expression node.
-    pub fn expr(&self) -> Option<ThrowExpr> {
-        self.syntax.children().find_map(ThrowExpr::cast)
-    }
 }
 
 /// An element within a block expression - either a statement node or an expression token.
@@ -3602,34 +2537,6 @@ pub enum BlockElement {
 }
 
 impl BlockElement {
-    /// Returns true if this element is a statement (has no value).
-    pub fn is_stmt(&self) -> bool {
-        matches!(self, BlockElement::Stmt(_) | BlockElement::HeaderComment(_))
-    }
-
-    /// Returns true if this element is an expression (has a value).
-    pub fn is_expr(&self) -> bool {
-        matches!(self, BlockElement::ExprNode(_) | BlockElement::ExprToken(_))
-    }
-
-    /// Get the syntax node if this is a node-based element.
-    pub fn as_node(&self) -> Option<&SyntaxNode> {
-        match self {
-            BlockElement::Stmt(n) | BlockElement::ExprNode(n) | BlockElement::HeaderComment(n) => {
-                Some(n)
-            }
-            BlockElement::ExprToken(_) => None,
-        }
-    }
-
-    /// Get the syntax token if this is a token-based element.
-    pub fn as_token(&self) -> Option<&SyntaxToken> {
-        match self {
-            BlockElement::ExprToken(t) => Some(t),
-            _ => None,
-        }
-    }
-
     /// Check if this element has a trailing semicolon.
     ///
     /// For most statement nodes (`LET_STMT`, `BREAK_STMT`, etc.), the semicolon is a child of the node.
@@ -3722,6 +2629,7 @@ impl BlockExpr {
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
                         | SyntaxKind::UPCAST_EXPR
+                        | SyntaxKind::SPEC_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR
@@ -3764,411 +2672,9 @@ impl BlockExpr {
     }
 }
 
-impl PathExpr {
-    /// Check if this path contains dots (field access syntax).
-    pub fn has_dots(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::DOT)
-    }
-
-    /// Get all segments of this path (the WORD tokens).
-    /// For `foo.bar.baz`, returns `["foo", "bar", "baz"]`.
-    /// For `mod.func`, returns `["mod", "func"]`.
-    pub fn segments(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
-    }
-}
-
-impl FieldAccessExpr {
-    /// Get the base expression being accessed.
-    pub fn base(&self) -> Option<SyntaxNode> {
-        self.syntax.children().next()
-    }
-
-    /// Get the field name being accessed.
-    ///
-    /// The interface-related keywords (`implements`, `interface`, `extends`)
-    /// also count: they remain callable as member names on the reflection
-    /// `type` value (e.g. `dog_t.implements(animal_t)`).
-    pub fn field(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD
-                        | SyntaxKind::KW_IMPLEMENTS
-                        | SyntaxKind::KW_IMPLEMENT
-                        | SyntaxKind::KW_INTERFACE
-                        | SyntaxKind::KW_EXTENDS
-                        | SyntaxKind::KW_REQUIRES
-                )
-            })
-            .last() // The field name is the last member-name token
-    }
-}
-
-impl EnvAccessExpr {
-    /// Get the field name (the env var name or method name after `env.`).
-    /// Skips the leading `"env"` WORD and finds the WORD after the DOT.
-    pub fn field(&self) -> Option<SyntaxToken> {
-        let mut seen_dot = false;
-        for elem in self.syntax.children_with_tokens() {
-            if let rowan::NodeOrToken::Token(t) = elem {
-                if t.kind() == SyntaxKind::DOT {
-                    seen_dot = true;
-                } else if seen_dot && t.kind() == SyntaxKind::WORD {
-                    return Some(t);
-                }
-            }
-        }
-        None
-    }
-}
-
-impl MatchExpr {
-    /// Get the scrutinee expression (the value being matched).
-    ///
-    /// For `match (expr) { ... }`, returns the expression inside parentheses.
-    pub fn scrutinee(&self) -> Option<SyntaxNode> {
-        // The scrutinee is the first child node (expression between parentheses)
-        self.syntax.children().next()
-    }
-
-    /// Iterate over all match arms.
-    pub fn arms(&self) -> impl Iterator<Item = MatchArm> + '_ {
-        self.syntax.children().filter_map(MatchArm::cast)
-    }
-}
-
-impl MatchArm {
-    /// Get the pattern for this arm.
-    pub fn pattern(&self) -> Option<MatchPattern> {
-        self.syntax.children().find_map(MatchPattern::cast)
-    }
-
-    /// Get the guard expression, if present.
-    ///
-    /// For `pattern if condition => body`, returns the `if condition` part.
-    pub fn guard(&self) -> Option<MatchGuard> {
-        self.syntax.children().find_map(MatchGuard::cast)
-    }
-
-    /// Get the body expression of this arm.
-    ///
-    /// The body is the expression after `=>`. It can be a simple expression
-    /// or a block expression.
-    pub fn body(&self) -> Option<SyntaxNode> {
-        // The body is the last child node that is an expression (not pattern or guard)
-        // Find the fat arrow and return the expression after it
-        let mut found_fat_arrow = false;
-        for element in self.syntax.children_with_tokens() {
-            match element {
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::FAT_ARROW {
-                        found_fat_arrow = true;
-                    }
-                }
-                rowan::NodeOrToken::Node(node) => {
-                    if found_fat_arrow {
-                        return Some(node);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    /// Check if the body is a block expression.
-    pub fn has_block_body(&self) -> bool {
-        self.body()
-            .map(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
-            .unwrap_or(false)
-    }
-}
-
-impl MatchPattern {
-    /// Check if this is a union pattern (has `|` separators).
-    pub fn is_union(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::PIPE)
-    }
-
-    /// Check if this is a typed binding pattern (has `:`).
-    ///
-    /// For patterns like `s: Success`, returns true.
-    pub fn is_typed_binding(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::COLON)
-    }
-
-    /// Check if this is an enum variant pattern (has `.`).
-    ///
-    /// For patterns like `Status.Active`, returns true.
-    pub fn is_enum_variant(&self) -> bool {
-        // An enum variant has a dot but NOT a colon (typed binding)
-        let has_dot = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::DOT);
-        has_dot && !self.is_typed_binding()
-    }
-
-    /// Check if this is a wildcard pattern (`_`).
-    pub fn is_wildcard(&self) -> bool {
-        let tokens: Vec<_> = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|t| t.kind() == SyntaxKind::WORD)
-            .collect();
-        tokens.len() == 1 && tokens[0].text() == "_"
-    }
-
-    /// Get the binding name if this is a binding pattern.
-    ///
-    /// For `s: Success`, returns "s".
-    /// For `x`, returns "x".
-    /// For `_`, returns "_".
-    pub fn binding_name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
-    }
-
-    /// Get the type expression if this is a typed binding pattern.
-    ///
-    /// For `s: Success`, returns the `Success` type expression.
-    pub fn binding_type(&self) -> Option<TypeExpr> {
-        self.syntax.children().find_map(TypeExpr::cast)
-    }
-
-    /// Get all identifiers in this pattern.
-    ///
-    /// For simple patterns, returns one identifier.
-    /// For enum variants like `Status.Active`, returns both identifiers (e.g. "Status", "Active").
-    /// For union patterns, returns identifiers from all branches.
-    pub fn identifiers(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
-    }
-
-    /// Get the literal token if this is a literal pattern.
-    ///
-    /// Returns the token for integer, float, or string literals,
-    /// as well as `null`, `true`, `false` keywords (which are parsed as WORD).
-    pub fn literal(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::INTEGER_LITERAL
-                        | SyntaxKind::FLOAT_LITERAL
-                        | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                ) || (token.kind() == SyntaxKind::WORD
-                    && matches!(token.text(), "null" | "true" | "false"))
-            })
-    }
-
-    /// Get all pattern elements for union patterns.
-    ///
-    /// For `Success | Failure`, returns iterator over the token groups
-    /// representing each alternative in the union.
-    ///
-    /// Note: This is a simplified view. For complex union patterns,
-    /// you may need to manually iterate `children_with_tokens()` and
-    /// split on `PIPE` tokens.
-    pub fn union_elements(&self) -> Vec<Vec<SyntaxToken>> {
-        let mut elements = Vec::new();
-        let mut current = Vec::new();
-
-        for element in self.syntax.children_with_tokens() {
-            if let Some(token) = element.into_token() {
-                if token.kind() == SyntaxKind::PIPE {
-                    if !current.is_empty() {
-                        elements.push(std::mem::take(&mut current));
-                    }
-                } else if !token.kind().is_trivia() {
-                    current.push(token);
-                }
-            }
-        }
-
-        if !current.is_empty() {
-            elements.push(current);
-        }
-
-        elements
-    }
-}
-
-impl MatchGuard {
-    /// Get the condition expression.
-    ///
-    /// For `if condition`, returns the condition expression.
-    pub fn condition(&self) -> Option<SyntaxNode> {
-        self.syntax.children().next()
-    }
-}
-
-impl ThrowExpr {
-    /// Get the thrown expression/value.
-    pub fn value(&self) -> Option<SyntaxNode> {
-        self.syntax.children().next()
-    }
-}
-
-impl ReturnExpr {
-    /// Get the returned value expression, if present (bare `return` has none).
-    pub fn value(&self) -> Option<SyntaxNode> {
-        self.syntax.children().next()
-    }
-}
-
 impl ThrowsClause {
     /// Get the type expression for the throws clause.
     pub fn type_expr(&self) -> Option<TypeExpr> {
-        self.syntax.children().find_map(TypeExpr::cast)
-    }
-}
-
-impl CatchExpr {
-    /// Get the base expression before the first catch clause.
-    pub fn base(&self) -> Option<SyntaxNode> {
-        self.syntax
-            .children()
-            .find(|n| n.kind() != SyntaxKind::CATCH_CLAUSE)
-    }
-
-    /// Iterate over attached catch clauses in source order.
-    pub fn clauses(&self) -> impl Iterator<Item = CatchClause> + '_ {
-        self.syntax.children().filter_map(CatchClause::cast)
-    }
-}
-
-impl CatchClause {
-    /// Get the clause keyword token (`catch`, `catch_all`, `catch_all_panics`).
-    pub fn keyword(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| {
-                matches!(
-                    t.kind(),
-                    SyntaxKind::KW_CATCH
-                        | SyntaxKind::KW_CATCH_ALL
-                        | SyntaxKind::KW_CATCH_ALL_PANICS
-                )
-            })
-    }
-
-    /// Get the binding pattern from `catch (...)`.
-    pub fn binding(&self) -> Option<CatchPattern> {
-        self.syntax.children().find_map(CatchPattern::cast)
-    }
-
-    /// Get the optional stack trace binding node from `catch (e, st)`.
-    pub fn stack_trace_binding(&self) -> Option<SyntaxNode> {
-        self.syntax
-            .children()
-            .find(|c| c.kind() == SyntaxKind::CATCH_STACK_TRACE_BINDING)
-    }
-
-    /// Iterate over typed/fallback arm entries for this clause.
-    pub fn arms(&self) -> impl Iterator<Item = CatchArm> + '_ {
-        self.syntax.children().filter_map(CatchArm::cast)
-    }
-}
-
-impl CatchArm {
-    /// Get the pattern for this catch arm.
-    pub fn pattern(&self) -> Option<CatchPattern> {
-        self.syntax.children().find_map(CatchPattern::cast)
-    }
-
-    /// Get the body expression of this arm.
-    pub fn body(&self) -> Option<SyntaxNode> {
-        let mut found_fat_arrow = false;
-        for element in self.syntax.children_with_tokens() {
-            match element {
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::FAT_ARROW {
-                        found_fat_arrow = true;
-                    }
-                }
-                rowan::NodeOrToken::Node(node) => {
-                    if found_fat_arrow {
-                        return Some(node);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    /// Check if this catch arm has a block body.
-    pub fn has_block_body(&self) -> bool {
-        self.body()
-            .map(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
-            .unwrap_or(false)
-    }
-}
-
-impl CatchPattern {
-    /// Check if this is a union pattern (has `|` separators).
-    pub fn is_union(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::PIPE)
-    }
-
-    /// Check if this is a typed binding pattern (has `:`).
-    pub fn is_typed_binding(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::COLON)
-    }
-
-    /// Check if this is a wildcard pattern (`_`).
-    pub fn is_wildcard(&self) -> bool {
-        let tokens: Vec<_> = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|t| t.kind() == SyntaxKind::WORD)
-            .collect();
-        tokens.len() == 1 && tokens[0].text() == "_"
-    }
-
-    /// Get the binding name for this pattern.
-    pub fn binding_name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
-    }
-
-    /// Get the type expression for typed bindings.
-    pub fn binding_type(&self) -> Option<TypeExpr> {
         self.syntax.children().find_map(TypeExpr::cast)
     }
 }

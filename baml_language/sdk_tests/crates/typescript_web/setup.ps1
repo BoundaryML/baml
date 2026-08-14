@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Force -Path $env:npm_config_store_dir | Out-Null
 Write-Host '==> pnpm install in sdks/typescript/bridge_typescript_web'
 Push-Location $BridgeTypescriptWeb
 try {
-    pnpm install --ignore-workspace --ignore-scripts
+    pnpm install
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     pnpm build:debug
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

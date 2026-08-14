@@ -1,0 +1,312 @@
+/* agent-tries-baml dashboard (/atb). Tokens and component classes are
+   atb- prefixed so they cannot collide with the site theme. Imported from
+   app/globals.css so Tailwind registers the tokens. */
+
+@theme {
+  --color-atb-cloud: #faf9f5;
+  --color-atb-ivory: #f0eee6;
+  --color-atb-oat: #e8e5da;
+  --color-atb-line: #e3dfd3;
+  --color-atb-line-strong: #d1ccba;
+  --color-atb-ink: #1f1e1b;
+  --color-atb-ink-2: #5e5a4f;
+  --color-atb-ink-3: #918c7b;
+  --color-atb-accent: #7c3aed;
+  --color-atb-accent-deep: #6d28d9;
+  --color-atb-accent-soft: #ede9fe;
+  --color-atb-olive: #6e8359;
+  --color-atb-olive-soft: #e7ebdd;
+  --color-atb-amber: #b8860b;
+  --color-atb-amber-soft: #f3ead2;
+  --color-atb-rust: #b3402e;
+  --color-atb-rust-soft: #f4e0da;
+  --color-atb-slate: #5d7282;
+  --color-atb-slate-soft: #e2e8ea;
+}
+
+/* Font utilities resolve var() at the element, where the next/font
+   variables (set on .atb-root) are actually in scope. Theme-level font
+   tokens would resolve at :root, where they are not defined. */
+.font-atb-sans {
+  font-family: var(--font-atb-inter), ui-sans-serif, system-ui, sans-serif;
+}
+.font-atb-serif {
+  font-family: var(--font-atb-ss4), ui-serif, Georgia, serif;
+}
+.font-atb-mono {
+  font-family: var(--font-atb-jb), ui-monospace, "SF Mono", monospace;
+}
+
+.atb-root {
+  background: var(--color-atb-cloud);
+  color: var(--color-atb-ink);
+  font-family: var(--font-atb-inter), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.atb-root ::selection {
+  background: var(--color-atb-accent);
+  color: var(--color-atb-cloud);
+}
+
+/* heartbeat ring around live status dots */
+@keyframes atb-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  80% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.atb-pulse-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: atb-pulse-ring 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes atb-blink-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.atb-blink-soft {
+  animation: atb-blink-soft 1.6s ease-in-out infinite;
+}
+
+@keyframes atb-drift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -14px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.atb-drift {
+  animation: atb-drift 9s ease-in-out infinite;
+}
+
+@keyframes atb-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.atb-bob {
+  animation: atb-bob 2.4s ease-in-out infinite;
+}
+
+/* markdown body (reports, issue descriptions, changelog) */
+.atb-md {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--color-atb-ink-2);
+}
+.atb-md h1,
+.atb-md h2,
+.atb-md h3,
+.atb-md h4 {
+  font-family: var(--font-atb-ss4), ui-serif, Georgia, serif;
+  color: var(--color-atb-ink);
+  font-weight: 600;
+  margin: 1.5em 0 0.5em;
+  line-height: 1.25;
+}
+.atb-md h1 {
+  font-size: 1.35rem;
+}
+.atb-md h2 {
+  font-size: 1.2rem;
+}
+.atb-md h3 {
+  font-size: 1.05rem;
+}
+.atb-md p {
+  margin: 0.65em 0;
+}
+.atb-md ul,
+.atb-md ol {
+  margin: 0.65em 0;
+  padding-left: 1.4em;
+}
+.atb-md ul {
+  list-style: disc;
+}
+.atb-md ol {
+  list-style: decimal;
+}
+.atb-md li {
+  margin: 0.25em 0;
+}
+.atb-md code {
+  font-family: var(--font-atb-jb), ui-monospace, "SF Mono", monospace;
+  font-size: 0.82em;
+  background: var(--color-atb-oat);
+  border: 1px solid var(--color-atb-line);
+  border-radius: 0.3rem;
+  padding: 0.1em 0.35em;
+  color: var(--color-atb-ink);
+}
+.atb-md pre {
+  background: #1a1a1a;
+  color: #ece9df;
+  border-radius: 0.6rem;
+  padding: 0.9rem 1.1rem;
+  overflow-x: auto;
+  margin: 0.9em 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+.atb-md pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+.atb-md table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.85rem;
+  width: 100%;
+}
+.atb-md th,
+.atb-md td {
+  border: 1px solid var(--color-atb-line);
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+}
+.atb-md th {
+  background: var(--color-atb-ivory);
+  font-weight: 600;
+  color: var(--color-atb-ink);
+}
+.atb-md a {
+  color: var(--color-atb-accent-deep);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.atb-md blockquote {
+  border-left: 3px solid var(--color-atb-accent);
+  padding-left: 1em;
+  margin: 0.9em 0;
+  color: var(--color-atb-ink-3);
+  font-style: italic;
+}
+.atb-md hr {
+  border: none;
+  border-top: 1px solid var(--color-atb-line);
+  margin: 1.5em 0;
+}
+
+/* thin warm scrollbars for transcript panes */
+.atb-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.atb-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-atb-line-strong);
+  border-radius: 4px;
+}
+.atb-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- raw terminal transcript (dark island) ---------- */
+.atb-terminal {
+  max-height: 72vh;
+  padding: 16px 18px;
+  overflow: auto;
+  font-family: var(--font-atb-jb), ui-monospace, "SF Mono", monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #d7d3c8;
+  background: #1a1a1a;
+}
+.atb-terminal > div {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.atb-terminal .t-dot {
+  color: #3fb950;
+}
+.atb-terminal .t-asst {
+  color: #e9e6dd;
+}
+.atb-terminal .t-user {
+  color: #6cb6ff;
+}
+.atb-terminal .t-think {
+  font-style: italic;
+  color: #6e7681;
+}
+.atb-terminal .t-error {
+  color: #ff6b63;
+  background: rgba(58, 32, 29, 0.55);
+  border-left: 2px solid #ff5f57;
+  padding-left: 6px;
+  margin-left: -8px;
+}
+.atb-terminal .t-result {
+  border-left: 2px solid #2e2e2c;
+  padding-left: 6px;
+  margin-left: -8px;
+
+  color: #8b949e;
+}
+@keyframes atb-cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.atb-terminal .t-cursor {
+  color: #d7d3c8;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .atb-terminal .t-cursor {
+    animation: atb-cursor-blink 1.1s steps(1) infinite;
+  }
+}
+
+/* shiki-highlighted code (files written, transcript Write inputs) */
+.atb-code-hl {
+  margin: 0;
+}
+.atb-code-hl pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.55;
+  font-family: var(--font-atb-jb), ui-monospace, "SF Mono", monospace;
+}
+.atb-code-hl pre code {
+  font-family: inherit;
+}

@@ -3,7 +3,7 @@
 #include <baml_sdk.h>
 #include <baml_test.h>
 
-BAML_TEST(no_op) {
+BAML_TEST(void_no_op) {
   baml_sdk::void_::no_op();  // returns void; completing without throwing is the
                              // assertion
 }

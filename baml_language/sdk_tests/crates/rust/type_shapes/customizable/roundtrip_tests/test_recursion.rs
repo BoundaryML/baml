@@ -12,7 +12,7 @@ use baml_sdk::recursion::{
 };
 
 #[test]
-fn test_round_trip_int_binary_tree() {
+fn test_recursion_round_trip_int_binary_tree() {
     let t = IntBinaryTree {
         value: 1,
         left: Some(Box::new(IntBinaryTree {
@@ -26,7 +26,7 @@ fn test_round_trip_int_binary_tree() {
 }
 
 #[test]
-fn test_round_trip_mutual_recursion() {
+fn test_recursion_round_trip_mutual_recursion() {
     let a = A {
         b: Some(Box::new(B { a: None })),
     };
@@ -38,7 +38,7 @@ fn test_round_trip_mutual_recursion() {
 }
 
 #[test]
-fn test_round_trip_scc_t1_t2_t3() {
+fn test_recursion_round_trip_scc_t1_t2_t3() {
     let t1 = T1 {
         via2: Some(Box::new(T2 {
             via1: None,
@@ -63,7 +63,7 @@ fn test_round_trip_scc_t1_t2_t3() {
 }
 
 #[test]
-fn test_round_trip_scc_t4_t5_t6() {
+fn test_recursion_round_trip_scc_t4_t5_t6() {
     let t4 = T4 {
         via5: Some(Box::new(T5 {
             via4: None,

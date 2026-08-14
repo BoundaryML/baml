@@ -1,84 +1,98 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function defer.$init_test_ns_defer_defer(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.defer"
     load_const "defer_runs_lifo_on_normal_block_exit"
     make_closure .<lambda($init_test_ns_defer_defer, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_is_block_scoped_not_function_scoped"
     make_closure .<lambda($init_test_ns_defer_defer, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_runs_per_loop_iteration"
     make_closure .<lambda($init_test_ns_defer_defer, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_sees_final_value_of_mutated_local"
     make_closure .<lambda($init_test_ns_defer_defer, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_runs_when_called_function_throws"
     make_closure .<lambda($init_test_ns_defer_defer, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_unwind_is_lifo_with_multiple_defers"
     make_closure .<lambda($init_test_ns_defer_defer, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_unwind_runs_only_armed_defers"
     make_closure .<lambda($init_test_ns_defer_defer, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_runs_on_early_return"
     make_closure .<lambda($init_test_ns_defer_defer, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_runs_on_break"
     make_closure .<lambda($init_test_ns_defer_defer, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_runs_on_continue"
     make_closure .<lambda($init_test_ns_defer_defer, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_runs_on_explicit_throw_in_same_function"
     make_closure .<lambda($init_test_ns_defer_defer, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "defer_that_throws_still_runs_remaining_defers"
     make_closure .<lambda($init_test_ns_defer_defer, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.defer"
     load_const "await_inside_defer"
     make_closure .<lambda($init_test_ns_defer_defer, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -119,15 +133,18 @@ function defer.defer_armed_only_risky(log: string[]) -> void {
     load_const 1
     call user.defer.defer_armed_only_maybe_throw
     pop 1
+    load_type string
     load_var log
     load_const "body"
     call baml.Array.push
     store_var _0
     jump L0
+    load_type string
     load_var log
     load_const "b"
     call baml.Array.push
     pop 1
+    load_type string
     load_var log
     load_const "a"
     call baml.Array.push
@@ -136,10 +153,12 @@ function defer.defer_armed_only_risky(log: string[]) -> void {
     rethrow
 
   L0:
+    load_type string
     load_var log
     load_const "b"
     call baml.Array.push
     pop 1
+    load_type string
     load_var log
     load_const "a"
     call baml.Array.push
@@ -152,6 +171,7 @@ function defer.defer_await_inside_main() -> string[] {
     load_type string
     alloc_array 0
     store_var log
+    load_type string
     load_var log
     load_const "body"
     call baml.Array.push
@@ -160,11 +180,14 @@ function defer.defer_await_inside_main() -> string[] {
     make_closure .<lambda(defer_await_inside_main, 1)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type never
     spawn
-    store_var _14
-    load_var _14
+    store_var _16
+    load_var _16
     await
     pop 1
+    load_type string
     load_var log
     load_const "awaited"
     call baml.Array.push
@@ -176,11 +199,14 @@ function defer.defer_await_inside_main() -> string[] {
     make_closure .<lambda(defer_await_inside_main, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type never
     spawn
-    store_var _8
-    load_var _8
+    store_var _9
+    load_var _9
     await
     pop 1
+    load_type string
     load_var log
     load_const "awaited"
     call baml.Array.push
@@ -231,6 +257,7 @@ function defer.defer_call_throws_main() -> string[] {
     jump L0
     load_var e
     throw_if_panic
+    load_type string
     load_var log
     load_const "caught"
     call baml.Array.push
@@ -245,6 +272,7 @@ function defer.defer_call_throws_risky(log: string[]) -> void {
     call user.defer.defer_call_throws_boom
     store_var _0
     jump L0
+    load_type string
     load_var log
     load_const "cleanup"
     call baml.Array.push
@@ -253,6 +281,7 @@ function defer.defer_call_throws_risky(log: string[]) -> void {
     rethrow
 
   L0:
+    load_type string
     load_var log
     load_const "cleanup"
     call baml.Array.push
@@ -267,11 +296,13 @@ function defer.defer_early_return_helper(log: string[], early: bool) -> int {
     jump L2
 
   L0:
+    load_type string
     load_var log
     load_const "after"
     call baml.Array.push
     pop 1
     jump L1
+    load_type string
     load_var log
     load_const "cleanup"
     call baml.Array.push
@@ -282,6 +313,7 @@ function defer.defer_early_return_helper(log: string[], early: bool) -> int {
   L1:
     load_const 2
     store_var _0
+    load_type string
     load_var log
     load_const "cleanup"
     call baml.Array.push
@@ -291,6 +323,7 @@ function defer.defer_early_return_helper(log: string[], early: bool) -> int {
   L2:
     load_const 1
     store_var _0
+    load_type string
     load_var log
     load_const "cleanup"
     call baml.Array.push
@@ -321,6 +354,7 @@ function defer.defer_explicit_throw_main() -> string[] {
     jump L0
     load_var e
     throw_if_panic
+    load_type string
     load_var log
     load_const "caught"
     call baml.Array.push
@@ -334,6 +368,7 @@ function defer.defer_explicit_throw_main() -> string[] {
 function defer.defer_explicit_throw_risky(log: string[]) -> void {
     load_const "boom"
     throw
+    load_type string
     load_var log
     load_const "cleanup"
     call baml.Array.push
@@ -378,14 +413,14 @@ function defer.defer_on_break_main() -> string[] {
     load_const 3
     load_type int
     alloc_array 3
-    load_type baml.iter.Iterable<Item = int, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Item = int, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -402,11 +437,13 @@ function defer.defer_on_break_main() -> string[] {
     jump L4
 
   L2:
+    load_type string
     load_var log
     load_const "i"
     call baml.Array.push
     pop 1
     jump L3
+    load_type string
     load_var log
     load_const "d"
     call baml.Array.push
@@ -415,6 +452,7 @@ function defer.defer_on_break_main() -> string[] {
     rethrow
 
   L3:
+    load_type string
     load_var log
     load_const "d"
     call baml.Array.push
@@ -422,6 +460,7 @@ function defer.defer_on_break_main() -> string[] {
     jump L0
 
   L4:
+    load_type string
     load_var log
     load_const "d"
     call baml.Array.push
@@ -440,14 +479,14 @@ function defer.defer_on_continue_main() -> string[] {
     load_const 2
     load_type int
     alloc_array 2
-    load_type baml.iter.Iterable<Item = int, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Item = int, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -464,11 +503,13 @@ function defer.defer_on_continue_main() -> string[] {
     jump L4
 
   L2:
+    load_type string
     load_var log
     load_const "body"
     call baml.Array.push
     pop 1
     jump L3
+    load_type string
     load_var log
     load_const "d"
     call baml.Array.push
@@ -477,6 +518,7 @@ function defer.defer_on_continue_main() -> string[] {
     rethrow
 
   L3:
+    load_type string
     load_var log
     load_const "d"
     call baml.Array.push
@@ -484,6 +526,7 @@ function defer.defer_on_continue_main() -> string[] {
     jump L0
 
   L4:
+    load_type string
     load_var log
     load_const "d"
     call baml.Array.push
@@ -503,14 +546,14 @@ function defer.defer_per_loop_iteration_main() -> string {
     load_const 3
     load_type int
     alloc_array 3
-    load_type baml.iter.Iterable<Item = int, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Item = int, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -572,6 +615,7 @@ function defer.defer_throwing_defer_main() -> string[] {
     jump L0
     load_var e
     throw_if_panic
+    load_type string
     load_var2 1 2
     call baml.Array.push
     pop 1
@@ -585,6 +629,7 @@ function defer.defer_throwing_defer_risky(log: string[]) -> void {
     call user.defer.defer_throwing_defer_trigger
     store_var _0
     jump L0
+    load_type string
     load_var log
     load_const "b"
     call baml.Array.push
@@ -593,12 +638,14 @@ function defer.defer_throwing_defer_risky(log: string[]) -> void {
     throw
 
   L0:
+    load_type string
     load_var log
     load_const "b"
     call baml.Array.push
     pop 1
     load_const "from_b"
     throw
+    load_type string
     load_var log
     load_const "a"
     call baml.Array.push
@@ -636,10 +683,12 @@ function defer.defer_unwind_lifo_risky(log: string[]) -> void {
     call user.defer.defer_unwind_lifo_boom
     store_var _0
     jump L0
+    load_type string
     load_var log
     load_const "b"
     call baml.Array.push
     pop 1
+    load_type string
     load_var log
     load_const "a"
     call baml.Array.push
@@ -648,10 +697,12 @@ function defer.defer_unwind_lifo_risky(log: string[]) -> void {
     rethrow
 
   L0:
+    load_type string
     load_var log
     load_const "b"
     call baml.Array.push
     pop 1
+    load_type string
     load_var log
     load_const "a"
     call baml.Array.push

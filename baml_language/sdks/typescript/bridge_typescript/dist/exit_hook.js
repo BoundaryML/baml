@@ -5,18 +5,16 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-// exit_hook.ts — single-registration helper for flushEvents on process exit.
-// Both index.ts and the CtxManager constructor used to call
-// process.once('exit', …) independently; consolidate to one registration so
-// `process.listenerCount('exit')` increases by exactly one per process.
-import { flushEvents } from './native.js';
+// Single-registration helper for runtime shutdown and event flushing.
+import { flushEvents, shutdownRuntime } from './native.js';
 let installed = false;
 export function installFlushOnExit() {
     if (installed)
         return;
     installed = true;
-    process.once('exit', () => {
+    process.once('beforeExit', async () => {
         try {
+            await shutdownRuntime();
             flushEvents();
         }
         catch {

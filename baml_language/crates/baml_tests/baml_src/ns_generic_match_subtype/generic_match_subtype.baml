@@ -1,20 +1,22 @@
 // End-to-end tests for B-634.
 //
 // A generic `match` arm `let s: Opt<T>` (where `T` is the enclosing function's
-// type var) used to lower its runtime type-test to an EXACT reified type-arg
-// comparison. When inference pins `T` to a supertype UNION of the scrutinee's
-// actual type arg — which happens whenever a `default: T` argument subtypes,
-// so `T` reifies to the un-subsumed join `Shape | Sq` while the value is a
-// plain `Opt<Shape>` — the exact `Shape | Sq == Shape` check failed and the arm
-// silently missed, falling through to the default.
+// type var) compares the scrutinee instance's reified type arg against the
+// frame's `T`. When inference pins `T` to a supertype UNION of the scrutinee's
+// actual arg — which happens whenever a `default: T` argument subtypes, so `T`
+// reifies to the un-subsumed join `Shape | Sq` while the value is a plain
+// `Opt<Shape>` — the arm must still match, because `Shape | Sq` *is* `Shape`:
+// `Sq` implements `Shape` (`Sq <: Shape`), so the union absorbs to `Shape`.
 //
-// Fixed in `baml_compiler2_mir::lower::lower_pattern_test`: the typevar-carrying
-// class-pattern arm now builds its `IsType` template with
-// `tir2_to_dispatch_guard_template` (frame `TypeVar` -> `TypeArgRefOrWildcard`,
-// subtype-or-wildcard) instead of `ty_to_template` (frame `TypeVar` ->
-// `TypeArgRef`, exact). This matches the interface class-dispatch guard path and
-// gives the correct covariant "does this value belong to type `Opt<T>`"
-// semantics.
+// The original miss came from comparing with the context-free structural
+// relation, which has no interface-membership knowledge: it could not absorb
+// `Shape | Sq -> Shape`, so the two spellings looked like different types and
+// the arm fell through to the default. The runtime now relates class type args
+// *invariantly* through the canonical algebra, which knows `Sq <: Shape` and
+// absorbs the union, so `equivalent(Shape, Shape | Sq)` holds and the arm
+// matches — no covariance, no widening. The arm lowers `T` to a plain
+// `TypeArgRef` frame slot; the covariant `TypeArgRefOrWildcard` band-aid it once
+// used is gone.
 //
 // NOTE: test bodies live in top-level helper functions — locals holding class
 // instances misbehave when compared/passed inside `test { ... }` blocks (the
@@ -53,8 +55,9 @@ function unwrap_or<T>(o: Opt<T> | Non, default: T) -> T {
 // ─── 1. Narrow default: T infers to the un-subsumed join `Shape | Sq` ─────────
 // The scrutinee is a plain `Opt<Shape>`; before the fix the reified frame `T`
 // (`Shape | Sq`) failed the exact type-arg check and the arm returned the
-// default `Sq { s: 0 }` (area 0). With subtype-or-wildcard, `Shape <: Shape|Sq`
-// matches, so we get the wrapped `Sq { s: 5 }` back (area 25).
+// default `Sq { s: 0 }` (area 0). Now the type arg is related invariantly by the
+// canonical algebra, which absorbs `Shape | Sq == Shape` (`Sq <: Shape`), so the
+// value's `Shape` arg matches `T` and we get the wrapped `Sq { s: 5 }` (area 25).
 function generic_match_subtype_narrow_default_fn() -> int {
     let o: Opt<Shape> | Non = mk<Shape>(Sq { s: 5 });
     unwrap_or(o, Sq { s: 0 }).area()
@@ -78,7 +81,7 @@ test "generic_match_widened_default" {
 }
 
 // ─── 3. The widened arm still discriminates `Opt<T>` from the non-Opt member ──
-// The subtype-or-wildcard template must not blindly match every value: a `Non`
+// The invariant type-arg match must not blindly match every value: a `Non`
 // scrutinee must still fall through to the default (`_` arm). Confirms the fix
 // does not collapse the class-name discrimination in the pattern.
 function generic_match_falls_through_on_non_fn() -> int {

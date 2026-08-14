@@ -11,7 +11,6 @@ use std::{
 };
 
 use baml_project::ProjectDatabase;
-use baml_workspace::Project;
 use salsa::{Database, Event, EventKind, Setter};
 
 /// Test database wrapper with Salsa event logging for incrementality verification.
@@ -20,7 +19,6 @@ use salsa::{Database, Event, EventKind, Setter};
 /// verify which queries were executed (cache misses) vs which were cached (hits).
 pub struct IncrementalTestDb {
     db: ProjectDatabase,
-    project: Project,
     events: Arc<Mutex<Vec<Event>>>,
 }
 
@@ -35,17 +33,8 @@ impl IncrementalTestDb {
             })
         });
         // Set up a project root so TIR queries work
-        let project = db.set_project_root(Path::new("."));
-        Self {
-            db,
-            project,
-            events,
-        }
-    }
-
-    /// Get the project handle.
-    pub fn project(&self) -> Project {
-        self.project
+        db.set_project_root(Path::new("."));
+        Self { db, events }
     }
 
     /// Get mutable access to the database for modifying inputs.
@@ -149,25 +138,6 @@ impl IncrementalTestDb {
     ) -> R {
         let expected: Vec<_> = query_names.iter().map(|&name| (name, 0)).collect();
         self.assert_executed(f, &expected)
-    }
-
-    /// Get the full list of executed query names from the last operation.
-    ///
-    /// Useful for debugging or for snapshot testing.
-    pub fn last_executed(&self) -> Vec<String> {
-        self.extract_executed_queries()
-    }
-
-    /// Get all events from the last operation (not just WillExecute).
-    ///
-    /// Useful for debugging the full Salsa behavior.
-    pub fn all_events(&self) -> Vec<String> {
-        self.events
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|e| format!("{:?}", e.kind))
-            .collect()
     }
 }
 

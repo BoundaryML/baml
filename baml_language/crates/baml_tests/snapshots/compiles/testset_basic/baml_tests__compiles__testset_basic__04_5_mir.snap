@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25397
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -7,11 +8,11 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: (testing.TestCollector) -> void throws unknown
+    let _3: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test_set(copy _1, const "basic group", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root", const "basic group", copy _3, const null) -> [bb1];
     }
 
     bb1: {
@@ -25,14 +26,14 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: void
-    let _3: () -> void throws unknown
+    let _3: () -> void throws never
     let _4: void
-    let _5: () -> void throws unknown
+    let _5: () -> void throws never
 
     bb0: {
         _3 = make_closure lambda[0]();
@@ -55,9 +56,9 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_main, 0)>, 1)>() -> null {
+fn .<lambda(<lambda($init_test_main, 0)>, 1)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];
@@ -69,9 +70,9 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(<lambda($init_test_main, 0)>, 2)>() -> null {
+fn .<lambda(<lambda($init_test_main, 0)>, 2)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];

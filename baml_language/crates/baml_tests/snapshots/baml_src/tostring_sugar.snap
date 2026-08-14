@@ -3,88 +3,102 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function tostring_sugar.$init_test_ns_tostring_sugar_tostring_sugar(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "primitive_to_string"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "string_to_string_is_bare"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "array_to_string"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "plain_class_to_string_is_structural"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "implementor_to_string_uses_override"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "nested_override_honored_via_sugar"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "nested_override_in_field_honored_via_sugar"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "sugar_matches_string_from_exactly"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "chained_method_result_to_string"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "generic_receiver_to_string"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "user_interface_to_string_is_not_hijacked"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "zzz_throws_never2"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "optional_receiver_to_string"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tostring_sugar"
     load_const "captured_root_to_string"
     make_closure .<lambda($init_test_ns_tostring_sugar_tostring_sugar, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -216,14 +230,14 @@ function tostring_sugar.sugar_match_via_sugar() -> string {
     return
 }
 
-function tostring_sugar.tostring_show(x: T) -> string {
+function tostring_sugar.tostring_show(x: #0) -> string {
     load_type #0
     load_var x
     call baml.String.from
     return
 }
 
-function tostring_sugar.tostring_show_never(x: T) -> string {
+function tostring_sugar.tostring_show_never(x: #0) -> string {
     load_type #0
     load_var x
     call baml.String.from

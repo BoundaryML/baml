@@ -17,14 +17,11 @@ class Dog {
 
 //----
 //- diagnostics
-// error: `bark` is not a method of interface `Animal`
-//     ╭─[ interface_unknown_interface_member.baml:12:5 ]
-//     │
+// E0115
+//
+//   × `bark` is not a method of interface `Animal`
+//     ╭─[interface_unknown_interface_member.baml:12:5]
 //  12 │ ╭─▶     function bark(self) -> string {
-//     ┆ ┆
-//  14 │ ├─▶     }
-//     │ │
-//     │ ╰─────────── `bark` is not a method of interface `Animal`
-//     │
-//     │     Note: Error code: E0115
-// ────╯
+//  13 │ │         return "Bark!"
+//  14 │ ╰─▶     }
+//     ╰────

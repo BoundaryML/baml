@@ -31,6 +31,64 @@ pub fn unwrap(v: wire::BamlOutboundValue) -> wire::BamlOutboundValue {
     }
 }
 
+/// Split a union envelope without discarding its canonical arm identity.
+/// Legacy/bare values return no selected type and are handled by structural
+/// fallback code.
+pub fn union_selected(
+    v: wire::BamlOutboundValue,
+) -> Result<(Option<wire::BamlTy>, wire::BamlOutboundValue), crate::DecodeError> {
+    match v.value {
+        Some(Out::UnionVariantValue(variant)) => {
+            let selected_type = match variant.selected_option_index {
+                None => None,
+                Some(index) => {
+                    let options = variant
+                        .self_type
+                        .as_ref()
+                        .and_then(|ty| ty.ty.as_ref())
+                        .and_then(|ty| match ty {
+                            wire::baml_ty::Ty::Union(union) => Some(&union.options),
+                            _ => None,
+                        })
+                        .ok_or(crate::DecodeError::InvalidUnionOptionIndex {
+                            union: "wire self_type",
+                            index,
+                            arm_count: 0,
+                        })?;
+                    Some(options.get(index as usize).cloned().ok_or(
+                        crate::DecodeError::InvalidUnionOptionIndex {
+                            union: "wire self_type",
+                            index,
+                            arm_count: options.len(),
+                        },
+                    )?)
+                }
+            };
+            Ok((
+                selected_type,
+                variant.value.map(|inner| *inner).unwrap_or_default(),
+            ))
+        }
+        _ => Ok((None, v)),
+    }
+}
+
+/// Compare a selected wire option with one generated host arm. A non-null
+/// value selected through `T?` inhabits host arm `T`, so optional shells are
+/// transparent here.
+pub fn selected_type_matches(expected: &wire::BamlTy, selected: &wire::BamlTy) -> bool {
+    if expected == selected {
+        return true;
+    }
+    match selected.ty.as_ref() {
+        Some(wire::baml_ty::Ty::Optional(optional)) => optional
+            .inner
+            .as_deref()
+            .is_some_and(|inner| selected_type_matches(expected, inner)),
+        _ => false,
+    }
+}
+
 fn literal_to_plain(lit: BamlLiteralValue) -> wire::BamlOutboundValue {
     let value = lit.literal.map(|l| match l {
         Literal::StringValue(s) => Out::StringValue(s),

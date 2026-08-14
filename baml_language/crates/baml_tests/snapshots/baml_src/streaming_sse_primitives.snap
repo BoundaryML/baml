@@ -3,76 +3,88 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function streaming_sse_primitives.$init_test_ns_streaming_sse_primitives_streaming_sse_primitives(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_fetch_and_next_returns_events"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_next_returns_null_when_done"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_close_does_not_hang"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_fetch_error_on_bad_status"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_post_with_body"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_custom_headers"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_empty_stream_returns_null"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_next_after_close_returns_null"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_event_fields_in_json"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_event_id_null_when_not_set"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_http_4xx_error"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_large_event_payload"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -94,6 +106,8 @@ function streaming_sse_primitives.sse_close_does_not_hang_fn() -> bool {
     make_closure .<lambda(sse_close_does_not_hang_fn, 0)>, 2
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _5
     load_const "GET"
@@ -137,6 +151,8 @@ function streaming_sse_primitives.sse_custom_headers_fn() -> bool {
     make_closure .<lambda(sse_custom_headers_fn, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_type string
@@ -200,6 +216,8 @@ function streaming_sse_primitives.sse_empty_stream_returns_null_fn() -> string {
     make_closure .<lambda(sse_empty_stream_returns_null_fn, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "GET"
@@ -253,6 +271,8 @@ function streaming_sse_primitives.sse_event_fields_in_json_fn() -> bool {
     make_closure .<lambda(sse_event_fields_in_json_fn, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "GET"
@@ -310,14 +330,12 @@ function streaming_sse_primitives.sse_event_fields_in_json_fn() -> bool {
     load_const "payload"
     call assert.equal
     pop 1
-    load_type string | null
     load_var parsed
     load_const 0
     load_array_element
     load_field .id
     load_const "42"
-    call baml.deep_equals
-    call assert.is_true
+    call assert.equal
     pop 1
     load_const true
     jump L2
@@ -340,6 +358,8 @@ function streaming_sse_primitives.sse_event_id_null_when_not_set_fn() -> bool {
     make_closure .<lambda(sse_event_id_null_when_not_set_fn, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "GET"
@@ -417,6 +437,8 @@ function streaming_sse_primitives.sse_fetch_and_next_returns_events_fn() -> bool
     make_closure .<lambda(sse_fetch_and_next_returns_events_fn, 0)>, 2
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _5
     load_const "GET"
@@ -478,6 +500,8 @@ function streaming_sse_primitives.sse_fetch_error_on_bad_status_fn() -> bool {
     make_closure .<lambda(sse_fetch_error_on_bad_status_fn, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "GET"
@@ -499,7 +523,9 @@ function streaming_sse_primitives.sse_fetch_error_on_bad_status_fn() -> bool {
     store_var ok
     jump L2
     load_var e
-    is_type baml.errors.Io
+    store_var _13
+    load_var _13
+    narrow_bind baml.errors.Io, slot=6
     pop_jump_if_false L0
     jump L1
 
@@ -508,7 +534,7 @@ function streaming_sse_primitives.sse_fetch_error_on_bad_status_fn() -> bool {
     rethrow
 
   L1:
-    load_var e
+    load_var _13
     load_field .message
     load_const "500"
     call assert.contains
@@ -535,6 +561,8 @@ function streaming_sse_primitives.sse_http_4xx_error_fn() -> bool {
     make_closure .<lambda(sse_http_4xx_error_fn, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "GET"
@@ -556,7 +584,9 @@ function streaming_sse_primitives.sse_http_4xx_error_fn() -> bool {
     store_var ok
     jump L2
     load_var e
-    is_type baml.errors.Io
+    store_var _13
+    load_var _13
+    narrow_bind baml.errors.Io, slot=6
     pop_jump_if_false L0
     jump L1
 
@@ -565,7 +595,7 @@ function streaming_sse_primitives.sse_http_4xx_error_fn() -> bool {
     rethrow
 
   L1:
-    load_var e
+    load_var _13
     load_field .message
     load_const "403"
     call assert.contains
@@ -605,6 +635,8 @@ function streaming_sse_primitives.sse_large_event_payload_fn() -> bool {
     make_closure .<lambda(sse_large_event_payload_fn, 0)>, 2
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _8
     load_const "GET"
@@ -661,6 +693,8 @@ function streaming_sse_primitives.sse_next_after_close_returns_null_fn() -> stri
     make_closure .<lambda(sse_next_after_close_returns_null_fn, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "GET"
@@ -722,6 +756,8 @@ function streaming_sse_primitives.sse_next_returns_null_when_done_fn() -> bool {
     make_closure .<lambda(sse_next_returns_null_when_done_fn, 0)>, 2
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _5
     load_const "GET"
@@ -787,6 +823,8 @@ function streaming_sse_primitives.sse_post_with_body_fn() -> bool {
     make_closure .<lambda(sse_post_with_body_fn, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "POST"

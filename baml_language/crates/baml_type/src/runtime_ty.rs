@@ -127,11 +127,6 @@ impl RuntimeTy {
         )
     }
 
-    /// `Class(name, args)` under the implicit `user` package.
-    pub fn user_class_with_args(name: &str, args: Vec<RuntimeTy>) -> Self {
-        RuntimeTy::Class(TypeName::local(Name::new(name)), args, TyAttr::default())
-    }
-
     /// `unknown` (the top type) with default attributes.
     pub fn unknown() -> Self {
         RuntimeTy::BuiltinUnknown {
@@ -172,26 +167,6 @@ impl RuntimeTy {
         matches!(self, RuntimeTy::Union(members, _) if members.iter().any(RuntimeTy::is_null))
     }
 
-    /// Check if this is the void type.
-    pub fn is_void(&self) -> bool {
-        matches!(self, RuntimeTy::Void { .. })
-    }
-
-    /// Check if this is a primitive type (including literals of primitive types).
-    pub fn is_primitive(&self) -> bool {
-        matches!(
-            self,
-            RuntimeTy::Int { .. }
-                | RuntimeTy::Bigint { .. }
-                | RuntimeTy::Float { .. }
-                | RuntimeTy::String { .. }
-                | RuntimeTy::Bool { .. }
-                | RuntimeTy::Null { .. }
-                | RuntimeTy::Uint8Array { .. }
-                | RuntimeTy::Literal(..)
-        )
-    }
-
     // --- Transforms ---
 
     /// Remove `null` from a nullable union, collapsing the result. The inverse
@@ -214,32 +189,15 @@ impl RuntimeTy {
         }
     }
 
-    // --- Rendering / subtyping ---
+    // --- Rendering ---
     //
-    // These reuse `Ty`'s implementation so the structural logic lives in exactly
+    // These reuse `Ty`'s implementation so the rendering logic lives in exactly
     // one place. The upcast is [`RuntimeTy::as_ty`] — a zero-cost borrow, not a
     // clone — so sharing the algorithm costs nothing; the value remains a
-    // statically runtime-safe `RuntimeTy`.
-
-    /// User-facing rendering — see [`Ty::render_user_facing`].
-    pub fn render_user_facing(&self) -> String {
-        self.as_ty().render_user_facing()
-    }
-
-    /// Canonical structural rendering — see [`Ty::render_canonical`].
-    pub fn render_canonical(&self) -> String {
-        self.as_ty().render_canonical()
-    }
-
-    /// Render with a custom strategy — see [`Ty::render_with`].
-    pub fn render_with(&self, s: &dyn crate::TyRenderStrategy) -> String {
-        self.as_ty().render_with(s)
-    }
-
-    /// Structural subtyping — see [`Ty::is_subtype_of`].
-    pub fn is_subtype_of(&self, other: &RuntimeTy) -> bool {
-        self.as_ty().is_subtype_of(other.as_ty())
-    }
+    // statically runtime-safe `RuntimeTy`. (Subtyping/equivalence have no method
+    // form: they need nominal facts, so callers go through
+    // [`crate::normalize`]'s `TypeContext` entry points with the richest context
+    // the site can reach.)
 }
 
 impl std::fmt::Display for RuntimeTy {
@@ -265,6 +223,21 @@ pub struct ResolvedAliases {
 }
 
 impl ResolvedAliases {
+    /// Build the environment from the collected alias targets, computing
+    /// the recursive set (DFS cycle detection) here - the one constructor,
+    /// so a caller cannot pair aliases with a stale recursive set.
+    pub fn from_aliases(aliases: HashMap<QualifiedTypeName, Ty>) -> ResolvedAliases {
+        let mut recursive = HashSet::new();
+        for name in aliases.keys() {
+            let mut visited = HashSet::new();
+            let mut stack = HashSet::new();
+            if has_cycle(name, &aliases, &mut visited, &mut stack) {
+                recursive.insert(name.clone());
+            }
+        }
+        ResolvedAliases { aliases, recursive }
+    }
+
     /// Lower a [`Ty`] into a [`RuntimeTy`] using this alias environment.
     ///
     /// This is the compiler's ergonomic entry point and asserts the conversion
@@ -451,6 +424,80 @@ fn lower_interface_to_runtime(
     })
 }
 
+fn has_cycle(
+    name: &QualifiedTypeName,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    visited: &mut HashSet<QualifiedTypeName>,
+    stack: &mut HashSet<QualifiedTypeName>,
+) -> bool {
+    if stack.contains(name) {
+        return true;
+    }
+    if visited.contains(name) {
+        return false;
+    }
+    visited.insert(name.clone());
+    stack.insert(name.clone());
+    let result = aliases
+        .get(name)
+        .is_some_and(|ty| ty_has_cycle(ty, aliases, visited, stack));
+    stack.remove(name);
+    result
+}
+
+fn ty_has_cycle(
+    ty: &Ty,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    visited: &mut HashSet<QualifiedTypeName>,
+    stack: &mut HashSet<QualifiedTypeName>,
+) -> bool {
+    match ty {
+        Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+            ty_has_cycle(inner, aliases, visited, stack)
+        }
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+            ty_has_cycle(key, aliases, visited, stack)
+                || ty_has_cycle(value, aliases, visited, stack)
+        }
+        Ty::Union(types, _) => types
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Class(_, type_args, _) => type_args
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args
+                .iter()
+                .any(|t| ty_has_cycle(t, aliases, visited, stack))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| ty_has_cycle(ty, aliases, visited, stack))
+        }
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            ty_has_cycle(base, aliases, visited, stack)
+                || interface
+                    .tys()
+                    .any(|t| ty_has_cycle(t, aliases, visited, stack))
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| ty_has_cycle(&param.ty, aliases, visited, stack))
+                || ty_has_cycle(ret, aliases, visited, stack)
+                || ty_has_cycle(throws, aliases, visited, stack)
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,7 +582,7 @@ mod tests {
     #[test]
     fn round_trip_associated_type_projection() {
         let ty = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::TypeVar(Name::new("T"), def())),
+            base: Box::new(Ty::type_var("T")),
             interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],

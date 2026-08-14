@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.reflect_array() -> type {
+fn user.reflect_type() -> type {
     // Locals:
     let _0: type // _0 // return
 
     bb0: {
-        _0 = load_type(#0[]);
+        _0 = load_type(#0);
         goto -> bb1;
     }
 
@@ -16,14 +16,13 @@ fn user.reflect_array() -> type {
     }
 }
 
-fn user.reflect_int_array() -> type {
+fn user.reflect_array() -> type {
     // Locals:
     let _0: type // _0 // return
-    let _1: type
 
     bb0: {
-        _1 = load_type(int);
-        _0 = call const fn user.reflect_array<copy _1>() -> [bb1];
+        _0 = load_type(#0[]);
+        goto -> bb1;
     }
 
     bb1: {
@@ -46,13 +45,14 @@ fn user.reflect_person() -> type {
     }
 }
 
-fn user.reflect_type() -> type {
+fn user.reflect_int_array() -> type {
     // Locals:
     let _0: type // _0 // return
+    let _1: type
 
     bb0: {
-        _0 = load_type(#0);
-        goto -> bb1;
+        _1 = load_type(int);
+        _0 = call const fn user.reflect_array<copy _1>() -> [bb1];
     }
 
     bb1: {

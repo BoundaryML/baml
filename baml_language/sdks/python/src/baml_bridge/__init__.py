@@ -7,6 +7,10 @@
 import atexit
 import asyncio
 import functools
+import os
+import signal
+import sys
+import traceback
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from typing_extensions import Sentinel
@@ -25,8 +29,12 @@ from .baml_py import (
     cancel_function_call,
     flush_events,
     get_runtime as _rust_get_runtime,
+    get_bridge_runtime_version,
+    get_toolchain_version,
     get_version,
     new_function_call,
+    register_unhandled_spawn_error_callback,
+    shutdown_runtime,
 )
 from .errors import (
     BamlCancelledError,
@@ -50,10 +58,27 @@ from .typemap import (
 )
 
 
-# Flush buffered trace events on process exit so nothing is lost.
+# Complete spawned work before flushing buffered trace events.
 atexit.register(flush_events)
+atexit.register(shutdown_runtime)
 
-__version__ = "0.15.0"
+
+def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
+    try:
+        decode_call_result(error_bytes)
+    except BaseException as error:
+        traceback.print_exception(error)
+        if not cancelled:
+            sys.stderr.flush()
+            if os.name == "nt":
+                os.kill(os.getpid(), signal.SIGTERM)
+            else:
+                os._exit(1)
+
+
+register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
+
+__version__ = "0.16.0"
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +205,10 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 
 def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
     call_id = new_function_call()
-    args_proto = encode_call_args(kwargs, call_id)
+    args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
-        result_bytes = rt.call_function_sync(function_name, args_proto, ctx, collectors)
+        result_bytes = rt.call_function_sync(args_proto, ctx, collectors)
     finally:
         _detach_call_ctx(_ctx, call_id)
     return FunctionResult(decode_call_result(result_bytes))
@@ -191,11 +216,11 @@ def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ct
 
 async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
     call_id = new_function_call()
-    args_proto = encode_call_args(kwargs, call_id)
+    args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
         try:
-            result_bytes = await rt.call_function(function_name, args_proto, ctx, collectors)
+            result_bytes = await rt.call_function(args_proto, ctx, collectors)
         except asyncio.CancelledError:
             cancel_function_call(call_id)
             raise
@@ -459,10 +484,15 @@ def define_function(
             )
             rt = get_runtime()
             call_id = new_function_call()
-            args_proto = encode_call_args(merged, call_id, type_args)
+            args_proto = encode_call_args(
+                merged,
+                call_id,
+                type_args,
+                function_name=baml_fqn,
+            )
             _attach_call_ctx(call_ctx, call_id)
             try:
-                result_bytes = rt.call_function_sync(baml_fqn, args_proto, None, None)
+                result_bytes = rt.call_function_sync(args_proto, None, None)
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
@@ -481,11 +511,16 @@ def define_function(
             )
             rt = get_runtime()
             call_id = new_function_call()
-            args_proto = encode_call_args(merged, call_id, type_args)
+            args_proto = encode_call_args(
+                merged,
+                call_id,
+                type_args,
+                function_name=baml_fqn,
+            )
             _attach_call_ctx(call_ctx, call_id)
             try:
                 try:
-                    result_bytes = await rt.call_function(baml_fqn, args_proto, None, None)
+                    result_bytes = await rt.call_function(args_proto, None, None)
                 except asyncio.CancelledError:
                     cancel_function_call(call_id)
                     raise
@@ -516,6 +551,7 @@ __all__ = [
     "BamlPanic",
     "make_sdk_panic",
     "flush_events",
+    "shutdown_runtime",
     "get_runtime",
     "get_version",
     "new_function_call",

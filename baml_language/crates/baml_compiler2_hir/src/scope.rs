@@ -34,11 +34,6 @@ impl FileScopeId {
     pub fn next(self) -> Self {
         Self(self.0 + 1)
     }
-
-    /// Convert to a cross-file Salsa identity.
-    pub fn to_scope_id(self, db: &dyn crate::Db, file: SourceFile) -> ScopeId<'_> {
-        ScopeId::new(db, file, self)
-    }
 }
 
 /// Cross-file scope identity — used as a Salsa query key for per-scope

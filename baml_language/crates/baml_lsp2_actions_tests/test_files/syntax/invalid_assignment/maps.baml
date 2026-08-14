@@ -48,48 +48,43 @@ function MapAssignments() -> int {
 
 //----
 //- diagnostics
-// error: type mismatch: expected int, got "wrong"
-//     ╭─[ invalid_assignment_maps.baml:28:12 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_maps.baml:28:12]
 //  28 │     d = {"y": "wrong"};
-//     │               ───┬───
-//     │                  ╰───── type mismatch: expected int, got "wrong"
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Person, got Animal
-//     ╭─[ invalid_assignment_maps.baml:32:12 ]
-//     │
+//     ·               ───┬───
+//     ·                  ╰── expected `int`, found `"wrong"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_maps.baml:32:12]
 //  32 │     e = {"a": Animal { species: "Cat", legs: 4 }};
-//     │               ─────────────────┬────────────────
-//     │                                ╰────────────────── type mismatch: expected Person, got Animal
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected map<string, int>, got "not a map"
-//     ╭─[ invalid_assignment_maps.baml:36:6 ]
-//     │
+//     ·               ─────────────────┬────────────────
+//     ·                                ╰── expected `Person`, found `Animal`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_maps.baml:36:6]
 //  36 │     f = "not a map";
-//     │         ─────┬─────
-//     │              ╰─────── type mismatch: expected map<string, int>, got "not a map"
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected map<string, int>, got 123
-//     ╭─[ invalid_assignment_maps.baml:40:6 ]
-//     │
+//     ·         ─────┬─────
+//     ·              ╰── expected `map<string, int>`, found `"not a map"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_maps.baml:40:6]
 //  40 │     g = 123;
-//     │         ─┬─
-//     │          ╰─── type mismatch: expected map<string, int>, got 123
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected string, got map<string, int>
-//     ╭─[ invalid_assignment_maps.baml:44:6 ]
-//     │
+//     ·         ─┬─
+//     ·          ╰── expected `map<string, int>`, found `123`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_maps.baml:44:6]
 //  44 │     h = {"k": 7};
-//     │         ────┬───
-//     │             ╰───── type mismatch: expected string, got map<string, int>
-//     │
-//     │ Note: Error code: E0001
-// ────╯
+//     ·         ────┬───
+//     ·             ╰── expected `string`, found `map<string, int>`
+//     ╰────

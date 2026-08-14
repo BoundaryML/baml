@@ -13,7 +13,8 @@ pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::{
     CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
-    FunctionCallContextBuilder, is_cancelled_engine_error,
+    FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,
+    UnhandledSpawnErrorHandler, is_cancelled_engine_error, register_inbound_union_ambiguity_policy,
     value_capture::{
         CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer,
         TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogMetadata,
@@ -21,9 +22,10 @@ pub use bex_engine::{
 };
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
-    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch, try_convert_rust_data,
-    validate_host_return,
+    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch,
+    runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
+use indexmap::IndexMap;
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};
 use thiserror::Error;
@@ -34,17 +36,37 @@ mod fs;
 mod project;
 mod seed;
 
-pub struct BexArgs(pub HashMap<String, BexExternalValue>);
+pub struct BexArgs {
+    /// Required values keyed by their type-level names and kept in declared order.
+    pub required: IndexMap<String, BexExternalValue>,
+    /// Supplied optional values keyed by their type-level parameter names.
+    pub optional: IndexMap<String, BexExternalValue>,
+}
 
 impl From<HashMap<&str, BexExternalValue>> for BexArgs {
     fn from(m: HashMap<&str, BexExternalValue>) -> Self {
-        BexArgs(m.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+        Self {
+            required: m.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
+            optional: IndexMap::new(),
+        }
     }
 }
 
 impl From<HashMap<String, BexExternalValue>> for BexArgs {
     fn from(m: HashMap<String, BexExternalValue>) -> Self {
-        BexArgs(m)
+        Self {
+            required: m.into_iter().collect(),
+            optional: IndexMap::new(),
+        }
+    }
+}
+
+impl From<IndexMap<String, BexExternalValue>> for BexArgs {
+    fn from(required: IndexMap<String, BexExternalValue>) -> Self {
+        Self {
+            required,
+            optional: IndexMap::new(),
+        }
     }
 }
 

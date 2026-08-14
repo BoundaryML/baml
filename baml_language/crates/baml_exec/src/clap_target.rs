@@ -47,16 +47,13 @@ fn leak(s: String) -> &'static str {
 /// depend on `baml_cli` — get the same look as the dev CLI.
 pub const CLAP_STYLING: styling::Styles = {
     use clap::builder::styling::{AnsiColor, Color, Effects, RgbColor, Style, Styles};
-    const PURPLE: Color = Color::Rgb(RgbColor(0xA8, 0x55, 0xF7));
-    // Tonal pair — same hue family, pale (Tailwind purple-200). Used on
-    // `<placeholders>` so they read as quiet secondary text against the
-    // bold primary purple without washing out into background gray.
-    const PURPLE_LIGHT: Color = Color::Rgb(RgbColor(0xE9, 0xD5, 0xFF));
+    const ACCENT: Color = Color::Rgb(RgbColor(0xA8, 0x55, 0xF7));
+    const PLACEHOLDER: Color = Color::Ansi(AnsiColor::Magenta);
     Styles::styled()
-        .header(Style::new().fg_color(Some(PURPLE)).effects(Effects::BOLD))
-        .usage(Style::new().fg_color(Some(PURPLE)).effects(Effects::BOLD))
+        .header(Style::new().fg_color(Some(ACCENT)).effects(Effects::BOLD))
+        .usage(Style::new().fg_color(Some(ACCENT)).effects(Effects::BOLD))
         .literal(Style::new().effects(Effects::BOLD))
-        .placeholder(Style::new().fg_color(Some(PURPLE_LIGHT)))
+        .placeholder(Style::new().fg_color(Some(PLACEHOLDER)))
         .error(
             Style::new()
                 .fg_color(Some(Color::Ansi(AnsiColor::Red)))
@@ -612,6 +609,27 @@ mod tests {
         let info = func_info(&["text"], vec![ty_string()], vec![false], ty_string());
         let err = parse_target_argv("./Test", "user.Test", &info, &["--help".into()]).unwrap_err();
         assert_eq!(err.kind(), clap::error::ErrorKind::DisplayHelp);
+    }
+
+    #[test]
+    fn clap_help_uses_brand_accent_and_terminal_placeholders() {
+        let info = func_info(&["text"], vec![ty_string()], vec![false], ty_string());
+        let mut command = build_target_command("./Test", "user.Test", &info);
+        let ansi = command.render_long_help().ansi().to_string();
+
+        assert!(
+            ansi.contains("\x1b[38;2;168;85;247m"),
+            "missing brand accent: {ansi:?}"
+        );
+        assert!(
+            ansi.contains("\x1b[35m"),
+            "missing terminal magenta placeholder: {ansi:?}"
+        );
+        assert!(
+            !ansi.contains("\x1b[38;2;233;213;255m"),
+            "fixed pale placeholder in: {ansi:?}"
+        );
+        assert!(!ansi.contains("\x1b[38;5;"), "fixed 256-color in: {ansi:?}");
     }
 
     // ── Defaulted parameters ──────────────────────────────────────────

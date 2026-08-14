@@ -1,20 +1,21 @@
 import { BamlCallContext, BamlRuntime, Collector, HostSpanManager, cancelFunctionCall as nativeCancelFunctionCall, getRuntime, installHostCallableDispatchFactory, newFunctionCall as nativeNewFunctionCall } from "./native.js";
 import { decodeCallResult, encodeCallArgs, makeHostCallableDispatch } from "./shared/proto.js";
+import { attachCallContext } from "./shared/call_context.js";
 
 installHostCallableDispatchFactory(makeHostCallableDispatch);
 
-export { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, LLMCall, Timing, Usage, flushEvents, getRuntime, getVersion, newFunctionCall } from "./native.js";
+export { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall } from "./native.js";
 export { BamlStream } from "./shared/stream.js";
 export { BamlTypeMap, getTypeMap, setTypeMap } from "./shared/typemap.js";
 export { defineFunction, defineInstanceFunction, UNSET } from "./shared/define_function.js";
 export type { GenericParams } from "./shared/define_function.js";
 export { Never, lowerTypeToWireTy } from "./shared/wire_ty.js";
 export type { BamlClassCtor, BamlPrimitiveToken, BamlType } from "./shared/wire_ty.js";
-export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic } from "./shared/errors.js";
+export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, wrapNativeError } from "./shared/errors.js";
 export { decodeCallResult, encodeCallArgs } from "./shared/proto.js";
 
-export function initializeRuntimeFromBytecode(bytecode: Uint8Array): void {
-  BamlRuntime.initializeRuntimeFromBytecode(bytecode);
+export function initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): void {
+  BamlRuntime.initializeRuntimeFromBytecode(bytecode, embeddedBamlToml);
 }
 
 export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
@@ -29,23 +30,23 @@ export class FunctionResult {
 
 export function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): FunctionResult {
   const callId = nativeNewFunctionCall();
-  const args = encodeCallArgs(kwargs, { syncMode: true, callId });
-  callCtx?._attachCallId(callId.toString());
+  const args = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
+  const callCtxBinding = attachCallContext(callCtx, callId);
   try {
-    return new FunctionResult(decodeCallResult(rt.callFunctionSync(functionName, args, ctx ?? null, collectors ?? null)));
+    return new FunctionResult(decodeCallResult(rt.callFunctionSync(args, ctx ?? null, collectors ?? null)));
   } finally {
-    callCtx?._detachCallId(callId.toString());
+    callCtxBinding.detach();
   }
 }
 
 export async function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): Promise<FunctionResult> {
   const callId = nativeNewFunctionCall();
-  const args = encodeCallArgs(kwargs, { callId });
-  callCtx?._attachCallId(callId.toString());
+  const args = encodeCallArgs(kwargs, { callId, functionName });
+  const callCtxBinding = attachCallContext(callCtx, callId);
   try {
-    return new FunctionResult(decodeCallResult(await rt.callFunction(functionName, args, ctx ?? null, collectors ?? null)));
+    return new FunctionResult(decodeCallResult(await rt.callFunction(args, ctx ?? null, collectors ?? null)));
   } finally {
-    callCtx?._detachCallId(callId.toString());
+    callCtxBinding.detach();
   }
 }
 

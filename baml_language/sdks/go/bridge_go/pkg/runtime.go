@@ -37,14 +37,15 @@ func Version() string {
 
 // CallFunction calls a BAML function asynchronously and returns the decoded Go result.
 func (rt *BamlRuntime) CallFunction(ctx context.Context, name string, args map[string]any) (any, error) {
-	encodedArgs, err := encodeCallArgs(args)
+	callbackID, ch := createUniqueID()
+
+	encodedArgs, err := encodeCallArgs(args, name, uint64(callbackID))
 	if err != nil {
+		deleteCallback(callbackID)
 		return nil, fmt.Errorf("encoding args: %w", err)
 	}
 
-	callbackID, ch := createUniqueID()
-
-	cffi.CallFunction(name, encodedArgs, callbackID)
+	cffi.CallFunction(encodedArgs, callbackID)
 
 	select {
 	case result := <-ch:

@@ -10,7 +10,7 @@
 //   stream_e2e_extract_doc(text) -> StreamingDoc   ($stream: Stream<StreamingDoc$stream | null, StreamingDoc>)
 //
 // The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
-// before `StreamFinished` (asserted below); finals are checked for type, not
+// before `Done` (asserted below); finals are checked for type, not
 // exact content. The class-typed tests are the bridge-level regression guard for
 // the class-typed streaming bug (bridge-generics/streaming, doc 00).
 //
@@ -22,7 +22,7 @@ import { describe, it, expect } from "vitest";
 // initialization happens as a side effect of the root module.
 import "./baml_sdk/index.js";
 import * as lorem from "./baml_sdk/lorem/index.js";
-import { StreamFinished } from "./baml_sdk/baml/stream/index.js";
+import { Done } from "./baml_sdk/ai/stream/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
 let withReplayServer: typeof import("./replay_harness.js").withReplayServer =
@@ -33,9 +33,10 @@ if (isTestRuntime("node")) {
 
 const T = 30_000;
 
+// The replay harness owns a local node:http listener. Web HTTP streaming is deliberately unsupported; browser/workerd tagged-handle selection, cloning, and prompt failure live in bridge_typescript_web/tests/typemap_builtins.test.ts, while generated stream-companion shapes run everywhere in type_shapes/roundtrip_streams.test.ts.
 describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => {
   it(
-    "next() yields >= 10 partials and drains to StreamFinished",
+    "streaming_e2e_next_yields_10_partials_and_drains_to_stream_finished",
     { timeout: T },
     withReplayServer("replay_extract_string", () => {
       const stream = lorem.stream_e2e_extract$stream(
@@ -44,7 +45,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
       let results = 0;
       for (;;) {
         const v: unknown = stream.next();
-        if (v instanceof StreamFinished) break;
+        if (v instanceof Done) break;
         results += 1;
         expect(v === null || typeof v === "string").toBe(true);
         expect(results).toBeLessThan(10_000);
@@ -55,7 +56,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
   );
 
   it(
-    "async: nextAsync() yields >= 10 partials",
+    "streaming_e2e_async_next_async_yields_10_partials",
     { timeout: T },
     withReplayServer("replay_extract_string", async () => {
       const stream = await lorem.stream_e2e_extract$stream_async(
@@ -64,7 +65,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
       let results = 0;
       for (;;) {
         const v: unknown = await stream.nextAsync();
-        if (v instanceof StreamFinished) break;
+        if (v instanceof Done) break;
         results += 1;
         expect(v === null || typeof v === "string").toBe(true);
         expect(results).toBeLessThan(10_000);
@@ -75,7 +76,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
   );
 
   it(
-    "BAML-driven collect keeps the S | StreamFinished union engine-side",
+    "streaming_e2e_baml_driven_collect_keeps_the_s_stream_finished_union_engine_side",
     { timeout: T },
     withReplayServer("replay_extract_string", () => {
       const result = lorem.stream_e2e_collect("ignored-by-replay-server");
@@ -89,9 +90,10 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
   );
 });
 
+// The class replay cases use the same Node-only local HTTP provider harness.
 describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
   it(
-    "next() yields >= 10 doc partials; final() is a typed StreamingDoc",
+    "streaming_e2e_next_yields_10_doc_partials_final_is_a_typed_streaming_doc",
     { timeout: T },
     withReplayServer("replay_extract_doc", () => {
       const stream = lorem.stream_e2e_extract_doc$stream(
@@ -100,7 +102,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
       let results = 0;
       for (;;) {
         const v: unknown = stream.next();
-        if (v instanceof StreamFinished) break;
+        if (v instanceof Done) break;
         results += 1;
         if (v !== null) expect(v).toHaveProperty("title");
         expect(results).toBeLessThan(10_000);
@@ -111,7 +113,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
   );
 
   it(
-    "async: class-typed nextAsync() yields >= 10 partials",
+    "streaming_e2e_async_class_typed_next_async_yields_10_partials",
     { timeout: T },
     withReplayServer("replay_extract_doc", async () => {
       const stream = await lorem.stream_e2e_extract_doc$stream_async(
@@ -120,7 +122,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
       let results = 0;
       for (;;) {
         const v: unknown = await stream.nextAsync();
-        if (v instanceof StreamFinished) break;
+        if (v instanceof Done) break;
         results += 1;
         if (v !== null) expect(v).toHaveProperty("title");
         expect(results).toBeLessThan(10_000);
@@ -131,7 +133,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
   );
 
   it(
-    "BAML-driven collect returns the final doc",
+    "streaming_e2e_baml_driven_collect_returns_the_final_doc",
     { timeout: T },
     withReplayServer("replay_extract_doc", () => {
       const result = lorem.stream_e2e_collect_doc("ignored-by-replay-server");

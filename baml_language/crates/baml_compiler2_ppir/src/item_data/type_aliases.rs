@@ -14,6 +14,7 @@ pub struct TypeAliasData {
     pub type_refs: TypeRefStore,
     /// Root of the aliased type. `None` when the RHS was omitted or unparseable.
     pub value: Option<TypeRefId>,
+    pub docstring: Option<String>,
 }
 
 /// Spans for a `TypeAlias`, parallel to [`TypeAliasData`].
@@ -21,6 +22,8 @@ pub struct TypeAliasData {
 pub struct TypeAliasSourceMap {
     /// Full source span of the declaration.
     pub span: TextRange,
+    /// Span of the alias's name token.
+    pub name_span: TextRange,
     /// Spans for every node in [`TypeAliasData::type_refs`].
     pub type_refs: TypeRefSourceMap,
 }
@@ -50,7 +53,9 @@ fn lower<'db>(
     db: &'db dyn crate::Db,
     alias: TypeAliasLoc<'db>,
 ) -> (TypeAliasData, TypeAliasSourceMap) {
-    let item_tree = crate::file_item_tree(db, alias.file(db));
+    let file = alias.file(db);
+    let item_tree = crate::file_item_tree(db, file);
+    let item_source_map = crate::file_item_tree_source_map(db, file);
     let data = &item_tree[alias.id(db)];
 
     let mut type_refs = TypeRefBuilder::new();
@@ -62,9 +67,15 @@ fn lower<'db>(
             name: data.name.clone(),
             type_refs: store,
             value,
+            docstring: data.docstring.clone(),
         },
         TypeAliasSourceMap {
             span: data.span,
+            name_span: item_source_map
+                .type_alias_name_spans
+                .get(&alias.id(db))
+                .copied()
+                .unwrap_or_else(|| unreachable!("name span recorded at allocation")),
             type_refs: spans,
         },
     )

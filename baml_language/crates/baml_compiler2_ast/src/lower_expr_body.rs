@@ -14,10 +14,10 @@ use crate::{
     LoweringDiagnostic,
     ast::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef,
-        FunctionDef, FunctionDefaults, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
-        PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
-        TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
+        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
+        LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin, MapExprEntry, MatchArm, MatchArmId,
+        ObjectExprField, Param, PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch,
+        TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
 
@@ -42,7 +42,7 @@ pub struct EnvVarRef {
 /// `dog_t.implements(animal_t)` on the reflection `type` value. This must
 /// match exactly what `parse_path_or_ident` / `at_member_name` accept in the
 /// parser; adding a new keyword there requires adding it here too.
-fn is_ident_token(kind: SyntaxKind) -> bool {
+pub(crate) fn is_ident_token(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::WORD
@@ -101,16 +101,10 @@ fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
 /// Lower a CST `ExprFunctionBody` to an owned `ExprBody` + parallel `AstSourceMap`.
 pub(crate) fn lower(
     expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
-    param_names: &[Name],
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<EnvVarRef>,
 ) -> (ExprBody, AstSourceMap) {
     let mut ctx = LoweringContext::new();
-
-    // Add function parameters to scope tracking (for gensym avoidance)
-    for name in param_names {
-        ctx.names_in_scope.insert(name.to_string());
-    }
 
     // The EXPR_FUNCTION_BODY contains a BLOCK_EXPR as its child
     let root_expr = expr_body
@@ -125,38 +119,12 @@ pub(crate) fn lower(
     (body, source_map)
 }
 
-/// Lower a `BLOCK_EXPR` node directly to an owned `ExprBody` + parallel `AstSourceMap`.
-///
-/// Used by `lower_cst` when synthesizing lambda bodies from `TEST_EXPR_DEF` / `TESTSET_DEF`
-/// blocks, where there is no wrapping `EXPR_FUNCTION_BODY` node.
-pub(crate) fn lower_block_node(
-    block_node: &SyntaxNode,
-    param_names: &[Name],
-) -> (
-    ExprBody,
-    AstSourceMap,
-    Vec<LoweringDiagnostic>,
-    Vec<EnvVarRef>,
-) {
-    let mut ctx = LoweringContext::new();
-    for name in param_names {
-        ctx.names_in_scope.insert(name.to_string());
-    }
-    let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone())
-        .map(|block| ctx.lower_block_expr(&block));
-    ctx.finish(root_expr)
-}
-
 pub(crate) fn lower_default_expr_nodes(
     defaults: &[(usize, baml_compiler_syntax::SyntaxElement)],
-    param_names: &[Name],
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<EnvVarRef>,
 ) -> (FunctionDefaults, Vec<(usize, DefaultExprId)>) {
     let mut ctx = LoweringContext::new();
-    for name in param_names {
-        ctx.names_in_scope.insert(name.to_string());
-    }
 
     let mut lowered = Vec::with_capacity(defaults.len());
     for (idx, element) in defaults {
@@ -174,41 +142,6 @@ pub(crate) fn lower_default_expr_nodes(
     diags.extend(ctx_diags);
     env_var_refs.extend(ctx_env_refs);
     (FunctionDefaults { exprs, source_map }, lowered)
-}
-
-/// Lower a testset `BLOCK_EXPR` body node to an owned `ExprBody` + `AstSourceMap`.
-///
-/// The body may contain a mix of regular statements (let bindings, for loops, if conditions)
-/// and `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The latter are converted to
-/// `<collector_var>.register_test(...)` / `<collector_var>.register_test_set(...)` calls
-/// so that the resulting body is a valid expression body for the testset collector lambda.
-///
-/// `collector_var` is the name of the `testing.TestSetCollector` parameter in scope.
-/// `param_names` are additional parameters to seed `names_in_scope` (e.g. the parent scope).
-///
-/// The returned body always has a `null` tail expression so the collector lambda satisfies
-/// the type checker's expectation that the body evaluates to `null`.
-pub(crate) fn lower_testset_block_node(
-    block_node: &SyntaxNode,
-    collector_var: &Name,
-    param_names: &[Name],
-) -> (
-    ExprBody,
-    AstSourceMap,
-    Vec<LoweringDiagnostic>,
-    Vec<EnvVarRef>,
-) {
-    let mut ctx = LoweringContext::new_testset_collector(collector_var.clone());
-    ctx.names_in_scope.insert(collector_var.to_string());
-    for name in param_names {
-        ctx.names_in_scope.insert(name.to_string());
-    }
-    let range = block_node.span_range();
-    let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()).map(|block| {
-        let inner_block_id = ctx.lower_block_expr(&block);
-        ctx.ensure_null_tail(inner_block_id, range)
-    });
-    ctx.finish(root_expr)
 }
 
 /// Lower a runner `SyntaxElement` (node or token) into an `ExprId` within the given context.
@@ -260,9 +193,9 @@ pub(crate) struct InitTestContext {
 
 impl InitTestContext {
     pub(crate) fn new() -> Self {
-        let mut inner = LoweringContext::new();
-        inner.names_in_scope.insert("registry".to_string());
-        Self { inner }
+        Self {
+            inner: LoweringContext::new(),
+        }
     }
 
     pub(crate) fn alloc_expr(&mut self, expr: Expr, span: text_size::TextRange) -> ExprId {
@@ -275,6 +208,36 @@ impl InitTestContext {
         span: text_size::TextRange,
     ) -> crate::ast::StmtId {
         self.inner.alloc_stmt(stmt, span)
+    }
+
+    /// Lower a top-level `test`'s body into the `$init_test` arena, as the body
+    /// of the lambda that gets registered.
+    ///
+    /// The nodes carry their real source offsets even though `$init_test`'s own
+    /// synthesized nodes carry empty ranges — both live in one source map, and
+    /// HIR resolves names inside the body by offset.
+    pub(crate) fn lower_test_body(&mut self, block_node: &SyntaxNode, span: TextRange) -> ExprId {
+        match baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()) {
+            Some(block) => self.inner.lower_lambda_body(&block),
+            None => self.inner.alloc_expr(Expr::Null, span),
+        }
+    }
+
+    /// Lower a top-level `testset`'s body into the `$init_test` arena, as the
+    /// body of the collector lambda that gets registered.
+    pub(crate) fn lower_testset_body(
+        &mut self,
+        block_node: &SyntaxNode,
+        collector: Name,
+        span: TextRange,
+    ) -> ExprId {
+        match baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()) {
+            Some(block) => {
+                self.inner
+                    .lower_testset_collector_body(&block, collector, block_node.span_range())
+            }
+            None => self.inner.alloc_expr(Expr::Null, span),
+        }
     }
 
     pub(crate) fn finish(
@@ -290,21 +253,63 @@ impl InitTestContext {
     }
 }
 
-/// BEP-049 §10 (M5f). Synthesize a NEW-MODE (backtick) LLM function body:
-/// `baml.llm.<builtin>(<client>, "Fn", {params}, <prompt-tag closure>)`.
-/// Identical to `lower_cst::synthesize_llm_builtin_call` except it appends the
-/// synthesized prompt-tag closure as a 4th argument (the orchestrator invokes it
-/// per attempt; legacy Jinja prompts pass 3 args and a `null` closure). Built in one
-/// `LoweringContext` so the closure shares the call's arena; the closure's
-/// `${…}` interps keep their real source spans, so interp diagnostics point at
-/// the user's prompt. Lowering diagnostics / `env.X` refs from the prompt are
-/// returned for the caller to merge.
-pub(crate) fn synthesize_llm_call_with_prompt(
-    builtin_name: &str,
+/// Lower a `client Name = <expr>;` initializer into its own `ExprBody`.
+/// The value may be a node or a bare identifier/literal token.
+pub(crate) fn lower_client_initializer(
+    value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<EnvVarRef>,
+) -> (ExprBody, AstSourceMap) {
+    let mut ctx = LoweringContext::new();
+    let root = match value {
+        Some(rowan::NodeOrToken::Node(node)) => ctx.lower_expr(node),
+        Some(rowan::NodeOrToken::Token(token)) => ctx
+            .try_lower_bare_token(token)
+            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
+        None => ctx.alloc_expr(Expr::Missing, span),
+    };
+    let (body, source_map, ctx_diags, ctx_env_refs) = ctx.finish(Some(root));
+    diags.extend(ctx_diags);
+    env_var_refs.extend(ctx_env_refs);
+    (body, source_map)
+}
+
+/// BEP `@spec`: synthesize the body of the `<Fn>$spec` companion — an
+/// `ai.FunctionSpec<Out>` literal binding the function's arguments:
+///
+/// ```baml
+/// ai.FunctionSpec<Out> {
+///     spec_name: "Fn",
+///     args: { "p": p, ... },
+///     prompt_template: (output_format: string) -> {
+///         // the parameter's real name is ` __spec_output_format` (leading
+///         // space) so it can never shadow a user identifier
+///         let ctx = ai.internal.SpecCtx { output_format: output_format };
+///         let tagged = baml.TaggedString { ...the function's prompt... };
+///         ai.internal.assemble_prompt(tagged.parts, tagged.values)
+///     },
+///     toolbox: ai.Toolbox.new([ai.tool(a), ...]),
+///     default_client: openai.OpenAiClient.new(model = "gpt-4o-mini"),
+/// }
+/// ```
+///
+/// The prompt closure uses the same structural parts/values representation as
+/// the built-in `prompt` tag. `${role(...)}` values become prompt messages
+/// and media remains structural. `ctx` is bound to an `ai.internal.SpecCtx`,
+/// so `${ctx.output_format}` resolves to the closure's parameter and every
+/// other interpolation captures the enclosing function's parameters. Provider
+/// construction is pure, so the eager default client never touches credentials.
+///
+/// In the `tools` list, a bare function reference is wrapped in `ai.tool(...)`;
+/// any other element expression must already produce an `ai.Tool`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn synthesize_llm_spec_body(
     function_name: &str,
     param_names: &[Name],
-    client_name: Option<&str>,
-    type_args: Vec<crate::ast::TypeExpr>,
+    client_spec: &crate::lower_cst::LlmClientSpec,
+    out_type: Option<crate::ast::TypeExpr>,
+    tools_value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
     prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
     span: TextRange,
 ) -> (
@@ -317,12 +322,14 @@ pub(crate) fn synthesize_llm_call_with_prompt(
 
     let mut ctx = LoweringContext::new();
 
-    let fn_name_expr = ctx.alloc_expr(
+    // spec_name: "Fn"
+    let name_lit = ctx.alloc_expr(
         Expr::Literal(Literal::String(function_name.to_string())),
         span,
     );
 
-    let entries: Vec<(ExprId, ExprId)> = param_names
+    // args: { "p": p, ... }
+    let entries: Vec<MapExprEntry> = param_names
         .iter()
         .map(|name| {
             let key = ctx.alloc_expr(
@@ -330,73 +337,552 @@ pub(crate) fn synthesize_llm_call_with_prompt(
                 span,
             );
             let value = ctx.alloc_expr(Expr::Path(vec![name.clone()]), span);
-            (key, value)
+            MapExprEntry::explicit(key, value)
         })
         .collect();
     let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
 
-    let callee = ctx.alloc_expr(
-        Expr::Path(vec![
+    // prompt_template: ( __spec_output_format: string) -> ai.Prompt { ... }
+    //
+    // The lambda parameter carries a leading-space name so it can never
+    // shadow a user identifier: a function parameter named `output_format`
+    // must stay visible to `${output_format}` in the template (the parameter
+    // is only the render calling convention; `ctx.output_format` is the
+    // documented way to reach the rendered schema). Mirrors the `__tt_*`
+    // accumulator naming in `elaborate_tagged_body`.
+    //
+    // Binding references are span-position-checked against their `let`'s
+    // visibility window, and the template's `${ctx.…}` interps keep their real
+    // source ranges inside the backtick — so the synthesized `let ctx` must
+    // sit at an empty range at the backtick's *start*, before every reference
+    // (mirrors the accumulator lets in `elaborate_tagged_body`).
+    let of_param_name = Name::new(" __spec_output_format");
+    let prompt_lambda_span = prompt_backtick.syntax().span_range();
+    let prompt_start = TextRange::empty(prompt_lambda_span.start());
+    let of_ref = ctx.alloc_expr(Expr::Path(vec![of_param_name.clone()]), prompt_start);
+    let spec_ctx_obj = ctx.alloc_expr(
+        Expr::Object {
+            type_name: baml_base::TypePath::from_dotted("ai.internal.SpecCtx"),
+            type_args: vec![],
+            fields: vec![ObjectExprField::explicit(
+                Name::new("output_format"),
+                of_ref,
+            )],
+            spreads: vec![],
+        },
+        prompt_start,
+    );
+    let ctx_pat = ctx.alloc_pattern(
+        Pattern::Bind {
+            name: Name::new("ctx"),
+            subpat: None,
+        },
+        prompt_start,
+    );
+    let let_ctx = ctx.alloc_stmt(
+        Stmt::Let {
+            pattern: ctx_pat,
+            initializer: Some(spec_ctx_obj),
+            origin: LetOrigin::Source,
+            else_branch: None,
+        },
+        prompt_start,
+    );
+    // Flatten the template exactly like the public `prompt` tag: values stay
+    // structural until the Rust prompt assembler sees them. Rewrite the
+    // prompt-local role constructor before name resolution; it is the same
+    // binding that the public tag supplies to its body lambda.
+    let segments = ctx.lower_template_segments_checked(prompt_backtick);
+    let role_callees: Vec<ExprId> = ctx
+        .exprs
+        .iter()
+        .filter_map(|(_, expr)| match expr {
+            Expr::Call { callee, .. }
+                if matches!(&ctx.exprs[*callee], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "role") =>
+            {
+                Some(*callee)
+            }
+            _ => None,
+        })
+        .collect();
+    for callee in role_callees {
+        ctx.exprs[callee] = Expr::Path(vec![
             Name::new("baml"),
-            Name::new("llm"),
-            Name::new(builtin_name),
+            Name::new("prompt"),
+            Name::new("make_role"),
+        ]);
+    }
+
+    let prev_synth = std::mem::replace(&mut ctx.synthesizing, true);
+    let tagged_expr = ctx.elaborate_tagged_body(&segments, prompt_lambda_span);
+    ctx.synthesizing = prev_synth;
+
+    // Evaluate the flattened template once before reading its two arrays.
+    let tagged_name = Name::new(" __spec_tagged_prompt");
+    let tagged_pat = ctx.alloc_pattern(
+        Pattern::Bind {
+            name: tagged_name.clone(),
+            subpat: None,
+        },
+        prompt_start,
+    );
+    let let_tagged = ctx.alloc_stmt(
+        Stmt::Let {
+            pattern: tagged_pat,
+            initializer: Some(tagged_expr),
+            origin: LetOrigin::Source,
+            else_branch: None,
+        },
+        prompt_start,
+    );
+    let parts_base = ctx.alloc_expr(Expr::Path(vec![tagged_name.clone()]), prompt_start);
+    let parts = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: parts_base,
+            member: Name::new("parts"),
+        },
+        prompt_start,
+    );
+    let values_base = ctx.alloc_expr(Expr::Path(vec![tagged_name]), prompt_start);
+    let values = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: values_base,
+            member: Name::new("values"),
+        },
+        prompt_start,
+    );
+    let assemble_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("internal"),
+            Name::new("assemble_prompt"),
+        ]),
+        prompt_start,
+    );
+    let prompt_ast = ctx.alloc_expr(
+        Expr::Call {
+            callee: assemble_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(parts), CallArg::positional(values)],
+        },
+        prompt_start,
+    );
+    let lambda_body = ctx.alloc_expr(
+        Expr::Block {
+            stmts: vec![let_ctx, let_tagged],
+            tail_expr: Some(prompt_ast),
+        },
+        prompt_lambda_span,
+    );
+    let of_param = Param {
+        name: of_param_name,
+        type_expr: Some((TypeExprKind::String { attrs: vec![] }).at(span)),
+        default: None,
+        span,
+        name_span: span,
+    };
+    // The prompt lambda carries the backtick's own range: lambda scopes are
+    // located by exact span within their owner (semantic index
+    // `lambda_scope_for_within`), so the two lambdas synthesized into this
+    // body must not share a range — the default-client thunk keeps the block
+    // span.
+    let prompt_lambda = ctx.alloc_expr(
+        Expr::Lambda(Box::new(LambdaDef {
+            kind: LambdaKind::Anonymous,
+            params: vec![of_param],
+            defaults: FunctionDefaults::empty(),
+            return_type: None,
+            throws: None,
+            body: Some(lambda_body),
+            span: prompt_lambda_span,
+        })),
+        prompt_lambda_span,
+    );
+    // toolbox: ai.Toolbox.new([...])
+    let tool_list = match tools_value {
+        Some(rowan::NodeOrToken::Node(node)) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
+            let mut elements = Vec::new();
+            for elem in node.children_with_tokens() {
+                let lowered = match &elem {
+                    rowan::NodeOrToken::Node(child) => {
+                        Some((child.kind() == SyntaxKind::PATH_EXPR, ctx.lower_expr(child)))
+                    }
+                    rowan::NodeOrToken::Token(token) => {
+                        let is_bare_ref = is_ident_token(token.kind());
+                        ctx.try_lower_bare_token(token).map(|id| (is_bare_ref, id))
+                    }
+                };
+                if let Some((is_bare_ref, id)) = lowered {
+                    let id = if is_bare_ref {
+                        // A bare function reference: normalize through ai.tool().
+                        let tool_callee = ctx.alloc_expr(
+                            Expr::Path(vec![
+                                Name::new("ai"),
+                                Name::new("tools"),
+                                Name::new("tool"),
+                            ]),
+                            span,
+                        );
+                        ctx.alloc_expr(
+                            Expr::Call {
+                                callee: tool_callee,
+                                type_args: vec![],
+                                args: vec![CallArg::positional(id)],
+                            },
+                            span,
+                        )
+                    } else {
+                        id
+                    };
+                    elements.push(id);
+                }
+            }
+            ctx.alloc_expr(Expr::Array { elements }, span)
+        }
+        // A non-list expression must already produce an `ai.Tool[]`.
+        Some(rowan::NodeOrToken::Node(node)) => ctx.lower_expr(node),
+        // A bare dot-free identifier is a token, not a node: a variable
+        // holding the `ai.Tool[]` value.
+        Some(rowan::NodeOrToken::Token(token)) => ctx
+            .try_lower_bare_token(token)
+            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
+        None => ctx.alloc_expr(Expr::Array { elements: vec![] }, span),
+    };
+    let toolbox_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("tools"),
+            Name::new("Toolbox"),
+            Name::new("new"),
         ]),
         span,
     );
+    let toolbox = ctx.alloc_expr(
+        Expr::Call {
+            callee: toolbox_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(tool_list)],
+        },
+        span,
+    );
 
-    let client_arg = match client_name {
-        Some(name) if name.contains('/') => {
-            let name_lit = ctx.alloc_expr(Expr::Literal(Literal::String(name.to_string())), span);
-            let ct_variant = ctx.alloc_expr(
-                Expr::Path(vec![
-                    Name::new("baml"),
-                    Name::new("llm"),
-                    Name::new("ClientType"),
-                    Name::new("Primitive"),
-                ]),
+    // default_client — an eager value; provider construction is pure
+    // (credentials resolve from the environment at request time), so
+    // building the spec never touches env. Either the compile-time-mapped
+    // provider constructor for a "provider/model" string, or the user's own
+    // client expression lowered in place.
+    let default_client = match client_spec {
+        crate::lower_cst::LlmClientSpec::Provider { pkg, class, model } => {
+            let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
+            let ctor_callee = ctx.alloc_expr(
+                Expr::Path(vec![Name::new(*pkg), Name::new(*class), Name::new("new")]),
                 span,
             );
-            let sub = ctx.alloc_expr(Expr::Array { elements: vec![] }, span);
-            let retry = ctx.alloc_expr(Expr::Null, span);
-            let counter = ctx.alloc_expr(Expr::Literal(Literal::Int(0)), span);
             ctx.alloc_expr(
-                Expr::Object {
-                    type_name: baml_base::TypePath::from_dotted("baml.llm.Client"),
+                Expr::Call {
+                    callee: ctor_callee,
                     type_args: vec![],
-                    fields: vec![
-                        (Name::new("name"), name_lit),
-                        (Name::new("client_type"), ct_variant),
-                        (Name::new("sub_clients"), sub),
-                        (Name::new("retry"), retry),
-                        (Name::new("counter"), counter),
-                    ],
-                    spreads: vec![],
+                    args: vec![CallArg::named("model", model_lit)],
                 },
                 span,
             )
         }
-        Some(name) => ctx.alloc_expr(Expr::Path(vec![Name::new(name)]), span),
-        None => ctx.alloc_expr(Expr::Null, span),
+        crate::lower_cst::LlmClientSpec::Expr(rowan::NodeOrToken::Node(node)) => {
+            ctx.lower_expr(node)
+        }
+        crate::lower_cst::LlmClientSpec::Expr(rowan::NodeOrToken::Token(token)) => ctx
+            .try_lower_bare_token(token)
+            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
     };
 
-    let prompt_closure = ctx.build_prompt_tag_closure(prompt_backtick, span);
+    let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
+    let spec_obj = ctx.alloc_expr(
+        Expr::Object {
+            type_name: baml_base::TypePath::from_dotted("ai.FunctionSpec"),
+            type_args,
+            fields: vec![
+                ObjectExprField::explicit(Name::new("spec_name"), name_lit),
+                ObjectExprField::explicit(Name::new("args"), args_map),
+                ObjectExprField::explicit(Name::new("prompt_template"), prompt_lambda),
+                ObjectExprField::explicit(Name::new("toolbox"), toolbox),
+                ObjectExprField::explicit(Name::new("default_client"), default_client),
+            ],
+            spreads: vec![],
+        },
+        span,
+    );
 
+    ctx.finish(Some(spec_obj))
+}
+
+/// Synthesize the `$render_prompt` companion body: render the spec's prompt
+/// with the return type's output-format text —
+/// `Fn$spec(p...).prompt(ai.wire.render_output_format(reflect.type_of<Out>()))`.
+pub(crate) fn synthesize_spec_render_prompt_body(
+    function_name: &str,
+    param_names: &[Name],
+    spec_type_args: Vec<crate::ast::TypeExpr>,
+    out_type: Option<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+
+    let spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
+        span,
+    );
+    let spec_args: Vec<CallArg> = param_names
+        .iter()
+        .map(|n| CallArg::positional(ctx.alloc_expr(Expr::Path(vec![n.clone()]), span)))
+        .collect();
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: spec_type_args,
+            args: spec_args,
+        },
+        span,
+    );
+    let prompt_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: spec_call,
+            member: Name::new("prompt"),
+        },
+        span,
+    );
+    let type_of_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new("reflect"), Name::new("type_of")]),
+        span,
+    );
+    let type_of_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: type_of_callee,
+            type_args: out_type.map(|t| vec![t]).unwrap_or_default(),
+            args: vec![],
+        },
+        span,
+    );
+    let rof_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("wire"),
+            Name::new("render_output_format"),
+        ]),
+        span,
+    );
+    let rof_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: rof_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(type_of_call)],
+        },
+        span,
+    );
+    let render_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: prompt_callee,
+            type_args: vec![],
+            args: vec![CallArg::named("output_format", rof_call)],
+        },
+        span,
+    );
+
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(render_call));
+    (body, source_map)
+}
+
+/// Synthesize the `$parse` companion body: a network-free parse of an
+/// existing JSON/SAP string into the function's return type —
+/// `baml.sap.parse<Out>(json)`.
+pub(crate) fn synthesize_spec_parse_body(
+    out_type: Option<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+    let json_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("json")]), span);
+    let callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("sap"),
+            Name::new("parse"),
+        ]),
+        span,
+    );
     let call = ctx.alloc_expr(
         Expr::Call {
             callee,
+            type_args: out_type.map(|t| vec![t]).unwrap_or_default(),
+            args: vec![CallArg::positional(json_ref)],
+        },
+        span,
+    );
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
+    (body, source_map)
+}
+
+/// BEP `@spec` spec mode: synthesize the direct-call body of a `tools`-bearing
+/// LLM function — run the default ai runner over the function's own spec and
+/// unwrap the value:
+///
+/// ```baml
+/// ai.Agent<Out>.new(client = client).run(Fn$spec(p1, p2)).value
+/// ```
+///
+/// `client` is the compiler-injected `ai.Client? = null` override parameter;
+/// `Agent.run` falls back to the spec's default client when it is null.
+pub(crate) fn synthesize_spec_agent_run_body(
+    function_name: &str,
+    param_names: &[Name],
+    spec_type_args: Vec<crate::ast::TypeExpr>,
+    out_type: Option<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+
+    // Fn$spec(p1, p2, ...)
+    let spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
+        span,
+    );
+    let spec_args: Vec<CallArg> = param_names
+        .iter()
+        .map(|n| {
+            let id = ctx.alloc_expr(Expr::Path(vec![n.clone()]), span);
+            CallArg::positional(id)
+        })
+        .collect();
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: spec_type_args,
+            args: spec_args,
+        },
+        span,
+    );
+
+    // ai.Agent<Out>.new(client = client)
+    let agent_path = ctx.alloc_expr(Expr::Path(vec![Name::new("ai"), Name::new("Agent")]), span);
+    let new_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: agent_path,
+            member: Name::new("new"),
+        },
+        span,
+    );
+    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
+    let new_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: new_callee,
+            type_args,
+            args: vec![CallArg::named("client", client_ref)],
+        },
+        span,
+    );
+
+    // .run(spec).value
+    let run_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: new_call,
+            member: Name::new("run"),
+        },
+        span,
+    );
+    let run_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: run_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(spec_call)],
+        },
+        span,
+    );
+    let value = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: run_call,
+            member: Name::new("value"),
+        },
+        span,
+    );
+
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(value));
+    (body, source_map)
+}
+
+/// Synthesize the `$stream` companion body (built at PPIR level, where the
+/// stream-expanded return type is known) — one-turn streaming over the
+/// function's own spec:
+///
+/// ```baml
+/// ai.stream.from_spec<Out$stream, Out>(Fn$spec(p1, p2), client = client)
+/// ```
+///
+/// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
+/// stdlib reifies both types from its own frame via `reflect.type_of`.
+/// `client` is the companion's injected `ai.StreamingClient? = null`
+/// override; `from_spec` falls back to the spec's default client when it
+/// is null.
+pub fn synthesize_spec_stream_body(
+    function_name: &str,
+    param_names: &[Name],
+    spec_type_args: Vec<crate::ast::TypeExpr>,
+    type_args: Vec<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+
+    // Fn$spec(p1, p2, ...)
+    let spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
+        span,
+    );
+    let spec_args: Vec<CallArg> = param_names
+        .iter()
+        .map(|n| {
+            let id = ctx.alloc_expr(Expr::Path(vec![n.clone()]), span);
+            CallArg::positional(id)
+        })
+        .collect();
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: spec_type_args,
+            args: spec_args,
+        },
+        span,
+    );
+
+    // ai.stream.from_spec<TS, TF>(spec, client = client)
+    let stream_spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("stream"),
+            Name::new("from_spec"),
+        ]),
+        span,
+    );
+    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let call = ctx.alloc_expr(
+        Expr::Call {
+            callee: stream_spec_callee,
             type_args,
             args: vec![
-                CallArg::positional(client_arg),
-                CallArg::positional(fn_name_expr),
-                CallArg::positional(args_map),
-                // `prompt_closure` is a defaulted param → must be passed by name.
-                CallArg::named("prompt_closure", prompt_closure),
+                CallArg::positional(spec_call),
+                CallArg::named("client", client_ref),
             ],
         },
         span,
     );
 
-    ctx.finish(Some(call))
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
+    (body, source_map)
 }
 
 struct LoweringContext {
@@ -408,8 +894,6 @@ struct LoweringContext {
     type_annotations: Arena<TypeExpr>,
     /// Parallel span storage
     source_map: AstSourceMap,
-    /// All names used, for generating unique synthetic variable names.
-    names_in_scope: std::collections::HashSet<String>,
     /// When set, `TEST_EXPR_DEF` and `TESTSET_DEF` nodes encountered during block
     /// lowering are converted to `<var>.register_test(...)` / `<var>.register_test_set(...)`
     /// calls using this variable name. This supports dynamic test generation inside
@@ -457,7 +941,6 @@ impl LoweringContext {
             catch_arms: Arena::new(),
             type_annotations: Arena::new(),
             source_map: AstSourceMap::new(),
-            names_in_scope: std::collections::HashSet::new(),
             testset_collector_var: None,
             diags: Vec::new(),
             env_var_refs: Vec::new(),
@@ -465,12 +948,6 @@ impl LoweringContext {
             consumed_generic_args: std::collections::HashSet::new(),
             synthesizing: false,
         }
-    }
-
-    fn new_testset_collector(collector_var: Name) -> Self {
-        let mut ctx = Self::new();
-        ctx.testset_collector_var = Some(collector_var);
-        ctx
     }
 
     fn warn_const_introducer(&mut self, span: TextRange) {
@@ -588,6 +1065,39 @@ impl LoweringContext {
         }
     }
 
+    /// Lower a lambda's `BLOCK_EXPR` into this arena.
+    ///
+    /// Clears `testset_collector_var` for the duration: a `test` / `testset`
+    /// written inside a lambda body is not in a collector's scope, so it must
+    /// lower to `Stmt::Missing` rather than a registration call. Before lambda
+    /// bodies shared this arena that fell out of building them in a fresh
+    /// `LoweringContext`; now it has to be said.
+    fn lower_lambda_body(&mut self, block: &baml_compiler_syntax::ast::BlockExpr) -> ExprId {
+        let saved_collector = self.testset_collector_var.take();
+        let body = self.lower_block_expr(block);
+        self.testset_collector_var = saved_collector;
+        body
+    }
+
+    /// Lower a testset's `BLOCK_EXPR` into this arena as a collector-lambda body.
+    ///
+    /// Sets `testset_collector_var` for the duration — the exact inverse of
+    /// [`Self::lower_lambda_body`] — so a `test` written inside registers
+    /// against `collector`. The body always ends in a `null` tail, which is what
+    /// the collector lambda's `-> void` signature expects.
+    fn lower_testset_collector_body(
+        &mut self,
+        block: &baml_compiler_syntax::ast::BlockExpr,
+        collector: Name,
+        range: TextRange,
+    ) -> ExprId {
+        let saved_collector = self.testset_collector_var.replace(collector);
+        let inner = self.lower_block_expr(block);
+        let body = self.ensure_null_tail(inner, range);
+        self.testset_collector_var = saved_collector;
+        body
+    }
+
     /// Ensure a block expression ends with a `null` tail.
     ///
     /// If `block_id` refers to a `Block` with no tail expression, this adds a `null` tail
@@ -687,12 +1197,23 @@ impl LoweringContext {
                             self.alloc_stmt(Stmt::Continue, node.span_range())
                         }
                         SyntaxKind::DEFER_STMT => self.lower_defer_stmt(node),
+                        // A nested `test` / `testset` registers against the
+                        // enclosing `testset`'s collector, so it only means
+                        // something where `testset_collector_var` is set — i.e.
+                        // directly inside a `testset` body. Everywhere else there
+                        // is nothing to register against and the declaration is
+                        // dropped: inside a `test` body (which clears the var, so
+                        // tests don't nest), inside a lambda, or in an ordinary
+                        // function.
+                        //
+                        // BUG: it is dropped *silently* — neither the parser nor
+                        // this lowering reports it. `testset "A" { test "B" { test
+                        // "C" {} } }` compiles clean while `test "C"` never runs.
                         SyntaxKind::TEST_EXPR_DEF => {
                             if self.testset_collector_var.is_some() {
                                 let expr_id = self.lower_test_expr_as_register_call(node);
                                 self.alloc_stmt(Stmt::Expr(expr_id), node.span_range())
                             } else {
-                                // Invalid context — parser already emitted a diagnostic
                                 self.alloc_stmt(Stmt::Missing, node.span_range())
                             }
                         }
@@ -701,7 +1222,6 @@ impl LoweringContext {
                                 let expr_id = self.lower_testset_as_register_call(node);
                                 self.alloc_stmt(Stmt::Expr(expr_id), node.span_range())
                             } else {
-                                // Invalid context — parser already emitted a diagnostic
                                 self.alloc_stmt(Stmt::Missing, node.span_range())
                             }
                         }
@@ -819,6 +1339,7 @@ impl LoweringContext {
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
             SyntaxKind::UPCAST_EXPR => self.lower_upcast_expr(node),
+            SyntaxKind::SPEC_EXPR => self.lower_spec_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
@@ -863,6 +1384,13 @@ impl LoweringContext {
     /// which the MIR lowering then handles via `lower_lambda` to emit
     /// the proper `MakeClosure`. The name expression is parsed in the
     /// outer context (where it can reference outer bindings).
+    ///
+    /// That body-is-a-lambda invariant is upheld here rather than assumed
+    /// downstream: with no `BLOCK_EXPR` there is no lambda to build, so the
+    /// whole `spawn` lowers to [`Expr::Missing`] instead of a `Spawn` wrapping
+    /// a non-lambda body. Inference projects the body's return type and reads
+    /// its effective throws out of the lambda side table, neither of which
+    /// exists for a non-lambda.
     fn lower_spawn_expr(&mut self, node: &SyntaxNode) -> ExprId {
         use baml_compiler_syntax::ast as cst_ast;
 
@@ -929,28 +1457,15 @@ impl LoweringContext {
                 // capture / scope / MIR plumbing applies unchanged.
                 let block = cst_ast::BlockExpr::cast(child.clone());
                 let func_def = block.map(|block| {
-                    let mut lambda_ctx = LoweringContext::new();
-                    let root_expr = lambda_ctx.lower_block_expr(&block);
-                    let (lbody, source_map, lambda_diags, lambda_env_refs) =
-                        lambda_ctx.finish(Some(root_expr));
-                    self.diags.extend(lambda_diags);
-                    self.env_var_refs.extend(lambda_env_refs);
-                    FunctionDef {
-                        name: Name::new("<spawn>"),
-                        generic_params: Vec::new(),
-                        generic_param_bounds: Vec::new(),
+                    let body = self.lower_lambda_body(&block);
+                    LambdaDef {
+                        kind: LambdaKind::Spawn,
                         params: Vec::new(),
                         defaults: crate::ast::FunctionDefaults::empty(),
                         return_type: None,
                         throws: None,
-                        body: Some(FunctionBodyDef::Expr(lbody, source_map)),
-                        declarative_meta: None,
-                        origin: crate::ast::FunctionOrigin::Internal,
-                        attributes: Vec::new(),
-                        docstring: None,
-                        is_tagged_template_tag: false,
+                        body: Some(body),
                         span: child.span_range(),
-                        name_span: child.span_range(),
                     }
                 });
                 if let Some(fd) = func_def {
@@ -964,7 +1479,13 @@ impl LoweringContext {
             }
         }
 
-        let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        // No block — an incomplete `spawn` (an editor prefix typed before the
+        // body exists, or a syntax error the parser has already reported).
+        // There is no lambda to hang the spawn off, so the expression itself is
+        // what is missing.
+        let Some(body) = body_lambda else {
+            return self.alloc_expr(Expr::Missing, node.span_range());
+        };
         self.alloc_expr(
             Expr::Spawn {
                 name,
@@ -2702,6 +3223,48 @@ impl LoweringContext {
         self.wrap_generic_apply(node, id, node.span_range())
     }
 
+    /// Lower `MyFunc@spec` (BEP `@spec` postfix) by renaming the base path's
+    /// last segment to the `<name>$spec` companion function — resolution then
+    /// proceeds exactly as if the companion had been named directly. The base
+    /// must be a plain path (an LLM function reference); anything else lowers
+    /// to `Missing` with a diagnostic-friendly span.
+    fn lower_spec_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let span = node.span_range();
+        // The base is either a PATH_EXPR child or a bare WORD token (single
+        // identifiers are tokens, not nodes, in postfix wrappers).
+        let mut segments: Vec<Name> = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) if child.kind() == SyntaxKind::PATH_EXPR => {
+                    for t in child
+                        .children_with_tokens()
+                        .filter_map(rowan::NodeOrToken::into_token)
+                    {
+                        if is_ident_token(t.kind()) {
+                            segments.push(Name::new(t.text()));
+                        }
+                    }
+                }
+                // Everything before the `@` is the base; the trailing
+                // `spec` word after it is the operator, not a segment.
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::AT => break,
+                rowan::NodeOrToken::Token(t) if is_ident_token(t.kind()) => {
+                    segments.push(Name::new(t.text()));
+                }
+                _ => {}
+            }
+        }
+        let Some(last) = segments.pop() else {
+            self.diags.push(LoweringDiagnostic::UnparseableType {
+                context: "`@spec` target (expected an LLM function reference)".to_string(),
+                span,
+            });
+            return self.alloc_expr(Expr::Missing, span);
+        };
+        segments.push(Name::new(format!("{}$spec", last.as_str())));
+        self.alloc_expr(Expr::Path(segments), span)
+    }
+
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let mut base = None;
         let mut field = None;
@@ -3454,7 +4017,7 @@ impl LoweringContext {
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
 
         // BEP-049 ergonomic hack: a bare `` prompt`...` `` tag resolves to the
-        // stdlib `baml.llm.prompt`. `prompt` lives in the `baml.llm` namespace
+        // stdlib `ai.prompt`. BAML has no prelude,
         // and BAML has no prelude, so the unqualified form (which the BEP §10
         // examples use) would otherwise be an unresolved name. Rewriting the bare
         // path here — same `ExprId`, so the source span is preserved — means every
@@ -3463,11 +4026,7 @@ impl LoweringContext {
         // caller who needs a different `prompt` tag can write it qualified.
         if matches!(&self.exprs[tag], Expr::Path(segs) if segs.len() == 1 && segs[0].as_str() == "prompt")
         {
-            self.exprs[tag] = Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("llm"),
-                Name::new("prompt"),
-            ]);
+            self.exprs[tag] = Expr::Path(vec![Name::new("ai"), Name::new("prompt")]);
         }
 
         let segments = backtick_node
@@ -3485,41 +4044,6 @@ impl LoweringContext {
         let body = self.elaborate_tagged_body(&segments, span);
         self.synthesizing = prev_synth;
 
-        self.alloc_expr(
-            Expr::Template {
-                tag: TemplateTag::Custom { tag, body },
-                segments,
-            },
-            span,
-        )
-    }
-
-    /// BEP-049 §10 (M5f). Build a `baml.llm.prompt`-tagged closure over the
-    /// segments for a new-mode LLM prompt — a *bare* backtick literal (no written tag), so the
-    /// `baml.llm.prompt` tag is synthesized here. Mirrors `lower_tagged_template_expr`
-    /// but with the synthetic tag; the segment interps keep their real source
-    /// spans (so `${…}` diagnostics point at the user's prompt). The result is a
-    /// `(Context) -> PromptAst`-producing expression the orchestrator invokes.
-    pub(crate) fn build_prompt_tag_closure(
-        &mut self,
-        backtick: &baml_compiler_syntax::BacktickStringLiteral,
-        span: TextRange,
-    ) -> ExprId {
-        let tag = self.alloc_expr(
-            Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("llm"),
-                Name::new("prompt"),
-            ]),
-            span,
-        );
-        let segments = self.lower_template_segments_checked(backtick);
-        // The desugared closure body is entirely compiler-generated — mark its
-        // nodes synthetic, mirroring the untagged path. The segments were lowered
-        // above as real user code and keep their non-synthetic ids.
-        let prev_synth = std::mem::replace(&mut self.synthesizing, true);
-        let body = self.elaborate_tagged_body(&segments, span);
-        self.synthesizing = prev_synth;
         self.alloc_expr(
             Expr::Template {
                 tag: TemplateTag::Custom { tag, body },
@@ -3595,8 +4119,8 @@ impl LoweringContext {
                 type_name: baml_base::TypePath::from_dotted("baml.TaggedString"),
                 type_args: Vec::new(),
                 fields: vec![
-                    (Name::new("parts"), parts_ref),
-                    (Name::new("values"), values_ref),
+                    ObjectExprField::explicit(Name::new("parts"), parts_ref),
+                    ObjectExprField::explicit(Name::new("values"), values_ref),
                 ],
                 spreads: Vec::new(),
             },
@@ -4106,6 +4630,7 @@ impl LoweringContext {
         }
 
         let mut fields = Vec::new();
+        let mut field_name_spans = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_args: Vec<TypeExpr> = vec![];
@@ -4142,13 +4667,14 @@ impl LoweringContext {
         // brace, so the segments are always present.
         let type_name = TypePath::new(type_path_segments);
 
-        // Object fields are child nodes after L_BRACE
-        // They come as key-value pairs: WORD COLON expr or SPREAD expr
+        // Object fields are child nodes after L_BRACE. They come as key-value
+        // pairs (`WORD COLON expr`), shorthand (`WORD`), or spreads.
         for child in node.children() {
             match child.kind() {
                 SyntaxKind::OBJECT_FIELD => {
-                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr
+                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr, or shorthand WORD.
                     let mut key_segments = Vec::new();
+                    let mut key_span: Option<TextRange> = None;
                     let mut val = None;
                     let mut seen_colon = false;
                     for elem in child.children_with_tokens() {
@@ -4159,6 +4685,12 @@ impl LoweringContext {
                             rowan::NodeOrToken::Token(t)
                                 if is_ident_token(t.kind()) && !seen_colon =>
                             {
+                                key_span = Some(match key_span {
+                                    Some(span) => {
+                                        TextRange::new(span.start(), t.text_range().end())
+                                    }
+                                    None => t.text_range(),
+                                });
                                 key_segments.push(t.text().to_string());
                             }
                             rowan::NodeOrToken::Node(n) if seen_colon && val.is_none() => {
@@ -4171,13 +4703,29 @@ impl LoweringContext {
                             rowan::NodeOrToken::Node(_) => {}
                         }
                     }
+                    if !seen_colon
+                        && key_segments.len() == 1
+                        && let Some(span) = key_span
+                    {
+                        let val_id =
+                            self.alloc_expr(Expr::Path(vec![Name::new(&key_segments[0])]), span);
+                        val = Some(val_id);
+                    }
                     let key = if key_segments.is_empty() {
                         None
                     } else {
                         Some(Name::new(key_segments.join(".")))
                     };
                     if let (Some(k), Some(val_id)) = (key, val) {
-                        fields.push((k, val_id));
+                        if let Some(span) = key_span {
+                            field_name_spans.push((val_id, span));
+                        }
+                        let field = if seen_colon {
+                            ObjectExprField::explicit(k, val_id)
+                        } else {
+                            ObjectExprField::shorthand(k, val_id)
+                        };
+                        fields.push(field);
                     }
                     position += 1;
                 }
@@ -4201,7 +4749,7 @@ impl LoweringContext {
             }
         }
 
-        self.alloc_expr(
+        let object_id = self.alloc_expr(
             Expr::Object {
                 type_name,
                 type_args,
@@ -4209,12 +4757,18 @@ impl LoweringContext {
                 spreads,
             },
             node.span_range(),
-        )
+        );
+        for (value_id, field_name_span) in field_name_spans {
+            self.source_map
+                .object_field_name_spans
+                .insert((object_id, value_id), field_name_span);
+        }
+        object_id
     }
 
     fn lower_map_literal(&mut self, node: &SyntaxNode) -> ExprId {
         // MAP_LITERAL uses OBJECT_FIELD children (same as OBJECT_LITERAL).
-        // Each OBJECT_FIELD: key (WORD or expr), COLON, value expr.
+        // Each OBJECT_FIELD is `key: value` or shorthand `key`.
         // For maps the key can also be a string literal or expression.
         let entries = node
             .children()
@@ -4224,6 +4778,7 @@ impl LoweringContext {
                 let mut key_expr = None;
                 let mut val_expr = None;
                 let mut seen_colon = false;
+                let mut shorthand_name = None;
 
                 for elem in field_node.children_with_tokens() {
                     match elem {
@@ -4233,6 +4788,7 @@ impl LoweringContext {
                             } else if !seen_colon && key_expr.is_none() && is_ident_token(t.kind())
                             {
                                 let span = t.text_range();
+                                shorthand_name = Some((Name::new(t.text()), span));
                                 key_expr = Some(self.alloc_expr(
                                     Expr::Literal(Literal::String(t.text().to_string())),
                                     span,
@@ -4261,8 +4817,17 @@ impl LoweringContext {
                     }
                 }
 
+                if !seen_colon && let Some((name, span)) = shorthand_name {
+                    let value = self.alloc_expr(Expr::Path(vec![name]), span);
+                    val_expr = Some(value);
+                }
+
                 match (key_expr, val_expr) {
-                    (Some(k), Some(v)) => Some((k, v)),
+                    (Some(k), Some(v)) => Some(if seen_colon {
+                        MapExprEntry::explicit(k, v)
+                    } else {
+                        MapExprEntry::shorthand(k, v)
+                    }),
                     _ => None,
                 }
             })
@@ -4276,8 +4841,7 @@ impl LoweringContext {
 
         // A lambda is a function *value* and cannot declare generic parameters
         // (rejected by the parser). Any leading `<...>` is left in the CST for
-        // recovery and ignored here, so the lambda carries no generics.
-        let generic_params = Vec::new();
+        // recovery and ignored here — `LambdaDef` has nowhere to put them.
 
         // Lower parameter list — gives us Vec<Param>
         let (params, defaults) = node
@@ -4295,8 +4859,6 @@ impl LoweringContext {
                 )
             })
             .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
-
-        let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
 
         // Lower optional return type: the TYPE_EXPR that is a direct child of the
         // lambda node, appearing after PARAMETER_LIST but before THROWS_CLAUSE/BLOCK_EXPR.
@@ -4337,43 +4899,24 @@ impl LoweringContext {
                     .with_span(te.syntax().span_range())
             });
 
-        // Lower body via a FRESH LoweringContext — lambda gets its own ExprBody.
+        // The body lowers into *this* arena — a lambda owns no `ExprBody`.
         let body = node
             .children()
             .find(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
             .and_then(ast::BlockExpr::cast)
-            .map(|block| {
-                let mut lambda_ctx = LoweringContext::new();
-                for name in &param_names {
-                    lambda_ctx.names_in_scope.insert(name.to_string());
-                }
-                let root_expr = lambda_ctx.lower_block_expr(&block);
-                let (body, source_map, lambda_diags, lambda_env_refs) =
-                    lambda_ctx.finish(Some(root_expr));
-                self.diags.extend(lambda_diags);
-                self.env_var_refs.extend(lambda_env_refs);
-                FunctionBodyDef::Expr(body, source_map)
-            });
+            .map(|block| self.lower_lambda_body(&block));
 
-        let func_def = FunctionDef {
-            name: Name::new("<anonymous function>"),
-            generic_params,
-            generic_param_bounds: Vec::new(),
+        let lambda_def = LambdaDef {
+            kind: LambdaKind::Anonymous,
             params,
             defaults,
             return_type,
             throws,
             body,
-            declarative_meta: None,
-            origin: crate::ast::FunctionOrigin::Internal,
-            attributes: Vec::new(),
-            docstring: None,
-            is_tagged_template_tag: false,
             span: node.span_range(),
-            name_span: node.span_range(), // synthetic: use the lambda span
         };
 
-        self.alloc_expr(Expr::Lambda(Box::new(func_def)), node.span_range())
+        self.alloc_expr(Expr::Lambda(Box::new(lambda_def)), node.span_range())
     }
 
     fn try_lower_paren_token_content(&mut self, node: &SyntaxNode) -> Option<ExprId> {
@@ -4864,38 +5407,20 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the test body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
-            if let Some(body_node) = body_node_opt {
-                // Lower the body using a fresh context (no collector var — test bodies don't nest)
-                crate::lower_expr_body::lower_block_node(
-                    &body_node,
-                    std::slice::from_ref(&collector_name),
-                )
-            } else {
-                // Empty body: produce null
-                let mut sub_ctx = LoweringContext::new();
-                let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
-                sub_ctx.finish(Some(null_expr))
-            };
-        self.diags.extend(lambda_diags);
-        self.env_var_refs.extend(lambda_env_refs);
+        // `lower_lambda_body` clears the collector — test bodies don't nest.
+        let lambda_body = match body_node_opt.and_then(baml_compiler_syntax::ast::BlockExpr::cast) {
+            Some(block) => self.lower_lambda_body(&block),
+            None => self.alloc_expr(Expr::Null, span),
+        };
 
-        let lambda_def = FunctionDef {
-            name: Name::new("<test body>"),
-            generic_params: vec![],
-            generic_param_bounds: vec![],
+        let lambda_def = LambdaDef {
+            kind: LambdaKind::Anonymous,
             params: vec![],
             defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
-            body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
-            declarative_meta: None,
-            origin: crate::ast::FunctionOrigin::Internal,
-            attributes: vec![],
-            docstring: None,
-            is_tagged_template_tag: false,
+            body: Some(lambda_body),
             span,
-            name_span: span,
         };
 
         // <collector>.register_test(name_expr, lambda, runner_or_null)
@@ -4948,20 +5473,15 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the testset body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (sub_body, sub_source_map, sub_diags, sub_env_refs) =
-            if let Some(body_node) = body_node_opt {
-                crate::lower_expr_body::lower_testset_block_node(
-                    &body_node,
-                    &Name::new("testset"),
-                    std::slice::from_ref(&collector_name),
-                )
-            } else {
-                let mut sub_ctx = LoweringContext::new();
-                let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
-                sub_ctx.finish(Some(null_expr))
-            };
-        self.diags.extend(sub_diags);
-        self.env_var_refs.extend(sub_env_refs);
+        let sub_body = match body_node_opt.as_ref().and_then(|body_node| {
+            baml_compiler_syntax::ast::BlockExpr::cast(body_node.clone())
+                .map(|block| (block, body_node.span_range()))
+        }) {
+            Some((block, range)) => {
+                self.lower_testset_collector_body(&block, Name::new("testset"), range)
+            }
+            None => self.alloc_expr(Expr::Null, span),
+        };
 
         let sub_param = Param {
             name: Name::new("testset"),
@@ -4979,22 +5499,14 @@ impl LoweringContext {
             name_span: span,
         };
 
-        let sub_collector_def = FunctionDef {
-            name: Name::new("<testset collector>"),
-            generic_params: vec![],
-            generic_param_bounds: vec![],
+        let sub_collector_def = LambdaDef {
+            kind: LambdaKind::Anonymous,
             params: vec![sub_param],
             defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
-            body: Some(FunctionBodyDef::Expr(sub_body, sub_source_map)),
-            declarative_meta: None,
-            origin: crate::ast::FunctionOrigin::Internal,
-            attributes: vec![],
-            docstring: None,
-            is_tagged_template_tag: false,
+            body: Some(sub_body),
             span,
-            name_span: span,
         };
 
         // <collector>.register_test_set(name_expr, sub_collector_lambda, runner_or_null)

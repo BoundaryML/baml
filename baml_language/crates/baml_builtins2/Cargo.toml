@@ -16,7 +16,9 @@ doctest = false
 
 [dependencies]
 baml_base = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 
 [lints]
 workspace = true

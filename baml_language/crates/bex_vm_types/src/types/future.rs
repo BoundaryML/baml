@@ -3,15 +3,16 @@ use std::{
     fmt::Display,
     mem::MaybeUninit,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicU8, Ordering},
     },
 };
 
+use baml_type::RealizedTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 
-use crate::{HeapPtr, Value};
+use crate::{HeapPtr, Value, errors::StackFrame};
 
 /// Error payload carried by a future's [`Future::ready`] `SetOnce` when the
 /// underlying engine produced an unrecoverable internal error.
@@ -28,10 +29,9 @@ pub type FutureInternalError = Box<dyn std::error::Error + Send + Sync>;
 ///
 /// Holds the cross-thread state-machine for one `spawn { ... }` body:
 /// atomic discriminant, optional result value, cancellation token, and a
-/// `SetOnce` that wakes any consumer blocked in `await`. All synchronization
-/// primitives live on the heap object itself — there is no central
-/// `FutureManager` registry — so producer (spawned task) and consumer
-/// (awaiter / `f.cancel()` caller) communicate directly through the heap.
+/// `SetOnce` that wakes any consumer blocked in `await`. The engine registry
+/// only roots pending futures and looks them up by id; producer and consumer
+/// state is synchronized through this heap object.
 ///
 /// Concretely:
 ///
@@ -65,12 +65,25 @@ pub struct Future {
     /// stored with `Release`. The first thread to successfully transition
     /// `Pending → terminal` via `compare_exchange` is the unique writer.
     state: AtomicU8,
+    /// Metadata orthogonal to the terminal state. `observed` is set when an
+    /// await delivers an error. `cancel_requested` is set by `f.cancel()` even
+    /// when the future already settled and cancellation cannot change it.
+    /// `reported` is set when GC transfers an unreachable error to the
+    /// engine-owned reporting queue.
+    flags: AtomicU8,
     /// Set at construction; never modified. Purely for debug/tracing.
     id: FutureId,
+    /// The return/throws types that the value will match.
+    /// Used for reflection/pattern matching.
+    /// Read-only: set once when the future is created.
+    types: Arc<FutureOutputTypes>,
     /// Written at most once by whichever writer wins the `state` CAS.
     /// Valid only when `state` indicates `Ready` or `Error`. For
     /// `Cancelled` / `InternalError`, this stays uninitialized.
     value: UnsafeCell<MaybeUninit<Value>>,
+    /// Trace captured when this future settles to `Error`. Kept separately
+    /// from `value` because stack frames contain no GC-managed pointers.
+    error_trace: Arc<OnceLock<Arc<[StackFrame]>>>,
     /// Cancellation signal observed by the producer. Fired by
     /// `f.cancel()` or by parent-cascade when an ancestor is cancelled.
     pub cancel: CancellationToken,
@@ -148,12 +161,11 @@ enum FutureTag {
     Error = 2,
     Cancelled = 3,
     InternalError = 4,
-    /// The future HAS failed but the error value is parked engine-side
-    /// (BEP-034 fire-and-forget deferral) awaiting its first observer.
-    /// State queries report it as an error; awaiting routes through the
-    /// engine (like `Pending`) so `future_ready` can consume the stash.
-    ErrorPending = 5,
 }
+
+const FUTURE_FLAG_OBSERVED: u8 = 1 << 0;
+const FUTURE_FLAG_CANCEL_REQUESTED: u8 = 1 << 1;
+const FUTURE_FLAG_REPORTED: u8 = 1 << 2;
 
 /// Snapshot view of a [`Future`] used for pattern matching at read sites.
 ///
@@ -188,14 +200,6 @@ pub enum FutureRead {
     /// error from the `FutureManager`'s registry. Such entries are leaked from
     /// `FutureManager::active_futures` by design.
     InternalError(FutureId),
-
-    /// The future HAS failed, but its error value is parked engine-side
-    /// (BEP-034 fire-and-forget deferral) until first observed. State
-    /// queries (`is_error()`, `state()`) treat this as `Error`; `await`
-    /// treats it like `Pending` and yields to the engine, whose
-    /// `future_ready` consumes the parked error and settles the real
-    /// `Error` value.
-    ErrorPending(FutureId),
 }
 
 impl Display for FutureRead {
@@ -210,9 +214,6 @@ impl Display for FutureRead {
             FutureRead::InternalError(id) => {
                 write!(f, "<internal error: future #{}>", id.id)
             }
-            FutureRead::ErrorPending(id) => {
-                write!(f, "<error (unobserved): future #{}>", id.id)
-            }
         }
     }
 }
@@ -223,11 +224,19 @@ impl Future {
     /// `cancel` is the future's own cancel token — fired by `f.cancel()`
     /// and observed by the producer. The caller is responsible for deriving
     /// it from the spawning thread's token so cascade cancellation works.
-    pub fn pending(id: FutureId, cancel: CancellationToken) -> Self {
+    pub fn pending(
+        id: FutureId,
+        returns: RealizedTy,
+        throws: RealizedTy,
+        cancel: CancellationToken,
+    ) -> Self {
         Self {
             state: AtomicU8::new(FutureTag::Pending as u8),
+            flags: AtomicU8::new(0),
             id,
+            types: Arc::new(FutureOutputTypes { returns, throws }),
             value: UnsafeCell::new(MaybeUninit::uninit()),
+            error_trace: Arc::new(OnceLock::new()),
             cancel,
             ready: Arc::new(tokio::sync::SetOnce::new()),
         }
@@ -236,6 +245,14 @@ impl Future {
     /// `FutureId` for debug/tracing purposes.
     pub fn id(&self) -> FutureId {
         self.id
+    }
+
+    pub fn returns(&self) -> &RealizedTy {
+        &self.types.returns
+    }
+
+    pub fn throws(&self) -> &RealizedTy {
+        &self.types.throws
     }
 
     /// Read the current state with appropriate atomic ordering.
@@ -262,9 +279,35 @@ impl Future {
             }
             t if t == FutureTag::Cancelled as u8 => FutureRead::Cancelled,
             t if t == FutureTag::InternalError as u8 => FutureRead::InternalError(self.id),
-            t if t == FutureTag::ErrorPending as u8 => FutureRead::ErrorPending(self.id),
             other => unreachable!("invalid Future discriminant byte: {other}"),
         }
+    }
+
+    /// Mark this future's terminal error as delivered to an awaiter.
+    pub fn mark_observed(&self) {
+        self.flags.fetch_or(FUTURE_FLAG_OBSERVED, Ordering::AcqRel);
+    }
+
+    pub fn is_observed(&self) -> bool {
+        self.flags.load(Ordering::Acquire) & FUTURE_FLAG_OBSERVED != 0
+    }
+
+    pub fn cancel_requested(&self) -> bool {
+        self.flags.load(Ordering::Acquire) & FUTURE_FLAG_CANCEL_REQUESTED != 0
+    }
+
+    /// Mark this future's error as transferred to the engine reporting queue.
+    /// Returns `true` exactly once.
+    pub fn try_mark_reported(&self) -> bool {
+        self.flags.fetch_or(FUTURE_FLAG_REPORTED, Ordering::AcqRel) & FUTURE_FLAG_REPORTED == 0
+    }
+
+    pub fn error_trace(&self) -> Vec<StackFrame> {
+        self.error_trace
+            .get()
+            .map(Arc::as_ref)
+            .unwrap_or_default()
+            .to_vec()
     }
 
     /// Mutable access to the embedded `Value` for `Ready`/`Error` states.
@@ -368,29 +411,18 @@ impl Future {
         heap: &impl crate::WriteBarrier,
         self_ptr: HeapPtr,
         value: Value,
+        trace: Vec<StackFrame>,
     ) -> bool {
         heap.write_barrier(self_ptr, value);
+        let _ = self.error_trace.set(Arc::from(trace));
         // SAFETY: see settle_ready.
         unsafe { (*self.value.get()).write(value) };
-        // `Pending → Error` (direct settle) or `ErrorPending → Error` (the
-        // engine consuming a parked fire-and-forget error on first
-        // observation; see `mark_error_pending`).
-        let transitioned = self
-            .state
-            .compare_exchange(
-                FutureTag::Pending as u8,
-                FutureTag::Error as u8,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .or_else(|_| {
-                self.state.compare_exchange(
-                    FutureTag::ErrorPending as u8,
-                    FutureTag::Error as u8,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
-            });
+        let transitioned = self.state.compare_exchange(
+            FutureTag::Pending as u8,
+            FutureTag::Error as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
         match transitioned {
             Ok(_) => {
                 let _ = self.ready.set(Ok(()));
@@ -404,28 +436,6 @@ impl Future {
         }
     }
 
-    /// Attempt to transition `Pending → ErrorPending`: the producing task
-    /// failed, but the error VALUE is parked engine-side (BEP-034
-    /// fire-and-forget deferral) until first observed. Fires the wake
-    /// signal so a current awaiter resumes (and yields to the engine,
-    /// whose `future_ready` consumes the parked error via `settle_error`).
-    ///
-    /// Returns `true` if the transition was performed.
-    pub fn mark_error_pending(&self) -> bool {
-        match self.state.compare_exchange(
-            FutureTag::Pending as u8,
-            FutureTag::ErrorPending as u8,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        ) {
-            Ok(_) => {
-                let _ = self.ready.set(Ok(()));
-                true
-            }
-            Err(_) => false,
-        }
-    }
-
     /// Attempt to transition `Pending → Cancelled`. Fires the cancel
     /// token (so the producer's next await checkpoint observes it) and
     /// the wake signal (so any current awaiter resumes).
@@ -434,12 +444,6 @@ impl Future {
     /// sense that repeated calls all return `false` after the first
     /// successful one.
     pub fn settle_cancelled(&self) -> bool {
-        // `ErrorPending` is deliberately NOT cancellable: the future has
-        // already FAILED — its error value is merely parked until observed —
-        // and cancelling any settled future is a no-op. Allowing the
-        // transition would orphan the parked error (the spawner's drain
-        // would surface it as unhandled even though a combinator was about
-        // to consume it).
         match self.state.compare_exchange(
             FutureTag::Pending as u8,
             FutureTag::Cancelled as u8,
@@ -453,6 +457,15 @@ impl Future {
             }
             Err(_) => false,
         }
+    }
+
+    /// Record an explicit `f.cancel()` request, then attempt to cancel the
+    /// future if it is still pending. The flag remains set when an existing
+    /// terminal error wins the race.
+    pub fn request_cancel(&self) -> bool {
+        self.flags
+            .fetch_or(FUTURE_FLAG_CANCEL_REQUESTED, Ordering::AcqRel);
+        self.settle_cancelled()
     }
 
     /// Attempt to transition `Pending → InternalError`, carrying `err`
@@ -499,8 +512,11 @@ impl Clone for Future {
         let read = self.read();
         let cloned = Self {
             state: AtomicU8::new(0), // placeholder; rewritten below
+            flags: AtomicU8::new(self.flags.load(Ordering::Acquire)),
             id: self.id,
+            types: Arc::clone(&self.types),
             value: UnsafeCell::new(MaybeUninit::uninit()),
+            error_trace: Arc::clone(&self.error_trace),
             cancel: self.cancel.clone(),
             ready: Arc::clone(&self.ready),
         };
@@ -519,9 +535,6 @@ impl Clone for Future {
             }
             FutureRead::Cancelled => FutureTag::Cancelled as u8,
             FutureRead::InternalError(_) => FutureTag::InternalError as u8,
-            // No payload to copy: the parked error lives in the engine's
-            // GC-rooted stash, keyed by the (unchanged) FutureId.
-            FutureRead::ErrorPending(_) => FutureTag::ErrorPending as u8,
         };
         cloned.state.store(tag, Ordering::Release);
         cloned
@@ -536,7 +549,6 @@ impl std::fmt::Debug for Future {
             FutureRead::Error(v) => f.debug_tuple("Error").field(&v).finish(),
             FutureRead::Cancelled => f.write_str("Cancelled"),
             FutureRead::InternalError(id) => f.debug_tuple("InternalError").field(&id).finish(),
-            FutureRead::ErrorPending(id) => f.debug_tuple("ErrorPending").field(&id).finish(),
         }
     }
 }
@@ -587,6 +599,13 @@ pub struct UnscheduledFuture {
     /// heap. `None` when the spawn had no `with` clause. The engine reads the
     /// config's `_handle` (`SpawnConfigData`) when dispatching the spawn.
     pub config: Option<HeapPtr>,
+    /// The `T` of the `Future<T, E>` this spawn yields, already resolved
+    /// against the spawning frame's type args by `OpCode::Spawn`. Handed to
+    /// [`Future::pending`] so the scheduled future can answer reflection and
+    /// `is`/`match` on its generic parameters.
+    pub returns: RealizedTy,
+    /// The `E` of the `Future<T, E>` this spawn yields. See [`Self::returns`].
+    pub throws: RealizedTy,
 }
 
 /// A unique identifier for a future.
@@ -647,9 +666,7 @@ impl FutureType {
         match future.read() {
             FutureRead::Pending(_) => Self::Pending,
             FutureRead::Ready(_) => Self::Ready,
-            // An unobserved fire-and-forget failure IS an error from the
-            // user's point of view.
-            FutureRead::Error(_) | FutureRead::ErrorPending(_) => Self::Error,
+            FutureRead::Error(_) => Self::Error,
             FutureRead::Cancelled => Self::Cancelled,
             FutureRead::InternalError(_) => Self::InternalError,
         }
@@ -673,4 +690,9 @@ impl From<&Future> for FutureType {
     fn from(value: &Future) -> Self {
         Self::of(value)
     }
+}
+
+struct FutureOutputTypes {
+    returns: RealizedTy,
+    throws: RealizedTy,
 }

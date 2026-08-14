@@ -8,7 +8,8 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_type::{
-    Freshness, Literal, RuntimeTy, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify,
+    Freshness, Literal, RuntimeTy, TyAttr, TyAttrValue, TypeName,
+    simplify_sap::{simplify, simplify_parse_target},
 };
 
 // =========================================================================
@@ -469,4 +470,19 @@ fn simplify_sap_tests() {
             failures.join("\n\n"),
         );
     }
+}
+
+#[test]
+fn parse_target_expands_recursive_union_alias_member_once() {
+    let json_name = TypeName::local("Json".into());
+    let aliases = HashMap::from([(
+        json_name,
+        parse_ty("null | bool | $Json[] | map<string, $Json>"),
+    )]);
+    let recursive = find_recursive_aliases(&aliases);
+
+    let actual = simplify_parse_target(parse_ty("$Json | null"), &aliases, &recursive);
+    let expected = parse_ty("bool | $Json[] | map<string, $Json> | null");
+
+    assert_eq!(actual, expected);
 }

@@ -1,0 +1,46 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 54638
+---
+=== PPIR ===
+class user.WithId {
+  field_id: string
+  $id: string
+}
+class user.WithId$stream {
+  field_id: string | null
+  $id: string | null
+}
+function user.$id() -> int  [expr] {
+  {  } 1
+}
+function user.call_site_label() -> int  [expr] {
+  {  } takes_int($id = boundary.id())
+}
+function user.compound_assignment() -> string  [expr] {
+  { $id Add= "-suffix" } $id
+}
+function user.member_access() -> int  [expr] {
+  {  } $id.len()
+}
+function user.non_string_assignment() -> string  [expr] {
+  { $id = 42 } $id
+}
+function user.optional_member_access() -> int?  [expr] {
+  {  } $id?.len()
+}
+function user.setter_never(s: string) -> string  [expr] {
+  { $id = s } $id
+}
+function user.shadowing_let() -> int  [expr] {
+  { let $id = 1 } 2
+}
+function user.shadowing_param($id: string) -> string  [expr] {
+  {  } "x"
+}
+function user.shorthand_destructure(w: user.WithId) -> string  [expr] {
+  { let WithId { $id: $id } = w } "x"
+}
+function user.takes_int(x: int) -> int  [expr] {
+  {  } x
+}

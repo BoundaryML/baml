@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { make_wrapper_methods } from "./baml_sdk/generics/index.js";
 
 describe("generic method boundary", () => {
-  it("test_generic", () => {
+  it("generic_generic", () => {
     const w = make_wrapper_methods("hello");
     expect(w.get_value_or_marker()).toBe("hello");
   });

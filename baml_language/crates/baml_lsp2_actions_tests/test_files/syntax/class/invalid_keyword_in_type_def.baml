@@ -31,21 +31,19 @@ random_keyword WrongEnum {
 
 //----
 //- diagnostics
-// error: Unknown keyword 'classs'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'.
-//     ╭─[ class_invalid_keyword_in_type_def.baml:10:1 ]
-//     │
+// E0010
+//
+//   × invalid syntax
+//     ╭─[class_invalid_keyword_in_type_def.baml:10:1]
 //  10 │ classs WrongClass {
-//     │ ───┬──  
-//     │    ╰──── Unknown keyword 'classs'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'.
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// error: Unknown keyword 'random_keyword'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'.
-//     ╭─[ class_invalid_keyword_in_type_def.baml:14:1 ]
-//     │
+//     · ───┬──
+//     ·    ╰── unknown keyword `classs`; expected `class`, `enum`, `function`, `client`, `generator`, `test`, or `type`
+//     ╰────
+// E0010
+//
+//   × invalid syntax
+//     ╭─[class_invalid_keyword_in_type_def.baml:14:1]
 //  14 │ random_keyword WrongEnum {
-//     │ ───────┬──────  
-//     │        ╰──────── Unknown keyword 'random_keyword'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'.
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
+//     · ───────┬──────
+//     ·        ╰── unknown keyword `random_keyword`; expected `class`, `enum`, `function`, `client`, `generator`, `test`, or `type`
+//     ╰────

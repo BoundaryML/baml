@@ -50,14 +50,14 @@ fn item_doc(src: &str, needle: &str) -> String {
 }
 
 #[test]
-fn test_imports() {
+fn test_main_imports_symbols_reachable() {
     use baml_sdk as _;
     use baml_sdk::docs as _;
     use baml_sdk::docs::{Doc as _, Note as _, Priority as _, Sentiment as _};
 }
 
 #[test]
-fn test_class_doc_summary_and_attributes_section_in_dunder_doc() {
+fn test_main_class_doc_summary_and_attributes_section() {
     // `item_doc` trims the surrounding whitespace and strips the `/// `
     // prefixes (like python's `inspect.getdoc` dedents) so the assertions
     // are stable against the emitted indent.
@@ -75,7 +75,7 @@ fn test_class_doc_summary_and_attributes_section_in_dunder_doc() {
 }
 
 #[test]
-fn test_undocumented_field_listed_as_bare_name_under_attributes() {
+fn test_main_undocumented_field_listed_as_bare_name_under_attributes() {
     // Note: `id` is documented, `text` is not. The "any-doc" rule says
     // the Attributes: section appears (because `id` carries a `///`)
     // and lists every field, with `text` rendered as a bare name.
@@ -98,7 +98,7 @@ fn test_undocumented_field_listed_as_bare_name_under_attributes() {
 }
 
 #[test]
-fn test_enum_doc_summary_and_members_section_in_dunder_doc() {
+fn test_main_enum_doc_summary_and_members_section() {
     let src = docs_source();
 
     assert_eq!(
@@ -111,7 +111,7 @@ fn test_enum_doc_summary_and_members_section_in_dunder_doc() {
 }
 
 #[test]
-fn test_enum_summary_only_omits_members_section_when_no_variant_documented() {
+fn test_main_enum_summary_only_omits_members_section() {
     // Priority has a class-level /// but no variant carries one — the
     // Members: section should be suppressed entirely. Variants are
     // still importable / iterable normally.
@@ -140,7 +140,7 @@ fn test_enum_summary_only_omits_members_section_when_no_variant_documented() {
 }
 
 #[test]
-fn test_no_inline_field_or_variant_doc_artifacts() {
+fn test_main_no_inline_field_or_variant_doc_artifacts() {
     // Field/variant `///` lines must not produce inline `# …` comments
     // or `"""…"""` attribute docstrings — they live exclusively inside
     // the parent's Attributes:/Members: section.

@@ -18,7 +18,7 @@
 //  4. Encodes the result into `InboundValue` bytes and calls
 //     `complete_host_call(call_id, 0, ptr, len)` via cgo.
 //  5. On any error (panic, decode failure, arity mismatch, result encode
-//     failure), encodes a `HostCallableError` proto and calls
+//     failure), encodes a `baml.errors.HostCallable` inbound value and calls
 //     `complete_host_call(call_id, 1, ptr, len)`.
 //
 // When the engine drops the last Rust clone of the `HostValueArc`,
@@ -67,8 +67,9 @@ var hostValues = &hostValueRegistry{
 
 func init() {
 	// Match Python/Node: 0 is reserved as "invalid". Start at 1 so the
-	// first key handed out is non-zero even before the first add.
-	hostValues.next.Store(1)
+	// first key handed out is non-zero even before the first add. Package
+	// initializers may already have registered the static fallback error.
+	hostValues.next.CompareAndSwap(0, 1)
 }
 
 func nextHostValueKey() uint64 {
@@ -165,8 +166,7 @@ func bamlHostDispatch(hostValueKey C.uint64_t, callID C.uint32_t, args *C.uint8_
 		// legitimate, so reject it rather than risk a bad read.
 		if length > C.size_t(math.MaxInt32) {
 			sendHostCallableError(id, "ProtocolError",
-				fmt.Sprintf("host-call args payload too large: %d bytes", uint64(length)),
-				pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR)
+				fmt.Sprintf("host-call args payload too large: %d bytes", uint64(length)))
 			return
 		}
 		argsBytes = C.GoBytes(unsafe.Pointer(args), C.int(length))
@@ -179,8 +179,7 @@ func bamlHostDispatch(hostValueKey C.uint64_t, callID C.uint32_t, args *C.uint8_
 	hostValues.mu.Unlock()
 	if !ok {
 		sendHostCallableError(id, "KeyError",
-			fmt.Sprintf("no host callable registered for key %d", key),
-			pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR)
+			fmt.Sprintf("no host callable registered for key %d", key))
 		return
 	}
 
@@ -190,9 +189,8 @@ func bamlHostDispatch(hostValueKey C.uint64_t, callID C.uint32_t, args *C.uint8_
 // runHostCallable decodes args, invokes `fn`, and forwards the result or
 // error back to Rust via `complete_host_call`.
 //
-// Panics are caught with `recover()` and surfaced as
-// `HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR`. Arity mismatches are
-// reported as `HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT`.
+// Panics, arity mismatches, and conversion failures are caught and surfaced as
+// `baml.errors.HostCallable` values carrying Go error metadata.
 func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -216,8 +214,7 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 
 	if fn.Kind() != reflect.Func {
 		sendHostCallableError(callID, "TypeError",
-			fmt.Sprintf("registered host value is not callable (kind=%s)", fn.Kind()),
-			pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
+			fmt.Sprintf("registered host value is not callable (kind=%s)", fn.Kind()))
 		return
 	}
 
@@ -231,8 +228,7 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 	var toHostCall pb.BamlToHostCall
 	if err := proto.Unmarshal(argsBytes, &toHostCall); err != nil {
 		sendHostCallableError(callID, "DecodeError",
-			fmt.Sprintf("failed to decode host-call args: %v", err),
-			pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
+			fmt.Sprintf("failed to decode host-call args: %v", err))
 		return
 	}
 	rawArgs := make([]*pb.BamlOutboundValue, 0, len(toHostCall.GetArgs()))
@@ -253,15 +249,13 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 		if len(rawArgs) < expectedNumArgs-1 {
 			sendHostCallableError(callID, "TypeError",
 				fmt.Sprintf("host callable expected at least %d args, got %d",
-					expectedNumArgs-1, len(rawArgs)),
-				pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
+					expectedNumArgs-1, len(rawArgs)))
 			return
 		}
 	} else if len(rawArgs) != expectedNumArgs {
 		sendHostCallableError(callID, "TypeError",
 			fmt.Sprintf("host callable expected %d args, got %d",
-				expectedNumArgs, len(rawArgs)),
-			pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
+				expectedNumArgs, len(rawArgs)))
 		return
 	}
 
@@ -270,8 +264,7 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 		decoded, err := outboundToGo(raw)
 		if err != nil {
 			sendHostCallableError(callID, "DecodeError",
-				fmt.Sprintf("failed to decode host-call arg %d: %v", i, err),
-				pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
+				fmt.Sprintf("failed to decode host-call arg %d: %v", i, err))
 			return
 		}
 		// Figure out the declared param type for this slot.
@@ -286,8 +279,7 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 		conv, ok := coerceToType(decoded, paramType)
 		if !ok {
 			sendHostCallableError(callID, "TypeError",
-				fmt.Sprintf("host callable arg %d: cannot convert %T to %s", i, decoded, paramType),
-				pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
+				fmt.Sprintf("host callable arg %d: cannot convert %T to %s", i, decoded, paramType))
 			return
 		}
 		in[i] = conv
@@ -332,8 +324,7 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 		// dropping the second value.
 		if !fnType.Out(1).Implements(errorInterface) {
 			sendHostCallableError(callID, "TypeError",
-				fmt.Sprintf("host callable's second return type %s does not implement error; expected (value, error)", fnType.Out(1)),
-				pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
+				fmt.Sprintf("host callable's second return type %s does not implement error; expected (value, error)", fnType.Out(1)))
 			return
 		}
 		// Surface a non-nil error. A typed-nil pointer error (e.g. a
@@ -349,8 +340,7 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 		resultValue = out[0].Interface()
 	default:
 		sendHostCallableError(callID, "TypeError",
-			fmt.Sprintf("host callable returned %d values; expected 0, 1, or (value, error)", len(out)),
-			pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
+			fmt.Sprintf("host callable returned %d values; expected 0, 1, or (value, error)", len(out)))
 		return
 	}
 
@@ -366,16 +356,14 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 	if err != nil {
 		rollbackRegisteredHostValues(registered)
 		sendHostCallableError(callID, "EncodeError",
-			fmt.Sprintf("failed to encode host-call result: %v", err),
-			pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR)
+			fmt.Sprintf("failed to encode host-call result: %v", err))
 		return
 	}
 	resultBytes, err := proto.Marshal(iv)
 	if err != nil {
 		rollbackRegisteredHostValues(registered)
 		sendHostCallableError(callID, "EncodeError",
-			fmt.Sprintf("failed to marshal host-call result: %v", err),
-			pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR)
+			fmt.Sprintf("failed to marshal host-call result: %v", err))
 		return
 	}
 	completeHostCallSuccess(callID, resultBytes)
@@ -551,8 +539,7 @@ func isNilValue(v reflect.Value) bool {
 // also mirrored into `traceback`, since a plain returned error carries no stack.
 func surfaceCallableError(callID uint32, err error) {
 	sendHostCallableError(callID, errorClassName(err), err.Error(),
-		pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR,
-		withTraceback(err.Error()))
+		withTraceback(err.Error()), withOpaqueValue(err))
 }
 
 // errorClassName returns a best-effort short type name for `err`, matching
@@ -577,37 +564,87 @@ func errorClassName(err error) string {
 	return name
 }
 
-// sendHostCallableError marshals a `HostCallableError` proto and forwards it
-// to Rust via `complete_host_call(callID, 1, ptr, len)`.
-func sendHostCallableError(callID uint32, className, message string,
-	category pb.HostCallableErrorCategory, opts ...errorOpt) {
+type hostCallableErrorDetails struct {
+	traceback   *string
+	opaqueValue any
+}
 
-	language := "go"
-	err := &pb.HostCallableError{
-		ClassName: className,
-		Message:   message,
-		Language:  &language,
-		Category:  category,
+type errorOpt func(*hostCallableErrorDetails)
+
+func withTraceback(tb string) errorOpt {
+	return func(details *hostCallableErrorDetails) {
+		details.traceback = &tb
 	}
+}
+
+func withOpaqueValue(value any) errorOpt {
+	return func(details *hostCallableErrorDetails) {
+		details.opaqueValue = value
+	}
+}
+
+func inboundStringField(key, value string) *pb.InboundMapEntry {
+	return &pb.InboundMapEntry{
+		Key: &pb.InboundMapEntry_StringKey{StringKey: key},
+		Value: &pb.InboundValue{
+			Value: &pb.InboundValue_StringValue{StringValue: value},
+		},
+	}
+}
+
+func marshalHostCallableError(
+	className, message string,
+	details hostCallableErrorDetails,
+) ([]byte, error) {
+	if details.opaqueValue == nil {
+		details.opaqueValue = &BamlError{ClassName: className, Message: message}
+	}
+	handleKey := registerHostValue(reflect.ValueOf(details.opaqueValue))
+	fields := []*pb.InboundMapEntry{
+		inboundStringField("message", message),
+		inboundStringField("class_name", className),
+		inboundStringField("language", "go"),
+	}
+	if details.traceback != nil {
+		fields = append(fields, inboundStringField("traceback", *details.traceback))
+	}
+	fields = append(fields, &pb.InboundMapEntry{
+		Key: &pb.InboundMapEntry_StringKey{StringKey: "_handle"},
+		Value: &pb.InboundValue{
+			Value: &pb.InboundValue_Handle{Handle: &pb.BamlHandle{
+				Key:        handleKey,
+				HandleType: pb.BamlHandleType_HOST_VALUE_OPAQUE,
+			}},
+		},
+	})
+	inbound := &pb.InboundValue{
+		ValueType: &pb.BamlTy{Ty: &pb.BamlTy_ClassTy{ClassTy: &pb.BamlTyClass{
+			Name: "baml.errors.HostCallable",
+		}}},
+		Value: &pb.InboundValue_ClassValue{ClassValue: &pb.InboundClassValue{
+			Fields: fields,
+		}},
+	}
+	bytes, err := proto.Marshal(inbound)
+	if err != nil {
+		unregisterHostValue(handleKey)
+		return nil, err
+	}
+	return bytes, nil
+}
+
+// sendHostCallableError encodes a `baml.errors.HostCallable` inbound value and
+// forwards it to Rust via `complete_host_call(callID, 1, ptr, len)`.
+func sendHostCallableError(callID uint32, className, message string, opts ...errorOpt) {
+	details := hostCallableErrorDetails{}
 	for _, o := range opts {
-		o(err)
+		o(&details)
 	}
-	bytes, marshalErr := proto.Marshal(err)
+	bytes, marshalErr := marshalHostCallableError(className, message, details)
 	if marshalErr != nil {
-		// Marshaling a small scalar message effectively cannot fail; if it
-		// somehow does, fall back to the pre-marshaled last-resort payload so
-		// the engine's in-flight call is still completed.
 		bytes = lastResortErrorPayload
 	}
 	completeHostCallError(callID, bytes)
-}
-
-type errorOpt func(*pb.HostCallableError)
-
-func withTraceback(tb string) errorOpt {
-	return func(e *pb.HostCallableError) {
-		e.Traceback = &tb
-	}
 }
 
 // completeHostCallSuccess forwards a successful host-call result to Rust.
@@ -620,24 +657,18 @@ func completeHostCallError(callID uint32, bytes []byte) {
 	cffi.CompleteHostCall(callID, 1, bytes)
 }
 
-// lastResortErrorPayload is a pre-marshaled `HostCallableError` used when the
-// normal error-encoding path itself panics. Marshaling it once at init means
-// the last-resort completion in `completeCallSafely` performs no work that
-// could panic, guaranteeing the engine's in-flight `call_id` is always
-// resolved (it never awaits forever) even under a double-panic.
-var lastResortErrorPayload = mustMarshal(&pb.HostCallableError{
-	ClassName: "InternalError",
-	Message:   "host callable failed and the error could not be encoded",
-	Category:  pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR,
-})
+// lastResortErrorPayload is a pre-marshaled `baml.errors.HostCallable` used
+// when the normal error-encoding path itself panics.
+var lastResortErrorPayload = mustMarshalHostCallableError()
 
-// mustMarshal marshals a static proto payload at package init, panicking on
-// the impossible failure of a fixed message. Used only for the pre-marshaled
-// last-resort payload, which must never be nil.
-func mustMarshal(m proto.Message) []byte {
-	b, err := proto.Marshal(m)
+func mustMarshalHostCallableError() []byte {
+	b, err := marshalHostCallableError(
+		"InternalError",
+		"host callable failed and the error could not be encoded",
+		hostCallableErrorDetails{},
+	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to marshal static HostCallableError payload: %v", err))
+		panic(fmt.Sprintf("failed to marshal static HostCallable payload: %v", err))
 	}
 	return b
 }
@@ -664,7 +695,5 @@ func completeCallSafely(callID uint32, className, message, traceback string) {
 			completeHostCallError(callID, lastResortErrorPayload)
 		}
 	}()
-	sendHostCallableError(callID, className, message,
-		pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR,
-		withTraceback(traceback))
+	sendHostCallableError(callID, className, message, withTraceback(traceback))
 }

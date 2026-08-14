@@ -1,0 +1,254 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function generic_union_returns.model_step_flattens_union_type_arg() -> bool {
+    load_type generic_union_returns.FinalValue | string
+    load_const "\"done\""
+    call user.generic_union_returns.parse_model_step
+    load_field .outcome
+    store_var _3
+    load_var _3
+    store_var _4
+    load_var _4
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _3
+    store_var _7
+    load_var _7
+    narrow_bind generic_union_returns.FinalValue, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _3
+    load_field .calls
+    container_len
+    store_var _11
+    load_var _11
+    load_const 99
+    cmp_int_op ==
+    jump L4
+
+  L2:
+    load_var _7
+    load_field .value
+    load_const "never"
+    cmp_op ==
+    jump L4
+
+  L3:
+    load_var _4
+    load_const "done"
+    cmp_op ==
+
+  L4:
+    return
+}
+
+function generic_union_returns.parse_model_step(raw: string) -> generic_union_returns.ModelStep<#0> {
+    load_type #0 | generic_union_returns.PendingCalls
+    load_var raw
+    call baml.sap.parse
+    load_type #0
+    init_instance<1> user.generic_union_returns.ModelStep .outcome
+    return
+}
+
+function generic_union_returns.sap_nullable_container_types_are_preserved() -> bool {
+    load_type generic_union_returns.ParsedNullableContainers
+    load_const "{\n      \"empty_json\": [],\n      \"metadata\": {\"attempt\": 1},\n      \"children\": [{\"name\": \"first\"}],\n      \"statuses\": [\"Ready\"]\n    }"
+    call baml.sap.parse
+    store_var parsed
+    load_var parsed
+    load_field .empty_json
+    store_var empty_json
+    load_var parsed
+    load_field .metadata
+    store_var metadata
+    load_var parsed
+    load_field .children
+    store_var children
+    load_var parsed
+    load_field .statuses
+    store_var statuses
+    load_var empty_json
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var empty_json
+    make_bound_method baml.Array.length
+    call_indirect
+    store_var _10
+    jump L2
+
+  L1:
+    load_const null
+    store_var _10
+
+  L2:
+    load_var _10
+    store_var_load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const 1
+    unary_op -
+    store_var _9
+
+  L3:
+    load_var _9
+    load_const 0
+    cmp_int_op ==
+    store_var empty_ok
+    load_var metadata
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var metadata
+    make_bound_method baml.Map.length
+    call_indirect
+    store_var _19
+    jump L6
+
+  L5:
+    load_const null
+    store_var _19
+
+  L6:
+    load_var _19
+    store_var_load_var _18
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const 0
+    store_var _18
+
+  L7:
+    load_var _18
+    load_const 1
+    cmp_int_op ==
+    store_var map_ok
+    load_var children
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_const 0
+    load_var children
+    make_bound_method baml.Array.at
+    call_indirect
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    jump L11
+
+  L9:
+    load_var children
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_const 0
+    load_var children
+    make_bound_method baml.Array.at
+    call_indirect
+    load_field .0
+    jump L12
+
+  L11:
+    load_const null
+
+  L12:
+    load_const "first"
+    call baml.ops.equals_equals
+    store_var children_ok
+    load_var statuses
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_const 0
+    load_var statuses
+    make_bound_method baml.Array.at
+    call_indirect
+    store_var _39
+    jump L15
+
+  L14:
+    load_const null
+    store_var _39
+
+  L15:
+    load_var _39
+    load_const user.generic_union_returns.ParsedStatus.Ready
+    alloc_variant user.generic_union_returns.ParsedStatus
+    call baml.ops.equals_equals
+    store_var statuses_ok
+    load_var empty_ok
+    jump_if_false L16
+    pop 1
+    load_var map_ok
+
+  L16:
+    jump_if_false L17
+    pop 1
+    load_var children_ok
+
+  L17:
+    jump_if_false L18
+    pop 1
+    load_var statuses_ok
+
+  L18:
+    return
+}
+
+function generic_union_returns.sap_parses_optional_json_null() -> bool {
+    load_type baml.json.json | null
+    load_const "null"
+    call baml.sap.parse
+    store_var parsed
+    load_var parsed
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var parsed
+    call baml.json.stringify
+    load_const "never"
+    cmp_op ==
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function generic_union_returns.sap_parses_optional_json_value() -> bool {
+    load_type baml.json.json | null
+    load_const "true"
+    call baml.sap.parse
+    call baml.json.stringify
+    load_const "true"
+    cmp_op ==
+    return
+}

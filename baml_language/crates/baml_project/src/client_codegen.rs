@@ -1,26 +1,17 @@
 //! Conversion from the compiler2 HIR/TIR to `SymbolPool`.
 //!
-//! Walks the HIR item trees for user-defined files, resolves types via TIR,
-//! and populates a codegen-ready `SymbolPool` suitable for language-specific
-//! code generators (e.g. `sdkgen_python_pydantic2`).
+//! Walks each user-defined file via the `ppir` item-data firewall (enumeration
+//! queries plus `*_data` lookups), resolves types via TIR, and populates a
+//! codegen-ready `SymbolPool` suitable for language-specific code generators
+//! such as `sdkgen_python_pydantic2`.
 
 use std::collections::HashMap;
 
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::{self as ast, FunctionOrigin};
-use baml_compiler2_hir::{
-    compiler2_all_files, file_package,
-    ids::{FunctionMarker, LocalItemId},
-    loc::FunctionLoc,
-    package::PackageId,
-};
-use baml_compiler2_tir::{
-    lower_type_expr,
-    normalize::find_recursive_aliases,
-    ty::{QualifiedTypeName, Ty as TirTy},
-};
+use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, package::PackageId};
 use baml_db::Name;
-use baml_type::{Freshness, TyAttr};
+use baml_type::{Freshness, ParamTy, QualifiedTypeName, Ty as TirTy, TyAttr};
 
 use crate::ProjectDatabase;
 
@@ -119,55 +110,66 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
         let (alias_map, recursive_aliases) = alias_caches.entry(pkg.clone()).or_insert_with(|| {
-            let aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-            let recursive = find_recursive_aliases(&aliases);
-            (aliases, recursive)
+            let mut aliases = HashMap::new();
+            for ns in pkg_items.namespaces.values() {
+                for (name, def) in &ns.types {
+                    if let baml_compiler2_hir::contributions::Definition::TypeAlias(loc) = def {
+                        aliases.insert(
+                            baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
+                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain(),
+                        );
+                    }
+                }
+            }
+            let resolved = baml_type::ResolvedAliases::from_aliases(aliases);
+            (resolved.aliases, resolved.recursive)
         });
         let alias_map: &HashMap<QualifiedTypeName, TirTy> = alias_map;
         let recursive_aliases: &std::collections::HashSet<QualifiedTypeName> = recursive_aliases;
 
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, source_file);
         let source_file_path: String = source_file.path(db).to_string_lossy().into_owned();
 
-        // Collect function IDs that are not package-level functions so the
+        // Collect function locs that are not package-level functions so the
         // free-function walk below can skip them. Class methods, interface
-        // default methods, and out-of-body implements methods all live in
-        // `item_tree.functions`, but none of them are directly callable as
-        // `<pkg>.<ns>.<method>` from generated SDKs.
-        let mut non_free_function_ids: std::collections::HashSet<LocalItemId<FunctionMarker>> =
+        // default methods, and out-of-body implements methods are all functions,
+        // but none of them are directly callable as `<pkg>.<ns>.<method>` from
+        // generated SDKs.
+        let mut non_free_function_locs: std::collections::HashSet<FunctionLoc> =
             std::collections::HashSet::new();
-        for class in item_tree.classes.values() {
-            for m in &class.methods {
-                non_free_function_ids.insert(*m);
+        for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, source_file) {
+            for &m in &baml_compiler2_ppir::item_data::class_data(db, class_loc).methods {
+                non_free_function_locs.insert(m);
             }
         }
-        for interface in item_tree.interfaces.values() {
-            for m in &interface.default_methods {
-                non_free_function_ids.insert(*m);
+        for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, source_file) {
+            // ALL interface methods: default (with a body) and required
+            // (bodyless items under the unified method model) alike - a
+            // required signature is an interface slot, not a callable.
+            for &m in &baml_compiler2_ppir::item_data::interface_data(db, iface_loc).methods {
+                non_free_function_locs.insert(m);
             }
         }
-        for impl_id in &item_tree.free_impls {
-            let Some(block) = item_tree.impls.get(impl_id) else {
-                continue;
-            };
-            for m in &block.methods {
-                non_free_function_ids.insert(*m);
+        for &impl_loc in baml_compiler2_ppir::item_data::file_free_impls(db, source_file) {
+            for &m in &baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc).methods {
+                non_free_function_locs.insert(m);
             }
         }
 
         // Classes
-        for class in item_tree.classes.values() {
+        for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, source_file) {
+            let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), class.name.clone());
-            let class_generic_params: Vec<Name> = class.generic_params.clone();
+            let class_generic_params =
+                baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
             let properties = class
                 .fields
                 .iter()
                 .filter_map(|field| {
-                    let ty = resolve_type_expr(
+                    let ty = resolve_type_ref(
                         db,
-                        field.type_expr.as_ref(),
-                        pkg_items,
-                        &pkg_info.namespace_path,
+                        &class.type_refs,
+                        Some(field.type_ref),
+                        source_file,
                         &class_generic_params,
                         alias_map,
                         recursive_aliases,
@@ -186,22 +188,45 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // `$build_request`) are independent `Function` entries that
             // sit alongside their parent method in the same vec; their
             // shared span keeps them adjacent after sorting.
-            for method_id in &class.methods {
-                let Some(method) = item_tree.functions.get(method_id) else {
-                    continue;
-                };
+            for &method_loc in &class.methods {
+                let method = baml_compiler2_ppir::item_data::function_data(db, method_loc);
 
                 // Auto-derived methods (`to_json` / `from_json` synthesized
                 // by `auto_derive_json`) are language-level plumbing, not
                 // user-facing API. Skip them so client SDKs don't surface
                 // them as static / instance methods on every class.
-                if matches!(method.origin, FunctionOrigin::AutoDerive) {
+                if method.metadata.is_language_internal
+                    || matches!(method.metadata.origin, FunctionOrigin::AutoDerive)
+                {
+                    continue;
+                }
+
+                // Interface-impl methods are not part of the generated surface.
+                // Interfaces themselves are never emitted — host languages differ
+                // too much on trait/protocol/interface semantics — so a method
+                // that only exists to satisfy one has nothing to attach to.
+                //
+                // Emitting them is not merely redundant but unsound: the
+                // generated name is the bare method name, so a type implementing
+                // one interface at several instantiations (`Multiply<int>` and
+                // `Multiply<bigint>` for `baml.time.Duration`) or two interfaces
+                // sharing a method name (`Subtract<Duration>` and
+                // `Subtract<Instant>` for `baml.time.Instant`) collides with
+                // itself. The runtime path it invokes (`baml.time.Duration.mul`)
+                // is ambiguous for the same reason.
+                //
+                // `class.methods` is flat: in-body `implements I { … }` and a
+                // non-generic out-of-body `implement I for C` merged onto `C`
+                // (`lower_cst`) both land here, so the interface target — not the
+                // declaration site — is what identifies them.
+                if baml_compiler2_ppir::item_data::method_interface_target(db, method_loc).is_some()
+                {
                     continue;
                 }
 
                 if matches!(
-                    method.body.as_ref(),
-                    Some(ast::FunctionBodyDef::Builtin(ast::BuiltinKind::Intrinsic))
+                    baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
+                    baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)
                 ) {
                     continue;
                 }
@@ -216,58 +241,60 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     MethodKind::Static
                 };
 
-                // Combined generics in scope inside the method body: the
-                // class's TypeVars plus the method's own. Order matches
-                // declaration: class-level first, method-level second.
-                let mut method_scope_generics: Vec<Name> = class_generic_params.clone();
-                method_scope_generics.extend(method.generic_params.iter().cloned());
-                let method_loc = FunctionLoc::new(db, source_file, *method_id);
+                // Same elaboration as free functions (see the free-function
+                // path). The method's own `generic_params` are its user +
+                // synthetic effect params; the enclosing class's params join
+                // only the lowering scope, not the method's declared generics.
+                let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, method_loc);
+                // Emitted generics are the method's *user* params only; effect
+                // params (see the free-function path) join only the lowering
+                // scope.
+                let method_own_generics: Vec<Name> = sig.user_generic_params.clone();
+                // Generics in scope inside the method body: the class's TypeVars
+                // first, then the method's own user + synthetic effect params.
+                let method_scope_generics =
+                    baml_compiler2_hir_ty::lower::function_generic_frame(db, method_loc);
+                // Empty bounds match the prior raw-AST lowering (see the
+                // free-function path).
+                let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, source_file)
+                    .with_frame(method_scope_generics.clone())
+                    .with_self_ty(Some(baml_compiler2_hir_ty::lower::class_self_ty(
+                        db, class_loc,
+                    )));
+                let type_refs = &sig.type_refs;
+                let lower = |id| {
+                    let tir_ty = ctx.lower_type_ref(type_refs, id).to_plain();
+                    convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
+                };
                 let method_defaults =
                     baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
 
-                let arguments: Vec<cg::FunctionArgument> = method
+                let arguments: Vec<cg::FunctionArgument> = sig
                     .params
                     .iter()
                     .enumerate()
                     .skip(usize::from(is_instance))
-                    .filter_map(|(index, param)| {
-                        let ty = resolve_type_expr(
-                            db,
-                            param.type_expr.as_ref(),
-                            pkg_items,
-                            &pkg_info.namespace_path,
-                            &method_scope_generics,
-                            alias_map,
-                            recursive_aliases,
-                        )?;
-                        Some(cg::FunctionArgument {
-                            name: param.name.clone(),
-                            docstring: None,
-                            ty,
-                            default: lower_codegen_default(
-                                method_defaults.param_default(index),
-                                &method_defaults.defaults,
-                            ),
-                        })
+                    .map(|(index, param)| cg::FunctionArgument {
+                        name: param.name.clone(),
+                        docstring: None,
+                        ty: lower(param.type_ref),
+                        default: lower_codegen_default(
+                            method_defaults.param_default(index),
+                            &method_defaults.defaults,
+                        ),
                     })
                     .collect();
 
-                let return_type = resolve_type_expr(
-                    db,
-                    method.return_type.as_ref(),
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &method_scope_generics,
-                    alias_map,
-                    recursive_aliases,
-                )
-                .unwrap_or(cg::Ty::Void {
-                    attr: TyAttr::default(),
-                });
+                let return_type = sig.return_type.map_or(
+                    cg::Ty::Void {
+                        attr: TyAttr::default(),
+                    },
+                    lower,
+                );
 
                 let cg_method = cg::Function {
                     name: method.name.clone(),
-                    generic_params: method.generic_params.clone(),
+                    generic_params: method_own_generics,
                     docstring: method.docstring.clone(),
                     arguments,
                     return_type,
@@ -275,7 +302,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     watchers: Vec::new(),
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
-                        span_start: u32::from(method.span.start()),
+                        span_start: u32::from(
+                            baml_compiler2_ppir::item_data::function_source_map(db, method_loc)
+                                .span
+                                .start(),
+                        ),
                     },
                 };
 
@@ -290,21 +321,30 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 cg_name.clone(),
                 cg::Symbol::Class(cg::Class {
                     name: cg_name,
-                    generic_params: class_generic_params,
+                    generic_params: class
+                        .generic_params
+                        .iter()
+                        .map(|param| param.name.clone())
+                        .collect(),
                     docstring: class.docstring.clone(),
                     properties,
                     static_methods: Vec::new(),
                     instance_methods: Vec::new(),
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
-                        span_start: u32::from(class.span.start()),
+                        span_start: u32::from(
+                            baml_compiler2_ppir::item_data::class_source_map(db, class_loc)
+                                .span
+                                .start(),
+                        ),
                     },
                 }),
             );
         }
 
         // Enums
-        for enum_def in item_tree.enums.values() {
+        for &enum_loc in baml_compiler2_ppir::item_data::file_enums(db, source_file) {
+            let enum_def = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), enum_def.name.clone());
             let variants = enum_def
                 .variants
@@ -323,19 +363,24 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     variants,
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
-                        span_start: u32::from(enum_def.span.start()),
+                        span_start: u32::from(
+                            baml_compiler2_ppir::item_data::enum_source_map(db, enum_loc)
+                                .span
+                                .start(),
+                        ),
                     },
                 }),
             );
         }
 
         // Type aliases
-        for alias in item_tree.type_aliases.values() {
-            if let Some(resolved) = resolve_type_expr(
+        for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, source_file) {
+            let alias = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+            if let Some(resolved) = resolve_type_ref(
                 db,
-                alias.type_expr.as_ref(),
-                pkg_items,
-                &pkg_info.namespace_path,
+                &alias.type_refs,
+                alias.value,
+                source_file,
                 &[],
                 alias_map,
                 recursive_aliases,
@@ -357,32 +402,50 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         recursive: is_recursive,
                         origin: Origin {
                             source_file_path: source_file_path.clone(),
-                            span_start: u32::from(alias.span.start()),
+                            span_start: u32::from(
+                                baml_compiler2_ppir::item_data::type_alias_source_map(
+                                    db, alias_loc,
+                                )
+                                .span
+                                .start(),
+                            ),
                         },
                     }),
                 );
             }
         }
 
-        // Top-level functions — methods are skipped via `method_ids` so they
-        // don't double-emit. Companion functions (names containing `$`) flow
-        // through as their own pool entries; parent and companion alike are
+        // Top-level functions — methods are skipped via `non_free_function_locs`
+        // so they don't double-emit. Companion functions (names containing `$`)
+        // flow through as their own pool entries; parent and companion alike are
         // inserted directly, keyed on the suffixed name.
-        for (id, func) in &item_tree.functions {
-            if non_free_function_ids.contains(id) {
+        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, source_file) {
+            if non_free_function_locs.contains(&func_loc) {
                 continue;
             }
+            let func = baml_compiler2_ppir::item_data::function_data(db, func_loc);
 
             // Internal-origin functions (e.g. `<Client>$new` synthesized for
             // primitive clients) are runtime plumbing, not user-callable —
             // skip them so they don't end up as Python factory bindings.
-            if matches!(func.origin, FunctionOrigin::Internal) {
+            if func.metadata.is_language_internal
+                || matches!(func.metadata.origin, FunctionOrigin::Internal)
+            {
+                continue;
+            }
+
+            // The `$spec` companion returns `ai.FunctionSpec<Out>` — a BAML-side
+            // recipe value for custom runners, not something a host language can
+            // use (and not something every generator can even classify: the C#
+            // generator hard-errors on it rather than skipping). The useful
+            // companions — `$render_prompt`, `$parse`, `$stream` — stay.
+            if func.name.as_str().ends_with("$spec") {
                 continue;
             }
 
             if matches!(
-                func.body.as_ref(),
-                Some(ast::FunctionBodyDef::Builtin(ast::BuiltinKind::Intrinsic))
+                baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
+                baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)
             ) {
                 continue;
             }
@@ -395,47 +458,82 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // bodies, etc.) are valid too. `FunctionOrigin::Internal` is
             // already filtered above.
 
-            let func_generic_params: Vec<Name> = func.generic_params.clone();
-            let func_loc = FunctionLoc::new(db, source_file, *id);
+            // Source the signature from the *elaborated* HIR data, not the raw
+            // item tree: elaboration mints a synthetic effect param for every
+            // callback parameter that omits a `throws` clause and rewrites that
+            // parameter's `throws` to the fresh param. Both must reach the
+            // codegen type — the inferred outer `throws` (from `callable_throws`)
+            // references the effect param, so a raw lowering would leave it a
+            // dangling, undeclared typevar and collapse the callback's own
+            // `throws` to `Never`.
+            let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
+            // Effect params (minted for a callback whose `throws` is inferred)
+            // join only the lowering *scope*, so the callback and the inferred
+            // outer `throws` resolve to real typevars instead of dangling /
+            // `Never`. They are inferred from the callback, not user-bound, so
+            // they are NOT emitted as user-facing generics: an SDK that binds
+            // generics by name (e.g. Python's `_types=`) must not see them — a
+            // consumer that needs the throws type recovers it from the callback
+            // parameter (the Rust SDK, via each callback's associated error
+            // type).
+            let scope_generics = baml_compiler2_hir_ty::lower::function_generic_frame(db, func_loc);
+            let func_generic_params: Vec<Name> = sig.user_generic_params.clone();
+            // Empty bounds match the prior raw-AST lowering: this path resolves
+            // only in-scope typevars (incl. the effect params), not associated
+            // projections that would need interface bounds.
+            let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, source_file)
+                .with_frame(scope_generics.clone());
+            let type_refs = &sig.type_refs;
+            let lower = |id| {
+                let tir_ty = ctx.lower_type_ref(type_refs, id).to_plain();
+                convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
+            };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-            let arguments: Vec<cg::FunctionArgument> = func
+            // The compiler injects a trailing `client: ai.Client? = null`
+            // override onto every LLM function (and its companions). It is a
+            // BAML-side concern typed as an INTERFACE, which no target
+            // language can represent — leaving it in makes the whole function
+            // "unsupported" and the generator drops it, so the SDK would
+            // expose no LLM functions at all. Strip it here (the same rule
+            // `param_schema` applies for the playground form): SDK callers get
+            // the function's declared default client.
+            let param_count = sig.params.len();
+            // ...and on the `$stream` companion, where the same override is
+            // typed `ai.stream.StreamingClient?` (companions carry no LLM
+            // metadata of their own, hence the name check).
+            let drop_injected_client = sig
+                .params
+                .last()
+                .is_some_and(|p| p.name.as_str() == "client")
+                && (baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
+                    || func.name.as_str().ends_with("$stream"));
+            let visible_params = if drop_injected_client {
+                param_count - 1
+            } else {
+                param_count
+            };
+            let arguments: Vec<cg::FunctionArgument> = sig
                 .params
                 .iter()
+                .take(visible_params)
                 .enumerate()
-                .filter_map(|(index, param)| {
-                    let ty = resolve_type_expr(
-                        db,
-                        param.type_expr.as_ref(),
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &func_generic_params,
-                        alias_map,
-                        recursive_aliases,
-                    )?;
-                    Some(cg::FunctionArgument {
-                        name: param.name.clone(),
-                        docstring: None,
-                        ty,
-                        default: lower_codegen_default(
-                            func_defaults.param_default(index),
-                            &func_defaults.defaults,
-                        ),
-                    })
+                .map(|(index, param)| cg::FunctionArgument {
+                    name: param.name.clone(),
+                    docstring: None,
+                    ty: lower(param.type_ref),
+                    default: lower_codegen_default(
+                        func_defaults.param_default(index),
+                        &func_defaults.defaults,
+                    ),
                 })
                 .collect();
 
-            let return_type = resolve_type_expr(
-                db,
-                func.return_type.as_ref(),
-                pkg_items,
-                &pkg_info.namespace_path,
-                &func_generic_params,
-                alias_map,
-                recursive_aliases,
-            )
-            .unwrap_or(cg::Ty::Void {
-                attr: TyAttr::default(),
-            });
+            let return_type = sig.return_type.map_or(
+                cg::Ty::Void {
+                    attr: TyAttr::default(),
+                },
+                lower,
+            );
 
             let cg_func = cg::Function {
                 name: func.name.clone(),
@@ -447,7 +545,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 watchers: Vec::new(),
                 origin: Origin {
                     source_file_path: source_file_path.clone(),
-                    span_start: u32::from(func.span.start()),
+                    span_start: u32::from(
+                        baml_compiler2_ppir::item_data::function_source_map(db, func_loc)
+                            .span
+                            .start(),
+                    ),
                 },
             };
 
@@ -476,32 +578,23 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 // Type resolution
 // ---------------------------------------------------------------------------
 
-/// Resolve an optional `TypeExpr` to a codegen `Ty`.
+/// Resolve an optional type reference (from an item's firewall `type_refs`
+/// arena) to a codegen `Ty`.
 ///
-/// Returns `None` if the type expression is missing.
-fn resolve_type_expr(
+/// Returns `None` if `id` is `None` (the annotation was omitted).
+fn resolve_type_ref(
     db: &ProjectDatabase,
-    spanned: Option<&baml_compiler2_ast::TypeExpr>,
-    package_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    ns_context: &[Name],
-    generic_params: &[Name],
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: Option<baml_compiler2_hir::type_ref::TypeRefId>,
+    file: baml_base::SourceFile,
+    generic_params: &[ParamTy],
     alias_map: &HashMap<QualifiedTypeName, TirTy>,
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {
-    let spanned = spanned?;
-    let mut diagnostics = Vec::new();
-    let tir_ty = lower_type_expr::lower_type_expr(
-        spanned,
-        &lower_type_expr::ScopeCtx {
-            db,
-            package_items,
-            ns_context,
-            generic_params,
-            bounds: &lower_type_expr::TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diagnostics,
-    );
+    let id = id?;
+    let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
+        .with_frame(generic_params.to_vec());
+    let tir_ty = ctx.lower_type_ref(store, id).to_plain();
     Some(convert_tir_to_codegen_ty(
         &tir_ty,
         alias_map,
@@ -523,7 +616,7 @@ fn resolve_throws<'db>(
     alias_map: &HashMap<QualifiedTypeName, TirTy>,
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {
-    match baml_compiler2_tir::callable::callable_throws(db, func_loc) {
+    match &baml_compiler2_hir_ty::callable::callable_throws(db, func_loc).0 {
         TirTy::Never { .. } | TirTy::Unknown { .. } => None,
         ty => Some(convert_tir_to_codegen_ty(ty, alias_map, recursive_aliases)),
     }
@@ -639,6 +732,7 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
 mod tests {
     use std::path::Path;
 
+    use baml_compiler2_hir::ids::{FunctionMarker, LocalItemId};
     use baml_type::TyAttrValue;
 
     use super::*;
@@ -752,16 +846,16 @@ mod tests {
         db.set_project_root(root);
         db.add_or_update_file(
             root.join("main.baml").as_path(),
-            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client \"openai/gpt-4o\"\n    prompt #\"Extract resume from {{resume}}\"#\n}\n",
+            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `Extract resume from ${resume} ${ctx.output_format}`\n}\n",
         );
 
         let pool = build_symbol_pool(&db);
 
-        // The parent and each companion must be present as their own
-        // `Symbol::Function` entry, keyed on the suffixed name.
+        // The parent and each host-facing companion must be present as their
+        // own `Symbol::Function` entry, keyed on the suffixed name. `$spec` is
+        // deliberately absent — it returns a BAML-side `ai.FunctionSpec`.
         for expected in [
             "ExtractResume",
-            "ExtractResume$build_request",
             "ExtractResume$render_prompt",
             "ExtractResume$parse",
         ] {
@@ -777,67 +871,40 @@ mod tests {
     }
 
     #[test]
-    fn test_llm_functions_and_companions_get_default_client_argument() {
+    fn test_llm_functions_hide_the_injected_client_argument() {
         let root = Path::new("/tmp/llm_default_client_arg");
         let mut db = ProjectDatabase::new();
         db.set_project_root(root);
         db.add_or_update_file(
             root.join("main.baml").as_path(),
             r##"
-client<llm> GPT4 {
-  provider "openai"
-  options {
-    model "gpt-4o"
-    api_key "test"
-  }
-}
-
 class Resume { name string }
 
 function ExtractResume(resume: string) -> Resume {
-  client GPT4
-  prompt #"Extract resume from {{resume}}"#
+  client: "openai/gpt-4o"
+  prompt: `Extract resume from ${resume} ${ctx.output_format}`
 }
 "##,
         );
 
         let pool = build_symbol_pool(&db);
 
-        for (bare, expected_prefix) in [
+        // The compiler injects a trailing `client: ai.Client? = null` override
+        // onto the LLM function. `ai.Client` is an interface, which no target
+        // language can represent — leaving it in the pool made every generator
+        // classify the function as unsupported and drop it entirely. The pool
+        // must expose the user's own parameters only.
+        for (bare, expected) in [
             ("ExtractResume", &["resume"][..]),
             ("ExtractResume$render_prompt", &["resume"][..]),
-            ("ExtractResume$build_request", &["resume"][..]),
-            ("ExtractResume$build_request_stream", &["resume"][..]),
-            ("ExtractResume$stream", &["resume"][..]),
             ("ExtractResume$parse", &["json"][..]),
-            ("ExtractResume$parse_stream", &["sse"][..]),
         ] {
             let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
                 panic!("missing function {bare}");
             };
-
             let arg_names: Vec<&str> = func.arguments.iter().map(|a| a.name.as_str()).collect();
-            let mut expected_names = expected_prefix.to_vec();
-            expected_names.push("client");
-            assert_eq!(arg_names, expected_names, "arguments for {bare}");
-
-            let client_arg = func.arguments.last().expect("client argument");
-            assert_eq!(client_arg.name.as_str(), "client");
-            assert_eq!(
-                client_arg.default,
-                Some(cg::FunctionArgumentDefault::Expression {
-                    source: Some("GPT4".to_string()),
-                }),
-                "client default for {bare}",
-            );
-            match &client_arg.ty {
-                cg::Ty::Class(name, args, _) => {
-                    assert_eq!(name.to_string(), "baml.llm.Client");
-                    assert!(args.is_empty());
-                }
-                other => panic!("client type for {bare} should be baml.llm.Client, got {other:?}"),
-            }
+            assert_eq!(arg_names, expected, "arguments for {bare}");
         }
     }
 
@@ -858,8 +925,8 @@ client<llm> GPT4 {
 }
 
 function Extract(client: string, text: string) -> string {
-  client GPT4
-  prompt #"{{ text }}"#
+  client: GPT4
+  prompt: `${text}`
 }
 "##,
         );
@@ -1114,6 +1181,136 @@ function Extract(client: string, text: string) -> string {
         let bump = &class.instance_methods[0];
         let bump_args: Vec<&str> = bump.arguments.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(bump_args, vec!["by"], "self should not be in arguments");
+    }
+
+    /// `Self` must be resolved by the compiler-owned type lowering before any
+    /// host generator sees the signature. This pins bare and nested positions
+    /// for both instance and static class methods.
+    #[test]
+    fn test_class_method_self_lowers_to_owning_codegen_class() {
+        let root = Path::new("/tmp/12c_method_self");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r#"
+class Mirror {
+  value string
+  function clone(self, other: Self?) -> map<string, Self> { {"value": self} }
+  function pick(self, value: Self | int) -> Self | string { self }
+  function wrap(value: Self[]) -> Self { value[0] }
+}
+
+class GenericMirror<T> {
+  value T
+  function nested(self, other: Self?) -> map<string, Self[]> { {"value": [self]} }
+  function identity(value: Self) -> Self { value }
+}
+"#,
+        );
+
+        let pool = build_symbol_pool(&db);
+        let (owner, class) = pool
+            .iter()
+            .find_map(|(name, symbol)| match symbol {
+                cg::Symbol::Class(class) if name.name().as_str() == "Mirror" => Some((name, class)),
+                _ => None,
+            })
+            .expect("Mirror class missing from pool");
+
+        let clone = class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "clone")
+            .expect("clone instance method missing");
+        assert!(matches!(
+            &clone.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null { .. }))
+        ));
+        assert!(matches!(
+            &clone.return_type,
+            cg::Ty::Map { key, value, .. }
+                if matches!(key.as_ref(), cg::Ty::String { .. })
+                    && matches!(value.as_ref(), cg::Ty::Class(name, args, _) if name == owner && args.is_empty())
+        ));
+
+        let pick = class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "pick")
+            .expect("pick instance method missing");
+        assert!(matches!(
+            &pick.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Int { .. }))
+        ));
+        assert!(matches!(
+            &pick.return_type,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::String { .. }))
+        ));
+
+        let wrap = class
+            .static_methods
+            .iter()
+            .find(|method| method.name.as_str() == "wrap")
+            .expect("wrap static method missing");
+        assert!(matches!(
+            &wrap.arguments[0].ty,
+            cg::Ty::List(inner, _)
+                if matches!(inner.as_ref(), cg::Ty::Class(name, args, _) if name == owner && args.is_empty())
+        ));
+        assert!(matches!(
+            &wrap.return_type,
+            cg::Ty::Class(name, args, _) if name == owner && args.is_empty()
+        ));
+
+        let (generic_owner, generic_class) = pool
+            .iter()
+            .find_map(|(name, symbol)| match symbol {
+                cg::Symbol::Class(class) if name.name().as_str() == "GenericMirror" => {
+                    Some((name, class))
+                }
+                _ => None,
+            })
+            .expect("GenericMirror class missing from pool");
+        let nested = generic_class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "nested")
+            .expect("nested generic instance method missing");
+        let is_instantiated_self = |ty: &cg::Ty| {
+            matches!(
+                ty,
+                cg::Ty::Class(name, args, _)
+                    if name == generic_owner
+                        && matches!(args.as_slice(), [cg::Ty::TypeVar(name, _)] if name.as_str() == "T")
+            )
+        };
+        assert!(matches!(
+            &nested.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(&is_instantiated_self)
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null { .. }))
+        ));
+        assert!(matches!(
+            &nested.return_type,
+            cg::Ty::Map { key, value, .. }
+                if matches!(key.as_ref(), cg::Ty::String { .. })
+                    && matches!(value.as_ref(), cg::Ty::List(inner, _) if is_instantiated_self(inner))
+        ));
+
+        let identity = generic_class
+            .static_methods
+            .iter()
+            .find(|method| method.name.as_str() == "identity")
+            .expect("identity generic static method missing");
+        assert!(is_instantiated_self(&identity.arguments[0].ty));
+        assert!(is_instantiated_self(&identity.return_type));
     }
 
     /// Verifies that a class in a namespaced folder gets `namespace_path` populated.

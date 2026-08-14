@@ -1,0 +1,641 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function generic_match_rigid.$init_test_ns_generic_match_rigid_generic_match_rigid(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "class_generic_match_matches_realized_instantiation"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "class_generic_match_rejects_non_member"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "class_generic_is_matches_realized_instantiation"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "class_generic_is_rejects_non_member"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "fn_generic_is_matches_at_realized_arg"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "fn_generic_is_rejects_non_class_value"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "fn_generic_is_invariant_on_realized_arg"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "fn_generic_arm_matches_realized_member"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "fn_generic_arm_rejects_other_member"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "fn_generic_arm_rejects_foreign_realization"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "concrete_arm_rejects_foreign_realization"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "concrete_arm_matches_own_realization"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "concrete_arms_after_open_union_arm_reachable"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "open_union_arm_dynamic_first_match_capture"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "written_union_arm_matches_rigid_member_realization"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "written_union_arm_matches_concrete_member"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "written_union_arm_rejects_foreign_realization"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "bounded_rigid_arm_matches_implementing_member"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "bounded_rigid_arm_rejects_other_member"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "refutable_rigid_arm_matches_at_realized_arg"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "refutable_rigid_arm_field_test_still_applies"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "refutable_rigid_arm_rejects_foreign_realization"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "refutable_rigid_list_arm_matches_at_realized_arg"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "refutable_rigid_list_arm_field_test_still_applies"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_rigid"
+    load_const "refutable_rigid_list_arm_rejects_foreign_realization"
+    make_closure .<lambda($init_test_ns_generic_match_rigid_generic_match_rigid, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function generic_match_rigid.RigidBox.is_own(self: generic_match_rigid.RigidBox<#0>, other: generic_match_rigid.RigidBox<int> | int) -> bool {
+    load_var other
+    is_type generic_match_rigid.RigidBox<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function generic_match_rigid.RigidBox.match_own(self: generic_match_rigid.RigidBox<#0>, other: generic_match_rigid.RigidBox<int> | int) -> string {
+    load_var other
+    store_var _3
+    load_var _3
+    narrow_bind generic_match_rigid.RigidBox<...>, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "other"
+    jump L2
+
+  L1:
+    load_const "box"
+
+  L2:
+    return
+}
+
+function generic_match_rigid.RigidTagged.RigidMarked.tag(self: generic_match_rigid.RigidTagged) -> string {
+    load_const "tagged"
+    return
+}
+
+function generic_match_rigid.box_is_hit_fn() -> bool {
+    load_type int
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidBox .v
+    load_const 2
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidBox .v
+    call user.generic_match_rigid.RigidBox.is_own
+    return
+}
+
+function generic_match_rigid.box_is_miss_fn() -> bool {
+    load_type int
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidBox .v
+    load_const 5
+    call user.generic_match_rigid.RigidBox.is_own
+    return
+}
+
+function generic_match_rigid.box_match_hit_fn() -> string {
+    load_type int
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidBox .v
+    load_const 2
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidBox .v
+    call user.generic_match_rigid.RigidBox.match_own
+    return
+}
+
+function generic_match_rigid.box_match_miss_fn() -> string {
+    load_type int
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidBox .v
+    load_const 5
+    call user.generic_match_rigid.RigidBox.match_own
+    return
+}
+
+function generic_match_rigid.fn_generic_is_arg_miss_fn() -> bool {
+    load_type string
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidBox .v
+    call user.generic_match_rigid.is_rigid_box
+    return
+}
+
+function generic_match_rigid.fn_generic_is_hit_fn() -> bool {
+    load_type int
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidBox .v
+    call user.generic_match_rigid.is_rigid_box
+    return
+}
+
+function generic_match_rigid.fn_generic_is_value_miss_fn() -> bool {
+    load_type int
+    load_const 5
+    call user.generic_match_rigid.is_rigid_box
+    return
+}
+
+function generic_match_rigid.is_rigid_box(x: generic_match_rigid.RigidBox<int> | int) -> bool {
+    load_var x
+    is_type generic_match_rigid.RigidBox<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function generic_match_rigid.pick_bounded(x: generic_match_rigid.RigidTagged | string) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind #0, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "other"
+    jump L2
+
+  L1:
+    load_const "bounded"
+
+  L2:
+    return
+}
+
+function generic_match_rigid.pick_bounded_hit_fn() -> string {
+    load_type generic_match_rigid.RigidTagged
+    load_const 1
+    init_instance user.generic_match_rigid.RigidTagged .v
+    call user.generic_match_rigid.pick_bounded
+    return
+}
+
+function generic_match_rigid.pick_bounded_miss_fn() -> string {
+    load_type generic_match_rigid.RigidTagged
+    load_const "hi"
+    call user.generic_match_rigid.pick_bounded
+    return
+}
+
+function generic_match_rigid.pick_concrete(x: #0) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "other"
+    jump L2
+
+  L1:
+    load_var _2
+    load_const "!"
+    bin_op +
+
+  L2:
+    return
+}
+
+function generic_match_rigid.pick_concrete_hit_fn() -> string {
+    load_type string
+    load_const "hi"
+    call user.generic_match_rigid.pick_concrete
+    return
+}
+
+function generic_match_rigid.pick_concrete_miss_fn() -> string {
+    load_type int
+    load_const 5
+    call user.generic_match_rigid.pick_concrete
+    return
+}
+
+function generic_match_rigid.pick_mixed_union(x: #0 | bool) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind #0, slot=2
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var x
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=3
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var x
+    load_const true
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L6
+    load_const "f"
+    jump L5
+
+  L3:
+    load_const "t"
+    jump L5
+
+  L4:
+    load_const "p"
+
+  L5:
+    return
+
+  L6:
+    unreachable
+}
+
+function generic_match_rigid.pick_mixed_union_bool_fn() -> string {
+    load_type int
+    load_const true
+    call user.generic_match_rigid.pick_mixed_union
+    return
+}
+
+function generic_match_rigid.pick_mixed_union_open_fn() -> string {
+    load_type bool
+    load_const true
+    call user.generic_match_rigid.pick_mixed_union
+    return
+}
+
+function generic_match_rigid.pick_rigid(x: int | string) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind #0, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "fallthrough"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function generic_match_rigid.pick_rigid_foreign_fn() -> string {
+    load_type bool
+    load_const 42
+    call user.generic_match_rigid.pick_rigid
+    return
+}
+
+function generic_match_rigid.pick_rigid_hit_fn() -> string {
+    load_type int
+    load_const 42
+    call user.generic_match_rigid.pick_rigid
+    return
+}
+
+function generic_match_rigid.pick_rigid_other_member_fn() -> string {
+    load_type int
+    load_const "hi"
+    call user.generic_match_rigid.pick_rigid
+    return
+}
+
+function generic_match_rigid.pick_written_union(x: #0 | int) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=2
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var x
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "other"
+    jump L3
+
+  L2:
+    load_const "int-or-string"
+
+  L3:
+    return
+}
+
+function generic_match_rigid.pick_written_union_concrete_hit_fn() -> string {
+    load_type string
+    load_const 5
+    call user.generic_match_rigid.pick_written_union
+    return
+}
+
+function generic_match_rigid.pick_written_union_miss_fn() -> string {
+    load_type bool
+    load_const true
+    call user.generic_match_rigid.pick_written_union
+    return
+}
+
+function generic_match_rigid.pick_written_union_rigid_hit_fn() -> string {
+    load_type string
+    load_const "hi"
+    call user.generic_match_rigid.pick_written_union
+    return
+}
+
+function generic_match_rigid.rigid_cell_arg_miss_fn() -> string {
+    load_type string
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidCell .v
+    call user.generic_match_rigid.rigid_cell_split
+    return
+}
+
+function generic_match_rigid.rigid_cell_field_miss_fn() -> string {
+    load_type int
+    load_const 2
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidCell .v
+    call user.generic_match_rigid.rigid_cell_split
+    return
+}
+
+function generic_match_rigid.rigid_cell_hit_fn() -> string {
+    load_type int
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_rigid.RigidCell .v
+    call user.generic_match_rigid.rigid_cell_split
+    return
+}
+
+function generic_match_rigid.rigid_cell_split(c: generic_match_rigid.RigidCell<int>) -> string {
+    load_var c
+    is_type generic_match_rigid.RigidCell<...>
+    pop_jump_if_false L0
+    load_var c
+    load_field .v
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var c
+    is_type generic_match_rigid.RigidCell<...>
+    pop_jump_if_false L3
+    load_const "concrete"
+    jump L2
+
+  L1:
+    load_const "rigid-one"
+
+  L2:
+    return
+
+  L3:
+    unreachable
+}
+
+function generic_match_rigid.rigid_row_arg_miss_fn() -> string {
+    load_type int
+    load_const "a"
+    load_type string
+    alloc_array 1
+    load_const 1
+    init_instance user.generic_match_rigid.RigidRow .xs, .n
+    call user.generic_match_rigid.rigid_row_split
+    return
+}
+
+function generic_match_rigid.rigid_row_field_miss_fn() -> string {
+    load_type string
+    load_const "a"
+    load_type string
+    alloc_array 1
+    load_const 2
+    init_instance user.generic_match_rigid.RigidRow .xs, .n
+    call user.generic_match_rigid.rigid_row_split
+    return
+}
+
+function generic_match_rigid.rigid_row_hit_fn() -> string {
+    load_type string
+    load_const "a"
+    load_type string
+    alloc_array 1
+    load_const 1
+    init_instance user.generic_match_rigid.RigidRow .xs, .n
+    call user.generic_match_rigid.rigid_row_split
+    return
+}
+
+function generic_match_rigid.rigid_row_split(r: generic_match_rigid.RigidRow) -> string {
+    load_var r
+    is_type generic_match_rigid.RigidRow
+    pop_jump_if_false L0
+    load_var r
+    load_field .xs
+    store_var _4
+    load_var _4
+    narrow_bind #0[], slot=2
+    pop_jump_if_false L0
+    load_var r
+    load_field .n
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "slice"
+    jump L2
+
+  L1:
+    load_const "rigid-one"
+
+  L2:
+    return
+}

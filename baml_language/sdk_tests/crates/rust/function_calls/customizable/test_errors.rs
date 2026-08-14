@@ -41,7 +41,7 @@ const _BAD_JSON: &str = "{not valid json";
 // `JsonParseError` (a plain generated struct). Proves stdlib error classes
 // surface structured, independent of any `throws` clause.
 #[test]
-fn test_stdlib_error_surfaces_as_baml_error() {
+fn test_errors_stdlib_error_surfaces_as_baml_error() {
     match ParseJson(_BAD_JSON.to_string()) {
         Err(baml_bridge::Error::Thrown { value, .. }) => {
             // `isinstance(..., JsonParseError)` is the static type of `value`.
@@ -55,7 +55,7 @@ fn test_stdlib_error_surfaces_as_baml_error() {
 // A user `throw` of a declared error → `Error::Thrown` whose `value` is
 // the declared user error instance itself (not a `.code` sub-field).
 #[test]
-fn test_user_throw_surfaces_declared_instance() {
+fn test_errors_user_throw_surfaces_declared_instance() {
     match ThrowMyError() {
         Err(baml_bridge::Error::Thrown { value, .. }) => {
             let _: MyError = value;
@@ -76,7 +76,7 @@ fn test_user_throw_surfaces_declared_instance() {
 // `throws ParseError | TimeoutError` (union); both throw `ParseError`, so
 // their `class_name` must agree.
 #[test]
-fn test_union_throws_preserves_class_name() {
+fn test_errors_union_throws_preserves_class_name() {
     // DIVERGENCE(rust): `Error::Thrown` has no runtime `class_name` field —
     // the thrown class (`user.raises_test.ParseError`) is carried by the
     // static type instead. The single-throws value decodes to `ParseError`
@@ -107,7 +107,7 @@ fn test_union_throws_preserves_class_name() {
 // declare) → `BamlError` wrapping `baml.errors.InvalidArgument`,
 // synthesized host-side rather than thrown from the VM.
 #[test]
-fn test_host_invalid_argument_wraps_baml_errors_invalid_argument() {
+fn test_errors_host_invalid_argument_wraps_baml_errors_invalid_argument() {
     // DIVERGENCE(rust): an argument the function doesn't declare cannot be
     // passed through the typed signature — it is a compile error, not a
     // host-synthesized `baml.errors.InvalidArgument`. Compile-time coverage
@@ -118,7 +118,7 @@ fn test_host_invalid_argument_wraps_baml_errors_invalid_argument() {
 // `BamlPanic` whose `.value` is a `baml.panics.UserPanic`, routed by the
 // namespace check, distinct from a host-synthesized `SdkPanic`).
 #[test]
-fn test_user_panic_surfaces_as_baml_panic() {
+fn test_errors_user_panic_surfaces_as_baml_panic() {
     // DIVERGENCE(rust): `Error::Panic` carries only the rendered message +
     // trace — the `UserPanic`-vs-`SdkPanic` class routing is not decodable
     // host-side, so the arm match is the assertion.
@@ -129,7 +129,7 @@ fn test_user_panic_surfaces_as_baml_panic() {
 // Async cancellation: python maps it to `asyncio.CancelledError` with a BAML
 // reason on the awaiting task.
 #[tokio::test]
-async fn test_cancellation_surfaces_as_baml_panic() {
+async fn test_errors_cancellation_surfaces_as_baml_panic() {
     // DIVERGENCE(rust): tokio has no cross-task cancellation exception — the
     // aborted call itself resolves to `Err(Error::Panic)` (the cancellation
     // panic) instead of a `CancelledError` carrying a `reason`.
@@ -156,7 +156,7 @@ async fn test_cancellation_surfaces_as_baml_panic() {
 // `str(e)` is non-empty — guards the `@trace` / telemetry path, which
 // records `str(e)`.
 #[test]
-fn test_str_is_non_empty() {
+fn test_errors_str_is_non_empty() {
     let err = match ParseJson(_BAD_JSON.to_string()) {
         Err(err) => err,
         Ok(_) => panic!("expected ParseJson to fail"),
@@ -206,7 +206,7 @@ fn _python_traceback_line(line: &str) -> String {
 // pointing into the throwing function's `.baml` source (python surfaces it
 // as `.baml_trace`).
 #[test]
-fn test_baml_error_carries_baml_trace() {
+fn test_errors_baml_error_carries_baml_trace() {
     let trace = match ThrowMyError() {
         Err(baml_bridge::Error::Thrown { trace, .. }) => trace,
         Err(other) => panic!("expected Error::Thrown, got {other:?}"),
@@ -230,7 +230,7 @@ fn test_baml_error_carries_baml_trace() {
 // `traceback.format_exception` renders the `.baml` source frame inline (not
 // as a detached blob).
 #[test]
-fn test_baml_trace_spliced_into_python_traceback() {
+fn test_errors_baml_trace_spliced_into_python_traceback() {
     // DIVERGENCE(rust): there is no host traceback to splice into. The
     // closest surface is the error's `Display` rendering, so this asserts
     // every wire trace line is rendered there inline.
@@ -278,7 +278,7 @@ fn test_baml_trace_spliced_into_python_traceback() {
 // a subprocess and asserting the child's return code (and that "UNREACHABLE"
 // never printed).
 #[test]
-fn test_clean_exit_terminates_process_with_code() {
+fn test_errors_clean_exit_terminates_process_with_code() {
     // DIVERGENCE(rust): the same observation needs a subprocess harness that
     // re-runs the current test binary (or a helper binary) so the child can
     // call `throws_test::DoExit(code)` and the parent can assert

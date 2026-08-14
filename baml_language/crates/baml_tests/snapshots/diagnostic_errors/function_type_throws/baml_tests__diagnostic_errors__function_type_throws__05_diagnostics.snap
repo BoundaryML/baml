@@ -2,42 +2,42 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
-    ╭─[ negative.baml:15:6 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[negative.baml:15:6]
  15 │   cb(inner)
-    │      ──┬──  
-    │        ╰──── type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·      ──┬──
+    ·        ╰── expected `(value: int) -> int throws never`, found `(value: int) -> int throws string`
+    ╰────
 
-  [type] error: type mismatch: expected HiddenHandler, got (value: int) -> int throws string
-    ╭─[ negative.baml:23:17 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[negative.baml:23:17]
  23 │   accept_hidden(risky)
-    │                 ──┬──  
-    │                   ╰──── type mismatch: expected HiddenHandler, got (value: int) -> int throws string
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                 ──┬──
+    ·                   ╰── expected `HiddenHandler`, found `(value: int) -> int throws string`
+    ╰────
 
-  [type] error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
-    ╭─[ negative.baml:27:16 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[negative.baml:27:16]
  27 │   Holder { cb: risky }
-    │                ──┬──  
-    │                  ╰──── type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                ──┬──
+    ·                  ╰── expected `(value: int) -> int throws never`, found `(value: int) -> int throws string`
+    ╰────
 
-  [type] error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
-    ╭─[ negative.baml:34:3 ]
-    │
- 34 │   local
-    │   ──┬──  
-    │     ╰──── type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
+
+  × mismatched types
+    ╭─[negative.baml:30:62]
+ 30 │ ╭─▶ function fail_returned() -> (value: int) -> int throws never {
+ 31 │ │     let local = (value: int) -> int throws string {
+ 32 │ │       throw "boom"
+ 33 │ │     }
+ 34 │ │     local
+ 35 │ ├─▶ }
+    · ╰──── expected `(value: int) -> int throws never`, found `(value: int) -> int throws string`
+    ╰────

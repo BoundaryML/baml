@@ -1,10 +1,10 @@
-# Baml Language VS Code Extension
+# BAML v0 — VS Code and Cursor extension
 
-This VS Code extension provides support for the Baml language used to define LLM functions, test them in the integrated LLM Playground and build agentic workflows.
+This extension provides VS Code and Cursor support for BAML v0, the DSL used to define LLM functions, test them in the integrated LLM Playground, and build agentic workflows.
 
 ### General features
 
-1. **Syntax Highlighting**: Provides enhanced readability and coding experience by highlighting the Baml language syntax for any file with the `.baml` extension.
+1. **Syntax Highlighting**: Provides enhanced readability and coding experience by highlighting the BAML v0 language syntax for any file with the `.baml` extension.
 2. **Dynamic playground**: Run and test your prompts in real-time.
 3. **Build typed clients in several languages**: Command +S a baml file to build a baml client to call your functions in Python or TS.
 

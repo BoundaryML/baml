@@ -6,24 +6,22 @@ function ConstToken() -> int {
 
 //----
 //- diagnostics
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//    ╭─[ const_binding.baml:2:3 ]
-//    │
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//    ╭─[const_binding.baml:2:3]
 //  2 │   const x = 1;
-//    │   ──┬──
-//    │     ╰──── `const` behaves like `let` for now
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: `const` is reserved and cannot be used as a binding name
-//    ╭─[ const_binding.baml:3:7 ]
-//    │
+//    ·   ──┬──
+//    ·     ╰── `const` behaves like `let` for now
+//    ╰────
+// E0010
+//
+//   × `const` is reserved and cannot be used as a binding name
+//    ╭─[const_binding.baml:3:7]
 //  3 │   let const = x;
-//    │       ──┬──
-//    │         ╰──── `const` is reserved here
-//    │
-//    │ Note: Error code: E0010
-// ───╯
+//    ·       ──┬──
+//    ·         ╰── `const` is reserved here
+//    ╰────
 //
 //- semantic_tokens
 // const_binding.baml:1:1 (keyword) len=8 "function"

@@ -6,6 +6,7 @@ export type FunctionSidebarFunctionNode = {
   fullName: string;
   label: string;
   key: string;
+  workflowNodeCount?: number;
 };
 
 export type FunctionSidebarFolderNode = {
@@ -27,6 +28,13 @@ export type FunctionSidebarTree = {
   forcedOpenFolderKeys: Set<string>;
 };
 
+export type FunctionSortOrder = 'alphanumeric' | 'workflowNodeCount';
+
+const naturalFunctionNameCollator = new Intl.Collator('en', {
+  numeric: true,
+  sensitivity: 'base',
+});
+
 type MutableFolderNode = Omit<FunctionSidebarFolderNode, 'children'> & {
   children: Array<FunctionSidebarTreeNode | MutableFolderNode>;
   foldersByName: Map<string, MutableFolderNode>;
@@ -35,6 +43,8 @@ type MutableFolderNode = Omit<FunctionSidebarFolderNode, 'children'> & {
 type BuildFunctionSidebarTreeOptions = {
   search?: string;
   selectedFunctionName?: string | null;
+  sortOrder?: FunctionSortOrder;
+  workflowNodeCounts?: ReadonlyMap<string, number>;
 };
 
 export function buildFunctionSidebarTree(
@@ -47,18 +57,41 @@ export function buildFunctionSidebarTree(
   const forcedOpenFolderKeys = new Set<string>();
   let functionCount = 0;
 
-  for (const functionInfo of functions) {
+  const workflowNodeCounts = options.workflowNodeCounts;
+  const sortOrder = options.sortOrder ?? 'workflowNodeCount';
+  const sortedFunctions = functions
+    .map((functionInfo, index) => ({ functionInfo, index }))
+    .sort((a, b) => {
+      if (sortOrder === 'alphanumeric') {
+        return (
+          naturalFunctionNameCollator.compare(
+            a.functionInfo.name,
+            b.functionInfo.name,
+          ) || a.index - b.index
+        );
+      }
+      if (!workflowNodeCounts) return a.index - b.index;
+      return (
+        (workflowNodeCounts.get(b.functionInfo.name) ?? 0) -
+          (workflowNodeCounts.get(a.functionInfo.name) ?? 0) ||
+        a.index - b.index
+      );
+    })
+    .map(({ functionInfo }) => functionInfo);
+
+  for (const functionInfo of sortedFunctions) {
     if (query && !functionInfo.name.toLowerCase().includes(query)) continue;
 
     const parts = functionInfo.name.split('.');
-    const label = parts[parts.length - 1] ?? functionInfo.name;
+    const label = parts.at(-1) ?? functionInfo.name;
     const namespacePath = parts.slice(0, -1);
     const leaf: FunctionSidebarFunctionNode = {
-      type: 'function',
-      functionInfo,
       fullName: functionInfo.name,
-      label,
+      functionInfo,
       key: functionInfo.name,
+      label,
+      type: 'function',
+      workflowNodeCount: workflowNodeCounts?.get(functionInfo.name),
     };
 
     functionCount += 1;
@@ -91,21 +124,21 @@ export function buildFunctionSidebarTree(
   }
 
   return {
-    nodes: root.map(finalizeNode),
-    functionCount,
     forcedOpenFolderKeys,
+    functionCount,
+    nodes: root.map(finalizeNode),
   };
 }
 
 function createFolder(name: string, path: string[]): MutableFolderNode {
   return {
-    type: 'folder',
-    name,
-    path,
-    key: path.join('.'),
-    functionCount: 0,
     children: [],
     foldersByName: new Map(),
+    functionCount: 0,
+    key: path.join('.'),
+    name,
+    path,
+    type: 'folder',
   };
 }
 
@@ -114,12 +147,12 @@ function finalizeNode(
 ): FunctionSidebarTreeNode {
   if (node.type === 'function') return node;
   return {
-    type: 'folder',
+    children: node.children.map(finalizeNode),
+    functionCount: node.functionCount,
+    key: node.key,
     name: node.name,
     path: node.path,
-    key: node.key,
-    functionCount: node.functionCount,
-    children: node.children.map(finalizeNode),
+    type: 'folder',
   };
 }
 

@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × type `Parent` expects 1 type argument(s), got 0
+    ╭─[requires_clause_shapes.baml:29:37]
+ 29 │ interface RequiresBareHead requires Parent {
+    ·                                     ──────
+    ╰────
+
+  [type] E0001
+
+  × type `Parent` expects 1 type argument(s), got 2
+    ╭─[requires_clause_shapes.baml:34:40]
+ 34 │ interface RequiresOverApplied requires Parent<int, string> {
+    ·                                        ───────────────────
+    ╰────
+
+  [type] E0133
+
+  × interface `RequiresAlias` cannot require `PlainAlias`, which is not an interface
+    ╭─[requires_clause_shapes.baml:39:34]
+ 39 │ interface RequiresAlias requires PlainAlias {
+    ·                                  ──────────
+    ╰────
+
+  [type] E0133
+
+  × interface `RequiresClass` cannot require `NotIface`, which is not an interface
+    ╭─[requires_clause_shapes.baml:43:34]
+ 43 │ interface RequiresClass requires NotIface {
+    ·                                  ────────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Nope
+    ╭─[requires_clause_shapes.baml:49:36]
+ 49 │ interface RequiresUnknown requires Nope {
+    ·                                    ────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Nope
+    ╭─[requires_clause_shapes.baml:56:44]
+ 56 │ interface RequiresErrorArg requires Parent<Nope> {
+    ·                                            ────
+    ╰────

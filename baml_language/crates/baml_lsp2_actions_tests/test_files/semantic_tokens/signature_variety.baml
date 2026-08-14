@@ -1,11 +1,11 @@
 function InputNone() -> int {
-  client "openai/gpt-4o"
-  prompt #"fa"#
+  client: "openai/gpt-4o"
+  prompt: `fa`
 }
 
 function InputSimple(a: string, b: int | bool) -> int {
-  client "openai/gpt-4o"
-  prompt #"fa"#
+  client: "openai/gpt-4o"
+  prompt: `fa`
 }
 
 class Email {
@@ -14,8 +14,8 @@ class Email {
 }
 
 function InputObject(email: Email) -> string {
-  client "openai/gpt-4o"
-  prompt #" subject line {{ email.subject }} "#
+  client: "openai/gpt-4o"
+  prompt: ` subject line ${email.subject} `
 }
 
 enum Color {
@@ -25,8 +25,8 @@ enum Color {
 }
 
 function InputEnum(color: Color) -> string {
-  client "openai/gpt-4o"
-  prompt #" color {{ color }} "#
+  client: "openai/gpt-4o"
+  prompt: ` color ${color} `
 }
 
 // Try it with wierd spacing and comments
@@ -48,23 +48,23 @@ string
 
 // Or else
 {
-  client "openai/gpt-4o"
-  prompt #" color {{ color }} "#
+  client: "openai/gpt-4o"
+  prompt: ` color ${color} `
 }
 
 
 function InputImage(img: image) -> string {
-  client "openai/gpt-4o"
-  prompt #" image {{ img }} "#
+  client: "openai/gpt-4o"
+  prompt: ` image ${img} `
 }
 
-// Test unquoted client string (no quotes around the client name)
+// Shorthand client strings must be quoted
 function ExtractName(text: string) -> string {
-  client "openai/gpt-4o-mini"
-  prompt #"
-    Extract the person's name from this text: {{ text }}
+  client: "openai/gpt-4o-mini"
+  prompt: `
+    Extract the person's name from this text: ${text}
     Return only the name, nothing else.
-  "#
+  `
 }
 
 //----
@@ -76,13 +76,11 @@ function ExtractName(text: string) -> string {
 // signature_variety.baml:1:10 (function) [declaration] len=9 "InputNone"
 // signature_variety.baml:1:25 (type) [defaultLibrary] len=3 "int"
 // signature_variety.baml:2:3 (property) len=6 "client"
-// signature_variety.baml:2:10 (string) len=15 "\"openai/gpt-4o\""
+// signature_variety.baml:2:11 (string) len=15 "\"openai/gpt-4o\""
 // signature_variety.baml:3:3 (property) [declaration] len=6 "prompt"
-// signature_variety.baml:3:10 (string) len=1 "#"
-// signature_variety.baml:3:11 (string) len=1 "\""
+// signature_variety.baml:3:11 (string) len=1 "`"
 // signature_variety.baml:3:12 (string) len=2 "fa"
-// signature_variety.baml:3:14 (string) len=1 "\""
-// signature_variety.baml:3:15 (string) len=1 "#"
+// signature_variety.baml:3:14 (string) len=1 "`"
 // signature_variety.baml:6:1 (keyword) len=8 "function"
 // signature_variety.baml:6:10 (function) [declaration] len=11 "InputSimple"
 // signature_variety.baml:6:22 (parameter) [declaration] len=1 "a"
@@ -93,13 +91,11 @@ function ExtractName(text: string) -> string {
 // signature_variety.baml:6:42 (type) [defaultLibrary] len=4 "bool"
 // signature_variety.baml:6:51 (type) [defaultLibrary] len=3 "int"
 // signature_variety.baml:7:3 (property) len=6 "client"
-// signature_variety.baml:7:10 (string) len=15 "\"openai/gpt-4o\""
+// signature_variety.baml:7:11 (string) len=15 "\"openai/gpt-4o\""
 // signature_variety.baml:8:3 (property) [declaration] len=6 "prompt"
-// signature_variety.baml:8:10 (string) len=1 "#"
-// signature_variety.baml:8:11 (string) len=1 "\""
+// signature_variety.baml:8:11 (string) len=1 "`"
 // signature_variety.baml:8:12 (string) len=2 "fa"
-// signature_variety.baml:8:14 (string) len=1 "\""
-// signature_variety.baml:8:15 (string) len=1 "#"
+// signature_variety.baml:8:14 (string) len=1 "`"
 // signature_variety.baml:11:1 (keyword) len=5 "class"
 // signature_variety.baml:11:7 (class) [declaration] len=5 "Email"
 // signature_variety.baml:12:5 (property) [declaration] len=7 "subject"
@@ -112,21 +108,14 @@ function ExtractName(text: string) -> string {
 // signature_variety.baml:16:29 (class) len=5 "Email"
 // signature_variety.baml:16:39 (type) [defaultLibrary] len=6 "string"
 // signature_variety.baml:17:3 (property) len=6 "client"
-// signature_variety.baml:17:10 (string) len=15 "\"openai/gpt-4o\""
+// signature_variety.baml:17:11 (string) len=15 "\"openai/gpt-4o\""
 // signature_variety.baml:18:3 (property) [declaration] len=6 "prompt"
-// signature_variety.baml:18:10 (string) len=1 "#"
-// signature_variety.baml:18:11 (string) len=1 "\""
+// signature_variety.baml:18:11 (string) len=1 "`"
 // signature_variety.baml:18:13 (string) len=7 "subject"
 // signature_variety.baml:18:21 (string) len=4 "line"
-// signature_variety.baml:18:26 (string) len=1 "{"
-// signature_variety.baml:18:27 (string) len=1 "{"
-// signature_variety.baml:18:29 (string) len=5 "email"
-// signature_variety.baml:18:34 (string) len=1 "."
-// signature_variety.baml:18:35 (string) len=7 "subject"
-// signature_variety.baml:18:43 (string) len=1 "}"
-// signature_variety.baml:18:44 (string) len=1 "}"
-// signature_variety.baml:18:46 (string) len=1 "\""
-// signature_variety.baml:18:47 (string) len=1 "#"
+// signature_variety.baml:18:28 (parameter) len=5 "email"
+// signature_variety.baml:18:34 (property) len=7 "subject"
+// signature_variety.baml:18:43 (string) len=1 "`"
 // signature_variety.baml:21:1 (keyword) len=4 "enum"
 // signature_variety.baml:21:6 (enum) [declaration] len=5 "Color"
 // signature_variety.baml:22:3 (enumMember) [declaration] len=3 "RED"
@@ -138,18 +127,12 @@ function ExtractName(text: string) -> string {
 // signature_variety.baml:27:27 (enum) len=5 "Color"
 // signature_variety.baml:27:37 (type) [defaultLibrary] len=6 "string"
 // signature_variety.baml:28:3 (property) len=6 "client"
-// signature_variety.baml:28:10 (string) len=15 "\"openai/gpt-4o\""
+// signature_variety.baml:28:11 (string) len=15 "\"openai/gpt-4o\""
 // signature_variety.baml:29:3 (property) [declaration] len=6 "prompt"
-// signature_variety.baml:29:10 (string) len=1 "#"
-// signature_variety.baml:29:11 (string) len=1 "\""
+// signature_variety.baml:29:11 (string) len=1 "`"
 // signature_variety.baml:29:13 (string) len=5 "color"
-// signature_variety.baml:29:19 (string) len=1 "{"
-// signature_variety.baml:29:20 (string) len=1 "{"
-// signature_variety.baml:29:22 (string) len=5 "color"
-// signature_variety.baml:29:28 (string) len=1 "}"
-// signature_variety.baml:29:29 (string) len=1 "}"
-// signature_variety.baml:29:31 (string) len=1 "\""
-// signature_variety.baml:29:32 (string) len=1 "#"
+// signature_variety.baml:29:21 (parameter) len=5 "color"
+// signature_variety.baml:29:28 (string) len=1 "`"
 // signature_variety.baml:32:1 (comment) len=41 "// Try it with wierd spacing and comments"
 // signature_variety.baml:34:1 (keyword) len=8 "function"
 // signature_variety.baml:34:10 (function) [declaration] len=10 "InputEnum2"
@@ -171,47 +154,34 @@ function ExtractName(text: string) -> string {
 // signature_variety.baml:47:1 (type) [defaultLibrary] len=6 "string"
 // signature_variety.baml:49:1 (comment) len=10 "// Or else"
 // signature_variety.baml:51:3 (property) len=6 "client"
-// signature_variety.baml:51:10 (string) len=15 "\"openai/gpt-4o\""
+// signature_variety.baml:51:11 (string) len=15 "\"openai/gpt-4o\""
 // signature_variety.baml:52:3 (property) [declaration] len=6 "prompt"
-// signature_variety.baml:52:10 (string) len=1 "#"
-// signature_variety.baml:52:11 (string) len=1 "\""
+// signature_variety.baml:52:11 (string) len=1 "`"
 // signature_variety.baml:52:13 (string) len=5 "color"
-// signature_variety.baml:52:19 (string) len=1 "{"
-// signature_variety.baml:52:20 (string) len=1 "{"
-// signature_variety.baml:52:22 (string) len=5 "color"
-// signature_variety.baml:52:28 (string) len=1 "}"
-// signature_variety.baml:52:29 (string) len=1 "}"
-// signature_variety.baml:52:31 (string) len=1 "\""
-// signature_variety.baml:52:32 (string) len=1 "#"
+// signature_variety.baml:52:21 (parameter) len=5 "color"
+// signature_variety.baml:52:28 (string) len=1 "`"
 // signature_variety.baml:56:1 (keyword) len=8 "function"
 // signature_variety.baml:56:10 (function) [declaration] len=10 "InputImage"
 // signature_variety.baml:56:21 (parameter) [declaration] len=3 "img"
 // signature_variety.baml:56:26 (type) [defaultLibrary] len=5 "image"
 // signature_variety.baml:56:36 (type) [defaultLibrary] len=6 "string"
 // signature_variety.baml:57:3 (property) len=6 "client"
-// signature_variety.baml:57:10 (string) len=15 "\"openai/gpt-4o\""
+// signature_variety.baml:57:11 (string) len=15 "\"openai/gpt-4o\""
 // signature_variety.baml:58:3 (property) [declaration] len=6 "prompt"
-// signature_variety.baml:58:10 (string) len=1 "#"
-// signature_variety.baml:58:11 (string) len=1 "\""
+// signature_variety.baml:58:11 (string) len=1 "`"
 // signature_variety.baml:58:13 (string) len=5 "image"
-// signature_variety.baml:58:19 (string) len=1 "{"
-// signature_variety.baml:58:20 (string) len=1 "{"
-// signature_variety.baml:58:22 (string) len=3 "img"
-// signature_variety.baml:58:26 (string) len=1 "}"
-// signature_variety.baml:58:27 (string) len=1 "}"
-// signature_variety.baml:58:29 (string) len=1 "\""
-// signature_variety.baml:58:30 (string) len=1 "#"
-// signature_variety.baml:61:1 (comment) len=65 "// Test unquoted client string (no quotes around the client name)"
+// signature_variety.baml:58:21 (parameter) len=3 "img"
+// signature_variety.baml:58:26 (string) len=1 "`"
+// signature_variety.baml:61:1 (comment) len=42 "// Shorthand client strings must be quoted"
 // signature_variety.baml:62:1 (keyword) len=8 "function"
 // signature_variety.baml:62:10 (function) [declaration] len=11 "ExtractName"
 // signature_variety.baml:62:22 (parameter) [declaration] len=4 "text"
 // signature_variety.baml:62:28 (type) [defaultLibrary] len=6 "string"
 // signature_variety.baml:62:39 (type) [defaultLibrary] len=6 "string"
 // signature_variety.baml:63:3 (property) len=6 "client"
-// signature_variety.baml:63:10 (string) len=20 "\"openai/gpt-4o-mini\""
+// signature_variety.baml:63:11 (string) len=20 "\"openai/gpt-4o-mini\""
 // signature_variety.baml:64:3 (property) [declaration] len=6 "prompt"
-// signature_variety.baml:64:10 (string) len=1 "#"
-// signature_variety.baml:64:11 (string) len=1 "\""
+// signature_variety.baml:64:11 (string) len=1 "`"
 // signature_variety.baml:65:5 (string) len=7 "Extract"
 // signature_variety.baml:65:13 (string) len=3 "the"
 // signature_variety.baml:65:17 (string) len=6 "person"
@@ -222,11 +192,7 @@ function ExtractName(text: string) -> string {
 // signature_variety.baml:65:36 (string) len=4 "this"
 // signature_variety.baml:65:41 (string) len=4 "text"
 // signature_variety.baml:65:45 (string) len=1 ":"
-// signature_variety.baml:65:47 (string) len=1 "{"
-// signature_variety.baml:65:48 (string) len=1 "{"
-// signature_variety.baml:65:50 (string) len=4 "text"
-// signature_variety.baml:65:55 (string) len=1 "}"
-// signature_variety.baml:65:56 (string) len=1 "}"
+// signature_variety.baml:65:49 (parameter) len=4 "text"
 // signature_variety.baml:66:5 (string) len=6 "Return"
 // signature_variety.baml:66:12 (string) len=4 "only"
 // signature_variety.baml:66:17 (string) len=3 "the"
@@ -235,5 +201,4 @@ function ExtractName(text: string) -> string {
 // signature_variety.baml:66:27 (string) len=7 "nothing"
 // signature_variety.baml:66:35 (string) len=4 "else"
 // signature_variety.baml:66:39 (string) len=1 "."
-// signature_variety.baml:67:3 (string) len=1 "\""
-// signature_variety.baml:67:4 (string) len=1 "#"
+// signature_variety.baml:67:3 (string) len=1 "`"

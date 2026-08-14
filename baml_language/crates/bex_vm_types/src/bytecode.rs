@@ -62,18 +62,6 @@ impl JumpTableData {
             self.names[index] = Some(name);
         }
     }
-
-    /// Lookup the offset for a value.
-    /// Returns None if value is out of range or is a hole.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    pub fn lookup(&self, value: i64) -> Option<isize> {
-        if value < self.min {
-            return None;
-        }
-        // Safety: value >= min, so index is non-negative.
-        let index = (value - self.min) as usize;
-        self.offsets.get(index).copied().flatten()
-    }
 }
 
 // ============================================================================
@@ -246,6 +234,37 @@ pub enum Instruction {
     /// Format: `STORE_FIELD i` where `i` is the index of the field in the
     /// object's fields array.
     StoreField(usize),
+
+    /// Read an *interface* field from a receiver whose concrete type is not known
+    /// statically — the field analogue of [`Self::VirtualCall`].
+    ///
+    /// `LoadField` cannot serve here: its operand is a physical slot in the
+    /// receiver's own layout, and two classes implementing the same interface link
+    /// the same interface field to different slots. So the operand is instead the
+    /// field's index in the *interface's* declaration order, and the VM maps it to a
+    /// slot through the resolved impl's
+    /// [`field_links`](crate::types::RuntimeImplRule::field_links).
+    ///
+    /// Stack: `[receiver, iface_type]` -> `[value]`
+    ///
+    /// Pops `iface_type` (an `Object::Type` holding the — possibly parameterized —
+    /// interface) and the receiver, reads `Self` from the receiver's runtime concrete
+    /// type, resolves `<Self as iface_type>` to its single `implements` rule
+    /// (coherence), and pushes `receiver.fields[rule.field_links[i]]`.
+    ///
+    /// The interface arrives via `LoadType`, which substitutes the *caller's* frame
+    /// type args — so a symbolic view (`Slot<T>` inside a generic function) reaches
+    /// the resolver realized, selecting the right block when one class implements the
+    /// same interface family at several instantiations with different links. That is
+    /// the discrimination a receiver-only type test cannot make.
+    VirtualLoadField(usize),
+
+    /// Write an *interface* field on a statically-unknown receiver — the store
+    /// counterpart of [`Self::VirtualLoadField`], with the same operand meaning and
+    /// the same resolution.
+    ///
+    /// Stack: `[receiver, value, iface_type]` -> `[]`
+    VirtualStoreField(usize),
 
     /// Initialize a field during construction: pops the value, stores it in the field,
     /// and keeps the instance on the stack (unlike `StoreField` which pops both).
@@ -470,10 +489,17 @@ pub enum Instruction {
     SysOp(GlobalIndex),
     SysOpWithRuntimeId(GlobalIndex),
 
-    /// BEP-034 `spawn { body }`. Pops `[closure_value, name_value]` from
-    /// the stack, allocates an `UnscheduledFuture { closure, name }`
-    /// into the TLAB, and yields `VmExecState::Spawn(ptr)` so the
-    /// engine routes the closure to a fresh `BexThread`.
+    /// BEP-034 `spawn { body }`. Pops `[closure, name, config, returns,
+    /// throws]` from the stack (in reverse push order), allocates an
+    /// `UnscheduledFuture` into the TLAB, and yields
+    /// `VmExecState::Spawn(ptr)` so the engine routes the closure to a fresh
+    /// `BexThread`.
+    ///
+    /// `returns` / `throws` are the `Object::Type` values a preceding pair of
+    /// `LoadType`s pushed — the `Future<T, E>` this spawn is typed at, already
+    /// resolved against the frame's type args. They travel with the request so
+    /// the engine can type the heap `Future` it allocates, which is what makes
+    /// a future's generic parameters visible to reflection and `is`/`match`.
     Spawn,
 
     /// Awaits the future on top of the stack.
@@ -632,6 +658,13 @@ pub enum Instruction {
     ///
     /// Pops the value, pushes `Bool` result.
     IsType(usize),
+
+    /// Pops and tests the top value, stores it in `destination` on success,
+    /// and pushes the `Bool` result.
+    NarrowBind {
+        ty: usize,
+        destination: usize,
+    },
 
     /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
     /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
@@ -1002,6 +1035,14 @@ pub enum OpCode {
     // no operands (1 byte); receiver, interface type, and method name are popped
     // from the stack and the resolved bound method is pushed.
     MakeVirtualBoundMethod,
+
+    // Atomic type test plus local binding: u32 type constant + u32 destination.
+    NarrowBind,
+
+    // Virtual interface-*field* access (the field analogue of `VirtualCall`):
+    // u32 interface-field index; receiver and interface type come off the stack.
+    VirtualLoadField,
+    VirtualStoreField,
 }
 
 impl OpCode {
@@ -1122,6 +1163,8 @@ impl OpCode {
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse
             | Self::VirtualCall
+            | Self::VirtualLoadField
+            | Self::VirtualStoreField
             | Self::VirtualCallWithRuntimeId => 5,
 
             // 3-byte: opcode + u16
@@ -1140,7 +1183,7 @@ impl OpCode {
             Self::JumpTable => 9,
 
             // 9-byte: opcode + u32 + u32 (operand-movement superinstructions)
-            Self::LoadVar2 | Self::StoreVar2 => 9,
+            Self::LoadVar2 | Self::StoreVar2 | Self::NarrowBind => 9,
         }
     }
 }
@@ -1269,9 +1312,12 @@ impl TryFrom<u8> for OpCode {
             }
             x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
             x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
+            x if x == Self::VirtualLoadField as u8 => Ok(Self::VirtualLoadField),
+            x if x == Self::VirtualStoreField as u8 => Ok(Self::VirtualStoreField),
             x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
             x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
             x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
+            x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
             _ => Err(byte),
         }
     }
@@ -1283,6 +1329,8 @@ impl std::fmt::Display for OpCode {
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
             Self::AwaitAny => "AWAIT_ANY",
+            Self::VirtualLoadField => "VIRTUAL_LOAD_FIELD",
+            Self::VirtualStoreField => "VIRTUAL_STORE_FIELD",
             Self::VirtualCall => "VIRTUAL_CALL",
             Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
             Self::Throw => "THROW",
@@ -1400,6 +1448,7 @@ impl std::fmt::Display for OpCode {
             Self::MakeGenericFunctionFromValue => "MAKE_GENERIC_FUNCTION_FROM_VALUE",
             Self::LoadVar2 => "LOAD_VAR2",
             Self::StoreVar2 => "STORE_VAR2",
+            Self::NarrowBind => "NARROW_BIND",
         };
         f.write_str(name)
     }
@@ -1517,6 +1566,8 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadGlobal(i) => write!(f, "LOAD_GLOBAL {i}"),
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
+            Instruction::VirtualLoadField(i) => write!(f, "VIRTUAL_LOAD_FIELD {i}"),
+            Instruction::VirtualStoreField(i) => write!(f, "VIRTUAL_STORE_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
             Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
             Instruction::InitSpread(i) => write!(f, "INIT_SPREAD {i}"),
@@ -1610,6 +1661,9 @@ impl std::fmt::Display for Instruction {
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
+            Instruction::NarrowBind { ty, destination } => {
+                write!(f, "NARROW_BIND {ty} {destination}")
+            }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
@@ -1744,12 +1798,12 @@ pub struct ExceptionTableEntry {
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
     /// Frame-local slot for the stack trace value.
-    /// `usize::MAX` means no stack trace binding (catch (e) without second param).
+    /// `u32::MAX` means no stack trace binding (catch (e) without second param).
     pub stack_trace_slot: usize,
 }
 
 impl ExceptionTableEntry {
-    pub const NO_STACK_TRACE: usize = usize::MAX;
+    pub const NO_STACK_TRACE: usize = u32::MAX as usize;
 
     pub fn has_stack_trace_slot(&self) -> bool {
         self.stack_trace_slot != Self::NO_STACK_TRACE
@@ -1887,7 +1941,7 @@ pub struct Bytecode {
     /// Contains `ObjectIndex` for object references.
     pub constants: Vec<ConstValue>,
 
-    /// Resolved constants (resolved from `constants` at load time via [`Bytecode::resolve_constants`]).
+    /// Resolved constants, populated from `constants` at load time.
     /// Contains `HeapPtr` for object references. Used by `LoadConst`.
     /// Set to `null` for types.
     #[borsh(skip)]
@@ -1995,28 +2049,6 @@ impl Bytecode {
             .iter()
             .filter(|e| pc >= e.start_pc && pc < e.end_pc)
             .max_by_key(|e| e.handler_pc)
-    }
-
-    /// Resolve constants from `ConstValue` to Value using a resolver function.
-    /// Called at load time to convert `ObjectIndex` to `HeapPtr`.
-    pub fn resolve_constants<F>(&mut self, resolve: F)
-    where
-        F: Fn(crate::ObjectIndex) -> crate::HeapPtr,
-    {
-        self.resolved_constants = self
-            .constants
-            .iter()
-            .map(|cv| match cv {
-                // TyTemplate constants are NOT pre-resolved: `LoadType` reads
-                // them directly from `constants` at execution time.
-                ConstValue::Type(_) => crate::Value::NULL,
-                // ClassWithTypeArgs constants are NOT pre-resolved: `IsType`
-                // reads them directly from `constants` at execution time and
-                // resolves `class_obj` to a `HeapPtr` via `idx_to_ptr`.
-                ConstValue::ClassWithTypeArgs { .. } => crate::Value::NULL,
-                other => other.to_value(&resolve),
-            })
-            .collect();
     }
 
     /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.
@@ -2138,6 +2170,8 @@ impl Bytecode {
                 | Instruction::StoreVar(v)
                 | Instruction::StoreVarLoadVar(v)
                 | Instruction::LoadField(v)
+                | Instruction::VirtualLoadField(v)
+                | Instruction::VirtualStoreField(v)
                 | Instruction::StoreField(v)
                 | Instruction::InitField(v)
                 | Instruction::InitSpread(v)
@@ -2295,6 +2329,18 @@ impl Bytecode {
                     );
                     code.extend_from_slice(
                         &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
+                    );
+                }
+                Instruction::NarrowBind { ty, destination } => {
+                    code.extend_from_slice(
+                        &u32::try_from(*ty)
+                            .expect("type constant fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*destination)
+                            .expect("destination slot fits u32")
+                            .to_le_bytes(),
                     );
                 }
             }
@@ -2471,6 +2517,8 @@ impl Bytecode {
             Instruction::LoadGlobal(_) => OpCode::LoadGlobal,
             Instruction::StoreGlobal(_) => OpCode::StoreGlobal,
             Instruction::LoadField(_) => OpCode::LoadField,
+            Instruction::VirtualLoadField(_) => OpCode::VirtualLoadField,
+            Instruction::VirtualStoreField(_) => OpCode::VirtualStoreField,
             Instruction::StoreField(_) => OpCode::StoreField,
             Instruction::InitField(_) => OpCode::InitField,
             Instruction::InitSpread(_) => OpCode::InitSpread,
@@ -2487,6 +2535,7 @@ impl Bytecode {
             Instruction::Call { .. } => OpCode::Call,
             Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
             Instruction::IsType(_) => OpCode::IsType,
+            Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
@@ -2605,6 +2654,60 @@ mod compact_tests {
         assert_eq!(compact.code[0], OpCode::LoadIntSmall as u8);
         assert_eq!(compact.code[1], 42u8);
         assert_eq!(compact.code[2], OpCode::Return as u8);
+    }
+
+    #[test]
+    fn encode_virtual_field_ops() {
+        let bc = make_bytecode(
+            vec![
+                Instruction::VirtualLoadField(3),
+                Instruction::VirtualStoreField(258),
+                Instruction::Return,
+            ],
+            Vec::new(),
+        );
+        let compact = bc.lower_to_compact();
+        // Both are opcode + u32, like `LoadField`.
+        assert_eq!(compact.code.len(), 5 + 5 + 1);
+        assert_eq!(compact.code[0], OpCode::VirtualLoadField as u8);
+        assert_eq!(
+            u32::from_le_bytes(compact.code[1..5].try_into().unwrap()),
+            3
+        );
+        assert_eq!(compact.code[5], OpCode::VirtualStoreField as u8);
+        assert_eq!(
+            u32::from_le_bytes(compact.code[6..10].try_into().unwrap()),
+            258,
+        );
+        assert_eq!(compact.code[10], OpCode::Return as u8);
+    }
+
+    /// A wrong `encoded_size` silently desynchronizes the instruction stream: the
+    /// decoder reads the next opcode from the middle of an operand. The offset
+    /// table is built from `encoded_size` while the bytes are written by
+    /// `lower_to_compact`, so the two must agree for every opcode.
+    #[test]
+    fn encoded_size_matches_emitted_bytes_for_every_opcode() {
+        for (instruction, expected) in [
+            (Instruction::VirtualLoadField(1), OpCode::VirtualLoadField),
+            (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
+            (Instruction::LoadField(1), OpCode::LoadField),
+            (Instruction::StoreField(1), OpCode::StoreField),
+        ] {
+            let bc = make_bytecode(vec![instruction], Vec::new());
+            let op = bc.instruction_to_opcode(&instruction);
+            assert_eq!(op, expected, "opcode mapping for {instruction:?}");
+            assert_eq!(
+                bc.lower_to_compact().code.len(),
+                op.encoded_size(),
+                "encoded_size disagrees with emitted bytes for {instruction:?}",
+            );
+            assert_eq!(
+                OpCode::try_from(op as u8).expect("opcode round-trips"),
+                op,
+                "opcode byte round-trip for {instruction:?}",
+            );
+        }
     }
 
     #[test]

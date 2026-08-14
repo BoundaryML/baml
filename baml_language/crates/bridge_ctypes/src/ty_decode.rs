@@ -11,8 +11,8 @@
 //!     (decoded into a `type`-valued `BexExternalAdt::Type`).
 
 use baml_type::{
-    FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, RuntimeInterface, RuntimeTy,
-    TyAttr, TypeName,
+    Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, RuntimeFunctionParamTy,
+    RuntimeInterface, RuntimeTy, TyAttr, TypeName,
 };
 use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
@@ -78,7 +78,7 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 .map(proto_ty_to_runtime_ty)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
-        TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref()),
+        TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref())?,
         TyVariant::TypeAlias(n) => {
             RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name), TyAttr::default())
         }
@@ -141,7 +141,9 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::Void(_) => RuntimeTy::Void {
             attr: TyAttr::default(),
         },
-        TyVariant::TypeVar(v) => RuntimeTy::TypeVar(Name::new(&v.name), TyAttr::default()),
+        TyVariant::TypeVar(v) => {
+            RuntimeTy::TypeVar(ParamTy::new(v.index, Name::new(&v.name)), TyAttr::default())
+        }
         TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),
             // The projection's interface constraint is wired as a `Ty` and must
@@ -248,15 +250,77 @@ fn function_param_mode(mode: i32) -> FunctionParamMode {
     }
 }
 
-fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> RuntimeTy {
-    // Literal types widen to their base primitive: binding a TypeVar to a
-    // literal is exotic, and the base type is the safe lowering.
-    match lit {
-        Some(TyLiteralVariant::StringValue(_)) => RuntimeTy::string(),
-        Some(TyLiteralVariant::IntValue(_)) => RuntimeTy::int(),
-        Some(TyLiteralVariant::BoolValue(_)) => RuntimeTy::bool(),
-        Some(TyLiteralVariant::BigintValue(_)) => RuntimeTy::bigint(),
-        Some(TyLiteralVariant::FloatValue(_)) => RuntimeTy::float(),
-        None => RuntimeTy::unknown(),
+fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<RuntimeTy, CtypesError> {
+    let literal = match lit {
+        Some(TyLiteralVariant::StringValue(value)) => Literal::String(value.clone()),
+        Some(TyLiteralVariant::IntValue(value)) => Literal::Int(*value),
+        Some(TyLiteralVariant::BoolValue(value)) => Literal::Bool(*value),
+        Some(TyLiteralVariant::BigintValue(value)) => {
+            Literal::Bigint(parse_decimal_bigint_literal(value)?)
+        }
+        Some(TyLiteralVariant::FloatValue(value)) => Literal::Float(value.clone()),
+        None => return Ok(RuntimeTy::unknown()),
+    };
+    Ok(RuntimeTy::Literal(
+        literal,
+        Freshness::Regular,
+        TyAttr::default(),
+    ))
+}
+
+fn parse_decimal_bigint_literal(value: &str) -> Result<num_bigint::BigInt, CtypesError> {
+    parse_decimal_bigint_literal_with_limits(
+        value,
+        baml_type::MAX_BIGINT_DECIMAL_DIGITS,
+        baml_type::MAX_BIGINT_BITS,
+    )
+}
+
+fn parse_decimal_bigint_literal_with_limits(
+    value: &str,
+    max_digits: usize,
+    max_bits: u64,
+) -> Result<num_bigint::BigInt, CtypesError> {
+    let len = value.len();
+    let digits = value
+        .strip_prefix('-')
+        .or_else(|| value.strip_prefix('+'))
+        .unwrap_or(value);
+    if digits.len() > max_digits {
+        return Err(CtypesError::InvalidBigintLiteral { len });
+    }
+
+    let parsed = num_bigint::BigInt::parse_bytes(value.as_bytes(), 10).ok_or_else(|| {
+        CtypesError::InternalError(format!(
+            "invalid decimal bigint literal in BAML type descriptor: {value:?}"
+        ))
+    })?;
+    if parsed.bits() > max_bits {
+        return Err(CtypesError::InvalidBigintLiteral { len });
+    }
+    Ok(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oversized_bigint_literal_is_rejected_before_parse_without_echoing_input() {
+        let error = parse_decimal_bigint_literal_with_limits("-1234", 3, u64::MAX).unwrap_err();
+        assert!(matches!(
+            error,
+            CtypesError::InvalidBigintLiteral { len: 5 }
+        ));
+        assert_eq!(
+            error.to_string(),
+            "Invalid decimal bigint literal (5 bytes)"
+        );
+    }
+
+    #[test]
+    fn bounded_invalid_bigint_literal_keeps_format_diagnostic() {
+        let error = parse_decimal_bigint_literal_with_limits("12x", 3, u64::MAX).unwrap_err();
+        assert!(matches!(error, CtypesError::InternalError(message) if message.contains("12x")));
     }
 }

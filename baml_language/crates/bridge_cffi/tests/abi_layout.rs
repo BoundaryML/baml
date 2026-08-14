@@ -183,6 +183,18 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     field!("BamlBridgeInfoV1", BamlBridgeInfoV1, language);
     field!("BamlBridgeInfoV1", BamlBridgeInfoV1, sdk_version);
     field!("BamlBridgeInfoV1", BamlBridgeInfoV1, sdk_version_len);
+    field!("BamlBridgeInfoV1", BamlBridgeInfoV1, bridge_runtime_name);
+    field!(
+        "BamlBridgeInfoV1",
+        BamlBridgeInfoV1,
+        bridge_runtime_name_len
+    );
+    field!("BamlBridgeInfoV1", BamlBridgeInfoV1, bridge_runtime_version);
+    field!(
+        "BamlBridgeInfoV1",
+        BamlBridgeInfoV1,
+        bridge_runtime_version_len
+    );
     size_align!("BamlApiV1", BamlApiV1);
     field!("BamlApiV1", BamlApiV1, abi_version);
     field!("BamlApiV1", BamlApiV1, struct_size);
@@ -206,6 +218,17 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     field!("BamlApiV1", BamlApiV1, media_base64);
     field!("BamlApiV1", BamlApiV1, media_mime_type);
     field!("BamlApiV1", BamlApiV1, register_bridge);
+    field!(
+        "BamlApiV1",
+        BamlApiV1,
+        register_unhandled_spawn_error_callback
+    );
+    field!("BamlApiV1", BamlApiV1, shutdown_runtime);
+    field!(
+        "BamlApiV1",
+        BamlApiV1,
+        initialize_runtime_from_bytecode_with_metadata
+    );
 
     assert_eq!(actual, expected, "C and Rust ABI layouts differ");
     assert_eq!(BamlCffiStatus::Ok as u32, 0);
@@ -219,6 +242,9 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     assert_eq!(BridgeLanguage::Go as u32, 3);
     assert_eq!(BridgeLanguage::Rust as u32, 4);
     assert_eq!(BridgeLanguage::CSharp as u32, 5);
+    assert_eq!(BridgeLanguage::Java as u32, 7);
+    assert_eq!(BridgeLanguage::Swift as u32, 8);
+    assert_eq!(BridgeLanguage::Web as u32, 9);
 
     let _ = fs::remove_dir_all(scratch);
 }

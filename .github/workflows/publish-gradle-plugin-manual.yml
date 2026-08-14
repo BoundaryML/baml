@@ -1,0 +1,70 @@
+name: Publish Gradle Plugin (manual)
+
+# Manual, standalone path to publish com.boundaryml.baml to the Gradle Plugin
+# Portal at an arbitrary version WITHOUT cutting a release.
+#
+# Its reason to exist is the FIRST publish: a brand-new Portal plugin id
+# (namespace) requires a one-time human approval by the Gradle team before it
+# goes live, and the approval is warmed by an initial submission. This lets the
+# owner fire that first submission (and any later ad-hoc republish) on demand,
+# independently of release-baml-language.yml's channel gating. Steady-state
+# canary/stable publishing is automated by the publish-gradle-plugin job there;
+# nightlies ride Maven Central instead (the Portal is stable-channels-only).
+#
+# Requires the org secrets GRADLE_PUBLISH_KEY / GRADLE_PUBLISH_SECRET (the Portal
+# API key + secret), which com.gradle.plugin-publish reads natively.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Plugin version to publish (e.g. 0.15.0). Becomes -PbamlVersion."
+        type: string
+        required: true
+      ref:
+        description: "Git ref to build the plugin from."
+        type: string
+        default: canary
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-gradle-plugin-manual
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publish:
+    name: Publish com.boundaryml.baml to the Portal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Setup mise (JDK + gradle)
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: java gradle
+      - name: Publish to the Gradle Plugin Portal
+        working-directory: baml_language/sdks/java/gradle-plugin
+        env:
+          VERSION: ${{ inputs.version }}
+          GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
+          GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${VERSION:-}" ]]; then
+            echo "::error::version input is required"
+            exit 1
+          fi
+          if [[ -z "${GRADLE_PUBLISH_KEY:-}" || -z "${GRADLE_PUBLISH_SECRET:-}" ]]; then
+            echo "::error::GRADLE_PUBLISH_KEY / GRADLE_PUBLISH_SECRET secret is empty"
+            exit 1
+          fi
+          gradle --no-daemon publishPlugins -PbamlVersion="$VERSION"

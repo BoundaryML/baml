@@ -219,6 +219,12 @@ macro_rules! assert_compiler2_snapshot {
 pub mod compiler2_hir;
 
 #[cfg(test)]
+pub mod compiler2_hir_ty;
+
+#[cfg(test)]
+pub mod compiler2_ppir;
+
+#[cfg(test)]
 pub mod compiler2_tir;
 
 #[cfg(test)]
@@ -231,6 +237,9 @@ pub mod compiler2_emit;
 pub mod incremental;
 
 #[cfg(test)]
+pub mod type_spec;
+
+#[cfg(test)]
 pub mod string_literals;
 
 #[cfg(test)]
@@ -240,56 +249,3 @@ pub mod utils;
 // Written to src/ (not OUT_DIR) so file!() returns a stable path for insta snapshots.
 #[cfg(test)]
 include!("generated_tests.rs");
-
-// Helper function for formatting syntax trees
-#[cfg(test)]
-fn format_syntax_tree(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> String {
-    format_node_recursive(node, 0)
-}
-
-#[cfg(test)]
-fn format_node_recursive(node: &baml_db::baml_compiler_syntax::SyntaxNode, depth: usize) -> String {
-    use baml_db::baml_compiler_syntax::NodeOrToken;
-
-    let mut result = String::new();
-    let indent = "  ".repeat(depth);
-
-    result.push_str(&format!("{}{:?}", indent, node.kind()));
-
-    // For leaf nodes (no child nodes), include the text
-    if node.first_child().is_none() {
-        let text = node.text().to_string().trim().to_string();
-        if !text.is_empty() {
-            // If text already has quotes, show as-is; otherwise wrap in quotes
-            if text.starts_with('"') || text.starts_with("#\"") {
-                result.push_str(&format!(" {}", text));
-            } else {
-                result.push_str(&format!(" \"{}\"", text));
-            }
-        }
-    }
-
-    result.push('\n');
-
-    // Iterate over both nodes and tokens
-    for child in node.children_with_tokens() {
-        match child {
-            NodeOrToken::Node(child_node) => {
-                result.push_str(&format_node_recursive(&child_node, depth + 1));
-            }
-            NodeOrToken::Token(token) => {
-                // Show tokens (but skip trivia for readability)
-                if !token.kind().is_trivia() {
-                    result.push_str(&format!(
-                        "{}{:?} \"{}\"\n",
-                        "  ".repeat(depth + 1),
-                        token.kind(),
-                        token.text()
-                    ));
-                }
-            }
-        }
-    }
-
-    result
-}

@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+131..132 'f': throws never
+160..235 '{\n   ...ing\n}': string
+166..201 'if (v ... "x" }': string
+170..171 'v': int | string
+170..181 'v is string': bool
+175..181 'string': string
+183..188 '{ v }': string
+185..186 'v': string
+194..201 '{ "x" }': "x"
+196..199 '"x"': "x"

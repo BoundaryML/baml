@@ -741,6 +741,7 @@ class BamlTyTypeVar final : public ::google::protobuf::MessageLite
   // accessors -------------------------------------------------------
   enum : int {
     kNameFieldNumber = 1,
+    kIndexFieldNumber = 2,
   };
   // string name = 1;
   void clear_name() ;
@@ -757,11 +758,21 @@ class BamlTyTypeVar final : public ::google::protobuf::MessageLite
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // uint32 index = 2;
+  void clear_index() ;
+  ::uint32_t index() const;
+  void set_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_index() const;
+  void _internal_set_index(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyTypeVar)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 1,
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
                                    0, 46,
                                    2>
       _table_;
@@ -784,6 +795,7 @@ class BamlTyTypeVar final : public ::google::protobuf::MessageLite
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint32_t index_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10149,6 +10161,30 @@ inline void BamlTyTypeVar::set_allocated_name(::std::string* PROTOBUF_NULLABLE v
     _impl_.name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyTypeVar.name)
+}
+
+// uint32 index = 2;
+inline void BamlTyTypeVar::clear_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.index_ = 0u;
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline ::uint32_t BamlTyTypeVar::index() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyTypeVar.index)
+  return _internal_index();
+}
+inline void BamlTyTypeVar::set_index(::uint32_t value) {
+  _internal_set_index(value);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyTypeVar.index)
+}
+inline ::uint32_t BamlTyTypeVar::_internal_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.index_;
+}
+inline void BamlTyTypeVar::_internal_set_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.index_ = value;
 }
 
 // -------------------------------------------------------------------

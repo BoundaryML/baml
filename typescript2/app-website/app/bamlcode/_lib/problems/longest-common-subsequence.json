@@ -1,0 +1,18 @@
+{
+  "slug": "longest-common-subsequence",
+  "id": 1143,
+  "title": "Longest Common Subsequence",
+  "difficulty": "Medium",
+  "category": "Dynamic Programming",
+  "statement": "Given two strings `text1` and `text2`, return the length of their longest **common subsequence**. If there is none, return `0`.\n\nA subsequence keeps relative order but need not be contiguous.\n\n**Example**\n\n```\ntext1 = \"abcde\", text2 = \"ace\"  => 3   // \"ace\"\ntext1 = \"abc\", text2 = \"def\"    => 0\n```",
+  "signature": "function LongestCommonSubsequence(text1: string, text2: string) -> int",
+  "starter": "function LongestCommonSubsequence(text1: string, text2: string) -> int {\n  // Return the length of the longest common subsequence.\n  return 0;\n}",
+  "solution": "function LongestCommonSubsequence(text1: string, text2: string) -> int {\n  let a = text1.chars();\n  let b = text2.chars();\n  let m = a.length();\n  let n = b.length();\n  let dp: int[] = [];\n  let j = 0;\n  while (j <= n) {\n    dp.push(0);\n    j += 1;\n  }\n  let i = 1;\n  while (i <= m) {\n    let prev = 0;\n    let k = 1;\n    while (k <= n) {\n      let temp = dp[k];\n      if (a[i - 1] == b[k - 1]) {\n        dp[k] = prev + 1;\n      } else {\n        let up = dp[k];\n        let left = dp[k - 1];\n        if (left > up) {\n          dp[k] = left;\n        } else {\n          dp[k] = up;\n        }\n      }\n      prev = temp;\n      k += 1;\n    }\n    i += 1;\n  }\n  return dp[n];\n}",
+  "tests": [
+    { "call": "LongestCommonSubsequence(\"abcde\", \"ace\")", "expected": "3" },
+    { "call": "LongestCommonSubsequence(\"abc\", \"abc\")", "expected": "3" },
+    { "call": "LongestCommonSubsequence(\"abc\", \"def\")", "expected": "0" },
+    { "call": "LongestCommonSubsequence(\"bl\", \"yby\")", "expected": "1", "hidden": true },
+    { "call": "LongestCommonSubsequence(\"bsbininm\", \"jmjkbkjkv\")", "expected": "1", "hidden": true }
+  ]
+}

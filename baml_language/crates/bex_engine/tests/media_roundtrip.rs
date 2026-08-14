@@ -4,10 +4,10 @@
 //! Pre-15d, `convert_external_to_vm_value` panicked on
 //! `Adt(Media(_))`, so any inbound media argument bottomed out at
 //! `bex_engine/src/conversion.rs:317-319`. This test synthesizes the
-//! shape the bridge encoder produces — `Instance{class_name:
-//! "baml.media.Pdf", fields:{_data: Adt(Media(arc))}}` — sends it as
-//! a function arg, and asserts the engine returns the same media
-//! through.
+//! payload shell the Python bridge encoder produces —
+//! `Instance{fields:{_data: Adt(Media(arc))}}` under a sparse exact `pdf`
+//! annotation — sends it as a function arg, and asserts the engine returns the
+//! canonical media value.
 
 mod common;
 
@@ -84,34 +84,16 @@ class Holder {
         .await
         .expect("Holder.unwrap should round-trip the pdf");
 
-    // The engine emits the media-bearing instance as a class-shape
-    // (mirrors the BAML stdlib `class Pdf { _data $rust_type }`); the
-    // `_data` field carries the `Arc<MediaValue>` back out as
-    // `Adt(Media(_))`.
     match result {
-        BexExternalValue::Instance {
-            class_name, fields, ..
-        } => {
-            assert!(
-                class_name == "baml.media.Pdf" || class_name == "Pdf",
-                "expected pdf class name, got {class_name:?}"
-            );
-            let data = fields
-                .get("_data")
-                .expect("pdf instance missing _data field");
-            match data {
-                BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
-                    assert_eq!(arc.kind, MediaKind::Pdf);
-                    arc.read_content(|content| match content {
-                        MediaContent::Url { url, .. } => {
-                            assert_eq!(url, "https://example.test/sample.pdf");
-                        }
-                        other => panic!("expected Url media content, got {other:?}"),
-                    });
+        BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
+            assert_eq!(arc.kind, MediaKind::Pdf);
+            arc.read_content(|content| match content {
+                MediaContent::Url { url, .. } => {
+                    assert_eq!(url, "https://example.test/sample.pdf");
                 }
-                other => panic!("expected Adt(Media(_)) in _data, got {other:?}"),
-            }
+                other => panic!("expected Url media content, got {other:?}"),
+            });
         }
-        other => panic!("expected Instance for unwrapped pdf, got {other:?}"),
+        other => panic!("expected canonical Adt(Media(_)) for unwrapped pdf, got {other:?}"),
     }
 }

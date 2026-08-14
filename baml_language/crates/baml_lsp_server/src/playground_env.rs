@@ -3,10 +3,23 @@
 //! Resolution order:
 //! 1. User overrides (manual entries from the playground UI)
 //! 2. Process environment (`std::env::var`) — e.g. from direnv / .envrc
-//! 3. WebSocket roundtrip to the webview (shows dialog if needed)
+//! 3. For a key the project declares (`env.FOO` in a client): WebSocket
+//!    roundtrip to the webview, which prompts the user and blocks the run
+//!    until they answer.
+//! 4. For any other key: unset, immediately and without notifying the UI.
+//!
+//! The split at 3/4 is deliberate. A declared key is one the project cannot
+//! run without, so stopping to ask is worth it. A key discovered at runtime
+//! through `baml.env.get("...")` is usually optional (`?? "default"`), and
+//! freezing a live run behind a modal for one of those is worse than
+//! reporting it unset and letting the user set it and run again.
+//!
+//! Step 4 stays silent because the UI has no "just so you know" channel for
+//! env vars: `EnvVarRequest` both badges the key as required and opens the env
+//! dialog. Sending one for an optional key reopens that dialog on every run.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -36,6 +49,11 @@ pub struct PlaygroundEnvState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     run_store: Arc<InMemoryRunStore>,
     session_store: Arc<PlaygroundSessionStore>,
+    /// Env vars the compiled project declares (`env.FOO`). Only these are
+    /// worth blocking a run to ask about. Refreshed from the compiled project
+    /// rather than accumulated, so a key that stops being referenced stops
+    /// blocking.
+    declared_keys: Mutex<HashSet<String>>,
     next_id: AtomicU64,
 }
 
@@ -60,8 +78,18 @@ impl PlaygroundEnvState {
             broadcast_tx,
             run_store,
             session_store,
+            declared_keys: Mutex::new(HashSet::new()),
             next_id: AtomicU64::new(1),
         }
+    }
+
+    /// Record the env vars the compiled project references by name.
+    pub fn set_declared_keys(&self, names: &[String]) {
+        *self.declared_keys.lock() = names.iter().cloned().collect();
+    }
+
+    fn is_declared(&self, key: &str) -> bool {
+        self.declared_keys.lock().contains(key)
     }
 
     /// Resolve a pending env var request (called by WS handler on envVarResponse).
@@ -157,8 +185,8 @@ impl PlaygroundEnvState {
     }
 }
 
-/// `IoNamespaceEnv` implementation with three-tier resolution:
-/// user overrides → process env → WebSocket roundtrip.
+/// `IoNamespaceEnv` implementation: user overrides → process env → prompt the
+/// UI (declared keys only) → unset.
 pub struct PlaygroundEnv(pub Arc<PlaygroundEnvState>);
 
 impl sys_ops::io::IoNamespaceEnv for PlaygroundEnv {
@@ -212,7 +240,29 @@ impl sys_ops::io::IoNamespaceEnv for PlaygroundEnv {
             return SysOpOutput::ok(Some(value));
         }
 
-        // 3. Fall back to the WebSocket roundtrip (may show dialog in the UI).
+        // 3. Not set anywhere, and the project never declared it — almost
+        //    always an optional lookup with a `??` fallback behind it. Report
+        //    unset and move on.
+        //
+        //    Deliberately silent: `EnvVarRequest` is the UI's signal to mark a
+        //    key required and open the env dialog, so sending one here would
+        //    reopen that dialog on every run and badge an optional key as
+        //    required. The resolution still lands in the run store, so the run
+        //    view shows the key was looked up and came back unset.
+        if !self.0.is_declared(&key) {
+            if let Some(patch) = self.0.run_store.ingest_env_resolved(
+                &host_call_id,
+                request_id,
+                key,
+                EnvResolutionStatus::DeclinedMissing,
+                None,
+            ) {
+                broadcast_run_patch(&self.0.broadcast_tx, &patch);
+            }
+            return SysOpOutput::ok(None);
+        }
+
+        // 4. A declared key the run cannot proceed without: ask, and wait.
         let state = self.0.clone();
         SysOpOutput::async_op(async move {
             let (tx, rx) = oneshot::channel();
@@ -293,6 +343,63 @@ mod tests {
         assert_eq!(
             state.resolve_for_run(start.boundary_id, 1, Some("secret".to_string())),
             RequestCommandOutcome::Missing.as_wire_str()
+        );
+    }
+
+    /// An undeclared key must not park the run on a UI prompt, and must not
+    /// emit `EnvVarRequest` — that message reopens the env dialog every run
+    /// and badges an optional key as required.
+    #[test]
+    fn undeclared_key_resolves_to_unset_without_waiting_or_prompting() {
+        use sys_ops::io::IoNamespaceEnv;
+
+        let (broadcast_tx, mut rx) = broadcast::channel(8);
+        let run_store = Arc::new(InMemoryRunStore::default());
+        let session_store = Arc::new(PlaygroundSessionStore::default());
+        let state = Arc::new(PlaygroundEnvState::new(
+            broadcast_tx,
+            run_store.clone(),
+            session_store,
+        ));
+        state.set_declared_keys(&["ANTHROPIC_API_KEY".to_string()]);
+
+        let key = "BAMLCODE_MEMORY_DIR_TEST_UNSET";
+        assert!(std::env::var(key).is_err(), "test key must be unset");
+
+        let heap = Arc::new(BexHeap::build_unsealed_default(Vec::new()));
+        let out =
+            PlaygroundEnv(state).get(&heap, CallId(42), key.to_string(), &SysOpContext::empty());
+
+        match out {
+            SysOpOutput::Ready(Ok(value)) => assert_eq!(value, None),
+            SysOpOutput::Ready(Err(_)) => panic!("undeclared key must not fail"),
+            SysOpOutput::Async(_) => {
+                panic!("undeclared key must resolve synchronously, not park on the UI")
+            }
+        }
+
+        while let Ok(msg) = rx.try_recv() {
+            assert!(
+                !matches!(msg, WsOutMessage::EnvVarRequest { .. }),
+                "an undeclared key must not prompt the UI"
+            );
+        }
+    }
+
+    #[test]
+    fn declared_keys_are_replaced_not_accumulated() {
+        let (broadcast_tx, _rx) = broadcast::channel(8);
+        let run_store = Arc::new(InMemoryRunStore::default());
+        let session_store = Arc::new(PlaygroundSessionStore::default());
+        let state = PlaygroundEnvState::new(broadcast_tx, run_store, session_store);
+
+        state.set_declared_keys(&["OLD_KEY".to_string()]);
+        state.set_declared_keys(&["NEW_KEY".to_string()]);
+
+        assert!(state.is_declared("NEW_KEY"));
+        assert!(
+            !state.is_declared("OLD_KEY"),
+            "a key the project stopped referencing must stop blocking runs"
         );
     }
 }

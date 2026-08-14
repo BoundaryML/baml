@@ -43,12 +43,6 @@ pub fn find_baml_project_root(start: &Path) -> Option<PathBuf> {
     )
 }
 
-/// Resolve `from` (or cwd when omitted) and walk up to the BAML project root.
-pub fn resolve_baml_project_root(from: Option<&Path>) -> io::Result<Option<PathBuf>> {
-    let start = resolve_project_search_start(from)?;
-    Ok(find_baml_project_root(&start))
-}
-
 /// Return the directory that should be walked for BAML source files once
 /// `project_root` has been resolved.
 pub fn project_source_root(project_root: &Path) -> PathBuf {

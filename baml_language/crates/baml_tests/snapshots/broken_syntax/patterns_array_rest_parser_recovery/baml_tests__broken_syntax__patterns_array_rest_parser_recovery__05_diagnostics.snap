@@ -1,184 +1,83 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3275
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] error: Expected only one '..' rest pattern is allowed in an array pattern, found '..'
-   ╭─[ patterns_array_rest_parser_recovery.baml:8:19 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[patterns_array_rest_parser_recovery.baml:8:19]
  8 │         [..let a, ..let b] => a.length() + b.length(),
-   │                   ─┬  
-   │                    ╰── Expected only one '..' rest pattern is allowed in an array pattern, found '..'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                   ─┬
+   ·                    ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
+   ╰────
 
-  [type] error: unresolved name: b
-   ╭─[ patterns_array_rest_parser_recovery.baml:8:44 ]
-   │
- 8 │         [..let a, ..let b] => a.length() + b.length(),
-   │                                            ┬  
-   │                                            ╰── unresolved name: b
-   │ 
-   │ Note: Error code: E0003
-───╯
+  [parse] E0010
 
-  [type] error: unreachable arm
-   ╭─[ patterns_array_rest_parser_recovery.baml:9:14 ]
-   │
- 9 │         _ => 0
-   │              ┬  
-   │              ╰── unreachable arm
-   │ 
-   │ Note: Error code: E0063
-───╯
-
-  [parse] error: Expected pattern, found '...'
-    ╭─[ patterns_array_rest_parser_recovery.baml:16:10 ]
-    │
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:16:10]
  16 │         [...let r] => r.length(),
-    │          ─┬─  
-    │           ╰─── Expected pattern, found '...'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ─┬─
+    ·           ╰── expected `pattern`, found `'...'`
+    ╰────
 
-  [parse] error: Expected ',' or ']' after array pattern element, found let
-    ╭─[ patterns_array_rest_parser_recovery.baml:16:13 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:16:13]
  16 │         [...let r] => r.length(),
-    │             ─┬─  
-    │              ╰─── Expected ',' or ']' after array pattern element, found let
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·             ─┬─
+    ·              ╰── expected `',' or ']' after array pattern element`, found `let`
+    ╰────
 
-  [type] error: unresolved type: r
-    ╭─[ patterns_array_rest_parser_recovery.baml:16:17 ]
-    │
+  [type] E0002
+
+  × unresolved type: r
+    ╭─[patterns_array_rest_parser_recovery.baml:16:17]
  16 │         [...let r] => r.length(),
-    │                 ┬  
-    │                 ╰── unresolved type: r
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                 ─
+    ╰────
 
-  [type] error: unresolved name: r
-    ╭─[ patterns_array_rest_parser_recovery.baml:16:23 ]
-    │
- 16 │         [...let r] => r.length(),
-    │                       ┬  
-    │                       ╰── unresolved name: r
-    │ 
-    │ Note: Error code: E0003
-────╯
+  [parse] E0010
 
-  [parse] error: Expected identifier after 'let', found ']'
-    ╭─[ patterns_array_rest_parser_recovery.baml:24:15 ]
-    │
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:24:15]
  24 │         [..let] => 1,
-    │               ┬  
-    │               ╰── Expected identifier after 'let', found ']'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·               ┬
+    ·               ╰── expected `identifier after 'let'`, found `']'`
+    ╰────
 
-  [type] error: unreachable arm
-    ╭─[ patterns_array_rest_parser_recovery.baml:25:14 ]
-    │
- 25 │         _ => 0
-    │              ┬  
-    │              ╰── unreachable arm
-    │ 
-    │ Note: Error code: E0063
-────╯
+  [parse] E0010
 
-  [type] error: type mismatch: expected int[], got never[][]
-    ╭─[ patterns_array_rest_parser_recovery.baml:32:9 ]
-    │
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:32:13]
  32 │         [.. : int[]] => 1,
-    │         ──────┬─────  
-    │               ╰─────── type mismatch: expected int[], got never[][]
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·             ┬
+    ·             ╰── expected `pattern`, found `':'`
+    ╰────
 
-  [parse] error: Expected pattern, found ':'
-    ╭─[ patterns_array_rest_parser_recovery.baml:32:13 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:32:15]
  32 │         [.. : int[]] => 1,
-    │             ┬  
-    │             ╰── Expected pattern, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·               ─┬─
+    ·                ╰── expected `',' or ']' after array pattern element`, found `identifier`
+    ╰────
 
-  [parse] error: Expected ',' or ']' after array pattern element, found identifier
-    ╭─[ patterns_array_rest_parser_recovery.baml:32:15 ]
-    │
- 32 │         [.. : int[]] => 1,
-    │               ─┬─  
-    │                ╰─── Expected ',' or ']' after array pattern element, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [type] error: type mismatch: expected int, got never[]
-    ╭─[ patterns_array_rest_parser_recovery.baml:32:18 ]
-    │
- 32 │         [.. : int[]] => 1,
-    │                  ─┬  
-    │                   ╰── type mismatch: expected int, got never[]
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] error: type mismatch: expected int[], got int[][]
-    ╭─[ patterns_array_rest_parser_recovery.baml:40:9 ]
-    │
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:40:14]
  40 │         [.._ : int[]] => 1,
-    │         ──────┬──────  
-    │               ╰──────── type mismatch: expected int[], got int[][]
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·              ┬
+    ·              ╰── expected `',' or ']' after array pattern element`, found `':'`
+    ╰────
 
-  [parse] error: Expected ',' or ']' after array pattern element, found ':'
-    ╭─[ patterns_array_rest_parser_recovery.baml:40:14 ]
-    │
- 40 │         [.._ : int[]] => 1,
-    │              ┬  
-    │              ╰── Expected ',' or ']' after array pattern element, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [type] error: type mismatch: expected int, got int[]
-    ╭─[ patterns_array_rest_parser_recovery.baml:40:16 ]
-    │
- 40 │         [.._ : int[]] => 1,
-    │                ──┬──  
-    │                  ╰──── type mismatch: expected int, got int[]
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] error: rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    ╭─[ patterns_array_rest_parser_recovery.baml:48:12 ]
-    │
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:48:17]
  48 │         [..[.., ..]] => 1,
-    │            ────┬───  
-    │                ╰───── rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [parse] error: Expected only one '..' rest pattern is allowed in an array pattern, found '..'
-    ╭─[ patterns_array_rest_parser_recovery.baml:48:17 ]
-    │
- 48 │         [..[.., ..]] => 1,
-    │                 ─┬  
-    │                  ╰── Expected only one '..' rest pattern is allowed in an array pattern, found '..'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                 ─┬
+    ·                  ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
+    ╰────

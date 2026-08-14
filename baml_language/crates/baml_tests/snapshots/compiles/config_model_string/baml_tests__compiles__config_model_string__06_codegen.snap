@@ -1,57 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8767
 ---
 function $init() -> null {
     call $init_let_0
     store_global user.MyAwsClient
     load_const null
-    return
-}
-
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function user.MyAwsClient$new(lenient: bool) -> null {
-    load_const "MyAwsClient"
-    load_const "aws-bedrock"
-    load_const "anthropic.claude-3-haiku-20240307-v1:0"
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const "sk-1234"
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const 100
-    load_const 0.7
-    load_const null
-    init_instance baml.llm.BedrockOptions .region, .endpoint_url, .access_key_id, .secret_access_key, .session_token, .profile, .stop_sequences, .max_tokens, .temperature, .top_p
-    load_const null
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type unknown
-    alloc_map 0
-    init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
-    init_instance baml.llm.PrimitiveClient .name, .provider, .options
     return
 }

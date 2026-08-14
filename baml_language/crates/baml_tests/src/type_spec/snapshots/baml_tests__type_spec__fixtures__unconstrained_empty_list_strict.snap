@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+350..358 'uel_bare': throws never
+381..433 '{\n   ...h()\n}': int
+387..392 'let e': !error[]
+395..397 '[]': !error[]
+421..429 'e.length': (self: !error[]) -> int throws never
+421..431 'e.length()': int
+443..453 'uel_hetero': throws never
+476..584 '{\n   ...tal\n}': int
+482..491 'let total': int
+494..495 '0': 0
+505..512 'let row': int[]
+516..533 '[[1], ...], []]': int[][]
+517..520 '[1]': int[]
+518..519 '1': 1
+522..528 '[2, 3]': int[]
+523..524 '2': 2
+526..527 '3': 3
+530..532 '[]': int[]
+535..572 '{\n   ...n    }': void
+545..550 'total': int
+554..564 'row.length': (self: int[]) -> int throws never
+554..566 'row.length()': int
+577..582 'total': int

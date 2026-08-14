@@ -20,7 +20,7 @@
 //   - phase3_error_binding_unhandled_is_compile_error
 //   - phase3_out_of_body_impl_on_builtin_normalizes_to_never
 //   - phase3_out_of_body_impl_on_builtin_with_error_throws_it
-//   - phase3_defaulted_assoc_error_over_constrains_bound
+//   - phase3_defaulted_assoc_override_satisfies_bare_bound
 //   - phase5_union_int_float_sort_is_compile_error
 //   - phase5_optional_element_sort_is_compile_error
 //   - phase5_sort_by_key_nullable_key_is_compile_error
@@ -382,10 +382,12 @@ test "phase5_class_with_comparable_sort_compiles_and_runs" {
 
 // ── 02 Phase 1: dispatch shape for the primitive fast path ──────────────────
 
-// Documents WHY the `Sortable.sort` boolean test is native: a BAML-level
-// `is int` on a `T`-typed value lowers to a constant-false test (pattern type
-// `T ∩ int` = `Never`), so even an actual int reports false. If this ever
-// starts returning 11, the `Sortable.sort` dispatch can move back to pure BAML.
+// A BAML-level `is int` on a `T`-typed value tests against the *realized* `T`
+// from the enclosing frame (overlap-oracle narrowing): an actual int reports
+// true, a string false. It used to lower to a constant-false test (`T ∩ int`
+// intersected to `never`), which is why `Sortable.sort`'s primitive fast-path
+// test went native; with this working, that dispatch could move back to pure
+// BAML.
 function probe<T>(x: T) -> int {
     if (x is int) { 1 } else { 0 }
 }
@@ -395,8 +397,8 @@ function is_primitive_probe_main() -> int {
     return probe(a) * 10 + probe("s")
 }
 
-test "is_primitive_on_generic_value_folds_to_false" {
-    assert.equal(is_primitive_probe_main(), 0)
+test "is_primitive_on_generic_value_tests_realized_type" {
+    assert.equal(is_primitive_probe_main(), 10)
 }
 
 // The fallback dispatch shape: a boolean guard routing between two generic
@@ -468,10 +470,20 @@ class ParityItem {
     }
 }
 
+// Element-wise `compare(...) == 0` rather than `xs == ys`. The float domain
+// below includes NaN, and `==` is IEEE — `NaN != NaN`, so an array holding one
+// is not even equal to itself. `Comparable for float` is `total_cmp`, which is
+// both total and the very ordering these two sort paths are being compared on.
 function check<T extends baml.Comparable>(xs: T[], ys: T[]) -> bool throws T.CompareError {
     xs.sort();
     ys.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) });
-    return baml.deep_equals(xs, ys)
+    if (xs.length() != ys.length()) { return false }
+    let i = 0;
+    while (i < xs.length()) {
+        if (xs[i].compare(ys[i]) != 0) { return false }
+        i = i + 1;
+    }
+    return true
 }
 
 function parity_main() -> int throws never {

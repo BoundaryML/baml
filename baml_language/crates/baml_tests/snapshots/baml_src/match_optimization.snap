@@ -3,214 +3,249 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function match_optimization.$init_test_ns_match_optimization_match_optimization(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_first_arm"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_middle_arm"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_last_arm"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_fallback"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_negative_fallback"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_with_holes_miss"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_with_holes_hit"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_offset_values"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_large"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_jump_table_dense_four_arms_param"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_first_arm"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_middle_arm"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_last_arm"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_fallback"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_very_sparse"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_large_values"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_sparse_four_arms_param"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_if_else_chain_three_arms"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_density_exactly_50_percent"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_density_below_50_percent"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_density_above_50_percent"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_large_range_dense"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_large_range_sparse"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_zero_in_range"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_negative_jump_table"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_negative_jump_table_fallback"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_spanning_zero_jump_table"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_spanning_zero_negative_hit"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_negative_sparse"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_spanning_zero_sparse"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_union_aggregated_jump_table"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_range_at_limit_uses_jump_table"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 31)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_range_exceeds_limit_uses_binary_search"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 32)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_large_jump_table"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 33)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_optimization"
     load_const "match_binary_search_eight_arms"
     make_closure .<lambda($init_test_ns_match_optimization_match_optimization, 34)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

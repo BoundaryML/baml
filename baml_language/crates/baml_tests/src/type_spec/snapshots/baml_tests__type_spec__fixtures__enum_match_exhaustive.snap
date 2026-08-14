@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+50..51 'f': throws never
+86..194 '{\n   ...int\n}': int
+92..97 'let r': int
+100..175 'match ...n    }': int
+107..108 's': user.Status
+120..133 'Status.Active': user.Status.Active
+137..138 'a': int
+148..163 'Status.Inactive': user.Status.Inactive
+167..168 'b': int
+181..182 'r': int

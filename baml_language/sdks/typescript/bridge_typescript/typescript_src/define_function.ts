@@ -17,6 +17,7 @@ import {
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
+import { attachCallContext } from './call_context.js';
 import { baml_bridge } from './proto/baml_cffi.js';
 import { lowerTypeToWireTy, type BamlType } from './wire_ty.js';
 
@@ -145,21 +146,8 @@ function buildTypeArgs(
     return wire;
 }
 
-interface CallContextBinding {
-    detach(): void;
-}
-
 function newFunctionCall(): bigint {
     return BigInt(nativeNewFunctionCall());
-}
-
-function attachCallContext(ctx: BamlCallContext | undefined, callId: bigint): CallContextBinding {
-    ctx?._attachCallId(callId.toString());
-    return {
-        detach() {
-            ctx?._detachCallId(callId.toString());
-        },
-    };
 }
 
 function buildArgs(
@@ -243,15 +231,14 @@ export function defineFunction(
             const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
+            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
-            let resultBytes: Buffer;
             try {
-                resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null);
+                const resultBytes = rt.callFunctionSync(argsProto, null, null);
+                return decodeCallResult(resultBytes);
             } finally {
                 callCtxBinding.detach();
             }
-            return decodeCallResult(resultBytes);
         };
     }
     if (mode === 'async') {
@@ -260,15 +247,14 @@ export function defineFunction(
             const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
+            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
-            let resultBytes: Buffer;
             try {
-                resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null);
+                const resultBytes = await rt.callFunction(argsProto, null, null);
+                return decodeCallResult(resultBytes);
             } finally {
                 callCtxBinding.detach();
             }
-            return decodeCallResult(resultBytes);
         };
     }
     throw new Error(`mode must be 'sync' or 'async', got ${JSON.stringify(mode)}`);
@@ -315,15 +301,14 @@ export function defineInstanceFunction(
                     const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
+                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
-                    let resultBytes: Buffer;
                     try {
-                        resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null);
+                        const resultBytes = rt.callFunctionSync(argsProto, null, null);
+                        return decodeCallResult(resultBytes);
                     } finally {
                         callCtxBinding.detach();
                     }
-                    return decodeCallResult(resultBytes);
                 };
             }
             if (mode === 'async') {
@@ -332,15 +317,14 @@ export function defineInstanceFunction(
                     const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
+                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
-                    let resultBytes: Buffer;
                     try {
-                        resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null);
+                        const resultBytes = await rt.callFunction(argsProto, null, null);
+                        return decodeCallResult(resultBytes);
                     } finally {
                         callCtxBinding.detach();
                     }
-                    return decodeCallResult(resultBytes);
                 };
             }
             throw new Error(`mode must be 'sync' or 'async', got ${JSON.stringify(mode)}`);

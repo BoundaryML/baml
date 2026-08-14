@@ -1,223 +1,201 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37227
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: no valid digits found for number
-   ╭─[ negative.baml:8:23 ]
-   │
+  [hir] E0152
+
+  × no valid digits found for number
+   ╭─[negative.baml:8:23]
  8 │   let no_digits_hex = 0x;
-   │                       ─┬  
-   │                        ╰── expected at least one digit
-   │ 
-   │ Note: Error code: E0152
-───╯
+   ·                       ─┬
+   ·                        ╰── expected at least one digit
+   ╰────
 
-  [hir] error: no valid digits found for number
-   ╭─[ negative.baml:9:25 ]
-   │
+  [hir] E0152
+
+  × no valid digits found for number
+   ╭─[negative.baml:9:25]
  9 │   let no_digits_octal = 0o;
-   │                         ─┬  
-   │                          ╰── expected at least one digit
-   │ 
-   │ Note: Error code: E0152
-───╯
+   ·                         ─┬
+   ·                          ╰── expected at least one digit
+   ╰────
 
-  [hir] error: no valid digits found for number
-    ╭─[ negative.baml:10:26 ]
-    │
+  [hir] E0152
+
+  × no valid digits found for number
+    ╭─[negative.baml:10:26]
  10 │   let no_digits_binary = 0b;
-    │                          ─┬  
-    │                           ╰── expected at least one digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                          ─┬
+    ·                           ╰── expected at least one digit
+    ╰────
 
-  [hir] error: no valid digits found for number
-    ╭─[ negative.baml:11:31 ]
-    │
+  [hir] E0152
+
+  × no valid digits found for number
+    ╭─[negative.baml:11:31]
  11 │   let no_digits_underscores = 0b__;
-    │                               ──┬─  
-    │                                 ╰─── expected at least one digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                               ──┬─
+    ·                                 ╰── expected at least one digit
+    ╰────
 
-  [hir] error: invalid digit for a base 2 literal
-    ╭─[ negative.baml:14:23 ]
-    │
+  [hir] E0152
+
+  × invalid digit for a base 2 literal
+    ╭─[negative.baml:14:23]
  14 │   let bad_binary = 0b123;
-    │                       ┬  
-    │                       ╰── invalid digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                       ┬
+    ·                       ╰── invalid digit
+    ╰────
 
-  [hir] error: invalid digit for a base 2 literal
-    ╭─[ negative.baml:14:24 ]
-    │
+  [hir] E0152
+
+  × invalid digit for a base 2 literal
+    ╭─[negative.baml:14:24]
  14 │   let bad_binary = 0b123;
-    │                        ┬  
-    │                        ╰── invalid digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                        ┬
+    ·                        ╰── invalid digit
+    ╰────
 
-  [hir] error: invalid digit for a base 2 literal
-    ╭─[ negative.baml:15:39 ]
-    │
+  [hir] E0152
+
+  × invalid digit for a base 2 literal
+    ╭─[negative.baml:15:39]
  15 │   let bad_binary_underscores = 0b10_10301;
-    │                                       ┬  
-    │                                       ╰── invalid digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                                       ┬
+    ·                                       ╰── invalid digit
+    ╰────
 
-  [hir] error: invalid digit for a base 8 literal
-    ╭─[ negative.baml:16:22 ]
-    │
+  [hir] E0152
+
+  × invalid digit for a base 8 literal
+    ╭─[negative.baml:16:22]
  16 │   let bad_octal = 0o18;
-    │                      ┬  
-    │                      ╰── invalid digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                      ┬
+    ·                      ╰── invalid digit
+    ╰────
 
-  [hir] error: invalid digit for a base 8 literal
-    ╭─[ negative.baml:17:38 ]
-    │
+  [hir] E0152
+
+  × invalid digit for a base 8 literal
+    ╭─[negative.baml:17:38]
  17 │   let bad_octal_underscores = 0o1234_9_5670;
-    │                                      ┬  
-    │                                      ╰── invalid digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                                      ┬
+    ·                                      ╰── invalid digit
+    ╰────
 
-  [hir] error: invalid base prefix for number literal; base prefixes are lowercase: `0x1F`
-    ╭─[ negative.baml:20:19 ]
-    │
+  [hir] E0152
+
+  × invalid base prefix for number literal; base prefixes are lowercase: `0x1F`
+    ╭─[negative.baml:20:19]
  20 │   let upper_hex = 0X1F;
-    │                   ──┬─  
-    │                     ╰─── base prefixes (`0x`, `0o`, `0b`) are lowercase
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                   ──┬─
+    ·                     ╰── base prefixes (`0x`, `0o`, `0b`) are lowercase
+    ╰────
 
-  [hir] error: invalid base prefix for number literal; base prefixes are lowercase: `0b10`
-    ╭─[ negative.baml:21:22 ]
-    │
+  [hir] E0152
+
+  × invalid base prefix for number literal; base prefixes are lowercase: `0b10`
+    ╭─[negative.baml:21:22]
  21 │   let upper_binary = 0B10;
-    │                      ──┬─  
-    │                        ╰─── base prefixes (`0x`, `0o`, `0b`) are lowercase
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                      ──┬─
+    ·                        ╰── base prefixes (`0x`, `0o`, `0b`) are lowercase
+    ╰────
 
-  [hir] error: invalid base prefix for number literal; base prefixes are lowercase: `0o7`
-    ╭─[ negative.baml:22:21 ]
-    │
+  [hir] E0152
+
+  × invalid base prefix for number literal; base prefixes are lowercase: `0o7`
+    ╭─[negative.baml:22:21]
  22 │   let upper_octal = 0O7;
-    │                     ─┬─  
-    │                      ╰─── base prefixes (`0x`, `0o`, `0b`) are lowercase
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                     ─┬─
+    ·                      ╰── base prefixes (`0x`, `0o`, `0b`) are lowercase
+    ╰────
 
-  [hir] error: integer literal is too large
-    ╭─[ negative.baml:25:27 ]
-    │
+  [hir] E0152
+
+  × integer literal is too large
+    ╭─[negative.baml:25:27]
  25 │   let too_large_decimal = 9223372036854775808;
-    │                           ─────────┬─────────  
-    │                                    ╰─────────── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                           ─────────┬─────────
+    ·                                    ╰── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
+    ╰────
 
-  [hir] error: integer literal is too large
-    ╭─[ negative.baml:26:32 ]
-    │
+  [hir] E0152
+
+  × integer literal is too large
+    ╭─[negative.baml:26:32]
  26 │   let too_large_decimal_wide = 99999999999999999999;
-    │                                ──────────┬─────────  
-    │                                          ╰─────────── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                                ──────────┬─────────
+    ·                                          ╰── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
+    ╰────
 
-  [hir] error: integer literal is too large
-    ╭─[ negative.baml:27:23 ]
-    │
+  [hir] E0152
+
+  × integer literal is too large
+    ╭─[negative.baml:27:23]
  27 │   let too_large_hex = 0x8000_0000_0000_0000;
-    │                       ──────────┬──────────  
-    │                                 ╰──────────── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                       ──────────┬──────────
+    ·                                 ╰── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
+    ╰────
 
-  [hir] error: integer literal is too large
-    ╭─[ negative.baml:28:26 ]
-    │
+  [hir] E0152
+
+  × integer literal is too large
+    ╭─[negative.baml:28:26]
  28 │   let too_large_binary = 0b11111111111111111111111111111111111111111111111111111111111111111;
-    │                          ─────────────────────────────────┬─────────────────────────────────  
-    │                                                           ╰─────────────────────────────────── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                          ─────────────────────────────────┬─────────────────────────────────
+    ·                                                           ╰── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
+    ╰────
 
-  [hir] error: integer literal is too large
-    ╭─[ negative.baml:29:25 ]
-    │
+  [hir] E0152
+
+  × integer literal is too large
+    ╭─[negative.baml:29:25]
  29 │   let too_large_octal = 0o2_000_000_000_000_000_000_000;
-    │                         ───────────────┬───────────────  
-    │                                        ╰───────────────── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                         ───────────────┬───────────────
+    ·                                        ╰── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
+    ╰────
 
-  [type] error: integer literal `4611686018427387904` is out of range for `int` (which holds -4611686018427387904 to 4611686018427387903); append `n` to write it as a `bigint`
-    ╭─[ negative.baml:32:26 ]
-    │
+  [type] E0150
+
+  × integer literal `4611686018427387904` is out of range for `int` (which holds -4611686018427387904 to 4611686018427387903); append `n` to write it as a `bigint`
+    ╭─[negative.baml:32:26]
  32 │   let beyond_int_range = 0x4000_0000_0000_0000;
-    │                          ──────────┬──────────  
-    │                                    ╰──────────── integer literal `4611686018427387904` is out of range for `int` (which holds -4611686018427387904 to 4611686018427387903); append `n` to write it as a `bigint`
-    │ 
-    │ Note: Error code: E0150
-────╯
+    ·                          ─────────────────────
+    ╰────
 
-  [hir] error: no valid digits found for number
-    ╭─[ negative.baml:35:26 ]
-    │
+  [hir] E0152
+
+  × no valid digits found for number
+    ╭─[negative.baml:35:26]
  35 │   let bigint_no_digits = 0xn;
-    │                          ─┬─  
-    │                           ╰─── expected at least one digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                          ─┬─
+    ·                           ╰── expected at least one digit
+    ╰────
 
-  [hir] error: invalid digit for a base 2 literal
-    ╭─[ negative.baml:36:28 ]
-    │
+  [hir] E0152
+
+  × invalid digit for a base 2 literal
+    ╭─[negative.baml:36:28]
  36 │   let bigint_bad_digit = 0b2n;
-    │                            ┬  
-    │                            ╰── invalid digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                            ┬
+    ·                            ╰── invalid digit
+    ╰────
 
-  [hir] error: invalid base prefix for number literal; base prefixes are lowercase: `0x1F`
-    ╭─[ negative.baml:42:19 ]
-    │
- 42 │ type BadHexFlag = 0X1F | 0b12
-    │                   ──┬─  
-    │                     ╰─── base prefixes (`0x`, `0o`, `0b`) are lowercase
-    │ 
-    │ Note: Error code: E0152
-────╯
+  [hir] E0152
 
-  [hir] error: invalid digit for a base 2 literal
-    ╭─[ negative.baml:42:29 ]
-    │
+  × invalid base prefix for number literal; base prefixes are lowercase: `0x1F`
+    ╭─[negative.baml:42:19]
  42 │ type BadHexFlag = 0X1F | 0b12
-    │                             ┬  
-    │                             ╰── invalid digit
-    │ 
-    │ Note: Error code: E0152
-────╯
+    ·                   ──┬─
+    ·                     ╰── base prefixes (`0x`, `0o`, `0b`) are lowercase
+    ╰────
+
+  [hir] E0152
+
+  × invalid digit for a base 2 literal
+    ╭─[negative.baml:42:29]
+ 42 │ type BadHexFlag = 0X1F | 0b12
+    ·                             ┬
+    ·                             ╰── invalid digit
+    ╰────

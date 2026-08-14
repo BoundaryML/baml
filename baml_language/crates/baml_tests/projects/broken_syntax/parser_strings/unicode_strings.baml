@@ -23,9 +23,9 @@ class UnicodeStrings {
 
 // Test Unicode in function names and prompts
 function 处理文本(输入: string) -> string {
-  client GPT4
-  prompt #"
-    Process the text: {{ 输入 }}
+  client: GPT4
+  prompt: `
+    Process the text: ${输入}
     Return result with emojis: ✅ or ❌
-  "#
+  `
 }

@@ -10,6 +10,7 @@
 )]
 
 pub(crate) mod agent_command;
+pub(crate) mod auth;
 pub(crate) mod bytecode_cache;
 #[cfg(test)]
 mod cache_test_support;
@@ -18,22 +19,26 @@ pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
 mod describe_command_tests;
+pub(crate) mod describe_render;
+pub(crate) mod describe_search;
 pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
+pub(crate) mod feedback_command;
 pub(crate) mod file_signature;
 pub(crate) mod format;
 pub(crate) mod generate;
-pub(crate) mod grep_command;
+pub(crate) mod help_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod lsp;
 pub(crate) mod manifest;
+pub(crate) mod output;
 pub(crate) mod pack_command;
-pub(crate) mod pack_elf;
 pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
+pub(crate) mod project_session;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod skill_check;
@@ -51,7 +56,7 @@ pub(crate) mod util;
 // pub(crate) mod propelauth;
 // pub(crate) mod tui;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone)]
 pub enum ExitCode {
@@ -113,10 +118,17 @@ impl From<ExitCode> for u32 {
 
 /// Run the CLI with the given arguments.
 ///
-/// Dispatches to one of: `run`, `describe`, `generate`, `grep`, `test`,
+/// Dispatches to one of: `run`, `describe`, `generate`, `test`,
 /// `format`, or `language-server`. `baml run` is the top-level entry for
 /// standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
+    if argv.get(1).map(String::as_str) == Some("update") {
+        return Err(anyhow!(
+            "`baml update` is ambiguous.\n\
+             To use the latest version of BAML, run `baml toolchain update`.\n\
+             To use the latest BAML toolchain selector, run `baml self-update`."
+        ));
+    }
     let cli = commands::RuntimeCli::parse_from_smart(argv);
     cli.run()
 }

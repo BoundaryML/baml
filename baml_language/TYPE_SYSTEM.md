@@ -4,7 +4,7 @@ At the time of this document's writing, not all BAML type system features work a
 
 # The BAML Type System
 
-The BAML programming language has a strong static type system. While it uses TypeScript-like syntax, it provides stronger guarantees and identity which also permit safe runtime validation (e.g. `match` over union types).
+The BAML programming language has a strong, statically checked, dynamically monomorphized type system. While it uses TypeScript-like syntax, it provides stronger guarantees and identity which also permit safe runtime validation (e.g. `match` over union types).
 
 BAML has a set-theoretic type system. It has unions like TypeScript (but more strongly typed) and type bound-based interfaces like Rust traits/Swift protocols. This enables flexibility while upholding correctness.
 
@@ -67,7 +67,7 @@ BAML's type system has the following properties:
    let a: int[] = [1, 2, 3];
    let b: (int | string)[] = a; // if covariant, this would be valid
    b[1] = "hello"; // The type `int | string` allows `string`
-   let c: int = b[1]; // oops!!!!! it's actually a `string`
+   let c: int = a[1]; // oops!!!!! it's actually a `string`
    ```
    This is a major point in which TypeScript fails: it would permit the above unsound code, resulting in `c` having a potentially cascading type/state mismatch.
 2. Union members are covariant: all members are subtypes of the union (as are their subtypes).
@@ -117,11 +117,51 @@ Other subtypes:
 
 In nearly all contexts, we can thus simplify types and maintain equivalence: `1 | int == int | 1 == int`, `anything | unknown == unknown`, `true | false == bool`, `Side.Left | Side.Right == Side` (enum), etc. The only exceptions are places like LLM function return types where the order affects the parsing. However, this should only matter in this one location based on explicit declaration for the SAP parser, and can still be treated the same for in-language type algebra.
 
+## Type Aliases and Recursive Types
+
+Type aliases are transparent (structural, not nominal): `type X = T` makes `X` the very same type as `T` in every context. The alias name is a spelling device, never an identity. Non-recursive aliases are expanded during lowering; only recursive aliases survive as named references, and the name still carries no identity of its own.
+
+### Equirecursive identity
+
+Recursive aliases are equirecursive μ-types over regular trees: a recursive alias denotes the unique regular tree obtained by unfolding its definition, and two types are the same type if and only if their trees are equal under the type algebra. Alias names, unfolding depth, and spelling never contribute identity:
+
+```baml
+type A = int | A[]
+type B = int | B[]
+// A and B are the same type: mutual subtypes, interchangeable everywhere.
+// So are `A`, `int | A[]`, and `int | (int | A[])[]` (partial unfoldings),
+// and mutually recursive definitions that unfold to the same tree.
+```
+
+### Values and membership
+
+BAML values are finite object graphs and may be self-referential (`let a: A = []; a.push(a);` is valid for `type A = A[]`). Membership checking never recurses over a value: every value carries (can trivially reconstruct) its concrete run-time type — for example, a list holds its element type as metadata, and writes into it are statically checked against that element type — so a value `v` is a member of type `T` if and only if `v`'s concrete type is a subtype of `T`. All recursion in the system lives in the type-level subtyping relation, which is decided coinductively over regular trees.
+
+### Productivity
+
+Because values can be self-referential, membership is not a well-founded judgment and subtyping over recursive types is coinductive. Coinductive derivations must be productive: every cycle in a derivation must pass through a type constructor. A self-supporting cycle ("`t <: A` because `t <: A`", reachable through an unguarded recursive union member) proves nothing. Consequently, an unguarded recursive union member contributes nothing to its type, and a fully unguarded cycle is uninhabited:
+
+```baml
+type A = A | A[]   // the same type as `type L = L[]`: the unguarded `A` member is vacuous
+type B = B         // denotes `never` (and is a compile error, E0068)
+```
+
+(The E0068 cycle check is per-SCC — a cycle group needs at least one list/map edge — so types like `A` above are legal; the algebra gives them the productive semantics.)
+
+### Equivalence and canonical forms
+
+Two types are **equivalent** if and only if they are mutual subtypes — they denote the same set of values. The canonical type algebra decides equivalence by structural equality of canonical forms, and for the algebra's rules these provably coincide with mutual subtyping (canonical forms are unique representatives of the equirecursive equivalence class).
+
+Two deliberate carve-outs qualify the "if and only if" (both are compiler devices, not value-set semantics): the error-recovery sentinel types are bidirectionally *compatible* with everything to suppress diagnostic cascades but equivalent only to themselves, and a fact set containing a mutual `requires` cycle between distinct interfaces would make them mutual subtypes while remaining nominally distinct — such cycles are rejected at declaration (E0118), so the case arises only for artificially constructed fact sets.
+
+`normalize` renders the canonical form back as surface syntax, with the following contract: the output is idempotent (`normalize(normalize(t)) == normalize(t)`), always equivalent to its input, and head-exposed (the root of a recursive alias is unfolded once; nested recursion stays folded as an alias name). Because surface syntax spells recursion via alias names, the rendering is canonical only up to the naming of recursion back-references: `normalize(A)` and `normalize(B)` above are equivalent but each spells back-references with its own name. Canonical *identity* is the equivalence judgment, not syntactic equality of rendered output.
+
 ## Pattern Matching
 
-Pattern matching ([BEP-015](https://beps.boundaryml.com/beps/15)) on types falls naturally out of BAML's subset-based subtyping system. For any given value, BAML can determine whether a value is a member of a given type. A `match` expression can be thought of as checking each arm in order to see if the value is a member of the type-set (though various optimizations allow us to implement this more efficiently in many cases).
+Pattern matching ([BEP-015](https://beps.boundaryml.com/beps/15)) on types falls naturally out of BAML's subset-based subtyping system. For any given value, BAML can determine whether a value is a member of a given type. A `match` expression with type-pattern arms can be thought of as checking each arm in order to see if the value is a member of the type-set (though various optimizations allow us to implement this more efficiently in many cases).
 
-To check pattern fallibility/infallibility/exhaustiveness, BAML ensures that the union of the matched patterns represent a superset of the scrutinee's type, or defines a diverging path for fallible patterns if not. `match` also rejects cases that can provably never be reached. While these do not necessarily violate the type system, they are dead code that could be misleading.
+To check pattern fallibility/infallibility/exhaustiveness, BAML ensures that the union of the matched patterns represent a superset of the scrutinee's type, or defines a diverging path for fallible patterns if not.
+`match` also rejects arms that can provably never be reached. While these do not necessarily violate the type system, they are dead code that could be misleading. A `match` arm `A(N)` is unreachable if and only if `SCRUTINEE ∩ (A(0) ∪ A(1) ∪ ... ∪ A(N-1)) = SCRUTINEE ∩ (A(0) ∪ A(1) ∪ ... ∪ A(N-1) ∪ A(N))`. If we cannot prove either way, we err towards saying it is reachable (for example, we exclude all arms with an `if` expression-guard from consideration in reachability and say they do not contribute to exhaustiveness as we can make no guarantees about the evaluated expression).
 
 ## Type Variables
 
@@ -130,7 +170,7 @@ There are several types of type variables in BAML: generics, associated types, a
 - Generics are used in [type constructors](https://en.wikipedia.org/wiki/Type_constructor) ("generic types") and as type parameters on functions. The type they hold is provided by the caller.
 - Associated types are used in interfaces. The type they hold is provided by the interface implementor.
 - `Self` is used in interfaces to refer to the concrete implementor type
-  - If the concrete type is generic, it refers to the generic-specialized type (the result of the type constructor, rather than the type constructor itself: `Foo<int>`/`Foo<string>`/..., not `Foo<T>`)
+  - If the concrete type is generic, it refers to the monomorphized type (the result of the type constructor, rather than the type constructor itself: `Foo<int>`/`Foo<string>`/..., not `Foo<T>`)
   - In an interface's default method implementation, it behaves a bit like an associated type with the interface as its bound, since it may be realized to any implementing type.
 
 As previously noted, type variables with interface bounds can only be filled by concrete types. This includes `Self`: when used in a class body, it must correspond to a specialization of the concrete class type, and when in an `interface`/`implements` block it is a type variable bounded by the interface.
@@ -149,7 +189,7 @@ function bar<T extends baml.ops.Add>(a: T, b: T) -> T {
 }
 ```
 
-BAML has generic type parameters. When a generic function is called, the caller provides realized[^1] type arguments for each parameter. While they can often be inferred, they must still be known unambiguously at the call site. In terms of identity, `bar<int>` can be considered a distinct, non-equivalent function from `bar<string>`, even if the implementation does not actually monomorphize. We call `bar<int>` a _specialization_ of `bar`.
+BAML has generic type parameters. When a generic function is called, the caller provides realized[^1] type arguments for each parameter. While they can often be inferred, they must still be known unambiguously at the call site. In terms of identity, `bar<int>` can be considered a distinct, non-equivalent function from `bar<string>`, even if the implementation does not statically monomorphize. We call `bar<int>` a _specialization_ of `bar`.
 
 It may be helpful to think of it this way: function `bar` takes in three parameters. One is a type-parameter `T` and the others are value-parameters `a` and `b`. We check statically during compilation to ensure that whatever `T` ends up being, it will be valid at run-time. Like how value-parameters are constrained by a type (`a: T`), a type-parameter may be constrained by interfaces (`T extends baml.ops.Add`). At some call sites, we may know at compile time what we are passing as `T`. At others it will depend on the caller's own type arguments. When interacting with the outside world (e.g. bridges), we may have to validate and pass it dynamically.
 
@@ -167,7 +207,7 @@ As a result, while an unconstrained type-parameter like in `foo<T>` may be any t
 
 ### Realized vs Unrealized Types
 
-As used in BAML, "realized" types are types which contain _no_ type variables (fully "real" types). Unrealized types contain type variables. Types are always realized when they are used at run-time, either statically or via binding of type parameters (generics).
+As used in BAML, "realized" types are types which contain _no_ type variables (fully monomorphized types). Unrealized types contain type variables (are still polymorphic). Types are always realized when they are used at run-time, either statically or via runtime binding of type parameters (generics).
 
 In the following example, the unspecialized generic function `foo` uses unrealized type `Box<T>`.
 
@@ -204,7 +244,7 @@ For the function call `foo<int>(123)`, the run time `foo` function effectively r
 
 ### Generics on Types (Type Constructors)
 
-A type constructor, as the name suggests, constructs types! They are very familiar to us as generics on types: `Box<int>` has type constructor `Box` which takes in type parameter `int` and produces a realized type. BAML doesn't permit `Box` by itself as a type: while BAML syntax permits it in some locations, this is only valid if we can unambiguously infer the parameters. Since BAML generics are invariant, `Box<A>` has a subtyping relationship with `Box<B>` if and only if `A == B`.
+A type constructor, as the name suggests, constructs types! They are very familiar to us as generics on types: `Box<int>` has type constructor `Box` which takes in type parameter `int` and produces a realized type (bindings all type parameters is also called _monomorphization_). BAML doesn't permit `Box` by itself as a type: while BAML syntax permits it in some locations, this is only valid if we can unambiguously infer the parameters. Since BAML generics are invariant, `Box<A>` has a subtyping relationship with `Box<B>` if and only if `A == B`.
 
 ### Associated Types
 
@@ -297,12 +337,19 @@ function bad() -> void {
 }
 ```
 
+There are a few different positions where `Self` might be used, which have different resolution paths:
+
+1. In free functions and type aliases: compiler error. There is no type for `Self` to refer to
+2. In class fields and methods: refers to the class type, accepting its type args.
+3. In interface `implements` methods: refers to the `for`-target type, accepting its type args.
+4. In `interface` default method bodies: the implementor for which the current call occurred. Since we do not expect the compiler to be able to fully monomorphize, this is typically not known until dynamically at call-time. As such, it is emitted as its own type arg.
+
 ## Functions
 
 A function signature in BAML includes:
 
-- Arguments: a tuple of types
-- Keyword/optional arguments: an unordered mapping of parameter names to types
+- Arguments (required, positional): a tuple of types
+- Kwargs (optional, by-name): an unordered mapping of parameter names to types
 - Return type: a single type. This is the only place that `void` is valid user-syntax.
 - Error type: a single type.
 
@@ -313,7 +360,7 @@ All components of a function signature must be defined explicitly except for the
 3. Other function and lambda declarations may omit a `throws` clause:
    - If declared, the compiler statically verifies that the body cannot throw an undeclared type.
    - If omitted, the compiler infers a `throws` clause from the content of the body.
-   - A `throws` clause may also be *partial*: a `_` wildcard member (`throws AppError | _`) declares the named types **and** opens the remainder to inference. The body may then throw anything; the `_` is filled with the body's inferred throw set, and callers see the full union (declared names ∪ inferred). This is the precise counterpart of `throws unknown` — it keeps the named types in the contract and the inferred types exact, instead of widening the whole error type to `unknown`. A plain `throws T` (no `_`) stays exhaustive: every thrown type must be covered. Use `_` to avoid re-declaring infrastructural stdlib throws (e.g. `baml.json.*`) while still naming your own domain errors.
+   - A `throws` clause may also be _partial_: a `_` wildcard member (`throws AppError | _`) declares the named types **and** opens the remainder to inference. The body may then throw anything; the `_` is filled with the body's inferred throw set, and callers see the full union (declared names ∪ inferred). This is the precise counterpart of `throws unknown` — it keeps the named types in the contract and the inferred types exact, instead of widening the whole error type to `unknown`. A plain `throws T` (no `_`) stays exhaustive: every thrown type must be covered. Use `_` to avoid re-declaring infrastructural stdlib throws (e.g. `baml.json.*`) while still naming your own domain errors.
 4. Function signature types used as function arguments or keyword arguments may omit a `throws` clause:
    - If declared, then the `throws` clause is used.
    - If omitted, then the compiler will add an implicit generic parameter to the surrounding function and use it as the function-typed-argument's `throws` clause:
@@ -326,7 +373,7 @@ function foo/*<E>*/(arg: () -> void /* throws E */) -> void /* throws E */ {
 
 5. Otherwise, the `throws` clause MUST be declared.
 
-As previously noted, BAML function declarations may include generics. However, all function calls and function-values must have their type parameters specified:
+As previously noted, BAML function declarations may include generics. However, all function calls and function-values must have their type parameters specified — or unambiguously inferable from context — to enable monomorphization at call-time:
 
 ```baml
 function foo<T>(a: T) -> T { a }
@@ -342,7 +389,7 @@ Since we can infer the type parameter(s), this should usually not be a major syn
 
 ## Interfaces
 
-Interfaces are contracts defining the behavior and/or shape of types. They are specified in [BEP-044](https://beps.boundaryml.com/beps/44). They include both fields and methods, but use Rust/Swift-like bounds rather than inheritance. Associated types are defined in [BEP-057](https://beps.boundaryml.com/beps/57). Only concrete types may implement interfaces. Blanket/bounds-based implementations simply apply an `implements` block to all concrete types satisfying the bounds.
+Interfaces are contracts defining the behavior and/or shape of types. They are specified in [BEP-044](https://beps.boundaryml.com/beps/44). They include both fields and methods, but use Rust/Swift-like bounds rather than inheritance. Associated types are defined in [BEP-057](https://beps.boundaryml.com/beps/57). Only concrete types may implement interfaces. Blanket/bounds-based implementations simply apply an `implements` block to all concrete types satisfying the bounds. They are best thought of as paralleling Rust traits and much of their implementation is inspired by the structures used by Rust.
 
 However, interfaces are (technically) not themselves types. Instead, each interface is used to create types:
 
@@ -353,7 +400,7 @@ However, interfaces are (technically) not themselves types. Instead, each interf
 
 Coherence: As specified in BEP-044, each concrete type can have at most one implementation of a given interface. Like Rust's [orphan rule](https://doc.rust-lang.org/reference/items/implementations.html#r-items.impl.trait.orphan-rule), BAML requires that either the interface or the implementing type be defined in the current package to allow out-of-body `implements` blocks.
 
-Like generic classes, generic interfaces must always have their type args specified unless in a position where they can unambiguously be inferred. If any generic args are specified, all non-defaulted generic args must be specified — except that an individual arg may be written as the `_` wildcard to infer just that position while keeping the rest explicit (e.g. `let fs: baml.future.Future<int, _>[] = [spawn { … }]` keeps the value type `int` explicit and infers the error type from the spawned body). A `_` is a real inference hole filled from context (the binding's initializer), not a synonym for the `unknown` top type: the filled-in type is exact, so it is not erased and downstream uses (such as `await`) see the precise type. `_` is only meaningful where the slot can be inferred from context (today: a `let` binding annotation and `throws`-clause members); it is not supported in positions with nothing to infer from, such as a bare function parameter or return type. Following Rust, in some places (e.g. whenever used as an interface-existential type), the associated types must also be specified. Naturally, type args/associated types with defaults may be omitted and will use said defaults.
+Like generic classes, generic interfaces must always have their type args explicitly specified unless in a position where they can unambiguously be inferred. If any generic args are specified, all non-defaulted generic args must be specified — except that an individual arg may be written as the `_` wildcard to infer just that position while keeping the rest explicit (e.g. `let fs: baml.future.Future<int, _>[] = [spawn { … }]` keeps the value type `int` explicit and infers the error type from the spawned body). A `_` is a real inference hole filled from context (the binding's initializer), not a synonym for the `unknown` top type: the filled-in type is exact, so it is not erased and downstream uses (such as `await`) see the precise type. `_` is only meaningful where the slot can be inferred from context (today: a `let` binding annotation and `throws`-clause members); it is not supported in positions with nothing to infer from, such as a bare function parameter or return type. Following Rust, in some places (e.g. whenever used as an interface-existential type), the associated types must also be specified. Naturally, type args/associated types with defaults may be omitted and will use said defaults.
 
 While BAML tries to be permissive in where it will do unambiguous type inference, it is best practice to always explicitly parameterize all types.
 
@@ -404,6 +451,33 @@ function add_makes_int<O, T extends baml.ops.Add<O, Output=int>>(
 	lhs + rhs
 }
 ```
+
+### Interface Implementations
+
+Like in Rust, a fully realized concrete type `C` implements a fully realized interface `I` if and only if there exists some `implements` block where some generic instantiation produces `I` and `C` for its interface and "for" targets, respectively:
+
+```baml
+/// For all types `T`, `int` implements `Foo<T>`.
+implements<T> Foo<T> for int {}
+```
+
+There is an alternate shorthand syntax which allows `implements` blocks inside of `class` definitions:
+
+```baml
+class Bar<T extends Bound> {
+    implements Foo<T> {}
+}
+```
+
+This is shorthand for the out-of-body `implements` block, and should be considered equivalent to
+
+```baml
+class Bar<T extends Bound> {}
+/// transformed: takes the same generic args declaration and adds `for` that fills them all in.
+implements<T extends Bound> Foo<T> for Bar<T> {}
+```
+
+The only substantive difference here is that the in-body class `implements` block form permits field links while the out-of-body variant does not. This is because only classes have fields, so restricting to in-body `implements` blocks gives us this check for free. However, at a later date it would not be unsound to permit field links in out-of-body `implements` blocks if and only if the `for` target provably only matches classes. Either way, the implementation should use a unified path for both forms beyond the syntax layers.
 
 ### Interface Coherence
 

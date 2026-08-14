@@ -15,9 +15,9 @@ use std::{
 };
 
 const SKILL_OUTDATED_WARNING: &str =
-    "Your baml skill is outdated, use baml agent install to upgrade it.";
+    "your baml skill is outdated; use `baml agent install` to upgrade it";
 const SKILL_MISSING_WARNING: &str =
-    "No baml skill is installed, set it up with baml agent install.";
+    "no baml skill is installed; set it up with `baml agent install`";
 
 /// A project directory containing installed baml agent skills.
 fn project_with_skills() -> tempfile::TempDir {

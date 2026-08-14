@@ -1,16 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function user.Foo.zero(self: Foo) -> T | null {
+function user.Foo.zero(self: Foo) -> #0 | null {
     load_const null
     return
 }
@@ -20,17 +11,14 @@ function user.use_method_type_args() -> int {
     load_const "x"
     init_instance user.Foo .tag
     call user.Foo.zero
-    store_var _3
-    load_var _3
-    store_var v
-    load_var _3
+    store_var_load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 5
-    store_var v
+    store_var _3
 
   L0:
-    load_var v
+    load_var _3
     return
 }

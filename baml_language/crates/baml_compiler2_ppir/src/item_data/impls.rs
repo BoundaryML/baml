@@ -1,4 +1,3 @@
-use baml_base::Name;
 use baml_compiler2_hir::{
     loc::{ClassLoc, FunctionLoc, ImplLoc},
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
@@ -6,8 +5,8 @@ use baml_compiler2_hir::{
 use text_size::TextRange;
 
 use crate::item_data::common::{
-    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, InterfaceFieldLinkData,
-    InterfaceFieldLinkSourceMap,
+    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, GenericParamData,
+    InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
 };
 
 /// What an `implements` block applies to.
@@ -31,15 +30,6 @@ pub enum ImplSubjectData<'db> {
     },
 }
 
-/// A generic parameter on an out-of-body `implements` block, paired with its
-/// `&`-separated interface bounds. Pairing name and bounds makes a length
-/// mismatch between the two unrepresentable.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GenericParamData {
-    pub name: Name,
-    pub bounds: Vec<TypeRefId>,
-}
-
 /// Span-free semantic data for one `implements` block (either kind).
 #[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct ImplBlockData<'db> {
@@ -51,6 +41,9 @@ pub struct ImplBlockData<'db> {
     pub field_links: Vec<InterfaceFieldLinkData>,
     pub associated_type_bindings: Vec<AssociatedTypeBindingData>,
     pub methods: Vec<FunctionLoc<'db>>,
+    /// Leading `///` docstring — populated for free `implements … for …`
+    /// blocks; in-body blocks carry none today.
+    pub docstring: Option<String>,
 }
 
 /// Spans for an `ImplBlock`, parallel to [`ImplBlockData`].
@@ -107,17 +100,7 @@ fn lower<'db>(
             generics,
         } => ImplSubjectData::Free {
             for_target: type_refs.lower(for_target),
-            generics: generics
-                .iter()
-                .map(|param| GenericParamData {
-                    name: param.name.clone(),
-                    bounds: param
-                        .bounds
-                        .iter()
-                        .map(|bound| type_refs.lower(bound))
-                        .collect(),
-                })
-                .collect(),
+            generics: lower_generic_params(generics, &mut type_refs),
         },
     };
 
@@ -153,6 +136,7 @@ fn lower<'db>(
                 .iter()
                 .map(|method| FunctionLoc::new(db, file, *method))
                 .collect(),
+            docstring: data.docstring.clone(),
         },
         ImplBlockSourceMap {
             span: data.span,

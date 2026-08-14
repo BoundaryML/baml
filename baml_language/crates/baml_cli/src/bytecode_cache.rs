@@ -45,7 +45,7 @@ use baml_db::{
         generate_project_bytecode_with_reuse_artifacts, generate_project_bytecode_with_stdlib,
         generate_stdlib_program, reuse_throws_mismatches,
     },
-    baml_compiler2_hir,
+    baml_compiler2_hir, baml_compiler2_ppir,
 };
 use baml_project::ProjectDatabase;
 use bex_cache::{
@@ -419,6 +419,9 @@ impl CacheContext {
 pub(crate) struct CachedLegacyTest {
     pub(crate) function_name: String,
     pub(crate) test_name: String,
+    /// Public root-qualified test id. Adding this field intentionally makes
+    /// older discovery blobs fail Borsh decoding and fall back to discovery.
+    pub(crate) canonical_id: String,
     /// Project-root-relative display path (the `--list` `(path)` suffix).
     pub(crate) file_path: String,
 }
@@ -442,7 +445,7 @@ pub(crate) struct CachedLegacyTest {
 pub(crate) struct TestDiscovery {
     /// Legacy function-attached tests, unfiltered, in discovery order.
     pub(crate) legacy: Vec<CachedLegacyTest>,
-    /// Fully-expanded testset leaf names (full slash paths), unfiltered, in
+    /// Fully-expanded testset leaf names (canonical `root...::...` ids), unfiltered, in
     /// `collect_leaf_names` order.
     pub(crate) testset_leaf_names: Vec<String>,
 }
@@ -536,7 +539,7 @@ impl CacheContext {
 fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<String, Vec<u8>> {
     use baml_db::{
         Name, baml_compiler2_hir::package::PackageId,
-        baml_compiler2_tir::package_interface::package_interface,
+        baml_compiler2_hir_ty::package_interface::package_interface,
     };
     let mut out = std::collections::BTreeMap::new();
     for name in baml_builtins2::stdlib_package_names().iter().copied() {
@@ -671,6 +674,19 @@ pub(crate) struct ReusePlan {
     /// by rel_path. Rehydrated to serve those files' diagnostics without
     /// re-checking, and copied verbatim into the next manifest.
     pub(crate) clean_diagnostics: std::collections::BTreeMap<String, Vec<u8>>,
+    /// Clean files' `CallableThrowsFragment` blobs carried verbatim from the
+    /// previous manifest, by rel_path. The source of the `callable_throws`
+    /// seeds (so seeding needs no unit payloads) and of the next manifest's
+    /// fragment carry.
+    pub(crate) clean_fragments: std::collections::BTreeMap<String, Vec<u8>>,
+    /// True when the dirty partition found nothing changed: no dirty or added
+    /// files, and every manifest entry still present on disk. On this path the
+    /// serve-time throws gate is provably a tautology (the seeds being checked
+    /// are byte-for-byte the values the manifest was stored with, units are
+    /// content-addressed and written before the manifest, and the solve is a
+    /// deterministic pure function), so it is skipped — and unit payloads are
+    /// not loaded at all (nothing will be re-emitted or relinked from them).
+    pub(crate) no_delta: bool,
 }
 
 /// The result of the warm-database preamble ([`CacheContext::prepare_warm_db`]).
@@ -694,6 +710,24 @@ pub(crate) fn prepare_reuse_plan(
     let mut plan = plan?;
     db.set_seeded_throw_facts(std::mem::take(&mut plan.seeded_throw_facts));
     let callable_seeds = std::mem::take(&mut plan.seeded_callable_throws);
+    // No delta ⇒ the gate is a tautology: the seeds just installed are
+    // byte-for-byte the values the manifest was stored with (the store path
+    // persists `file_throw_facts` verbatim and units are content-addressed,
+    // written before the manifest that points at them), and the solve +
+    // runtime conversion the gate would re-run are deterministic pure
+    // functions of those inputs. Comparing a value against itself cannot
+    // demote anything, so skip the compare — it was the dominant cost of a
+    // warm no-op invocation (it derives `package_items`, i.e. re-parses the
+    // project). Any real edit, added or removed file takes the gate below.
+    if plan.no_delta {
+        db.set_seeded_callable_throws(callable_seeds);
+        return Some(plan);
+    }
+    // The gate's runtime-type conversion derives the package alias tables,
+    // which fold every file's semantic index. Prime the per-file indexes
+    // across workers first so that derivation is a cheap fold instead of a
+    // serial parse of the whole project under one salsa memo claim.
+    baml_project::prime_file_indexes_parallel(db);
     let mismatches = reuse_throws_mismatches(db, &plan.prev_units, &plan.clean_files);
     if mismatches.is_empty() {
         db.set_seeded_callable_throws(callable_seeds);
@@ -744,50 +778,38 @@ fn last_segment(name: &str) -> &str {
 
 /// Last-segment names of every item `file` defines, from the HIR item tree.
 fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
-    use baml_compiler2_hir::{
-        contributions::Definition,
-        loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
+    use baml_compiler2_hir::contributions::Definition;
+    use baml_compiler2_ppir::item_data::{
+        file_classes, file_enums, file_functions, file_interfaces, file_lets, file_type_aliases,
     };
     use baml_db::baml_compiler2_mir::def_to_item_ref;
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+
     let mut names: Vec<String> = Vec::new();
-    for local_id in item_tree.functions.keys() {
-        let fq = def_to_item_ref(
-            db,
-            Definition::Function(FunctionLoc::new(db, file, *local_id)),
-        );
-        names.push(last_segment(&fq.to_string()).to_string());
+    let push = |def, names: &mut Vec<String>| {
+        names.push(last_segment(&def_to_item_ref(db, def).to_string()).to_string());
+    };
+    for &loc in file_functions(db, file) {
+        push(Definition::Function(loc), &mut names);
     }
-    for local_id in item_tree.lets.keys() {
-        let fq = def_to_item_ref(db, Definition::Let(LetLoc::new(db, file, *local_id)));
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_lets(db, file) {
+        push(Definition::Let(loc), &mut names);
     }
-    for local_id in item_tree.classes.keys() {
-        let fq = def_to_item_ref(db, Definition::Class(ClassLoc::new(db, file, *local_id)));
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_classes(db, file) {
+        push(Definition::Class(loc), &mut names);
     }
-    for local_id in item_tree.enums.keys() {
-        let fq = def_to_item_ref(db, Definition::Enum(EnumLoc::new(db, file, *local_id)));
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_enums(db, file) {
+        push(Definition::Enum(loc), &mut names);
     }
-    for local_id in item_tree.interfaces.keys() {
-        let fq = def_to_item_ref(
-            db,
-            Definition::Interface(InterfaceLoc::new(db, file, *local_id)),
-        );
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_interfaces(db, file) {
+        push(Definition::Interface(loc), &mut names);
     }
     // Type aliases are erased into their consumers (a non-recursive alias is
     // expanded inline at every use), so an alias whose RHS changes must reach
     // the change-propagation set by *name*: a consumer that named the alias
     // would otherwise splice the stale expansion. `def_to_item_ref` handles
     // `TypeAlias` like any other named item.
-    for local_id in item_tree.type_aliases.keys() {
-        let fq = def_to_item_ref(
-            db,
-            Definition::TypeAlias(TypeAliasLoc::new(db, file, *local_id)),
-        );
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_type_aliases(db, file) {
+        push(Definition::TypeAlias(loc), &mut names);
     }
     names.sort_unstable();
     names.dedup();
@@ -864,86 +886,106 @@ fn is_builtin_type_word(word: &str) -> bool {
 /// file to the dirty set, never removes one — while every real type name is
 /// always present as an identifier run. The floor this guarantees: any file
 /// naming a changed type in a signature is dirtied.
+/// The firewall-`TypeRef` twin of [`add_type_display`]: render one type
+/// reference from an item's `type_refs` arena and tokenize its name into `out`.
+fn add_type_ref_display(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    out: &mut HashSet<String>,
+) {
+    add_type_display(&store.display(id), out);
+}
+
 fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<String> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    use baml_compiler2_ppir::item_data::{
+        ImplSubjectData, class_data, file_classes, file_functions, file_impls, file_interfaces,
+        file_template_strings, file_type_aliases, function_data, impl_block_data, interface_data,
+        template_string_data, type_alias_data,
+    };
     let mut names: HashSet<String> = HashSet::new();
 
-    for func in item_tree.functions.values() {
-        for te in func.params.iter().filter_map(|p| p.type_expr.as_ref()) {
-            add_type_display(te, &mut names);
+    for &loc in file_functions(db, file) {
+        let func = function_data(db, loc);
+        for id in func.params.iter().filter_map(|p| p.type_ref) {
+            add_type_ref_display(&func.type_refs, id, &mut names);
         }
-        if let Some(te) = &func.return_type {
-            add_type_display(te, &mut names);
+        if let Some(id) = func.return_type {
+            add_type_ref_display(&func.type_refs, id, &mut names);
         }
-        if let Some(te) = &func.throws {
-            add_type_display(te, &mut names);
+        if let Some(id) = func.throws {
+            add_type_ref_display(&func.type_refs, id, &mut names);
         }
-        for te in func.generic_param_bounds.iter().flatten() {
-            add_type_display(te, &mut names);
-        }
-    }
-    for ts in item_tree.template_strings.values() {
-        for te in ts.params.iter().filter_map(|p| p.type_expr.as_ref()) {
-            add_type_display(te, &mut names);
+        for id in func.generic_params.iter().flat_map(|p| &p.bounds) {
+            add_type_ref_display(&func.type_refs, *id, &mut names);
         }
     }
-    for class in item_tree.classes.values() {
-        for te in class.fields.iter().filter_map(|f| f.type_expr.as_ref()) {
-            add_type_display(te, &mut names);
+    for &loc in file_template_strings(db, file) {
+        let ts = template_string_data(db, loc);
+        for id in ts.params.iter().filter_map(|p| p.type_ref) {
+            add_type_ref_display(&ts.type_refs, id, &mut names);
         }
-        for te in class.generic_param_bounds.iter().flatten() {
-            add_type_display(te, &mut names);
+    }
+    for &loc in file_classes(db, file) {
+        let class = class_data(db, loc);
+        for id in class.fields.iter().map(|f| f.type_ref) {
+            add_type_ref_display(&class.type_refs, id, &mut names);
+        }
+        for id in class.generic_params.iter().flat_map(|p| &p.bounds) {
+            add_type_ref_display(&class.type_refs, *id, &mut names);
         }
         for block in &class.implements {
-            add_type_display(&block.target, &mut names);
+            add_type_ref_display(&class.type_refs, block.target, &mut names);
         }
     }
-    for iface in item_tree.interfaces.values() {
-        for te in iface.fields.iter().filter_map(|f| f.type_expr.as_ref()) {
-            add_type_display(te, &mut names);
+    for &loc in file_interfaces(db, file) {
+        let iface = interface_data(db, loc);
+        for id in iface.fields.iter().map(|f| f.type_ref) {
+            add_type_ref_display(&iface.type_refs, id, &mut names);
         }
-        for te in &iface.requires {
-            add_type_display(te, &mut names);
+        for id in &iface.requires {
+            add_type_ref_display(&iface.type_refs, *id, &mut names);
         }
-        for te in iface.generic_param_bounds.iter().flatten() {
-            add_type_display(te, &mut names);
+        for id in iface.generic_params.iter().flat_map(|p| &p.bounds) {
+            add_type_ref_display(&iface.type_refs, *id, &mut names);
         }
         for method in &iface.required_methods {
-            for te in method.params.iter().filter_map(|p| p.type_expr.as_ref()) {
-                add_type_display(te, &mut names);
+            for id in method.params.iter().filter_map(|p| p.type_ref) {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            if let Some(te) = &method.return_type {
-                add_type_display(te, &mut names);
+            if let Some(id) = method.return_type {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            if let Some(te) = &method.throws {
-                add_type_display(te, &mut names);
+            if let Some(id) = method.throws {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            for te in method.generic_param_bounds.iter().flatten() {
-                add_type_display(te, &mut names);
+            for id in method.generic_params.iter().flat_map(|p| &p.bounds) {
+                add_type_ref_display(&iface.type_refs, *id, &mut names);
             }
         }
         for assoc in &iface.associated_types {
-            if let Some(te) = &assoc.bound {
-                add_type_display(te, &mut names);
+            if let Some(id) = assoc.bound {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            if let Some(te) = &assoc.default {
-                add_type_display(te, &mut names);
+            if let Some(id) = assoc.default {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
         }
     }
-    for alias in item_tree.type_aliases.values() {
-        if let Some(te) = &alias.type_expr {
-            add_type_display(te, &mut names);
+    for &loc in file_type_aliases(db, file) {
+        let alias = type_alias_data(db, loc);
+        if let Some(id) = alias.value {
+            add_type_ref_display(&alias.type_refs, id, &mut names);
         }
     }
-    for imp in item_tree.impls.values() {
-        add_type_display(&imp.interface_target, &mut names);
-        // Out-of-body (`Free`) impls carry an explicit for-target `TypeExpr`; an
-        // in-class impl's for-target is the class itself (no `TypeExpr` to
-        // display). `names` is a set, so the interface_target added above is not
+    for &loc in file_impls(db, file) {
+        let block = impl_block_data(db, loc);
+        add_type_ref_display(&block.type_refs, block.interface_target, &mut names);
+        // Out-of-body (`Free`) impls carry an explicit for-target; an in-class
+        // impl's for-target is the class itself (no header type to display).
+        // `names` is a set, so the interface_target added above is not
         // double-counted for free impls.
-        if let baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } = &imp.subject {
-            add_type_display(for_target, &mut names);
+        if let ImplSubjectData::Free { for_target, .. } = &block.subject {
+            add_type_ref_display(&block.type_refs, *for_target, &mut names);
         }
     }
     names
@@ -956,11 +998,13 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
 /// against; a *modified* file instead compares its [`file_layout_hash`] so a
 /// function-only edit in a type-defining file no longer trips the sentinel.
 fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    !item_tree.classes.is_empty()
-        || !item_tree.enums.is_empty()
-        || !item_tree.interfaces.is_empty()
-        || !item_tree.type_aliases.is_empty()
+    use baml_compiler2_ppir::item_data::{
+        file_classes, file_enums, file_interfaces, file_type_aliases,
+    };
+    !file_classes(db, file).is_empty()
+        || !file_enums(db, file).is_empty()
+        || !file_interfaces(db, file).is_empty()
+        || !file_type_aliases(db, file).is_empty()
 }
 
 /// Whether `file` declares any interface-`impl` construct — an `impl` block, an
@@ -968,10 +1012,13 @@ fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
 /// `IMPL_SENTINEL`: only a change to such a file can move the package's impl set
 /// (and thus a coherence verdict), so an impl-free edit never trips the fallback.
 fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    // The unified `impls` map holds both in-class and out-of-body impl blocks; a
-    // class `implements` block is a distinct construct, so it needs its own check.
-    !item_tree.impls.is_empty() || item_tree.classes.values().any(|c| !c.implements.is_empty())
+    use baml_compiler2_ppir::item_data::{class_data, file_classes, file_impls};
+    // `file_impls` holds both in-class and out-of-body impl blocks; a class
+    // `implements` block is a distinct construct, so it needs its own check.
+    !file_impls(db, file).is_empty()
+        || file_classes(db, file)
+            .iter()
+            .any(|&loc| !class_data(db, loc).implements.is_empty())
 }
 
 /// Last-segment names referenced by each user file's compiled bytecode,
@@ -1164,7 +1211,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 }
                 // An added function may shadow an existing callee, so callers'
                 // transitive throws can move — seed the taint closure.
-                let fresh = baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf);
+                let fresh = baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(db, *sf);
                 throws_taint.extend(throw_fn_names(&fresh.0));
                 fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh.0.clone());
             }
@@ -1179,7 +1226,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 // stored ones, seed the taint closure with both the fresh and
                 // the stored function names — a rename/removal shifts which
                 // callers resolve where.
-                let fresh = baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf);
+                let fresh = baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(db, *sf);
                 if fresh.0 != entry.throw_facts {
                     throws_taint.extend(throw_fn_names(&fresh.0));
                     throws_taint.extend(throw_fn_names(&entry.throw_facts));
@@ -1348,36 +1395,33 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
 /// empty or fails to decode is skipped — its functions then infer honestly
 /// (degrade, never miscompile). Empty under `BAML_NO_CALLABLE_THROWS_CACHE=1`.
 fn project_callable_throws_seeds(
-    prev_units: &[CompilationUnit],
-    clean_files: &HashSet<String>,
+    clean_fragments: &std::collections::BTreeMap<String, Vec<u8>>,
     root: Option<&PathBuf>,
 ) -> std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>> {
     if CacheContext::callable_throws_cache_disabled() {
         return std::collections::BTreeMap::new();
     }
-    use baml_db::baml_compiler2_tir::package_interface::CallableThrowsFragment;
+    use baml_db::baml_compiler2_hir_ty::package_interface::CallableThrowsFragment;
     let mut by_path = std::collections::BTreeMap::new();
-    for unit in prev_units {
-        if !clean_files.contains(&unit.source_file) || unit.callable_throws_fragment.is_empty() {
+    for (rel, fragment_bytes) in clean_fragments {
+        if fragment_bytes.is_empty() {
             continue;
         }
-        let fragment: CallableThrowsFragment =
-            match borsh::from_slice(&unit.callable_throws_fragment) {
-                Ok(f) => f,
-                Err(e) => {
-                    cache_debug(format_args!(
-                        "interface fragment for `{}` undecodable: {e}",
-                        unit.source_file
-                    ));
-                    continue;
-                }
-            };
+        let fragment: CallableThrowsFragment = match borsh::from_slice(fragment_bytes) {
+            Ok(f) => f,
+            Err(e) => {
+                cache_debug(format_args!(
+                    "interface fragment for `{rel}` undecodable: {e}"
+                ));
+                continue;
+            }
+        };
         if fragment.by_id.is_empty() {
             continue;
         }
         let full = root
-            .map(|r| r.join(&unit.source_file).display().to_string())
-            .unwrap_or_else(|| unit.source_file.clone());
+            .map(|r| r.join(rel).display().to_string())
+            .unwrap_or_else(|| rel.clone());
         by_path.insert(full, fragment.by_id);
     }
     by_path
@@ -1422,49 +1466,79 @@ impl CacheContext {
             current,
         } = partition;
 
+        // No dirty or added files, and no manifest entry missing from disk
+        // (a removed file's entry would be neither clean nor current, so the
+        // counts diverge): nothing will be re-emitted or relinked, so unit
+        // payloads are not needed at all — the seeds and diagnostics blobs
+        // are manifest-resident. This skips both the unit read/hash pass and
+        // (in `prepare_reuse_plan`) the serve-time throws gate.
+        let no_delta = dirty_files.is_empty() && clean_files.len() == manifest.files.len();
+
         // Reuse the single file walk `compute_dirty_partition` already made rather
         // than re-listing the source set on the warm hot path.
         let current_files: HashMap<String, SourceFile> =
             current.into_iter().map(|(file, rel)| (rel, file)).collect();
         let mut prev_units = Vec::with_capacity(clean_files.len());
         let mut unit_keys = HashMap::with_capacity(clean_files.len());
-        let mut degraded = Vec::new();
-        for entry in &manifest.files {
-            if !clean_files.contains(&entry.rel_path) {
-                continue;
+        if no_delta {
+            for entry in &manifest.files {
+                unit_keys.insert(entry.rel_path.clone(), entry.unit_key);
             }
-            let key = CacheKey::from_bytes(entry.unit_key);
-            match self.cache.load_unit_shared(&key) {
-                Some(unit)
-                    if unit.source_file == entry.rel_path
-                        && !std::path::Path::new(&unit.source_file).is_absolute() =>
-                {
-                    unit_keys.insert(entry.rel_path.clone(), entry.unit_key);
-                    prev_units.push(unit);
+        } else {
+            // Load clean units across worker threads (read + digest + borsh
+            // decode per unit, sizable at large projects). `par_iter`'s
+            // indexed collect preserves manifest order exactly, so
+            // `prev_units` is byte-for-byte the sequence the serial loop
+            // produced — emit determinism is unaffected.
+            use rayon::prelude::*;
+            let clean_entries: Vec<_> = manifest
+                .files
+                .iter()
+                .filter(|entry| clean_files.contains(&entry.rel_path))
+                .collect();
+            let loaded: Vec<(&str, [u8; 32], Option<CompilationUnit>)> = clean_entries
+                .par_iter()
+                .map(|entry| {
+                    let key = CacheKey::from_bytes(entry.unit_key);
+                    let unit = self.cache.load_unit_shared(&key).filter(|unit| {
+                        unit.source_file == entry.rel_path
+                            && !std::path::Path::new(&unit.source_file).is_absolute()
+                    });
+                    (entry.rel_path.as_str(), entry.unit_key, unit)
+                })
+                .collect();
+            let mut degraded = Vec::new();
+            for (rel, entry_key, unit) in loaded {
+                match unit {
+                    Some(unit) => {
+                        unit_keys.insert(rel.to_string(), entry_key);
+                        prev_units.push(unit);
+                    }
+                    None => degraded.push(rel.to_string()),
                 }
-                _ => degraded.push(entry.rel_path.clone()),
             }
-        }
-        for rel in degraded {
-            cache_debug(format_args!(
-                "unit `{rel}` missing or invalid — degraded to dirty"
-            ));
-            clean_files.remove(&rel);
-            unit_keys.remove(&rel);
-            if let Some(file) = current_files.get(&rel)
-                && !dirty_files.contains(file)
-            {
-                dirty_files.push(*file);
+            for rel in degraded {
+                cache_debug(format_args!(
+                    "unit `{rel}` missing or invalid — degraded to dirty"
+                ));
+                clean_files.remove(&rel);
+                unit_keys.remove(&rel);
+                if let Some(file) = current_files.get(&rel)
+                    && !dirty_files.contains(file)
+                {
+                    dirty_files.push(*file);
+                }
             }
-        }
-        if clean_files.is_empty() {
-            cache_debug(format_args!("all reusable units missing — full compile"));
-            return None;
+            if clean_files.is_empty() {
+                cache_debug(format_args!("all reusable units missing — full compile"));
+                return None;
+            }
         }
         cache_debug(format_args!(
-            "reuse plan: {} clean, {} dirty",
+            "reuse plan: {} clean, {} dirty{}",
             clean_files.len(),
-            dirty_files.len()
+            dirty_files.len(),
+            if no_delta { " (no delta)" } else { "" }
         ));
 
         // Seed throw facts for every file. Clean files' facts come from the
@@ -1492,13 +1566,28 @@ impl CacheContext {
             .collect();
         seeded_throw_facts.extend(fresh_throw_facts);
 
+        // Carry clean files' interface-fragment blobs verbatim (rel-path-keyed):
+        // the `callable_throws` seeds project from these, and the store path
+        // copies them into the next manifest unchanged. Manifest-resident so
+        // seeding never has to read unit payloads.
+        let clean_fragments: std::collections::BTreeMap<String, Vec<u8>> = manifest
+            .files
+            .iter()
+            .filter(|entry| clean_files.contains(&entry.rel_path))
+            .map(|entry| {
+                (
+                    entry.rel_path.clone(),
+                    entry.callable_throws_fragment.clone(),
+                )
+            })
+            .collect();
+
         // Project clean files' cached interface fragments into a per-function
         // `callable_throws` seed (Phase 2): a clean function's throws — and hence
         // any dirty caller's throws-dependent inference over it — are served
         // without walking its body. The throws-taint closure guarantees a seeded
         // function's transitive throw contributors are all unchanged.
-        let seeded_callable_throws =
-            project_callable_throws_seeds(&prev_units, &clean_files, root.as_ref());
+        let seeded_callable_throws = project_callable_throws_seeds(&clean_fragments, root.as_ref());
 
         // Carry clean files' cached diagnostics blobs verbatim (already
         // rel-path-keyed): the gate rehydrates them to serve those files without
@@ -1518,6 +1607,8 @@ impl CacheContext {
             seeded_throw_facts,
             seeded_callable_throws,
             clean_diagnostics,
+            clean_fragments,
+            no_delta,
         })
     }
 
@@ -1649,7 +1740,7 @@ impl CacheContext {
                     sig_referenced_names,
                     // Free: seeded files return their seeds verbatim, dirty
                     // files were extracted (and memoized) during the compile.
-                    throw_facts: baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(
+                    throw_facts: baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(
                         db, sf,
                     )
                     .0
@@ -1662,6 +1753,16 @@ impl CacheContext {
                         .cloned()
                         .or_else(|| plan.and_then(|p| p.clean_diagnostics.get(&rel).cloned()))
                         .unwrap_or_else(crate::diagnostics_cache::empty_blob),
+                    // Verbatim copy of the unit's fragment bytes when this
+                    // compile produced/assembled the unit, else the plan's
+                    // carried manifest copy — the two are byte-identical by
+                    // construction, so the manifest copy can seed without
+                    // reading unit payloads.
+                    callable_throws_fragment: units_by_source
+                        .get(rel.as_str())
+                        .map(|unit| unit.callable_throws_fragment.clone())
+                        .or_else(|| plan.and_then(|p| p.clean_fragments.get(&rel).cloned()))
+                        .unwrap_or_default(),
                     unit_key: unit_keys[&rel],
                     rel_path: rel,
                 }
@@ -1687,11 +1788,7 @@ impl CacheContext {
     /// the identical warm-database setup `run`, `test`, and `check` each run
     /// before the diagnostics gate. `check` discards `stdlib_interface_hit`.
     pub(crate) fn prepare_warm_db(&self, db: &mut ProjectDatabase) -> WarmPrep {
-        let stdlib_interface_hit = !Self::verify_enabled()
-            && self
-                .load_stdlib_interface()
-                .map(|by_package| db.set_seeded_stdlib_interface(by_package))
-                .is_some();
+        let stdlib_interface_hit = self.seed_stdlib_interface(db);
         let reuse_plan = prepare_reuse_plan(db, self.plan_reuse(db));
         WarmPrep {
             reuse_plan,
@@ -1995,41 +2092,42 @@ impl CacheContext {
         let Some(manifest) = self.load_prev_manifest_for_verify() else {
             return Ok(());
         };
-        let prev_units = self.load_prev_units_for_verify(&manifest);
         let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
             return Ok(());
         };
-        // Exactly the files a served warm compile would have seeded.
+        // Exactly the files a served warm compile would have seeded. The
+        // served artifact is the manifest-resident fragment blob (seeds
+        // project from the manifest, not from unit payloads), so that copy is
+        // what the oracle must compare.
         let clean_files = compute_dirty_partition(db, &manifest).clean_files;
 
-        for unit in &prev_units {
-            if !clean_files.contains(&unit.source_file) || unit.callable_throws_fragment.is_empty()
-            {
+        for entry in &manifest.files {
+            if !clean_files.contains(&entry.rel_path) || entry.callable_throws_fragment.is_empty() {
                 continue;
             }
-            let full = root.join(&unit.source_file);
+            let full = root.join(&entry.rel_path);
             let Some(sf) = db.get_file(&full) else {
                 continue; // file removed — never seeded
             };
             let honest =
-                baml_db::baml_compiler2_tir::package_interface::file_callable_throws_fragment(
+                baml_db::baml_compiler2_hir_ty::package_interface::file_callable_throws_fragment(
                     db, sf,
                 );
             let honest_bytes = borsh::to_vec(honest).map_err(|e| {
                 anyhow::anyhow!(
                     "honest interface fragment for `{}` failed to serialize: {e}",
-                    unit.source_file
+                    entry.rel_path
                 )
             })?;
-            if honest_bytes != unit.callable_throws_fragment {
+            if honest_bytes != entry.callable_throws_fragment {
                 anyhow::bail!(
                     "BAML_CACHE_VERIFY: cached interface fragment for `{}` differs from a fresh \
                      derivation ({} cached vs {} fresh bytes). A clean file's stored fragment is \
                      a stale substitute — the throws-taint closure failed to dirty a file whose \
                      `callable_throws` changed, so the seeded value would be \
                      wrong. Please report this.",
-                    unit.source_file,
-                    unit.callable_throws_fragment.len(),
+                    entry.rel_path,
+                    entry.callable_throws_fragment.len(),
                     honest_bytes.len(),
                 );
             }
@@ -2151,29 +2249,42 @@ impl CacheContext {
             }
         }
 
-        // (2) Served `callable_throws` fragment vs an honest derivation. An
-        // empty fragment seeds nothing, so there is no served artifact to check.
-        if let Some(unit) = plan.prev_units.iter().find(|u| u.source_file == rel)
-            && !unit.callable_throws_fragment.is_empty()
+        // (2) Served `callable_throws` fragment vs an honest derivation. The
+        // served copy is the manifest-resident blob (what the seeds project
+        // from); an empty fragment seeds nothing, so there is no served
+        // artifact to check.
+        if let Some(fragment) = plan.clean_fragments.get(rel)
+            && !fragment.is_empty()
         {
             let honest =
-                baml_db::baml_compiler2_tir::package_interface::file_callable_throws_fragment(
+                baml_db::baml_compiler2_hir_ty::package_interface::file_callable_throws_fragment(
                     honest_db, sf,
                 );
             let honest_bytes = borsh::to_vec(honest)?;
-            if honest_bytes != unit.callable_throws_fragment {
+            if honest_bytes != *fragment {
                 anyhow::bail!(
                     "BAML_CACHE_SAMPLED_VERIFY: the incremental cache served a STALE \
                      callable-throws seed for `{rel}` ({} served vs {} honest bytes). This is a \
                      cache-soundness bug — a warm build would infer different throws than a clean \
                      one. Re-run with BAML_CACHE_VERIFY=1 for the full compare and please report \
                      this (file `{rel}`, artifact: callable-throws fragment).",
-                    unit.callable_throws_fragment.len(),
+                    fragment.len(),
                     honest_bytes.len(),
                 );
             }
         }
         Ok(())
+    }
+
+    /// Install the immutable stdlib typed-interface seed (a per-toolchain
+    /// build constant). Returns whether the seed was served; gated off under
+    /// `BAML_CACHE_VERIFY` so the oracle exercises the honest path.
+    pub(crate) fn seed_stdlib_interface(&self, db: &mut ProjectDatabase) -> bool {
+        !Self::verify_enabled()
+            && self
+                .load_stdlib_interface()
+                .map(|by_package| db.set_seeded_stdlib_interface(by_package))
+                .is_some()
     }
 
     /// Test hook: overwrite one file's cached diagnostics with an empty blob,
@@ -2232,12 +2343,16 @@ impl CacheContext {
             .cache
             .load_unit_shared(&CacheKey::from_bytes(entry.unit_key))
             .expect("unit present");
-        unit.callable_throws_fragment = fragment;
+        unit.callable_throws_fragment = fragment.clone();
         let (key, _) = self
             .cache
             .store_unit_shared(&unit)
             .expect("poisoned unit stored");
         entry.unit_key = *key.as_bytes();
+        // The manifest carries its own verbatim fragment copy (the one seeds
+        // project from) — poison it too so the drift is observable on the
+        // served artifact, matching what a real store-path bug would produce.
+        entry.callable_throws_fragment = fragment;
         let payload = borsh::to_vec(&manifest).expect("manifest serializes");
         self.cache
             .store_raw(&self.manifest_key, &payload)
@@ -3158,7 +3273,7 @@ mod tests {
         // function still infers. If either key format drifted (rel vs abs, a
         // separator change) the seed would silently never apply and this fails.
         use baml_compiler2_hir::loc::FunctionLoc;
-        use baml_db::baml_compiler2_tir::callable::callable_throws;
+        use baml_db::baml_compiler2_hir_ty::callable::callable_throws;
 
         let mut db = build_db(&[(
             "a.baml",
@@ -3168,13 +3283,13 @@ mod tests {
         )]);
         let file = file_named(&db, "a.baml");
         let (f_id, g_id) = {
-            let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
+            use baml_compiler2_ppir::item_data::{file_functions, function_data};
             let mut f_id = None;
             let mut g_id = None;
-            for (lid, func) in &item_tree.functions {
-                match func.name.as_str() {
-                    "f" => f_id = Some(*lid),
-                    "g" => g_id = Some(*lid),
+            for &loc in file_functions(&db, file) {
+                match function_data(&db, loc).name.as_str() {
+                    "f" => f_id = Some(loc.id(&db)),
+                    "g" => g_id = Some(loc.id(&db)),
                     _ => {}
                 }
             }
@@ -3187,8 +3302,8 @@ mod tests {
             let f_loc = FunctionLoc::new(&db, file, f_id);
             let g_loc = FunctionLoc::new(&db, file, g_id);
             (
-                callable_throws(&db, f_loc).clone(),
-                callable_throws(&db, g_loc).clone(),
+                callable_throws(&db, f_loc).0.clone(),
+                callable_throws(&db, g_loc).0.clone(),
             )
         };
         assert_ne!(
@@ -3207,12 +3322,12 @@ mod tests {
         let f_loc = FunctionLoc::new(&db, file, f_id);
         let g_loc = FunctionLoc::new(&db, file, g_id);
         assert_eq!(
-            *callable_throws(&db, f_loc),
+            callable_throws(&db, f_loc).0,
             g_throws,
             "the seed must short-circuit: f returns the path-keyed seeded value"
         );
         assert_eq!(
-            *callable_throws(&db, g_loc),
+            callable_throws(&db, g_loc).0,
             g_throws,
             "an unseeded function still infers honestly"
         );
@@ -3365,9 +3480,9 @@ mod tests {
                 _ => None,
             })
             .expect("stable function");
-        stable_fn.throws_type = Some(baml_type::RuntimeTy::String {
+        stable_fn.throws_type = baml_type::TyTemplate::String {
             attr: baml_type::TyAttr::default(),
-        });
+        };
 
         let prepared = prepare_reuse_plan(&mut db2, Some(plan))
             .expect("the unaffected clean unit remains reusable");
@@ -3448,6 +3563,16 @@ mod tests {
             ("b.baml", "function b() -> int {\n  2\n}\n"),
             ("c.baml", "function c() -> int {\n  3\n}\n"),
         ];
+        // The second compile edits c.baml: unit validation (and hence missing-
+        // unit degradation) runs only when the partition has a delta — a
+        // no-delta invocation serves entirely from the manifest and never
+        // opens unit payloads (a missing unit there surfaces later as the
+        // relink fallback to a full compile).
+        let edited = [
+            ("a.baml", "function a() -> int {\n  1\n}\n"),
+            ("b.baml", "function b() -> int {\n  2\n}\n"),
+            ("c.baml", "function c() -> int {\n  3 + 0\n}\n"),
+        ];
         let root = bc_root();
         let (_db1, ctx1) = compile_and_store_v1(&root, &files);
 
@@ -3474,23 +3599,24 @@ mod tests {
             .join(format!("{hex}.bexc"));
         std::fs::remove_file(missing_path).expect("remove b unit");
 
-        let r = resolved(&root, &files);
+        let r = resolved(&root, &edited);
         let mut db2 = crate::project_load::build_db_from_sources(&r, |_| {});
         let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
         let pending = ctx2.plan_reuse(&db2).expect("partial reuse survives");
         let dirty = dirty_basenames(&pending.dirty_files, &db2);
-        assert_eq!(dirty, HashSet::from(["b.baml".to_string()]));
         assert_eq!(
-            pending.clean_files,
-            HashSet::from(["a.baml".to_string(), "c.baml".to_string()])
+            dirty,
+            HashSet::from(["b.baml".to_string(), "c.baml".to_string()])
         );
+        assert_eq!(pending.clean_files, HashSet::from(["a.baml".to_string()]));
 
         let plan = prepare_reuse_plan(&mut db2, Some(pending)).expect("reuse plan");
         let _ = baml_db::baml_compiler2_emit::take_lowered_files();
         let relinked =
             compile_program(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("incremental compile");
-        let lowered = baml_db::baml_compiler2_emit::take_lowered_files();
-        assert_eq!(lowered, vec!["b.baml".to_string()]);
+        let mut lowered = baml_db::baml_compiler2_emit::take_lowered_files();
+        lowered.sort();
+        assert_eq!(lowered, vec!["b.baml".to_string(), "c.baml".to_string()]);
 
         let honest_db = crate::project_load::build_db_from_sources(&r, |_| {});
         let full = compile_program(&honest_db, &opts(), Some(&ctx2), None).expect("full compile");
@@ -3601,9 +3727,8 @@ mod tests {
         use baml_db::{
             Name,
             baml_compiler2_hir::package::PackageId,
-            baml_compiler2_tir::{
-                package_interface::{PackageInterface, package_interface},
-                throw_inference::FunctionThrowSets,
+            baml_compiler2_hir_ty::package_interface::{
+                FunctionThrowSets, PackageInterface, package_interface,
             },
         };
 
@@ -3654,18 +3779,20 @@ mod tests {
                 CachedLegacyTest {
                     function_name: "Greet".to_string(),
                     test_name: "hello".to_string(),
+                    canonical_id: "root.Greet::hello".to_string(),
                     file_path: "greet.baml".to_string(),
                 },
                 CachedLegacyTest {
                     function_name: "Greet".to_string(),
                     test_name: "world".to_string(),
+                    canonical_id: "root.Greet::world".to_string(),
                     file_path: "greet.baml".to_string(),
                 },
             ],
             testset_leaf_names: vec![
-                "suite/one".to_string(),
-                "suite/two".to_string(),
-                "nested/inner/leaf".to_string(),
+                "root::suite::one".to_string(),
+                "root::suite::two".to_string(),
+                "root::nested::inner::leaf".to_string(),
             ],
         }
     }
@@ -3750,7 +3877,7 @@ mod tests {
         // A drifted testset leaf set (e.g. a nondeterministic generator) bails.
         let cached = sample_discovery();
         let mut honest = sample_discovery();
-        honest.testset_leaf_names[0] = "suite/one-CHANGED".to_string();
+        honest.testset_leaf_names[0] = "root::suite::one-CHANGED".to_string();
         let err = CacheContext::compare_test_discovery(&cached, &honest)
             .expect_err("a testset-list mismatch must bail");
         assert!(
@@ -3888,17 +4015,17 @@ mod tests {
         let Some((root, ctx, mut plan, honest)) = sampled_setup(&files) else {
             return;
         };
-        // Corrupt a.baml's served callable-throws fragment; honest bytes differ.
-        let unit = plan
-            .prev_units
-            .iter_mut()
-            .find(|u| u.source_file == "a.baml")
-            .expect("a.baml unit present in the reuse plan");
+        // Corrupt a.baml's served callable-throws fragment (the manifest-
+        // resident copy the seeds project from); honest bytes differ.
+        let fragment = plan
+            .clean_fragments
+            .get_mut("a.baml")
+            .expect("a.baml fragment present in the reuse plan");
         assert!(
-            !unit.callable_throws_fragment.is_empty(),
+            !fragment.is_empty(),
             "a plain function must carry a non-empty fragment for this test to bite"
         );
-        unit.callable_throws_fragment = vec![0xde, 0xad, 0xbe, 0xef];
+        *fragment = vec![0xde, 0xad, 0xbe, 0xef];
         let err = ctx
             .verify_sampled_artifact(&honest, &plan, "a.baml")
             .expect_err("a stale served fragment must hard-error");

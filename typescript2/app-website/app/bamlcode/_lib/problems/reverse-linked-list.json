@@ -1,0 +1,18 @@
+{
+  "slug": "reverse-linked-list",
+  "id": 206,
+  "title": "Reverse Linked List",
+  "difficulty": "Easy",
+  "category": "Linked List",
+  "statement": "Given the `head` of a singly linked list, reverse the list and return its new head.\n\nA node is `ListNode { val int  next ListNode? }` (an empty list is `null`).\n\n**Example**\n\n```\n1 -> 2 -> 3 -> 4 -> 5   =>   5 -> 4 -> 3 -> 2 -> 1\n```",
+  "signature": "function ReverseList(head: ListNode?) -> ListNode?",
+  "prelude": "class ListNode {\n  val int\n  next ListNode?\n}",
+  "starter": "function ReverseList(head: ListNode?) -> ListNode? {\n  // Reverse the singly linked list and return the new head.\n  return head;\n}",
+  "solution": "function ReverseHelper(cur: ListNode?, prev: ListNode?) -> ListNode? {\n  if (cur == null) {\n    return prev;\n  }\n  return ReverseHelper(cur.next, ListNode { val: cur.val, next: prev });\n}\n\nfunction ReverseList(head: ListNode?) -> ListNode? {\n  return ReverseHelper(head, null);\n}",
+  "tests": [
+    { "call": "ReverseList(ListNode { val: 1, next: ListNode { val: 2, next: ListNode { val: 3, next: null } } })", "expected": "ListNode { val: 3, next: ListNode { val: 2, next: ListNode { val: 1, next: null } } }" },
+    { "call": "ReverseList(ListNode { val: 1, next: ListNode { val: 2, next: null } })", "expected": "ListNode { val: 2, next: ListNode { val: 1, next: null } }" },
+    { "call": "ReverseList(null)", "expected": "null" },
+    { "call": "ReverseList(ListNode { val: 5, next: null })", "expected": "ListNode { val: 5, next: null }", "hidden": true }
+  ]
+}

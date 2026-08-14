@@ -8,6 +8,7 @@
 // test.sh / run_test_cmd need.
 
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <string>
 #include <utility>
@@ -15,37 +16,50 @@
 
 namespace baml_test {
 
-struct Case {
+struct test_case {
   const char* name;
   void (*fn)();
 };
 
-inline std::vector<Case>& Registry() {
-  static std::vector<Case> cases;
+inline std::vector<test_case>& registry() {
+  static std::vector<test_case> cases;
   return cases;
 }
 
-struct Register {
-  Register(const char* name, void (*fn)()) {
-    Registry().push_back(Case{name, fn});
+inline const char*& executable_path_storage() {
+  static const char* path = nullptr;
+  return path;
+}
+
+inline const char* executable_path() { return executable_path_storage(); }
+
+struct registrar {
+  registrar(const char* name, void (*fn)()) {
+    registry().push_back(test_case{name, fn});
   }
 };
 
-struct Failure {
+struct failure {
   std::string message;
 };
 
-[[noreturn]] inline void Fail(std::string message) {
-  throw Failure{std::move(message)};
+[[noreturn]] inline void fail(std::string message) {
+  throw failure{std::move(message)};
 }
 
-inline int RunAll() {
+inline int run_all() {
   int failed = 0;
-  for (const Case& c : Registry()) {
+  std::size_t ran = 0;
+  const char* filter = std::getenv("BAML_TEST_FILTER");
+  for (const test_case& c : registry()) {
+    if (filter != nullptr && std::string(c.name) != filter) {
+      continue;
+    }
+    ++ran;
     try {
       c.fn();
       std::printf("PASS %s\n", c.name);
-    } catch (const Failure& f) {
+    } catch (const failure& f) {
       std::printf("FAIL %s: %s\n", c.name, f.message.c_str());
       ++failed;
     } catch (const std::exception& e) {
@@ -56,16 +70,20 @@ inline int RunAll() {
       ++failed;
     }
   }
-  std::printf("%zu tests, %d failed\n", Registry().size(), failed);
+  if (filter != nullptr && ran == 0) {
+    std::printf("FAIL no test matched %s\n", filter);
+    ++failed;
+  }
+  std::printf("%zu tests, %d failed\n", ran, failed);
   return failed == 0 ? 0 : 1;
 }
 
 }  // namespace baml_test
 
-#define BAML_TEST(name)                                                      \
-  static void baml_test_case_##name();                                       \
-  static ::baml_test::Register baml_test_reg_##name{#name,                   \
-                                                    &baml_test_case_##name}; \
+#define BAML_TEST(name)                                                       \
+  static void baml_test_case_##name();                                        \
+  static ::baml_test::registrar baml_test_reg_##name{#name,                   \
+                                                     &baml_test_case_##name}; \
   static void baml_test_case_##name()
 
 #define BAML_STRINGIZE_INNER(x) #x
@@ -74,7 +92,7 @@ inline int RunAll() {
 #define BAML_ASSERT(cond)                                        \
   do {                                                           \
     if (!(cond)) {                                               \
-      ::baml_test::Fail(std::string(__FILE__ ":" BAML_STRINGIZE( \
+      ::baml_test::fail(std::string(__FILE__ ":" BAML_STRINGIZE( \
                             __LINE__) ": assertion failed: ") +  \
                         #cond);                                  \
     }                                                            \
@@ -83,13 +101,17 @@ inline int RunAll() {
 #define BAML_ASSERT_EQ(lhs, rhs)                                 \
   do {                                                           \
     if (!((lhs) == (rhs))) {                                     \
-      ::baml_test::Fail(std::string(__FILE__ ":" BAML_STRINGIZE( \
+      ::baml_test::fail(std::string(__FILE__ ":" BAML_STRINGIZE( \
                             __LINE__) ": assertion failed: ") +  \
                         #lhs " == " #rhs);                       \
     }                                                            \
   } while (0)
 
-#define BAML_TEST_MAIN() \
-  int main() { return ::baml_test::RunAll(); }
+#define BAML_TEST_MAIN()                              \
+  int main(int argc, char** argv) {                   \
+    (void)argc;                                       \
+    ::baml_test::executable_path_storage() = argv[0]; \
+    return ::baml_test::run_all();                    \
+  }
 
 #endif  // BAML_TEST_H_

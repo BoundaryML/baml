@@ -224,7 +224,12 @@ pub(crate) fn collect_diagnostic_candidate(guard: &SourceGuard<'_>) -> Diagnosti
     let mut documents = Vec::new();
     let mut has_errors = false;
 
-    for file in &source_files {
+    // Check across worker threads (input order preserved, so per-file zip is
+    // sound). This runs under the held source guard, so no mutation can race
+    // the cloned worker handles; the guard is the same exclusion the serial
+    // loop relied on.
+    let per_file = baml_project::check_files_parallel(db, &source_files);
+    for (file, diagnostics) in source_files.iter().zip(per_file) {
         let file_id = file.file_id(db);
         let Some(path) = db.file_id_to_path(file_id).cloned() else {
             continue;
@@ -232,7 +237,6 @@ pub(crate) fn collect_diagnostic_candidate(guard: &SourceGuard<'_>) -> Diagnosti
         let text = file.text(db).clone();
         file_texts.insert(file_id, (path.clone(), text));
 
-        let diagnostics = baml_lsp2_actions::check_file(db, *file);
         has_errors |= diagnostics
             .iter()
             .any(|d| d.severity == baml_compiler_diagnostics::Severity::Error);
@@ -241,6 +245,34 @@ pub(crate) fn collect_diagnostic_candidate(guard: &SourceGuard<'_>) -> Diagnosti
             path,
             diagnostics,
         });
+    }
+
+    // Package-level diagnostics (cross-file name conflicts and namespace
+    // shadows) come from `package_items`, not `check_file`, so the per-file
+    // sweep above misses them: without this the candidate under-reports
+    // errors relative to `get_bytecode`'s gate, and cross-file conflicts
+    // never reach the editor at all. Bucket each onto its primary-span
+    // file's document; only user-file spans count toward `has_errors`
+    // (matching the gate's filter).
+    let package_diags = baml_project::collect_package_level_diagnostics(db);
+    if !package_diags.is_empty() {
+        let doc_index: HashMap<std::path::PathBuf, usize> = documents
+            .iter()
+            .enumerate()
+            .map(|(idx, doc)| (doc.path.clone(), idx))
+            .collect();
+        for diag in package_diags {
+            let Some(span) = diag.primary_span() else {
+                continue;
+            };
+            let Some((path, _)) = file_texts.get(&span.file_id) else {
+                continue;
+            };
+            has_errors |= diag.severity == baml_compiler_diagnostics::Severity::Error;
+            if let Some(&idx) = doc_index.get(path) {
+                documents[idx].diagnostics.push(diag);
+            }
+        }
     }
 
     DiagnosticCandidate {
@@ -806,7 +838,10 @@ impl BexProject {
         if diagnostics.has_errors {
             return CompilationOutcome::BlockedByDiagnostics(diagnostics);
         }
-        match guard.db().get_bytecode() {
+        // The candidate above is a full-project check (per-file sweep plus
+        // package-level diagnostics), so `get_bytecode`'s error gate would
+        // re-derive exactly what `has_errors` just proved — skip it.
+        match guard.db().get_bytecode_unchecked() {
             Ok(program) => CompilationOutcome::Ready(
                 Box::new(CompiledCandidate {
                     source_revision: guard.revision(),
@@ -848,6 +883,15 @@ impl BexProject {
             Vec::new(),
         )
         .map_err(RuntimeError::Engine)?;
+        engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
+            let cancelled = error.cancelled;
+            let error = error.into_engine_error();
+            if cancelled {
+                log::warn!("cancelled spawned task failed: {error}");
+            } else {
+                log::error!("unhandled spawned task failed: {error}");
+            }
+        })));
         Ok(EngineCandidate {
             source_revision: compiled.source_revision,
             engine,
@@ -894,26 +938,37 @@ impl BexProject {
         candidate.engine.activate_profiling();
         let engine = Arc::new(candidate.engine);
 
-        let receipt = {
+        let (receipt, retired_engine) = {
             let mut runtime = self.lock_runtime()?;
             let generation = runtime.next_generation;
             runtime.next_generation += 1;
-            runtime.installed = Some(InstalledEngine {
-                source_revision: candidate.source_revision,
-                generation,
-                engine,
-            });
+            let retired_engine = runtime
+                .installed
+                .replace(InstalledEngine {
+                    source_revision: candidate.source_revision,
+                    generation,
+                    engine,
+                })
+                .map(|installed| installed.engine);
             // Derived work bound to the previous engine is superseded; the
             // registry is cleared atomically with the engine swap.
             runtime.supersede_derived();
             runtime.collection_epoch += 1;
             runtime.registry = None;
-            CommitReceipt {
-                source_revision: candidate.source_revision,
-                generation,
-            }
+            (
+                CommitReceipt {
+                    source_revision: candidate.source_revision,
+                    generation,
+                },
+                retired_engine,
+            )
         };
         drop(source);
+        if let Some(engine) = retired_engine {
+            crate::BackgroundSpawner::new().spawn(async move {
+                engine.shutdown().await;
+            });
+        }
         Ok(CommitOutcome::Committed(receipt))
     }
 
@@ -1014,6 +1069,22 @@ impl BexProject {
             .ok()
             .and_then(|rt| rt.installed.as_ref().map(|i| i.generation))
             .unwrap_or(0)
+    }
+
+    /// Runtime status for a source revision already captured under a caller's
+    /// source lease. This avoids re-locking the source gate while that lease
+    /// is held.
+    pub(crate) fn runtime_status_for_source(&self, source_revision: SourceRevision) -> (bool, u64) {
+        let Ok(runtime) = self.lock_runtime() else {
+            return (false, 0);
+        };
+        let Some(installed) = runtime.installed.as_ref() else {
+            return (false, 0);
+        };
+        (
+            installed.source_revision == source_revision,
+            installed.generation,
+        )
     }
 
     /// Latest installed engine regardless of currentness (playground render

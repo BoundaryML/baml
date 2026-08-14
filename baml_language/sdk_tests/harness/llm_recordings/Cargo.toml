@@ -8,9 +8,10 @@
 # Neither sibling harness crate can host this: `sdk_test_harness_setup` is
 # `[build-dependencies]`-only codegen and `sdk_test_harness_runner` is
 # deliberately std-only. The recorder needs the engine (to invoke the
-# `$build_request_stream` companion) + insta + the network, so it is its own
-# crate. It is also generator-agnostic (recordings feed both the Python and TS
-# replay tests), so it does not belong inside a per-generator crate.
+# fixture request helper backed by the native-BAML provider lowering) + insta
+# + the network, so it is its own crate. It is also generator-agnostic
+# (recordings feed both the Python and TS replay tests), so it does not belong
+# inside a per-generator crate.
 #
 # Package named `sdk_test_*` so cargo-stow's `ignore_crates = ["sdk_test_*"]`
 # rule (baml_language/stow.toml) covers it; the folder name stays short.

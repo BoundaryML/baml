@@ -2,39 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.test_generic_capture(box: Box<User>) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Box<User> // box // param [captured]
-    let _2: () -> string throws never // get_name
-    let _3: () -> string throws never
-
-    bb0: {
-        _2 = make_closure lambda[0](copy _1);
-        _3 = copy _2;
-        _0 = call copy _3() -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(test_generic_capture, 0)>() -> null {
-    // Locals:
-    let _0: null // _0 // return
-
-    bb0: {
-        _0 = copy capture[0].0.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_generic_chain(box: Box<User>) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -57,6 +24,39 @@ fn user.test_nested_generic_chain(box: Box<Box<User>>) -> string {
 
     bb0: {
         _0 = copy _1.0.0.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_generic_capture(box: Box<User>) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Box<User> // box // param [captured]
+    let _2: () -> string throws never // get_name
+    let _3: () -> string throws never
+
+    bb0: {
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_generic_capture, 0)>() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = copy capture[0].0.0;
         goto -> bb1;
     }
 

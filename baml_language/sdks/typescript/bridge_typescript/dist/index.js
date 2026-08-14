@@ -10,7 +10,8 @@ import { BamlRuntime, Collector as NativeCollector, cancelFunctionCall as native
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
-export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents, } from './native.js';
+import { attachCallContext } from './call_context.js';
+export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, flushEvents, } from './native.js';
 export { Timing, Usage } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
@@ -39,24 +40,17 @@ export function initializeRuntime(srcDir, files) {
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function initializeRuntimeFromBytecode(bytecode) {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode));
+export function initializeRuntimeFromBytecode(bytecode, embeddedBamlToml) {
+    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
 }
-export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
+export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export function newFunctionCall() {
     return BigInt(nativeNewFunctionCall());
 }
 export function cancelFunctionCall(callId) {
     return nativeCancelFunctionCall(callId.toString());
 }
-function attachCallContext(ctx, callId) {
-    ctx?._attachCallId(callId.toString());
-    return {
-        detach() {
-            ctx?._detachCallId(callId.toString());
-        },
-    };
-}
+import './unhandled_spawn.js';
 export class FunctionResult {
     _value;
     constructor(value) {
@@ -115,7 +109,7 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, call
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId });
+    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -123,21 +117,23 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, call
     // decoder's throws (`BamlError`/`BamlPanic`, *or* a re-raised
     // original JS exception from the host-callable rehydration path)
     // already carry the right type and must propagate by identity.
-    let resultBytes;
     try {
-        resultBytes = rt.callFunctionSync(functionName, argsProto, ctx ?? null, nativeCollectors);
-    }
-    catch (err) {
-        throw wrapNativeError(err);
+        let resultBytes;
+        try {
+            resultBytes = rt.callFunctionSync(argsProto, ctx ?? null, nativeCollectors);
+        }
+        catch (err) {
+            throw wrapNativeError(err);
+        }
+        return new FunctionResult(decodeCallResult(resultBytes));
     }
     finally {
         callCtxBinding.detach();
     }
-    return new FunctionResult(decodeCallResult(resultBytes));
 }
 export async function callFunction(rt, functionName, kwargs, ctx, collectors, callCtx) {
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { callId });
+    const argsProto = encodeCallArgs(kwargs, { callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -145,17 +141,19 @@ export async function callFunction(rt, functionName, kwargs, ctx, collectors, ca
     // decoder's throws (`BamlError`/`BamlPanic`, *or* a re-raised
     // original JS exception from the host-callable rehydration path)
     // already carry the right type and must propagate by identity.
-    let resultBytes;
     try {
-        resultBytes = await rt.callFunction(functionName, argsProto, ctx ?? null, nativeCollectors);
-    }
-    catch (err) {
-        throw wrapNativeError(err);
+        let resultBytes;
+        try {
+            resultBytes = await rt.callFunction(argsProto, ctx ?? null, nativeCollectors);
+        }
+        catch (err) {
+            throw wrapNativeError(err);
+        }
+        return new FunctionResult(decodeCallResult(resultBytes));
     }
     finally {
         callCtxBinding.detach();
     }
-    return new FunctionResult(decodeCallResult(resultBytes));
 }
 // Register flush on process exit (single registration; see exit_hook.ts).
 installFlushOnExit();

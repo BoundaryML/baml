@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/* The two languages' colours. Everything else is Tailwind's palette; these
+   are data, not decoration, so they get names.
+
+   JavaScript yellow rather than TypeScript blue: at equal lightness the blue
+   sat a step away from BAML's purple on the hue wheel, and the striped
+   both-sides swatch — which is the two of them interleaved at 4px — read as one
+   muddy colour rather than as two languages.
+
+   Yellow is light enough that a hollow square outlined in it disappears against
+   white, so the unjudged swatch borrows a darker edge. Its fill is the yellow;
+   only the outline is darkened, which keeps the state legible without
+   introducing a third colour. */
+@theme {
+  --color-baml: oklch(0.62 0.19 300);
+  --color-ts: oklch(0.89 0.18 101);
+  --color-ts-edge: oklch(0.68 0.14 95);
+  --color-unnecessary: oklch(0.58 0.21 25);
+}
+
+/* Presence swatches encode which side a member exists on. The both-sides case
+   needs a gradient, which is not worth spelling as an arbitrary-value utility
+   at every call site. */
+@utility swatch-* {
+  border: 1px solid --alpha(var(--color-black) / 25%);
+  border-radius: 3px;
+}
+
+/* A type reference navigates like an editor's go-to-definition: modifier-held.
+   The link styling appears only while the modifier is down, because that is the
+   only time clicking one does anything — a plain click belongs to the row. */
+.type-ref {
+  color: inherit;
+  text-decoration: none;
+}
+.mod-held .type-ref:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Where a reference just landed. Fades rather than persists: it answers "which
+   row" at the moment of arrival, and after that it would only be clutter. */
+@keyframes goto-flash {
+  from {
+    background-color: oklch(0.85 0.16 85 / 40%);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.goto-flash {
+  animation: goto-flash 1.4s ease-out;
+}
+
+/* The squares are named for their ink, not for their meaning: the same fill
+   says different things from the two sides, and the component is what maps one
+   to the other.
+
+   A solid square is one language. Which language it names depends on where you
+   are standing — from the TypeScript view a purple square means "this is in
+   BAML too", and a yellow one means "this is TypeScript's alone" — so the
+   viewing side never paints its own colour on a symbol that exists in both. */
+.swatch-baml {
+  background: var(--color-baml);
+}
+.swatch-ts {
+  background: var(--color-ts);
+}
+
+/* Both languages, interleaved: the same operation reached differently. Stripes
+   rather than a single split, because a split reads as a boundary between two
+   halves and this is not two halves of anything — it is one operation you can
+   reach from either side by different routes. */
+.swatch-striped {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-baml) 0 4px,
+    var(--color-ts) 4px 8px
+  );
+}
+
+/* Neither language's colour, because this is not a fact about either surface:
+   BAML answers the question in the language, so the API does not arise.
+   `Array.isArray` is not missing — `foo is int[]` is how you ask. */
+.swatch-unnecessary {
+  background: var(--color-unnecessary);
+}
+
+/* Nothing has looked at it yet. Hollow rather than pale — an empty square reads
+   as an open question, where a faded one reads as a weaker version of an
+   answer. */
+.swatch-unjudged-baml {
+  background: transparent;
+  border-color: var(--color-baml);
+}
+.swatch-unjudged-ts {
+  background: transparent;
+  border-color: var(--color-ts-edge);
+}
+
+/* Segments of a group's composition bar: the same vocabulary as the swatches,
+   without the border and radius an 8px slice cannot carry. Stripes are finer
+   here than on a swatch, because the slice is half the height. */
+.seg-baml {
+  background: var(--color-baml);
+}
+.seg-ts {
+  background: var(--color-ts);
+}
+.seg-striped {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-baml) 0 3px,
+    var(--color-ts) 3px 6px
+  );
+}
+.seg-unnecessary {
+  background: var(--color-unnecessary);
+}
+/* Unanswered, in neither language's colour: the bar's one neutral, so that a
+   mostly-unjudged module reads as mostly empty at a glance. */
+.seg-unjudged {
+  background: --alpha(var(--color-zinc-500) / 22%);
+}

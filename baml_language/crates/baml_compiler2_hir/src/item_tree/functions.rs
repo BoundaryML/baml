@@ -2,7 +2,10 @@ use baml_base::Name;
 use baml_compiler2_ast::ast;
 use text_size::TextRange;
 
-use crate::ids::{FunctionMarker, LocalItemId};
+use crate::{
+    ids::{FunctionMarker, LocalItemId},
+    item_tree::GenericParam,
+};
 
 /// Full function data stored in the `ItemTree`.
 /// Params and return type are stored for signature queries.
@@ -10,13 +13,9 @@ use crate::ids::{FunctionMarker, LocalItemId};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     pub name: Name,
-    /// Generic type parameters (e.g., `["T", "U"]`).
+    /// Generic type parameters (e.g., `["T", "U"]`), each with its bounds.
     /// Empty for non-generic functions.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`. `Some(te)`
-    /// means the parameter at the matching index was declared with
-    /// `T extends <te>`; `None` means unbounded.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     /// Function parameters with optional type annotations and spans.
     pub params: Vec<FunctionParam>,
     /// Function parameter default expression arena.
@@ -29,7 +28,7 @@ pub struct Function {
     pub body: Option<ast::FunctionBodyDef>,
     /// Declarative metadata, if this function was declared with declarative syntax.
     pub declarative_meta: Option<ast::DeclarativeMeta>,
-    pub origin: ast::FunctionOrigin,
+    pub metadata: ast::FunctionMetadata,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
     /// BEP-049 §10: set when the fn def had a `//baml:tagged_string` marker.

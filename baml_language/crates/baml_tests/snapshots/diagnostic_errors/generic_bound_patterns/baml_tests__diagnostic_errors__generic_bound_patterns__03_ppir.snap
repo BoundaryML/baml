@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.DeadPair {
+  a: A
+  b: B
+}
+class user.DeadPair$stream {
+  a: A | null
+  b: B | null
+}
+function user.dead_bounded(x: string | int) -> string  [expr] {
+  {  } match (x) { t: T => "T", _ => "other" }
+}
+function user.dead_inconsistent(x: user.DeadPair<int, string>) -> string  [expr] {
+  {  } match (x) { p: user.DeadPair<T, T> => "pair", _ => "other" }
+}
+function user.tag(self: ?) -> string  [missing]

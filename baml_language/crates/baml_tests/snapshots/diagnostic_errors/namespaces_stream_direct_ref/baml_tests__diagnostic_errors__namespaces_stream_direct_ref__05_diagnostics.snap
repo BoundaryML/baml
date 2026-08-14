@@ -2,42 +2,42 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected string, got string | null
-    ╭─[ main.baml:21:5 ]
-    │
- 21 │     c.key
-    │     ──┬──  
-    │       ╰──── type mismatch: expected string, got string | null
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: type mismatch: expected string, got string | null
-    ╭─[ main.baml:26:5 ]
-    │
- 26 │     r.text
-    │     ───┬──  
-    │        ╰──── type mismatch: expected string, got string | null
-    │ 
-    │ Note: Error code: E0001
-────╯
+  × mismatched types
+    ╭─[main.baml:20:56]
+ 20 │ ╭─▶ function RootUsesOwnStream(c: Config$stream) -> string {
+ 21 │ │       c.key
+ 22 │ ├─▶ }
+    · ╰──── expected `string`, found `string | null`
+    ╰────
 
-  [type] error: type mismatch: expected string, got string | null
-    ╭─[ models.baml:13:5 ]
-    │
- 13 │     r.text
-    │     ───┬──  
-    │        ╰──── type mismatch: expected string, got string | null
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: type mismatch: expected string, got string | null
-    ╭─[ models.baml:18:5 ]
-    │
- 18 │     c.key
-    │     ──┬──  
-    │       ╰──── type mismatch: expected string, got string | null
-    │ 
-    │ Note: Error code: E0001
-────╯
+  × mismatched types
+    ╭─[main.baml:25:67]
+ 25 │ ╭─▶ function RootUsesLlmStream(r: root.llm.Response$stream) -> string {
+ 26 │ │       r.text
+ 27 │ ├─▶ }
+    · ╰──── expected `string`, found `string | null`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[models.baml:12:57]
+ 12 │ ╭─▶ function LlmUsesOwnStream(r: Response$stream) -> string {
+ 13 │ │       r.text
+ 14 │ ├─▶ }
+    · ╰──── expected `string`, found `string | null`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[models.baml:17:61]
+ 17 │ ╭─▶ function LlmUsesRootStream(c: root.Config$stream) -> string {
+ 18 │ │       c.key
+ 19 │ ├─▶ }
+    · ╰──── expected `string`, found `string | null`
+    ╰────

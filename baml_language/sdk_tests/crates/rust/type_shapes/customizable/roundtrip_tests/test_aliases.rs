@@ -3,7 +3,7 @@
 use baml_sdk::aliases::round_trip_string_list;
 
 #[test]
-fn test_round_trip_string_list() {
+fn test_aliases_round_trip_string_list() {
     assert_eq!(
         round_trip_string_list(vec!["a".to_string(), "b".to_string()]).unwrap(),
         vec!["a".to_string(), "b".to_string()]
@@ -11,7 +11,7 @@ fn test_round_trip_string_list() {
 }
 
 #[test]
-fn test_round_trip_rec_list() {
+fn test_aliases_round_trip_rec_list() {
     // RecList = int | RecList[]
     //
     // DIVERGENCE(rust): `RecList` is a recursive *union* alias — unions have
@@ -29,7 +29,7 @@ fn test_round_trip_rec_list() {
 }
 
 #[test]
-fn test_round_trip_alias_container() {
+fn test_aliases_round_trip_alias_container() {
     // DIVERGENCE(rust): `AliasContainer.rec_field` is the recursive union
     // alias `RecList` (see above), so the struct cannot be constructed yet.
     // Intended body once unions and recursive aliases exist:

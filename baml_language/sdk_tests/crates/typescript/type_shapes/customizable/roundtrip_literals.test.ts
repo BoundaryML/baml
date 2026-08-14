@@ -18,7 +18,7 @@ import {
 } from "./baml_sdk/literals/index.js";
 
 describe("roundtrip literals", () => {
-  it("return_literals", () => {
+  it("literals_return_literals", () => {
     expect(return_literal42()).toBe(42);
     expect(return_literal_neg_one()).toBe(-1);
     expect(return_literal_draft()).toBe("draft");
@@ -26,15 +26,15 @@ describe("roundtrip literals", () => {
     expect(return_literal_true()).toBe(true);
     expect(return_literal_false()).toBe(false);
   });
-  it("round_trip_literal42", () => expect(round_trip_literal42(42)).toBe(42));
-  it("round_trip_literal_draft", () =>
+  it("literals_round_trip_literal42", () => expect(round_trip_literal42(42)).toBe(42));
+  it("literals_round_trip_literal_draft", () =>
     expect(round_trip_literal_draft("draft")).toBe("draft"));
-  it("round_trip_literal_escaped", () =>
+  it("literals_round_trip_literal_escaped", () =>
     expect(round_trip_literal_escaped('has "quotes"')).toBe('has "quotes"'));
-  it("round_trip_literal_true", () => expect(round_trip_literal_true(true)).toBe(true));
-  it("round_trip_literal_false", () =>
+  it("literals_round_trip_literal_true", () => expect(round_trip_literal_true(true)).toBe(true));
+  it("literals_round_trip_literal_false", () =>
     expect(round_trip_literal_false(false)).toBe(false));
-  it("round_trip_literals", () => {
+  it("literals_round_trip_literals", () => {
     const lit = new Literals({
       literal_42: 42,
       literal_draft: "draft",

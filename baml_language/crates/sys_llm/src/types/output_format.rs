@@ -88,20 +88,6 @@ impl OutputFormatContent {
         self
     }
 
-    /// Mark a class as recursive (will be hoisted during rendering).
-    #[must_use]
-    pub fn with_recursive_class(mut self, name: String) -> Self {
-        self.recursive_classes.insert(name);
-        self
-    }
-
-    /// Add a recursive type alias (alias name → target type).
-    #[must_use]
-    pub fn with_recursive_type_alias(mut self, name: String, target: RuntimeTy) -> Self {
-        self.recursive_type_aliases.insert(name, target);
-        self
-    }
-
     /// Find an enum by name.
     pub fn find_enum(&self, name: &str) -> Option<&Enum> {
         self.enums.get(name)
@@ -585,11 +571,11 @@ impl OutputFormatContent {
             // them (`type`, or the fixed qualified name).
             RuntimeTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
             RuntimeTy::Resource { .. } => Err(RenderError::UnsupportedType(
-                "baml.llm.Resource".to_string(),
+                "baml.prompt.Resource".to_string(),
             )),
-            RuntimeTy::PromptAst { .. } => Err(RenderError::UnsupportedType(
-                "baml.llm.PromptAst".to_string(),
-            )),
+            RuntimeTy::PromptAst { .. } => {
+                Err(RenderError::UnsupportedType("ai.Prompt".to_string()))
+            }
 
             RuntimeTy::TypeAlias(fqn, _) => {
                 // Recursive type aliases render as just their display name

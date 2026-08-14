@@ -21,11 +21,11 @@
 /// }
 /// ```
 ///
-/// Note: `CompareError` is intentionally *not* defaulted. A defaulted associated
-/// type would be injected into a bare `T extends Comparable` bound as the
-/// concrete default, which then rejects any implementor that overrides it —
-/// so `MyError[].sort()` (a fallible comparator) would stop compiling. Leaving
-/// it undefaulted keeps the `Comparable` bound permissive over `CompareError`.
+/// Note: `CompareError` is intentionally *not* defaulted, so that every
+/// implementor states its error type outright. Defaulting it would be sound —
+/// a bare `T extends Comparable` bound pins nothing, so an implementor that
+/// overrides the default still satisfies the bound and its error type flows
+/// through — but a comparator's failure mode is worth writing down.
 interface Comparable {
   type CompareError
 
@@ -110,7 +110,7 @@ implements<T extends Comparable> Sortable for T[] {
 //baml:mut_vm
 //baml:may_yield
 function _compare_shim<T extends Comparable>(a: T, b: T) -> int throws T.CompareError {
-  $rust_function
+    $rust_function
 }
 
 // Floats order by IEEE 754 `totalOrder` (`f64::total_cmp`): a *total* order
@@ -134,7 +134,7 @@ implements Comparable for float {
 /// with the float comparator inside the native `_rust_sort`; not part of the
 /// public `Comparable`/`Sortable` surface.
 function _float_total_cmp(a: float, b: float) -> int throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Whether `arr` is a homogeneous primitive array (`int`/`bigint`/`string`/
@@ -149,7 +149,7 @@ function _float_total_cmp(a: float, b: float) -> int throws never {
 /// call path into a blanket impl.
 //baml:vm
 function _is_primitive_array<T extends Comparable>(arr: T[]) -> bool throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Sorts a primitive array (`int`/`bigint`/`string`/`float`) in place by its
@@ -170,5 +170,5 @@ function _is_primitive_array<T extends Comparable>(arr: T[]) -> bool throws neve
 //baml:mut_vm
 //baml:may_yield
 function _rust_sort<A>(arr: A) -> A throws never {
-  $rust_function
+    $rust_function
 }

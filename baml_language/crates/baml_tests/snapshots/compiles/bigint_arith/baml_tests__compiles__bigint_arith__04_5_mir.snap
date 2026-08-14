@@ -16,6 +16,62 @@ fn user.AddBigints() -> bigint {
     }
 }
 
+fn user.SubBigints() -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+
+    bb0: {
+        _0 = const 2n;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.MulBigints() -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+
+    bb0: {
+        _0 = const 6n;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DivBigints() -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+
+    bb0: {
+        _0 = const 3n;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ModBigints() -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+
+    bb0: {
+        _0 = const 1n;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.BitAndBigints() -> bigint {
     // Locals:
     let _0: bigint // _0 // return
@@ -58,48 +114,6 @@ fn user.BitXorBigints() -> bigint {
     }
 }
 
-fn user.DivBigints() -> bigint {
-    // Locals:
-    let _0: bigint // _0 // return
-
-    bb0: {
-        _0 = const 3n;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ModBigints() -> bigint {
-    // Locals:
-    let _0: bigint // _0 // return
-
-    bb0: {
-        _0 = const 1n;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.MulBigints() -> bigint {
-    // Locals:
-    let _0: bigint // _0 // return
-
-    bb0: {
-        _0 = const 6n;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.ShlBigints() -> bigint {
     // Locals:
     let _0: bigint // _0 // return
@@ -120,20 +134,6 @@ fn user.ShrBigints() -> bigint {
 
     bb0: {
         _0 = const 16n;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.SubBigints() -> bigint {
-    // Locals:
-    let _0: bigint // _0 // return
-
-    bb0: {
-        _0 = const 2n;
         goto -> bb1;
     }
 

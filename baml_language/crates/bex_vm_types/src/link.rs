@@ -697,15 +697,6 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     sort_packages(&mut program);
 
     // ---- Whole-program tails (design §3b step 5) ----------------------------
-    // Template macros are joined by newlines, in unit (file) order.
-    let mut macros: Vec<&str> = Vec::new();
-    for unit in units {
-        for m in &unit.template_macros {
-            macros.push(m.as_str());
-        }
-    }
-    program.template_strings_macros = macros.join("\n");
-
     for unit in units {
         program.test_cases.extend(unit.test_cases.iter().cloned());
     }
@@ -778,6 +769,7 @@ fn merge_package_fragment(
                 interface_args: rule.interface_args.clone(),
                 interface_assoc: rule.interface_assoc.clone(),
                 methods,
+                field_links: rule.field_links.clone(),
             });
         }
         pkg.impl_rules
@@ -818,6 +810,8 @@ mod tests {
         Object::Function(Box::new(Function {
             name: name.to_string(),
             source_file: "user.baml".to_string(),
+            docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
@@ -825,14 +819,18 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
-            return_type: baml_type::RuntimeTy::unknown(),
+            return_type: baml_type::TyTemplate::BuiltinUnknown {
+                attr: baml_type::TyAttr::default(),
+            },
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
-            throws_type: None,
+            throws_type: baml_type::TyTemplate::Never {
+                attr: baml_type::TyAttr::default(),
+            },
             origin: FunctionOrigin::UserDefined,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
@@ -894,7 +892,6 @@ mod tests {
                 globals: vec![("user.foo".to_string(), 0), ("user.bar".to_string(), 1)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            template_macros: Vec::new(),
             test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
@@ -1011,7 +1008,6 @@ mod tests {
                 globals: vec![("a.f".to_string(), 0)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            template_macros: Vec::new(),
             test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
@@ -1034,7 +1030,6 @@ mod tests {
                 globals: vec![("b.g".to_string(), 0)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            template_macros: Vec::new(),
             test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,

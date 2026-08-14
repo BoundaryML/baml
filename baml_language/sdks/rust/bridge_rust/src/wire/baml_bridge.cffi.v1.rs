@@ -16,7 +16,7 @@ pub struct BamlHandle {
 ///    - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 ///    - baml.llm.PromptAst                     -> ADT_PROMPT_AST
 ///    - baml.llm.Collector                     -> ADT_COLLECTOR
-///    - baml.llm.Stream                        -> ADT_TAGGED_HEAP_HANDLE
+///    - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
@@ -26,7 +26,7 @@ pub struct BamlHandle {
 ///
 /// Stdlib symbols TODO (decode to bare BamlPyHandle today):
 ///    - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
-///    - baml.glob.Glob, baml.llm.{StreamAccumulator,StreamCache}
+///    - baml.glob.Glob, baml.sap.ParseCache
 ///
 /// To enumerate all candidates: `rg '\$rust_type' baml_language/crates/baml_builtins2/`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -228,8 +228,9 @@ pub struct BamlTyUnknown {
 }
 /// Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 /// strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
-/// its source string to preserve formatting). Literal types widen to their base
-/// primitive at decode time.
+/// its source string to preserve formatting). Decoders preserve literal
+/// identity so `InboundValue.value_type` remains exact rather than being
+/// widened to the corresponding primitive payload shape.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlTyLiteral {
     #[prost(oneof = "baml_ty_literal::Literal", tags = "1, 2, 3, 4, 5")]
@@ -346,6 +347,8 @@ pub struct BamlTyVoid {
 pub struct BamlTyTypeVar {
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub index: u32,
 }
 /// An associated-type projection such as `P.Output` or `(T as Iterator).Item`
 /// (`RuntimeTy::AssociatedTypeProjection`). `interface` is absent when the
@@ -479,14 +482,18 @@ impl BamlTyFunctionParamMode {
     }
 }
 // -----------------------------------------------------------------------------
-// Inbound values — host language to engine (value-only, no type metadata)
+// Inbound values — host language to engine
 // -----------------------------------------------------------------------------
 
-/// Core value type. No type metadata because not every language has union/class
-/// concepts (e.g. JS uses plain interfaces). Engine resolves types from function
-/// signatures.
+/// Core value type. `value_type` is a sparse exact-type annotation for this
+/// node, never a copy of the enclosing union. Most values omit it and are
+/// decoded from the declared contextual type plus payload shape. Hosts set it
+/// only when shape/context cannot preserve their choice (for example an empty
+/// container, an overlapping union arm, or a literal-vs-primitive selection).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundValue {
+    #[prost(message, optional, tag = "1")]
+    pub value_type: ::core::option::Option<BamlTy>,
     #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
     pub value: ::core::option::Option<inbound_value::Value>,
 }
@@ -558,11 +565,6 @@ pub mod inbound_map_entry {
 pub struct InboundClassValue {
     #[prost(message, repeated, tag = "2")]
     pub fields: ::prost::alloc::vec::Vec<InboundMapEntry>,
-    /// The instance's class as a nominal type: `class_ty.name` is the FQN used to
-    /// bind the class, and `class_ty.type_args` carries a generic instance's
-    /// concrete args. Always set for a well-formed class value.
-    #[prost(message, optional, tag = "3")]
-    pub class_ty: ::core::option::Option<BamlTyClass>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InboundEnumValue {
@@ -602,6 +604,18 @@ pub struct CallFunctionArgs {
     /// non-generic calls.
     #[prost(message, repeated, tag = "3")]
     pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
+    #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5")]
+    pub call_target: ::core::option::Option<call_function_args::CallTarget>,
+}
+/// Nested message and enum types in `CallFunctionArgs`.
+pub mod call_function_args {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum CallTarget {
+        #[prost(string, tag = "4")]
+        FunctionName(::prost::alloc::string::String),
+        #[prost(uint64, tag = "5")]
+        FunctionHandle(u64),
+    }
 }
 /// CallAck is the engine's acknowledgment of an inbound call. It flows
 /// engine->host, but is defined in the inbound proto because it completes
@@ -802,8 +816,7 @@ pub struct BamlValueEnum {
     pub is_dynamic: bool,
 }
 /// A union value: the selected variant's value plus its `self_type` (the full
-/// union type as a `BamlTy`). Hosts decode purely by recursing into `value` — the
-/// `self_type` metadata is written for completeness but read by no host.
+/// union type as a `BamlTy`) and the selected arm's canonical index.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlValueUnionVariant {
     /// Optional union name; unions carry their full type in `self_type`.
@@ -815,10 +828,17 @@ pub struct BamlValueUnionVariant {
     pub is_single_pattern: bool,
     #[prost(message, optional, tag = "4")]
     pub self_type: ::core::option::Option<BamlTy>,
+    /// Display-only arm name. Consumers must use `selected_option_index` for
+    /// canonical selected-arm identity.
     #[prost(string, tag = "5")]
     pub value_option_name: ::prost::alloc::string::String,
     #[prost(message, optional, boxed, tag = "6")]
     pub value: ::core::option::Option<::prost::alloc::boxed::Box<BamlOutboundValue>>,
+    /// Zero-based position of the selected arm in `self_type`'s canonical union
+    /// member order. Presence distinguishes the first arm from an absent
+    /// discriminator. The selected type is derived from this index.
+    #[prost(uint32, optional, tag = "8")]
+    pub selected_option_index: ::core::option::Option<u32>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlValueMedia {

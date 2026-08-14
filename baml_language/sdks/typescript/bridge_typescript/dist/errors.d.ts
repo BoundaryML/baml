@@ -24,13 +24,13 @@ export declare class BamlError extends Error {
     constructor(message: string, detail?: BamlErrorDetail);
 }
 export declare class BamlInvalidArgumentError extends BamlError {
-    constructor(message: string);
+    constructor(message: string, detail?: BamlErrorDetail);
 }
 export declare class BamlClientError extends BamlError {
-    constructor(message: string);
+    constructor(message: string, detail?: BamlErrorDetail);
 }
 export declare class BamlCancelledError extends BamlError {
-    constructor(message: string);
+    constructor(message: string, detail?: BamlErrorDetail);
 }
 export declare class BamlAbortError extends Error {
     readonly reason: unknown;

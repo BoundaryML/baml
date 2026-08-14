@@ -18,18 +18,22 @@ BAML is the programming language for agents.
 
 BAML looks like TypeScript, but every feature is built so agents make fewer mistakes:
 
-- Statically typed like Rust, with colorless concurrency like Go.
-- Types persist at runtime. There is no `any`.
+- It has a type system like Rust, but compiles even faster than Go.
+- Types persist at runtime. There is no `any` nor casting dangerously to any type.
 - Errors are typed and statically analyzed.
 - The filesystem describes the modules/namespaces.
-- Run BAML standalone, or call it from any language of your choice (Python, TypeScript, Go, and more).
+- Has green threads, and colorless concurrency like Go
+- Built-in tests / eval framework
+- Built-in stdlib for agents
+- Every baml tool is natively designed for agents, with no garbage outputs, etc.
+- Can be run standalone or adopt incrementally (you can call a BAML function from TS, Py, Go, C#, Java, etc).
 
 [Explore the website and examples](https://www.boundaryml.com/explore).
 
 ## Try it out
 
 ```bash
-brew install boundaryml/tap/baml
+brew install baml
 baml agent install
 baml init
 baml ide install --code

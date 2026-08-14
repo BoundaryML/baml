@@ -11,7 +11,7 @@ typedef Buffer (*VersionFn)(void);
 typedef void* (*CreateBamlRuntimeFn)(const char *root_path, const char *src_files_json);
 typedef void (*DestroyBamlRuntimeFn)(const void *runtime);
 typedef void (*FreeBufferFn)(Buffer buf);
-typedef void (*CallFunctionFn)(const char *function_name, const uint8_t *encoded_args, size_t length, uint32_t id);
+typedef void (*CallFunctionFn)(const uint8_t *encoded_args, size_t length, uint32_t id);
 typedef void (*CallbackFn)(uint32_t call_id, const int8_t *content, size_t length);
 typedef void (*RegisterCallbackFn)(CallbackFn cb);
 typedef uint32_t BamlCffiStatus;
@@ -79,8 +79,8 @@ static void wrapFreeBuffer(const int8_t *ptr, size_t len) {
         ((FreeBufferFn)freeBufferFnPtr)(buf);
     }
 }
-static void wrapCallFunction(const char *function_name, const uint8_t *encoded_args, size_t length, uint32_t id) {
-    if (callFunctionFnPtr) ((CallFunctionFn)callFunctionFnPtr)(function_name, encoded_args, length, id);
+static void wrapCallFunction(const uint8_t *encoded_args, size_t length, uint32_t id) {
+    if (callFunctionFnPtr) ((CallFunctionFn)callFunctionFnPtr)(encoded_args, length, id);
 }
 static void wrapRegisterCallback(CallbackFn cb) {
     if (registerCallbackFnPtr) ((RegisterCallbackFn)registerCallbackFnPtr)(cb);

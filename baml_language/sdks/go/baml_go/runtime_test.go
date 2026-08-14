@@ -3,17 +3,217 @@ package baml_go
 import (
 	"context"
 	"errors"
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
 	"google.golang.org/protobuf/proto"
 )
 
+func outboundResultBytes(t *testing.T, result *cffi.BamlOutboundResult) []byte {
+	t.Helper()
+	payload, err := proto.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return payload
+}
+
+func outboundClass(name string, fields ...*cffi.BamlOutboundMapEntry) *cffi.BamlOutboundValue {
+	return &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_ClassValue{ClassValue: &cffi.BamlValueClass{
+		Name: name, Fields: fields,
+	}}}
+}
+
+func outboundString(value string) *cffi.BamlOutboundValue {
+	return &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: value}}
+}
+
+func TestDecodeResultRejectsMalformedAndEmptyEnvelopes(t *testing.T) {
+	for name, payload := range map[string][]byte{
+		"malformed protobuf": {0xff},
+		"empty envelope":     outboundResultBytes(t, &cffi.BamlOutboundResult{}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decodeResult(payload); err == nil || err.Error() == "" {
+				t.Fatalf("decodeResult returned error %v", err)
+			}
+		})
+	}
+	if _, err := decodeResultEnvelope(nil); err == nil || !strings.Contains(err.Error(), "nil result envelope") {
+		t.Fatalf("nil envelope error = %v", err)
+	}
+}
+
+func TestDecodeResultRejectsMissingArmPayloads(t *testing.T) {
+	for name, result := range map[string]*cffi.BamlOutboundResult{
+		"success": {Result: &cffi.BamlOutboundResult_Ok{}},
+		"error":   {Result: &cffi.BamlOutboundResult_Error{}},
+		"panic":   {Result: &cffi.BamlOutboundResult_Panic{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decodeResultEnvelope(result); err == nil || err.Error() == "" {
+				t.Fatalf("decodeResultEnvelope returned error %v", err)
+			}
+		})
+	}
+}
+
+func TestDecodeResultFormatsErrorIdentityMessageAndTrace(t *testing.T) {
+	trace := []string{
+		`File "outer.baml", line 3, in user.errors.Outer`,
+		`File "middle.baml", line 7, in user.errors.Middle`,
+		`File "types.baml", line 12, in user.errors.Throw`,
+	}
+	value := outboundClass("user.errors.MyError", &cffi.BamlOutboundMapEntry{
+		Key: "message", Value: outboundString("broken input"),
+	})
+	result := &cffi.BamlOutboundResult{Result: &cffi.BamlOutboundResult_Error{Error: &cffi.BamlOutboundError{
+		Value: value,
+		Trace: trace,
+	}}}
+	_, err := decodeResult(outboundResultBytes(t, result))
+	if err == nil {
+		t.Fatal("error result decoded successfully")
+	}
+	want := "BAML error: user.errors.MyError: broken input\n    " + strings.Join(trace, "\n    ")
+	if err.Error() != want {
+		t.Fatalf("formatted error = %q, want %q", err, want)
+	}
+	for _, frame := range trace {
+		if count := strings.Count(err.Error(), frame); count != 1 {
+			t.Fatalf("trace frame %q appears %d times in %q", frame, count, err)
+		}
+	}
+}
+
+func TestDecodeResultUnwrapsUnionThrownClassIdentity(t *testing.T) {
+	value := &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_UnionVariantValue{UnionVariantValue: &cffi.BamlValueUnionVariant{
+		Value: outboundClass("user.errors.ParseError", &cffi.BamlOutboundMapEntry{
+			Key: "message", Value: outboundString("bad parse"),
+		}),
+	}}}
+	result := &cffi.BamlOutboundResult{Result: &cffi.BamlOutboundResult_Error{Error: &cffi.BamlOutboundError{Value: value}}}
+	_, err := decodeResult(outboundResultBytes(t, result))
+	if err == nil || !strings.Contains(err.Error(), "user.errors.ParseError: bad parse") {
+		t.Fatalf("union thrown error = %v", err)
+	}
+}
+
+func TestDecodeResultTraceLessFailuresRemainDescriptive(t *testing.T) {
+	for name, result := range map[string]*cffi.BamlOutboundResult{
+		"error": {Result: &cffi.BamlOutboundResult_Error{Error: &cffi.BamlOutboundError{}}},
+		"panic": {Result: &cffi.BamlOutboundResult_Panic{Panic: &cffi.BamlOutboundPanic{}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := decodeResult(outboundResultBytes(t, result))
+			if err == nil || !strings.Contains(err.Error(), "BAML "+name) || strings.Contains(err.Error(), "\n") {
+				t.Fatalf("trace-less %s error = %q", name, err)
+			}
+		})
+	}
+}
+
+func TestDecodeResultNonExitPanicReturnsError(t *testing.T) {
+	trace := []string{
+		`File "outer.baml", line 2, in user.panics.Outer`,
+		`File "middle.baml", line 5, in user.panics.Middle`,
+		`File "types.baml", line 9, in user.panics.Boom`,
+	}
+	result := &cffi.BamlOutboundResult{Result: &cffi.BamlOutboundResult_Panic{Panic: &cffi.BamlOutboundPanic{
+		Value: outboundClass("baml.panics.UserPanic", &cffi.BamlOutboundMapEntry{
+			Key: "message", Value: outboundString("user-initiated boom"),
+		}),
+		Trace: trace,
+	}}}
+	_, err := decodeResult(outboundResultBytes(t, result))
+	if err == nil {
+		t.Fatal("panic result decoded successfully")
+	}
+	want := "BAML panic: baml.panics.UserPanic: user-initiated boom\n    " + strings.Join(trace, "\n    ")
+	if err.Error() != want {
+		t.Fatalf("formatted panic = %q, want %q", err, want)
+	}
+	for _, frame := range trace {
+		if count := strings.Count(err.Error(), frame); count != 1 {
+			t.Fatalf("panic trace frame %q appears %d times in %q", frame, count, err)
+		}
+	}
+}
+
+func TestDecodeResultExitPanicUsesHostExitContract(t *testing.T) {
+	previous := processExit
+	t.Cleanup(func() { processExit = previous })
+
+	called := false
+	processExit = func(code int) {
+		called = true
+		if code != 7 {
+			t.Fatalf("exit code = %d, want 7", code)
+		}
+	}
+	result := &cffi.BamlOutboundResult{Result: &cffi.BamlOutboundResult_Panic{Panic: &cffi.BamlOutboundPanic{
+		IsExitPanic: true, ExitCode: 7,
+	}}}
+	_, err := decodeResult(outboundResultBytes(t, result))
+	if !called || err == nil || !strings.Contains(err.Error(), "returned unexpectedly") {
+		t.Fatalf("called = %v, error = %v", called, err)
+	}
+
+	for _, code := range []int64{math.MinInt64, int64(math.MinInt32) - 1, int64(math.MaxInt32) + 1, math.MaxInt64} {
+		if got := processExitCode(code); got != 1 {
+			t.Fatalf("processExitCode(%d) = %d, want 1", code, got)
+		}
+	}
+}
+
+func TestDecodeResultSuccessStillDefersTypedDecoderErrors(t *testing.T) {
+	result := &cffi.BamlOutboundResult{Result: &cffi.BamlOutboundResult_Ok{Ok: &cffi.BamlOutboundValue{
+		Value: &cffi.BamlOutboundValue_IntValue{IntValue: 42},
+	}}}
+	value, err := decodeResult(outboundResultBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := value.String(); err == nil || !strings.Contains(err.Error(), "expected BAML string") {
+		t.Fatalf("typed decoder error = %v", err)
+	}
+}
+
+func TestUnexpectedNeverReturnIsDescriptive(t *testing.T) {
+	err := UnexpectedNeverReturn("user.errors.AlwaysPanics")
+	if !strings.Contains(err.Error(), "never-returning") || !strings.Contains(err.Error(), "user.errors.AlwaysPanics") {
+		t.Fatalf("never-return error = %v", err)
+	}
+}
+
 func TestCallRejectsNULInFunctionNameBeforeRuntimeInitialization(t *testing.T) {
 	_, err := Call(context.Background(), "user.foo\x00bar", nil)
 	if err == nil || err.Error() != "baml_go.Call: function name contains a NUL byte" {
 		t.Fatalf("got error %v, want embedded-NUL diagnostic", err)
 	}
+}
+
+func TestUnhandledSpawnError(t *testing.T) {
+	t.Run("unhandled_spawn_error_uses_host_default", func(t *testing.T) {
+		payload, err := proto.Marshal(&cffi.BamlOutboundResult{
+			Result: &cffi.BamlOutboundResult_Error{
+				Error: &cffi.BamlOutboundError{
+					Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "boom"}},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if recovered := recover(); recovered == nil {
+				t.Fatal("default unhandled-spawn handler did not panic")
+			}
+		}()
+		reportUnhandledSpawnError(payload, false)
+	})
 }
 
 func TestRuntimeInitializationWaitHonorsCancellation(t *testing.T) {
@@ -27,6 +227,29 @@ func TestRuntimeInitializationWaitHonorsCancellation(t *testing.T) {
 		t.Fatalf("got error %v, want context cancellation", err)
 	}
 	state.release()
+}
+
+func TestWaitForCallResultPreservesExactContextErrorWhenResultAndDoneAreReady(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan []byte, 1)
+	result <- []byte("already completed")
+	cancel()
+
+	for range 1000 {
+		payload, err := waitForCallResult(ctx, result)
+		if err != ctx.Err() {
+			t.Fatalf("wait error identity = %v, want exact ctx.Err() %v", err, ctx.Err())
+		}
+		if payload != nil {
+			t.Fatalf("cancelled wait returned payload %q", payload)
+		}
+		// Keep both select arms ready on every iteration. The assertion must
+		// hold regardless of which ready arm the scheduler chooses.
+		select {
+		case result <- []byte("already completed"):
+		default:
+		}
+	}
 }
 
 func TestReservePendingCallSkipsOccupiedIDAfterWraparound(t *testing.T) {
@@ -123,7 +346,8 @@ func TestEncodeCallUsesExactClassAndFieldWireNames(t *testing.T) {
 		t.Fatalf("unexpected kwargs: %#v", call.Kwargs)
 	}
 	class := call.Kwargs[0].Value.GetClassValue()
-	if class == nil || class.ClassTy.GetName() != "user.people.Person" {
+	if class == nil ||
+		call.Kwargs[0].Value.GetValueType().GetClassTy().GetName() != "user.people.Person" {
 		t.Fatalf("unexpected class: %#v", class)
 	}
 	if len(class.Fields) != 2 {

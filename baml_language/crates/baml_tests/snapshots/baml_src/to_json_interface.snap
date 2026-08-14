@@ -3,88 +3,102 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function to_json_interface.$init_test_ns_to_json_interface_to_json_interface(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.to_json_interface"
     load_const "operator_style_to_json_desugars_to_from"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "operator_style_to_json_dispatches_override"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "default_renders_primitives"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "default_renders_containers"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "default_renders_class_instance_structurally"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "empty_implementor_matches_nonimplementor"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "implementor_override_is_used"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "nested_override_is_honored_at_depth"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "override_inside_container_is_honored"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "enum_renders_as_variant_name"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "enum_field_serializes_as_variant_name"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "string_literal_union_field_serializes_as_string"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "optional_enum_field_serializes_via_typed_to_string"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_json_interface"
     load_const "enum_union_field_serializes_via_typed_to_string"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

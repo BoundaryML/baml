@@ -2,112 +2,87 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: `$id` cannot be the target of a compound assignment; use `$id = ...` with an override from `baml.id.new()`
-   ╭─[ runtime_id.baml:8:5 ]
-   │
+  [type] E0001
+
+  × `$id` cannot be the target of a compound assignment; use `$id = ...` with an override from `baml.id.new()`
+   ╭─[runtime_id.baml:8:5]
  8 │     $id += "-suffix";
-   │     ─┬─  
-   │      ╰─── `$id` cannot be the target of a compound assignment; use `$id = ...` with an override from `baml.id.new()`
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·     ───
+   ╰────
 
-  [type] error: type mismatch: expected string, got 42
-    ╭─[ runtime_id.baml:15:11 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[runtime_id.baml:15:11]
  15 │     $id = 42;
-    │           ─┬  
-    │            ╰── type mismatch: expected string, got 42
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·           ─┬
+    ·            ╰── expected `string`, found `42`
+    ╰────
 
-  [type] error: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
-    ╭─[ runtime_id.baml:21:5 ]
-    │
+  [type] E0001
+
+  × `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+    ╭─[runtime_id.baml:21:5]
  21 │     $id.len()
-    │     ───┬───  
-    │        ╰───── `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·     ───────
+    ╰────
 
-  [type] error: missing required argument `x`
-    ╭─[ runtime_id.baml:31:5 ]
-    │
- 31 │     takes_int($id = baml.id.new())
-    │     ───────────────┬──────────────  
-    │                    ╰──────────────── missing required argument `x`
-    │ 
-    │ Note: Error code: E0005
-────╯
+  [type] E0005
 
-  [type] error: `$id` cannot be set at the call site; assign `$id = ...` inside the function body instead
-    ╭─[ runtime_id.baml:31:21 ]
-    │
- 31 │     takes_int($id = baml.id.new())
-    │                     ──────┬──────  
-    │                           ╰──────── `$id` cannot be set at the call site; assign `$id = ...` inside the function body instead
-    │ 
-    │ Note: Error code: E0001
-────╯
+  × expected 1 argument(s), got 0
+    ╭─[runtime_id.baml:31:5]
+ 31 │     takes_int($id = boundary.id())
+    ·     ──────────────────────────────
+    ╰────
 
-  [hir] error: `$id` is the runtime identity and cannot be used as a binding name
-    ╭─[ runtime_id.baml:36:9 ]
-    │
+  [hir] E0010
+
+  × `$id` is the runtime identity and cannot be used as a binding name
+    ╭─[runtime_id.baml:36:9]
  36 │     let $id = 1;
-    │         ─┬─  
-    │          ╰─── `$id` is reserved here
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·         ─┬─
+    ·          ╰── `$id` is reserved here
+    ╰────
 
-  [hir] error: `$id` is the runtime identity and cannot be used as a binding name
-    ╭─[ runtime_id.baml:41:26 ]
-    │
+  [hir] E0010
+
+  × `$id` is the runtime identity and cannot be used as a binding name
+    ╭─[runtime_id.baml:41:26]
  41 │ function shadowing_param($id: string) -> string {
-    │                          ─┬─  
-    │                           ╰─── `$id` is reserved here
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                          ─┬─
+    ·                           ╰── `$id` is reserved here
+    ╰────
 
-  [type] error: declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
-    ╭─[ runtime_id.baml:48:51 ]
-    │
- 48 │ function setter_never(s: string) -> string throws never {
-    │                                                   ──┬──  
-    │                                                     ╰──── declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
-    │ 
-    │ Note: Error code: E0096
-────╯
+  [type] E0096
 
-  [type] error: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
-    ╭─[ runtime_id.baml:56:5 ]
-    │
+  × declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
+    ╭─[runtime_id.baml:49:5]
+ 49 │     $id = s;
+    ·     ───
+    ╰────
+
+  [type] E0001
+
+  × `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+    ╭─[runtime_id.baml:56:5]
  56 │     $id?.len()
-    │     ────┬───  
-    │         ╰───── `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·     ────────
+    ╰────
 
-  [hir] error: `$id` is the runtime identity and cannot be used as a binding name
-    ╭─[ runtime_id.baml:66:18 ]
-    │
+  [hir] E0010
+
+  × `$id` is the runtime identity and cannot be used as a binding name
+    ╭─[runtime_id.baml:66:18]
  66 │     let WithId { $id } = w;
-    │                  ─┬─  
-    │                   ╰─── `$id` is reserved here
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                  ─┬─
+    ·                   ╰── `$id` is reserved here
+    ╰────
 
-  [hir] error: `$id` is the runtime identity and cannot be used as a binding name
-    ╭─[ runtime_id.baml:71:10 ]
-    │
+  [hir] E0010
+
+  × `$id` is the runtime identity and cannot be used as a binding name
+    ╭─[runtime_id.baml:71:10]
  71 │ function $id() -> int {
-    │          ─┬─  
-    │           ╰─── `$id` is reserved here
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ─┬─
+    ·           ╰── `$id` is reserved here
+    ╰────

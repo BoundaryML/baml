@@ -2,32 +2,38 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected foo, got true
-    ╭─[ type_aliases.baml:11:3 ]
-    │
- 11 │   true
-    │   ──┬─  
-    │     ╰─── type mismatch: expected foo, got true
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: unresolved type: name
-   ╭─[ type_aliases_json.baml:4:9 ]
-   │
+  × mismatched types
+    ╭─[type_aliases.baml:10:23]
+ 10 │ ╭─▶ function Bar() -> foo {
+ 11 │ │     true
+ 12 │ ├─▶ }
+    · ╰──── expected `foo`, found `true`
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: name
+   ╭─[type_aliases_json.baml:1:1]
+ 1 │ type JSON = int | float | string | bool | JSON[] | map<string,json>
+   · ▲
+   ╰────
+
+  [type] E0002
+
+  × unresolved type: name
+   ╭─[type_aliases_json.baml:4:9]
  4 │   inner name
-   │         ──┬─  
-   │           ╰─── unresolved type: name
-   │ 
-   │ Note: Error code: E0002
-───╯
+   ·         ────
+   ╰────
 
-  [type] error: type mismatch: expected JSON, got NotJSON
-   ╭─[ type_aliases_json.baml:9:3 ]
-   │
- 9 │   NotJSON{ inner: "Whoops" }
-   │   ─────────────┬────────────  
-   │                ╰────────────── type mismatch: expected JSON, got NotJSON
-   │ 
-   │ Note: Error code: E0001
-───╯
+  [type] E0001
+
+  × mismatched types
+    ╭─[type_aliases_json.baml:8:36]
+  8 │ ╭─▶ function EchoJSON(i: JSON) -> JSON {
+  9 │ │     NotJSON{ inner: "Whoops" }
+ 10 │ ├─▶ }
+    · ╰──── expected `JSON`, found `NotJSON`
+    ╰────

@@ -19,15 +19,18 @@ const docsSource = () =>
     "\n",
   );
 
-describe.runIf(isTestRuntime("node"))("docstrings_etc", () => {
-  it("imports all documented symbols from baml_sdk/docs", () => {
+describe("docstrings_etc exports", () => {
+  it("main_imports_symbols_reachable", () => {
     expect(Doc).toBeDefined();
     expect(Note).toBeDefined();
     expect(Priority).toBeDefined();
     expect(Sentiment).toBeDefined();
   });
+});
 
-  it("renders class summaries and Attributes sections as JSDoc", () => {
+// Reading generated TypeScript source requires Node's local filesystem APIs.
+describe.runIf(isTestRuntime("node"))("docstrings_etc generated source", () => {
+  it("main_class_doc_summary_and_attributes_section", () => {
     const src = docsSource();
 
     expect(src).toContain(`/**
@@ -51,7 +54,7 @@ export class Doc {`);
 export class Note {`);
   });
 
-  it("renders enum summaries and Members sections as JSDoc", () => {
+  it("main_enum_doc_summary_and_members_section", () => {
     const src = docsSource();
 
     expect(src).toContain(`/**
@@ -71,7 +74,7 @@ export enum Sentiment {`);
 export enum Priority {`);
   });
 
-  it("does not emit inline field or variant doc artifacts", () => {
+  it("main_no_inline_field_or_variant_doc_artifacts", () => {
     const src = docsSource();
 
     expect(src).not.toContain("// Title shown in lists");

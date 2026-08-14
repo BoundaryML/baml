@@ -10,16 +10,14 @@
 //! [`EqualsDriver`] dispatches a class's or enum's custom `Equals.eq` when it has
 //! one, falling back to structural / variant-identity comparison otherwise.)
 //!
-//! Floats compare by IEEE rules (so `NaN != NaN`), matching the `==` operator
-//! and deliberately *unlike* `baml.deep_equals`, whose NaN-equal convention is
-//! a test-helper nicety rather than the language's equality.
+//! Floats compare by IEEE rules (so `NaN != NaN`), matching the `==` operator.
 
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 
-use baml_type::{Name, RealizedTy, TyAttr, TypeName};
+use baml_type::{Name, RealizedTy, TyAttr, TypeName, normalize::TypeContext};
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, ValueKind,
@@ -220,8 +218,9 @@ fn dispatch_op(
     let Some(self_ty) = vm.value_concrete_ty(args[0]) else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
+    let resolver = resolve::ImplResolver::new(vm);
     let Some((rule, bound_args)) =
-        resolve::resolve_implements_rule_exact(vm, &self_ty.into(), &op_qtn, iface_args)
+        resolver.resolve_implements_rule(&self_ty.into(), &op_qtn, iface_args)
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
@@ -230,7 +229,7 @@ fn dispatch_op(
     };
     // The resolved impl's frame realizes fully against its bound args; a failure
     // is a broken compiler/VM invariant, surfaced rather than swallowed.
-    let type_args = match resolve::realize_frame(vm, &method_impl.frame, &bound_args) {
+    let type_args = match resolver.realize_frame(&method_impl.frame, &bound_args) {
         Ok(type_args) => type_args,
         Err(e) => return NativeCallResult::from(e),
     };
@@ -517,7 +516,8 @@ impl EqualsDriver {
                 // `Box<string | int>`) — the same notion of "same instantiation" the
                 // resolver and reflection use.
                 if x.class != y.class
-                    || !resolve::ty_args_equivalent(&x.class_type_args, &y.class_type_args)
+                    || !resolve::ImplResolver::new(vm)
+                        .ty_args_equivalent(&x.class_type_args, &y.class_type_args)
                     || x.fields.len() != y.fields.len()
                 {
                     return Cmp::NotEqual;
@@ -558,12 +558,17 @@ impl EqualsDriver {
             (Object::Collector(x), Object::Collector(y)) => step(Arc::ptr_eq(&x.0, &y.0)),
             (Object::Collector(_), _) => Cmp::NotEqual,
 
-            // Two `type` values are equal when they denote the same type. Use the
-            // resolver's semantic equivalence, not derived `==`: union member order is
-            // non-canonical at runtime, so `type_of<int | string>` and
-            // `type_of<string | int>` are the same type and must compare equal (matching
-            // the interface resolver and `type.to_string()`'s stable-identity claim).
-            (Object::Type(x), Object::Type(y)) => step(resolve::ty_equivalent(x, y)),
+            // Two `type` values are equal when they denote the same type. Compare
+            // through the *full* program context (`vm` as the `TypeContext`), not derived
+            // `==` nor the resolver's fact-opaque equivalence: this is user-facing type
+            // equality, so it must see nominal facts. Union member order is non-canonical
+            // (`type_of<int | string>` ≡ `type_of<string | int>`), and an
+            // interface-membership union absorbs (`type_of<Shape | Sq>` ≡ `type_of<Shape>`
+            // when `Sq` implements `Shape`). Using `vm` here is safe — this is a *client*
+            // of the resolver, not on its re-entrant path, so the membership lookup this
+            // may trigger bottoms out in the resolver's fact-opaque internals without
+            // looping.
+            (Object::Type(x), Object::Type(y)) => step(vm.equivalent(x.as_ty(), y.as_ty())),
             (Object::Type(_), _) => Cmp::NotEqual,
 
             // `Sentinel` (heap_debug builds only) is an internal freed/uninit
@@ -683,7 +688,8 @@ fn resolve_equals_eq(vm: &BexVm, concrete: &RealizedTy) -> Option<(HeapPtr, Vec<
     // `Equals` is non-generic — no interface args to select on; off the resolved
     // rule, `eq` is the concrete method (the impl's own, or the merged default),
     // invoked with its frame realized against the impl's bound type args.
-    let (rule, bound_args) = resolve::resolve_implements_rule(vm, concrete, &equals_qtn(), &[])?;
+    let resolver = resolve::ImplResolver::new(vm);
+    let (rule, bound_args) = resolver.resolve_implements_rule(concrete, &equals_qtn(), &[])?;
     let method = rule.methods.get("eq")?;
     // `fqn` is the resolved callee's heap pointer (the impl method or merged
     // default), baked at emit time — invoke it directly.
@@ -692,9 +698,11 @@ fn resolve_equals_eq(vm: &BexVm, concrete: &RealizedTy) -> Option<(HeapPtr, Vec<
     // projection reduced through the impl registry). A failure is a broken
     // compiler/VM invariant rather than a runtime possibility, so surface it
     // instead of silently dropping the custom `eq`.
-    let type_args = resolve::realize_frame(vm, &method.frame, &bound_args).unwrap_or_else(|e| {
-        unreachable!("Equals impl frame did not realize against bound args: {e}")
-    });
+    let type_args = resolver
+        .realize_frame(&method.frame, &bound_args)
+        .unwrap_or_else(|e| {
+            unreachable!("Equals impl frame did not realize against bound args: {e}")
+        });
     Some((callee, type_args))
 }
 

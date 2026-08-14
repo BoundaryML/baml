@@ -13,7 +13,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, Value,
@@ -49,6 +49,8 @@ fn inject_function(
     let func = Function {
         name: fn_name.to_string(),
         source_file: String::new(),
+        docstring: None,
+        declared_name: None,
         arity: 0,
         real_local_count: 0,
         bytecode,
@@ -56,14 +58,18 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        return_type: RuntimeTy::int(),
+        return_type: baml_type::TyTemplate::Int {
+            attr: baml_type::TyAttr::default(),
+        },
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![],
         display_type_params: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
-        throws_type: None,
+        throws_type: baml_type::TyTemplate::Never {
+            attr: baml_type::TyAttr::default(),
+        },
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
@@ -140,7 +146,7 @@ fn load_type_concrete_int() {
 
 /// A `TyTemplate::from(string)` produces a `RuntimeTy::string()` payload distinct
 /// from a `TyTemplate::from(int)`, and the resulting heap objects compare
-/// unequal under `deep_equals`.
+/// unequal under `==`.
 #[test]
 fn load_type_concrete_string_different_from_int() {
     let (r_int, vm_int) = run_with_bytecode_keep_vm(

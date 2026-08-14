@@ -133,6 +133,80 @@ test "same_generic_interface_field_links_select_matching_type_args_runtime" {
     assert.is_true(sgif_main())
 }
 
+// symbolic_interface_view_selects_per_instantiation_link_runtime
+// The view is the frame's `T`, not anything on the receiver: both calls pass the
+// SAME object, so no runtime test of the receiver can tell the two links apart.
+// Only carrying the requested view to the resolver discriminates them.
+function sgif_read<T>(g: SgifSlot<T>) -> T {
+    g.value
+}
+function sgif_symbolic_main() -> bool {
+    let p = SgifPair { int_value: 7, string_value: "seven" }
+    return sgif_read<int>(p) == 7 && sgif_read<string>(p) == "seven"
+}
+test "symbolic_interface_view_selects_per_instantiation_link_runtime" {
+    assert.is_true(sgif_symbolic_main())
+}
+
+// interface_field_write_through_existential_runtime
+interface IfwCounter {
+    count: int
+}
+class IfwBox {
+    label: string
+    count: int
+    implements IfwCounter {}
+}
+function ifw_main() -> bool {
+    let b = IfwBox { label: "b", count: 1 }
+    let c: IfwCounter = b
+    c.count = 10
+    let after_assign = b.count == 10
+    c.count += 5
+    return after_assign && b.count == 15
+}
+test "interface_field_write_through_existential_runtime" {
+    assert.is_true(ifw_main())
+}
+
+// interface_field_write_through_bounded_type_var_runtime
+function ifw_bump<T extends IfwCounter>(t: T) -> void {
+    t.count += 100
+}
+function ifw_typevar_main() -> bool {
+    let b = IfwBox { label: "b", count: 1 }
+    ifw_bump<IfwBox>(b)
+    return b.count == 101
+}
+test "interface_field_write_through_bounded_type_var_runtime" {
+    assert.is_true(ifw_typevar_main())
+}
+
+// generic_implementor_field_resolves_from_receiver_runtime
+// Nothing at the access site names the implementor: `gif_read` sees only the
+// existential. The slot comes from the receiver's own impl at run time, so a
+// generic class works at every instantiation without any of them being
+// enumerable at the access site.
+interface GifHolder {
+    held: string
+}
+class GifBox<T> {
+    payload: T
+    held: string
+    implements GifHolder {}
+}
+function gif_read(h: GifHolder) -> string {
+    h.held
+}
+function gif_main() -> bool {
+    let a = GifBox<int> { payload: 1, held: "one" }
+    let b = GifBox<string> { payload: "x", held: "ex" }
+    return gif_read(a) == "one" && gif_read(b) == "ex"
+}
+test "generic_implementor_field_resolves_from_receiver_runtime" {
+    assert.is_true(gif_main())
+}
+
 // interface_field_via_requires_chain_runtime
 interface IfvrNamed { name: string }
 interface IfvrAged { age: int }
@@ -847,49 +921,6 @@ function ritv_main() -> bool {
 }
 test "reflect_implements_transitive_via_requires" {
     assert.is_true(ritv_main())
-}
-
-// reflect_implementors_lists_lexicographic_order_and_identity
-interface RillAnimal {
-    function speak(self) -> string throws never
-}
-class RillDog {
-    implements RillAnimal {
-        function speak(self) -> string { return "Woof!" }
-    }
-}
-class RillCat {
-    implements RillAnimal {
-        function speak(self) -> string { return "Meow." }
-    }
-}
-function rill_main() -> bool {
-    let impls = reflect.type_of<RillAnimal>().implementors()
-    return impls.length() == 2
-        && impls[0] == reflect.type_of<RillCat>()
-        && impls[1] == reflect.type_of<RillDog>()
-}
-test "reflect_implementors_lists_lexicographic_order_and_identity" {
-    assert.is_true(rill_main())
-}
-
-// reflect_implementors_empty_for_concrete_class
-class RiefDog {
-    breed: string
-}
-function rief_main() -> int {
-    return reflect.type_of<RiefDog>().implementors().length()
-}
-test "reflect_implementors_empty_for_concrete_class" {
-    assert.equal(rief_main(), 0)
-}
-
-// reflect_implementors_empty_for_primitive
-function riep_main() -> int {
-    return reflect.type_of<int>().implementors().length()
-}
-test "reflect_implementors_empty_for_primitive" {
-    assert.equal(riep_main(), 0)
 }
 
 // reflect_implements_inside_generic_function
@@ -1728,10 +1759,8 @@ implements OobvAnimal for OobvDog {
     function speak(self) -> string { return "woof" }
 }
 function oobv_main() -> bool {
-    let impls = reflect.type_of<OobvAnimal>().implementors()
     return reflect.type_of<OobvDog>().implements(reflect.type_of<OobvAnimal>())
-        && impls.length() == 1
-        && impls[0] == reflect.type_of<OobvDog>()
+        && reflect.type_of<OobvAnimal>().implemented_by(reflect.type_of<OobvDog>())
 }
 test "out_of_body_implements_is_visible_to_reflection_registry" {
     assert.is_true(oobv_main())
@@ -1919,4 +1948,32 @@ function rcpm_main() -> bool {
 }
 test "requires_closure_preserves_multiple_parent_instantiations_runtime" {
     assert.is_true(rcpm_main())
+}
+
+// interface_type_args_match_positionally_runtime
+// Replaces a compile-time unit test that pinned the same rule on the deleted
+// block-selection path: interface type arguments match *by position*, so
+// `Conv<int, string>` and `Conv<string, int>` are different instantiations. One
+// class implements both, so the receiver cannot discriminate them — only the
+// requested view's argument order can. Order-insensitive matching would resolve
+// both views to whichever rule the registry happens to hold first.
+interface ItampConv<A, B> {
+    function tag(self) -> string throws never
+}
+class ItampBoth {
+    implements ItampConv<int, string> {
+        function tag(self) -> string throws never { "int->string" }
+    }
+    implements ItampConv<string, int> {
+        function tag(self) -> string throws never { "string->int" }
+    }
+}
+function itamp_main() -> bool {
+    let p = ItampBoth {}
+    let forward: ItampConv<int, string> = p
+    let reverse: ItampConv<string, int> = p
+    return forward.tag() == "int->string" && reverse.tag() == "string->int"
+}
+test "interface_type_args_match_positionally_runtime" {
+    assert.is_true(itamp_main())
 }

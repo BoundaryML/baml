@@ -3,244 +3,284 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function match_basics.$init_test_ns_match_basics_match_basics(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.match_basics"
     load_const "match_catch_all_underscore"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_catch_all_named_binding"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_catch_all_with_variable"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_literal_int_first_arm"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_literal_int_second_arm"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_literal_int_fallback"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_literal_int_single_arm"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_literal_null"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_literal_bool_true"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_literal_bool_false"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_literal_bool_exhaustive_constant"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_union_literal_first"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_union_literal_second"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_union_large"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_union_client_error"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_union_with_duplicates"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_as_expression_in_arithmetic"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_nested"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_string_literal_first_arm"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_string_literal_second_arm"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_string_literal_fallback"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_string_four_arms"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_string_literal_with_typed_fallback"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_catch_all_binding_with_int_patterns"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_negative_int_with_variable"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_negative_int_first_arm"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_three_levels_nested"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_three_levels_nested_middle"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_optional_null_pattern"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_optional_value_pattern"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_optional_with_literal_and_typed"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_arithmetic_scrutinee"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 31)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_function_call_scrutinee"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 32)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_computed_discriminant"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 33)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_in_loop"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 34)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_dense_with_catch_all_via_call"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 35)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_mixed_instanceof_and_literal"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 36)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_bool_variable_exhaustive"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 37)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_or_wildcard_bool_is_exhaustive"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 38)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_basics"
     load_const "match_string_many_arms"
     make_closure .<lambda($init_test_ns_match_basics_match_basics, 39)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

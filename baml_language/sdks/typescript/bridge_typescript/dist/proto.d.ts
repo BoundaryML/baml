@@ -6,6 +6,7 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { baml_bridge } from './proto/baml_cffi.js';
+import { HandleKey } from './native.js';
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
  * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
@@ -16,6 +17,8 @@ export declare class HostCallableSyncError extends Error {
 export interface EncodeCallArgsOptions {
     callId: bigint;
     syncMode?: boolean;
+    functionName?: string;
+    functionHandle?: HandleKey;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params

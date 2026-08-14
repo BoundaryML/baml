@@ -102,8 +102,9 @@ message BamlTyUnknown {}
 
 // Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 // strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
-// its source string to preserve formatting). Literal types widen to their base
-// primitive at decode time.
+// its source string to preserve formatting). Decoders preserve literal
+// identity so `InboundValue.value_type` remains exact rather than being
+// widened to the corresponding primitive payload shape.
 message BamlTyLiteral {
   oneof literal {
     string string_value = 1;
@@ -203,6 +204,7 @@ message BamlTyVoid {}
 // (`RuntimeTy::TypeVar`).
 message BamlTyTypeVar {
   string name = 1;
+  uint32 index = 2;
 }
 
 // An associated-type projection such as `P.Output` or `(T as Iterator).Item`

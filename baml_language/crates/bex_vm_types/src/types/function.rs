@@ -1,4 +1,4 @@
-use baml_type::RuntimeTy;
+use baml_type::TyTemplate;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{Bytecode, HeapPtr, SysOp, Value};
@@ -93,10 +93,7 @@ impl BorshDeserialize for FunctionKind {
 /// LLM-specific metadata for a function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm {
-        prompt_template: String,
-        client: String,
-    },
+    Llm { client: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -192,6 +189,19 @@ pub struct Function {
     /// synthesized functions that have no source file.
     pub source_file: String,
 
+    /// The declaration's joined `///` doc-comment lines, if any. Surfaced by
+    /// runtime reflection (BEP-062 `reflect.signature`); `None` for lambdas
+    /// without docs and synthesized functions.
+    pub docstring: Option<String>,
+
+    /// The name the function was declared with (`greet`, `bump`), recorded
+    /// at lowering.
+    /// `None` for callables that have no source-level name: lambdas and
+    /// compiler-synthesized bodies, whose [`Self::name`] is a debug identity
+    /// (`<lambda(...)>`), not a name. Surfaced by runtime reflection
+    /// (BEP-062 `reflect.signature`); never inferred from [`Self::name`].
+    pub declared_name: Option<String>,
+
     /// Number of arguments the function accepts.
     pub arity: usize,
 
@@ -224,24 +234,31 @@ pub struct Function {
     /// Span of the function as computed by the parser.
     pub span: baml_base::Span,
 
-    /// Return type of the function.
-    pub return_type: RuntimeTy,
+    /// Return type of the function, as a template over the callee frame's
+    /// De Bruijn type-arg slots. A non-generic function's template is already
+    /// realized; a generic one references the slots its callers seed, so a
+    /// *value* of this function type reconstructs precisely by substituting the
+    /// realized args it carries (see `bex_vm`'s `function_object_ty`).
+    pub return_type: TyTemplate,
 
     /// Parameter names in declaration order.
     pub param_names: Vec<String>,
 
-    /// Parameter types in declaration order.
-    pub param_types: Vec<RuntimeTy>,
+    /// Parameter types in declaration order, as templates over the callee
+    /// frame's type-arg slots (see [`Self::return_type`]).
+    pub param_types: Vec<TyTemplate>,
 
     /// Whether each parameter has a BAML default expression.
     pub param_has_default: Vec<bool>,
 
     /// Source/TIR-rendered generic parameters for documentation surfaces.
     ///
-    /// Runtime metadata in `param_types` and `return_type` may erase generic
-    /// type variables to `unknown`; surfaces like `baml run --list` should use
-    /// these display fields to preserve signatures such as
-    /// `<T extends BoxLike>(box: T) -> T.Item`.
+    /// `param_types` and `return_type` are precise but *positional*: a generic
+    /// position is a [`TyTemplate::TypeArgRef`] that renders as its De Bruijn
+    /// index, and a bound is not part of the type at all. Surfaces like
+    /// `baml run --list` use these display fields to recover the written
+    /// spelling — `<T extends BoxLike>(box: T) -> T.Item` rather than
+    /// `(box: #0) -> #0.Item`.
     pub display_type_params: Vec<String>,
 
     /// Source/TIR-rendered parameter types in declaration order.
@@ -250,10 +267,16 @@ pub struct Function {
     /// Source/TIR-rendered return type.
     pub display_return_type: String,
 
-    /// Inferred throws type — the union of all types this function (and its callees)
-    /// may throw. `None` if the function never throws. Used by the engine to convert
-    /// uncaught throw values to `BexExternalValue`.
-    pub throws_type: Option<RuntimeTy>,
+    /// Inferred throws type — the union of all types this function (and its
+    /// callees) may throw, as a template over the callee frame's type-arg slots
+    /// (see [`Self::return_type`]). Used by the engine to convert uncaught throw
+    /// values to `BexExternalValue`.
+    ///
+    /// "Cannot throw" is [`TyTemplate::Never`] — the empty error set — which is
+    /// also how a function *type* spells it statically, so a value's
+    /// reconstructed signature and its written type agree. (`unknown` is the
+    /// distinct "unannotated, no claim" case.)
+    pub throws_type: TyTemplate,
 
     /// Provenance of this function in the compiler/runtime pipeline.
     pub origin: FunctionOrigin,
@@ -279,29 +302,6 @@ pub struct Function {
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<fn {}>", self.name)
-    }
-}
-
-impl Function {
-    /// Get the source span associated with a bytecode PC.
-    pub fn source_span_for_pc(&self, pc: usize) -> Option<baml_base::Span> {
-        self.bytecode.line_entry_for_pc(pc).map(|entry| entry.span)
-    }
-
-    /// Get named locals whose lexical scope contains the source span at `pc`.
-    pub fn debug_locals_in_scope(&self, pc: usize) -> Vec<&crate::bytecode::DebugLocalScope> {
-        let Some(span) = self.source_span_for_pc(pc) else {
-            return Vec::new();
-        };
-
-        self.debug_locals
-            .iter()
-            .filter(|local| {
-                local.scope_span.file_id == span.file_id
-                    && local.scope_span.range.start() <= span.range.start()
-                    && local.scope_span.range.end() >= span.range.end()
-            })
-            .collect()
     }
 }
 

@@ -32,7 +32,7 @@ use std::{
 use baml_db::{
     FileId, SourceFile, Span,
     baml_compiler_diagnostics::{
-        Diagnostic, DiagnosticId, DiagnosticPhase, Severity,
+        Diagnostic, DiagnosticId, DiagnosticMessageHighlight, DiagnosticPhase, Severity,
         diagnostic::{Annotation, RelatedInfo},
     },
     baml_compiler2_hir,
@@ -54,6 +54,7 @@ struct CachedSpan {
 struct CachedAnnotation {
     span: CachedSpan,
     message: Option<String>,
+    message_highlights: Vec<DiagnosticMessageHighlight>,
     is_primary: bool,
 }
 
@@ -61,6 +62,7 @@ struct CachedAnnotation {
 struct CachedRelatedInfo {
     span: CachedSpan,
     message: String,
+    message_highlights: Vec<DiagnosticMessageHighlight>,
     file_path: Option<String>,
 }
 
@@ -70,6 +72,7 @@ struct CachedDiagnostic {
     severity: Severity,
     phase: DiagnosticPhase,
     message: String,
+    message_highlights: Vec<DiagnosticMessageHighlight>,
     annotations: Vec<CachedAnnotation>,
     related_info: Vec<CachedRelatedInfo>,
 }
@@ -120,6 +123,7 @@ fn dehydrate_with(
         annotations.push(CachedAnnotation {
             span: map_span(a.span)?,
             message: a.message.clone(),
+            message_highlights: a.message_highlights.clone(),
             is_primary: a.is_primary,
         });
     }
@@ -128,6 +132,7 @@ fn dehydrate_with(
         related_info.push(CachedRelatedInfo {
             span: map_span(r.span)?,
             message: r.message.clone(),
+            message_highlights: r.message_highlights.clone(),
             file_path: r.file_path.clone(),
         });
     }
@@ -136,6 +141,7 @@ fn dehydrate_with(
         severity: diag.severity,
         phase: diag.phase,
         message: diag.message.clone(),
+        message_highlights: diag.message_highlights.clone(),
         annotations,
         related_info,
     })
@@ -153,6 +159,7 @@ fn rehydrate_with(
         annotations.push(Annotation {
             span: map_span(&a.span)?,
             message: a.message.clone(),
+            message_highlights: a.message_highlights.clone(),
             is_primary: a.is_primary,
         });
     }
@@ -161,6 +168,7 @@ fn rehydrate_with(
         related_info.push(RelatedInfo {
             span: map_span(&r.span)?,
             message: r.message.clone(),
+            message_highlights: r.message_highlights.clone(),
             file_path: r.file_path.clone(),
         });
     }
@@ -168,6 +176,7 @@ fn rehydrate_with(
         id: cached.id,
         severity: cached.severity,
         message: cached.message.clone(),
+        message_highlights: cached.message_highlights.clone(),
         annotations,
         related_info,
         phase: cached.phase,
@@ -246,6 +255,7 @@ pub(crate) fn one_fake_diagnostic_blob(rel_path: &str) -> Vec<u8> {
         severity: Severity::Error,
         phase: DiagnosticPhase::Type,
         message: "sampled-verify poison".to_string(),
+        message_highlights: Vec::new(),
         annotations: vec![CachedAnnotation {
             span: CachedSpan {
                 rel_path: rel_path.to_string(),
@@ -253,6 +263,7 @@ pub(crate) fn one_fake_diagnostic_blob(rel_path: &str) -> Vec<u8> {
                 end: 1,
             },
             message: None,
+            message_highlights: Vec::new(),
             is_primary: true,
         }],
         related_info: Vec::new(),
@@ -464,7 +475,7 @@ mod tests {
             sources.insert(sf.file_id(&db), sf.text(&db).to_string());
             paths.insert(sf.file_id(&db), p.clone());
         }
-        let cfg = render::RenderConfig::cli_auto();
+        let cfg = render::RenderConfig::test();
         assert_eq!(
             render::render_diagnostics(&[diag], &sources, &paths, &cfg),
             render::render_diagnostics(&restored, &sources, &paths, &cfg),
@@ -510,6 +521,7 @@ mod tests {
             severity: Severity::Error,
             phase: DiagnosticPhase::Type,
             message: "x".to_string(),
+            message_highlights: Vec::new(),
             annotations: vec![CachedAnnotation {
                 span: CachedSpan {
                     rel_path: "gone.baml".to_string(),
@@ -517,6 +529,7 @@ mod tests {
                     end: 1,
                 },
                 message: None,
+                message_highlights: Vec::new(),
                 is_primary: true,
             }],
             related_info: Vec::new(),
@@ -534,6 +547,7 @@ mod tests {
             severity: Severity::Error,
             phase: DiagnosticPhase::Type,
             message: "x".to_string(),
+            message_highlights: Vec::new(),
             annotations: vec![CachedAnnotation {
                 span: CachedSpan {
                     rel_path: "a.baml".to_string(),
@@ -541,6 +555,7 @@ mod tests {
                     end: text_len + 100,
                 },
                 message: None,
+                message_highlights: Vec::new(),
                 is_primary: true,
             }],
             related_info: Vec::new(),

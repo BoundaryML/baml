@@ -47,28 +47,28 @@ pub fn parse_cli_value(raw: &str, ty: &RuntimeTy) -> Result<BexExternalValue> {
         RuntimeTy::Int { .. } => {
             let v: i64 = raw
                 .parse()
-                .with_context(|| format!("Expected integer, got `{raw}`"))?;
+                .with_context(|| format!("expected integer, got `{raw}`"))?;
             Ok(BexExternalValue::Int(v))
         }
 
         RuntimeTy::Float { .. } => {
             let v: f64 = raw
                 .parse()
-                .with_context(|| format!("Expected float, got `{raw}`"))?;
+                .with_context(|| format!("expected float, got `{raw}`"))?;
             Ok(BexExternalValue::Float(v))
         }
 
         RuntimeTy::Bool { .. } => match raw {
             "true" => Ok(BexExternalValue::Bool(true)),
             "false" => Ok(BexExternalValue::Bool(false)),
-            _ => anyhow::bail!("Expected `true` or `false`, got `{raw}`"),
+            _ => anyhow::bail!("expected `true` or `false`, got `{raw}`"),
         },
 
         RuntimeTy::Null { .. } => {
             if raw == "null" {
                 Ok(BexExternalValue::Null)
             } else {
-                anyhow::bail!("Expected `null`, got `{raw}`")
+                anyhow::bail!("expected `null`, got `{raw}`")
             }
         }
 

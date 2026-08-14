@@ -24,14 +24,15 @@ impl BamlClassTypeValue for PackageBamlImpl {
 
     /// BEP-044: `class_t.implements(iface_t)`.
     ///
-    /// Selects over the per-package `interface_impls` registry: an impl applies
-    /// when its `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
+    /// Selects over the program-wide impl-rule index: an impl applies when its
+    /// `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
     /// implemented-interface args / associated bindings match the requested
-    /// instantiation. The orphan rule localizes the candidates to `class_t`'s
-    /// package and the interface's package; bound obligations recurse the same
-    /// way. Because the compiler (E0125) forces a class to implement every
-    /// interface in its `requires` closure, "direct impl" already covers
-    /// transitive satisfaction.
+    /// instantiation. Candidates are every impl of the interface in the program —
+    /// the orphan rule does *not* localize them to `class_t`'s or the interface's
+    /// package (see [`crate::package_load::PackageIndex`]); bound obligations
+    /// recurse the same way. Because the compiler (E0125) forces a class to
+    /// implement every interface in its `requires` closure, "direct impl" already
+    /// covers transitive satisfaction.
     fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         let Some(self_ty) = type_value_ty(vm, *self_value) else {
             return false;
@@ -39,48 +40,18 @@ impl BamlClassTypeValue for PackageBamlImpl {
         let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *other) else {
             return false;
         };
-        resolve::type_implements(vm, &self_ty, &iface_name, &iface_args, &iface_assoc)
+        resolve::ImplResolver::new(vm).type_implements(
+            &self_ty,
+            &iface_name,
+            &iface_args,
+            &iface_assoc,
+        )
     }
 
     /// BEP-044: `iface_t.implemented_by(class_t)` — same answer as
     /// `class_t.implements(iface_t)` but with the receiver flipped.
     fn implemented_by(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         Self::implements(vm, other, self_value)
-    }
-
-    /// BEP-044: `iface_t.implementors()` returns the concrete classes that
-    /// nominally satisfy this interface, in deterministic lexicographic order by
-    /// qualified name. Returns `[]` when `self_value` is not an interface (e.g. a
-    /// class type or a primitive type).
-    ///
-    /// Derived from the same per-package `interface_impls` registry as
-    /// [`Self::implements`] (via `resolve::implementor_entries`), so the two
-    /// reflection directions cannot disagree. A generic class is reported by its
-    /// base and a blanket impl by every loaded class its bounds admit, so a
-    /// specific generic instantiation (`Box<int>`) is not separately enumerable.
-    ///
-    /// Returns a raw `Vec<Value>`; the codegen glue wraps it into an
-    /// `Object::Array` allocation. The element `Object::Type` values are
-    /// allocated here because they each require a fresh TLAB slot.
-    fn implementors(vm: &mut BexVm, self_value: &Value) -> Vec<Value> {
-        let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *self_value)
-        else {
-            return Vec::new();
-        };
-        resolve::implementor_entries(vm, &iface_name)
-            .into_iter()
-            // Keep only implementors recorded at the requested instantiation
-            // (any, when the request or implementor entry carries no type args /
-            // associated bindings) — args and assoc handled symmetrically.
-            .filter(|(_, impl_args, impl_assoc)| {
-                (iface_args.is_empty()
-                    || impl_args.is_empty()
-                    || resolve::ty_args_equivalent(impl_args, &iface_args))
-                    && (impl_assoc.is_empty()
-                        || resolve::associated_bindings_equivalent(impl_assoc, &iface_assoc))
-            })
-            .map(|(ty, _, _)| Value::object(vm.tlab.alloc(Object::Type(Box::new(ty)))))
-            .collect()
     }
 }
 

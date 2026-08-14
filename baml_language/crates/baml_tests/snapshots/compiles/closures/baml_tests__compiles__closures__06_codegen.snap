@@ -1,16 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7713
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function user.Box.unwrap(self: Box<T>) -> T {
+function user.Box.unwrap(self: Box<#0>) -> #0 {
     load_var self
     load_field .value
     return
@@ -220,6 +212,7 @@ function user.test_repeated_bound_calls() -> int {
 }
 
 function user.test_strategy() -> int[] {
+    load_type never
     load_const "add"
     init_instance user.Calculator .op
     make_bound_method user.Calculator.compute
@@ -227,13 +220,14 @@ function user.test_strategy() -> int[] {
     load_const 4
     call user.apply
     store_var _5
+    load_type never
     load_const "mul"
     init_instance user.Calculator .op
     make_bound_method user.Calculator.compute
     load_const 3
     load_const 4
     call user.apply
-    store_var _7
+    store_var _8
     load_var2 1 2
     load_type int
     alloc_array 2
@@ -241,12 +235,13 @@ function user.test_strategy() -> int[] {
 }
 
 function user.test_unbound_higher_order() -> string[] {
+    load_type never
     load_const "Alice"
     load_const "Smith"
     init_instance user.Employee .first, .last
     load_type Employee
     alloc_array 1
-    load_global user.Employee.full_name
+    load_const user.Employee.full_name
     call user.apply_to_each
     return
 }
@@ -263,7 +258,7 @@ function user.test_unbound_in_map() -> string[] {
     init_instance user.Employee .first, .last
     load_type Employee
     alloc_array 2
-    load_global user.Employee.full_name
+    load_const user.Employee.full_name
     call baml.Array.map
     return
 }

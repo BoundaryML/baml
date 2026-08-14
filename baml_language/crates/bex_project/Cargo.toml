@@ -37,6 +37,7 @@ sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
 borsh = { workspace = true }
+indexmap = { workspace = true }
 log = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
@@ -52,7 +53,7 @@ tracing = { workspace = true }
 vfs = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-bex_cache = { workspace = true }
+bex_cache = { workspace = true, default-features = false }
 ignore = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "time" ] }
 
@@ -65,5 +66,5 @@ wasm-bindgen-futures = { workspace = true }
 
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "bex_engine/aws-crypto" ]
-ring-crypto = [ "bex_engine/ring-crypto" ]
+aws-crypto = [ "bex_engine/aws-crypto", "bex_cache/aws-crypto" ]
+ring-crypto = [ "bex_engine/ring-crypto", "bex_cache/ring-crypto" ]

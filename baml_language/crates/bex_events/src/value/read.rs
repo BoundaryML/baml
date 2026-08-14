@@ -1,6 +1,6 @@
 //! Target-neutral `.bamlvalue` parsing helpers.
 
-use std::io::{self, Read};
+use std::io;
 
 use prost::Message;
 
@@ -11,12 +11,6 @@ pub struct BamlvalueContents {
     pub header: pb::ValueFileHeaderV1,
     pub records: Vec<ValueFileRecord>,
     pub truncated: bool,
-}
-
-pub fn read_bamlvalue_from_reader(mut reader: impl Read) -> io::Result<BamlvalueContents> {
-    let mut bytes = Vec::new();
-    reader.read_to_end(&mut bytes)?;
-    read_bamlvalue_from_bytes(&bytes)
 }
 
 pub fn read_bamlvalue_from_bytes(bytes: &[u8]) -> io::Result<BamlvalueContents> {

@@ -10,13 +10,6 @@ use crate::{
     },
 };
 
-pub fn encode_length_delimited_message(
-    out: &mut Vec<u8>,
-    msg: &impl Message,
-) -> Result<(), prost::EncodeError> {
-    msg.encode_length_delimited(out)
-}
-
 pub fn encode_header(out: &mut Vec<u8>, boundary_id: BoundaryId) -> Result<(), prost::EncodeError> {
     pb::ValueFileHeaderV1 {
         boundary_id: boundary_id.as_bytes().to_vec(),

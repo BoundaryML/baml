@@ -157,6 +157,18 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
             write_rvalue(f, value)?;
             write!(f, ";")
         }
+        StatementKind::VirtualFieldStore {
+            iface,
+            receiver,
+            field_index,
+            field,
+            value,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface} = ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
@@ -204,6 +216,17 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write!(f, "branch ")?;
             write_operand(f, condition)?;
             write!(f, " -> [{then_block}, {else_block}];")
+        }
+        Terminator::NarrowBind {
+            source,
+            ty_template,
+            destination,
+            then_block,
+            else_block,
+        } => {
+            write!(f, "{destination} = narrow_bind ")?;
+            write_operand(f, source)?;
+            write!(f, " as {ty_template:?} -> [{then_block}, {else_block}];")
         }
         Terminator::Switch {
             discriminant,
@@ -345,10 +368,15 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             closure,
             name,
             config,
+            future_ty,
             future,
             resume,
         } => {
-            write!(f, "{future} = spawn ")?;
+            write!(
+                f,
+                "{future} = spawn<{}, {}> ",
+                future_ty.returns, future_ty.throws
+            )?;
             write_operand(f, closure)?;
             write!(f, " name=")?;
             write_operand(f, name)?;
@@ -432,6 +460,15 @@ fn write_runtime_id_arg(
 fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
     match rvalue {
         Rvalue::Use(operand) => write_operand(f, operand),
+        Rvalue::VirtualFieldAccess {
+            iface,
+            receiver,
+            field_index,
+            field,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface}")
+        }
         Rvalue::BinaryOp { op, left, right } => {
             write_operand(f, left)?;
             write!(f, " {op} ")?;
@@ -515,6 +552,11 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, operand)?;
             write!(f, ", {ty_template})")
         }
+        Rvalue::IsTypeTag { operand, tag } => {
+            write!(f, "is_type_tag(")?;
+            write_operand(f, operand)?;
+            write!(f, ", {})", type_tag_name(*tag))
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -574,6 +616,31 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
     }
 }
 
+/// Symbolic name for a `baml_type::typetag` constant in `is_type_tag` renders.
+/// Class tags (`CLASS_BASE + n`) and anything unrecognized print numerically.
+/// The full tag set is named for robustness, though the only MIR producer
+/// today (`emit_is_type_tag_branch`) emits `LIST`/`MAP`.
+fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
+    use baml_type::typetag as t;
+    std::borrow::Cow::Borrowed(match tag {
+        t::INT => "INT",
+        t::STRING => "STRING",
+        t::BOOL => "BOOL",
+        t::NULL => "NULL",
+        t::FLOAT => "FLOAT",
+        t::ENUM => "ENUM",
+        t::LIST => "LIST",
+        t::MAP => "MAP",
+        t::FUNCTION => "FUNCTION",
+        t::FUTURE => "FUTURE",
+        t::TYPE => "TYPE",
+        t::COLLECTOR => "COLLECTOR",
+        t::UINT8ARRAY => "UINT8ARRAY",
+        t::BIGINT => "BIGINT",
+        other => return std::borrow::Cow::Owned(other.to_string()),
+    })
+}
+
 fn write_operand(f: &mut impl Write, operand: &Operand) -> fmt::Result {
     match operand {
         Operand::Copy(place) => write!(f, "copy {place}"),
@@ -592,6 +659,7 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
         Constant::Null => write!(f, "const null"),
         Constant::OmittedArg => write!(f, "const <omitted>"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
+        Constant::GlobalItem(qn) => write!(f, "const item {qn}"),
         Constant::GenericFunction { item, type_args } => {
             let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
             write!(f, "const fn {item}<{}>", args.join(", "))
@@ -649,7 +717,11 @@ mod tests {
     #[test]
     fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
         let terminator = Terminator::VirtualCall {
-            iface: baml_type::TyTemplate::Wildcard,
+            iface: baml_type::TyTemplateInterface::new(
+                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
+                Vec::new(),
+                Vec::new(),
+            ),
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
@@ -661,7 +733,7 @@ mod tests {
 
         assert_eq!(
             render_terminator(&terminator),
-            "_0 = virtual_call eq as _($id = copy _9) -> [bb1];"
+            "_0 = virtual_call eq as baml.ops.Equals($id = copy _9) -> [bb1];"
         );
     }
 

@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+280..288 'el_adopt': throws never
+311..387 '{\n   ...h()\n}': int
+317..325 'let rows': int[][]
+328..345 '[[1], ...], []]': int[][]
+329..332 '[1]': int[]
+330..331 '1': 1
+334..340 '[2, 3]': int[]
+335..336 '2': 2
+338..339 '3': 3
+342..344 '[]': int[]
+372..383 'rows.length': (self: int[][]) -> int throws never
+372..385 'rows.length()': int

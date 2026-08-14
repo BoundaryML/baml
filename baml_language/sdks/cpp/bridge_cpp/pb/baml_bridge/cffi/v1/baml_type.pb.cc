@@ -78,7 +78,8 @@ inline constexpr BamlTyTypeVar::Impl_::Impl_(
       : _cached_size_{0},
         name_(
             &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()) {}
+            ::_pbi::ConstantInitialized()),
+        index_{0u} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR BamlTyTypeVar::BamlTyTypeVar(::_pbi::ConstantInitialized)
@@ -8239,6 +8240,7 @@ BamlTyTypeVar::BamlTyTypeVar(
   _internal_metadata_.MergeFrom<std::string>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.index_ = from._impl_.index_;
 
   // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlTyTypeVar)
 }
@@ -8250,6 +8252,7 @@ PROTOBUF_NDEBUG_INLINE BamlTyTypeVar::Impl_::Impl_(
 
 inline void BamlTyTypeVar::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.index_ = {};
 }
 BamlTyTypeVar::~BamlTyTypeVar() {
   // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlTyTypeVar)
@@ -8303,16 +8306,16 @@ BamlTyTypeVar::GetClassData() const {
   return BamlTyTypeVar_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 0, 46, 2>
+const ::_pbi::TcParseTable<1, 2, 0, 46, 2>
 BamlTyTypeVar::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(BamlTyTypeVar, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
+    2,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     BamlTyTypeVar_class_data_.base(),
@@ -8322,6 +8325,9 @@ BamlTyTypeVar::_table_ = {
     ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyTypeVar>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // uint32 index = 2;
+    {::_pbi::TcParser::FastV32S1,
+     {16, 1, 0, PROTOBUF_FIELD_OFFSET(BamlTyTypeVar, _impl_.index_)}},
     // string name = 1;
     {::_pbi::TcParser::FastUS1,
      {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlTyTypeVar, _impl_.name_)}},
@@ -8331,6 +8337,9 @@ BamlTyTypeVar::_table_ = {
     // string name = 1;
     {PROTOBUF_FIELD_OFFSET(BamlTyTypeVar, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // uint32 index = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlTyTypeVar, _impl_.index_), _Internal::kHasBitsOffset + 1, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
   }},
   // no aux_entries
   {{
@@ -8350,6 +8359,7 @@ PROTOBUF_NOINLINE void BamlTyTypeVar::Clear() {
   if ((cached_has_bits & 0x00000001u) != 0) {
     _impl_.name_.ClearNonDefaultToEmpty();
   }
+  _impl_.index_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
 }
@@ -8379,6 +8389,15 @@ PROTOBUF_NOINLINE void BamlTyTypeVar::Clear() {
     }
   }
 
+  // uint32 index = 2;
+  if ((this_._impl_._has_bits_[0] & 0x00000002u) != 0) {
+    if (this_._internal_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_index(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(
         this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
@@ -8402,13 +8421,21 @@ PROTOBUF_NOINLINE void BamlTyTypeVar::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
     // string name = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if ((cached_has_bits & 0x00000001u) != 0) {
       if (!this_._internal_name().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_name());
+      }
+    }
+    // uint32 index = 2;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      if (this_._internal_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_index());
       }
     }
   }
@@ -8428,12 +8455,19 @@ void BamlTyTypeVar::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::g
   (void) cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if ((cached_has_bits & 0x00000001u) != 0) {
-    if (!from._internal_name().empty()) {
-      _this->_internal_set_name(from._internal_name());
-    } else {
-      if (_this->_impl_.name_.IsDefault()) {
-        _this->_internal_set_name("");
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      if (from._internal_index() != 0) {
+        _this->_impl_.index_ = from._impl_.index_;
       }
     }
   }
@@ -8456,6 +8490,7 @@ void BamlTyTypeVar::InternalSwap(BamlTyTypeVar* PROTOBUF_RESTRICT PROTOBUF_NONNU
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  swap(_impl_.index_, other->_impl_.index_);
 }
 
 // ===================================================================

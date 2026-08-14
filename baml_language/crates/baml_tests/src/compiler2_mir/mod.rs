@@ -5,8 +5,10 @@
 
 use std::fmt::Write;
 
-use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
-use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
+use baml_compiler2_mir::{
+    MirFunctionKind, OptLevel, Terminator, lower_function, pretty::display_function,
+};
+use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
 use baml_project::ProjectDatabase;
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
@@ -19,16 +21,161 @@ fn make_db() -> ProjectDatabase {
 
 /// Lower all functions in a file to MIR and pretty-print them.
 fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-    let item_tree = file_item_tree(db, file);
+    // Dump in source order (by declaration span) — intrinsic and
+    // salsa-enumeration-independent, matching the generated `test_04_5_mir`.
+    let mut functions = file_functions(db, file).to_vec();
+    functions.sort_by_key(|loc| function_source_map(db, *loc).span.start());
     let mut output = String::new();
 
-    for local_id in item_tree.functions.keys() {
-        let func_loc = FunctionLoc::new(db, file, *local_id);
+    for func_loc in functions {
         let mir = lower_function(db, func_loc, OptLevel::Two);
         writeln!(output, "{}", display_function(&mir)).unwrap();
     }
 
     output
+}
+
+#[test]
+fn explicit_local_id_reaches_direct_and_sysop_mir_terminators() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function leaf(n: int) -> int { n }
+
+function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int throws baml.errors.Io {
+  let value = leaf(1, $id = call_id)
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(0n), $id = sysop_id)
+  value
+}
+"#,
+    );
+    let main_loc = *file_functions(&db, file)
+        .iter()
+        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
+        .expect("main function");
+    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        panic!("main must lower to bytecode")
+    };
+
+    assert!(body.blocks.iter().any(|block| matches!(
+        block.terminator,
+        Some(Terminator::Call {
+            runtime_id: Some(_),
+            ..
+        })
+    )));
+    assert!(body.blocks.iter().any(|block| matches!(
+        block.terminator,
+        Some(Terminator::SysOp {
+            runtime_id: Some(_),
+            ..
+        })
+    )));
+}
+
+#[test]
+fn explicit_local_id_reaches_indirect_optional_virtual_and_union_calls() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+interface Speaker {
+  function speak(self) -> int throws never
+}
+
+class Dog {
+  function speak(self) -> int { 1 }
+}
+
+class Cat {
+  function speak(self) -> int { 2 }
+}
+
+implements Speaker for Dog {}
+implements Speaker for Cat {}
+
+function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
+  callback(1, $id = id)
+}
+
+function optional(callback: ((int) -> int throws never)?, id: boundary.LocalId) -> int? {
+  callback?.(1, $id = id)
+}
+
+function virtual(speaker: Speaker, id: boundary.LocalId) -> int {
+  speaker.speak($id = id)
+}
+
+function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
+  speaker.speak($id = id)
+}
+"#,
+    );
+    let lower_named = |name: &str| {
+        let loc = *file_functions(&db, file)
+            .iter()
+            .find(|&&loc| function_data(&db, loc).name.as_str() == name)
+            .unwrap_or_else(|| panic!("{name} function"));
+        lower_function(&db, loc, OptLevel::Two)
+    };
+
+    for name in ["indirect", "optional"] {
+        let mir = lower_named(name);
+        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+            panic!("{name} must lower to bytecode")
+        };
+        assert!(
+            body.blocks.iter().any(|block| matches!(
+                block.terminator,
+                Some(Terminator::Call {
+                    runtime_id: Some(_),
+                    ..
+                })
+            )),
+            "{name} dropped its runtime ID: {}",
+            display_function(&mir)
+        );
+    }
+
+    let virtual_mir = lower_named("virtual");
+    let MirFunctionKind::Bytecode(virtual_body) = &virtual_mir.kind else {
+        panic!("virtual must lower to bytecode")
+    };
+    assert!(
+        virtual_body.blocks.iter().any(|block| matches!(
+            block.terminator,
+            Some(Terminator::VirtualCall {
+                runtime_id: Some(_),
+                ..
+            })
+        )),
+        "virtual call dropped its runtime ID: {}",
+        display_function(&virtual_mir)
+    );
+
+    let union_mir = lower_named("union_dispatch");
+    let MirFunctionKind::Bytecode(union_body) = &union_mir.kind else {
+        panic!("union_dispatch must lower to bytecode")
+    };
+    let union_calls = union_body
+        .blocks
+        .iter()
+        .filter_map(|block| match block.terminator.as_ref() {
+            Some(Terminator::Call { runtime_id, .. }) => Some(runtime_id),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        union_calls.len() >= 2,
+        "expected one dispatch call per union member"
+    );
+    assert!(
+        union_calls.iter().all(|runtime_id| runtime_id.is_some()),
+        "a union dispatch branch dropped its runtime ID: {}",
+        display_function(&union_mir)
+    );
 }
 
 macro_rules! mir_snapshot {

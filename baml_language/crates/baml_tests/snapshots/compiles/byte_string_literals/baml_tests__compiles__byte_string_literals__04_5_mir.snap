@@ -18,26 +18,6 @@ fn user.ByteStringBasic() -> int {
     }
 }
 
-fn user.ByteStringDirectIndexRead() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: uint8array // data
-    let _2: uint8array
-    let _3: 0
-
-    bb0: {
-        _1 = b"<3 bytes>";
-        _2 = copy _1;
-        _3 = const 0_i64;
-        _0 = copy _2[_3];
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.ByteStringEmpty() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -54,23 +34,6 @@ fn user.ByteStringEmpty() -> int {
     }
 }
 
-fn user.ByteStringEquality() -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: uint8array
-    let _2: uint8array
-
-    bb0: {
-        _1 = b"<3 bytes>";
-        _2 = b"<3 bytes>";
-        _0 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.ByteStringHexEscapes() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -80,6 +43,37 @@ fn user.ByteStringHexEscapes() -> int {
         _1 = b"<5 bytes>";
         _0 = len(_1);
         goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ByteStringStandardEscapes() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: uint8array // data
+
+    bb0: {
+        _1 = b"<6 bytes>";
+        _0 = len(_1);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ByteStringIndexAccess() -> int | null {
+    // Locals:
+    let _0: int | null // _0 // return
+    let _1: uint8array // data
+
+    bb0: {
+        _1 = b"<3 bytes>";
+        _0 = call const fn baml.Uint8Array.at(copy _1, const 0_i64) -> [bb1];
     }
 
     bb1: {
@@ -120,14 +114,16 @@ fn user.ByteStringInCondition() -> int {
     }
 }
 
-fn user.ByteStringIndexAccess() -> int | null {
+fn user.ByteStringEquality() -> bool {
     // Locals:
-    let _0: int | null // _0 // return
-    let _1: uint8array // data
+    let _0: bool // _0 // return
+    let _1: uint8array
+    let _2: uint8array
 
     bb0: {
         _1 = b"<3 bytes>";
-        _0 = call const fn baml.Uint8Array.at(copy _1, const 0_i64) -> [bb1];
+        _2 = b"<3 bytes>";
+        _0 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -135,14 +131,14 @@ fn user.ByteStringIndexAccess() -> int | null {
     }
 }
 
-fn user.ByteStringLiteralAsArg() -> int {
+fn user.ByteStringPassAndReturn(data: uint8array) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: uint8array
+    let _1: uint8array // data // param
 
     bb0: {
-        _1 = b"<3 bytes>";
-        _0 = call const fn user.ByteStringPassAndReturn(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {
@@ -168,13 +164,18 @@ fn user.ByteStringMutate() -> int | null {
     }
 }
 
-fn user.ByteStringPassAndReturn(data: uint8array) -> int {
+fn user.ByteStringDirectIndexRead() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: uint8array // data // param
+    let _1: uint8array // data
+    let _2: uint8array
+    let _3: 0
 
     bb0: {
-        _0 = len(_1);
+        _1 = b"<3 bytes>";
+        _2 = copy _1;
+        _3 = const 0_i64;
+        _0 = copy _2[_3];
         goto -> bb1;
     }
 
@@ -183,15 +184,14 @@ fn user.ByteStringPassAndReturn(data: uint8array) -> int {
     }
 }
 
-fn user.ByteStringStandardEscapes() -> int {
+fn user.ByteStringLiteralAsArg() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: uint8array // data
+    let _1: uint8array
 
     bb0: {
-        _1 = b"<6 bytes>";
-        _0 = len(_1);
-        goto -> bb1;
+        _1 = b"<3 bytes>";
+        _0 = call const fn user.ByteStringPassAndReturn(copy _1) -> [bb1];
     }
 
     bb1: {

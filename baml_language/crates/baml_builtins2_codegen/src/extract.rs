@@ -61,15 +61,22 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 pub fn extract_native_builtins()
 -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
+    extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)
+}
+
+/// [`extract_native_builtins`] scoped to one stdlib package, so each package
+/// with Rust-implemented builtins gets its own generated dispatch surface.
+#[allow(clippy::type_complexity)]
+pub fn extract_native_builtins_for(
+    package: &str,
+) -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
+{
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL
-        .iter()
-        .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
-    {
+    for builtin_file in baml_builtins2::ALL.iter().filter(|f| f.package == package) {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(
@@ -206,10 +213,24 @@ fn extract_from_class(
     let class_generics: Vec<String> = class_def
         .generic_params
         .iter()
-        .map(|n| n.as_str().to_string())
+        .map(|param| param.name.as_str().to_string())
         .collect();
 
-    for method in &class_def.methods {
+    // Builtin methods may be declared directly on the class or inside an
+    // `implements I { ... }` block (BEP-044) — e.g. the `random.Rng`
+    // implementors put their `$rust_function` / `$rust_io_function` methods in
+    // an `implements Rng { ... }` block. A method inside `implements I` is named
+    // `{ns}.{Class}.{I}.{method}` at runtime (matching MIR's
+    // `scoped_implements_method_name`), so it carries the interface qualifier; a
+    // direct method is just `{ns}.{Class}.{method}`.
+    let direct = class_def.methods.iter().map(|m| (m, None));
+    let in_impl = class_def.implements.iter().flat_map(|b| {
+        // The interface `TypeExpr`'s `Display` is the exact form MIR uses to
+        // build the method's fully-qualified name, so reuse it verbatim.
+        let iface = b.target.to_string();
+        b.methods.iter().map(move |m| (m, Some(iface.clone())))
+    });
+    for (method, iface_qualifier) in direct.chain(in_impl) {
         let Some(pipeline) = extract_builtin_pipeline(method) else {
             continue;
         };
@@ -218,7 +239,7 @@ fn extract_from_class(
         let method_generics: Vec<String> = method
             .generic_params
             .iter()
-            .map(|n| n.as_str().to_string())
+            .map(|param| param.name.as_str().to_string())
             .collect();
         let mut all_generics = class_generics.clone();
         for g in &method_generics {
@@ -227,7 +248,15 @@ fn extract_from_class(
             }
         }
 
-        let path = format!("{namespace_prefix}.{class_name}.{}", method.name.as_str());
+        let path = match &iface_qualifier {
+            Some(iface) => {
+                format!(
+                    "{namespace_prefix}.{class_name}.{iface}.{}",
+                    method.name.as_str()
+                )
+            }
+            None => format!("{namespace_prefix}.{class_name}.{}", method.name.as_str()),
+        };
         let fn_name = path_to_fn_name(&path);
 
         let has_self = method
@@ -272,7 +301,7 @@ fn extract_from_class(
 
         // Always set receiver for class methods — even static methods (no `self`)
         // need it for dispatch routing. The runtime path is
-        // "baml.llm.StreamCache.new" which dispatches via class name.
+        // "baml.sap.ParseCache.new" which dispatches via class name.
         let receiver_type = if !has_self {
             ReceiverType::Static
         } else if is_mut {
@@ -363,7 +392,7 @@ fn extract_class_fields(
     let generic_params: Vec<String> = class_def
         .generic_params
         .iter()
-        .map(|n| n.as_str().to_string())
+        .map(|param| param.name.as_str().to_string())
         .collect();
 
     let fields: Vec<NativeClassField> = class_def
@@ -371,11 +400,7 @@ fn extract_class_fields(
         .iter()
         .enumerate()
         .map(|(index, field)| {
-            let field_type = field
-                .type_expr
-                .as_ref()
-                .map(|te| type_expr_to_baml_type(te, &generic_params))
-                .unwrap_or(BamlType::Named("unknown".to_string()));
+            let field_type = type_expr_to_baml_type(&field.type_expr, &generic_params);
             NativeClassField {
                 name: field.name.as_str().to_string(),
                 field_type,
@@ -409,7 +434,7 @@ fn extract_from_free_function(
     let generics: Vec<String> = func_def
         .generic_params
         .iter()
-        .map(|n| n.as_str().to_string())
+        .map(|param| param.name.as_str().to_string())
         .collect();
 
     let path = format!("{namespace_prefix}.{}", func_def.name.as_str());
@@ -512,7 +537,7 @@ fn extract_from_implements_for(
     let impl_generics: Vec<String> = impl_def
         .generic_params
         .iter()
-        .map(|(n, _)| n.as_str().to_string())
+        .map(|param| param.name.as_str().to_string())
         .collect();
 
     // `Self` inside method signatures resolves to the `for` target.
@@ -536,7 +561,7 @@ fn extract_from_implements_for(
         let method_generics: Vec<String> = method
             .generic_params
             .iter()
-            .map(|n| n.as_str().to_string())
+            .map(|param| param.name.as_str().to_string())
             .collect();
         let mut all_generics = impl_generics.clone();
         for g in &method_generics {
@@ -748,7 +773,7 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
 /// Examples:
 /// - `"baml.Array.length"` → `"baml_array_length"`
 /// - `"baml.deep_copy"` → `"baml_deep_copy"`
-/// - `"baml.sys.now_ms"` → `"baml_sys_now_ms"`
+/// - `"baml.sys.argv"` → `"baml_sys_argv"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
 fn path_to_fn_name(path: &str) -> String {
     path.replace('.', "_").to_lowercase()
@@ -1123,31 +1148,22 @@ mod tests {
         assert_eq!(request.namespace_prefix, "baml.http");
         assert_eq!(request.fields.len(), 4);
 
-        // LLM classes
-        let pc = class_defs
+        // The structural prompt lives in the ai package.
+        let (_ai_vm, _ai_io, ai_class_defs) = extract_native_builtins_for("ai").unwrap();
+        let prompt = ai_class_defs
             .iter()
-            .find(|c| c.name == "PrimitiveClient")
-            .expect("missing PrimitiveClient");
-        assert_eq!(pc.namespace_prefix, "baml.llm");
-
-        let client = class_defs
-            .iter()
-            .find(|c| c.name == "Client")
-            .expect("missing Client");
-        assert_eq!(client.namespace_prefix, "baml.llm");
-
-        let retry = class_defs
-            .iter()
-            .find(|c| c.name == "RetryPolicy")
-            .expect("missing RetryPolicy");
-        assert_eq!(retry.namespace_prefix, "baml.llm");
+            .find(|c| c.name == "Prompt")
+            .expect("missing ai.Prompt");
+        assert_eq!(prompt.namespace_prefix, "ai");
+        assert_eq!(prompt.fields.len(), 1);
+        assert!(matches!(prompt.fields[0].field_type, BamlType::RustType));
     }
 
     #[test]
     fn test_path_to_fn_name() {
         assert_eq!(path_to_fn_name("baml.Array.length"), "baml_array_length");
         assert_eq!(path_to_fn_name("baml.deep_copy"), "baml_deep_copy");
-        assert_eq!(path_to_fn_name("baml.sys.now_ms"), "baml_sys_now_ms");
+        assert_eq!(path_to_fn_name("baml.sys.argv"), "baml_sys_argv");
         assert_eq!(path_to_fn_name("baml.media.Pdf.url"), "baml_media_pdf_url");
         assert_eq!(path_to_fn_name("baml.Array.push"), "baml_array_push");
     }
@@ -1179,13 +1195,10 @@ mod tests {
             "BamlHttpFetch"
         );
         assert_eq!(make("baml.sys.panic").sys_op_variant_name(), "BamlSysPanic");
+        assert_eq!(make("ai.Prompt.text").sys_op_variant_name(), "AiPromptText");
         assert_eq!(
-            make("baml.llm.PrimitiveClient.render_prompt").sys_op_variant_name(),
-            "BamlLlmPrimitiveClientRenderPrompt"
-        );
-        assert_eq!(
-            make("baml.llm.get_jinja_template").sys_op_variant_name(),
-            "BamlLlmGetJinjaTemplate"
+            make("baml.prompt.render_output_format").sys_op_variant_name(),
+            "BamlPromptRenderOutputFormat"
         );
     }
 
@@ -1271,11 +1284,10 @@ mod tests {
 
         assert_eq!(deep_copy.vm_usage, VmUsage::MutRef);
 
-        let deep_equals = vm_builtins
-            .iter()
-            .find(|b| b.path == "baml.deep_equals")
-            .expect("missing deep_equals");
-        assert_eq!(deep_equals.vm_usage, VmUsage::Ref);
+        // `//baml:vm` on a non-container receiver: `Array`/`Map` methods default to
+        // `Ref` without the directive, so a media method is what actually pins the
+        // directive being read.
+        assert_eq!(pdf_url.vm_usage, VmUsage::Ref);
 
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);
@@ -1312,16 +1324,10 @@ mod tests {
             .unwrap();
         assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
 
-        let render_prompt = io_builtins
+        let sap_final = io_builtins
             .iter()
-            .find(|b| b.path == "baml.llm.PrimitiveClient.render_prompt")
+            .find(|b| b.path == "baml.sap.__parse_final")
             .unwrap();
-        assert_eq!(render_prompt.throws, throws(&["RenderPrompt"]));
-
-        let specialize = io_builtins
-            .iter()
-            .find(|b| b.path == "baml.llm.PrimitiveClient.specialize_prompt")
-            .unwrap();
-        assert_eq!(specialize.throws, throws(&["RenderPrompt", "LlmClient"]));
+        assert_eq!(sap_final.throws, throws(&["LlmClient"]));
     }
 }

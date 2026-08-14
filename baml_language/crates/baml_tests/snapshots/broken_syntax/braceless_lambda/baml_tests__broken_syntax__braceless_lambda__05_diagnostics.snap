@@ -2,22 +2,53 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] error: Expected lambda body '{', found '+'
-   ╭─[ braceless_lambda.baml:8:28 ]
-   │
- 8 │   let add1 = (x: int) => x + 1;
-   │                            ┬  
-   │                            ╰── Expected lambda body '{', found '+'
-   │ 
-   │ Note: Error code: E0010
-───╯
+  [type] E0002
 
-  [type] error: operator `+` cannot be applied to `"hello"` and `5`
-    ╭─[ braceless_lambda.baml:15:3 ]
-    │
- 15 │   "hello" + 5
-    │   ─────┬─────  
-    │        ╰─────── operator `+` cannot be applied to `"hello"` and `5`
-    │ 
-    │ Note: Error code: E0004
-────╯
+  × unresolved type: x
+   ╭─[braceless_lambda.baml:8:26]
+ 8 │   let add1 = (x: int) => x + 1;
+   ·                          ─
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[braceless_lambda.baml:8:28]
+ 8 │   let add1 = (x: int) => x + 1;
+   ·                            ┬
+   ·                            ╰── expected `lambda body '{'`, found `'+'`
+   ╰────
+
+  [type] E0002
+
+  × unresolved type: x
+    ╭─[braceless_lambda.baml:15:26]
+ 15 │   let add1 = (x: int) => x + ;
+    ·                          ─
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[braceless_lambda.baml:15:28]
+ 15 │   let add1 = (x: int) => x + ;
+    ·                            ┬
+    ·                            ╰── expected `lambda body '{'`, found `'+'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[braceless_lambda.baml:15:30]
+ 15 │   let add1 = (x: int) => x + ;
+    ·                              ┬
+    ·                              ╰── expected `expression`, found `';'`
+    ╰────
+
+  [type] E0004
+
+  × operator `+` cannot be applied to `"hello"` and `5`
+    ╭─[braceless_lambda.baml:22:3]
+ 22 │   "hello" + 5
+    ·   ───────────
+    ╰────

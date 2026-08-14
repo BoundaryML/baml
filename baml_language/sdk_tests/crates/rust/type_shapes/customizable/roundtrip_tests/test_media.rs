@@ -19,7 +19,7 @@ const URL: &str = "https://example.com/asset";
 // --- decode path (return_*) works -----------------------------------------
 
 #[test]
-fn test_return_image() {
+fn test_media_return_image() {
     // DIVERGENCE(rust): python asserts `is not None`; the successful unwrap
     // of the non-optional media result is that assertion here (and in every
     // test below).
@@ -27,48 +27,48 @@ fn test_return_image() {
 }
 
 #[test]
-fn test_return_audio() {
+fn test_media_return_audio() {
     return_audio(URL.to_string(), None).unwrap();
 }
 
 #[test]
-fn test_return_video() {
+fn test_media_return_video() {
     return_video(URL.to_string(), None).unwrap();
 }
 
 #[test]
-fn test_return_pdf() {
+fn test_media_return_pdf() {
     return_pdf(URL.to_string(), None).unwrap();
 }
 
 // --- encode path (round_trip_*) ------------------------------------------
 
 #[test]
-fn test_round_trip_image() {
+fn test_media_round_trip_image() {
     let img = return_image(URL.to_string(), None).unwrap();
     round_trip_image(img).unwrap();
 }
 
 #[test]
-fn test_round_trip_audio() {
+fn test_media_round_trip_audio() {
     let aud = return_audio(URL.to_string(), None).unwrap();
     round_trip_audio(aud).unwrap();
 }
 
 #[test]
-fn test_round_trip_video() {
+fn test_media_round_trip_video() {
     let vid = return_video(URL.to_string(), None).unwrap();
     round_trip_video(vid).unwrap();
 }
 
 #[test]
-fn test_round_trip_pdf() {
+fn test_media_round_trip_pdf() {
     let pdf = return_pdf(URL.to_string(), None).unwrap();
     round_trip_pdf(pdf).unwrap();
 }
 
 #[test]
-fn test_round_trip_media() {
+fn test_media_round_trip_media() {
     let m = Media {
         image_field: return_image(URL.to_string(), None).unwrap(),
         audio_field: return_audio(URL.to_string(), None).unwrap(),

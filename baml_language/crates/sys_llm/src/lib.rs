@@ -2,14 +2,12 @@
 //!
 //! This crate consolidates all LLM-related functionality:
 //! - `types` - Error types and output format schema types
-//! - `jinja` - Jinja template rendering for BAML prompts
 //! - `specialize_prompt()` - Transform a generic `PromptAst` for a specific LLM provider
 //! - `execute_*` entry points for trait-based dispatch from `sys_types`
 
 mod auth_request;
 pub mod baml_std;
 mod build_request;
-pub(crate) mod jinja;
 mod model_features;
 pub(crate) mod parse_response;
 mod provider;
@@ -21,19 +19,13 @@ pub(crate) mod types;
 use std::{str::FromStr, sync::Arc};
 
 use bex_external_types::BexExternalValue;
-// Used by bex_engine tests
-pub use jinja::{
-    OutputFormatContent, RenderContext, RenderContextClient, RenderEnum, RenderEnumVariant,
-    RenderPromptError, preprocess_template, render_prompt,
-};
 // --- Crate-internal re-exports (used by submodules via `crate::`) ---
 pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
 // Used by sys_types (From<LlmOpError> for VmBamlError)
 pub use provider::LlmProvider;
-pub use sys_jinja::undeclared_prompt_variables;
-pub use types::LlmOpError;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
-pub use types::SapStreamCache;
+pub use types::SapParseCache;
+pub use types::{LlmOpError, OutputFormatContent};
 
 // Selects the rustls crypto provider for the crate. No longer called directly
 // now that all HTTPS flows through `RuntimeIo` (sys_native installs its own
@@ -68,50 +60,9 @@ pub(crate) fn ensure_rustls_crypto_provider() {}
 // Clean (owned-type) entry points for trait-based dispatch
 // ============================================================================
 
-/// Render a Jinja template given already-extracted owned types.
-///
-/// `args` is expected to be `BexExternalValue::Map { entries, .. }`.
-pub fn execute_render_prompt_from_owned(
-    client: &baml_std::PrimitiveClient,
-    template: &str,
-    args: &BexExternalValue,
-    return_type: &baml_type::RuntimeTy,
-    ctx: &::sys_types::SysOpContext,
-) -> Result<bex_vm_types::PromptAst, LlmOpError> {
-    let BexExternalValue::Map {
-        entries: template_args,
-        ..
-    } = args
-    else {
-        return Err(LlmOpError::TypeError {
-            expected: "map",
-            actual: args.type_name().to_string(),
-        });
-    };
-
-    let output_format = build_output_format_content(return_type, ctx);
-
-    let render_ctx = jinja::RenderContext {
-        client: jinja::RenderContextClient {
-            name: client.name.clone(),
-            provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles.clone(),
-        },
-        output_format,
-        tags: indexmap::IndexMap::new(),
-        enums: std::collections::HashMap::new(),
-    };
-
-    let prompt_ast = jinja::render_prompt(template, template_args, &render_ctx)
-        .map_err(|e| LlmOpError::RenderPrompt(e.to_string()))?;
-    Ok(std::sync::Arc::new(prompt_ast))
-}
-
-/// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
-/// string a `prompt` body reads as `ctx.output_format`. Equivalent to the Jinja
-/// path's `{{ ctx.output_format }}` (`OutputFormatObject`'s `Display`): build the
-/// `OutputFormatContent`, render with `RenderOptions::default()`. An empty/`None`
+/// Render `return_type`'s schema with default options for
+/// `ctx.output_format`. Build the `OutputFormatContent`, then render with
+/// `RenderOptions::default()`. An empty or `None`
 /// render (e.g. a primitive return type with no schema) becomes the empty string.
 pub fn render_output_format(
     return_type: &baml_type::RuntimeTy,
@@ -124,9 +75,8 @@ pub fn render_output_format(
         .unwrap_or_default()
 }
 
-/// BEP-049 §10 (M5b.2). Render a prebuilt [`OutputFormatContent`] with
-/// caller-supplied options — backs the parameterized `ctx.output_format_with(...)`
-/// accessor (the rare `{{ ctx.output_format(...) }}` Jinja form). The content is
+/// Render a prebuilt [`OutputFormatContent`] with caller-supplied options.
+/// This backs the parameterized `ctx.output_format_with(...)` accessor. The content is
 /// carried as an opaque handle on `Context` (built once by
 /// [`build_output_format_content`]); this only re-renders. The option mapping
 /// (`RenderSetting`/`RenderOptions`) stays crate-internal: a value overrides
@@ -629,7 +579,7 @@ pub fn execute_parse_response_from_owned(
         baml_type::RuntimeTy::null(), // no streaming
     )
     .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
-    let sap = SapStreamCache::new(compiled);
+    let sap = SapParseCache::new(compiled);
     execute_sap_parse_final(&response.content, &sap, ctx)
 }
 
@@ -976,7 +926,7 @@ fn nullable_list_inner(target: &baml_type::RuntimeTy) -> Option<&baml_type::Runt
 
 pub fn execute_sap_parse_final(
     json: &str,
-    sap: &SapStreamCache,
+    sap: &SapParseCache,
     _ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
     // === Jsonish ===
@@ -996,12 +946,15 @@ pub fn execute_sap_parse_final(
         })?;
 
     // === Convert back to baml ===
-    Ok(::bex_sap::to_external::baml_value_to_external(&parsed))
+    Ok(::bex_sap::to_external::baml_value_to_external(
+        &parsed,
+        sap.db(),
+    ))
 }
 
 pub fn execute_sap_parse_partial(
     json: &str,
-    sap: &SapStreamCache,
+    sap: &SapParseCache,
     _ctx: &::sys_types::SysOpContext,
 ) -> Result<Option<bex_external_types::BexExternalValue>, LlmOpError> {
     // === Jsonish ===
@@ -1020,7 +973,7 @@ pub fn execute_sap_parse_partial(
     // === Convert back to baml ===
     match parsed {
         Some(parsed) => {
-            let converted = ::bex_sap::to_external::baml_value_to_external(&parsed);
+            let converted = ::bex_sap::to_external::baml_value_to_external(&parsed, sap.db());
             Ok(Some(converted))
         }
         None => Ok(None),
@@ -1720,10 +1673,7 @@ mod tests {
 
     #[test]
     fn render_output_format_renders_class_schema() {
-        // BEP-049 M5b: `render_output_format` is the `ctx.output_format` backing.
-        // For a class return type it must emit the schema (field names), matching
-        // what `OutputFormatObject`'s `Display` (the Jinja `{{ ctx.output_format }}`)
-        // produces from the same `OutputFormatContent`.
+        // For a class return type, `ctx.output_format` must emit the schema.
         let ctx = ctx_with(
             vec![(
                 tn("User"),

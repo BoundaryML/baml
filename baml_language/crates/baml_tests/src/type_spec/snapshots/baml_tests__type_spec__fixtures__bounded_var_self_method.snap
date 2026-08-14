@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+220..221 'f': throws never
+270..302 '{\n   ...ool\n}': bool
+276..280 'x.lt': (self: T, other: T) -> bool throws never
+276..283 'x.lt(y)': bool
+281..282 'y': T
+313..314 'g': throws never
+363..395 '{\n   ...ool\n}': bool
+369..373 'x.eq': (self: T, other: T) -> bool throws never
+369..376 'x.eq(y)': bool
+374..375 'y': T

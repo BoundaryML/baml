@@ -20,6 +20,7 @@ use std::{
     fmt::Write as _,
 };
 
+use baml_base::qualified_name::AI_STREAM_STREAM;
 use baml_codegen_types::FunctionArgumentDefault;
 
 use crate::{
@@ -95,17 +96,21 @@ fn symbol_kind_ord(sym: &EmittedSymbol) -> u8 {
     }
 }
 
-/// If `c` is one of the five runtime-owned stdlib types, return the
-/// runtime export name (`BamlImage`, etc.).
-fn media_reexport_runtime_name(c: &TypeScriptClass) -> Option<&'static str> {
-    match c.source.to_string().as_str() {
-        "baml.media.Image" => Some("BamlImage"),
-        "baml.media.Video" => Some("BamlVideo"),
-        "baml.media.Audio" => Some("BamlAudio"),
-        "baml.media.Pdf" => Some("BamlPdf"),
-        "baml.llm.Stream" => Some("BamlStream"),
-        _ => None,
-    }
+/// Authoritative engine-FQN → runtime-export mapping for classes whose
+/// JavaScript identity is owned by the bridge package rather than codegen.
+const RUNTIME_OWNED_CLASS_REEXPORTS: &[(&str, &str)] = &[
+    ("baml.media.Image", "BamlImage"),
+    ("baml.media.Audio", "BamlAudio"),
+    ("baml.media.Video", "BamlVideo"),
+    ("baml.media.Pdf", "BamlPdf"),
+    (AI_STREAM_STREAM, "BamlStream"),
+];
+
+fn runtime_owned_reexport_name(c: &TypeScriptClass) -> Option<&'static str> {
+    let source = c.source.to_string();
+    RUNTIME_OWNED_CLASS_REEXPORTS
+        .iter()
+        .find_map(|(fqn, runtime_name)| (*fqn == source).then_some(*runtime_name))
 }
 
 fn mode_str(mode: SyncAsync) -> &'static str {
@@ -373,7 +378,7 @@ fn fn_type_sig(
         .zip(tys.iter())
         .map(|(name, ty)| format!("{name}: {}", ty.expr))
         .collect();
-    if required < names.len() {
+    {
         let mut fields = Vec::new();
         for (name, ty) in names.iter().zip(tys.iter()).skip(required) {
             fields.push(format!(
@@ -382,6 +387,7 @@ fn fn_type_sig(
                 ty.expr
             ));
         }
+        fields.push("$ctx?: BamlCallContext | undefined".to_string());
         params.push(format!("$opts?: {{ {} }} | undefined", fields.join("; ")));
     }
     let ret = if is_async {
@@ -536,6 +542,9 @@ fn runtime_import_line(state: &RenderState, extra: &[&str], runtime_package: &st
     if state.uses_define_instance {
         names.push("defineInstanceFunction");
     }
+    if state.uses_define_function || state.uses_define_instance {
+        names.push("type BamlCallContext");
+    }
     // Type-only import (inline `type` modifier) for the generic `$types` field
     // token. Sorted alongside the value imports; TS accepts a mixed
     // value/type-only named import.
@@ -577,7 +586,9 @@ fn write_preamble_ts(
         out.push_str("import { _TYPE_MAP } from \"./_typemap.js\";\n");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
-        out.push_str("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);\n");
+        out.push_str(
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);\n",
+        );
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
@@ -602,7 +613,7 @@ fn render_symbol_ts(
 ) {
     match sym {
         EmittedSymbol::Class(c) => {
-            if let Some(rust_name) = media_reexport_runtime_name(c) {
+            if let Some(rust_name) = runtime_owned_reexport_name(c) {
                 render_media_reexport_ts(out, &c.name, rust_name, runtime_package);
             } else {
                 render_class_ts(out, c, ctx, state);
@@ -1167,9 +1178,11 @@ mod tests {
             ],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-bridge\";"));
-        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string) => number;"));
-        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string) => Promise<number>;"));
+        assert!(ts.contains(
+            "import { defineFunction, type BamlCallContext } from \"@boundaryml/baml-bridge\";"
+        ));
+        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => number;"));
+        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<number>;"));
     }
 
     #[test]
@@ -1214,7 +1227,7 @@ mod tests {
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
         assert!(ts.contains(
-            "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined } | undefined) => number;"
+            "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined; $ctx?: BamlCallContext | undefined } | undefined) => number;"
         ));
         assert!(!ts.contains("default_?:"));
     }
@@ -1269,7 +1282,7 @@ mod tests {
             "defineFunction(\"user.lorem.extract\", \"sync\", [\"arguments\", \"arguments_\", \"$opts\"], [\"eval\"])"
         ));
         assert!(ts.contains(
-            "as (arguments_: string, arguments__: string, $opts_: string, $opts?: { eval?: string | undefined } | undefined) => string;"
+            "as (arguments_: string, arguments__: string, $opts_: string, $opts?: { eval?: string | undefined; $ctx?: BamlCallContext | undefined } | undefined) => string;"
         ));
     }
 
@@ -1296,20 +1309,42 @@ mod tests {
     }
 
     #[test]
-    fn media_reexport_full_shape() {
-        let b = body(
-            &["baml", "media"],
-            vec![class_sym(
-                "Image",
-                name("baml", &["media"], "Image"),
+    fn runtime_owned_reexports_use_the_configured_package_and_only_exact_bases() {
+        let mut symbols = Vec::new();
+        for (fqn, _) in RUNTIME_OWNED_CLASS_REEXPORTS {
+            let parts = fqn.split('.').collect::<Vec<_>>();
+            let class_name = parts[parts.len() - 1];
+            symbols.push(class_sym(
+                class_name,
+                name(parts[0], &parts[1..parts.len() - 1], class_name),
                 vec![],
-            )],
-        );
-        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains("import { BamlImage as Image } from \"@boundaryml/baml-bridge\";"));
-        assert!(ts.contains("export { Image };"));
-        // The class binding already provides the type; no separate `export type`.
-        assert!(!ts.contains("export type Image"));
+            ));
+        }
+        symbols.push(class_sym(
+            "Image$stream",
+            name("baml", &["media"], "Image$stream"),
+            vec![],
+        ));
+        symbols.push(class_sym(
+            "UserImage",
+            name("user", &["media"], "UserImage"),
+            vec![],
+        ));
+        let b = body(&["baml", "media"], symbols);
+
+        for runtime_package in ["@boundaryml/baml-bridge", "@boundaryml/baml-bridge-web"] {
+            let ts = render_index_ts(&b, &BTreeSet::new(), false, runtime_package);
+            for (fqn, runtime_name) in RUNTIME_OWNED_CLASS_REEXPORTS {
+                let local_name = fqn.rsplit('.').next().unwrap();
+                assert!(ts.contains(&format!(
+                    "import {{ {runtime_name} as {local_name} }} from \"{runtime_package}\";"
+                )));
+                assert!(ts.contains(&format!("export {{ {local_name} }};")));
+            }
+            assert!(ts.contains("export class Image$stream {"));
+            assert!(ts.contains("export class UserImage {"));
+            assert!(!ts.contains("export type Image"));
+        }
     }
 
     #[test]
@@ -1358,11 +1393,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as () => LocalId, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => LocalId, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as () => Promise<LocalId>;"
+                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<LocalId>;"
             )
         );
     }
@@ -1384,10 +1419,12 @@ mod tests {
         let mut kids = BTreeSet::new();
         kids.insert("lorem".to_string());
         let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);"));
+        assert!(ts.contains(
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+        ));
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap } from \"@boundaryml/baml-bridge\";"));
+        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap, type BamlCallContext } from \"@boundaryml/baml-bridge\";"));
     }
 }

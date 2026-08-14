@@ -11,10 +11,10 @@
 
 using baml_sdk::docs::Priority;
 
-static std::string HeaderText() {
+static std::string header_text() {
   std::ifstream in("baml_sdk/include/baml_sdk.h");
   if (!in) {
-    baml_test::Fail("cannot open baml_sdk/include/baml_sdk.h");
+    baml_test::fail("cannot open baml_sdk/include/baml_sdk.h");
   }
   std::ostringstream out;
   out << in.rdbuf();
@@ -31,7 +31,7 @@ static size_t CountOccurrences(const std::string& text,
   return count;
 }
 
-BAML_TEST(class_doc_summary_and_attributes_section) {
+BAML_TEST(main_class_doc_summary_and_attributes_section) {
   // Anchored on the namespace open so nothing precedes the summary line
   // (python parity: exact __doc__ equality).
   const std::string expected =
@@ -42,10 +42,10 @@ BAML_TEST(class_doc_summary_and_attributes_section) {
       "///     title: Title shown in lists and search results.\n"
       "///     body: Free-form body text.\n"
       "struct Doc {";
-  BAML_ASSERT(HeaderText().find(expected) != std::string::npos);
+  BAML_ASSERT(header_text().find(expected) != std::string::npos);
 }
 
-BAML_TEST(undocumented_field_listed_as_bare_name_under_attributes) {
+BAML_TEST(main_undocumented_field_listed_as_bare_name_under_attributes) {
   // Note: `id` is documented, `text` is not - the any-doc rule lists every
   // field, the undocumented one as a bare name. One contiguous block
   // (python parity: exact __doc__ equality), pinning the blank separator
@@ -60,10 +60,10 @@ BAML_TEST(undocumented_field_listed_as_bare_name_under_attributes) {
       "///     id: Stable identifier \u2014 surfaces in URLs.\n"
       "///     text\n"
       "struct Note {";
-  BAML_ASSERT(HeaderText().find(expected) != std::string::npos);
+  BAML_ASSERT(header_text().find(expected) != std::string::npos);
 }
 
-BAML_TEST(enum_doc_summary_and_members_section) {
+BAML_TEST(main_enum_doc_summary_and_members_section) {
   const std::string expected =
       "namespace docs {\n"
       "/// Sentiment labels surfaced by the model.\n"
@@ -74,11 +74,11 @@ BAML_TEST(enum_doc_summary_and_members_section) {
       "///     NEUTRAL\n"
       "// Enumerator values: FNV-1a-64 of the wire value (reorder-stable).\n"
       "enum class Sentiment : uint64_t {";
-  BAML_ASSERT(HeaderText().find(expected) != std::string::npos);
+  BAML_ASSERT(header_text().find(expected) != std::string::npos);
 }
 
-BAML_TEST(enum_summary_only_omits_members_section) {
-  const std::string text = HeaderText();
+BAML_TEST(main_enum_summary_only_omits_members_section) {
+  const std::string text = header_text();
   // The class-level summary is present verbatim with NO Members: rollup
   // between it and the declaration (python parity: exact __doc__
   // equality for the summary-only case).
@@ -98,19 +98,19 @@ BAML_TEST(enum_summary_only_omits_members_section) {
   const std::string body = text.substr(body_start, body_end - body_start);
   BAML_ASSERT_EQ(CountOccurrences(body, "="), size_t{3});
   // ...with these wire values.
-  BAML_ASSERT_EQ(std::string(baml::Codec<Priority>::ToWire(Priority::HIGH)),
+  BAML_ASSERT_EQ(std::string(baml::codec<Priority>::ToWire(Priority::HIGH)),
                  std::string("HIGH"));
-  BAML_ASSERT_EQ(std::string(baml::Codec<Priority>::ToWire(Priority::MEDIUM)),
+  BAML_ASSERT_EQ(std::string(baml::codec<Priority>::ToWire(Priority::MEDIUM)),
                  std::string("MEDIUM"));
-  BAML_ASSERT_EQ(std::string(baml::Codec<Priority>::ToWire(Priority::LOW)),
+  BAML_ASSERT_EQ(std::string(baml::codec<Priority>::ToWire(Priority::LOW)),
                  std::string("LOW"));
   BAML_ASSERT(Priority::HIGH != Priority::LOW);
 }
 
-BAML_TEST(no_inline_field_or_variant_doc_artifacts) {
+BAML_TEST(main_no_inline_field_or_variant_doc_artifacts) {
   // Field/variant /// docs live exclusively in the parent's rollup, never
   // inline per field: each doc line appears exactly once, on the parent.
-  const std::string text = HeaderText();
+  const std::string text = header_text();
   BAML_ASSERT_EQ(CountOccurrences(text, "Title shown in lists"), size_t{1});
   BAML_ASSERT_EQ(CountOccurrences(text, "Smiling face."), size_t{1});
 }

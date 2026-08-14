@@ -1,64 +1,75 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 52037
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    ╭─[ patterns_array_rest_binding.baml:37:12 ]
-    │
+  [type] E0001
+
+  × rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
+    ╭─[patterns_array_rest_binding.baml:37:12]
  37 │         [..[..]] => 1,
-    │            ──┬─  
-    │              ╰─── rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·            ────
+    ╰────
 
-  [type] error: rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    ╭─[ patterns_array_rest_binding.baml:45:12 ]
-    │
+  [type] E0063
+
+  × unreachable arm
+    ╭─[patterns_array_rest_binding.baml:38:14]
+ 38 │         _ => 0
+    ·              ─
+    ╰────
+
+  [type] E0001
+
+  × rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
+    ╭─[patterns_array_rest_binding.baml:45:12]
  45 │         [..[..let r]] => r.length(),
-    │            ────┬────  
-    │                ╰────── rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·            ─────────
+    ╰────
 
-  [type] error: rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    ╭─[ patterns_array_rest_binding.baml:53:19 ]
-    │
+  [type] E0063
+
+  × unreachable arm
+    ╭─[patterns_array_rest_binding.baml:46:14]
+ 46 │         _ => 0
+    ·              ─
+    ╰────
+
+  [type] E0001
+
+  × rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
+    ╭─[patterns_array_rest_binding.baml:53:19]
  53 │         [let a, ..[]] => a,
-    │                   ─┬  
-    │                    ╰── rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                   ──
+    ╰────
 
-  [type] error: rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    ╭─[ patterns_array_rest_binding.baml:61:19 ]
-    │
+  [type] E0001
+
+  × rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
+    ╭─[patterns_array_rest_binding.baml:61:19]
  61 │         [let a, ..[let b, ..let r, let c], let d] => a + b + c + d,
-    │                   ───────────┬───────────  
-    │                              ╰───────────── rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                   ───────────────────────
+    ╰────
 
-  [type] error: rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    ╭─[ patterns_array_rest_binding.baml:77:19 ]
-    │
+  [type] E0001
+
+  × rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
+    ╭─[patterns_array_rest_binding.baml:77:19]
  77 │         [let a, ..int] => a,
-    │                   ─┬─  
-    │                    ╰─── rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                   ───
+    ╰────
 
-  [type] error: rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    ╭─[ patterns_array_rest_binding.baml:84:12 ]
-    │
+  [type] E0001
+
+  × rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
+    ╭─[patterns_array_rest_binding.baml:84:12]
  84 │         [..Wrapper { value }] => value,
-    │            ────────┬────────  
-    │                    ╰────────── rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·            ─────────────────
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[patterns_array_rest_binding.baml:85:14]
+ 85 │         _ => 0
+    ·              ─
+    ╰────

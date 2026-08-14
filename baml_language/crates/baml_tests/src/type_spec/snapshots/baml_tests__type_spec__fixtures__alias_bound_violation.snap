@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+224..232 'abv_take': throws never
+278..287 '{\n    0\n}': 0
+284..285 '0': 0
+297..305 'abv_main': throws never
+339..447 '{\n   ...  r\n}': int
+345..350 'let r': int
+353..361 'abv_take': (v: user.AbvAlias) -> int throws never
+353..364 'abv_take(u)': int
+362..363 'u': user.AbvAlias
+444..445 'r': int
+353..364 'abv_take(u)': [mismatch] expected user.AbvShow, got user.AbvAlias

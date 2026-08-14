@@ -27,75 +27,51 @@ enum TestEnum {
 
 //----
 //- diagnostics
-// error: Expected ')', found is
-//     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
-//     │
+// E0010
+//
+//   × unexpected token
+//     ╭─[enum_enum_unquoted_description.baml:13:10]
 //  13 │     User is confused
-//     │          ─┬
-//     │           ╰── Expected ')', found is
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected Unexpected token in enum body, found is
-//     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
-//     │
-//  13 │     User is confused
-//     │          ─┬
-//     │           ╰── Expected Unexpected token in enum body, found is
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected Unexpected token in enum body, found ')'
-//     ╭─[ enum_enum_unquoted_description.baml:14:3 ]
-//     │
+//     ·          ─┬
+//     ·           ╰── expected `')'`, found `is`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[enum_enum_unquoted_description.baml:14:3]
 //  14 │   )
-//     │   ┬
-//     │   ╰── Expected Unexpected token in enum body, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected ')', found is
-//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
-//     │
+//     ·   ┬
+//     ·   ╰── expected `Unexpected token in enum body`, found `')'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[enum_enum_unquoted_description.baml:16:10]
 //  16 │     User is excited
-//     │          ─┬
-//     │           ╰── Expected ')', found is
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected Unexpected token in enum body, found is
-//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
-//     │
-//  16 │     User is excited
-//     │          ─┬
-//     │           ╰── Expected Unexpected token in enum body, found is
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected Unexpected token in enum body, found ')'
-//     ╭─[ enum_enum_unquoted_description.baml:17:3 ]
-//     │
+//     ·          ─┬
+//     ·           ╰── expected `')'`, found `is`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[enum_enum_unquoted_description.baml:17:3]
 //  17 │   )
-//     │   ┬
-//     │   ╰── Expected Unexpected token in enum body, found ')'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: `@description` argument must be a string literal, got `User`
-//     ╭─[ enum_enum_unquoted_description.baml:13:5 ]
-//     │
+//     ·   ┬
+//     ·   ╰── expected `Unexpected token in enum body`, found `')'`
+//     ╰────
+// E0037
+//
+//   × `@description` argument must be a string literal, got `User`
+//     ╭─[enum_enum_unquoted_description.baml:13:5]
 //  13 │     User is confused
-//     │     ──┬─
-//     │       ╰─── invalid builtin declaration
-//     │
-//     │ Note: Error code: E0037
-// ────╯
-// error: `@description` argument must be a string literal, got `User`
-//     ╭─[ enum_enum_unquoted_description.baml:16:5 ]
-//     │
+//     ·     ──┬─
+//     ·       ╰── invalid builtin declaration
+//     ╰────
+// E0037
+//
+//   × `@description` argument must be a string literal, got `User`
+//     ╭─[enum_enum_unquoted_description.baml:16:5]
 //  16 │     User is excited
-//     │     ──┬─
-//     │       ╰─── invalid builtin declaration
-//     │
-//     │ Note: Error code: E0037
-// ────╯
+//     ·     ──┬─
+//     ·       ╰── invalid builtin declaration
+//     ╰────

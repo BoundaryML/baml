@@ -3,82 +3,95 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function tagged_template_runtime.$init_test_ns_tagged_template_runtime_tagged_template_runtime(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_parts_built_in_order"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_captures_enclosing_local"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_outer_local_captured_through_user_lambda"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_body_param_injection"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_body_param_captured_by_nested_lambda"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_for_loop_flattens"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_for_loop_empty_collection"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_if_block_taken_and_skipped"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_mixed_static_and_for"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_cstyle_for_flattens"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_for_body_interp_with_nested_lambda_capturing_loop_local"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_for_body_interp_nested_lambda_uses_loop_local_in_let"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.tagged_template_runtime"
     load_const "tagged_template_nested_for_in_if"
     make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -104,8 +117,9 @@ function tagged_template_runtime.tt_cap(body: () -> baml.TaggedString throws nev
     load_field .values
     load_const 0
     load_array_element
-    store_var_load_var _3
-    is_type string
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -118,7 +132,7 @@ function tagged_template_runtime.tt_cap(body: () -> baml.TaggedString throws nev
     load_field .parts
     load_const 0
     load_array_element
-    load_var _3
+    load_var _6
     bin_op +
     load_var t
     load_field .parts
@@ -157,8 +171,9 @@ function tagged_template_runtime.tt_fmt(body: (string) -> baml.TaggedString thro
     load_field .values
     load_const 0
     load_array_element
-    store_var_load_var _3
-    is_type string
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -171,7 +186,7 @@ function tagged_template_runtime.tt_fmt(body: (string) -> baml.TaggedString thro
     load_field .parts
     load_const 0
     load_array_element
-    load_var _3
+    load_var _6
     bin_op +
     load_var t
     load_field .parts
@@ -405,8 +420,9 @@ function tagged_template_runtime.tt_render(body: () -> baml.TaggedString throws 
     load_field .values
     load_var i
     load_array_element
-    store_var_load_var _10
-    is_type string
+    store_var _13
+    load_var _13
+    narrow_bind string, slot=8
     pop_jump_if_false L3
     jump L4
 
@@ -416,7 +432,7 @@ function tagged_template_runtime.tt_render(body: () -> baml.TaggedString throws 
     jump L5
 
   L4:
-    load_var _10
+    load_var _13
     store_var v
 
   L5:

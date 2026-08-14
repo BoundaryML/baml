@@ -78,7 +78,7 @@ fn to_lsp_diagnostic(
         code: Some(lsp_types::NumberOrString::String(
             diagnostic.code().to_string(),
         )),
-        message: diagnostic.message.clone(),
+        message: diagnostic.message_with_primary_label().into_owned(),
         code_description: None,
         source: Some("baml".to_string()),
         related_information: Some(

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
-assertion_line: 511
 ---
 fn user.f(xs: int[]) -> int {
     // Locals:
@@ -20,7 +19,7 @@ fn user.f(xs: int[]) -> int {
     let _13: int
 
     bb0: {
-        _2 = is_type(copy _1, _[]);
+        _2 = is_type_tag(copy _1, LIST);
         branch copy _2 -> [bb1, bb2];
     }
 

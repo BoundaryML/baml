@@ -151,6 +151,16 @@ impl<'db> Definition<'db> {
     pub fn source_kind_name(self, db: &'db dyn crate::Db) -> &'static str {
         self.source_kind(db).as_str()
     }
+
+    /// Whether this definition is outside BAML's user-facing language surface.
+    pub fn is_language_internal(self, db: &'db dyn crate::Db) -> bool {
+        let Definition::Function(loc) = self else {
+            return false;
+        };
+        crate::file_item_tree(db, loc.file(db))[loc.id(db)]
+            .metadata
+            .is_language_internal
+    }
 }
 
 /// A symbol contribution: name, definition, and the name's source span.

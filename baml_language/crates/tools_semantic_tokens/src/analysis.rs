@@ -166,7 +166,8 @@ fn parse_expected(block: &str, source: &str) -> Vec<Token> {
 
         let text = after
             .find('"')
-            .and_then(|i| after.rfind('"').filter(|&j| j > i).map(|j| (i, j)))
+            .zip(after.rfind('"'))
+            .filter(|(i, j)| j > i)
             .map(|(i, j)| after[i + 1..j].to_string())
             .unwrap_or_default();
 

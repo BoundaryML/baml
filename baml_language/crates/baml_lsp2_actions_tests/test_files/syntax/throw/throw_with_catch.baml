@@ -45,30 +45,4 @@ function CatchOuter(x: int) -> string {
 
 //----
 //- diagnostics
-// warning: unreachable arm
-//     ╭─[ throw_throw_with_catch.baml:27:10 ]
-//     │
-//  27 │     _ => throw "wrapped"
-//     │          ───────┬───────
-//     │                 ╰───────── unreachable arm
-//     │
-//     │ Note: Error code: E0063
-// ────╯
-// warning: unreachable arm
-//     ╭─[ throw_throw_with_catch.baml:29:10 ]
-//     │
-//  29 │     _ => "ultimately caught"
-//     │          ─────────┬─────────
-//     │                   ╰─────────── unreachable arm
-//     │
-//     │ Note: Error code: E0063
-// ────╯
-// warning: unreachable arm
-//     ╭─[ throw_throw_with_catch.baml:42:10 ]
-//     │
-//  42 │     _ => "caught outer"
-//     │          ───────┬──────
-//     │                 ╰──────── unreachable arm
-//     │
-//     │ Note: Error code: E0063
-// ────╯
+// <no-diagnostics-expected>

@@ -764,6 +764,56 @@ fn function_type_throws_builtin_map_propagates_callback_surface() {
 }
 
 #[test]
+fn generic_bound_associated_error_is_reused_by_throws_analysis() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"class Boom {}
+
+interface Runner<Input> {
+  type Output
+  type Error
+
+  function run(self, input: Input) -> Self.Output throws Self.Error
+}
+
+class Task<T> {
+  function run<Output, Error, R extends Runner<Task<T>, Output = Output, Error = Error>>(
+    self,
+    runner: R,
+  ) -> Output throws Error {
+    runner.run(self)
+  }
+}
+
+class ConcreteRunner {
+  implements Runner<Task<int>> {
+    type Output = int
+    type Error = Boom
+
+    function run(self, input: Task<int>) -> int throws Boom {
+      throw Boom {}
+    }
+  }
+}
+
+function caller(task: Task<int>) -> int throws Boom {
+  task.run(runner = ConcreteRunner {})
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("declared throws"),
+        "expected the runner's concrete associated Error to satisfy the caller, got:\n{output}"
+    );
+    assert!(
+        !output.contains("extraneous throws declaration"),
+        "expected the concrete Boom throw to remain visible, got:\n{output}"
+    );
+}
+
+#[test]
 fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
     let mut db = make_db();
     let file = db.add_file(
@@ -784,6 +834,43 @@ fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
     assert!(
         !output.contains("declared throws"),
         "expected no local violation for an unannotated lambda (throws are inferred), got:\n{output}"
+    );
+}
+
+#[test]
+fn defining_a_throwing_lambda_does_not_charge_the_enclosing_functions_throw_set() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function defines(value: int) -> int throws never {
+  let risky = (n: int) -> int {
+    throw "boom"
+  }
+  return value
+}
+
+function calls(value: int) -> int throws never {
+  return defines(value)
+}"#,
+    );
+
+    // `defines` never invokes `risky`, so `boom` is the lambda's effect and not
+    // its definer's. The distinction is carried by walking the body structurally
+    // and stopping at `Expr::Lambda`; a flat scan of the expression arena would
+    // see the `throw` as though `defines` wrote it, give `defines` a
+    // package-level throw set of `string`, and propagate that to every caller.
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("declared throws"),
+        "neither the definer nor its caller may violate `throws never`, got:\n{output}"
+    );
+    // The effect is not lost, just attributed to the right place: the lambda's
+    // own inferred type carries it. FLIPPED to literal grain: the spec's
+    // callback_effect_param_flows_through fixture pins inferred surfaces
+    // keeping the thrown literal's type (TIR widened here).
+    assert!(
+        output.contains("(n: int) -> int throws \"boom\""),
+        "the throw must land on the lambda's inferred type, got:\n{output}"
     );
 }
 
@@ -933,11 +1020,14 @@ function f() -> int {
 
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
-    // Only the trailing wildcard `_ => 3` should be unreachable (int is fully
-    // handled by the literal + typed arms). The `int` arm must stay reachable.
-    assert!(
-        unreachable_count <= 1,
-        "typed int arm after literal 42 arm should NOT be unreachable, got:\n{output}"
+    // hir_ty keeps LITERAL grain on cross-function throw surfaces (the
+    // ratified S13 rule; TIR widened facts at the call boundary), so the
+    // one fact here is `42`: the literal arm handles it completely and
+    // BOTH later arms are provably unreachable.
+    assert_eq!(
+        unreachable_count, 2,
+        "under literal-grain facts the typed and wildcard arms are dead, got:
+{output}"
     );
 }
 
@@ -991,7 +1081,7 @@ fn spawn_with_non_callable_reports_concrete_mismatch() {
     let output = render_tir(&db, file);
     assert!(
         output.contains(
-            "expected (baml.spawn.SpawnParams<int, null>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
+            "expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
         ),
         "non-callable `with` must report the concrete transformer shape, got:\n{output}"
     );
@@ -1023,7 +1113,7 @@ function f() -> int { let x = spawn with h() { 1 }; await x }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("this link receives `baml.spawn.SpawnParams<int, null>`")
+        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`")
             && output.contains("must return a `baml.spawn.SpawnParams`"),
         "wrong-return transformer must report the link's concrete input, got:\n{output}"
     );
@@ -1034,13 +1124,13 @@ fn spawn_with_chain_input_mismatch_is_concrete() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        r#"function fix() -> (baml.spawn.SpawnParams<string, null>) -> baml.spawn.SpawnParams<string, null> throws never { (p) -> { p } }
+        r#"function fix() -> (baml.spawn.SpawnParams<string, never>) -> baml.spawn.SpawnParams<string, never> throws never { (p) -> { p } }
 function f() -> int { let x = spawn with fix() { 1 }; await x }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("got (baml.spawn.SpawnParams<string, null>)")
-            && output.contains("expected (baml.spawn.SpawnParams<int, null>)"),
+        output.contains("got (baml.spawn.SpawnParams<string, never>)")
+            && output.contains("expected (baml.spawn.SpawnParams<int, never>)"),
         "chain input mismatch must show both concrete SpawnParams types, got:\n{output}"
     );
 }
@@ -1077,7 +1167,7 @@ function f() -> int {
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("this link receives `baml.spawn.SpawnParams<int, null>`"),
+        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`"),
         "wrong-param variable transformer must report the link input, got:\n{output}"
     );
 }

@@ -3,28 +3,32 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function net.$init_test_ns_net_net(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.net"
     load_const "net_tcp_read_after_close_errors"
     make_closure .<lambda($init_test_ns_net_net, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.net"
     load_const "net_tcp_listener_accept_after_close_errors"
     make_closure .<lambda($init_test_ns_net_net, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.net"
     load_const "net_udp_send_after_close_errors"
     make_closure .<lambda($init_test_ns_net_net, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.net"
     load_const "net_udp_recv_timeout_fires"
     make_closure .<lambda($init_test_ns_net_net, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

@@ -20,7 +20,7 @@ function await_token_cancelled_catches() -> int {
 }
 
 test "await_token_cancelled_catches" {
-    assert.is_true(baml.deep_equals(await_token_cancelled_catches(), 0))
+    assert.equal(await_token_cancelled_catches(), 0)
 }
 
 // An un-fired token leaves the spawn to complete normally — the option must
@@ -32,7 +32,7 @@ function uncancelled_token_completes() -> int {
 }
 
 test "uncancelled_token_completes" {
-    assert.is_true(baml.deep_equals(uncancelled_token_completes(), 42))
+    assert.equal(uncancelled_token_completes(), 42)
 }
 
 // `CancelToken.cancel()` is synchronous on the token, so `is_cancelled()`
@@ -46,7 +46,7 @@ function token_is_cancelled_reflects_cancel() -> bool[] {
 }
 
 test "token_is_cancelled_reflects_cancel" {
-    assert.is_true(baml.deep_equals(token_is_cancelled_reflects_cancel(), [false, true]))
+    assert.equal(token_is_cancelled_reflects_cancel(), [false, true])
 }
 
 // `detach = true` opts out of the parent cascade but must not break normal
@@ -58,7 +58,7 @@ function detached_spawn_completes() -> int {
 }
 
 test "detached_spawn_completes" {
-    assert.is_true(baml.deep_equals(detached_spawn_completes(), 42))
+    assert.equal(detached_spawn_completes(), 42)
 }
 
 //----
@@ -83,6 +83,7 @@ test "detached_spawn_completes" {
 // cancel_token.baml:13:9 (variable) [declaration] len=3 "tok"
 // cancel_token.baml:13:13 (operator) len=1 "="
 // cancel_token.baml:13:15 (namespace) [defaultLibrary] len=4 "baml"
+// cancel_token.baml:13:19 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:13:20 (keyword) len=5 "spawn"
 // cancel_token.baml:13:26 (class) [defaultLibrary] len=11 "CancelToken"
 // cancel_token.baml:13:38 (method) len=3 "new"
@@ -92,16 +93,21 @@ test "detached_spawn_completes" {
 // cancel_token.baml:14:13 (keyword) len=5 "spawn"
 // cancel_token.baml:14:19 (keyword) len=4 "with"
 // cancel_token.baml:14:24 (namespace) [defaultLibrary] len=4 "baml"
+// cancel_token.baml:14:28 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:14:29 (keyword) len=5 "spawn"
 // cancel_token.baml:14:35 (function) len=7 "options"
 // cancel_token.baml:14:43 (parameter) len=6 "cancel"
 // cancel_token.baml:14:50 (operator) len=1 "="
 // cancel_token.baml:14:52 (variable) len=3 "tok"
 // cancel_token.baml:15:9 (namespace) [defaultLibrary] len=4 "baml"
+// cancel_token.baml:15:13 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:15:14 (namespace) [defaultLibrary] len=3 "sys"
+// cancel_token.baml:15:17 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:15:18 (function) len=5 "sleep"
 // cancel_token.baml:15:24 (namespace) [defaultLibrary] len=4 "baml"
+// cancel_token.baml:15:28 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:15:29 (namespace) [defaultLibrary] len=4 "time"
+// cancel_token.baml:15:33 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:15:34 (class) [defaultLibrary] len=8 "Duration"
 // cancel_token.baml:15:43 (method) len=17 "from_milliseconds"
 // cancel_token.baml:15:61 (number) len=6 "60000n"
@@ -115,19 +121,18 @@ test "detached_spawn_completes" {
 // cancel_token.baml:19:15 (keyword) len=5 "catch"
 // cancel_token.baml:19:22 (parameter) [declaration] len=1 "e"
 // cancel_token.baml:19:27 (namespace) [defaultLibrary] len=4 "baml"
-// cancel_token.baml:19:31 (operator) len=1 "."
+// cancel_token.baml:19:31 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:19:32 (namespace) [defaultLibrary] len=6 "panics"
-// cancel_token.baml:19:38 (operator) len=1 "."
+// cancel_token.baml:19:38 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:19:39 (class) [defaultLibrary] len=9 "Cancelled"
 // cancel_token.baml:19:52 (number) len=1 "0"
 // cancel_token.baml:22:1 (keyword) len=4 "test"
 // cancel_token.baml:22:6 (string) len=31 "\"await_token_cancelled_catches\""
 // cancel_token.baml:23:5 (namespace) [defaultLibrary] len=6 "assert"
-// cancel_token.baml:23:12 (function) len=7 "is_true"
-// cancel_token.baml:23:20 (namespace) [defaultLibrary] len=4 "baml"
-// cancel_token.baml:23:25 (function) len=11 "deep_equals"
-// cancel_token.baml:23:37 (function) len=29 "await_token_cancelled_catches"
-// cancel_token.baml:23:70 (number) len=1 "0"
+// cancel_token.baml:23:11 (namespace) [defaultLibrary] len=1 "."
+// cancel_token.baml:23:12 (function) len=5 "equal"
+// cancel_token.baml:23:18 (function) len=29 "await_token_cancelled_catches"
+// cancel_token.baml:23:51 (number) len=1 "0"
 // cancel_token.baml:26:1 (comment) len=78 "// An un-fired token leaves the spawn to complete normally — the option must"
 // cancel_token.baml:27:1 (comment) len=30 "// not perturb the happy path."
 // cancel_token.baml:28:1 (keyword) len=8 "function"
@@ -137,6 +142,7 @@ test "detached_spawn_completes" {
 // cancel_token.baml:29:9 (variable) [declaration] len=3 "tok"
 // cancel_token.baml:29:13 (operator) len=1 "="
 // cancel_token.baml:29:15 (namespace) [defaultLibrary] len=4 "baml"
+// cancel_token.baml:29:19 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:29:20 (keyword) len=5 "spawn"
 // cancel_token.baml:29:26 (class) [defaultLibrary] len=11 "CancelToken"
 // cancel_token.baml:29:38 (method) len=3 "new"
@@ -146,6 +152,7 @@ test "detached_spawn_completes" {
 // cancel_token.baml:30:13 (keyword) len=5 "spawn"
 // cancel_token.baml:30:19 (keyword) len=4 "with"
 // cancel_token.baml:30:24 (namespace) [defaultLibrary] len=4 "baml"
+// cancel_token.baml:30:28 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:30:29 (keyword) len=5 "spawn"
 // cancel_token.baml:30:35 (function) len=7 "options"
 // cancel_token.baml:30:43 (parameter) len=6 "cancel"
@@ -157,11 +164,10 @@ test "detached_spawn_completes" {
 // cancel_token.baml:34:1 (keyword) len=4 "test"
 // cancel_token.baml:34:6 (string) len=29 "\"uncancelled_token_completes\""
 // cancel_token.baml:35:5 (namespace) [defaultLibrary] len=6 "assert"
-// cancel_token.baml:35:12 (function) len=7 "is_true"
-// cancel_token.baml:35:20 (namespace) [defaultLibrary] len=4 "baml"
-// cancel_token.baml:35:25 (function) len=11 "deep_equals"
-// cancel_token.baml:35:37 (function) len=27 "uncancelled_token_completes"
-// cancel_token.baml:35:68 (number) len=2 "42"
+// cancel_token.baml:35:11 (namespace) [defaultLibrary] len=1 "."
+// cancel_token.baml:35:12 (function) len=5 "equal"
+// cancel_token.baml:35:18 (function) len=27 "uncancelled_token_completes"
+// cancel_token.baml:35:49 (number) len=2 "42"
 // cancel_token.baml:38:1 (comment) len=74 "// `CancelToken.cancel()` is synchronous on the token, so `is_cancelled()`"
 // cancel_token.baml:39:1 (comment) len=70 "// observes the transition immediately (no future / watcher involved)."
 // cancel_token.baml:40:1 (keyword) len=8 "function"
@@ -171,6 +177,7 @@ test "detached_spawn_completes" {
 // cancel_token.baml:41:9 (variable) [declaration] len=3 "tok"
 // cancel_token.baml:41:13 (operator) len=1 "="
 // cancel_token.baml:41:15 (namespace) [defaultLibrary] len=4 "baml"
+// cancel_token.baml:41:19 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:41:20 (keyword) len=5 "spawn"
 // cancel_token.baml:41:26 (class) [defaultLibrary] len=11 "CancelToken"
 // cancel_token.baml:41:38 (method) len=3 "new"
@@ -193,12 +200,11 @@ test "detached_spawn_completes" {
 // cancel_token.baml:48:1 (keyword) len=4 "test"
 // cancel_token.baml:48:6 (string) len=36 "\"token_is_cancelled_reflects_cancel\""
 // cancel_token.baml:49:5 (namespace) [defaultLibrary] len=6 "assert"
-// cancel_token.baml:49:12 (function) len=7 "is_true"
-// cancel_token.baml:49:20 (namespace) [defaultLibrary] len=4 "baml"
-// cancel_token.baml:49:25 (function) len=11 "deep_equals"
-// cancel_token.baml:49:37 (function) len=34 "token_is_cancelled_reflects_cancel"
-// cancel_token.baml:49:76 (boolean) len=5 "false"
-// cancel_token.baml:49:83 (boolean) len=4 "true"
+// cancel_token.baml:49:11 (namespace) [defaultLibrary] len=1 "."
+// cancel_token.baml:49:12 (function) len=5 "equal"
+// cancel_token.baml:49:18 (function) len=34 "token_is_cancelled_reflects_cancel"
+// cancel_token.baml:49:57 (boolean) len=5 "false"
+// cancel_token.baml:49:64 (boolean) len=4 "true"
 // cancel_token.baml:52:1 (comment) len=75 "// `detach = true` opts out of the parent cascade but must not break normal"
 // cancel_token.baml:53:1 (comment) len=79 "// completion (its survival/cascade-independence is verified by construction in"
 // cancel_token.baml:54:1 (comment) len=62 "// the engine: a detached spawn gets a fresh effective token)."
@@ -211,6 +217,7 @@ test "detached_spawn_completes" {
 // cancel_token.baml:56:13 (keyword) len=5 "spawn"
 // cancel_token.baml:56:19 (keyword) len=4 "with"
 // cancel_token.baml:56:24 (namespace) [defaultLibrary] len=4 "baml"
+// cancel_token.baml:56:28 (namespace) [defaultLibrary] len=1 "."
 // cancel_token.baml:56:29 (keyword) len=5 "spawn"
 // cancel_token.baml:56:35 (function) len=7 "options"
 // cancel_token.baml:56:43 (parameter) len=6 "detach"
@@ -222,8 +229,7 @@ test "detached_spawn_completes" {
 // cancel_token.baml:60:1 (keyword) len=4 "test"
 // cancel_token.baml:60:6 (string) len=26 "\"detached_spawn_completes\""
 // cancel_token.baml:61:5 (namespace) [defaultLibrary] len=6 "assert"
-// cancel_token.baml:61:12 (function) len=7 "is_true"
-// cancel_token.baml:61:20 (namespace) [defaultLibrary] len=4 "baml"
-// cancel_token.baml:61:25 (function) len=11 "deep_equals"
-// cancel_token.baml:61:37 (function) len=24 "detached_spawn_completes"
-// cancel_token.baml:61:65 (number) len=2 "42"
+// cancel_token.baml:61:11 (namespace) [defaultLibrary] len=1 "."
+// cancel_token.baml:61:12 (function) len=5 "equal"
+// cancel_token.baml:61:18 (function) len=24 "detached_spawn_completes"
+// cancel_token.baml:61:46 (number) len=2 "42"

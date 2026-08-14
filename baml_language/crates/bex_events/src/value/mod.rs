@@ -29,7 +29,7 @@ pub use live_cache::{
     DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES, DEFAULT_WASM_LIVE_VALUE_CACHE_BYTES, LiveValueBody,
     LiveValueCache, LiveValueEviction, LiveValueInsertResult, LiveValueKey, LiveValueLookup,
 };
-pub use read::{BamlvalueContents, read_bamlvalue_from_bytes, read_bamlvalue_from_reader};
+pub use read::{BamlvalueContents, read_bamlvalue_from_bytes};
 pub use record::{
     CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord, LogRecord,
     RunCompletedRecord, RunStartedRecord, ValueAvailability, ValueCapture, ValueCaptureKind,

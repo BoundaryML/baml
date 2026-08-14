@@ -1,147 +1,98 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 34534
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected T, got string
-    ╭─[ classes.baml:75:26 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[classes.baml:75:26]
  75 │         Maker<T> { data: params }
-    │                          ───┬──  
-    │                             ╰──── type mismatch: expected T, got string
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                          ───┬──
+    ·                             ╰── expected `T`, found `string`
+    ╰────
 
-  [type] error: type mismatch: expected T, got string
-    ╭─[ classes.baml:96:9 ]
-    │
- 96 │         self.data
-    │         ────┬────  
-    │             ╰────── type mismatch: expected T, got string
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
-     ╭─[ classes.baml:113:5 ]
-     │
- 113 │ ╭─▶     function bad<T>(x: T) -> T {
-     ┆ ┆   
- 115 │ ├─▶     }
-     │ │           
-     │ ╰─────────── type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
-     │     
-     │     Note: Error code: E0001
-─────╯
+  × mismatched types
+    ╭─[classes.baml:94:34]
+ 94 │ ╭─▶     function get_data(self) -> T {
+ 95 │ │           // error: method body returns string but declared return is T
+ 96 │ │           self.data
+ 97 │ ├─▶     }
+    · ╰──── expected `T`, found `string`
+    ╰────
 
-  [type] error: type `Box` expects 1 type argument(s), got 2
-     ╭─[ classes.baml:128:33 ]
-     │
+  [type] E0001
+
+  × type `Box` expects 1 type argument(s), got 0
+     ╭─[classes.baml:123:35]
+ 123 │ function wrong_arity_missing() -> Box {
+     ·                                   ───
+     ╰────
+
+  [type] E0001
+
+  × type `Box` expects 1 type argument(s), got 2
+     ╭─[classes.baml:128:33]
  128 │ function wrong_arity_extra() -> Box<int, string> {
-     │                                 ────────┬───────  
-     │                                         ╰───────── type `Box` expects 1 type argument(s), got 2
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·                                 ────────────────
+     ╰────
 
-  [type] error: type `Box` expects 1 type argument(s), got 2
-     ╭─[ classes.baml:129:5 ]
-     │
- 129 │     Box<int, string> { value: 42 }
-     │     ───────────────┬──────────────  
-     │                    ╰──────────────── type `Box` expects 1 type argument(s), got 2
-     │ 
-     │ Note: Error code: E0001
-─────╯
+  [type] E0001
 
-  [type] error: type `Pair` expects 2 type argument(s), got 1
-     ╭─[ classes.baml:133:35 ]
-     │
+  × type `Pair` expects 2 type argument(s), got 1
+     ╭─[classes.baml:133:35]
  133 │ function wrong_arity_partial() -> Pair<int> {
-     │                                   ────┬────  
-     │                                       ╰────── type `Pair` expects 2 type argument(s), got 1
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·                                   ─────────
+     ╰────
 
-  [type] error: type `Pair` expects 2 type argument(s), got 1
-     ╭─[ classes.baml:134:5 ]
-     │
- 134 │     Pair<int> { first: 1, second: "two" }
-     │     ──────────────────┬──────────────────  
-     │                       ╰──────────────────── type `Pair` expects 2 type argument(s), got 1
-     │ 
-     │ Note: Error code: E0001
-─────╯
+  [type] E0001
 
-  [type] error: type mismatch: expected B, got "two"
-     ╭─[ classes.baml:134:35 ]
-     │
- 134 │     Pair<int> { first: 1, second: "two" }
-     │                                   ──┬──  
-     │                                     ╰──── type mismatch: expected B, got "two"
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] error: type `Plain` expects 0 type argument(s), got 1
-     ╭─[ classes.baml:145:42 ]
-     │
+  × type `Plain` expects 0 type argument(s), got 1
+     ╭─[classes.baml:145:42]
  145 │ function wrong_arity_on_non_generic() -> Plain<int> {
-     │                                          ─────┬────  
-     │                                               ╰────── type `Plain` expects 0 type argument(s), got 1
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·                                          ──────────
+     ╰────
 
-  [type] error: type `Plain` expects 0 type argument(s), got 1
-     ╭─[ classes.baml:146:5 ]
-     │
- 146 │     Plain<int> { name: "hello" }
-     │     ──────────────┬─────────────  
-     │                   ╰─────────────── type `Plain` expects 0 type argument(s), got 1
-     │ 
-     │ Note: Error code: E0001
-─────╯
+  [type] E0001
 
-  [type] error: unreachable arm
-     ╭─[ classes.baml:197:21 ]
-     │
- 197 │             null => default,
-     │                     ───┬───  
-     │                        ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+  × type `Foo` expects 1 type argument(s), got 0
+     ╭─[classes.baml:234:44]
+ 234 │ function bare_in_union_param(f: Foo<int> | Foo) -> string {
+     ·                                            ───
+     ╰────
 
-  [type] error: unresolved name: fetch_as
-   ╭─[ fetch_as.baml:9:5 ]
-   │
+  [type] E0001
+
+  × type `Foo` expects 1 type argument(s), got 0
+     ╭─[classes.baml:237:9]
+ 237 │         Foo      => "bare",
+     ·         ───
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `baml.fetch_as`
+   ╭─[fetch_as.baml:9:5]
  9 │     baml.fetch_as<Todo>(baml.HttpRequest {
-   │     ──────┬──────  
-   │           ╰──────── unresolved name: fetch_as
-   │ 
-   │ Note: Error code: E0003
-───╯
+   ·     ─────────────
+   ╰────
 
-  [type] error: unresolved type: baml.HttpRequest
-    ╭─[ fetch_as.baml:9:25 ]
-    │
+  [type] E0002
+
+  × unresolved type: baml.HttpRequest
+    ╭─[fetch_as.baml:9:25]
   9 │ ╭─▶     baml.fetch_as<Todo>(baml.HttpRequest {
-    ┆ ┆   
- 12 │ ├─▶     })
-    │ │            
-    │ ╰──────────── unresolved type: baml.HttpRequest
-    │     
-    │     Note: Error code: E0002
-────╯
+ 10 │ │           method: baml.HttpMethod.Get,
+ 11 │ │           url: "dummyjson.com/todos/1",
+ 12 │ ╰─▶     })
+    ╰────
 
-  [type] error: unresolved name: HttpMethod
-    ╭─[ fetch_as.baml:10:17 ]
-    │
+  [type] E0003
+
+  × unresolved name: `baml.HttpMethod.Get`
+    ╭─[fetch_as.baml:10:17]
  10 │         method: baml.HttpMethod.Get,
-    │                 ─────────┬─────────  
-    │                          ╰─────────── unresolved name: HttpMethod
-    │ 
-    │ Note: Error code: E0003
-────╯
+    ·                 ───────────────────
+    ╰────

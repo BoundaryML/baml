@@ -649,20 +649,22 @@ fn phase_for_query(name: &str) -> &'static str {
         // PPIR (baml_compiler2_ppir)
         "ppir_expansion_items" | "file_semantic_index_expanded" => "ppir",
 
-        // TIR (baml_compiler2_tir)
-        "infer_scope_types"
+        // Type provider (baml_compiler2_hir_ty)
+        "infer_function_body"
+        | "infer_let_body"
+        | "infer_parameter_defaults"
+        | "function_signature_ty"
         | "resolve_class_fields"
         | "resolve_type_alias"
         | "resolve_name_at"
         | "callable_throws"
-        | "callee_generics_for_func"
         | "package_resolved_aliases"
         | "package_impl_locs"
         | "impl_data"
         | "impl_data_source_map"
         | "validate_impl_signatures"
         | "package_coherence_diagnostics"
-        | "package_resolution_context" => "tir",
+        | "package_resolution_context" => "ty",
 
         // MIR (baml_compiler2_mir)
         "lower_function"
@@ -878,7 +880,7 @@ fn print_human(
         entry.1 += row.cache_hits;
     }
     let mut phase_rows: Vec<_> = phase_totals.into_iter().collect();
-    phase_rows.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    phase_rows.sort_by_key(|row| std::cmp::Reverse(row.1.0));
     println!();
     println!("--- Query events by phase ---");
     println!(
@@ -953,7 +955,7 @@ fn print_human(
         .iter()
         .filter(|r| r.executed >= 100 && r.executed >= r.cache_hits * 2)
         .collect();
-    suspect.sort_by(|a, b| b.executed.cmp(&a.executed));
+    suspect.sort_by_key(|row| std::cmp::Reverse(row.executed));
     println!();
     println!("--- Suspect: high exec, low cache hit (exec ≥ 100, exec ≥ 2× hits) ---");
     if suspect.is_empty() {
@@ -1068,7 +1070,7 @@ mod tests {
         assert_eq!(phase_for_query("file_semantic_index"), "hir");
         assert_eq!(phase_for_query("function_body"), "hir");
         assert_eq!(phase_for_query("ppir_expansion_items"), "ppir");
-        assert_eq!(phase_for_query("infer_scope_types"), "tir");
+        assert_eq!(phase_for_query("infer_function_body"), "ty");
         assert_eq!(phase_for_query("lower_function"), "mir");
         assert_eq!(phase_for_query("generate_project_bytecode"), "emit");
     }
@@ -1088,8 +1090,8 @@ mod tests {
             "hir"
         );
         assert_eq!(
-            phase_for_query("infer_scope_types [IngredientIndex(7)]"),
-            "tir"
+            phase_for_query("infer_function_body [IngredientIndex(7)]"),
+            "ty"
         );
         assert_eq!(
             phase_for_query("some_unregistered_query [IngredientIndex(1)]"),

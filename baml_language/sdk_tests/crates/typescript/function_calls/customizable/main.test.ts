@@ -12,24 +12,24 @@ import {
 } from "./baml_sdk/index.js";
 
 describe("function_calls — hello_world", () => {
-  it("returns the literal (sync)", () => {
+  it("main_returns_the_literal_sync", () => {
     expect(hello_world()).toBe("hello world");
   });
 
-  it("returns the literal (async)", async () => {
+  it("main_returns_the_literal_async", async () => {
     expect(await hello_world_async()).toBe("hello world");
   });
 });
 
 describe("function_calls — single_required_arg", () => {
-  it("round-trips a single positional argument", () => {
+  it("main_round_trips_a_single_positional_argument", () => {
     // The next step up from the nullary case: one required positional arg.
     expect(single_required_arg("hi")).toBe("hi");
   });
 });
 
 describe("function_calls — primitive arguments across callFunction", () => {
-  it("round-trips ints, bools, strings, and floats", async () => {
+  it("main_round_trips_ints_bools_strings_and_floats", async () => {
     expect(await round_trip_int_async(42)).toBe(42);
     expect(await round_trip_bool_async(false)).toBe(false);
     expect(await round_trip_string_async("hello from the browser")).toBe(

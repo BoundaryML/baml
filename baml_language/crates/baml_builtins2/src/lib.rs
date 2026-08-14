@@ -51,10 +51,6 @@ impl BuiltinFile {
 pub const PACKAGE_BAML: &str = "baml";
 /// Package name for boundary identity and capture helpers.
 pub const PACKAGE_BOUNDARY: &str = "boundary";
-/// Package name for the testing package.
-pub const PACKAGE_TESTING: &str = "testing";
-/// Package name for the assert package.
-pub const PACKAGE_ASSERT: &str = "assert";
 
 /// Absolute path to the `baml_std/` source tree, captured at compile time via
 /// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
@@ -62,11 +58,17 @@ pub const PACKAGE_ASSERT: &str = "assert";
 /// generated code or committed artifacts).
 pub const BAML_STD_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/baml_std");
 
-/// YAML documentation for BAML keywords, embedded at compile time.
+/// YAML documentation for BAML language-reference topics, embedded at compile time.
 pub const BAML_KEYWORDS_YAML: &str = include_str!("../keyword_docs/baml_keywords.yaml");
 
 /// YAML crosswalk documentation for TypeScript/JS keywords, embedded at compile time.
 pub const TS_KEYWORDS_YAML: &str = include_str!("../keyword_docs/ts_keywords.yaml");
+
+mod language_docs;
+pub use language_docs::{
+    LanguageTopic, TypescriptCrosswalkTopic, has_describe_topic, language_topic, language_topics,
+    typescript_crosswalk_topic, typescript_crosswalk_topics,
+};
 
 /// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {
@@ -97,6 +99,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "type_class.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
+    builtin!("baml", "ns_errors/unknown_error.baml"),
     builtin!("baml", "ns_errors/stack_trace.baml"),
     builtin!("baml", "ns_errors/error_context.baml"),
     builtin!("baml", "ns_panics/panics.baml"),
@@ -115,9 +118,10 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
-    builtin!("baml", "ns_llm/llm_types.baml"),
-    builtin!("baml", "ns_llm/llm.baml"),
-    builtin!("baml", "ns_stream/stream.baml"),
+    builtin!("baml", "ns_prompt/prompt.baml"),
+    builtin!("baml", "ns_prompt/sys_llm_types.baml"),
+    builtin!("baml", "ns_sap/sap.baml"),
+    builtin!("baml", "ns_ws/ws.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
     builtin!("baml", "ns_future/future.baml"),
     builtin!("baml", "ns_spawn/spawn.baml"),
@@ -129,8 +133,16 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/plaindate.baml"),
     builtin!("baml", "ns_time/plaindatetime.baml"),
     builtin!("baml", "ns_time/zoneddatetime.baml"),
+    builtin!("baml", "ns_ops/bitwise.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
+    builtin!("baml", "ns_ops/index.baml"),
     builtin!("baml", "ns_ops/math.baml"),
+    builtin!("baml", "ns_random/random.baml"),
+    builtin!("baml", "ns_crypto/errors.baml"),
+    builtin!("baml", "ns_crypto/interfaces.baml"),
+    builtin!("baml", "ns_crypto/aes_gcm_siv.baml"),
+    builtin!("baml", "ns_crypto/chacha20poly1305.baml"),
+    builtin!("baml", "ns_crypto/sha2.baml"),
     // --- boundary package ---
     builtin!("boundary", "core.baml"),
     builtin!("boundary", "ns_id/id.baml"),
@@ -144,6 +156,30 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("assert", "assert.baml"),
     // --- log package ---
     builtin!("log", "log.baml"),
+    // --- ai package (specs, journal, runner, client interface) ---
+    builtin!("ai", "ns_content/content.baml"),
+    builtin!("ai", "ns_events/events.baml"),
+    builtin!("ai", "journal.baml"),
+    builtin!("ai", "spec.baml"),
+    builtin!("ai", "ns_tools/tools.baml"),
+    builtin!("ai", "turn.baml"),
+    builtin!("ai", "ns_wire/wire.baml"),
+    builtin!("ai", "ns_clients/clients.baml"),
+    builtin!("ai", "runner.baml"),
+    builtin!("ai", "ns_stream/stream.baml"),
+    builtin!("ai", "ns_errors/errors.baml"),
+    builtin!("ai", "ns_internal/helpers.baml"),
+    // --- provider client packages ---
+    builtin!("openai", "responses.baml"),
+    builtin!("openai", "ns_internal/responses.baml"),
+    builtin!("anthropic", "messages.baml"),
+    builtin!("anthropic", "ns_internal/messages.baml"),
+    builtin!("google", "gemini.baml"),
+    builtin!("google", "ns_internal/gemini.baml"),
+    builtin!("claude_code", "cli.baml"),
+    builtin!("claude_code", "ns_internal/cli.baml"),
+    // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
+    builtin!("ai", "ns_mcp/mcp.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the

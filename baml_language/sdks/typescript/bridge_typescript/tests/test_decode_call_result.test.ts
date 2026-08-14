@@ -7,7 +7,7 @@
 
 import { baml_bridge } from '../dist/proto/baml_cffi.js';
 import { decodeCallResult } from '../dist/index.js';
-import { BamlError, BamlPanic } from '../dist/index.js';
+import { BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic } from '../dist/index.js';
 
 const { BamlOutboundResult, BamlOutboundValue } = baml_bridge.cffi.v1;
 
@@ -50,7 +50,7 @@ describe('decodeCallResult — thrown value carries structured detail', () => {
         } catch (e) {
             caught = e;
         }
-        expect(caught).toBeInstanceOf(BamlError);
+        expect(caught).toBeInstanceOf(BamlClientError);
         const err = caught as BamlError;
         expect(err.className).toBe('baml.errors.GenericSdkError');
         expect(err.bamlTrace).toEqual(trace);
@@ -58,6 +58,16 @@ describe('decodeCallResult — thrown value carries structured detail', () => {
         // The formatted message still surfaces the className + message + trace.
         expect(err.message).toContain('baml.errors.GenericSdkError');
         expect(err.message).toContain('boom');
+    });
+
+    test('documented invalid-argument class selects its exact subclass', () => {
+        const invalid = {
+            classValue: {
+                name: 'baml.errors.InvalidArgument',
+                fields: [{ key: 'message', value: { stringValue: 'bad argument' } }],
+            },
+        };
+        expect(() => decodeCallResult(encodeResult({ error: { value: invalid, trace } }))).toThrow(BamlInvalidArgumentError);
     });
 
     test('panic arm: BamlPanic carries the same structured detail', () => {

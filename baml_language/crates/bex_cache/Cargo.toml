@@ -10,12 +10,36 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 
+# TLS provider selection mirrors sys_native/sys_llm: `rustls` on
+# reqwest pins the aws-lc-rs provider, whose C objects don't link on
+# iOS — Apple bridge builds select `ring-crypto` instead.
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "reqwest/rustls" ]
+ring-crypto = [
+  "reqwest/rustls-no-provider",
+  "dep:rustls",
+  "rustls/ring",
+  "rustls/std",
+]
+
 [dependencies]
 baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_vm_types = { workspace = true }
 borsh = { workspace = true }
-reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
+reqwest = { workspace = true, features = [ "blocking" ] }
+rustls = { workspace = true, optional = true }
+
+# The warm bytecode-cache path hashes every cached unit payload per run
+# (~230MB at a 295k LOC project), so enable sha2's hardware backend (`asm`:
+# SHA-NI / ARMv8 crypto extensions, runtime-detected) wherever it builds.
+# MSVC is the exception: sha2-asm ships GAS `.S` sources that cl.exe cannot
+# assemble, so MSVC targets keep the portable implementation.
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+sha2 = { workspace = true, features = [ "asm" ] }
+
+[target.'cfg(target_env = "msvc")'.dependencies]
 sha2 = { workspace = true }
 
 [dev-dependencies]

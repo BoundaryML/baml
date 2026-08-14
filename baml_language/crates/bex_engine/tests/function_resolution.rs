@@ -151,16 +151,18 @@ async fn sysop_fs_exists_callable_as_entry_point() {
     assert!(ok.is_ok(), "bytecode entry must still resolve: {ok:?}");
 }
 
-/// `baml.sys.now_ms() -> int` is a `$rust_function` → `FunctionKind::Native`.
-/// Calling it as an entry point should run the native and return a positive
-/// millisecond timestamp, not reject with `NotInvokableAsEntry`.
+/// `baml.sys.argv() -> string[]` is a `$rust_function` → `FunctionKind::Native`.
+/// Calling it as an entry point should run the native and return the argument
+/// array, not reject with `NotInvokableAsEntry`. The engine here is built
+/// without host argv, so the array is legitimately empty — the shape is what
+/// this asserts.
 #[tokio::test]
-async fn native_now_ms_callable_as_entry_point() {
+async fn native_argv_callable_as_entry_point() {
     let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
 
     let result = eng
         .call_function(
-            "baml.sys.now_ms",
+            "baml.sys.argv",
             vec![],
             FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
@@ -168,10 +170,8 @@ async fn native_now_ms_callable_as_entry_point() {
         .await;
 
     match result {
-        Ok(BexExternalValue::Int(n)) => {
-            assert!(n > 0, "now_ms should be a positive timestamp, got {n}");
-        }
-        other => panic!("expected Ok(Int(_)) from baml.sys.now_ms as entry, got {other:?}"),
+        Ok(BexExternalValue::Array { .. }) => {}
+        other => panic!("expected Ok(Array {{ .. }}) from baml.sys.argv as entry, got {other:?}"),
     }
 }
 

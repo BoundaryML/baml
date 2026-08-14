@@ -3,256 +3,298 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function json_auto_derive.$init_test_ns_json_auto_derive_json_auto_derive(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "simple_class_to_json_roundtrip"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "user_to_json_override_suppresses_auto_derive"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "int_to_json_resolves_and_executes"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "float_to_json_resolves_and_executes"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "bool_to_json_resolves_and_executes"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "null_to_json_resolves_and_executes"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "array_of_int_to_json_returns_json_array"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "array_of_class_to_json_honors_override"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "map_of_int_to_json_returns_json_map"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "typevar_to_json_compiles_in_generic_class"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "primitive_field_to_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "array_of_primitive_to_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_direct"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_in_array"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_in_map"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "recursive_class_to_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_to_json_concrete"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_to_json_array_typearg"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_honors_override_through_typevar"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_with_optional_typevar_field"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_with_optional_typevar_field_null"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_with_optional_typevar_field_honors_override"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "primitive_field_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "array_of_primitive_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_direct_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_in_array_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "nested_class_override_honored_in_map_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "recursive_class_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_from_json_concrete"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "generic_class_honors_override_through_typevar_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "optional_class_override_honored_from_json_non_null"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "optional_class_override_honored_from_json_null"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 31)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "optional_primitive_field_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 32)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "map_of_primitive_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 33)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "top_level_from_json_call_concrete_class"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 34)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "top_level_from_json_call_primitive"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 35)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "independent_synthesis_only_from_json_defined"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 36)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "independent_synthesis_only_to_json_defined"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 37)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "round_trip_with_overrides_both_directions"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 38)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "alias_chain_dispatch_to_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 39)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "alias_chain_dispatch_from_json"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 40)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_auto_derive"
     load_const "from_json_wrapper_body_fallback"
     make_closure .<lambda($init_test_ns_json_auto_derive_json_auto_derive, 41)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -324,10 +366,10 @@ function json_auto_derive.BZeroFrom.baml.FromJson.from_json(j: baml.json.json) -
     return
 }
 
-function json_auto_derive.G.f(self: json_auto_derive.G<T>) -> baml.json.json[] {
+function json_auto_derive.G.f(self: json_auto_derive.G<#0>) -> baml.json.json[] {
     load_type #0
     load_type baml.json.json
-    load_type baml.json.JsonSerializationError
+    load_type baml.json.JsonParseError | baml.json.JsonSerializationError
     load_var self
     load_field .items
     load_type #0
@@ -379,12 +421,10 @@ function json_auto_derive.alias_chain_dispatch_from_json_val() -> int {
 function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
     load_const 7
     init_instance user.json_auto_derive.BAliasTo .y
-    load_type baml.ToJson
-    load_const "to_json"
-    virtual_call nargs=1 ntypeargs=0
-    store_var j
-    load_var j
-    is_type int
+    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -394,7 +434,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
     jump L2
 
   L1:
-    load_var j
+    load_var _3
 
   L2:
     return
@@ -485,8 +525,9 @@ function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     load_var j
     call baml.json.to
     load_field .value
-    store_var_load_var _5
-    is_type int
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -496,7 +537,7 @@ function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     jump L2
 
   L1:
-    load_var _5
+    load_var _6
 
   L2:
     return

@@ -16,21 +16,17 @@ class Person {
 
 //----
 //- diagnostics
-// error: field `name` of interface `Named` is linked more than once
-//     ╭─[ interface_error_duplicate_interface_field_link.baml:12:5 ]
-//     │
+// E0130
+//
+//   × field `name` of interface `Named` is linked more than once
+//     ╭─[interface_error_duplicate_interface_field_link.baml:12:5]
 //  12 │     name as primary_name
-//     │     ──┬─
-//     │       ╰─── field `name` of interface `Named` is linked more than once
-//     │
-//     │ Note: Error code: E0130
-// ────╯
-// error: field `name` of interface `Named` is linked more than once
-//     ╭─[ interface_error_duplicate_interface_field_link.baml:13:5 ]
-//     │
+//     ·     ────
+//     ╰────
+// E0130
+//
+//   × field `name` of interface `Named` is linked more than once
+//     ╭─[interface_error_duplicate_interface_field_link.baml:13:5]
 //  13 │     name as secondary_name
-//     │     ──┬─
-//     │       ╰─── field `name` of interface `Named` is linked more than once
-//     │
-//     │ Note: Error code: E0130
-// ────╯
+//     ·     ────
+//     ╰────

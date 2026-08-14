@@ -3,178 +3,207 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function json_to_from_string.$init_test_ns_json_to_from_string_json_to_from_string(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "to_string_simple_class"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "from_string_simple_class"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "from_string_infers_simple_class"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "to_string_infers_simple_class"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "roundtrip_simple"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "composite_generic_roundtrip"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "generic_forwarding_user"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "generic_forwarding_composite"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "three_level_forwarding"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "closure_captures_type_arg"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "enum_variant_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "enum_variant_from_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "optional_field_present"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "optional_field_null"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "optional_field_decode_missing"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "recursive_class_roundtrip"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "parse_throws_on_bad_json"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "decode_throws_on_missing_field"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "serialize_throws_uint8array"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "decode_error_path_points_at_missing_field"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "enum_variant_roundtrip"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "media_field_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "media_field_roundtrip"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "alias_field_uses_raw_name_in_json"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "alias_field_decodes_raw_name"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "skip_field_still_emitted_in_json"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "from_string_json_passthrough_int"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "from_string_json_passthrough_object"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.json_to_from_string"
     load_const "to_string_json_passthrough"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -195,7 +224,9 @@ function json_to_from_string.check_decode_error_path_contains_field() -> bool {
     store_var u
     jump L2
     load_var e
-    is_type baml.json.JsonDecodeError
+    store_var _4
+    load_var _4
+    narrow_bind baml.json.JsonDecodeError, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -204,7 +235,7 @@ function json_to_from_string.check_decode_error_path_contains_field() -> bool {
     rethrow
 
   L1:
-    load_var e
+    load_var _4
     load_field .path
     load_const ".inner.value"
     call assert.contains
@@ -283,7 +314,7 @@ function json_to_from_string.enum_variant_roundtrip_eq() -> bool {
     return
 }
 
-function json_to_from_string.fetch_as(s: string) -> T {
+function json_to_from_string.fetch_as(s: string) -> #0 {
     load_type #0
     load_var s
     call baml.json.from_string
@@ -302,7 +333,9 @@ function json_to_from_string.from_string_json_passthrough_int_match() -> bool {
     load_type baml.json.json
     load_const "42"
     call baml.json.from_string
-    is_type int
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -321,9 +354,9 @@ function json_to_from_string.from_string_json_passthrough_object_len() -> int {
     load_type baml.json.json
     load_const "{\"x\":7}"
     call baml.json.from_string
-    store_var j
-    load_var j
-    is_type map<string, baml.json.json>
+    store_var _3
+    load_var _3
+    narrow_bind map<string, baml.json.json>, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -333,7 +366,7 @@ function json_to_from_string.from_string_json_passthrough_object_len() -> int {
     jump L2
 
   L1:
-    load_var j
+    load_var _3
     container_len
 
   L2:
@@ -365,28 +398,28 @@ function json_to_from_string.generic_forwarding_user_name() -> string {
     return
 }
 
-function json_to_from_string.level1(s: string) -> T {
+function json_to_from_string.level1(s: string) -> #0 {
     load_type #0
     load_var s
     call baml.json.from_string
     return
 }
 
-function json_to_from_string.level2(s: string) -> T {
+function json_to_from_string.level2(s: string) -> #0 {
     load_type #0
     load_var s
     call user.json_to_from_string.level1
     return
 }
 
-function json_to_from_string.level3(s: string) -> T {
+function json_to_from_string.level3(s: string) -> #0 {
     load_type #0
     load_var s
     call user.json_to_from_string.level2
     return
 }
 
-function json_to_from_string.make_decoder() -> (string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function json_to_from_string.make_decoder() -> (string) -> #0 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
     load_type #0
     make_closure .<lambda(make_decoder, 0)>, captures=0, ntypeargs=1
     return

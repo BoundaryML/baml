@@ -1,0 +1,52 @@
+name: TypeScript2
+
+on:
+  pull_request:
+    paths:
+      - "typescript2/**"
+      - ".github/actions/setup-node2/**"
+      - ".github/workflows/typescript2.yml"
+  push:
+    branches: [main, canary]
+    paths:
+      - "typescript2/**"
+      - ".github/actions/setup-node2/**"
+      - ".github/workflows/typescript2.yml"
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  biome:
+    name: Biome
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: useblacksmith/checkout@v1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node2
+
+      - name: Run Biome on changed files
+        env:
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base="${PR_BASE_SHA:-${MERGE_GROUP_BASE_SHA:-$PUSH_BEFORE_SHA}}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            base=HEAD^
+          fi
+          pnpm format:ci --since="$base" --reporter=github
+        working-directory: typescript2

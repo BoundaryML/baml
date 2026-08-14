@@ -9,10 +9,10 @@ pub enum BuiltinPipeline {
 
 /// A single extracted `$rust_function` or `$rust_io_function` builtin.
 pub struct NativeBuiltin {
-    /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.now_ms"`
+    /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.argv"`
     pub path: String,
     /// Rust function name derived from path (dots → underscores, lowercased):
-    /// e.g. `"baml_array_length"`, `"baml_deep_copy"`, `"baml_sys_now_ms"`
+    /// e.g. `"baml_array_length"`, `"baml_deep_copy"`, `"baml_sys_argv"`
     pub fn_name: String,
     /// Non-self/receiver parameters only.
     pub params: Vec<Param>,
@@ -47,7 +47,7 @@ pub struct NativeBuiltin {
 impl NativeBuiltin {
     /// Derive the `SysOp` enum variant name from the path.
     /// `"baml.fs.open"` → `"BamlFsOpen"`, `"baml.fs.File.read"` → `"BamlFsFileRead"`,
-    /// `"baml.env.get"` → `"BamlEnvGet"`, `"baml.llm.render_prompt"` → `"BamlLlmRenderPrompt"`.
+    /// `"baml.env.get"` → `"BamlEnvGet"`, `"ai.Prompt.text"` → `"AiPromptText"`.
     pub fn sys_op_variant_name(&self) -> String {
         self.path
             .split('.')

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 48723
 ---
 // $id misuse diagnostics: every invalid shape of the runtime-identity special
 // form must fail at compile time with a targeted message (never a silent
@@ -32,7 +31,7 @@ function takes_int(x: int) -> int {
 }
 
 function call_site_label() -> int {
-    takes_int($id = baml.id.new())
+    takes_int($id = boundary.id())
 }
 
 // $id cannot be used as a binding name (the binding would be silently dead).

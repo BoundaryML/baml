@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+    <RestoreSources>$(BamlProtocolProbeFeed)</RestoreSources>
+    <BamlProtocolSchemaRoot
+      Condition="'$(BamlProtocolSchemaRoot)' == ''">../../../../../crates/bridge_ctypes/types</BamlProtocolSchemaRoot>
+    <PackageId>Baml.Bridge.ProtocolProbe</PackageId>
+    <PackageVersion>0.0.0-b3</PackageVersion>
+    <Description>Repository-only package fixture for the BAML C# protocol-generation gate.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="[3.35.1,4.0.0)" />
+    <PackageReference
+      Include="Grpc.Tools"
+      Version="[2.82.0]"
+      PrivateAssets="all"
+      IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <Protobuf
+      Include="$(BamlProtocolSchemaRoot)/baml_bridge/cffi/v1/baml_handle.proto"
+      ProtoRoot="$(BamlProtocolSchemaRoot)"
+      GrpcServices="None"
+      Access="Internal"
+      OutputOptions="file_extension=.g.cs" />
+    <Protobuf
+      Include="$(BamlProtocolSchemaRoot)/baml_bridge/cffi/v1/baml_inbound.proto"
+      ProtoRoot="$(BamlProtocolSchemaRoot)"
+      GrpcServices="None"
+      Access="Internal"
+      OutputOptions="file_extension=.g.cs" />
+    <Protobuf
+      Include="$(BamlProtocolSchemaRoot)/baml_bridge/cffi/v1/baml_outbound.proto"
+      ProtoRoot="$(BamlProtocolSchemaRoot)"
+      GrpcServices="None"
+      Access="Internal"
+      OutputOptions="file_extension=.g.cs" />
+    <Protobuf
+      Include="$(BamlProtocolSchemaRoot)/baml_bridge/cffi/v1/baml_type.proto"
+      ProtoRoot="$(BamlProtocolSchemaRoot)"
+      GrpcServices="None"
+      Access="Internal"
+      OutputOptions="file_extension=.g.cs" />
+  </ItemGroup>
+  <Target
+    Name="IncludeDeterministicProtobufGeneratedSources"
+    BeforeTargets="CoreCompile"
+    DependsOnTargets="Protobuf_Compile">
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)baml_bridge/cffi/v1/*.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

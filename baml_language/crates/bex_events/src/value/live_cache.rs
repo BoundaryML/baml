@@ -90,23 +90,8 @@ impl LiveValueCache {
     }
 
     #[must_use]
-    pub fn max_bytes(&self) -> usize {
-        self.max_bytes
-    }
-
-    #[must_use]
     pub fn current_bytes(&self) -> usize {
         self.current_bytes
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
     }
 
     pub fn insert(

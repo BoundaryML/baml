@@ -29,7 +29,7 @@ use baml_sdk::stream_types::Foo as StreamFoo;
 use baml_sdk::stream_types::lorem::Resume as StreamResume;
 
 #[test]
-fn test_round_trip_resume_stream() {
+fn test_streams_round_trip_resume_stream() {
     let r = StreamResume {
         name: Some("ada".to_string()),
         email: None,
@@ -38,13 +38,13 @@ fn test_round_trip_resume_stream() {
 }
 
 #[test]
-fn test_round_trip_root_foo_stream() {
+fn test_streams_round_trip_root_foo_stream() {
     let f = StreamFoo { v: Some(3) };
     assert_eq!(round_trip_root_foo_stream(f.clone()).unwrap(), f);
 }
 
 #[test]
-fn test_round_trip_box_of_resume_stream() {
+fn test_streams_round_trip_box_of_resume_stream() {
     let b = Box {
         v: StreamResume {
             name: Some("grace".to_string()),
@@ -55,7 +55,7 @@ fn test_round_trip_box_of_resume_stream() {
 }
 
 #[test]
-fn test_round_trip_resume_or_resume_stream() {
+fn test_streams_round_trip_resume_or_resume_stream() {
     // Union arm `Resume` (the non-stream side) is host-constructible.
     let r = Resume {
         name: "hopper".to_string(),
@@ -68,7 +68,7 @@ fn test_round_trip_resume_or_resume_stream() {
 }
 
 #[test]
-fn test_round_trip_resume_or_http_response() {
+fn test_streams_round_trip_resume_or_http_response() {
     // Pass the `Resume` arm; the `baml.http.Response` arm isn't
     // host-constructible.
     let r = Resume {

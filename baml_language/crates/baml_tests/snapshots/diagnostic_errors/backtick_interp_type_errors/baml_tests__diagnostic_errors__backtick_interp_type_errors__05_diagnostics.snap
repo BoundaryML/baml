@@ -1,0 +1,59 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0007
+
+  × type `int[]` has no member `len`
+    ╭─[main.baml:10:16]
+ 10 │     `result: ${[1,2,3].len()}`
+    ·                ─────────────
+    ╰────
+
+  [type] E0007
+
+  × type `int[]` has no member `len`
+    ╭─[main.baml:16:10]
+ 16 │     `x ${[1,2,3].len().to_string()}`
+    ·          ─────────────
+    ╰────
+
+  [type] E0004
+
+  × operator `+` cannot be applied to `1` and `"x"`
+    ╭─[main.baml:21:13]
+ 21 │     `sum: ${1 + "x"}`
+    ·             ───────
+    ╰────
+
+  [type] E0007
+
+  × type `"abc"` has no member `nonexistent`
+    ╭─[main.baml:26:11]
+ 26 │     `v: ${"abc".nonexistent()}`
+    ·           ───────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `undefined_var`
+    ╭─[main.baml:33:11]
+ 33 │     `v: ${undefined_var}`
+    ·           ─────────────
+    ╰────
+
+  [type] E0007
+
+  × type `int` has no member `bogus`
+    ╭─[main.baml:39:28]
+ 39 │     `${for (let x in xs)}${x.bogus()}${endfor}`
+    ·                            ─────────
+    ╰────
+
+  [type] E0007
+
+  × type `"abc"` has no member `missing`
+    ╭─[main.baml:43:20]
+ 43 │     `${if (show)}${"abc".missing()}${endif}`
+    ·                    ───────────────
+    ╰────

@@ -13,7 +13,7 @@ function lambdas_iife_single_param() -> int {
 }
 
 test "iife_single_param_returns_correct_value" {
-    assert.is_true(baml.deep_equals(lambdas_iife_single_param(), 11))
+    assert.equal(lambdas_iife_single_param(), 11)
 }
 
 // ─── zero_param_lambda_returns_constant ───────────────────────────────────────
@@ -24,7 +24,7 @@ function lambdas_zero_param_lambda() -> int {
 }
 
 test "zero_param_lambda_returns_constant" {
-    assert.is_true(baml.deep_equals(lambdas_zero_param_lambda(), 42))
+    assert.equal(lambdas_zero_param_lambda(), 42)
 }
 
 // ─── multi_param_lambda_returns_sum ───────────────────────────────────────────
@@ -35,7 +35,7 @@ function lambdas_multi_param_lambda() -> int {
 }
 
 test "multi_param_lambda_returns_sum" {
-    assert.is_true(baml.deep_equals(lambdas_multi_param_lambda(), 42))
+    assert.equal(lambdas_multi_param_lambda(), 42)
 }
 
 // ─── annotated_lambda_doubles_value ───────────────────────────────────────────
@@ -46,7 +46,7 @@ function lambdas_annotated_lambda_doubles() -> int {
 }
 
 test "annotated_lambda_doubles_value" {
-    assert.is_true(baml.deep_equals(lambdas_annotated_lambda_doubles(), 42))
+    assert.equal(lambdas_annotated_lambda_doubles(), 42)
 }
 
 // ─── inferred_return_type_lambda ──────────────────────────────────────────────
@@ -57,7 +57,7 @@ function lambdas_inferred_return_type_lambda() -> int {
 }
 
 test "inferred_return_type_lambda" {
-    assert.is_true(baml.deep_equals(lambdas_inferred_return_type_lambda(), 42))
+    assert.equal(lambdas_inferred_return_type_lambda(), 42)
 }
 
 // ─── lambda_captures_local_variable ───────────────────────────────────────────
@@ -69,7 +69,7 @@ function lambdas_captures_local_variable() -> int {
 }
 
 test "lambda_captures_local_variable" {
-    assert.is_true(baml.deep_equals(lambdas_captures_local_variable(), 15))
+    assert.equal(lambdas_captures_local_variable(), 15)
 }
 
 // ─── lambda_captures_function_parameter ───────────────────────────────────────
@@ -81,7 +81,7 @@ function lambdas_captures_function_parameter() -> int {
 }
 
 test "lambda_captures_function_parameter" {
-    assert.is_true(baml.deep_equals(lambdas_captures_function_parameter(), 42))
+    assert.equal(lambdas_captures_function_parameter(), 42)
 }
 
 // ─── lambda_captures_multiple_variables ───────────────────────────────────────
@@ -94,7 +94,7 @@ function lambdas_captures_multiple_variables() -> int {
 }
 
 test "lambda_captures_multiple_variables" {
-    assert.is_true(baml.deep_equals(lambdas_captures_multiple_variables(), 42))
+    assert.equal(lambdas_captures_multiple_variables(), 42)
 }
 
 // ─── shared_cell_mutation_counter ─────────────────────────────────────────────
@@ -109,7 +109,7 @@ function lambdas_shared_cell_mutation_counter() -> int {
 }
 
 test "shared_cell_mutation_counter" {
-    assert.is_true(baml.deep_equals(lambdas_shared_cell_mutation_counter(), 2))
+    assert.equal(lambdas_shared_cell_mutation_counter(), 2)
 }
 
 // ─── nested_lambda_transitive_capture ─────────────────────────────────────────
@@ -124,7 +124,7 @@ function lambdas_nested_lambda_transitive_capture() -> int {
 }
 
 test "nested_lambda_transitive_capture" {
-    assert.is_true(baml.deep_equals(lambdas_nested_lambda_transitive_capture(), 111))
+    assert.equal(lambdas_nested_lambda_transitive_capture(), 111)
 }
 
 // ─── iife_returns_closure_counter ─────────────────────────────────────────────
@@ -141,7 +141,7 @@ function lambdas_iife_returns_closure_counter() -> int {
 }
 
 test "iife_returns_closure_counter" {
-    assert.is_true(baml.deep_equals(lambdas_iife_returns_closure_counter(), 3))
+    assert.equal(lambdas_iife_returns_closure_counter(), 3)
 }
 
 // ─── closure_in_map_with_captured_offset ──────────────────────────────────────
@@ -153,7 +153,7 @@ function lambdas_closure_in_map_with_captured_offset() -> int[] {
 }
 
 test "closure_in_map_with_captured_offset" {
-    assert.is_true(baml.deep_equals(lambdas_closure_in_map_with_captured_offset(), [11, 12, 13]))
+    assert.equal(lambdas_closure_in_map_with_captured_offset(), [11, 12, 13])
 }
 
 // ─── multiple_closures_share_cell ─────────────────────────────────────────────
@@ -168,7 +168,7 @@ function lambdas_multiple_closures_share_cell() -> int {
 }
 
 test "multiple_closures_share_cell" {
-    assert.is_true(baml.deep_equals(lambdas_multiple_closures_share_cell(), 1))
+    assert.equal(lambdas_multiple_closures_share_cell(), 1)
 }
 
 // ─── multiple_closures_share_cell_deep_copy ───────────────────────────────────
@@ -190,7 +190,7 @@ function lambdas_multiple_closures_share_cell_deep_copy() -> int {
 }
 
 test "multiple_closures_share_cell_deep_copy" {
-    assert.is_true(baml.deep_equals(lambdas_multiple_closures_share_cell_deep_copy(), 2))
+    assert.equal(lambdas_multiple_closures_share_cell_deep_copy(), 2)
 }
 
 // ─── explicit_throwing_lambda_catches_error ───────────────────────────────────
@@ -207,7 +207,44 @@ function lambdas_explicit_throwing_lambda_catches_error() -> int {
 }
 
 test "explicit_throwing_lambda_catches_error" {
-    assert.is_true(baml.deep_equals(lambdas_explicit_throwing_lambda_catches_error(), -1))
+    assert.equal(lambdas_explicit_throwing_lambda_catches_error(), -1)
+}
+
+function lambda_effect_invoke<T, E>(f: () -> T throws E) -> T throws E {
+    f()
+}
+
+function lambda_effect_forward<E>(f: () -> int throws E) -> int throws E {
+    lambda_effect_invoke(() -> { f() })
+}
+
+function lambda_effect_fail() -> int throws string {
+    throw "callback"
+}
+
+function lambda_effect_main() -> int {
+    lambda_effect_forward(lambda_effect_fail) catch (e) {
+        string => 1
+    }
+}
+
+test "callback_effect_param_is_inferred_from_unannotated_lambda_body" {
+    assert.equal(lambda_effect_main(), 1)
+}
+
+function lambda_contextual_call(cb: (x: int) -> int throws int | string) -> int throws int | string {
+    cb(1)
+}
+
+function lambda_contextual_main() -> int {
+    lambda_contextual_call((x: int) -> int { throw "contextual" }) catch (e) {
+        string => 1,
+        int => 2,
+    }
+}
+
+test "contextual_lambda_preserves_omitted_throws_surface" {
+    assert.equal(lambda_contextual_main(), 1)
 }
 
 // ─── lambda_inside_catch_base_keeps_parameter_scope ───────────────────────────
@@ -224,7 +261,7 @@ function lambdas_lambda_inside_catch_base_keeps_parameter_scope() -> int {
 }
 
 test "lambda_inside_catch_base_keeps_parameter_scope" {
-    assert.is_true(baml.deep_equals(lambdas_lambda_inside_catch_base_keeps_parameter_scope(), 7))
+    assert.equal(lambdas_lambda_inside_catch_base_keeps_parameter_scope(), 7)
 }
 
 // ─── deep_nesting_three_levels ────────────────────────────────────────────────
@@ -242,7 +279,7 @@ function lambdas_deep_nesting_three_levels() -> int {
 }
 
 test "deep_nesting_three_levels" {
-    assert.is_true(baml.deep_equals(lambdas_deep_nesting_three_levels(), 1111))
+    assert.equal(lambdas_deep_nesting_three_levels(), 1111)
 }
 
 // ─── lambda_captures_loop_variable_accumulation ───────────────────────────────
@@ -259,7 +296,7 @@ function lambdas_captures_loop_variable_accumulation() -> int {
 }
 
 test "lambda_captures_loop_variable_accumulation" {
-    assert.is_true(baml.deep_equals(lambdas_captures_loop_variable_accumulation(), 6))
+    assert.equal(lambdas_captures_loop_variable_accumulation(), 6)
 }
 
 // ─── issue_e_method_resolution_different_types ────────────────────────────────
@@ -272,7 +309,7 @@ function lambdas_issue_e_method_resolution_different_types() -> int {
 }
 
 test "issue_e_method_resolution_different_types" {
-    assert.is_true(baml.deep_equals(lambdas_issue_e_method_resolution_different_types(), 35))
+    assert.equal(lambdas_issue_e_method_resolution_different_types(), 35)
 }
 
 // ─── issue_f_shadowing_capture_correct_binding ────────────────────────────────
@@ -286,7 +323,7 @@ function lambdas_issue_f_shadowing_capture_correct_binding() -> int {
 }
 
 test "issue_f_shadowing_capture_correct_binding" {
-    assert.is_true(baml.deep_equals(lambdas_issue_f_shadowing_capture_correct_binding(), 12))
+    assert.equal(lambdas_issue_f_shadowing_capture_correct_binding(), 12)
 }
 
 // ─── issue_f_shadowing_capture_independent_cells ──────────────────────────────
@@ -304,7 +341,7 @@ function lambdas_issue_f_shadowing_capture_independent_cells() -> int {
 }
 
 test "issue_f_shadowing_capture_independent_cells" {
-    assert.is_true(baml.deep_equals(lambdas_issue_f_shadowing_capture_independent_cells(), 12))
+    assert.equal(lambdas_issue_f_shadowing_capture_independent_cells(), 12)
 }
 
 // ─── issue_a_capture_read_after_mutation ──────────────────────────────────────
@@ -321,7 +358,7 @@ function lambdas_issue_a_capture_read_after_mutation() -> int {
 }
 
 test "issue_a_capture_read_after_mutation" {
-    assert.is_true(baml.deep_equals(lambdas_issue_a_capture_read_after_mutation(), 1))
+    assert.equal(lambdas_issue_a_capture_read_after_mutation(), 1)
 }
 
 // ─── issue_a_interleaved_capture_reads_writes ─────────────────────────────────
@@ -341,7 +378,7 @@ function lambdas_issue_a_interleaved_capture_reads_writes() -> int {
 }
 
 test "issue_a_interleaved_capture_reads_writes" {
-    assert.is_true(baml.deep_equals(lambdas_issue_a_interleaved_capture_reads_writes(), 60))
+    assert.equal(lambdas_issue_a_interleaved_capture_reads_writes(), 60)
 }
 
 // ─── issue_d_capture_as_call_destination ─────────────────────────────────────
@@ -358,7 +395,7 @@ function lambdas_issue_d_capture_as_call_destination() -> int {
 }
 
 test "issue_d_capture_as_call_destination" {
-    assert.is_true(baml.deep_equals(lambdas_issue_d_capture_as_call_destination(), 42))
+    assert.equal(lambdas_issue_d_capture_as_call_destination(), 42)
 }
 
 // ─── issue_b_captured_variable_mutation_visible ───────────────────────────────
@@ -372,7 +409,7 @@ function lambdas_issue_b_captured_variable_mutation_visible() -> int {
 }
 
 test "issue_b_captured_variable_mutation_visible" {
-    assert.is_true(baml.deep_equals(lambdas_issue_b_captured_variable_mutation_visible(), 42))
+    assert.equal(lambdas_issue_b_captured_variable_mutation_visible(), 42)
 }
 
 
@@ -388,5 +425,38 @@ function lambdas_lambda_param_shadows_annotated_outer_local() -> int {
 }
 
 test "lambda_param_shadows_annotated_outer_local" {
-    assert.is_true(baml.deep_equals(lambdas_lambda_param_shadows_annotated_outer_local(), 12))
+    assert.equal(lambdas_lambda_param_shadows_annotated_outer_local(), 12)
+}
+
+
+// ─── inferred_signature_is_reconstructed ─────────────────────────────────────
+
+// A lambda's runtime signature carries the types it actually HAS, not only the
+// ones it spells. An omitted return type and an omitted `throws` clause are
+// filled from inference, so a closure value reconstructs as precisely as an
+// annotated declaration would — `-> int throws never` here, not the
+// `-> unknown throws unknown` its syntax alone says.
+function lambdas_inferred_signature() -> string {
+    let inferred = (x: int) -> { x * 2 }
+    let sig = reflect.signature(inferred)
+    sig.returns.to_string() + "/" + sig.errors.to_string()
+}
+
+test "inferred_signature_is_reconstructed" {
+    assert.equal(lambdas_inferred_signature(), "int/never")
+}
+
+// The same for a throwing body: the inferred `throws` surface is the error set
+// the body can actually raise, so it is testable rather than an open claim.
+function lambdas_inferred_throwing_signature() -> string {
+    let inferred = (x: int) -> {
+        if (x < 0) { throw "negative" }
+        x * 2
+    }
+    let sig = reflect.signature(inferred)
+    sig.returns.to_string() + "/" + sig.errors.to_string()
+}
+
+test "inferred_throwing_signature_is_reconstructed" {
+    assert.equal(lambdas_inferred_throwing_signature(), "int/\"negative\"")
 }

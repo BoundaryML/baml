@@ -35,7 +35,9 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 mod analyze;
+mod effect_rename;
 mod emit;
+mod host_types;
 mod idents;
 mod routing;
 mod translate_ty;
@@ -66,6 +68,7 @@ pub struct RustGenOptions {
 
 /// A symbol the emitter skipped because it references a BAML type the Rust
 /// SDK cannot represent yet (media, non-null unions, generics, …).
+#[derive(Debug)]
 pub struct SkipWarning {
     /// Fully qualified BAML name of the skipped symbol.
     pub fqn: String,
@@ -84,13 +87,6 @@ pub enum FileContent {
 }
 
 impl FileContent {
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            FileContent::Text(s) => s.as_bytes(),
-            FileContent::Binary(b) => b,
-        }
-    }
-
     pub fn into_bytes(self) -> Vec<u8> {
         match self {
             FileContent::Text(s) => s.into_bytes(),
@@ -150,10 +146,34 @@ pub fn to_source_code_with_bytecode(
     baml_bytecode: &[u8],
     options: &RustGenOptions,
 ) -> Generated {
+    to_source_code_with_optional_metadata(pool, baml_bytecode, None, options)
+}
+
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    options: &RustGenOptions,
+) -> Generated {
+    to_source_code_with_optional_metadata(pool, baml_bytecode, Some(embedded_baml_toml), options)
+}
+
+fn to_source_code_with_optional_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    options: &RustGenOptions,
+) -> Generated {
     assert!(
         matches!(options.naming_convention, NamingConvention::PreserveCase),
         "only NamingConvention::PreserveCase is supported"
     );
+
+    // Give each callback's synthetic effect param a readable Rust name before
+    // anything else looks at the pool, so the generic, its error union, and
+    // that union's variant all read `CbError` rather than `__effect_param_0`.
+    let pool = effect_rename::rename_effect_params(pool);
+    let pool = &host_types::lower_unrepresentable_literals(&pool);
 
     let (analysis, mut warnings) = analyze::analyze(pool);
     let union_registry = unions::collect(pool, &analysis);
@@ -190,6 +210,7 @@ pub fn to_source_code_with_bytecode(
                     unions: &union_registry,
                     leaf: &leaf,
                     boxing_for: None,
+                    generic_params: &[],
                 };
                 match emit::function::emit(name, function, &ctx) {
                     Ok(tokens) => leaves
@@ -215,6 +236,7 @@ pub fn to_source_code_with_bytecode(
                     unions: &union_registry,
                     leaf: &leaf,
                     boxing_for: Some(name),
+                    generic_params: &[],
                 };
                 match emit::class::emit(name, class, &ctx) {
                     Ok((tokens, class_warnings)) => {
@@ -254,6 +276,7 @@ pub fn to_source_code_with_bytecode(
                     unions: &union_registry,
                     leaf: &leaf,
                     boxing_for: None,
+                    generic_params: &[],
                 };
                 match emit::type_alias::emit(name, alias, &ctx) {
                     Ok(tokens) => leaves
@@ -274,11 +297,14 @@ pub fn to_source_code_with_bytecode(
     // Synthesized union enums land after their leaf's own symbols, in
     // shape order.
     for (leaf, union_enum) in union_registry.iter() {
+        // A generic union enum's own `<...>` params come into scope so its
+        // `TypeVar` arm payloads translate to those Rust generic params.
         let ctx = translate_ty::TyCtx {
             analysis: &analysis,
             unions: &union_registry,
             leaf,
             boxing_for: None,
+            generic_params: &union_enum.generic_params,
         };
         match emit::union::emit(union_enum, &ctx) {
             Ok(tokens) => leaves.entry(leaf.clone()).or_default().push(LeafItem {
@@ -322,7 +348,7 @@ pub fn to_source_code_with_bytecode(
     );
     files.insert(
         PathBuf::from("src/_inlinedbaml.rs"),
-        FileContent::Text(render_inlinedbaml_module()),
+        FileContent::Text(render_inlinedbaml_module(embedded_baml_toml)),
     );
     files.insert(
         PathBuf::from("src/_runtime.rs"),
@@ -405,7 +431,11 @@ struct LeafItem {
 /// `_inlinedbaml.bin` (`include_bytes!` resolves relative to the
 /// containing source file) so rustc never has to parse the program as a
 /// byte-string literal.
-fn render_inlinedbaml_module() -> String {
+fn render_inlinedbaml_module(embedded_baml_toml: Option<&str>) -> String {
+    let embedded_baml_toml = match embedded_baml_toml {
+        Some(manifest) => quote!(::core::option::Option::Some(#manifest)),
+        None => quote!(::core::option::Option::None),
+    };
     render_rust_file(
         RUST_BANNER,
         quote! {
@@ -414,6 +444,8 @@ fn render_inlinedbaml_module() -> String {
             /// first call.
             pub(crate) static BYTECODE: &[u8] =
                 ::core::include_bytes!("_inlinedbaml.bin");
+            pub(crate) static EMBEDDED_BAML_TOML: ::core::option::Option<&str> =
+                #embedded_baml_toml;
         },
     )
 }
@@ -431,7 +463,10 @@ fn render_runtime_module() -> String {
 
             pub(crate) fn ensure_init() -> ::std::result::Result<(), ::baml_bridge::SdkError> {
                 INIT.get_or_init(|| {
-                    ::baml_bridge::runtime::initialize_from_bytecode(crate::_inlinedbaml::BYTECODE)
+                    ::baml_bridge::runtime::initialize_from_bytecode_with_metadata(
+                        crate::_inlinedbaml::BYTECODE,
+                        crate::_inlinedbaml::EMBEDDED_BAML_TOML,
+                    )
                 })
                 .clone()
             }
@@ -555,6 +590,56 @@ mod tests {
             });
         function.return_type = return_type;
         function
+    }
+
+    fn class_symbol(
+        n: &Name,
+        properties: Vec<baml_codegen_types::ClassProperty>,
+        static_methods: Vec<Function>,
+        instance_methods: Vec<Function>,
+    ) -> Symbol {
+        Symbol::Class(baml_codegen_types::Class {
+            name: n.clone(),
+            generic_params: Vec::new(),
+            docstring: None,
+            properties,
+            static_methods,
+            instance_methods,
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        })
+    }
+
+    /// A generic class with the given `<...>` params and properties (no
+    /// methods).
+    fn generic_class(n: &Name, params: &[&str], properties: Vec<(&str, Ty)>) -> Symbol {
+        Symbol::Class(baml_codegen_types::Class {
+            name: n.clone(),
+            generic_params: params.iter().map(|p| baml_base::Name::new(*p)).collect(),
+            docstring: None,
+            properties: properties
+                .into_iter()
+                .map(|(field, ty)| baml_codegen_types::ClassProperty {
+                    name: baml_base::Name::new(field),
+                    docstring: None,
+                    ty,
+                })
+                .collect(),
+            static_methods: Vec::new(),
+            instance_methods: Vec::new(),
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        })
+    }
+
+    /// `src` with every whitespace character removed — signature
+    /// assertions stay stable against the pretty-printer's line wrapping.
+    fn flat(src: &str) -> String {
+        src.chars().filter(|c| !c.is_whitespace()).collect()
     }
 
     #[test]
@@ -755,6 +840,767 @@ mod tests {
             lib.matches("#[allow(clippy::too_many_arguments)]").count(),
             2,
             "both sync and async wrappers need the generated-code allowance:\n{lib}"
+        );
+    }
+
+    #[test]
+    fn functions_with_arguments_carry_the_by_value_note() {
+        let with_args = name("user", &[], "takes_one");
+        let mut function = nullary_string_fn(&with_args);
+        function.docstring = Some("Frobnicates the input.".to_string());
+        function.arguments = vec![baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new("x"),
+            docstring: None,
+            ty: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            default: None,
+        }];
+        let nullary = name("user", &[], "takes_none");
+        let pool = SymbolPool::from([
+            (with_args, Symbol::Function(function)),
+            (
+                nullary.clone(),
+                Symbol::Function(nullary_string_fn(&nullary)),
+            ),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        // The note follows the BAML docstring after a blank `///` line.
+        let note_head = "/// Arguments are passed to the BAML runtime by value:";
+        assert!(
+            lib.contains(&format!("/// Frobnicates the input.\n///\n{note_head}")),
+            "{lib}"
+        );
+        // Exactly the sync + async bindings of `takes_one` carry the note;
+        // `takes_none` has no arguments to mutate, so a count of 2 also
+        // proves its absence there.
+        assert_eq!(lib.matches(note_head).count(), 2, "{lib}");
+    }
+
+    fn typevar(index: u32, name: &str) -> Ty {
+        Ty::TypeVar(
+            baml_codegen_types::ParamTy::new(index, baml_base::Name::new(name)),
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+
+    #[test]
+    fn throwing_functions_carry_an_errors_doc_section() {
+        let e = name("user", &[], "ParseError");
+        let f = name("user", &[], "load");
+        let mut function = nullary_string_fn(&f);
+        function.docstring = Some("Load a document.".to_string());
+        function.arguments = vec![arg(
+            "path",
+            Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+        )];
+        function.throws = Some(Ty::Class(e.clone(), Vec::new(), baml_base::TyAttr::EMPTY));
+        let pool = SymbolPool::from([
+            (e.clone(), generic_class(&e, &[], vec![])),
+            (f, Symbol::Function(function)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        // The section comes LAST (after the by-value note — rustdoc folds
+        // everything after a heading into that section), on both bindings.
+        let section = "/// # Errors\n///\n/// Throws `ParseError`.\npub";
+        assert_eq!(lib.matches(section).count(), 2, "{lib}");
+        assert!(
+            lib.contains("/// are never written back to the caller's values.\n///\n/// # Errors"),
+            "{lib}"
+        );
+    }
+
+    fn arg(name: &str, ty: Ty) -> baml_codegen_types::FunctionArgument {
+        baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new(name),
+            docstring: None,
+            ty,
+            default: None,
+        }
+    }
+
+    #[test]
+    fn generic_function_binds_type_params_and_sends_type_args() {
+        // identity<T>(x: T) -> T
+        let n = name("user", &[], "identity");
+        let mut f = nullary_string_fn(&n);
+        f.generic_params = vec![baml_base::Name::new("T")];
+        f.arguments = vec![arg("x", typevar(0, "T"))];
+        f.return_type = typevar(0, "T");
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // The TypeVar becomes a `BamlValue`-bounded Rust generic on both the
+        // sync and async bindings; the arg and return position resolve to it.
+        assert!(
+            flat.contains("pubfnidentity<T:::baml_bridge::BamlValue>"),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("pubasyncfnidentity_async<T:::baml_bridge::BamlValue>"),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("x:T"),
+            "arg resolves to the type param:\n{lib}"
+        );
+        assert_eq!(
+            flat.matches(
+                "->::std::result::Result<T,::baml_bridge::Error<::core::convert::Infallible>>"
+            )
+            .count(),
+            2,
+            "return resolves to the type param on both bindings:\n{lib}"
+        );
+        // The concrete binding is sent explicitly, keyed by the TypeVar
+        // name, on both the sync and async bindings.
+        let type_arg = concat!(
+            "::baml_bridge::encode::type_args(::std::vec![(\"T\",",
+            "<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty()"
+        );
+        assert_eq!(flat.matches(type_arg).count(), 2, "{lib}");
+    }
+
+    #[test]
+    fn generic_function_with_return_only_type_params_still_binds_them() {
+        // two_type_args<A, B>() -> string : A and B appear only in the body
+        // (via the wire type args), never in the Rust signature — so the
+        // only thing that keeps them "used" is the explicit binding.
+        let n = name("user", &[], "two_type_args");
+        let mut f = nullary_string_fn(&n);
+        f.generic_params = vec![baml_base::Name::new("A"), baml_base::Name::new("B")];
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let flat = flat(text(&generated, "src/lib.rs"));
+        assert!(
+            flat.contains(
+                "pubfntwo_type_args<A:::baml_bridge::BamlValue,B:::baml_bridge::BamlValue>()"
+            ),
+            "{flat}"
+        );
+        assert!(flat.contains("(\"A\",<Aas"), "{flat}");
+        assert!(flat.contains("(\"B\",<Bas"), "{flat}");
+    }
+
+    #[test]
+    fn typevar_in_a_union_synthesizes_a_generic_union_enum() {
+        // tag_or_value<T>(x: T | string | null) -> string : `T` in a union
+        // synthesizes a generic enum `TOrString<T>`, wrapped in `Option` for
+        // the null arm. The function's param accepts it via `impl Into<_>`.
+        let n = name("user", &[], "tag_or_value");
+        let mut f = nullary_string_fn(&n);
+        f.generic_params = vec![baml_base::Name::new("T")];
+        f.arguments = vec![arg(
+            "x",
+            Ty::Union(
+                vec![
+                    typevar(0, "T"),
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ],
+                baml_base::TyAttr::EMPTY,
+            ),
+        )];
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // The generic enum: `T` variant holds `T`, `String` holds a String.
+        assert!(
+            flat.contains(
+                "pubenumTOrString<T:::baml_bridge::BamlValue>{T(T),String(::std::string::String),}"
+            ),
+            "{lib}"
+        );
+        // The concrete arm gets a `From`; the `TypeVar` arm does not
+        // (coherence) — so exactly one `From` impl on the enum.
+        assert!(
+            flat.contains(
+                "impl<T:::baml_bridge::BamlValue>::std::convert::From<::std::string::String>forTOrString<T>"
+            ),
+            "{lib}"
+        );
+        assert_eq!(flat.matches("::std::convert::From").count(), 1, "{lib}");
+        // The param references the generic enum wrapped in `Option`.
+        assert!(
+            flat.contains("x:impl::std::convert::Into<::std::option::Option<crate::TOrString<T>>>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn generic_union_field_makes_the_enclosing_class_representable() {
+        // ContainerShapes<T> { mixed: T | string | null } — the union field
+        // becomes `Option<TOrString<T>>`, and the class now emits (it used
+        // to skip on the TypeVar-union field). The enum shares the class's
+        // `T`.
+        let c = name("user", &[], "ContainerShapes");
+        let mixed = Ty::Union(
+            vec![
+                typevar(0, "T"),
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let pool =
+            SymbolPool::from([(c.clone(), generic_class(&c, &["T"], vec![("mixed", mixed)]))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let flat = flat(text(&generated, "src/lib.rs"));
+        assert!(
+            flat.contains("pubstructContainerShapes<T:::baml_bridge::BamlValue>"),
+            "{flat}"
+        );
+        assert!(
+            flat.contains("pubmixed:::std::option::Option<crate::TOrString<T>>"),
+            "{flat}"
+        );
+        assert!(
+            flat.contains("pubenumTOrString<T:::baml_bridge::BamlValue>"),
+            "{flat}"
+        );
+    }
+
+    #[test]
+    fn multiple_typevars_in_a_union_parameterize_the_enum() {
+        // two_in_union<T, U>(x: T | U | int) -> string : the enum is generic
+        // over both, in first-appearance order; only the concrete `int` arm
+        // gets a `From`.
+        let n = name("user", &[], "two_in_union");
+        let mut f = nullary_string_fn(&n);
+        f.generic_params = vec![baml_base::Name::new("T"), baml_base::Name::new("U")];
+        f.arguments = vec![arg(
+            "x",
+            Ty::Union(
+                vec![
+                    typevar(0, "T"),
+                    typevar(1, "U"),
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ],
+                baml_base::TyAttr::EMPTY,
+            ),
+        )];
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let flat = flat(text(&generated, "src/lib.rs"));
+        assert!(
+            flat.contains(
+                "pubenumTOrUOrInt<T:::baml_bridge::BamlValue,U:::baml_bridge::BamlValue>"
+            ),
+            "{flat}"
+        );
+        assert!(
+            flat.contains("T(T),U(U),Int(::core::primitive::i64),"),
+            "{flat}"
+        );
+        // Only the `int` arm converts; `T` and `U` do not.
+        assert_eq!(flat.matches("::std::convert::From<").count(), 1, "{flat}");
+        assert!(
+            flat.contains("From<::core::primitive::i64>forTOrUOrInt<T,U>"),
+            "{flat}"
+        );
+    }
+
+    #[test]
+    fn generic_class_emits_bounded_struct_and_wire_type_args() {
+        // GenericBox<T> { value: T }
+        let b = name("user", &[], "GenericBox");
+        let pool = SymbolPool::from([(
+            b.clone(),
+            generic_class(&b, &["T"], vec![("value", typevar(0, "T"))]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "{:?}",
+            generated.warnings.first().map(|w| &w.reason)
+        );
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // Struct + impl carry the `BamlValue`-bounded param; the field
+        // resolves to it.
+        assert!(
+            flat.contains("pubstructGenericBox<T:::baml_bridge::BamlValue>{pubvalue:T,}"),
+            "{lib}"
+        );
+        assert!(
+            flat.contains(
+                "impl<T:::baml_bridge::BamlValue>::baml_bridge::baml_value::internal::__BamlValuePrivateforGenericBox<T>"
+            ),
+            "{lib}"
+        );
+        // The instance carries its concrete type arg on the wire, in both
+        // the value encoding and the type descriptor.
+        let type_args = concat!(
+            "::std::vec![<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>",
+            "::baml_ty()]"
+        );
+        // once in encode::class (to_baml) and once in class_ty (baml_ty).
+        assert_eq!(flat.matches(type_args).count(), 2, "{lib}");
+    }
+
+    #[test]
+    fn recursive_generic_class_boxes_the_self_reference() {
+        // GenericRecursive<T> { value: T, next: GenericRecursive<T>? }
+        let r = name("user", &[], "GenericRecursive");
+        let next_ty = Ty::Union(
+            vec![
+                Ty::Class(r.clone(), vec![typevar(0, "T")], baml_base::TyAttr::EMPTY),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let pool = SymbolPool::from([(
+            r.clone(),
+            generic_class(
+                &r,
+                &["T"],
+                vec![("value", typevar(0, "T")), ("next", next_ty)],
+            ),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "{:?}",
+            generated.warnings.first().map(|w| &w.reason)
+        );
+        let lib = text(&generated, "src/lib.rs");
+        // The self-referential field boxes, and the box wraps the fully
+        // parameterized `GenericRecursive<T>`.
+        assert!(
+            flat(lib).contains(
+                "pubnext:::std::option::Option<::std::boxed::Box<crate::GenericRecursive<T>>>"
+            ),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn generic_class_resolves_in_function_signatures() {
+        // GenericBox<T>; wrap<T>(x: T) -> GenericBox<T>; consume(x: GenericBox<int>) -> int
+        let b = name("user", &[], "GenericBox");
+        let mut wrap = nullary_string_fn(&name("user", &[], "wrap"));
+        wrap.generic_params = vec![baml_base::Name::new("T")];
+        wrap.arguments = vec![arg("x", typevar(0, "T"))];
+        wrap.return_type = Ty::Class(b.clone(), vec![typevar(0, "T")], baml_base::TyAttr::EMPTY);
+        let mut consume = nullary_string_fn(&name("user", &[], "consume"));
+        consume.arguments = vec![arg(
+            "x",
+            Ty::Class(
+                b.clone(),
+                vec![Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                }],
+                baml_base::TyAttr::EMPTY,
+            ),
+        )];
+        consume.return_type = Ty::Int {
+            attr: baml_base::TyAttr::EMPTY,
+        };
+        let pool = SymbolPool::from([
+            (
+                b.clone(),
+                generic_class(&b, &["T"], vec![("value", typevar(0, "T"))]),
+            ),
+            (name("user", &[], "wrap"), Symbol::Function(wrap)),
+            (name("user", &[], "consume"), Symbol::Function(consume)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "{:?}",
+            generated.warnings.first().map(|w| &w.reason)
+        );
+        let flat = flat(text(&generated, "src/lib.rs"));
+        // A generic instantiation over the fn's own param, and a concrete one.
+        assert!(
+            flat.contains("->::std::result::Result<crate::GenericBox<T>,"),
+            "{flat}"
+        );
+        assert!(
+            flat.contains("x:crate::GenericBox<::core::primitive::i64>"),
+            "{flat}"
+        );
+    }
+
+    #[test]
+    fn generic_class_instance_methods_bind_class_params_first() {
+        // GenericBox<T> with `get(self) -> string` and
+        // `pair_with<U>(self, other: U) -> string`: methods land in a
+        // generic `impl` block; the wire bindings send the class params
+        // ahead of the method's own (De Bruijn order).
+        let b = name("user", &[], "GenericBox");
+        let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar(0, "T"))])
+        else {
+            unreachable!("generic_class builds a class")
+        };
+        class
+            .instance_methods
+            .push(nullary_string_fn(&name("user", &[], "get")));
+        class.instance_methods.push({
+            let mut m = nullary_string_fn(&name("user", &[], "pair_with"));
+            m.generic_params = vec![baml_base::Name::new("U")];
+            m.arguments = vec![arg("other", typevar(1, "U"))];
+            m
+        });
+        let pool = SymbolPool::from([(b, Symbol::Class(class))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // Methods live in a generic impl block; only the method's own
+        // params appear on the fn (the class's come from the header).
+        assert!(
+            flat.contains("impl<T:::baml_bridge::BamlValue>GenericBox<T>{"),
+            "{lib}"
+        );
+        assert!(flat.contains("pubfnget(&self"), "{lib}");
+        assert!(
+            flat.contains("pubfnpair_with<U:::baml_bridge::BamlValue>(&self,other:U"),
+            "{lib}"
+        );
+        // `pair_with` binds the class `T` first, then its own `U`.
+        assert!(
+            flat.contains(concat!(
+                "(\"T\",<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),),",
+                "(\"U\",<Uas::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),)"
+            )),
+            "{lib}"
+        );
+        // `get` has no own params but still binds the class `T`:
+        // 2 bindings each (sync + async) for `get` and `pair_with`.
+        assert_eq!(flat.matches("(\"T\",<Tas").count(), 4, "{lib}");
+    }
+
+    #[test]
+    fn generic_class_statics_bind_only_their_own_params() {
+        // GenericBox<T> with static `make_box<V>(value: V) -> GenericBox<V>`:
+        // no receiver exists, so no class TypeVars ride the call — the wire
+        // carries only the static's own `V` ("no phantom class params").
+        let b = name("user", &[], "GenericBox");
+        let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar(0, "T"))])
+        else {
+            unreachable!("generic_class builds a class")
+        };
+        class.static_methods.push({
+            let mut m = nullary_string_fn(&name("user", &[], "make_box"));
+            m.generic_params = vec![baml_base::Name::new("V")];
+            m.arguments = vec![arg("value", typevar(0, "V"))];
+            m.return_type = Ty::Class(b.clone(), vec![typevar(0, "V")], baml_base::TyAttr::EMPTY);
+            m
+        });
+        let pool = SymbolPool::from([(b, Symbol::Class(class))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains("pubfnmake_box<V:::baml_bridge::BamlValue>(value:V"),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("Result<crate::GenericBox<V>,"),
+            "the static's own param instantiates the return:\n{lib}"
+        );
+        // Sync + async each bind exactly `V`; the class `T` is never sent.
+        assert_eq!(flat.matches("(\"V\",<Vas").count(), 2, "{lib}");
+        assert_eq!(flat.matches("(\"T\",<Tas").count(), 0, "{lib}");
+    }
+
+    #[test]
+    fn generic_class_with_a_param_unused_by_fields_skips() {
+        // Phantom<T> { x: int } — `T` appears in no field, so the emitted
+        // struct would be an E0392 "unused parameter". Skip, fail closed.
+        let p = name("user", &[], "Phantom");
+        let pool = SymbolPool::from([(
+            p.clone(),
+            generic_class(
+                &p,
+                &["T"],
+                vec![(
+                    "x",
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                )],
+            ),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            !flat(text(&generated, "src/lib.rs")).contains("structPhantom"),
+            "must skip"
+        );
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|w| w.fqn == "user.Phantom" && w.reason.contains("non-recursive")),
+            "{:?}",
+            generated.warnings
+        );
+    }
+
+    #[test]
+    fn generic_class_using_its_param_only_recursively_skips() {
+        // GNode<T> { children: GNode<T>[] } — `T` appears only as the arg of
+        // the recursive self-reference, so Rust would reject the struct with
+        // "type parameter T is only used recursively". Skip, fail closed.
+        let g = name("user", &[], "GNode");
+        let children = Ty::List(
+            Box::new(Ty::Class(
+                g.clone(),
+                vec![typevar(0, "T")],
+                baml_base::TyAttr::EMPTY,
+            )),
+            baml_base::TyAttr::EMPTY,
+        );
+        let pool = SymbolPool::from([(
+            g.clone(),
+            generic_class(&g, &["T"], vec![("children", children)]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            !flat(text(&generated, "src/lib.rs")).contains("structGNode"),
+            "must skip"
+        );
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|w| w.fqn == "user.GNode" && w.reason.contains("non-recursive")),
+            "{:?}",
+            generated.warnings
+        );
+    }
+
+    #[test]
+    fn methods_emit_static_and_instance_bindings() {
+        let g = name("user", &[], "Greeter");
+        let mut create = nullary_string_fn(&name("user", &[], "create"));
+        create.arguments.push(baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new("name"),
+            docstring: None,
+            ty: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            default: None,
+        });
+        create.return_type = Ty::Class(g.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        let who = nullary_string_fn(&name("user", &[], "who"));
+        let mut greet = nullary_string_fn(&name("user", &[], "greet"));
+        greet.arguments.push(baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new("greeting"),
+            docstring: None,
+            ty: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            default: None,
+        });
+        let pool = SymbolPool::from([(
+            g.clone(),
+            class_symbol(
+                &g,
+                vec![baml_codegen_types::ClassProperty {
+                    name: baml_base::Name::new("name"),
+                    docstring: None,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                }],
+                vec![create],
+                vec![who, greet],
+            ),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("impl Greeter {"), "{lib}");
+        // Wire FQNs are `<class fqn>.<method>` — the engine resolves a
+        // method like any other function.
+        assert!(lib.contains(r#""user.Greeter.create""#), "{lib}");
+        assert!(lib.contains(r#""user.Greeter.who""#), "{lib}");
+        assert!(lib.contains(r#""user.Greeter.greet""#), "{lib}");
+        let flat = flat(lib);
+        // Static: plain associated fn. Instance: `&self` receiver.
+        assert!(
+            flat.contains("pubfncreate(name:::std::string::String"),
+            "{lib}"
+        );
+        assert!(flat.contains("pubasyncfncreate_async("), "{lib}");
+        assert!(flat.contains("pubfnwho(&self"), "{lib}");
+        assert!(flat.contains("pubasyncfnwho_async(&self"), "{lib}");
+        assert!(
+            flat.contains("pubfngreet(&self,greeting:::std::string::String"),
+            "{lib}"
+        );
+        // The receiver rides the wire as the `"self"` kwarg, encoded by
+        // value like every other argument.
+        assert!(
+            flat.contains(r#"("self",::std::option::Option::Some"#),
+            "{lib}"
+        );
+        assert!(flat.contains("to_baml(self)"), "{lib}");
+        // Instance methods carry the receiver-aware by-value note (even
+        // with no non-receiver arguments); the static factory gets the
+        // arguments wording.
+        assert!(
+            lib.contains("/// The receiver and any arguments are passed to the BAML runtime by"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("/// Arguments are passed to the BAML runtime by value:"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn unsupported_methods_skip_individually_without_poisoning_the_class() {
+        let w = name("user", &[], "Widget");
+        let ok = nullary_string_fn(&name("user", &[], "ok"));
+        let mut snap = nullary_string_fn(&name("user", &[], "snap"));
+        snap.return_type = Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY);
+        // A generic method on a non-generic class emits (its own `<T>`),
+        // proving `snap`'s skip is per-method, not per-vec.
+        let mut pick = nullary_string_fn(&name("user", &[], "pick"));
+        pick.generic_params.push(baml_base::Name::new("T"));
+        let pool = SymbolPool::from([(
+            w.clone(),
+            class_symbol(&w, Vec::new(), Vec::new(), vec![ok, snap, pick]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub struct Widget"), "{lib}");
+        let flat = flat(lib);
+        assert!(flat.contains("pubfnok(&self"), "{lib}");
+        assert!(!flat.contains("pubfnsnap"), "{lib}");
+        assert!(
+            flat.contains("pubfnpick<T:::baml_bridge::BamlValue>(&self"),
+            "{lib}"
+        );
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert_eq!(generated.warnings[0].fqn, "user.Widget.snap");
+        assert!(
+            generated.warnings[0].reason.contains("media"),
+            "{}",
+            generated.warnings[0].reason
+        );
+    }
+
+    #[test]
+    fn method_signatures_do_not_box_recursive_class_references() {
+        let node = name("user", &[], "Node");
+        let next_field = Ty::Union(
+            vec![
+                Ty::Class(node.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let mut next_or_self = nullary_string_fn(&name("user", &[], "next_or_self"));
+        next_or_self.return_type = Ty::Class(node.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        let pool = SymbolPool::from([(
+            node.clone(),
+            class_symbol(
+                &node,
+                vec![baml_codegen_types::ClassProperty {
+                    name: baml_base::Name::new("next"),
+                    docstring: None,
+                    ty: next_field,
+                }],
+                Vec::new(),
+                vec![next_or_self],
+            ),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        // The recursive field boxes…
+        assert!(
+            lib.contains("::std::option::Option<::std::boxed::Box<crate::Node>>"),
+            "{lib}"
+        );
+        // …but a method signature is not a containment site: the field is
+        // the only `Box` in the module, so the method's `crate::Node`
+        // return stays plain.
+        assert_eq!(lib.matches("Box<").count(), 1, "{lib}");
+    }
+
+    #[test]
+    fn method_union_signatures_register_in_the_leaf_registry() {
+        let h = name("user", &[], "Holder");
+        let union = Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let mut pick = nullary_string_fn(&name("user", &[], "pick"));
+        pick.arguments.push(baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new("u"),
+            docstring: None,
+            ty: union,
+            default: None,
+        });
+        let pool = SymbolPool::from([(
+            h.clone(),
+            class_symbol(&h, Vec::new(), Vec::new(), vec![pick]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub enum IntOrString"), "{lib}");
+        assert!(
+            lib.contains("u: impl ::std::convert::Into<crate::IntOrString>"),
+            "{lib}"
         );
     }
 

@@ -20,18 +20,15 @@ class Dog {
 
 //----
 //- diagnostics
-// error: overlapping interface implementations for the same receiver/interface
-//     ╭─[ interface_duplicate_implements.baml:14:14 ]
-//     │
+// E0132
+//
+//   × overlapping interface implementations for the same receiver/interface
+//    ╭─[interface_duplicate_implements.baml:8:14]
+//  8 │   implements Animal {
+//    ·              ───┬──
+//    ·                 ╰── conflicting implementation is here
+//    ╰────
+//     ╭─[interface_duplicate_implements.baml:14:14]
 //  14 │   implements Animal {
-//     │              ───┬──
-//     │                 ╰──── overlapping interface implementations for the same receiver/interface
-//     │
-//     ├─[ interface_duplicate_implements.baml:14:14 ]
-//     │
-//   8 │   implements Animal {
-//     │              ───┬──
-//     │                 ╰──── conflicting implementation is here
-//     │
-//     │ Note: Error code: E0132
-// ────╯
+//     ·              ──────
+//     ╰────

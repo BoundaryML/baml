@@ -11,7 +11,7 @@
 //!   * class  `T` — `stream_e2e_extract_doc(text) -> StreamingDoc { title, body, word_count }`
 //!
 //! The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
-//! before `StreamFinished` (asserted below). The class-typed tests are the
+//! before the end marker (asserted below). The class-typed tests are the
 //! deterministic, bridge-level regression guard for the class-typed streaming bug
 //! (thoughts/sam-projects/bridge-generics/streaming, doc 00).
 //!
@@ -24,7 +24,7 @@
 //   * `$stream` companions bind as `<function>_stream` /
 //     `<function>_stream_async` (mirroring the python binding names);
 //   * the stream's `next()` returns `Result<Option<S>, _>`, with `None`
-//     playing python's `StreamFinished` sentinel, and `final_()` returns
+//     adapting the engine's `ai.stream.Done` sentinel, and `final_()` returns
 //     `Result<T, _>` (`final` is a reserved keyword);
 //   * the `_async` companion returns a stream whose `next()`/`final_()` are
 //     themselves `async` — python names those methods `next_async` /
@@ -36,9 +36,9 @@ use crate::replay_harness::{replay_server, replay_server_async};
 // String-typed `T` — Stream<null | string, string>.
 // ---------------------------------------------------------------------------
 
-/// Sync `next()` yields a stream of partials and drains to `StreamFinished`.
+/// Sync `next()` yields a stream of partials and drains to `None`.
 #[test]
-fn test_stream() {
+fn test_streaming_e2e_stream() {
     use baml_sdk::lorem::stream_e2e_extract_stream;
 
     replay_server("replay_extract_string", || {
@@ -63,7 +63,7 @@ fn test_stream() {
 /// Async sibling (python routes it over the pyo3-tokio path as
 /// `next_async()` / `final_async()`).
 #[tokio::test]
-async fn test_stream_async() {
+async fn test_streaming_e2e_stream_async() {
     use baml_sdk::lorem::stream_e2e_extract_stream_async;
 
     replay_server_async("replay_extract_string", async {
@@ -85,9 +85,9 @@ async fn test_stream_async() {
     .await;
 }
 
-/// BAML-driven counterpart: the `S | StreamFinished` union stays engine-side.
+/// BAML-driven counterpart: the `S | ai.stream.Done` union stays engine-side.
 #[test]
-fn test_stream_collect_in_baml() {
+fn test_streaming_e2e_stream_collect_in_baml() {
     use baml_sdk::lorem::{StreamE2ECollectResult, stream_e2e_collect};
 
     replay_server("replay_extract_string", || {
@@ -116,7 +116,7 @@ fn test_stream_collect_in_baml() {
 
 /// Sync `next()` yields >= 10 doc partials; `final()` is a typed `StreamingDoc`.
 #[test]
-fn test_stream_doc() {
+fn test_streaming_e2e_stream_doc() {
     use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream};
 
     replay_server("replay_extract_doc", || {
@@ -142,7 +142,7 @@ fn test_stream_doc() {
 
 /// Async sibling for a class `T` (python's pyo3-tokio path).
 #[tokio::test]
-async fn test_stream_doc_async() {
+async fn test_streaming_e2e_stream_doc_async() {
     use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream_async};
 
     replay_server_async("replay_extract_doc", async {
@@ -167,10 +167,10 @@ async fn test_stream_doc_async() {
     .await;
 }
 
-/// BAML-driven counterpart: the `S | StreamFinished` union stays engine-side;
+/// BAML-driven counterpart: the `S | ai.stream.Done` union stays engine-side;
 /// only the concrete `StreamingDoc` crosses the FFI boundary.
 #[test]
-fn test_stream_doc_collect_in_baml() {
+fn test_streaming_e2e_stream_doc_collect_in_baml() {
     use baml_sdk::lorem::{StreamingDoc, stream_e2e_collect_doc};
 
     replay_server("replay_extract_doc", || {

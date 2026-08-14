@@ -451,13 +451,14 @@ test "inferred_ctor_default_method_collects_all" {
     assert.equal(inferred_ctor_collect_count(), 3)
 }
 
-// ─── Inferred binding nesting a rigid `Self` must NOT seed `void` ───
+// ─── Inferred binding nesting the rigid `Self` resolves through its slot ───
 //
 // Inside an interface default method, `self` has the rigid pinned type `Self`,
-// which is never among the caller frame's generic params. An inferred generic
-// call whose binding NESTS it (here `T := Self[]` via `echo_type([self])`)
-// cannot be resolved to a frame index — the seeding must demote that binding
-// to `unknown` (the unseeded status quo), not lower `Self` to `void`.
+// carried at frame slot 0. An inferred generic call whose binding NESTS it
+// (here `T := Self[]` via `echo_type([self])`) seeds the callee with the
+// realized receiver type — the reflected result is the concrete implementor's
+// array type, never a `void[]` (the naive-lowering regression this guarded
+// against) and no longer the demoted `unknown` of the slotless era.
 
 function echo_type<T>(a: T) -> string {
     return reflect.type_of<T>().to_string();
@@ -493,11 +494,8 @@ function nested_self_inferred_binding() -> string throws unknown {
     e.nested_self_type()
 }
 
-// `unknown` (the whole binding demoted) is the pre-existing status quo for an
-// unresolvable binding — the regression this guards against is `void[]`, which
-// a naive lowering of the nested rigid `Self` produces.
 test "nested_self_inferred_binding_not_voided" {
-    assert.equal(nested_self_inferred_binding(), "unknown")
+    assert.equal(nested_self_inferred_binding(), "inferred_generic_type_args.EchoA[]")
 }
 
 // Interface dispatch must also carry inferred method-level type args. The

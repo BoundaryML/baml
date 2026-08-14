@@ -1,0 +1,83 @@
+---
+title: Structured Output with Ollama
+description: Getting structured output out of Ollama, using novel parsing techniques.
+slug: ollama-structured-output
+date: Aug 16, 2024
+tags: ['tutorials']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+  linkedin: https://www.linkedin.com/in/sxlijin/
+---
+
+We're excited to announce that we've added Ollama support to
+[promptfiddle.com][ollama-demo], our interactive playground for
+BAML, a language designed to make it easy to get structured output out of LLMs.
+
+Try it out today:
+
+  - run `OLLAMA_ORIGINS='*' ollama serve` to start Ollama on your machine
+  - in another terminal, run `ollama pull llama3` to download the model
+  - use [Prompt Fiddle, running BAML in your browser][ollama-demo], to get
+    structured output out of Ollama
+
+<img src="/blog/prompt-fiddle-ollama.png" title="Screenshot showing Prompt Fiddle being used with Llama3 via Ollama" width={1000} />
+
+## What is Ollama?
+
+Ollama is a tool that makes it easy to run LLMs like Llama 3.1, Mistral, Gemma
+2, and others locally, right on your own machine. For those of you who work in
+environments where data security and privacy is a top concern, Ollama makes it
+easy to run LLMs on your own hardware.
+
+## Structured Output
+
+Everyone writing software with LLMs quickly runs into this problem: a magic
+genie that gives you text that solves your problem is great for human users,
+but sucks if you're trying to feed the LLM's output into another program.
+
+There are a number of approaches that the industry is trying out to make this
+easier: naive parsing, LLM-based retries, constrained generation, and
+schema-aligned parsing. We've talked about [some](structured-output-from-llms)
+[of](schema-aligned-parsing) [these](sota-function-calling) in the past, but
+haven't really talked a lot about _how_ you use these techniques.
+
+## How to use BAML with Ollama
+
+So let's actually talk about how you can use BAML with Ollama!
+
+First, you'll need to install Ollama ([docs](https://github.com/ollama/ollama?tab=readme-ov-file#ollama)):
+
+```bash
+if [[ "$(uname)" == "Darwin" ]]; then
+  brew install ollama
+else
+  curl -fsSL https://ollama.com/install.sh | sh
+fi
+```
+
+Next, you'll want to start it, and specifically you'll want to allow any origin
+to connect to it, including Prompt Fiddle:
+
+```bash
+OLLAMA_ORIGINS='*' ollama serve
+```
+
+In another terminal, pull a model to use with Ollama:
+
+```bash
+ollama pull llama3
+```
+
+(`llama3.1` has some API compatibility issues, unfortunately, but `llama3` works great!)
+
+And now, you can write BAML code to get structured output out of Ollama!
+
+Our [Prompt Fiddle demo][ollama-demo] will allow you to
+write and run BAML code, entirely in your browser, to try it out.
+
+Alternatively, we also offer a VSCode extension and command-line tooling that you can use to
+write BAML code in VSCode, and run it on your machine, without any cloud system in the loop.
+Check out our [docs](https://docs.boundaryml.com/quickstart) for more information.
+
+[ollama-demo]: https://promptfiddle.com/Ollama-Demo-2Nzzh

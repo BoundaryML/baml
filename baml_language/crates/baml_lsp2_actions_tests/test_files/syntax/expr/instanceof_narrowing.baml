@@ -43,84 +43,63 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 
 //----
 //- diagnostics
-// error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_instanceof_narrowing.baml:11:11 ]
-//     │
+// E0098
+//
+//   × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[expr_instanceof_narrowing.baml:11:11]
 //  11 │     if (x instanceof Foo) {
-//     │           ─────┬────
-//     │                ╰────── use `match` instead
-//     │
-//     │ Note: Error code: E0098
-// ────╯
-// error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_instanceof_narrowing.baml:22:11 ]
-//     │
+//     ·           ─────┬────
+//     ·                ╰── use `match` instead
+//     ╰────
+// E0098
+//
+//   × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[expr_instanceof_narrowing.baml:22:11]
 //  22 │     if (x instanceof Foo) {
-//     │           ─────┬────
-//     │                ╰────── use `match` instead
-//     │
-//     │ Note: Error code: E0098
-// ────╯
-// error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_instanceof_narrowing.baml:35:11 ]
-//     │
+//     ·           ─────┬────
+//     ·                ╰── use `match` instead
+//     ╰────
+// E0098
+//
+//   × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[expr_instanceof_narrowing.baml:35:11]
 //  35 │     if (x instanceof Foo) {
-//     │           ─────┬────
-//     │                ╰────── use `match` instead
-//     │
-//     │ Note: Error code: E0098
-// ────╯
-// error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_instanceof_narrowing.baml:37:18 ]
-//     │
+//     ·           ─────┬────
+//     ·                ╰── use `match` instead
+//     ╰────
+// E0098
+//
+//   × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[expr_instanceof_narrowing.baml:37:18]
 //  37 │     } else if (x instanceof Baz) {
-//     │                  ─────┬────
-//     │                       ╰────── use `match` instead
-//     │
-//     │ Note: Error code: E0098
-// ────╯
-// error: type `Foo | Bar` has no member `field`: its members implement no common interface that declares `field`
-//     ╭─[ expr_instanceof_narrowing.baml:13:18 ]
-//     │
+//     ·                  ─────┬────
+//     ·                       ╰── use `match` instead
+//     ╰────
+// E0007
+//
+//   × type `Bar | Foo` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_instanceof_narrowing.baml:13:16]
 //  13 │         return x.field;
-//     │                  ──┬──
-//     │                    ╰──── type `Foo | Bar` has no member `field`: its members implement no common interface that declares `field`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: did you mean `x?.field`? `x.field` does not handle the case when `x` is null
-//     ╭─[ expr_instanceof_narrowing.baml:23:16 ]
-//     │
+//     ·                ───────
+//     ╰────
+// E0007
+//
+//   × type `Foo | null` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_instanceof_narrowing.baml:23:16]
 //  23 │         return x.field;
-//     │                ───┬───
-//     │                   ╰───── did you mean `x?.field`? `x.field` does not handle the case when `x` is null
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected string, got string | null
-//     ╭─[ expr_instanceof_narrowing.baml:23:16 ]
-//     │
-//  23 │         return x.field;
-//     │                ───┬───
-//     │                   ╰───── type mismatch: expected string, got string | null
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
-//     ╭─[ expr_instanceof_narrowing.baml:36:18 ]
-//     │
+//     ·                ───────
+//     ╰────
+// E0007
+//
+//   × type `Bar | Baz | Foo` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_instanceof_narrowing.baml:36:16]
 //  36 │         return x.field;
-//     │                  ──┬──
-//     │                    ╰──── type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
-//     ╭─[ expr_instanceof_narrowing.baml:38:18 ]
-//     │
+//     ·                ───────
+//     ╰────
+// E0007
+//
+//   × type `Bar | Baz | Foo` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_instanceof_narrowing.baml:38:16]
 //  38 │         return x.field;
-//     │                  ──┬──
-//     │                    ╰──── type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
+//     ·                ───────
+//     ╰────

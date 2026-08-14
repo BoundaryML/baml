@@ -60,6 +60,10 @@ use crate::{
     playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
+#[derive(Debug, thiserror::Error)]
+#[error("Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR")]
+pub(crate) struct PlaygroundNotConfigured;
+
 fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
     match serde_json::to_string(msg) {
         Ok(json) => Some(AxumWsMsg::Text(json.into())),
@@ -1034,9 +1038,7 @@ fn build_router(
         tracing::info!("Playground: serving static files from {dir}");
         static_router(dir)
     } else {
-        anyhow::bail!(
-            "Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR"
-        )
+        return Err(PlaygroundNotConfigured.into());
     };
 
     Ok(api.fallback_service(fallback))
@@ -1541,6 +1543,14 @@ async fn update_source_file_handler(
         .playground_update_source_file(&request.project, &request.path, request.content)
     {
         Ok(()) => {
+            // The edit may have added or removed an `env.FOO` reference, and
+            // the declared set decides which keys are worth blocking a run to
+            // prompt for. Without this refresh a removed key keeps prompting
+            // and a newly added one resolves silently until the session
+            // reconnects.
+            state
+                .env_state
+                .set_declared_keys(&state.bex.all_env_var_names());
             state.bex.request_playground_state();
             json_response(StatusCode::OK, &UpdateSourceFileResponse { ok: true })
         }
@@ -1609,6 +1619,9 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     // round-trip (playground_env.rs).
     {
         let names = state.bex.all_env_var_names();
+        // Only these keys are worth blocking a run to prompt for; everything
+        // else resolves to unset without stalling. See `playground_env`.
+        state.env_state.set_declared_keys(&names);
         let vars = collect_referenced_env_vars(&names, |name| std::env::var(name).ok());
         if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
             && sink.send(msg).await.is_err()
@@ -2455,6 +2468,7 @@ async fn handle_ws_in_message(
         WsInMessage::RequestControlFlowGraph {
             project: _,
             function_name,
+            request_id,
         } => {
             let graph = state.bex.ast_control_flow_graph(&function_name);
             let graph = graph.map(|g| {
@@ -2464,6 +2478,7 @@ async fn handle_ws_in_message(
             let msg = WsOutMessage::ControlFlowGraphResult {
                 function_name,
                 graph: graph_json,
+                request_id,
             };
             if let Some(ws_msg) = to_ws_text(&msg)
                 && sink.send(ws_msg).await.is_err()

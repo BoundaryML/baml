@@ -71,9 +71,6 @@ pub enum TokenKind {
     RetryPolicy,
     #[token("template_string")]
     TemplateString,
-    #[token("type_builder")]
-    TypeBuilder,
-
     // Control flow keywords
     #[token("if")]
     If,
@@ -115,9 +112,6 @@ pub enum TokenKind {
     Instanceof,
     #[token("is")]
     Is,
-    #[token("dynamic")]
-    Dynamic,
-
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
     /// Also matches $-prefixed identifiers and `$`-separated names.
@@ -365,7 +359,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::TestSet => "testset",
             TokenKind::RetryPolicy => "retry_policy",
             TokenKind::TemplateString => "template_string",
-            TokenKind::TypeBuilder => "type_builder",
             TokenKind::If => "if",
             TokenKind::Else => "else",
             TokenKind::For => "for",
@@ -385,8 +378,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Defer => "defer",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Is => "is",
-            TokenKind::Dynamic => "dynamic",
-
             // Identifiers and literals
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
@@ -595,6 +586,11 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_is_an_identifier() {
+        assert_eq!(lex_no_whitespace("dynamic"), vec![TokenKind::Word]);
+    }
+
+    #[test]
     fn test_word_with_dollar() {
         // Dollar-qualified names (e.g. companion functions) tokenize as a single Word
         let source = "ExtractResume$render_prompt Foo$bar";
@@ -754,7 +750,7 @@ mod tests {
     }
 
     #[test]
-    fn test_raw_string_with_jinja() {
+    fn test_raw_string_with_braces() {
         let source = r##"#"Hello {{ name }}"#"##;
         let tokens = lex_no_whitespace(source);
 
@@ -1048,8 +1044,8 @@ mod tests {
 
     #[test]
     fn test_path_with_keyword_segment() {
-        // `baml.llm.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
-        let tokens = lex_no_whitespace("baml.llm.get_client");
+        // `baml.prompt.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
+        let tokens = lex_no_whitespace("baml.prompt.get_client");
         assert_eq!(
             tokens,
             vec![

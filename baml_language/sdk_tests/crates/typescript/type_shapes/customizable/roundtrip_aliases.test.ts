@@ -9,14 +9,14 @@ import {
 } from "./baml_sdk/aliases/index.js";
 
 describe("roundtrip aliases", () => {
-  it("round_trip_string_list", () =>
+  it("aliases_round_trip_string_list", () =>
     expect(round_trip_string_list(["a", "b"])).toEqual(["a", "b"]));
-  it("round_trip_rec_list", () => {
+  it("aliases_round_trip_rec_list", () => {
     // RecList = int | RecList[]
     expect(round_trip_rec_list(1)).toBe(1);
     expect(round_trip_rec_list([1, [2, 3]])).toEqual([1, [2, 3]]);
   });
-  it("round_trip_alias_container", () => {
+  it("aliases_round_trip_alias_container", () => {
     const c = new AliasContainer({ list_field: ["x"], rec_field: [1, [2]] });
     expect(round_trip_alias_container(c)).toEqual(c);
   });

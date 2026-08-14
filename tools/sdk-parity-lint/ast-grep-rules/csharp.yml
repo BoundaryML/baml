@@ -1,0 +1,37 @@
+id: csharp-test
+language: Rust
+rule:
+  all:
+    - any:
+        - pattern: 'fn $NAME($$$ARGS) { $$$BODY }'
+        - pattern: 'async fn $NAME($$$ARGS) { $$$BODY }'
+    - follows:
+        all:
+          - kind: attribute_item
+          - regex: '^#\[.*test.*\]$'
+        stopBy:
+          kind: function_item
+constraints:
+  NAME:
+    regex: '^test_[a-z][a-z0-9_]*$'
+---
+id: csharp-audit-test
+language: Rust
+rule:
+  all:
+    - any:
+        - pattern: 'fn $NAME($$$ARGS) { $$$BODY }'
+        - pattern: 'async fn $NAME($$$ARGS) { $$$BODY }'
+    - follows:
+        all:
+          - kind: attribute_item
+          - regex: '^#\[.*test.*\]$'
+        stopBy:
+          kind: function_item
+---
+id: sdk-parity-lint-skip
+language: Rust
+rule:
+  all:
+    - kind: line_comment
+    - regex: 'SDK_PARITY_LINT\(skip\):'

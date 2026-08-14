@@ -35,22 +35,22 @@ export class BamlError extends Error {
 }
 
 export class BamlInvalidArgumentError extends BamlError {
-    constructor(message: string) {
-        super(message);
+    constructor(message: string, detail?: BamlErrorDetail) {
+        super(message, detail);
         this.name = 'BamlInvalidArgumentError';
     }
 }
 
 export class BamlClientError extends BamlError {
-    constructor(message: string) {
-        super(message);
+    constructor(message: string, detail?: BamlErrorDetail) {
+        super(message, detail);
         this.name = 'BamlClientError';
     }
 }
 
 export class BamlCancelledError extends BamlError {
-    constructor(message: string) {
-        super(message);
+    constructor(message: string, detail?: BamlErrorDetail) {
+        super(message, detail);
         this.name = 'BamlCancelledError';
     }
 }
@@ -79,6 +79,11 @@ export class BamlPanic extends BamlError {
 }
 
 export function wrapNativeError(err: unknown): BamlError {
-    if (!(err instanceof Error)) return new BamlError(String(err));
-    return new BamlError(err.message);
+    if (err instanceof BamlError) return err;
+    const message = err instanceof Error ? err.message : String(err);
+    const code = err !== null && typeof err === 'object' && 'code' in err
+        ? (err as { code?: unknown }).code
+        : undefined;
+    if (code === 'invalid_argument') return new BamlInvalidArgumentError(message);
+    return new BamlClientError(message);
 }

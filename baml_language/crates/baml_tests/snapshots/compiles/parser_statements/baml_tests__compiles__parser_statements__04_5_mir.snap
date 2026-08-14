@@ -1,7 +1,25 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 20109
 ---
 === MIR2 ===
+fn user.simple_assign() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+
+    bb0: {
+        _1 = const 1_i64;
+        _1 = const 5_i64;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.add_assign() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -11,6 +29,54 @@ fn user.add_assign() -> int {
         _1 = const 10_i64;
         _1 = copy _1 + const 5_i64;
         _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.sub_assign() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+
+    bb0: {
+        _1 = const 10_i64;
+        _1 = copy _1 - const 3_i64;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.mul_assign() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+
+    bb0: {
+        _1 = const 3_i64;
+        _1 = copy _1 * const 4_i64;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.multi_assign() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 30_i64;
         goto -> bb1;
     }
 
@@ -81,24 +147,58 @@ fn user.block_with_tail() -> int {
     }
 }
 
-fn user.edge_call_then_index(foo: () -> int[] throws never) -> int {
+fn user.let_no_semicolons() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: () -> int[] throws never // foo // param
-    let _2: int[]
-    let _3: 0
+    let _1: int // x
+    let _2: int // y
+    let _3: int
+    let _4: int
 
     bb0: {
-        _2 = call copy _1() -> [bb1];
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _3 = copy _1;
+        _4 = copy _2;
+        _0 = copy _3 + copy _4;
+        goto -> bb1;
     }
 
     bb1: {
-        _3 = const 0_i64;
-        _0 = const 1_i64;
-        goto -> bb2;
+        return;
+    }
+}
+
+fn user.let_mixed_semicolons() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a
+    let _2: int // b
+    let _3: int // c
+    let _4: int // d
+    let _5: int
+    let _6: int
+    let _7: int
+    let _8: int
+    let _9: int
+    let _10: int
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _3 = const 3_i64;
+        _4 = const 4_i64;
+        _7 = copy _1;
+        _8 = copy _2;
+        _6 = copy _7 + copy _8;
+        _9 = copy _3;
+        _5 = copy _6 + copy _9;
+        _10 = copy _4;
+        _0 = copy _5 + copy _10;
+        goto -> bb1;
     }
 
-    bb2: {
+    bb1: {
         return;
     }
 }
@@ -124,6 +224,44 @@ fn user.edge_call_then_parens(foo: () -> ((int) -> int throws never) throws neve
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.edge_call_then_index(foo: () -> int[] throws never) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int[] throws never // foo // param
+    let _2: int[]
+    let _3: 0
+
+    bb0: {
+        _2 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        _3 = const 0_i64;
+        _0 = const 1_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.edge_type_then_object() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: EdgeFoo
+
+    bb0: {
+        _1 = user.EdgeFoo { const 1_i64 };
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -172,294 +310,6 @@ fn user.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> int {
     }
 }
 
-fn user.edge_type_then_object() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: EdgeFoo
-
-    bb0: {
-        _1 = user.EdgeFoo { const 1_i64 };
-        _0 = copy _1.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_mixed_semicolons() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // a
-    let _2: int // b
-    let _3: int // c
-    let _4: int // d
-    let _5: int
-    let _6: int
-    let _7: int
-    let _8: int
-    let _9: int
-    let _10: int
-
-    bb0: {
-        _1 = const 1_i64;
-        _2 = const 2_i64;
-        _3 = const 3_i64;
-        _4 = const 4_i64;
-        _7 = copy _1;
-        _8 = copy _2;
-        _6 = copy _7 + copy _8;
-        _9 = copy _3;
-        _5 = copy _6 + copy _9;
-        _10 = copy _4;
-        _0 = copy _5 + copy _10;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_no_semicolons() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x
-    let _2: int // y
-    let _3: int
-    let _4: int
-
-    bb0: {
-        _1 = const 1_i64;
-        _2 = const 2_i64;
-        _3 = copy _1;
-        _4 = copy _2;
-        _0 = copy _3 + copy _4;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.mul_assign() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x
-
-    bb0: {
-        _1 = const 3_i64;
-        _1 = copy _1 * const 4_i64;
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.multi_assign() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // a
-    let _2: int // b
-    let _3: int
-    let _4: int
-
-    bb0: {
-        _1 = const 1_i64;
-        _2 = const 2_i64;
-        _1 = const 10_i64;
-        _2 = const 20_i64;
-        _3 = copy _1;
-        _4 = copy _2;
-        _0 = copy _3 + copy _4;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.simple_assign() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x
-
-    bb0: {
-        _1 = const 1_i64;
-        _1 = const 5_i64;
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.sub_assign() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x
-
-    bb0: {
-        _1 = const 10_i64;
-        _1 = copy _1 - const 3_i64;
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.break_in_for() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // i
-    let _2: bool
-    let _3: int
-
-    bb0: {
-        _1 = const 0_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        _3 = copy _1;
-        _2 = copy _3 < const 10_i64;
-        branch copy _2 -> [bb2, bb2];
-    }
-
-    bb2: {
-        _0 = const 1_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.break_with_locals() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        goto -> bb1;
-    }
-
-    bb1: {
-        branch const true -> [bb2, bb3];
-    }
-
-    bb2: {
-        branch const true -> [bb3, bb1];
-    }
-
-    bb3: {
-        _0 = const 4_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.continue_in_for() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // i
-    let _2: bool
-    let _3: int
-    let _4: int
-
-    bb0: {
-        _1 = const 0_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        _3 = copy _1;
-        _2 = copy _3 < const 10_i64;
-        branch copy _2 -> [bb4, bb2];
-    }
-
-    bb2: {
-        _0 = const 2_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-
-    bb4: {
-        _4 = copy _1;
-        _1 = copy _4 + const 1_i64;
-        goto -> bb1;
-    }
-}
-
-fn user.continue_with_locals() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        goto -> bb1;
-    }
-
-    bb1: {
-        branch const true -> [bb4, bb2];
-    }
-
-    bb2: {
-        _0 = const 5_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-
-    bb4: {
-        branch const true -> [bb1, bb1];
-    }
-}
-
-fn user.nested_break() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        goto -> bb1;
-    }
-
-    bb1: {
-        branch const true -> [bb2, bb3];
-    }
-
-    bb2: {
-        branch const true -> [bb3, bb3];
-    }
-
-    bb3: {
-        _0 = const 3_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
 fn user.simple_break() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -501,6 +351,147 @@ fn user.simple_continue() -> int {
 
     bb3: {
         return;
+    }
+}
+
+fn user.break_in_for() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // i
+    let _2: bool
+    let _3: int
+
+    bb0: {
+        _1 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _2 = copy _3 < const 10_i64;
+        branch copy _2 -> [bb2, bb2];
+    }
+
+    bb2: {
+        _0 = const 1_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.continue_in_for() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // i
+    let _2: bool
+    let _3: int
+    let _4: int
+
+    bb0: {
+        _1 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _2 = copy _3 < const 10_i64;
+        branch copy _2 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = const 2_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _4 = copy _1;
+        _1 = copy _4 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
+fn user.nested_break() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        branch const true -> [bb2, bb3];
+    }
+
+    bb2: {
+        branch const true -> [bb3, bb3];
+    }
+
+    bb3: {
+        _0 = const 3_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.break_with_locals() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        branch const true -> [bb2, bb3];
+    }
+
+    bb2: {
+        branch const true -> [bb3, bb1];
+    }
+
+    bb3: {
+        _0 = const 4_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.continue_with_locals() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        branch const true -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = const 5_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        branch const true -> [bb1, bb1];
     }
 }
 
@@ -561,11 +552,11 @@ fn user.iterator_style_for_loop() -> int {
     bb0: {
         _1 = const 0_i64;
         _2 = [const 1_i64, const 2_i64, const 3_i64]: int[];
-        _3 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -615,11 +606,11 @@ fn user.nested_for_loop() -> int {
     bb0: {
         _1 = const 0_i64;
         _2 = [const 1_i64, const 2_i64, const 3_i64]: int[];
-        _3 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -632,11 +623,11 @@ fn user.nested_for_loop() -> int {
         fresh_cell(_7);
         _7 = copy _6;
         _8 = [const 4_i64, const 5_i64, const 6_i64]: int[];
-        _9 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _8) -> [bb4];
+        _9 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _8) -> [bb4];
     }
 
     bb4: {
-        _10 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _9) -> [bb5];
+        _10 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _9) -> [bb5];
     }
 
     bb5: {
@@ -722,6 +713,41 @@ fn user.let_statements() -> int {
     }
 }
 
+fn user.simple_while_loop() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // i
+    let _2: bool
+    let _3: int
+    let _4: int
+
+    bb0: {
+        _1 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _2 = copy _3 < const 10_i64;
+        branch copy _2 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _4 = copy _1;
+        _1 = copy _4 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
 fn user.nested_while_loop() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -768,40 +794,5 @@ fn user.nested_while_loop() -> int {
         _7 = copy _4;
         _4 = copy _7 + const 1_i64;
         goto -> bb5;
-    }
-}
-
-fn user.simple_while_loop() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // i
-    let _2: bool
-    let _3: int
-    let _4: int
-
-    bb0: {
-        _1 = const 0_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        _3 = copy _1;
-        _2 = copy _3 < const 10_i64;
-        branch copy _2 -> [bb4, bb2];
-    }
-
-    bb2: {
-        _0 = copy _1;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-
-    bb4: {
-        _4 = copy _1;
-        _1 = copy _4 + const 1_i64;
-        goto -> bb1;
     }
 }

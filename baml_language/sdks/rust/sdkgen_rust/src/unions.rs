@@ -38,6 +38,11 @@ pub(crate) struct UnionEnum {
     pub(crate) rust_name: String,
     /// Null-stripped arms in declared order, with their variant names.
     pub(crate) arms: Vec<UnionArm>,
+    /// `TypeVar` names appearing in the arms, first-appearance order — the
+    /// enum's own Rust generic parameters (`TOrString<T>`). Empty for a
+    /// fully concrete union. A `TypeVar` arm is bound by each use site,
+    /// which supplies these as the reference's `<…>` arguments.
+    pub(crate) generic_params: Vec<String>,
 }
 
 pub(crate) struct UnionArm {
@@ -114,6 +119,16 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
                     continue;
                 }
                 tys.extend(class.properties.iter().map(|p| &p.ty));
+                // Method signatures surface unions too: the bindings in
+                // the class's `impl` block translate against this same
+                // leaf's registry.
+                for method in class.static_methods.iter().chain(&class.instance_methods) {
+                    tys.extend(method.arguments.iter().map(|a| &a.ty));
+                    tys.push(&method.return_type);
+                    if let Some(throws) = &method.throws {
+                        tys.push(throws);
+                    }
+                }
             }
             Symbol::Enum(_) => {}
             Symbol::TypeAlias(alias) => {
@@ -166,6 +181,13 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
         }
         Ty::List(inner, _) => register_unions_in(inner, leaf, analysis, registry),
         Ty::Map { key: _, value, .. } => register_unions_in(value, leaf, analysis, registry),
+        // A union nested inside a generic instantiation (`GenericBox<int |
+        // string>`) is registered in the same leaf as its enclosing symbol.
+        Ty::Class(_, args, _) => {
+            for arg in args {
+                register_unions_in(arg, leaf, analysis, registry);
+            }
+        }
         _ => {}
     }
 }
@@ -246,7 +268,42 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
     Some(UnionEnum {
         rust_name,
         arms: built,
+        generic_params: union_generic_params(arms),
     })
+}
+
+/// The `TypeVar` names appearing anywhere in the arms, in first-appearance
+/// order — the synthesized enum's own generic parameters.
+fn union_generic_params(arms: &[Ty]) -> Vec<String> {
+    let mut params = Vec::new();
+    let mut seen = HashSet::new();
+    for arm in arms {
+        collect_arm_type_vars(arm, &mut params, &mut seen);
+    }
+    params
+}
+
+fn collect_arm_type_vars(ty: &Ty, out: &mut Vec<String>, seen: &mut HashSet<String>) {
+    match ty {
+        Ty::TypeVar(var, _) => {
+            let name = var.as_str().to_string();
+            if seen.insert(name.clone()) {
+                out.push(name);
+            }
+        }
+        Ty::List(inner, _) => collect_arm_type_vars(inner, out, seen),
+        Ty::Map { key, value, .. } => {
+            collect_arm_type_vars(key, out, seen);
+            collect_arm_type_vars(value, out, seen);
+        }
+        Ty::Union(items, _) => items
+            .iter()
+            .for_each(|item| collect_arm_type_vars(item, out, seen)),
+        Ty::Class(_, args, _) => args
+            .iter()
+            .for_each(|arg| collect_arm_type_vars(arg, out, seen)),
+        _ => {}
+    }
 }
 
 /// Whether a payload arm's type is representable given the emitted set
@@ -259,6 +316,10 @@ fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         | Ty::String { .. }
         | Ty::Bool { .. }
         | Ty::Uint8Array { .. } => true,
+        // A `TypeVar` arm makes the enum generic over that param: the
+        // variant holds a bare `T`. Whether `T` is actually in scope at the
+        // use site is enforced when the reference is translated.
+        Ty::TypeVar(..) => true,
         Ty::Class(name, args, _) => args.is_empty() && analysis.is_emitted(name),
         Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) | Ty::TypeAlias(name, _) => {
             analysis.is_emitted(name)
@@ -278,7 +339,6 @@ fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         | Ty::Void { .. }
         | Ty::Literal(..)
         | Ty::Media(..)
-        | Ty::TypeVar(..)
         | Ty::BuiltinUnknown { .. }
         | Ty::Function { .. }
         | Ty::Future(..)
@@ -305,6 +365,9 @@ fn variant_name(arm: &Ty) -> Option<String> {
         | Ty::Enum(name, _)
         | Ty::EnumVariant(name, _, _)
         | Ty::TypeAlias(name, _) => Some(name.name().as_str().to_string()),
+        // A `TypeVar` arm's variant is named after the type parameter
+        // (`T | string` → `TOrString { T(T), String(String) }`).
+        Ty::TypeVar(var, _) => Some(var.as_str().to_string()),
         Ty::List(inner, _) => Some(format!("{}List", variant_name(inner)?)),
         Ty::Map { key: _, value, .. } => Some(format!("{}Map", variant_name(value)?)),
         Ty::Literal(baml_base::Literal::String(value), ..) => {
@@ -331,7 +394,6 @@ fn variant_name(arm: &Ty) -> Option<String> {
         | Ty::Void { .. }
         | Ty::Literal(..)
         | Ty::Media(..)
-        | Ty::TypeVar(..)
         | Ty::BuiltinUnknown { .. }
         | Ty::Function { .. }
         | Ty::Future(..)

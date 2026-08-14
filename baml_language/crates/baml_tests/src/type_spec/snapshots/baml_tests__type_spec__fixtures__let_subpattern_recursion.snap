@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+assertion_line: 93
+expression: outcome.dump
+---
+67..76 'lsp_chain': throws never
+99..197 '{\n   ...  r\n}': int
+105..117 'let x: let y': int
+112..117 'let y': int
+120..121 '1': 1
+126..127 'y': int
+130..131 '2': 2
+136..141 'let f': () -> int throws never
+144..159 '() -> int { y }': () -> int throws never
+154..159 '{ y }': int
+156..157 'y': int
+164..169 'let r': int
+172..173 'f': () -> int throws never
+172..175 'f()': int
+194..195 'r': int
+207..224 'lsp_as...d_rest': throws never
+247..330 '{\n   ...  n\n}': int
+253..272 'let xs... int[]': int[]
+261..272 '[..]: int[]': int[]
+275..284 '[4, 5, 6]': int[]
+276..277 '4': 4
+279..280 '5': 5
+282..283 '6': 6
+289..294 'let n': int
+297..306 'xs.length': (self: int[]) -> int throws never
+297..308 'xs.length()': int
+327..328 'n': int

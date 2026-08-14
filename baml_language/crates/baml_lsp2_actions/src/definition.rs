@@ -25,6 +25,7 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_hir::semantic_index::DefinitionSite;
+use baml_compiler2_ppir::item_data;
 use text_size::{TextRange, TextSize};
 
 use crate::{Db, utils};
@@ -68,12 +69,12 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
     let name = Name::new(name_text);
 
     // ── Step 2: resolve the name in scope ─────────────────────────────────────
-    let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &name);
+    let resolved = baml_compiler2_ppir::resolve::resolve_name_at(db, file, offset, &name);
 
     // ── Step 3: map ResolvedName to a Location ────────────────────────────────
     match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => {
+        baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+        | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => {
             // Top-level item — look up the contribution's name_span.
             let (def_file, range) = utils::definition_span(db, def)?;
             Some(Location {
@@ -82,16 +83,16 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
             })
         }
 
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             definition_site: Some(site),
             ..
         } => local_definition_location(db, file, offset, site),
 
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             definition_site: None,
             ..
         }
-        | baml_compiler2_tir::resolve::ResolvedName::Unknown => {
+        | baml_compiler2_ppir::resolve::ResolvedName::Unknown => {
             // Fallback: try member resolution (field access, enum variant, constructor field, method)
             resolve_member_at(db, file, offset, name_text)
         }
@@ -102,8 +103,9 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
 
 /// Resolve a local variable's definition site to a `Location`.
 ///
-/// Finds the enclosing function by matching the scope range against `item_tree`
-/// functions, then uses the appropriate source map to get the span.
+/// Finds the enclosing function by matching the scope range against each
+/// function's declaration span, then uses the appropriate source map to get the
+/// span.
 fn local_definition_location(
     db: &dyn Db,
     file: SourceFile,
@@ -111,7 +113,6 @@ fn local_definition_location(
     site: DefinitionSite,
 ) -> Option<Location> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     // Find the enclosing Function scope to locate the function in the item tree.
     let scope_id = index.scope_at_offset(at_offset, None);
@@ -127,13 +128,8 @@ fn local_definition_location(
 
     let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
 
-    // Find the function in the item tree by matching the scope range.
-    let (func_local_id, _) = item_tree
-        .functions
-        .iter()
-        .find(|(_, f)| f.span == func_scope_range)?;
-
-    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
+    // Find the function by matching the scope range against its declaration span.
+    let func_loc = crate::utils::function_at_scope_range(db, file, func_scope_range)?;
 
     match site {
         DefinitionSite::Statement(stmt_id) => {
@@ -169,17 +165,16 @@ fn resolve_member_at(
     token_text: &str,
 ) -> Option<Location> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let scope_id = index.scope_at_offset(offset, None);
     let scope = &index.scopes[scope_id.index() as usize];
 
     match scope.kind {
         // ── Cursor on a field/variant definition ──────────────────────
         baml_compiler2_hir::scope::ScopeKind::Class => {
-            resolve_field_definition(db, file, &item_tree, scope.name.as_ref(), token_text)
+            resolve_field_definition(db, file, scope.name.as_ref(), token_text)
         }
         baml_compiler2_hir::scope::ScopeKind::Enum => {
-            resolve_variant_definition(db, file, &item_tree, scope.name.as_ref(), token_text)
+            resolve_variant_definition(db, file, scope.name.as_ref(), token_text)
         }
 
         // ── Cursor in a function body ─────────────────────────────────
@@ -198,15 +193,18 @@ fn resolve_member_at(
 
             let func_scope = &index.scopes[enclosing_func_scope.index() as usize];
 
-            // Find the matching function in the item tree
-            let (func_local_id, _) = item_tree.functions.iter().find(|(_, f)| {
-                f.span == func_scope.range && func_scope.name.as_ref() == Some(&f.name)
-            })?;
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
+            // Find the matching function by its declaration span and name.
+            let func_loc = *item_data::file_functions(db, file)
+                .iter()
+                .find(|func_loc| {
+                    item_data::function_source_map(db, **func_loc).span == func_scope.range
+                        && func_scope.name.as_ref()
+                            == Some(&item_data::function_data(db, **func_loc).name)
+                })?;
 
             // Get inference, body, source map
             let func_scope_id = index.scope_ids[enclosing_func_scope.index() as usize];
-            let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
+            let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_scope_id)?;
             let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
                 return None;
@@ -244,20 +242,19 @@ fn resolve_member_at(
 fn resolve_field_definition(
     db: &dyn Db,
     file: SourceFile,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     class_name: Option<&Name>,
     token_text: &str,
 ) -> Option<Location> {
     let class_name = class_name?;
-    let source_map = baml_compiler2_hir::file_item_tree_source_map(db, file);
-    for (class_id, class) in &item_tree.classes {
+    for class_loc in item_data::file_classes(db, file) {
+        let class = item_data::class_data(db, *class_loc);
         if class.name == *class_name {
-            let field_spans = source_map.class_field_spans.get(class_id)?;
+            let source_map = item_data::class_source_map(db, *class_loc);
             for (i, field) in class.fields.iter().enumerate() {
                 if field.name.as_str() == token_text {
                     return Some(Location {
                         file,
-                        range: field_spans[i],
+                        range: source_map.field_name_spans[i],
                     });
                 }
             }
@@ -270,20 +267,19 @@ fn resolve_field_definition(
 fn resolve_variant_definition(
     db: &dyn Db,
     file: SourceFile,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     enum_name: Option<&Name>,
     token_text: &str,
 ) -> Option<Location> {
     let enum_name = enum_name?;
-    let source_map = baml_compiler2_hir::file_item_tree_source_map(db, file);
-    for (enum_id, enum_def) in &item_tree.enums {
+    for enum_loc in item_data::file_enums(db, file) {
+        let enum_def = item_data::enum_data(db, *enum_loc);
         if enum_def.name == *enum_name {
-            let variant_spans = source_map.enum_variant_spans.get(enum_id)?;
+            let source_map = item_data::enum_source_map(db, *enum_loc);
             for (i, variant) in enum_def.variants.iter().enumerate() {
                 if variant.name.as_str() == token_text {
                     return Some(Location {
                         file,
-                        range: variant_spans[i],
+                        range: source_map.variant_name_spans[i],
                     });
                 }
             }
@@ -301,10 +297,10 @@ fn resolve_field_access_at(
     token_text: &str,
     expr_body: &baml_compiler2_ast::ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
-    inference: &baml_compiler2_tir::inference::ScopeInference<'_>,
+    inference: &baml_compiler2_hir_ty::infer::InferenceResult<'_>,
 ) -> Option<Location> {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_tir::inference::MemberResolution;
+    use baml_compiler2_hir_ty::infer::MemberResolution;
 
     // Find the best matching expr — either a MemberAccess or a multi-segment Path
     // whose span contains the cursor and whose member name matches the token.
@@ -356,21 +352,22 @@ fn resolve_field_access_at(
     // For multi-segment Path nodes, look up the per-segment resolution
     // from path_member_resolutions. For MemberAccess, use the top-level resolution.
     let resolution = if let Some(seg_idx) = path_seg_idx {
-        // seg_idx is the index into the full segments array (0-based, with 0 being the root).
-        // path_member_resolutions[i] corresponds to segments[i+1], so the member resolution
-        // for segment seg_idx is at index seg_idx - 1 in path_member_resolutions.
+        // seg_idx indexes the full segments array (0 = the root); the
+        // resolved-path ladder is parallel, entry 0 carrying no resolution.
         inference
-            .path_member_resolution(expr_id)
-            .and_then(|resolutions| resolutions.get(seg_idx - 1))
-            .or_else(|| inference.resolution(expr_id))
+            .path_resolutions
+            .get(&expr_id)
+            .and_then(|path| path.segments.get(seg_idx))
+            .and_then(|step| step.resolution.as_ref())
+            .or_else(|| inference.member_resolutions.get(&expr_id))
     } else {
-        inference.resolution(expr_id)
+        inference.member_resolutions.get(&expr_id)
     };
 
     match resolution? {
         MemberResolution::Field {
-            class_loc,
-            field_name,
+            class: class_loc,
+            field: field_name,
         } => {
             let target_file = class_loc.file(db);
             // Read the canonical (PPIR) tree, not the HIR pre-expansion tree: this
@@ -379,35 +376,31 @@ fn resolve_field_access_at(
             // the pre-expansion tree and would panic on index here. PPIR carries it,
             // and a `$stream` field's name-span is the original class field's, so
             // goto-definition still lands on the user-authored field.
-            let target_item_tree = baml_compiler2_ppir::file_item_tree(db, target_file);
-            let target_source_map = baml_compiler2_ppir::file_item_tree_source_map(db, target_file);
-            let class = &target_item_tree[class_loc.id(db)];
+            let class = item_data::class_data(db, *class_loc);
             let field_idx = class.fields.iter().position(|f| f.name == *field_name)?;
-            let field_spans = target_source_map.class_field_spans.get(&class_loc.id(db))?;
+            let source_map = item_data::class_source_map(db, *class_loc);
             Some(Location {
                 file: target_file,
-                range: field_spans[field_idx],
+                range: source_map.field_name_spans[field_idx],
             })
         }
         MemberResolution::Variant {
             enum_loc,
-            variant_name,
+            variant: variant_name,
         } => {
             let target_file = enum_loc.file(db);
-            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
-            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
-            let enum_def = &target_item_tree[enum_loc.id(db)];
+            let enum_def = item_data::enum_data(db, *enum_loc);
             let variant_idx = enum_def
                 .variants
                 .iter()
                 .position(|v| v.name == *variant_name)?;
-            let variant_spans = target_source_map.enum_variant_spans.get(&enum_loc.id(db))?;
+            let source_map = item_data::enum_source_map(db, *enum_loc);
             Some(Location {
                 file: target_file,
-                range: variant_spans[variant_idx],
+                range: source_map.variant_name_spans[variant_idx],
             })
         }
-        MemberResolution::Free { func_loc } => {
+        MemberResolution::Free { func: func_loc } => {
             let def = baml_compiler2_hir::contributions::Definition::Function(*func_loc);
             let (def_file, range) = utils::definition_span(db, def)?;
             Some(Location {
@@ -415,66 +408,60 @@ fn resolve_field_access_at(
                 range,
             })
         }
-        MemberResolution::BoundMethod { func_loc, .. }
-        | MemberResolution::UnboundMethod { func_loc, .. }
-        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-            // Methods are not in FileSymbolContributions — use ItemTreeSourceMap.
+        MemberResolution::BoundMethod { func: func_loc, .. }
+        | MemberResolution::UnboundMethod { func: func_loc, .. }
+        | MemberResolution::InterfaceConcreteMethod { func: func_loc, .. } => {
+            // Methods are not in FileSymbolContributions — use the function source map.
             let target_file = func_loc.file(db);
-            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
-            let name_range = target_source_map
-                .function_name_spans
-                .get(&func_loc.id(db))?;
+            let name_span = item_data::function_source_map(db, *func_loc).name_span;
             Some(Location {
                 file: target_file,
-                range: *name_range,
+                range: name_span,
             })
         }
-        MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
+        MemberResolution::InterfaceVirtualMethod {
+            interface: iface_loc,
+            method,
+        } => {
             // A virtual interface-method call: only the slot (interface + name) is
             // known statically, so navigate to the declaration in the interface —
             // the required signature, or the default method's definition.
             let target_file = iface_loc.file(db);
-            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
-            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
-            let iface = &target_item_tree[iface_loc.id(db)];
+            let iface = item_data::interface_data(db, *iface_loc);
             if let Some(method_idx) = iface
                 .required_methods
                 .iter()
                 .position(|m| m.name == *method)
             {
-                let method_spans = target_source_map
-                    .interface_method_spans
-                    .get(&iface_loc.id(db))?;
+                let source_map = item_data::interface_source_map(db, *iface_loc);
                 return Some(Location {
                     file: target_file,
-                    range: method_spans[method_idx],
+                    range: source_map.required_method_spans[method_idx].name_span,
                 });
             }
-            let default_id = iface
+            let default_loc = *iface
                 .default_methods
                 .iter()
-                .copied()
-                .find(|&fn_id| target_item_tree[fn_id].name == *method)?;
-            let name_range = target_source_map.function_name_spans.get(&default_id)?;
+                .find(|&&fn_loc| item_data::function_data(db, fn_loc).name == *method)?;
+            let name_span = item_data::function_source_map(db, default_loc).name_span;
             Some(Location {
                 file: target_file,
-                range: *name_range,
+                range: name_span,
             })
         }
-        MemberResolution::InterfaceVirtualField { iface_loc, field } => {
+        MemberResolution::InterfaceVirtualField {
+            interface: iface_loc,
+            field_index,
+            ..
+        } => {
             // A virtual interface-field access: navigate to the field declaration
-            // in the declaring interface.
+            // in the declaring interface. `field_index` indexes the interface's own
+            // field list, which `field_name_spans` is parallel to.
             let target_file = iface_loc.file(db);
-            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
-            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
-            let iface = &target_item_tree[iface_loc.id(db)];
-            let field_idx = iface.fields.iter().position(|f| f.name == *field)?;
-            let field_spans = target_source_map
-                .interface_field_spans
-                .get(&iface_loc.id(db))?;
+            let source_map = item_data::interface_source_map(db, *iface_loc);
             Some(Location {
                 file: target_file,
-                range: field_spans[field_idx],
+                range: *source_map.field_name_spans.get(*field_index as usize)?,
             })
         }
     }
@@ -488,10 +475,10 @@ fn resolve_constructor_field_at(
     token_text: &str,
     expr_body: &baml_compiler2_ast::ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
-    inference: &baml_compiler2_tir::inference::ScopeInference<'_>,
+    inference: &baml_compiler2_hir_ty::infer::InferenceResult<'_>,
 ) -> Option<Location> {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_tir::ty::Ty;
+    use baml_type::Ty;
 
     for (expr_id, expr) in expr_body.exprs.iter() {
         if let Expr::Object { fields, .. } = expr {
@@ -503,11 +490,11 @@ fn resolve_constructor_field_at(
             // Check if cursor token matches any field key name
             let _matching_field = fields
                 .iter()
-                .find(|(name, _)| name.as_str() == token_text)?;
+                .find(|field| field.name.as_str() == token_text)?;
 
             // Get the Object's type
-            let obj_ty = inference.expression_type(expr_id)?;
-            let Ty::Class(qtn, _, _) = obj_ty else {
+            let obj_ty = inference.type_of_expr.get(&expr_id)?.to_plain();
+            let Ty::Class(ref qtn, _, _) = obj_ty else {
                 return None;
             };
 
@@ -519,19 +506,17 @@ fn resolve_constructor_field_at(
                 return None;
             };
 
-            // Look up field name_span in ItemTreeSourceMap
+            // Look up field name_span via the class source map.
             let target_file = class_loc.file(db);
-            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
-            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
-            let class = &target_item_tree[class_loc.id(db)];
+            let class = item_data::class_data(db, class_loc);
             let field_idx = class
                 .fields
                 .iter()
                 .position(|f| f.name.as_str() == token_text)?;
-            let field_spans = target_source_map.class_field_spans.get(&class_loc.id(db))?;
+            let source_map = item_data::class_source_map(db, class_loc);
             return Some(Location {
                 file: target_file,
-                range: field_spans[field_idx],
+                range: source_map.field_name_spans[field_idx],
             });
         }
     }

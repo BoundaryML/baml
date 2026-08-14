@@ -14,9 +14,9 @@ baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
+baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_mir = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
-baml_compiler2_tir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_project = { workspace = true, features = [ "testing" ] }
@@ -30,6 +30,7 @@ sys_types = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true }
 salsa = { workspace = true }
+similar = { workspace = true }
 text-size = { workspace = true }
 
 [build-dependencies]
@@ -41,6 +42,7 @@ syn = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
+baml_builtins2 = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_fmt = { workspace = true }
 baml_type = { workspace = true }

@@ -45,8 +45,14 @@ impl FlushTelemetryArgs {
 // `next telemetry [enable|disable|status]`.
 #[derive(Args, Debug)]
 pub(crate) struct TelemetryArgs {
-    /// What to do. Omit to just show current status.
-    #[arg(value_enum, default_value_t = TelemetryAction::Status)]
+    #[arg(
+        value_enum,
+        value_name = "ACTION",
+        help = "Telemetry action [default: status] [possible values: status, enable, disable]",
+        hide_default_value = true,
+        hide_possible_values = true,
+        default_value_t = TelemetryAction::Status
+    )]
     pub action: TelemetryAction,
 }
 

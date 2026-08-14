@@ -535,6 +535,33 @@ async fn cancel_function_call_by_id_before_registration_pre_cancels() {
 }
 
 #[tokio::test]
+async fn shutdown_ignores_pre_cancelled_call_that_never_started() {
+    let source = r#"
+        function main() -> int {
+            7
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    engine
+        .cancel_function_call(sys_types::CallId::next())
+        .expect("unknown call_id should be reserved as pre-cancelled");
+
+    tokio::time::timeout(std::time::Duration::from_secs(1), engine.shutdown())
+        .await
+        .expect("shutdown should not wait for a call that never started");
+}
+
+#[tokio::test]
 async fn duplicate_call_id_is_rejected() {
     // Two concurrent calls with the same `CallId` should fail-fast on the
     // second. The first holds the registry slot via `ActiveCallGuard`.

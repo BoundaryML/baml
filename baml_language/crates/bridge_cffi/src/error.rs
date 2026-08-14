@@ -19,11 +19,11 @@ pub enum BridgeError {
     #[error("{0}")]
     Runtime(#[from] bex_project::RuntimeError),
 
-    #[error("Null function name pointer")]
-    NullFunctionName,
+    #[error("CallFunctionArgs.call_target must be set")]
+    MissingCallTarget,
 
-    #[error("Invalid UTF-8 in function name: {0}")]
-    InvalidFunctionName(#[from] std::str::Utf8Error),
+    #[error("type arguments are not supported when invoking a BAML function handle")]
+    FunctionHandleTypeArgs,
 
     #[error("Function not found: {name}")]
     FunctionNotFound { name: String },
@@ -42,4 +42,7 @@ pub enum BridgeError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("{0}")]
+    Startup(String),
 }

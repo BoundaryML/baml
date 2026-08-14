@@ -1,0 +1,70 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A `requires` clause is a constraint head, exactly like a generic bound, so it
+// is shape-validated at the interface declaration that writes it: arity, name
+// resolution, and associated-binding hygiene all report here. The impl side
+// re-lowers the same clause to build each implementor's obligation and discards
+// its diagnostics, so an ill-formed clause is reported once at its declaration
+// rather than once per implementor.
+//
+// Only an interface can be required. An alias denotes a *type* — for an
+// interface, the interface-existential type — never the interface itself, so an
+// aliased `requires` target is rejected (E0133) just as an aliased bound is
+// (E0145; see diagnostic_errors/alias_bounds).
+
+interface Parent<T> {
+    function p(self) -> T throws never
+}
+
+interface Plain {
+    function q(self) -> int throws never
+}
+
+type PlainAlias = Plain;
+
+class NotIface {
+    v: int,
+}
+
+// Arity: a bare generic head names no instantiation. Fully explicit or not at
+// all — the same rule type positions and bounds follow.
+interface RequiresBareHead requires Parent {
+    function c(self) -> int throws never
+}
+
+// Over-application truncates the extras — but never silently.
+interface RequiresOverApplied requires Parent<int, string> {
+    function c(self) -> int throws never
+}
+
+// Not an interface: an alias of one, and a class.
+interface RequiresAlias requires PlainAlias {
+    function c(self) -> int throws never
+}
+
+interface RequiresClass requires NotIface {
+    function c(self) -> int throws never
+}
+
+// An unresolved name reports its own resolution error; the clause does not
+// additionally claim "not an interface" on the same span.
+interface RequiresUnknown requires Nope {
+    function c(self) -> int throws never
+}
+
+// An ill-formed clause realizes to an unsatisfiable obligation. Implementors
+// must NOT each report a missing `Parent<!error>` — that cascade would restate
+// the declaration's error in a sentinel spelling no user wrote.
+interface RequiresErrorArg requires Parent<Nope> {
+    function c(self) -> int throws never
+}
+
+class ImplementsErrorArg {
+    v: int,
+    implements RequiresErrorArg {
+        function c(self) -> int {
+            return 0;
+        }
+    }
+}

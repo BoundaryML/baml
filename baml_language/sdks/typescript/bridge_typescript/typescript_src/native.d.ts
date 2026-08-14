@@ -101,11 +101,11 @@ export declare class BamlRuntime {
    */
   static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
   /** Initialize the process-global runtime from precompiled BAML bytecode. */
-  static initializeRuntimeFromBytecode(bytecode: Buffer): BamlRuntime
+  static initializeRuntimeFromBytecode(bytecode: Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
-  callFunctionSync(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
+  callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
-  callFunction(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Promise<Buffer>
+  callFunction(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Promise<Buffer>
 }
 
 export declare class BamlVideo {
@@ -207,6 +207,8 @@ export declare function completeHostCall(callId: number, isError: number, conten
 /** No-op: tracing has been removed. Kept as a live symbol for ABI stability. */
 export declare function flushEvents(): void
 
+export declare function getBridgeRuntimeVersion(): string
+
 /**
  * Return the process-global `BamlRuntime`, or a `BamlError`-shaped
  * `napi::Error` if `initializeRuntime` has not run yet. The handle is
@@ -214,6 +216,8 @@ export declare function flushEvents(): void
  * `bridge_python`'s module-level `get_runtime()`.
  */
 export declare function getRuntime(): BamlRuntime
+
+export declare function getToolchainVersion(): string
 
 export declare function getVersion(): string
 
@@ -290,6 +294,8 @@ export declare function registerHostCallable(callable: (callId: number, argsByte
  */
 export declare function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void
 
+export declare function registerUnhandledSpawnErrorCallback(callback: (errorBytes: Buffer, cancelled: boolean) => void): void
+
 /**
  * Release a host callable the inbound encoder registered but never handed to
  * the engine — the encode-error rollback path.
@@ -303,3 +309,5 @@ export declare function registerHostValueReleaseCallback(callback: (key: HandleK
  * key it registered during a failed encode.
  */
 export declare function releaseHostCallable(key: HandleKey): void
+
+export declare function shutdownRuntime(): Promise<void>

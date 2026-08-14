@@ -5,11 +5,12 @@
 # in `baml_language/.config/nextest.toml` whenever the run selects any
 # sdk_test_cpp test. For plain `cargo test` (no nextest) run this manually.
 #
-# One responsibility: build the dev-profile bridge_cffi cdylib that every
-# fixture's test.sh dlopens at run time (target/debug/libbridge_cffi.*). The dev
-# profile has panic=unwind by default, matching the release-bridge-cffi
-# shipping profile's unwind requirement. Features mirror the workspace test
-# convention (ring-crypto instead of the default aws-crypto).
+# Builds the dev-profile bridge_cffi cdylib that every fixture's test.sh
+# dlopens at run time (target/debug/libbridge_cffi.*), then runs the bridge_cpp
+# core consumer smoke against that same library. The dev profile has
+# panic=unwind by default, matching the release-bridge-cffi shipping profile's
+# unwind requirement. Features mirror the workspace test convention
+# (ring-crypto instead of the default aws-crypto).
 #
 # This placement (out of build.rs) mirrors the python/typescript targets so
 # `cargo check`/`cargo doc` succeed without a C++ toolchain and the heavy
@@ -46,6 +47,15 @@ clone_pinned() {
 }
 clone_pinned https://github.com/protocolbuffers/protobuf.git v31.1 "$PROTOBUF_SRC"
 clone_pinned https://github.com/abseil/abseil-cpp.git 20250127.0 "$ABSL_SRC"
+
+case "$(uname -s)" in
+    Darwin) RUNTIME_LIB="libbridge_cffi.dylib" ;;
+    MSYS* | MINGW* | CYGWIN*) RUNTIME_LIB="bridge_cffi.dll" ;;
+    *) RUNTIME_LIB="libbridge_cffi.so" ;;
+esac
+echo "==> run bridge_cpp core consumer smoke"
+BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
+    "$WORKSPACE_ROOT/sdks/cpp/bridge_cpp/tests/run.sh"
 
 # Per-run breadcrumb for the in-test guard; see setup_guard in
 # harness_runner and SETUP_ENV_VAR in harness_setup/src/cpp.rs.

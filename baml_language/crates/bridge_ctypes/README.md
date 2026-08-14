@@ -26,8 +26,23 @@ cd typescript2/pkg-proto && pnpm generate
 # Go (protoc-gen-go)
 cd sdks/go/bridge_go && ./build.sh
 #   -> sdks/go/bridge_go/cffi/proto/baml_bridge/cffi/v1/*.pb.go
+# Keep baml_go's internal inbound/outbound consumers byte-identical:
+cp cffi/proto/baml_bridge/cffi/v1/baml_inbound.pb.go \
+  ../baml_go/internal/cffi/baml_inbound.pb.go
+cp cffi/proto/baml_bridge/cffi/v1/baml_outbound.pb.go \
+  ../baml_go/internal/cffi/baml_outbound.pb.go
+
+# C++ (pinned vendored protoc)
+cd ../../.. && cargo test -p sdkgen_cpp --test pb_generation regenerate -- --ignored --exact
+#   -> sdks/cpp/bridge_cpp/pb/baml_bridge/cffi/v1/*.pb.{h,cc}
+
+# Swift (protoc-gen-swift; macOS: brew install protobuf swift-protobuf)
+sdks/swift/scripts/generate-protos.sh
+#   -> sdks/swift/Sources/BamlBridge/Proto/*.pb.swift
+#   -> sdks/swift/Sources/BamlBridge/Proto/.generated-from (input-hash
+#      manifest; CI checks it on Linux instead of running the plugin)
 ```
 
 Other consumers (`bridge_cffi`, `bridge_wasm`, `sdks/python/rust/bridge_python`) use the Rust prost types via `bridge_ctypes` — nothing extra to regenerate. `sdks/rust/bridge_rust` is the exception: it vendors the generated file (see above) because it publishes to crates.io and must not depend on this engine-coupled crate.
 
-No clients exist for Ruby, Java/Kotlin, C#/.NET, Swift, or PHP.
+No clients exist for Ruby, Java/Kotlin, C#/.NET, or PHP.

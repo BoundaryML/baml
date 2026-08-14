@@ -26,7 +26,7 @@ from baml_bridge.cffi.v1 import baml_handle_pb2 as baml__bridge_dot_cffi_dot_v1_
 from baml_bridge.cffi.v1 import baml_type_pb2 as baml__bridge_dot_cffi_dot_v1_dot_baml__type__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n&baml_bridge/cffi/v1/baml_inbound.proto\x12\x13\x62\x61ml_bridge.cffi.v1\x1a%baml_bridge/cffi/v1/baml_handle.proto\x1a#baml_bridge/cffi/v1/baml_type.proto\"\x83\x04\n\x0cInboundValue\x12\x16\n\x0cstring_value\x18\x02 \x01(\tH\x00\x12\x13\n\tint_value\x18\x03 \x01(\x03H\x00\x12\x15\n\x0b\x66loat_value\x18\x04 \x01(\x01H\x00\x12\x14\n\nbool_value\x18\x05 \x01(\x08H\x00\x12;\n\nlist_value\x18\x06 \x01(\x0b\x32%.baml_bridge.cffi.v1.InboundListValueH\x00\x12\x39\n\tmap_value\x18\x07 \x01(\x0b\x32$.baml_bridge.cffi.v1.InboundMapValueH\x00\x12=\n\x0b\x63lass_value\x18\x08 \x01(\x0b\x32&.baml_bridge.cffi.v1.InboundClassValueH\x00\x12;\n\nenum_value\x18\t \x01(\x0b\x32%.baml_bridge.cffi.v1.InboundEnumValueH\x00\x12\x31\n\x06handle\x18\n \x01(\x0b\x32\x1f.baml_bridge.cffi.v1.BamlHandleH\x00\x12\x1a\n\x10uint8array_value\x18\x0b \x01(\x0cH\x00\x12\x16\n\x0c\x62igint_value\x18\x0c \x01(\tH\x00\x12/\n\x08ty_value\x18\r \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTyH\x00\x42\x07\n\x05valueJ\x04\x08\x01\x10\x02\"E\n\x10InboundListValue\x12\x31\n\x06values\x18\x01 \x03(\x0b\x32!.baml_bridge.cffi.v1.InboundValue\"H\n\x0fInboundMapValue\x12\x35\n\x07\x65ntries\x18\x01 \x03(\x0b\x32$.baml_bridge.cffi.v1.InboundMapEntry\"\xc2\x01\n\x0fInboundMapEntry\x12\x14\n\nstring_key\x18\x01 \x01(\tH\x00\x12\x11\n\x07int_key\x18\x02 \x01(\x03H\x00\x12\x12\n\x08\x62ool_key\x18\x03 \x01(\x08H\x00\x12\x39\n\x08\x65num_key\x18\x05 \x01(\x0b\x32%.baml_bridge.cffi.v1.InboundEnumValueH\x00\x12\x30\n\x05value\x18\x06 \x01(\x0b\x32!.baml_bridge.cffi.v1.InboundValueB\x05\n\x03key\"\x83\x01\n\x11InboundClassValue\x12\x34\n\x06\x66ields\x18\x02 \x03(\x0b\x32$.baml_bridge.cffi.v1.InboundMapEntry\x12\x32\n\x08\x63lass_ty\x18\x03 \x01(\x0b\x32 .baml_bridge.cffi.v1.BamlTyClassJ\x04\x08\x01\x10\x02\"/\n\x10InboundEnumValue\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"N\n\tBamlTyArg\x12\x10\n\x08type_var\x18\x01 \x01(\t\x12/\n\ntype_value\x18\x02 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\"\x8c\x01\n\x10\x43\x61llFunctionArgs\x12\x34\n\x06kwargs\x18\x01 \x03(\x0b\x32$.baml_bridge.cffi.v1.InboundMapEntry\x12\x0f\n\x07\x63\x61ll_id\x18\x02 \x01(\x04\x12\x31\n\ttype_args\x18\x03 \x03(\x0b\x32\x1e.baml_bridge.cffi.v1.BamlTyArg\"&\n\x07\x43\x61llAck\x12\x0f\n\x05\x65rror\x18\x01 \x01(\tH\x00\x42\n\n\x08responseB\nH\x03Z\x06./cffib\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n&baml_bridge/cffi/v1/baml_inbound.proto\x12\x13\x62\x61ml_bridge.cffi.v1\x1a%baml_bridge/cffi/v1/baml_handle.proto\x1a#baml_bridge/cffi/v1/baml_type.proto\"\xae\x04\n\x0cInboundValue\x12/\n\nvalue_type\x18\x01 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12\x16\n\x0cstring_value\x18\x02 \x01(\tH\x00\x12\x13\n\tint_value\x18\x03 \x01(\x03H\x00\x12\x15\n\x0b\x66loat_value\x18\x04 \x01(\x01H\x00\x12\x14\n\nbool_value\x18\x05 \x01(\x08H\x00\x12;\n\nlist_value\x18\x06 \x01(\x0b\x32%.baml_bridge.cffi.v1.InboundListValueH\x00\x12\x39\n\tmap_value\x18\x07 \x01(\x0b\x32$.baml_bridge.cffi.v1.InboundMapValueH\x00\x12=\n\x0b\x63lass_value\x18\x08 \x01(\x0b\x32&.baml_bridge.cffi.v1.InboundClassValueH\x00\x12;\n\nenum_value\x18\t \x01(\x0b\x32%.baml_bridge.cffi.v1.InboundEnumValueH\x00\x12\x31\n\x06handle\x18\n \x01(\x0b\x32\x1f.baml_bridge.cffi.v1.BamlHandleH\x00\x12\x1a\n\x10uint8array_value\x18\x0b \x01(\x0cH\x00\x12\x16\n\x0c\x62igint_value\x18\x0c \x01(\tH\x00\x12/\n\x08ty_value\x18\r \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTyH\x00\x42\x07\n\x05value\"E\n\x10InboundListValue\x12\x31\n\x06values\x18\x01 \x03(\x0b\x32!.baml_bridge.cffi.v1.InboundValue\"H\n\x0fInboundMapValue\x12\x35\n\x07\x65ntries\x18\x01 \x03(\x0b\x32$.baml_bridge.cffi.v1.InboundMapEntry\"\xc2\x01\n\x0fInboundMapEntry\x12\x14\n\nstring_key\x18\x01 \x01(\tH\x00\x12\x11\n\x07int_key\x18\x02 \x01(\x03H\x00\x12\x12\n\x08\x62ool_key\x18\x03 \x01(\x08H\x00\x12\x39\n\x08\x65num_key\x18\x05 \x01(\x0b\x32%.baml_bridge.cffi.v1.InboundEnumValueH\x00\x12\x30\n\x05value\x18\x06 \x01(\x0b\x32!.baml_bridge.cffi.v1.InboundValueB\x05\n\x03key\"O\n\x11InboundClassValue\x12\x34\n\x06\x66ields\x18\x02 \x03(\x0b\x32$.baml_bridge.cffi.v1.InboundMapEntryJ\x04\x08\x01\x10\x02\"/\n\x10InboundEnumValue\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"N\n\tBamlTyArg\x12\x10\n\x08type_var\x18\x01 \x01(\t\x12/\n\ntype_value\x18\x02 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\"\xcf\x01\n\x10\x43\x61llFunctionArgs\x12\x34\n\x06kwargs\x18\x01 \x03(\x0b\x32$.baml_bridge.cffi.v1.InboundMapEntry\x12\x0f\n\x07\x63\x61ll_id\x18\x02 \x01(\x04\x12\x31\n\ttype_args\x18\x03 \x03(\x0b\x32\x1e.baml_bridge.cffi.v1.BamlTyArg\x12\x17\n\rfunction_name\x18\x04 \x01(\tH\x00\x12\x19\n\x0f\x66unction_handle\x18\x05 \x01(\x04H\x00\x42\r\n\x0b\x63\x61ll_target\"&\n\x07\x43\x61llAck\x12\x0f\n\x05\x65rror\x18\x01 \x01(\tH\x00\x42\n\n\x08responseB\nH\x03Z\x06./cffib\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,21 +35,21 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'H\003Z\006./cffi'
   _globals['_INBOUNDVALUE']._serialized_start=140
-  _globals['_INBOUNDVALUE']._serialized_end=655
-  _globals['_INBOUNDLISTVALUE']._serialized_start=657
-  _globals['_INBOUNDLISTVALUE']._serialized_end=726
-  _globals['_INBOUNDMAPVALUE']._serialized_start=728
-  _globals['_INBOUNDMAPVALUE']._serialized_end=800
-  _globals['_INBOUNDMAPENTRY']._serialized_start=803
-  _globals['_INBOUNDMAPENTRY']._serialized_end=997
-  _globals['_INBOUNDCLASSVALUE']._serialized_start=1000
-  _globals['_INBOUNDCLASSVALUE']._serialized_end=1131
-  _globals['_INBOUNDENUMVALUE']._serialized_start=1133
-  _globals['_INBOUNDENUMVALUE']._serialized_end=1180
-  _globals['_BAMLTYARG']._serialized_start=1182
-  _globals['_BAMLTYARG']._serialized_end=1260
-  _globals['_CALLFUNCTIONARGS']._serialized_start=1263
-  _globals['_CALLFUNCTIONARGS']._serialized_end=1403
-  _globals['_CALLACK']._serialized_start=1405
-  _globals['_CALLACK']._serialized_end=1443
+  _globals['_INBOUNDVALUE']._serialized_end=698
+  _globals['_INBOUNDLISTVALUE']._serialized_start=700
+  _globals['_INBOUNDLISTVALUE']._serialized_end=769
+  _globals['_INBOUNDMAPVALUE']._serialized_start=771
+  _globals['_INBOUNDMAPVALUE']._serialized_end=843
+  _globals['_INBOUNDMAPENTRY']._serialized_start=846
+  _globals['_INBOUNDMAPENTRY']._serialized_end=1040
+  _globals['_INBOUNDCLASSVALUE']._serialized_start=1042
+  _globals['_INBOUNDCLASSVALUE']._serialized_end=1121
+  _globals['_INBOUNDENUMVALUE']._serialized_start=1123
+  _globals['_INBOUNDENUMVALUE']._serialized_end=1170
+  _globals['_BAMLTYARG']._serialized_start=1172
+  _globals['_BAMLTYARG']._serialized_end=1250
+  _globals['_CALLFUNCTIONARGS']._serialized_start=1253
+  _globals['_CALLFUNCTIONARGS']._serialized_end=1460
+  _globals['_CALLACK']._serialized_start=1462
+  _globals['_CALLACK']._serialized_end=1500
 # @@protoc_insertion_point(module_scope)

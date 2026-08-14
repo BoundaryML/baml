@@ -21,16 +21,19 @@ rustls = [ "sys_native/rustls" ]
 bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
+baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_ops = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
+semver = { workspace = true }
 thiserror = { workspace = true }
+toml = { workspace = true }
+vfs = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-baml_version = { workspace = true }
 bex_events = { workspace = true }
 sys_native = { workspace = true }
 sys_types = { workspace = true }
@@ -38,7 +41,9 @@ libc = { workspace = true }
 once_cell = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
-vfs = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 cbindgen = { workspace = true }

@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Keep the existing public module path.
+// biome-ignore-all lint/suspicious/noExplicitAny: Monaco's dynamic editor registration APIs are not publicly typed.
 /**
  * ExecutionPanelPane — registers a custom Monaco EditorPane that hosts
  * the ExecutionPanel React component inside the VS Code workbench.
@@ -10,25 +12,23 @@
  *   3. The command "baml.openPlayground" or setRuntimePort both open the tab
  */
 
-import { createRoot, type Root } from 'react-dom/client';
-import { createElement } from 'react';
 import type { RuntimePort, SourceNavigationTarget } from '@b/pkg-playground';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
+import { createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 
 // ---------------------------------------------------------------------------
 // Module-level state — bridges imperative EditorPane with React component
 // ---------------------------------------------------------------------------
 
 let portResolve: ((port: RuntimePort) => void) | null = null;
-let portPromise = new Promise<RuntimePort>((resolve) => {
+const portPromise = new Promise<RuntimePort>((resolve) => {
   portResolve = resolve;
 });
 /** Latest port (updated on every setRuntimePort); used when reconnecting after restart. */
 let currentPort: RuntimePort | null = null;
 /** Connection version passed from MonacoEditor (survives HMR); used as React key to force remount. */
 let currentConnectionVersion = 0;
-/** Incremented when port changes on restart so ExecutionPanel remounts and requests state. */
-let portKey = 0;
 const portChangeListeners = new Set<(port: RuntimePort) => void>();
 /** Callback to reload the backend connection (set by MonacoEditor). */
 let reloadCallback: (() => void) | null = null;
@@ -59,7 +59,11 @@ async function openPlaygroundTab(): Promise<void> {
 
   const editorService = StandaloneServices.get(IEditorService);
   const SIDE_GROUP = -2;
-  await editorService.openEditor(singletonInput, { revealIfOpened: true }, SIDE_GROUP);
+  await editorService.openEditor(
+    singletonInput,
+    { revealIfOpened: true },
+    SIDE_GROUP,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +77,12 @@ export async function registerExecutionPanelPane(): Promise<void> {
   registered = true;
 
   const [
-    { SimpleEditorPane, SimpleEditorInput, registerEditorPane, EditorInputCapabilities },
+    {
+      SimpleEditorPane,
+      SimpleEditorInput,
+      registerEditorPane,
+      EditorInputCapabilities,
+    },
     vscode,
   ] = await Promise.all([
     import('@codingame/monaco-vscode-api/service-override/tools/views'),
@@ -107,8 +116,11 @@ export async function registerExecutionPanelPane(): Promise<void> {
   class PlaygroundEditorPane extends SimpleEditorPane {
     private reactRoot: Root | null = null;
     private _el: HTMLElement | null = null;
+    private _portChangeCleanup: (() => void) | undefined;
 
-    async renderInput() { return { dispose() {} }; }
+    async renderInput() {
+      return { dispose() {} };
+    }
 
     initialize(): HTMLElement {
       const el = document.createElement('div');
@@ -122,20 +134,24 @@ export async function registerExecutionPanelPane(): Promise<void> {
 
       // Show loading state, then swap to ExecutionPanel when port is ready
       this.reactRoot.render(
-        createElement('div', {
-          style: { padding: 20, color: '#888', fontSize: 12 },
-        }, 'Loading playground…'),
+        createElement(
+          'div',
+          {
+            style: { color: '#888', fontSize: 12, padding: 20 },
+          },
+          'Loading playground...',
+        ),
       );
 
       const renderWithPort = (port: RuntimePort) => {
         import('@b/pkg-playground').then(({ ExecutionPanel }) => {
           this.reactRoot?.render(
             createElement(ExecutionPanel, {
-              port,
-              key: `playground-${currentConnectionVersion}`,
               connectionVersion: currentConnectionVersion,
-              onReload: reloadCallback ?? undefined,
+              key: `playground-${currentConnectionVersion}`,
               onNavigateToSource: navigateToSource ?? undefined,
+              onReload: reloadCallback ?? undefined,
+              port,
             }),
           );
         });
@@ -148,7 +164,7 @@ export async function registerExecutionPanelPane(): Promise<void> {
       };
       portChangeListeners.add(onPortChange);
       const removeListener = () => portChangeListeners.delete(onPortChange);
-      (this as any)._portChangeCleanup = removeListener;
+      this._portChangeCleanup = removeListener;
 
       return el;
     }
@@ -164,8 +180,8 @@ export async function registerExecutionPanelPane(): Promise<void> {
     }
 
     dispose(): void {
-      const cleanup = (this as any)._portChangeCleanup as (() => void) | undefined;
-      if (typeof cleanup === 'function') cleanup();
+      this._portChangeCleanup?.();
+      this._portChangeCleanup = undefined;
       this.reactRoot?.unmount();
       this.reactRoot = null;
       this._el = null;
@@ -173,16 +189,13 @@ export async function registerExecutionPanelPane(): Promise<void> {
     }
   }
 
-  registerEditorPane(
-    PANE_TYPE_ID,
-    'Playground',
-    PlaygroundEditorPane as any,
-    [PlaygroundInput],
-  );
+  registerEditorPane(PANE_TYPE_ID, 'Playground', PlaygroundEditorPane as any, [
+    PlaygroundInput,
+  ]);
 
-  vscode.commands.registerCommand('baml.openPlayground', () => {
-    openPlaygroundTab();
-  });
+  vscode.commands.registerCommand('baml.openPlayground', () =>
+    openPlaygroundTab(),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -199,15 +212,23 @@ export interface SetRuntimePortOptions {
  * On first call: resolves the port promise and opens the tab.
  * On restart: updates the existing pane with the new port (no new tab).
  */
-export function setRuntimePort(port: RuntimePort, options?: SetRuntimePortOptions): void {
+export function setRuntimePort(
+  port: RuntimePort,
+  options?: SetRuntimePortOptions,
+): void {
   currentPort = port;
-  currentConnectionVersion = options?.connectionVersion ?? currentConnectionVersion;
+  currentConnectionVersion =
+    options?.connectionVersion ?? currentConnectionVersion;
   if (portResolve) {
+    const shouldOpen = !singletonInput || singletonInput.isDisposed?.();
     portResolve(port);
     portResolve = null;
-    openPlaygroundTab();
+    if (shouldOpen) {
+      void openPlaygroundTab().catch((error: unknown) => {
+        console.error('[ExecutionPanelPane] failed to open Playground:', error);
+      });
+    }
   } else {
-    portKey += 1;
     portChangeListeners.forEach((cb) => cb(port));
   }
 }
@@ -224,7 +245,9 @@ export function setReloadCallback(cb: () => void): void {
  * Set the callback to navigate to a source location.
  * Called from MonacoEditor after workbench setup.
  */
-export function setNavigateToSource(cb: (source: SourceNavigationTarget) => void): void {
+export function setNavigateToSource(
+  cb: (source: SourceNavigationTarget) => void,
+): void {
   navigateToSource = cb;
 }
 

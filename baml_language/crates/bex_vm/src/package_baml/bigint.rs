@@ -5,6 +5,7 @@ use std::sync::Arc;
 /// VM would refuse to allocate.
 pub(crate) use baml_type::MAX_BIGINT_BITS;
 use bex_str::BexStr;
+use bex_vm_types::Value;
 use num_bigint::{BigInt, BigUint, Sign};
 
 use super::{BamlClassBigint, PackageBamlImpl};
@@ -147,6 +148,29 @@ impl BamlClassBigint for PackageBamlImpl {
             }
         }
         Ok(Arc::new(BigInt::from(lo)))
+    }
+
+    fn to_int(bigint: Arc<BigInt>) -> Result<i64, VmRustFnError> {
+        // BAML int is i63 (low bit reserved for the Value tag), so the
+        // representable range is narrower than i64's and `i64::try_from` alone
+        // is not the right gate: the codegen wraps this return in `Value::int`,
+        // which only debug-asserts the i63 range and truncates in release.
+        //
+        // The message reports the operand's bit width rather than the operand:
+        // a bigint is unbounded and has no business inside a diagnostic string.
+        i64::try_from(bigint.as_ref())
+            .ok()
+            .filter(|i| (Value::INT_MIN..=Value::INT_MAX).contains(i))
+            .ok_or_else(|| {
+                VmBamlError::InvalidArgument {
+                    message: format!(
+                        "bigint.to_int: a {}-bit value is outside int's range \
+                         (int is 63-bit signed)",
+                        bigint.bits()
+                    ),
+                }
+                .into()
+            })
     }
 
     fn parse(text: &BexStr) -> Result<Arc<BigInt>, VmRustFnError> {

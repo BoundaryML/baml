@@ -10,9 +10,11 @@ use crate::{
     UnresolvedRolesSelection,
 };
 
-/// Configuration for HTTP timeouts
+/// Configuration for HTTP clients
 #[derive(Debug, Clone, Default, BamlHash)]
 pub struct HttpConfig {
+    /// Disabled by default because a pooled client must not be inherited across `fork()`.
+    pub enable_connection_pooling: bool,
     pub connect_timeout_ms: Option<u64>,
     pub request_timeout_ms: Option<u64>,
     pub time_to_first_token_timeout_ms: Option<u64>,
@@ -516,23 +518,41 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     // Define allowed fields based on provider type
                     let is_composite =
                         provider_type == "fallback" || provider_type == "round-robin";
+                    let supports_connection_pooling = !is_composite && provider_type != "aws";
+                    let mut regular_http_fields = vec![
+                        "connect_timeout_ms",
+                        "request_timeout_ms",
+                        "time_to_first_token_timeout_ms",
+                        "idle_timeout_ms",
+                    ];
+                    if supports_connection_pooling {
+                        regular_http_fields.insert(0, "enable_connection_pooling");
+                    }
                     let allowed_fields: HashSet<&str> = if is_composite {
                         // Composite clients only support total_timeout_ms
                         vec!["total_timeout_ms"].into_iter().collect()
                     } else {
-                        // Regular clients support all timeout types except total_timeout_ms
-                        vec![
-                            "connect_timeout_ms",
-                            "request_timeout_ms",
-                            "time_to_first_token_timeout_ms",
-                            "idle_timeout_ms",
-                        ]
-                        .into_iter()
-                        .collect()
+                        regular_http_fields.iter().copied().collect()
                     };
 
                     for (key, (_, value)) in config_map {
                         match key.as_str() {
+                            "enable_connection_pooling" if supports_connection_pooling => {
+                                match value.into_bool() {
+                                    Ok((enabled, _)) => {
+                                        http_config.enable_connection_pooling = enabled;
+                                    }
+                                    Err(other) => {
+                                        self.push_error(
+                                            format!(
+                                                "enable_connection_pooling must be a bool. Got: {}",
+                                                other.r#type()
+                                            ),
+                                            other.meta().clone(),
+                                        );
+                                    }
+                                }
+                            }
                             "connect_timeout_ms" if !is_composite => {
                                 let value_meta = value.meta().clone();
                                 match value.into_numeric() {
@@ -685,22 +705,23 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                 }
                             } else {
                                 // For regular clients
-                                let all_timeout_fields = vec![
-                                    "connect_timeout_ms",
-                                    "request_timeout_ms",
-                                    "time_to_first_token_timeout_ms",
-                                    "idle_timeout_ms",
-                                    "total_timeout_ms", // Include for suggestions
-                                ];
+                                let mut all_http_fields = regular_http_fields.clone();
+                                all_http_fields.push("total_timeout_ms");
+                                let supported_fields = regular_http_fields.join(", ");
 
-                                if unrecognized_field == "total_timeout_ms" {
+                                if unrecognized_field == "enable_connection_pooling"
+                                    && !supports_connection_pooling
+                                {
+                                    format!(
+                                        "enable_connection_pooling is not supported for {provider_type} clients because their HTTP transport is managed externally"
+                                    )
+                                } else if unrecognized_field == "total_timeout_ms" {
                                     // Special case for total_timeout_ms in regular clients
-                                    "Unrecognized field 'total_timeout_ms' in http configuration block. \
+                                    format!("Unrecognized field 'total_timeout_ms' in http configuration block. \
                                         'total_timeout_ms' is only available for composite clients (fallback/round-robin). \
-                                        For regular clients, use: connect_timeout_ms, request_timeout_ms, \
-                                        time_to_first_token_timeout_ms, idle_timeout_ms".to_string()
+                                        For regular clients, use: {supported_fields}")
                                 } else if let Some(suggestion) =
-                                    find_best_match(unrecognized_field, &all_timeout_fields)
+                                    find_best_match(unrecognized_field, &all_http_fields)
                                 {
                                     if suggestion == "total_timeout_ms" {
                                         format!(
@@ -716,8 +737,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                                 } else {
                                     format!(
                                         "Unrecognized field '{unrecognized_field}' in http configuration block. \
-                                        Supported timeout fields are: connect_timeout_ms, request_timeout_ms, \
-                                        time_to_first_token_timeout_ms, idle_timeout_ms"
+                                        Supported fields are: {supported_fields}"
                                     )
                                 }
                             };

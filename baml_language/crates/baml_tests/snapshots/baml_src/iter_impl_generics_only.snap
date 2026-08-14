@@ -3,130 +3,151 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function iter_impl_generics_only.$init_test_ns_iter_impl_generics_only_iter(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_collect"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_reduce"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_count"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_some_every_find"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_range"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_chain"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_repeat"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_map"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_map_implicit_source"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_explicit_map_coerces_to_iterator"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_filter"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_filter_implicit_source"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_filter_map"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_filter_map_implicit_source"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_flat_map"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_flat_map_implicit_source"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_flatten"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_peekable"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_step_by"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "iter_array_iter"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.iter_impl_generics_only"
     load_const "out_of_body_inferred_ctor_dispatch"
     make_closure .<lambda($init_test_ns_iter_impl_generics_only_iter, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -502,6 +523,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     jump L1
 
   L0:
+    load_type int
     load_var2 2 3
     call baml.Array.push
     pop 1
@@ -511,13 +533,14 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _14
-    load_var _14
+    store_var _15
+    load_var _15
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L2
     jump L3
 
   L2:
+    load_type int
     load_var2 2 4
     call baml.Array.push
     pop 1
@@ -527,13 +550,14 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
-    load_var _19
+    store_var _21
+    load_var _21
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L4
     jump L5
 
   L4:
+    load_type int
     load_var2 2 5
     call baml.Array.push
     pop 1
@@ -543,19 +567,21 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     load_type never
     load_var p
     call user.iter_impl_generics_only.core.Peekable.peek
-    store_var _24
-    load_var _24
+    store_var _27
+    load_var _27
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L6
     jump L7
 
   L6:
+    load_type int
     load_var2 2 6
     call baml.Array.push
     pop 1
     jump L8
 
   L7:
+    load_type int
     load_var out
     load_const 99
     call baml.Array.push

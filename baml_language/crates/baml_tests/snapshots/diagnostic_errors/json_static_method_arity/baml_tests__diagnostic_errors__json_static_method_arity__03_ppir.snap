@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 49276
+---
+=== PPIR ===
+class user.Box {
+  value: T
+}
+class user.Box$stream {
+  value: T | null
+}
+function user.bad_extra(j: baml.json.json) -> user.Box<int>  [expr] {
+  {  } Box.from_json(j)
+}
+function user.bad_missing(j: baml.json.json) -> user.Box<int>  [expr] {
+  {  } Box.from_json(j)
+}
+function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
+  {  } user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
+}

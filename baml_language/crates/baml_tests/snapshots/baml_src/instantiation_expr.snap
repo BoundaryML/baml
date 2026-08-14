@@ -3,82 +3,94 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "identity_int_value_runs"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "same_specialization_is_identical"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "deep_copy_compares_equal"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "pair_two_type_args_value_runs"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "reflect_type_of_through_value"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "json_native_through_value"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "param_dependent_instantiation_runs"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "param_dependent_reflect_resolves_T"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "qualified_namespaced_value_reflects"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "qualified_namespaced_value_runs"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "bound_method_value_runs"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.instantiation_expr"
     load_const "lambda_reflects_enclosing_U_resolves"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
 }
 
-function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: T) -> T {
+function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: #0) -> #0 {
     load_var x
     return
 }
@@ -106,7 +118,7 @@ function instantiation_expr.describe_user_value_fn() -> string {
     return
 }
 
-function instantiation_expr.forward(x: T) -> T {
+function instantiation_expr.forward(x: #0) -> #0 {
     load_var x
     load_type #0
     make_generic_function user.instantiation_expr.identity ntypeargs=1
@@ -128,7 +140,7 @@ function instantiation_expr.from_string_value_fn() -> instantiation_expr.User {
     return
 }
 
-function instantiation_expr.identity(x: T) -> T {
+function instantiation_expr.identity(x: #0) -> #0 {
     load_var x
     return
 }
@@ -138,10 +150,9 @@ function instantiation_expr.identity_deep_copy_equal() -> bool {
     load_const user.instantiation_expr.identity<...>
     call baml.deep_copy
     store_var _3
-    load_type (int) -> int throws never
     load_const user.instantiation_expr.identity<...>
     load_var _3
-    call baml.deep_equals
+    call baml.ops.equals_equals
     return
 }
 
@@ -153,10 +164,9 @@ function instantiation_expr.identity_int_value_fn() -> int {
 }
 
 function instantiation_expr.identity_same_specialization() -> bool {
-    load_type (int) -> int throws never
     load_const user.instantiation_expr.identity<...>
     load_const user.instantiation_expr.identity<...>
-    call baml.deep_equals
+    call baml.ops.equals_equals
     return
 }
 
@@ -167,7 +177,7 @@ function instantiation_expr.lambda_reflects_enclosing_U() -> string {
     return
 }
 
-function instantiation_expr.pair(a: A, b: B) -> B {
+function instantiation_expr.pair(a: #0, b: #1) -> #1 {
     load_var b
     return
 }

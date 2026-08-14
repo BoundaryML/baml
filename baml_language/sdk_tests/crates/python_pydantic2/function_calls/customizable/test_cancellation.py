@@ -30,15 +30,15 @@ def _assert_fast_cancellation(start: float) -> None:
     assert elapsed < _MAX_CANCELLATION_SECONDS, f"cancellation took {elapsed:.3f}s"
 
 
-def test_sync_call_returns_none():
+def test_cancellation_sync_call_returns_none():
     assert throws_test.SleepMs(1) is None
 
 
-async def test_async_call_returns_none():
+async def test_cancellation_async_call_returns_none():
     assert await throws_test.SleepMs_async(1) is None
 
 
-def test_sync_cancel_via_call_context():
+def test_cancellation_sync_cancel_via_call_context():
     start = time.monotonic()
     ctx = BamlCallContext()
     timer = threading.Timer(0.05, ctx.abort)
@@ -54,7 +54,7 @@ def test_sync_cancel_via_call_context():
     _assert_fast_cancellation(start)
 
 
-async def test_async_cancel_via_call_context():
+async def test_cancellation_async_cancel_via_call_context():
     start = time.monotonic()
     ctx = BamlCallContext()
     task = asyncio.create_task(throws_test.SleepMs_async(2000, _ctx=ctx))
@@ -69,7 +69,7 @@ async def test_async_cancel_via_call_context():
     _assert_fast_cancellation(start)
 
 
-async def test_async_cancel_via_task_cancel():
+async def test_cancellation_async_cancel_via_task_cancel():
     start = time.monotonic()
     task = asyncio.create_task(throws_test.SleepMs_async(2000))
 
@@ -82,7 +82,7 @@ async def test_async_cancel_via_task_cancel():
     _assert_fast_cancellation(start)
 
 
-async def test_async_cancel_via_task_group_sibling():
+async def test_cancellation_async_cancel_via_task_group_sibling():
     start = time.monotonic()
 
     async def _fail_soon() -> None:
@@ -99,7 +99,7 @@ async def test_async_cancel_via_task_group_sibling():
     _assert_fast_cancellation(start)
 
 
-async def test_async_cancel_via_asyncio_timeout():
+async def test_cancellation_async_cancel_via_asyncio_timeout():
     start = time.monotonic()
     with pytest.raises(TimeoutError):
         await asyncio.wait_for(throws_test.SleepMs_async(2000), timeout=0.05)

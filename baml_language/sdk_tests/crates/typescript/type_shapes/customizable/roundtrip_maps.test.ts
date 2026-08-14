@@ -14,23 +14,23 @@ import {
 } from "./baml_sdk/maps/index.js";
 
 describe("roundtrip maps", () => {
-  it("round_trip_simple_map", () =>
+  it("maps_round_trip_simple_map", () =>
     expect(round_trip_simple_map({ a: 1, b: 2 })).toEqual({ a: 1, b: 2 }));
-  it("round_trip_enum_keyed_map", () => {
+  it("maps_round_trip_enum_keyed_map", () => {
     const m: Parameters<typeof round_trip_enum_keyed_map>[0] = {
       [Sentiment.Positive]: new Resume({ name: "up" }),
     };
     expect(round_trip_enum_keyed_map(m)).toEqual(m);
   });
-  it("round_trip_list_valued_map", () =>
+  it("maps_round_trip_list_valued_map", () =>
     expect(round_trip_list_valued_map({ k: [1, 2] })).toEqual({ k: [1, 2] }));
-  it("round_trip_sentiment", () =>
+  it("maps_round_trip_sentiment", () =>
     expect(round_trip_sentiment(Sentiment.Positive)).toBe(Sentiment.Positive));
-  it("round_trip_resume", () => {
+  it("maps_round_trip_resume", () => {
     const r = new Resume({ name: "n" });
     expect(round_trip_resume(r)).toEqual(r);
   });
-  it("round_trip_map_container", () => {
+  it("maps_round_trip_map_container", () => {
     const enumKeyed: Parameters<typeof round_trip_enum_keyed_map>[0] = {
       [Sentiment.Negative]: new Resume({ name: "dn" }),
     };

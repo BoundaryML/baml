@@ -10,7 +10,7 @@ import { BamlError } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 
 describe("function_calls — union throws className", () => {
-  it("preserves the thrown class FQN through a multi-member throws union", () => {
+  it("errors_union_throws_preserves_class_name", () => {
     // `Reparse` declares `throws ParseError` (single); `LoadDoc` declares
     // `throws ParseError | TimeoutError` (union). Both throw `ParseError`, so
     // the surfaced `className` must agree.

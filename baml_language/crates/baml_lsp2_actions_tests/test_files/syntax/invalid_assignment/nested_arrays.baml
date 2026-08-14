@@ -44,66 +44,67 @@ function NestedArrayAssignments() -> int {
 
 //----
 //- diagnostics
-// error: type mismatch: expected int[], got 3
-//     ╭─[ invalid_assignment_nested_arrays.baml:28:7 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:28:7]
 //  28 │     d = [3, 4, 5];
-//     │          ┬
-//     │          ╰── type mismatch: expected int[], got 3
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected int[], got 4
-//     ╭─[ invalid_assignment_nested_arrays.baml:28:10 ]
-//     │
+//     ·          ┬
+//     ·          ╰── expected `int[]`, found `3`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:28:10]
 //  28 │     d = [3, 4, 5];
-//     │             ┬
-//     │             ╰── type mismatch: expected int[], got 4
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected int[], got 5
-//     ╭─[ invalid_assignment_nested_arrays.baml:28:13 ]
-//     │
+//     ·             ┬
+//     ·             ╰── expected `int[]`, found `4`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:28:13]
 //  28 │     d = [3, 4, 5];
-//     │                ┬
-//     │                ╰── type mismatch: expected int[], got 5
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected int[], got int[][]
-//     ╭─[ invalid_assignment_nested_arrays.baml:32:6 ]
-//     │
+//     ·                ┬
+//     ·                ╰── expected `int[]`, found `5`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:32:7]
 //  32 │     e = [[4, 5], [6, 7]];
-//     │         ────────┬───────
-//     │                 ╰───────── type mismatch: expected int[], got int[][]
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected string, got 1
-//     ╭─[ invalid_assignment_nested_arrays.baml:36:8 ]
-//     │
+//     ·          ───┬──
+//     ·             ╰── expected `int`, found `int[]`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:32:15]
+//  32 │     e = [[4, 5], [6, 7]];
+//     ·                  ───┬──
+//     ·                     ╰── expected `int`, found `int[]`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:36:8]
 //  36 │     f = [[1, 2]];
-//     │           ┬
-//     │           ╰── type mismatch: expected string, got 1
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected string, got 2
-//     ╭─[ invalid_assignment_nested_arrays.baml:36:11 ]
-//     │
+//     ·           ┬
+//     ·           ╰── expected `string`, found `1`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:36:11]
 //  36 │     f = [[1, 2]];
-//     │              ┬
-//     │              ╰── type mismatch: expected string, got 2
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Person, got Animal
-//     ╭─[ invalid_assignment_nested_arrays.baml:40:8 ]
-//     │
+//     ·              ┬
+//     ·              ╰── expected `string`, found `2`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:40:8]
 //  40 │     g = [[Animal { species: "Cat", legs: 4 }]];
-//     │           ─────────────────┬────────────────
-//     │                            ╰────────────────── type mismatch: expected Person, got Animal
-//     │
-//     │ Note: Error code: E0001
-// ────╯
+//     ·           ─────────────────┬────────────────
+//     ·                            ╰── expected `Person`, found `Animal`
+//     ╰────

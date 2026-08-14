@@ -1,0 +1,18 @@
+{
+  "slug": "coin-change",
+  "id": 322,
+  "title": "Coin Change",
+  "difficulty": "Medium",
+  "category": "Dynamic Programming",
+  "statement": "You are given an integer array `coins` of coin denominations and an integer `amount`. Return the **fewest number of coins** needed to make up `amount`. If it cannot be made, return `-1`. You have an infinite supply of each coin.\n\n**Example**\n\n```\ncoins = [1, 2, 5], amount = 11  => 3   // 5 + 5 + 1\ncoins = [2], amount = 3         => -1\n```",
+  "signature": "function CoinChange(coins: int[], amount: int) -> int",
+  "starter": "function CoinChange(coins: int[], amount: int) -> int {\n  // Return the fewest coins summing to amount, or -1 if impossible.\n  return -1;\n}",
+  "solution": "function CoinChange(coins: int[], amount: int) -> int {\n  let big = amount + 1;\n  let dp: int[] = [];\n  let i = 0;\n  while (i <= amount) {\n    dp.push(big);\n    i += 1;\n  }\n  dp[0] = 0;\n  let a = 1;\n  while (a <= amount) {\n    let c = 0;\n    while (c < coins.length()) {\n      let coin = coins[c];\n      if (coin <= a) {\n        let sub = dp[a - coin];\n        if (sub + 1 < dp[a]) {\n          dp[a] = sub + 1;\n        }\n      }\n      c += 1;\n    }\n    a += 1;\n  }\n  if (dp[amount] > amount) {\n    return -1;\n  }\n  return dp[amount];\n}",
+  "tests": [
+    { "call": "CoinChange([1, 2, 5], 11)", "expected": "3" },
+    { "call": "CoinChange([2], 3)", "expected": "-1" },
+    { "call": "CoinChange([1], 0)", "expected": "0" },
+    { "call": "CoinChange([2, 5, 10, 1], 27)", "expected": "4", "hidden": true },
+    { "call": "CoinChange([186, 419, 83, 408], 6249)", "expected": "20", "hidden": true }
+  ]
+}

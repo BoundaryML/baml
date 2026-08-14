@@ -1,13 +1,7 @@
 /// Returns a deep copy of `value` — all nested structures are recursively cloned.
 //baml:mut_vm
 function deep_copy<T>(value: T) -> T throws never {
-  $rust_function
-}
-
-/// Returns `true` if `a` and `b` are deeply equal — recursively comparing all nested values.
-//baml:vm
-function deep_equals<T>(a: T, b: T) -> bool throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Implemented by all concrete types.
@@ -20,6 +14,18 @@ implement<T> Concrete for T {
 
 }
 
+/// Implemented automatically by every function value, with its parameter
+/// list erased. `Returns` pins the held function's return type and `Throws`
+/// its error type; both default to `unknown`, so a bare `AnyFunction`
+/// accepts any function. A compiler builtin: it cannot be implemented by
+/// hand, cannot be used as a generic bound, and declares no methods. Call
+/// the held function through `reflect.call_any`; read its signature with
+/// `reflect.signature`.
+interface AnyFunction {
+  type Returns = unknown
+  type Throws = unknown
+}
+
 /// The structured value a tagged template literal produces.
 ///
 /// BEP-049 §10. A `tag` ` `…` ` call site lowers to `tag(body = () -> TaggedString { … })`;
@@ -28,9 +34,9 @@ implement<T> Concrete for T {
 /// ending with a literal — empty strings fill the leading/trailing slot when the
 /// template begins or ends with an interpolation).
 class TaggedString {
-  /// Literal text segments between interpolations, in source order.
-  parts string[]
-  /// Interpolated values, in source order. Heterogeneous: each entry has the
-  /// type of its `${expr}` site; tags inspect element types at runtime.
-  values unknown[]
+    /// Literal text segments between interpolations, in source order.
+    parts: string[],
+    /// Interpolated values, in source order. Heterogeneous: each entry has the
+    /// type of its `${expr}` site; tags inspect element types at runtime.
+    values: unknown[],
 }

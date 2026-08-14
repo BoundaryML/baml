@@ -1,0 +1,25 @@
+# Swift sdk-test crate. Fans out across every fixture under
+# `sdk_tests/fixtures/<fixture>/baml_src/` and produces a generated
+# SwiftPM package at `<fixture>/generated/` (Package.swift +
+# Sources/Baml/ + Tests/BamlTests/) plus two toolchain test invocations
+# per fixture (swift build --build-tests, swift test) plus the shared
+# `build_diagnostics::no_build_failures` test.
+#
+# `sdk_test_harness_setup` runs at build time (codegen + scaffold
+# emit); `sdk_test_harness_runner` runs at test time. The native
+# XCFramework build lives in setup.sh (fired by `cargo nextest run`
+# on macOS via .config/nextest.toml), NOT in build.rs.
+[package]
+name = "sdk_test_swift"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+sdk_test_harness_setup = { path = "../../harness_setup" }
+
+[dev-dependencies]
+sdk_test_harness_runner = { path = "../../harness_runner" }
+
+[package.metadata.ci]
+wasm_support = false

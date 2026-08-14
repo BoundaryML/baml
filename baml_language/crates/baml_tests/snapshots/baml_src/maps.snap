@@ -3,160 +3,186 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function maps.$init_test_ns_maps_maps(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.maps"
     load_const "len"
     make_closure .<lambda($init_test_ns_maps_maps, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_set_first_insert_returns_null"
     make_closure .<lambda($init_test_ns_maps_maps, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_set_replace_returns_previous"
     make_closure .<lambda($init_test_ns_maps_maps, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_set_then_get_reads_latest"
     make_closure .<lambda($init_test_ns_maps_maps, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_set_grows_length"
     make_closure .<lambda($init_test_ns_maps_maps, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_set_replace_preserves_length"
     make_closure .<lambda($init_test_ns_maps_maps, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_delete_returns_previous"
     make_closure .<lambda($init_test_ns_maps_maps, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_delete_absent_returns_null"
     make_closure .<lambda($init_test_ns_maps_maps, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_delete_already_deleted_returns_null"
     make_closure .<lambda($init_test_ns_maps_maps, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_delete_shrinks_length"
     make_closure .<lambda($init_test_ns_maps_maps, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_delete_does_not_affect_other_keys"
     make_closure .<lambda($init_test_ns_maps_maps, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_get_or_insert_inserts_when_absent"
     make_closure .<lambda($init_test_ns_maps_maps, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_get_or_insert_returns_existing_when_present"
     make_closure .<lambda($init_test_ns_maps_maps, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_get_or_insert_does_not_overwrite"
     make_closure .<lambda($init_test_ns_maps_maps, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_get_or_insert_persists_inserted_value"
     make_closure .<lambda($init_test_ns_maps_maps, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_get_or_insert_grows_length_only_when_absent"
     make_closure .<lambda($init_test_ns_maps_maps, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_clear_removes_all"
     make_closure .<lambda($init_test_ns_maps_maps, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_clear_already_empty_is_noop"
     make_closure .<lambda($init_test_ns_maps_maps, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_clear_then_reuse"
     make_closure .<lambda($init_test_ns_maps_maps, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_clear_makes_get_return_null"
     make_closure .<lambda($init_test_ns_maps_maps, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_has_after_delete_is_false"
     make_closure .<lambda($init_test_ns_maps_maps, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "map_has_after_get_or_insert_is_true"
     make_closure .<lambda($init_test_ns_maps_maps, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "create_and_access"
     make_closure .<lambda($init_test_ns_maps_maps, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "access_no_key"
     make_closure .<lambda($init_test_ns_maps_maps, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "contains"
     make_closure .<lambda($init_test_ns_maps_maps, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.maps"
     load_const "modify"
     make_closure .<lambda($init_test_ns_maps_maps, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -296,19 +322,16 @@ function maps.map_clear_then_reuse_main() -> int {
     load_var m
     load_const "b"
     call baml.Map.get
-    store_var _11
-    load_var _11
-    store_var _0
-    load_var _11
+    store_var_load_var _11
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 1
     unary_op -
-    store_var _0
+    store_var _11
 
   L0:
-    load_var _0
+    load_var _11
     return
 }
 
@@ -379,19 +402,16 @@ function maps.map_delete_does_not_affect_other_keys_main() -> int {
     load_var m
     load_const "b"
     call baml.Map.get
-    store_var _11
-    load_var _11
-    store_var _0
-    load_var _11
+    store_var_load_var _11
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 1
     unary_op -
-    store_var _0
+    store_var _11
 
   L0:
-    load_var _0
+    load_var _11
     return
 }
 
@@ -469,19 +489,16 @@ function maps.map_get_or_insert_does_not_overwrite_main() -> int {
     load_var m
     load_const "k"
     call baml.Map.get
-    store_var _8
-    load_var _8
-    store_var _0
-    load_var _8
+    store_var_load_var _8
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 1
     unary_op -
-    store_var _0
+    store_var _8
 
   L0:
-    load_var _0
+    load_var _8
     return
 }
 
@@ -538,19 +555,16 @@ function maps.map_get_or_insert_persists_main() -> int {
     load_var m
     load_const "k"
     call baml.Map.get
-    store_var _5
-    load_var _5
-    store_var _0
-    load_var _5
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 1
     unary_op -
-    store_var _0
+    store_var _5
 
   L0:
-    load_var _0
+    load_var _5
     return
 }
 
@@ -752,19 +766,16 @@ function maps.map_set_then_get_main() -> int {
     load_var m
     load_const "a"
     call baml.Map.get
-    store_var _8
-    load_var _8
-    store_var _0
-    load_var _8
+    store_var_load_var _8
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 1
     unary_op -
-    store_var _0
+    store_var _8
 
   L0:
-    load_var _0
+    load_var _8
     return
 }
 

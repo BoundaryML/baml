@@ -91,6 +91,36 @@ enum:
       Blue,
     }
 
+alias:
+  summary: "Overrides the serialized and parsed name of a class, enum, field, or enum variant. Expects exactly one string argument."
+  syntax: |
+    class User {
+      user_id string @alias("id")
+      @@alias("user")
+    }
+  details: |
+    `@alias("name")` applies to fields and enum variants. `@@alias("name")` applies to classes and enums. Each declaration accepts at most one alias, and the argument must be a string literal.
+
+description:
+  summary: "Attaches a human-readable description to a class, enum, field, or enum variant. Expects exactly one string argument."
+  syntax: |
+    class User {
+      name string @description("The user's display name")
+      @@description("A user returned by the API")
+    }
+  details: |
+    `@description("text")` applies to fields and enum variants. `@@description("text")` applies to classes and enums. Each declaration accepts at most one description, and the argument must be a string literal.
+
+skip:
+  summary: "Excludes a field or enum variant from generated schemas. Takes no arguments."
+  syntax: |
+    class InternalRecord {
+      public_value string
+      internal_value string @skip
+    }
+  details: |
+    `@skip` takes no arguments and may appear at most once on a declaration.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |
@@ -143,6 +173,51 @@ client:
       }
     }
 
+provider:
+  summary: "Selects the provider implementation used by this LLM client."
+  syntax: |
+    client<llm> MyClient {
+      provider openai
+    }
+
+options:
+  summary: "Contains provider-specific client configuration such as the model, credentials, and HTTP settings."
+  syntax: |
+    client<llm> MyClient {
+      provider openai
+      options {
+        model "gpt-4o"
+      }
+    }
+
+client_option:
+  summary: "A provider-specific configuration property for this LLM client."
+  details: |
+    Available option names and value types depend on the selected provider.
+
+model:
+  summary: "A provider configuration property that selects the model used for requests."
+  syntax: |
+    options {
+      model "gpt-4o"
+    }
+
+http:
+  summary: "A provider configuration property that groups HTTP transport and timeout settings."
+  syntax: |
+    options {
+      http {
+        request_timeout_ms 30000
+      }
+    }
+
+request_timeout_ms:
+  summary: "A provider configuration property that sets the request timeout in milliseconds. Use `0` for no timeout."
+  syntax: |
+    http {
+      request_timeout_ms 30000
+    }
+
 google-ai:
   summary: "Uses Gemini models through the Google AI Studio API, or delegates to Vertex AI when configured for Google Cloud."
   syntax: |
@@ -191,31 +266,51 @@ vertex-ai:
 generator:
   summary: "Configures code generation for a target language."
   syntax: |
-    generator python {
-      output_type "python/pydantic"
-      output_dir "../generated"
-    }
+    # baml.toml
+    [generator.python_client]
+    output_type = "python/pydantic"
+    output_dir = "."
+    naming_convention = "preserve-case"
+  details: |
+    Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `..`; BAML creates a `baml_sdk` directory inside it (`baml_client` for C#).
+
+    Accepted `output_type` values:
+
+    - `"python/pydantic"` — Python with Pydantic v2 models
+    - `"python/pydantic/v1"` — Python with Pydantic v1 models
+    - `"typescript/node"` — TypeScript for Node.js
+    - `"typescript/web"` — TypeScript for web/WASM
+    - `"swift"` — Swift
+    - `"go"` — Go
+    - `"rust"` — Rust
+    - `"java"` — Java
+    - `"cpp"` — C++17
+    - `"csharp"` — C#
+
+    `naming_convention` accepts `"preserve-case"` or `"language"`. Go requires `"language"` and also requires `sdk_import_path`.
 
 test:
-  summary: "Defines a test case for a BAML function."
+  summary: "Defines a named executable test using ordinary BAML expressions."
   syntax: |
-    test MyTest {
-      functions [ExtractResume]
-      args {
-        text "John Doe, Software Engineer"
-      }
+    test "extracts a resume" {
+      let resume = ExtractResume("John Doe, Software Engineer")
+      assert.equal(resume.name, "John Doe")
     }
+  details: |
+    A test is named with a string and its body can call functions, bind values, and make assertions directly. Pick a runner with an optional `with` clause: `test "name" with <runner> { ... }`.
+
+    Top-level tests have canonical IDs such as `root::extracts a resume`; tests declared in a namespace start with that namespace, such as `root.payments::refunds`. Tests inside a testset add each enclosing quoted name with `::`.
+
+    Run `baml test --list` to discover canonical IDs. `baml test -i <selector>` and `-x <selector>` match them; plain selectors are substring matches, while selectors containing `*` are anchored globs. Run `baml test --help` for selector and profile configuration.
 
 testset:
   summary: "Groups related tests, optionally sharing setup, under a quoted name."
   syntax: |
     testset "math suite" {
       let answer = 42
-
       test "adds" {
         assert.equal(answer, 42)
       }
-
       test "is positive" {
         assert.is_true(answer > 0)
       }
@@ -223,12 +318,7 @@ testset:
   details: |
     A testset is named with a string (`testset "name" { ... }`), not a bare identifier. Its body holds `let` setup bindings plus nested `test` (and further `testset`) blocks; setup bindings are visible to the nested tests. Pick a runner with an optional `with` clause: `testset "name" with <runner> { ... }`. This is unrelated to the old config-block style — there are no `functions`/`cases` keys.
 
-template_string:
-  summary: "Defines a reusable prompt template with Jinja2 syntax."
-  syntax: |
-    template_string Greeting(name: string) #"
-      Hello, {{ name }}! How can I help you?
-    "#
+    Every leaf gets a canonical ID beginning with `root` (or `root.<namespace>`) and using `::` for testset nesting. For example, the first test above is `root::math suite::adds`. Run `baml test --list` to discover IDs and `baml test --help` for selectors and profiles.
 
 retry_policy:
   summary: "Configures automatic retry behavior for LLM calls."
@@ -257,6 +347,31 @@ type:
     }
   details: |
     At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`.
+
+void:
+  summary: "The return type of a function that produces no value."
+  syntax: |
+    function log_message(message: string) -> void {
+      log.info(message)
+    }
+
+never:
+  summary: "The bottom type of an expression that never returns normally."
+  syntax: |
+    function fail(message: string) -> never {
+      throw baml.errors.InvalidArgument { message: message }
+    }
+  details: |
+    `never` is also the empty throws-set: a function declared with `throws never` cannot return an ordinary error.
+
+unknown:
+  summary: "The top type for a value whose concrete type is not known statically."
+  syntax: |
+    function inspect(value: unknown) -> string {
+      return string.from(value)
+    }
+  details: |
+    Narrow an `unknown` value with pattern matching or an `is` test before using type-specific fields or methods.
 
 types:
   summary: "Concept page for BAML type syntax, aliases, generic bounds, and associated type bindings."
@@ -365,6 +480,11 @@ let:
     let name = "Alice"
     let count = items.length()
 
+const:
+  summary: "Declares a compile-time constant binding."
+  syntax: |
+    const DEFAULT_LIMIT = 100
+
 in:
   summary: "Used with `for` loops to iterate over a collection."
   syntax: |
@@ -430,6 +550,15 @@ catch_all:
     }
   details: |
     `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` if a throw type is left unhandled. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
+
+catch_all_panics:
+  summary: "Handles every panic raised by a preceding expression."
+  syntax: |
+    let result = risky_call() catch_all_panics (panic) {
+      _ => fallback_value,
+    }
+  details: |
+    Use `catch_all` for ordinary declared errors. `catch_all_panics` is the explicit boundary for runtime panics.
 
 defer:
   summary: "Schedules a block to run when the enclosing block exits, in LIFO order."
@@ -753,8 +882,8 @@ default:
 check:
   summary: "Explains how to ask the CLI to validate a project."
   syntax: |
-    baml check --from .
-    baml run --list --from .
+    baml check --project .
+    baml run --list --project .
   details: |
     `baml check` compiles the project and reports compiler errors without running anything — the most direct way to validate. Other commands (`baml run`, `baml run --list`, `baml fmt`, `baml test`) also load and check the project before their main work. Use `baml run --list` when you additionally want the compiled function signatures.
 
@@ -762,7 +891,7 @@ playground:
   summary: "Serves the BAML playground web UI for a project and opens it in a browser."
   syntax: |
     baml playground                      # current project, first free port from 4265
-    baml playground --from ./my-app      # explicit project directory
+    baml playground --project ./my-app   # explicit project directory
     baml playground --file ./one.baml    # standalone single file
     baml playground --port 4265          # pin the port (errors if taken)
     baml playground --no-open            # don't launch a browser (automatic in SSH/headless sessions)
@@ -792,41 +921,6 @@ await:
   syntax: |
     let future = spawn { compute() }
     let result = await future
-
-dynamic:
-  summary: "Prefix inside a `type_builder` block that makes a class/enum extensible at runtime."
-  syntax: |
-    test MyTest {
-      functions [Fn]
-      type_builder {
-        dynamic class DynamicInner {
-          c string
-        }
-        dynamic enum DynamicEnum {
-          P
-          Q
-        }
-      }
-      args { from_text "test" }
-    }
-  details: |
-    `dynamic` is a prefix on a `class` or `enum` declared inside a test's `type_builder` block (`dynamic class Foo { ... }`), not a class suffix. It marks the type so the type-builder API can add fields/variants at runtime. See `baml describe type_builder`.
-
-type_builder:
-  summary: "Block inside a `test` that declares extra types for that test."
-  syntax: |
-    test MyTest {
-      functions [Fn]
-      type_builder {
-        class InnerClass { b int }
-        dynamic class DynamicInner { c string }
-        enum InnerEnum { X Y }
-        type MyAlias = string | int
-      }
-      args { from_text "test" }
-    }
-  details: |
-    `type_builder { ... }` appears inside a `test` body and may contain `class`, `enum`, and `type` declarations, optionally prefixed with `dynamic`. It is not a modifier on a top-level class. See `baml describe dynamic`.
 
 with:
   summary: "Optional clause that attaches a runner to a test/testset or options to a spawn."

@@ -13,12 +13,11 @@ function NoRet(x: int) {
 
 //----
 //- diagnostics
-// error: Expected return type (->), found '{'
-//    ╭─[ expr_missing_return_value.baml:1:24 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[expr_missing_return_value.baml:1:24]
 //  1 │ function NoRet(x: int) {
-//    │                        ┬  
-//    │                        ╰── Expected return type (->), found '{'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
+//    ·                        ┬
+//    ·                        ╰── expected `return type (->)`, found `'{'`
+//    ╰────

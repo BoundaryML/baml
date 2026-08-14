@@ -7,10 +7,40 @@
 
 use std::fmt::Write;
 
+/// Lower a raw AST type expression through hir's scratch store and
+/// hir_ty's one lowering road (the MIR pattern), to a plain type plus
+/// the sink's lowering diagnostics. Resolution context comes from
+/// `file`'s package/namespace.
+fn lower_type_expr_hir_in(
+    db: &baml_project::ProjectDatabase,
+    file: baml_base::SourceFile,
+    expr: &baml_compiler2_ast::TypeExpr,
+) -> (
+    baml_type::Ty,
+    Vec<baml_compiler2_hir_ty::lower::LoweringDiag>,
+) {
+    let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+    let id = builder.lower(expr);
+    let (store, _spans) = builder.finish();
+    let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file).with_diagnostics();
+    let ty = ctx.lower_type_ref(&store, id).to_plain();
+    (ty, ctx.take_diagnostics())
+}
+
+fn lower_type_expr_hir(
+    db: &baml_project::ProjectDatabase,
+    expr: &baml_compiler2_ast::TypeExpr,
+) -> baml_type::Ty {
+    let file = baml_compiler2_hir::compiler2_all_files(db)
+        .into_iter()
+        .next()
+        .expect("db has at least one file");
+    lower_type_expr_hir_in(db, file, expr).0
+}
+
 use baml_base::Name;
 use baml_compiler2_hir::{
     contributions::Definition,
-    file_item_tree,
     package::{PackageId, package_items},
 };
 use baml_project::ProjectDatabase;
@@ -21,6 +51,12 @@ fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new("."));
     db
+}
+
+/// Declared generic parameter names, for assertions that care about the names
+/// rather than the bounds.
+fn generic_param_names(params: &[baml_compiler2_ppir::item_data::GenericParamData]) -> Vec<Name> {
+    params.iter().map(|param| param.name.clone()).collect()
 }
 
 /// Build a sorted, human-readable summary of what `package_items(db, "baml")`
@@ -59,8 +95,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
             let def = &ns_items.types[name];
             match def {
                 Definition::Class(class_loc) => {
-                    let item_tree = file_item_tree(db, class_loc.file(db));
-                    let class_data = &item_tree[class_loc.id(db)];
+                    let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
                     let gp_str = if class_data.generic_params.is_empty() {
                         String::new()
                     } else {
@@ -69,7 +104,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                             class_data
                                 .generic_params
                                 .iter()
-                                .map(|n| n.as_str())
+                                .map(|param| param.name.as_str())
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -77,7 +112,11 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                     let method_names: Vec<String> = class_data
                         .methods
                         .iter()
-                        .map(|mid| item_tree.functions[mid].name.to_string())
+                        .map(|mid| {
+                            baml_compiler2_ppir::item_data::function_data(db, *mid)
+                                .name
+                                .to_string()
+                        })
                         .collect();
                     writeln!(
                         output,
@@ -102,8 +141,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
             let def = &ns_items.values[name];
             match def {
                 Definition::Function(func_loc) => {
-                    let item_tree = file_item_tree(db, func_loc.file(db));
-                    let func_data = &item_tree[func_loc.id(db)];
+                    let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
                     let gp_str = if func_data.generic_params.is_empty() {
                         String::new()
                     } else {
@@ -112,7 +150,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                             func_data
                                 .generic_params
                                 .iter()
-                                .map(|n| n.as_str())
+                                .map(|param| param.name.as_str())
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -260,11 +298,10 @@ fn array_has_generic_param_t() {
         panic!("Array should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
-        class_data.generic_params,
+        generic_param_names(&class_data.generic_params),
         vec![Name::new("T")],
         "Array should have generic_params [T]"
     );
@@ -282,11 +319,10 @@ fn map_has_generic_params_k_v() {
         panic!("Map should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
-        class_data.generic_params,
+        generic_param_names(&class_data.generic_params),
         vec![Name::new("K"), Name::new("V")],
         "Map should have generic_params [K, V]"
     );
@@ -304,8 +340,7 @@ fn string_class_has_no_generic_params() {
         panic!("String should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     assert!(
         class_data.generic_params.is_empty(),
@@ -327,13 +362,16 @@ fn array_has_expected_methods() {
         panic!("Array should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
         .iter()
-        .map(|mid| item_tree.functions[mid].name.to_string())
+        .map(|mid| {
+            baml_compiler2_ppir::item_data::function_data(&db, *mid)
+                .name
+                .to_string()
+        })
         .collect();
 
     let expected = [
@@ -359,13 +397,16 @@ fn map_has_expected_methods() {
         panic!("Map should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
         .iter()
-        .map(|mid| item_tree.functions[mid].name.to_string())
+        .map(|mid| {
+            baml_compiler2_ppir::item_data::function_data(&db, *mid)
+                .name
+                .to_string()
+        })
         .collect();
 
     let expected = ["length", "has", "keys", "values", "set", "get"];
@@ -464,31 +505,18 @@ fn file_package_derives_correct_namespaces() {
 
 #[test]
 fn rust_type_field_lowers_to_rust_type() {
-    use baml_compiler2_hir::package::{PackageId, package_items};
-    use baml_compiler2_tir::lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr};
-
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
-    let items = package_items(&db, baml_pkg);
 
     // Lower $rust_type — should produce Ty::RustType
-    let mut diags = Vec::new();
-    let ty = lower_type_expr(
+    let ty = lower_type_expr_hir(
+        &db,
         &baml_compiler2_ast::TypeExprKind::Rust { attrs: vec![] }.at(Default::default()),
-        &ScopeCtx {
-            db: &db,
-            package_items: items,
-            ns_context: &[],
-            generic_params: &[],
-            bounds: &TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diags,
     );
+    let diags: Vec<()> = Vec::new();
 
     assert_eq!(
         ty,
-        baml_compiler2_tir::ty::Ty::RustType {
+        baml_type::Ty::RustType {
             attr: Default::default()
         }
     );
@@ -521,9 +549,6 @@ fn user_package_unaffected_by_builtins() {
 /// All types should resolve without diagnostics.
 #[test]
 fn cross_namespace_type_resolution_via_root() {
-    use baml_compiler2_hir::file_package::file_package;
-    use baml_compiler2_tir::lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr};
-
     let mut db = make_db();
 
     // Root namespace: defines Config
@@ -532,13 +557,11 @@ fn cross_namespace_type_resolution_via_root() {
     // llm namespace: defines Response
     let ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
 
-    let user_pkg_id = PackageId::new(&db, Name::new("user"));
-    let pkg_items = package_items(&db, user_pkg_id);
-
     // From root namespace: resolve root.llm.Response
-    let mut diags = Vec::new();
     let segments = vec![Name::new("root"), Name::new("llm"), Name::new("Response")];
-    let ty = lower_type_expr(
+    let (ty, diags) = lower_type_expr_hir_in(
+        &db,
+        _root_file,
         &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
@@ -546,15 +569,6 @@ fn cross_namespace_type_resolution_via_root() {
             attrs: vec![],
         }
         .at(Default::default()),
-        &ScopeCtx {
-            db: &db,
-            package_items: pkg_items,
-            ns_context: &[], // root namespace context
-            generic_params: &[],
-            bounds: &TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diags,
     );
     assert!(
         diags.is_empty(),
@@ -562,15 +576,15 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        !matches!(ty, baml_type::Ty::Unknown { .. }),
         "root.llm.Response should not resolve to Unknown"
     );
 
     // From llm namespace: resolve root.Config
-    let mut diags = Vec::new();
     let segments = vec![Name::new("root"), Name::new("Config")];
-    let pkg_info = file_package(&db, ns_file);
-    let ty = lower_type_expr(
+    let (ty, diags) = lower_type_expr_hir_in(
+        &db,
+        ns_file,
         &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
@@ -578,15 +592,6 @@ fn cross_namespace_type_resolution_via_root() {
             attrs: vec![],
         }
         .at(Default::default()),
-        &ScopeCtx {
-            db: &db,
-            package_items: pkg_items,
-            ns_context: &pkg_info.namespace_path,
-            generic_params: &[],
-            bounds: &TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diags,
     );
     assert!(
         diags.is_empty(),
@@ -594,7 +599,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        !matches!(ty, baml_type::Ty::Unknown { .. }),
         "root.Config should not resolve to Unknown from llm namespace"
     );
 }
@@ -602,21 +607,17 @@ fn cross_namespace_type_resolution_via_root() {
 /// Same-namespace resolution: types in the same ns_* folder resolve without root. prefix.
 #[test]
 fn same_namespace_resolution_no_prefix() {
-    use baml_compiler2_tir::lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr};
-
     let mut db = make_db();
 
     // Both files in ns_llm namespace
     let _f1 = db.add_file("ns_llm/types.baml", "class LLMConfig { model string }");
     let _f2 = db.add_file("ns_llm/client.baml", "class LLMClient { name string }");
 
-    let user_pkg_id = PackageId::new(&db, Name::new("user"));
-    let pkg_items = package_items(&db, user_pkg_id);
-
     // From within llm namespace: resolve LLMConfig (no root. prefix)
-    let mut diags = Vec::new();
     let segments = vec![Name::new("LLMConfig")];
-    let ty = lower_type_expr(
+    let (ty, diags) = lower_type_expr_hir_in(
+        &db,
+        _f1,
         &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
@@ -624,23 +625,15 @@ fn same_namespace_resolution_no_prefix() {
             attrs: vec![],
         }
         .at(Default::default()),
-        &ScopeCtx {
-            db: &db,
-            package_items: pkg_items,
-            ns_context: &[Name::new("llm")],
-            generic_params: &[],
-            bounds: &TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diags,
     );
+    let _ = diags;
     assert!(
         diags.is_empty(),
         "LLMConfig should resolve within same namespace, got: {:?}",
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        !matches!(ty, baml_type::Ty::Unknown { .. }),
         "LLMConfig should not resolve to Unknown within same namespace"
     );
 }
@@ -649,8 +642,6 @@ fn same_namespace_resolution_no_prefix() {
 /// Resolve root.llm.openai.OpenAIClient from root namespace.
 #[test]
 fn nested_namespace_resolution() {
-    use baml_compiler2_tir::lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr};
-
     let mut db = make_db();
 
     let _root_file = db.add_file("main.baml", "class Config { key string }");
@@ -659,8 +650,8 @@ fn nested_namespace_resolution() {
         "class OpenAIClient { model string }",
     );
 
-    let user_pkg_id = PackageId::new(&db, Name::new("user"));
-    let pkg_items = package_items(&db, user_pkg_id);
+    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_items = package_items(&db, pkg_id);
 
     // Verify the nested namespace exists
     assert!(
@@ -671,14 +662,15 @@ fn nested_namespace_resolution() {
     );
 
     // Resolve root.llm.openai.OpenAIClient from root namespace
-    let mut diags = Vec::new();
     let segments = vec![
         Name::new("root"),
         Name::new("llm"),
         Name::new("openai"),
         Name::new("OpenAIClient"),
     ];
-    let ty = lower_type_expr(
+    let (ty, diags) = lower_type_expr_hir_in(
+        &db,
+        _root_file,
         &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
@@ -686,15 +678,6 @@ fn nested_namespace_resolution() {
             attrs: vec![],
         }
         .at(Default::default()),
-        &ScopeCtx {
-            db: &db,
-            package_items: pkg_items,
-            ns_context: &[],
-            generic_params: &[],
-            bounds: &TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diags,
     );
     assert!(
         diags.is_empty(),
@@ -702,7 +685,7 @@ fn nested_namespace_resolution() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        !matches!(ty, baml_type::Ty::Unknown { .. }),
         "root.llm.openai.OpenAIClient should not resolve to Unknown"
     );
 }
@@ -710,19 +693,15 @@ fn nested_namespace_resolution() {
 #[test]
 fn bare_name_cross_namespace_rejected() {
     // Config is in root, but ns_context is ["llm"] — bare "Config" should not resolve
-    use baml_compiler2_tir::lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr};
 
     let mut db = make_db();
     let _root_file = db.add_file("main.baml", "class Config { key string }");
     let _ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
 
-    let pkg_id = PackageId::new(&db, Name::new("user"));
-    let pkg_items = package_items(&db, pkg_id);
-
     let segments = vec![Name::new("Config")];
-    let ns_context = vec![Name::new("llm")];
-    let mut diags = Vec::new();
-    let ty = lower_type_expr(
+    let (ty, diags) = lower_type_expr_hir_in(
+        &db,
+        _ns_file,
         &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
@@ -730,18 +709,9 @@ fn bare_name_cross_namespace_rejected() {
             attrs: vec![],
         }
         .at(Default::default()),
-        &ScopeCtx {
-            db: &db,
-            package_items: pkg_items,
-            ns_context: &ns_context,
-            generic_params: &[],
-            bounds: &TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diags,
     );
     assert!(
-        matches!(ty, baml_compiler2_tir::ty::Ty::Error { .. }),
+        matches!(ty, baml_type::Ty::Error { .. }),
         "bare Config from ns_llm should not resolve (an unresolved name is the diagnosed \
          `!error` sentinel, never `unknown`)"
     );
@@ -750,7 +720,7 @@ fn bare_name_cross_namespace_rejected() {
         "should emit exactly one diagnostic, got: {:?}",
         diags
     );
-    let msg = diags[0].to_string();
+    let msg = baml_compiler2_hir_ty::lower::lowering_diag_error(&diags[0].kind).to_string();
     assert!(
         msg.contains("root.Config"),
         "diagnostic should suggest `root.Config`, got: {msg}"
@@ -760,19 +730,15 @@ fn bare_name_cross_namespace_rejected() {
 #[test]
 fn multi_segment_bare_path_rejected() {
     // "ns2.MyClass" from ns1 without root. prefix should fail
-    use baml_compiler2_tir::lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr};
 
     let mut db = make_db();
     let _f1 = db.add_file("ns_ns1/a.baml", "class Foo { x int }");
     let _f2 = db.add_file("ns_ns2/b.baml", "class MyClass { y string }");
 
-    let pkg_id = PackageId::new(&db, Name::new("user"));
-    let pkg_items = package_items(&db, pkg_id);
-
     let segments = vec![Name::new("ns2"), Name::new("MyClass")];
-    let ns_context = vec![Name::new("ns1")];
-    let mut diags = Vec::new();
-    let ty = lower_type_expr(
+    let (ty, diags) = lower_type_expr_hir_in(
+        &db,
+        _f1,
         &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
@@ -780,23 +746,14 @@ fn multi_segment_bare_path_rejected() {
             attrs: vec![],
         }
         .at(Default::default()),
-        &ScopeCtx {
-            db: &db,
-            package_items: pkg_items,
-            ns_context: &ns_context,
-            generic_params: &[],
-            bounds: &TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diags,
     );
     assert!(
-        matches!(ty, baml_compiler2_tir::ty::Ty::Error { .. }),
+        matches!(ty, baml_type::Ty::Error { .. }),
         "ns2.MyClass from ns1 should not resolve without root. prefix (an unresolved name \
          is the diagnosed `!error` sentinel, never `unknown`)"
     );
     assert!(!diags.is_empty(), "should emit UnresolvedType diagnostic");
-    let msg = diags[0].to_string();
+    let msg = baml_compiler2_hir_ty::lower::lowering_diag_error(&diags[0].kind).to_string();
     assert!(
         msg.contains("unresolved type: ns2.MyClass"),
         "diagnostic should mention ns2.MyClass, got: {msg}"

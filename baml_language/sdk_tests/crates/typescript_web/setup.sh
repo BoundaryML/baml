@@ -14,7 +14,7 @@ export npm_config_store_dir="$WORKSPACE_ROOT/target/pnpm-store"
 mkdir -p "$npm_config_store_dir"
 
 echo "==> pnpm install in sdks/typescript/bridge_typescript_web"
-(cd "$BRIDGE_TYPESCRIPT_WEB" && pnpm install --ignore-workspace --ignore-scripts)
+(cd "$BRIDGE_TYPESCRIPT_WEB" && pnpm install)
 
 echo "==> pnpm build:debug in sdks/typescript/bridge_typescript_web"
 (cd "$BRIDGE_TYPESCRIPT_WEB" && pnpm build:debug)

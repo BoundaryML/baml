@@ -3,76 +3,88 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function errorcontext.$init_test_ns_errorcontext_errorcontext(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.errorcontext"
     load_const "single_error_root_cause_is_self"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "nested_catch_chains_to_handled_error"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "hazard_a_nested_construct_in_catch_arm_chains_to_outer_error"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "no_match_rethrow_does_not_self_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "throw_after_catch_in_layout_gap_does_not_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "sibling_defers_that_throw_chain_to_root_cause"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "hazard_b_unused_binding_slot_liveness_preserves_cause"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "defer_on_unwind_preserves_cause_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "defer_on_unwind_preserves_to_string_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "defer_with_body_preserves_cause_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "nested_defers_nonthrowing_preserve_cause"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "defer_that_throws_still_chains_through_wrap"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -91,8 +103,9 @@ function errorcontext.ec_deferbody_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -101,7 +114,7 @@ function errorcontext.ec_deferbody_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return
@@ -137,48 +150,45 @@ function errorcontext.ec_deferthrow_check() -> bool {
     load_var rendered
     load_const "origin"
     call baml.String.index_of
-    store_var _3
-    load_var _3
-    store_var origin_at
-    load_var _3
+    store_var_load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 1
     unary_op -
-    store_var origin_at
+    store_var _3
 
   L0:
+    load_var _3
+    store_var origin_at
     load_var rendered
     load_const "wrap"
     call baml.String.index_of
-    store_var _6
-    load_var _6
-    store_var wrap_at
-    load_var _6
+    store_var_load_var _7
     load_const null
     cmp_op ==
     pop_jump_if_false L1
     load_const 1
     unary_op -
-    store_var wrap_at
+    store_var _7
 
   L1:
+    load_var _7
+    store_var wrap_at
     load_var rendered
     load_const "cleanup"
     call baml.String.index_of
-    store_var _9
-    load_var _9
-    store_var cleanup_at
-    load_var _9
+    store_var_load_var _11
     load_const null
     cmp_op ==
     pop_jump_if_false L2
     load_const 1
     unary_op -
-    store_var cleanup_at
+    store_var _11
 
   L2:
+    load_var _11
+    store_var cleanup_at
     load_var origin_at
     load_const 0
     cmp_int_op >=
@@ -274,8 +284,9 @@ function errorcontext.ec_deferunwind_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -284,7 +295,7 @@ function errorcontext.ec_deferunwind_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return
@@ -375,8 +386,9 @@ function errorcontext.ec_hazard_a_main() -> string {
 
   L0:
     load_field .error
-    store_var_load_var _7
-    is_type string
+    store_var _9
+    load_var _9
+    narrow_bind string, slot=7
     pop_jump_if_false L1
     jump L2
 
@@ -385,7 +397,7 @@ function errorcontext.ec_hazard_a_main() -> string {
     jump L3
 
   L2:
-    load_var _7
+    load_var _9
 
   L3:
     return
@@ -417,8 +429,9 @@ function errorcontext.ec_hazard_b_main() -> string {
     load_var _10
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _11
-    is_type string
+    store_var _13
+    load_var _13
+    narrow_bind string, slot=6
     pop_jump_if_false L0
     jump L1
 
@@ -427,7 +440,7 @@ function errorcontext.ec_hazard_b_main() -> string {
     jump L2
 
   L1:
-    load_var _11
+    load_var _13
 
   L2:
     return
@@ -455,8 +468,9 @@ function errorcontext.ec_nested_main() -> string {
     load_var _4
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _5
-    is_type string
+    store_var _7
+    load_var _7
+    narrow_bind string, slot=5
     pop_jump_if_false L0
     jump L1
 
@@ -465,7 +479,7 @@ function errorcontext.ec_nested_main() -> string {
     jump L2
 
   L1:
-    load_var _5
+    load_var _7
 
   L2:
     return
@@ -519,8 +533,9 @@ function errorcontext.ec_sibling_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -529,7 +544,7 @@ function errorcontext.ec_sibling_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return
@@ -559,8 +574,9 @@ function errorcontext.ec_single_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -569,7 +585,7 @@ function errorcontext.ec_single_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return
@@ -588,8 +604,9 @@ function errorcontext.ec_stackdefers_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -598,7 +615,7 @@ function errorcontext.ec_stackdefers_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return

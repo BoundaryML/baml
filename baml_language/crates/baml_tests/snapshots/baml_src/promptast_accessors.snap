@@ -3,28 +3,32 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function promptast_accessors.$init_test_ns_promptast_accessors_promptast_accessors(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.promptast_accessors"
     load_const "text_renders_role_headed_prompt"
     make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.promptast_accessors"
     load_const "to_string_is_readable_not_rust_debug"
     make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.promptast_accessors"
     load_const "messages_expose_role_and_content"
     make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.promptast_accessors"
     load_const "messages_yields_promptmessage_instances"
     make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -34,15 +38,15 @@ function promptast_accessors.paa_fold_messages_fn() -> string {
     load_const ""
     store_var out
     call user.promptast_accessors.paa_render_ast
-    sys_op baml.llm.PromptAst.messages
-    load_type baml.iter.Iterable<Item = baml.llm.PromptMessage, Error = never>
+    call ai.Prompt.messages
+    load_type baml.iter.Iterable<Error = never, Item = ai.PromptMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = baml.llm.PromptMessage, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = ai.PromptMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -72,9 +76,9 @@ function promptast_accessors.paa_fold_messages_fn() -> string {
     return
 }
 
-function promptast_accessors.paa_render_ast() -> baml.llm.PromptAst {
+function promptast_accessors.paa_render_ast() -> ai.Prompt {
     make_closure .<tagged(paa_render_ast, 0)>, 0
-    call baml.llm.prompt
+    call ai.prompt
     store_var render
     load_const "c"
     load_const "openai"
@@ -83,21 +87,21 @@ function promptast_accessors.paa_render_ast() -> baml.llm.PromptAst {
     load_const "user"
     load_type string
     alloc_array 2
-    init_instance baml.llm.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.llm.Context .client, .tags, .output_format, ._output_format
+    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     return
 }
 
-function promptast_accessors.paa_single_message_fn() -> baml.llm.PromptMessage[] {
+function promptast_accessors.paa_single_message_fn() -> ai.PromptMessage[] {
     make_closure .<tagged(paa_single_message_fn, 0)>, 0
-    call baml.llm.prompt
+    call ai.prompt
     store_var render
     load_const "c"
     load_const "openai"
@@ -105,29 +109,29 @@ function promptast_accessors.paa_single_message_fn() -> baml.llm.PromptMessage[]
     load_const "system"
     load_type string
     alloc_array 1
-    init_instance baml.llm.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.llm.Context .client, .tags, .output_format, ._output_format
+    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
-    sys_op baml.llm.PromptAst.messages
+    call ai.Prompt.messages
     return
 }
 
 function promptast_accessors.paa_text_fn() -> string {
     call user.promptast_accessors.paa_render_ast
-    sys_op baml.llm.PromptAst.text
+    call ai.Prompt.text
     return
 }
 
 function promptast_accessors.paa_to_string_fn() -> string {
     call user.promptast_accessors.paa_render_ast
     store_var _1
-    load_type baml.llm.PromptAst
+    load_type ai.Prompt
     load_var _1
     call baml.String.from
     return

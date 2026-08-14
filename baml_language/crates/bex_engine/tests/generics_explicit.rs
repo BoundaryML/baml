@@ -85,7 +85,7 @@ async fn escaped_instance_rejects_wrong_type_args() {
             b
         }
         function main() -> int {
-            let b = mk(5);
+            let b: unknown = mk(5);
             if (b is Box<string>) { 1 } else { 0 }
         }
     "#;
@@ -216,13 +216,11 @@ async fn inbound_instance_arg_wrong_type_args_rejected() {
     );
 }
 
-/// A generic instance arriving with NO wire type args for a concrete generic
-/// slot is rejected. Phase 2/3 makes generic instances arrive fully bound, so
-/// an argless `Box` against `Box<int>` is a positive mismatch (the tightened
-/// `class_type_args_compatible`: a non-empty expected with a differing wire
-/// arity rejects), not a value to wave through on a name-only match.
+/// A shape-only generic instance inherits its concrete arguments from the
+/// contextual class slot. Sparse inbound annotations are only required when
+/// that context and the payload do not determine the arguments.
 #[tokio::test]
-async fn inbound_instance_arg_missing_type_args_rejected() {
+async fn inbound_instance_arg_missing_type_args_uses_context() {
     let source = r#"
         class Box<T> { v T }
         function takes_box<T>(b: Box<T>) -> int { 1 }
@@ -233,18 +231,15 @@ async fn inbound_instance_arg_missing_type_args_rejected() {
         "Box",
         indexmap::IndexMap::from_iter([("v", BexExternalValue::Int(5))]),
     );
-    let err = call_named(
+    let out = call_named(
         source,
         "takes_box",
         vec![arg],
         vec![("T".to_string(), baml_type::RuntimeTy::int())],
     )
     .await
-    .expect_err("an argless Box against Box<int> must be rejected");
-    assert!(
-        matches!(err, EngineError::TypeMismatch { .. }),
-        "expected TypeMismatch, got {err:?}"
-    );
+    .expect("the concrete Box<int> context supplies the omitted type arg");
+    assert_eq!(out, BexExternalValue::Int(1));
 }
 
 /// A generic instance whose wire arity disagrees with the declared class is
@@ -276,13 +271,10 @@ async fn inbound_instance_arg_wrong_arity_rejected() {
     );
 }
 
-/// A bare host `Map` against a *generic* class slot is rejected at coercion: a
-/// map carries no class type args, so promoting it to a `Box<int>` instance
-/// would fabricate an under-specified generic value. (Against a *non-generic*
-/// class slot the same map would still promote — see the non-generic baseline
-/// elsewhere.)
+/// A bare host map can be promoted into a generic class when the contextual
+/// class slot already supplies the concrete arguments.
 #[tokio::test]
-async fn inbound_bare_map_against_generic_class_rejected() {
+async fn inbound_bare_map_against_generic_class_uses_context() {
     let source = r#"
         class Box<T> { v T }
         function takes_box<T>(b: Box<T>) -> int { 1 }
@@ -293,18 +285,15 @@ async fn inbound_bare_map_against_generic_class_rejected() {
         value_type: baml_type::RuntimeTy::int(),
         entries: indexmap::IndexMap::from_iter([("v".to_string(), BexExternalValue::Int(5))]),
     };
-    let err = call_named(
+    let out = call_named(
         source,
         "takes_box",
         vec![arg],
         vec![("T".to_string(), baml_type::RuntimeTy::int())],
     )
     .await
-    .expect_err("a bare map against the generic Box<int> must be rejected");
-    assert!(
-        matches!(err, EngineError::TypeMismatch { .. }),
-        "expected TypeMismatch, got {err:?}"
-    );
+    .expect("the contextual Box<int> type supplies the map's nominal identity");
+    assert_eq!(out, BexExternalValue::Int(1));
 }
 
 /// Explicit call-site type args still win over inference (regression guard

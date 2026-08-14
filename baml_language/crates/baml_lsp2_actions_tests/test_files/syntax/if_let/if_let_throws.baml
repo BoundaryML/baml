@@ -33,12 +33,10 @@ function ThrowsContractViolationInElse(v: int | string) -> string throws never {
 
 //----
 //- diagnostics
-// error: declared throws is `never`, but this function may also throw `string`
-//     ╭─[ if_let_if_let_throws.baml:26:74 ]
-//     │
-//  26 │ function ThrowsContractViolationInElse(v: int | string) -> string throws never {
-//     │                                                                          ──┬──
-//     │                                                                            ╰──── declared throws is `never`, but this function may also throw `string`
-//     │
-//     │ Note: Error code: E0096
-// ────╯
+// E0096
+//
+//   × declared throws is `never`, but this function may also throw `string`
+//     ╭─[if_let_if_let_throws.baml:30:11]
+//  30 │     throw "from else"
+//     ·           ───────────
+//     ╰────

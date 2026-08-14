@@ -1,108 +1,126 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 152
 ---
 function array_rest_binding.$init_test_ns_array_rest_binding_array_rest_binding(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_binds_middle_values"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_with_no_suffix_takes_tail"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_is_empty_when_nothing_remains"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_is_empty_between_exact_prefix_and_suffix"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "too_short_array_falls_through_rest_arm"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_only_copies_whole_array"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "pushing_to_rest_does_not_mutate_source"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "pushing_to_source_does_not_mutate_rest"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_copy_is_shallow_elements_are_shared"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "or_arm_rest_binding_dispatches_class_branch"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "or_arm_rest_binding_dispatches_array_branch"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "or_arm_rest_binding_falls_through_empty_array"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_binding_in_nested_element_pattern"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_binding_in_if_let"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_only_binding_in_for_loop"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_binding_generic_element_type"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.array_rest_binding"
     load_const "rest_bind_chain_aliases_same_slice"
     make_closure .<lambda($init_test_ns_array_rest_binding_array_rest_binding, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -164,14 +182,15 @@ function array_rest_binding.arb_grab(xs: int[]) -> int {
     load_const 1
     load_var _10
     call baml.Array.slice
-    container_len
-    store_var _14
     load_var xs
     load_const 0
     load_array_element
     load_const 10
     mul_int
-    load_var _14
+    store_var _12
+    container_len
+    store_var _14
+    load_var2 4 5
     add_int
 
   L2:
@@ -272,20 +291,22 @@ function array_rest_binding.arb_pushing_to_rest_does_not_mutate_source() -> int 
     load_var _9
     call baml.Array.slice
     store_var r
+    load_type int
     load_var r
     load_const 99
     call baml.Array.push
     pop 1
     load_var xs
     container_len
+    store_var _14
+    load_var _14
+    load_const 10
+    mul_int
     store_var _13
     load_var r
     container_len
-    store_var _14
-    load_var _13
-    load_const 10
-    mul_int
-    load_var _14
+    store_var _15
+    load_var2 5 7
     add_int
 
   L2:
@@ -323,6 +344,7 @@ function array_rest_binding.arb_pushing_to_source_does_not_mutate_rest() -> int 
     load_var _9
     call baml.Array.slice
     store_var _8
+    load_type int
     load_var xs
     load_const 7
     call baml.Array.push
@@ -351,20 +373,22 @@ function array_rest_binding.arb_rest_bind_chain_aliases_same_slice() -> int {
     store_var _2
     load_var _2
     store_var r
+    load_type int
     load_var r
     load_const 4
     call baml.Array.push
     pop 1
     load_var r
     container_len
+    store_var _9
+    load_var _9
+    load_const 10
+    mul_int
     store_var _8
     load_var _2
     container_len
-    store_var _9
-    load_var _8
-    load_const 10
-    mul_int
-    load_var _9
+    store_var _10
+    load_var2 5 7
     add_int
     return
 }
@@ -377,17 +401,15 @@ function array_rest_binding.arb_rest_binding_generic_element_type() -> int {
     load_type string
     alloc_array 3
     call user.array_rest_binding.arb_tail_len
-    store_var _2
+    load_const 10
+    mul_int
+    store_var _1
     load_type bool
     load_const true
     load_type bool
     alloc_array 1
     call user.array_rest_binding.arb_tail_len
-    store_var _5
-    load_var _2
-    load_const 10
-    mul_int
-    load_var _5
+    load_var _1
     add_int
     return
 }
@@ -399,15 +421,13 @@ function array_rest_binding.arb_rest_binding_in_if_let() -> int {
     load_type int
     alloc_array 3
     call user.array_rest_binding.arb_grab
-    store_var _2
+    load_const 100
+    mul_int
+    store_var _1
     load_type int
     alloc_array 0
     call user.array_rest_binding.arb_grab
-    store_var _4
-    load_var _2
-    load_const 100
-    mul_int
-    load_var _4
+    load_var _1
     add_int
     return
 }
@@ -703,14 +723,14 @@ function array_rest_binding.arb_rest_only_binding_in_for_loop() -> int {
     alloc_array 0
     load_type int[]
     alloc_array 3
-    load_type baml.iter.Iterable<Item = int[], Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = int[]>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
   L0:
     load_var _8
-    load_type baml.iter.Iterator<Item = int[], Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = int[]>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -825,7 +845,7 @@ function array_rest_binding.arb_rest_with_no_suffix_takes_tail() -> int {
     return
 }
 
-function array_rest_binding.arb_tail_len(xs: T[]) -> int {
+function array_rest_binding.arb_tail_len(xs: #0[]) -> int {
     load_var xs
     is_type _[]
     pop_jump_if_false L0

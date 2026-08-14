@@ -6,13 +6,13 @@ use baml_sdk::optional::{
 };
 
 #[test]
-fn test_round_trip_optional_int() {
+fn test_optional_round_trip_optional_int() {
     assert_eq!(round_trip_optional_int(Some(5)).unwrap(), Some(5));
     assert_eq!(round_trip_optional_int(None).unwrap(), None);
 }
 
 #[test]
-fn test_round_trip_optional_resume() {
+fn test_optional_round_trip_optional_resume() {
     let r = Resume {
         name: "ada".to_string(),
     };
@@ -24,7 +24,7 @@ fn test_round_trip_optional_resume() {
 }
 
 #[test]
-fn test_round_trip_optional_union() {
+fn test_optional_round_trip_optional_union() {
     assert_eq!(
         round_trip_optional_union(Some(IntOrString::Int(3))).unwrap(),
         Some(IntOrString::Int(3))
@@ -37,7 +37,7 @@ fn test_round_trip_optional_union() {
 }
 
 #[test]
-fn test_round_trip_resume() {
+fn test_optional_round_trip_resume() {
     let r = Resume {
         name: "grace".to_string(),
     };
@@ -45,7 +45,7 @@ fn test_round_trip_resume() {
 }
 
 #[test]
-fn test_round_trip_optional_container() {
+fn test_optional_round_trip_optional_container() {
     let c = OptionalContainer {
         optional_int: None,
         optional_class: Some(Resume {

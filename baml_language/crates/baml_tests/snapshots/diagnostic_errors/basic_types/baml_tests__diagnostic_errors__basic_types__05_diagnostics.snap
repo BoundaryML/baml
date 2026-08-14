@@ -2,58 +2,44 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: Unknown attribute `@stream.not_null`
-    ╭─[ classes.baml:11:21 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+    ╭─[classes.baml:11:21]
  11 │     details string? @stream.not_null
-    │                     ────────┬───────  
-    │                             ╰───────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                     ────────┬───────
+    ·                             ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-    ╭─[ classes.baml:16:96 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+    ╭─[classes.baml:16:96]
  16 │     multiple string? @description("Multiple attributes") @alias("multiple_alias") @stream.done @stream.not_null
-    │                                                                                                ────────┬───────  
-    │                                                                                                        ╰───────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                                                                                                ────────┬───────
+    ·                                                                                                        ╰── unknown attribute
+    ╰────
 
-  [type] error: unresolved name: GPT4
-   ╭─[ functions.baml:6:32 ]
-   │
- 6 │ ╭─▶ function GetStatus() -> Status {
-   ┆ ┆   
- 9 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0003
-───╯
+  [type] E0003
 
-  [type] error: unresolved name: GPT4
-    ╭─[ functions.baml:12:45 ]
-    │
- 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
-    ┆ ┆   
- 15 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  × unresolved name: `GPT4`
+   ╭─[functions.baml:7:13]
+ 7 │     client: GPT4
+   ·             ────
+   ╰────
 
-  [type] error: unresolved name: GPT4
-    ╭─[ functions.baml:17:53 ]
-    │
- 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
-    ┆ ┆   
- 20 │ ├─▶ }
-    │ │      
-    │ ╰────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
+  [type] E0003
+
+  × unresolved name: `GPT4`
+    ╭─[functions.baml:13:13]
+ 13 │     client: GPT4
+    ·             ────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+    ╭─[functions.baml:18:13]
+ 18 │     client: GPT4
+    ·             ────
+    ╰────

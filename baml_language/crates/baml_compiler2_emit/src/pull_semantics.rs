@@ -62,6 +62,10 @@ pub(crate) trait PullSink {
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error>;
+    /// Coarse runtime type-tag test (`Rvalue::IsTypeTag`): the MIR lowering
+    /// proved the `baml_type::typetag` constant `tag` a sound substitute for
+    /// the structural check, so the test is the tag comparison itself.
+    fn is_type_tag(&mut self, tag: i64) -> Result<(), Self::Error>;
     /// Materialize an `Object::Type` from a `TyTemplate` constant.
     /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
@@ -427,6 +431,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             walk_operand_pull(sink, operand)?;
             sink.is_type(ty_template)
         }
+        Rvalue::IsTypeTag { operand, tag } => {
+            walk_operand_pull(sink, operand)?;
+            sink.is_type_tag(*tag)
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -448,6 +456,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::MakeVirtualBoundMethod { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeVirtualBoundMethod must be handled in emit_rvalue_pull")
+        }
+        Rvalue::VirtualFieldAccess { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("VirtualFieldAccess must be handled in emit_rvalue_pull")
         }
         Rvalue::MakeGenericFunction {
             item,

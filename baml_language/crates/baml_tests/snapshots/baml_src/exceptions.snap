@@ -1,582 +1,679 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function exceptions.$init_test_ns_exceptions_exceptions(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_literal_string_match"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_literal_string_no_match_falls_to_wildcard"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_literal_int_match"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_multiple_literals_dispatch"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "typed_binding_string"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "typed_binding_int"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "typed_binding_dispatch_string_vs_int"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "typed_binding_dispatch_int_vs_string"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "typed_binding_plus_wildcard"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_binding_string_access_value"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_binding_int_access_value"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_user_class_single_arm"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_two_user_classes_dispatch_first"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_two_user_classes_dispatch_second"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_user_class_plus_wildcard"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_three_user_classes_plus_wildcard"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_class_binding_access_field"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_class_binding_dispatch_access_fields"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "bare_class_single_arm"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "bare_class_dispatch_first"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "bare_class_dispatch_second"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "bare_class_plus_wildcard"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "bare_class_plus_wildcard_wildcard_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "unhandled_throw_string"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "unhandled_throw_int"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_division_by_zero"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_integer_overflow_add"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_integer_overflow_sub"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_integer_overflow_mul"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_integer_overflow_neg"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_integer_overflow_via_panic_union"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_shift_overflow"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 31)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_negative_shift"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 32)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_index_out_of_bounds"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 33)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_map_key_not_found"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 34)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_negative_index_as_index_out_of_bounds"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 35)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_panic_binding_division_by_zero_field"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 36)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_panic_binding_integer_overflow_message"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 37)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_panic_binding_index_out_of_bounds_fields"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 38)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_panic_binding_index_out_of_bounds_length"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 39)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_panic_binding_map_key_not_found_field"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 40)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "wildcard_skips_division_by_zero"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 41)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "wildcard_skips_index_out_of_bounds"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 42)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "panic_arm_plus_wildcard_panic_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 43)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "panic_arm_plus_wildcard_user_error_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 44)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "panic_arm_plus_wildcard_no_error"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 45)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "user_class_plus_panic_plus_wildcard_class_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 46)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "user_class_plus_panic_plus_wildcard_panic_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 47)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "user_class_plus_panic_plus_wildcard_string_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 48)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_arm_plus_wildcard_panic_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 49)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_arm_plus_wildcard_user_error_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 50)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_arm_plus_wildcard_fallback_error_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 51)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_arm_plus_wildcard_other_panic_propagates"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 52)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_alias_plus_wildcard_handles_both_domains"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 53)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_alias_plus_wildcard_error_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 54)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_no_wildcard_panic_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 55)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_no_wildcard_error_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 56)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_no_wildcard_unmatched_rethrows"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 57)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "mixed_union_no_wildcard_unmatched_panic_rethrows"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 58)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "panic_union_plus_wildcard_division_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 59)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "panic_union_plus_wildcard_index_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 60)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "panic_union_plus_wildcard_error_falls_to_wildcard"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 61)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "four_arms_division_by_zero_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 62)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "four_arms_index_out_of_bounds_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 63)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "four_arms_user_class_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 64)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "four_arms_wildcard_fires"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 65)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "four_arms_no_error"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 66)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "uncaught_division_by_zero"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 67)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "uncaught_index_out_of_bounds"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 68)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "wrong_panic_pattern_propagates"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 69)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "same_frame_division_caught"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 70)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "same_frame_index_out_of_bounds_caught"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 71)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "panic_alias_catches_any_panic"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 72)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "panic_alias_plus_wildcard_dispatch"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 73)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "nested_inner_catches_outer_does_not_fire"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 74)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "nested_inner_catches_panic_outer_catches_rethrow"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 75)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "rethrow_propagates_to_outer"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 76)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "sequential_catches_both_recover"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 77)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "inline_throw_catch"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 78)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "throw_in_match_arm_propagates"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 79)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "caught_panic_has_accessible_fields"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 80)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_four_primitive_type_arms"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 81)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_four_typed_arms_plus_bind_jump_table_rethrows_panic"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 82)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_four_primitive_wildcard_on_float"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 83)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_three_type_arms_bool_throw"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 84)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_four_user_classes_instanceof_chain"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 85)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_four_literal_arms"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 86)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_mixed_named_and_anonymous_bindings"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 87)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_four_typed_arms_jump_table"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 88)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_four_typed_arms_plus_wildcard_jump_table"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 89)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_two_typed_arms_sequential_chain"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 90)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_mixed_literal_and_typed_no_switch"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 91)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_without_stack_trace_still_works"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 92)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "named_wrapper_value_catches_callback_throw"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 93)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "catch_four_typed_arms_plus_bind_chain_rethrows_panic"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 94)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.exceptions"
     load_const "nested_catch_inner_catches_callee_throw"
     make_closure .<lambda($init_test_ns_exceptions_exceptions, 95)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -1191,37 +1288,61 @@ function exceptions.catch_mixed_literal_and_typed_no_switch_fn() -> int {
 
 function exceptions.catch_mixed_named_and_anonymous_bindings_fn() -> string {
     call user.exceptions.s15_fails_mixed
-    jump L5
+    jump L8
     load_var e
-    type_tag
-    dense_tag [NetErr, AuthErr, NotFoundErr, RateLimitErr]
-    jump_table [L4, L3, L2, L1], default L0
+    store_var _2
+    load_var _2
+    narrow_bind exceptions.NetErr, slot=2
+    pop_jump_if_false L0
+    jump L7
 
   L0:
     load_var e
+    store_var _3
+    load_var _3
+    narrow_bind exceptions.AuthErr, slot=3
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var e
+    store_var _4
+    load_var _4
+    narrow_bind exceptions.NotFoundErr, slot=4
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var e
+    is_type exceptions.RateLimitErr
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var e
     throw_if_panic
     load_const "unknown"
-    jump L5
+    jump L8
 
-  L1: RateLimitErr
+  L4:
     load_const "rate limited"
-    jump L5
-
-  L2: NotFoundErr
-    load_var e
-    load_field .path
-    jump L5
-
-  L3: AuthErr
-    load_var e
-    load_field .reason
-    jump L5
-
-  L4: NetErr
-    load_var e
-    load_field .url
+    jump L8
 
   L5:
+    load_var _4
+    load_field .path
+    jump L8
+
+  L6:
+    load_var _3
+    load_field .reason
+    jump L8
+
+  L7:
+    load_var _2
+    load_field .url
+
+  L8:
     return
 }
 
@@ -1971,7 +2092,9 @@ function exceptions.named_binding_int_access_value_fn() -> int {
 
   L0:
     load_var e
-    is_type int
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=2
     pop_jump_if_false L1
     jump L2
 
@@ -1980,7 +2103,7 @@ function exceptions.named_binding_int_access_value_fn() -> int {
     rethrow
 
   L2:
-    load_var e
+    load_var _3
     jump L4
 
   L3:
@@ -1996,7 +2119,9 @@ function exceptions.named_binding_string_access_value_fn() -> string {
     call user.exceptions.s2b_fails_10
     jump L4
     load_var e
-    is_type string
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
     pop_jump_if_false L0
     jump L3
 
@@ -2015,7 +2140,7 @@ function exceptions.named_binding_string_access_value_fn() -> string {
     jump L4
 
   L3:
-    load_var e
+    load_var _2
 
   L4:
     return
@@ -2025,7 +2150,9 @@ function exceptions.named_class_binding_access_field_fn() -> string {
     call user.exceptions.s3a_fails_16
     jump L2
     load_var e
-    is_type exceptions.NetworkError
+    store_var _2
+    load_var _2
+    narrow_bind exceptions.NetworkError, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -2034,7 +2161,7 @@ function exceptions.named_class_binding_access_field_fn() -> string {
     rethrow
 
   L1:
-    load_var e
+    load_var _2
     load_field .url
 
   L2:
@@ -2046,13 +2173,17 @@ function exceptions.named_class_binding_dispatch_access_fields_fn() -> string {
     call user.exceptions.s3a_fails_17
     jump L4
     load_var e
-    is_type exceptions.NetworkError
+    store_var _2
+    load_var _2
+    narrow_bind exceptions.NetworkError, slot=2
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    is_type exceptions.ParseError
+    store_var _3
+    load_var _3
+    narrow_bind exceptions.ParseError, slot=3
     pop_jump_if_false L1
     jump L2
 
@@ -2061,12 +2192,12 @@ function exceptions.named_class_binding_dispatch_access_fields_fn() -> string {
     rethrow
 
   L2:
-    load_var e
+    load_var _3
     load_field .message
     jump L4
 
   L3:
-    load_var e
+    load_var _2
     load_field .url
 
   L4:
@@ -2077,7 +2208,9 @@ function exceptions.named_panic_binding_division_by_zero_field_fn() -> int {
     call user.exceptions.s5b_divides_2
     jump L2
     load_var e
-    is_type baml.panics.DivisionByZero
+    store_var _2
+    load_var _2
+    narrow_bind baml.panics.DivisionByZero, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -2086,7 +2219,7 @@ function exceptions.named_panic_binding_division_by_zero_field_fn() -> int {
     rethrow
 
   L1:
-    load_var e
+    load_var _2
     load_field .dividend
 
   L2:
@@ -2097,7 +2230,9 @@ function exceptions.named_panic_binding_index_out_of_bounds_fields_fn() -> int {
     call user.exceptions.s5b_oob_2
     jump L2
     load_var e
-    is_type baml.panics.IndexOutOfBounds
+    store_var _2
+    load_var _2
+    narrow_bind baml.panics.IndexOutOfBounds, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -2106,7 +2241,7 @@ function exceptions.named_panic_binding_index_out_of_bounds_fields_fn() -> int {
     rethrow
 
   L1:
-    load_var e
+    load_var _2
     load_field .index
 
   L2:
@@ -2117,7 +2252,9 @@ function exceptions.named_panic_binding_index_out_of_bounds_length_fn() -> int {
     call user.exceptions.s5b_oob_2
     jump L2
     load_var e
-    is_type baml.panics.IndexOutOfBounds
+    store_var _2
+    load_var _2
+    narrow_bind baml.panics.IndexOutOfBounds, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -2126,7 +2263,7 @@ function exceptions.named_panic_binding_index_out_of_bounds_length_fn() -> int {
     rethrow
 
   L1:
-    load_var e
+    load_var _2
     load_field .length
 
   L2:
@@ -2138,7 +2275,9 @@ function exceptions.named_panic_binding_integer_overflow_message_fn() -> string 
     call user.exceptions.s5b_overflow_to_string
     jump L2
     load_var e
-    is_type baml.panics.IntegerOverflow
+    store_var _3
+    load_var _3
+    narrow_bind baml.panics.IntegerOverflow, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -2147,7 +2286,7 @@ function exceptions.named_panic_binding_integer_overflow_message_fn() -> string 
     rethrow
 
   L1:
-    load_var e
+    load_var _3
     load_field .message
 
   L2:
@@ -2158,7 +2297,9 @@ function exceptions.named_panic_binding_map_key_not_found_field_fn() -> string {
     call user.exceptions.s5b_bad_3
     jump L2
     load_var e
-    is_type baml.panics.MapKeyNotFound
+    store_var _2
+    load_var _2
+    narrow_bind baml.panics.MapKeyNotFound, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -2167,7 +2308,7 @@ function exceptions.named_panic_binding_map_key_not_found_field_fn() -> string {
     rethrow
 
   L1:
-    load_var e
+    load_var _2
     load_field .key
 
   L2:
@@ -2175,7 +2316,7 @@ function exceptions.named_panic_binding_map_key_not_found_field_fn() -> string {
 }
 
 function exceptions.named_wrapper_value_catches_callback_throw_fn() -> string {
-    load_global user.exceptions.s17_risky_cb
+    load_const user.exceptions.s17_risky_cb
     call user.exceptions.s17_forward_cb
     jump L2
     load_var e
@@ -2909,6 +3050,7 @@ function exceptions.s17_direct_cb(cb: (int) -> string throws never) -> string {
 }
 
 function exceptions.s17_forward_cb(cb: (int) -> string throws never) -> string {
+    load_type unknown
     load_var cb
     call user.exceptions.s17_direct_cb
     return

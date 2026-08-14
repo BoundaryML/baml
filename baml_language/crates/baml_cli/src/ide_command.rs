@@ -23,20 +23,37 @@ pub(crate) enum IdeCommand {
     Install(IdeInstallArgs),
 }
 
+/// Install the active toolchain's BAML editor extension.
+///
+/// Select Cursor or VS Code explicitly, or use `--output-dir` to copy the VSIX for a
+/// manual installation. With no option, BAML selects an available supported
+/// editor.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Install into the detected editor:
+    baml ide install
+
+  Install into Cursor:
+    baml ide install --cursor
+
+  Copy the extension for manual installation:
+    baml ide install --output-dir ./extensions")]
 pub(crate) struct IdeInstallArgs {
     /// Install the active toolchain's BAML VSIX into Cursor.
-    #[arg(long)]
+    #[arg(long, help_heading = "Editor options")]
     pub cursor: bool,
     /// Install the active toolchain's BAML VSIX into VS Code.
-    #[arg(long)]
+    #[arg(long, help_heading = "Editor options")]
     pub code: bool,
     /// Copy the active toolchain's BAML VSIX into a directory for manual
     /// install.
-    // Named `--dir` rather than `--path`: `--path` is ambiguous about
-    // whether it takes a file or a directory, and this flag only accepts
-    // a directory.
-    #[arg(long)]
+    #[arg(
+        long = "output-dir",
+        alias = "dir",
+        value_name = "PATH",
+        help_heading = "Editor options"
+    )]
     pub dir: Option<PathBuf>,
 }
 
@@ -173,7 +190,7 @@ fn manual_install_help(ide: &str, os: HostOs) -> String {
 
   1. Save baml-vscode.vsix somewhere easy to find:
 
-         baml ide install --dir {dir}
+         baml ide install --output-dir {dir}
 
   2. In {ide}, press {chord} and run "Extensions: Install from VSIX...".
 
@@ -191,6 +208,14 @@ fn active_toolchain_vsix() -> Result<PathBuf> {
         .ok_or_else(|| anyhow!("failed to determine active BAML toolchain root"))?;
     let vsix = toolchain_root.join("assets").join("baml-vscode.vsix");
     if !vsix.exists() {
+        // A local build has no assets/ next to it, so say that plainly rather
+        // than reporting a missing file the developer never expected to exist.
+        if let Some(local) = env::var_os("BAML_WRAPPER_LOCAL_TOOLCHAIN") {
+            anyhow::bail!(
+                "baml ide install needs a managed BAML toolchain, but the active one is a local binary at {}.\nThe VS Code extension ships with released toolchains only.\nRun: baml toolchain use canary",
+                Path::new(&local).display()
+            );
+        }
         anyhow::bail!(
             "active BAML toolchain does not include assets/baml-vscode.vsix at {}",
             vsix.display()
@@ -231,7 +256,7 @@ mod tests {
 
     #[test]
     fn install_dir_flag_binds() {
-        let parsed = Wrapper::try_parse_from(["install", "--dir", "out"]).unwrap();
+        let parsed = Wrapper::try_parse_from(["install", "--output-dir", "out"]).unwrap();
         assert_eq!(parsed.args.dir, Some(PathBuf::from("out")));
     }
 
@@ -250,7 +275,7 @@ Install it manually instead:
 
   1. Save baml-vscode.vsix somewhere easy to find:
 
-         baml ide install --dir %USERPROFILE%\Downloads
+         baml ide install --output-dir %USERPROFILE%\Downloads
 
   2. In VS Code, press Ctrl+Shift+P and run "Extensions: Install from VSIX...".
 

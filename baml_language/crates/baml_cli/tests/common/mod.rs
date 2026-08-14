@@ -23,15 +23,16 @@
 // path for free. The *right* fix is cargo's artifact dependencies (RFC 3028):
 //
 //     [dev-dependencies]
-//     baml_pack_host = { workspace = true, artifact = "bin" }
+//     baml_pack_host = { workspace = true, artifact = "bin:baml-pack-host" }
 //
-// With that, `env!("CARGO_BIN_FILE_baml_pack_host_baml-pack-host")` would give
-// us the binary path, cargo would handle rebuilds, and we'd delete the runtime
-// build below. But `artifact = "bin"` requires `-Z bindeps` and is nightly-only
-// as of Rust 1.93 (2026-01). The workspace is pinned to stable, so until that
-// stabilizes we shell out to `cargo build -p baml_pack_host` from inside the
-// test (real cargo freshness tracking, no new dev-deps). `baml pack` locates
-// the host as a sibling of the running `baml-cli`, so we build it into the same
+// With that, `env!("CARGO_BIN_FILE_BAML_PACK_HOST_baml-pack-host")` would give
+// us the binary path, cargo would handle rebuilds, and we'd delete the setup
+// below. But `artifact = "bin"` requires `-Z bindeps` and is nightly-only as of
+// Rust 1.93 (2026-01). The workspace is pinned to stable, so nextest runs one
+// filtered setup script that builds the host before it launches any test case.
+// Plain `cargo test` has no setup-script facility; its single test process uses
+// the fallback build in [`ensure_built`]. `baml pack` locates the host as a
+// sibling of the running `baml-cli`, so both paths build it into the same
 // `target/<profile>` directory `env!` points at.
 
 #![allow(dead_code)] // Shared helpers; individual tests use a subset.
@@ -39,8 +40,9 @@
 
 use std::{path::PathBuf, process::Command, sync::OnceLock};
 
-/// Memoized build: `cargo build -p baml_pack_host` runs at most once per test
-/// binary regardless of how many tests call in.
+/// Memoized host discovery for this test process. Nextest's filtered setup
+/// script prebuilds the host once for the whole run; plain `cargo test` falls
+/// back to one build shared by every case in its single process.
 static BUILT: OnceLock<BuiltPaths> = OnceLock::new();
 
 #[derive(Clone, Debug)]
@@ -90,23 +92,24 @@ pub fn ensure_built() -> &'static BuiltPaths {
             .expect("CARGO_BIN_EXE_baml-cli should have a parent directory")
             .to_path_buf();
 
-        // Build `baml-pack-host` for the same profile the test binary uses —
-        // otherwise `cargo test --release` would build into `target/debug` while
-        // `env!` resolves `baml-cli` from `target/release`, and the two would not
-        // be siblings.
-        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-        let mut build = Command::new(&cargo);
-        build.args(["build", "-p", "baml_pack_host"]);
-        if profile() == "release" {
-            build.arg("--release");
-        }
-        let status = build.status().expect("spawn cargo build");
-        assert!(
-            status.success(),
-            "cargo build for baml_pack_host failed — see output above",
-        );
-
         let baml_pack_host = bin_dir.join(bin_name("baml-pack-host"));
+        let setup_prebuilt = std::env::var("BAML_PACK_HOST_PREBUILT").is_ok_and(|v| v == "1");
+        if !setup_prebuilt {
+            // Plain `cargo test` does not run nextest setup scripts. Build the
+            // host for the same profile as the test binary once per process.
+            let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+            let mut build = Command::new(&cargo);
+            build.args(["build", "-p", "baml_pack_host"]);
+            if profile() == "release" {
+                build.arg("--release");
+            }
+            let status = build.status().expect("spawn cargo build");
+            assert!(
+                status.success(),
+                "cargo build for baml_pack_host failed — see output above",
+            );
+        }
+
         assert!(
             baml_cli.exists(),
             "baml-cli not found at {} (CARGO_BIN_EXE_baml-cli)",
@@ -114,7 +117,7 @@ pub fn ensure_built() -> &'static BuiltPaths {
         );
         assert!(
             baml_pack_host.exists(),
-            "baml-pack-host not found at {} after build",
+            "baml-pack-host not found at {}; nextest setup or the plain cargo-test fallback should have built it",
             baml_pack_host.display()
         );
         BuiltPaths {

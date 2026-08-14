@@ -11,10 +11,11 @@ describe('BamlStream', () => {
         // Seed any handle (a function ref is fine for the encoder test).
         const [key, ht] = _seedFunctionRefHandle(42);
         const h = new BamlHandle(key, ht);
-        const stream = BamlStream._fromHandle<number, string>(h);
+        const stream = BamlStream._fromHandle<number, string>(h, 'ai.stream.Stream');
 
         const innerH = stream._toHandle();
         expect(innerH).toBeInstanceOf(BamlHandle);
+        expect((stream as unknown as { _classFqn: string })._classFqn).toBe('ai.stream.Stream');
 
         // Encoding a stream-typed value should not throw.
         expect(() => encodeCallArgs({ self: stream }, { callId: 1n })).not.toThrow();

@@ -15,36 +15,36 @@ import {
 import { round_trip_lorem_resume_from_ipsum } from "./baml_sdk/ipsum/index.js";
 
 describe("roundtrip routing", () => {
-  it("make_foo", () => expect(make_foo(3).v).toBe(3));
-  it("round_trip_foo", () => {
+  it("routing_make_foo", () => expect(make_foo(3).v).toBe(3));
+  it("routing_round_trip_foo", () => {
     const f = new Foo({ v: 10 });
     expect(round_trip_foo(f)).toEqual(f);
   });
-  it("round_trip_thing_from_ab", () => {
+  it("routing_round_trip_thing_from_ab", () => {
     const t = new Thing({ v: 1 });
     expect(round_trip_thing_from_ab(t)).toEqual(t);
   });
-  it("round_trip_root_foo_from_ab", () => {
+  it("routing_round_trip_root_foo_from_ab", () => {
     const f = new Foo({ v: 2 });
     expect(round_trip_root_foo_from_ab(f)).toEqual(f);
   });
-  it("round_trip_deep_thing_from_a", () => {
+  it("routing_round_trip_deep_thing_from_a", () => {
     const t = new Thing({ v: 4 });
     expect(round_trip_deep_thing_from_a(t)).toEqual(t);
   });
-  it("round_trip_deep_thing_from_lorem", () => {
+  it("routing_round_trip_deep_thing_from_lorem", () => {
     const t = new Thing({ v: 5 });
     expect(round_trip_deep_thing_from_lorem(t)).toEqual(t);
   });
-  it("round_trip_resume", () => {
+  it("routing_round_trip_resume", () => {
     const r = new Resume({ name: "ada", email: null });
     expect(round_trip_resume(r)).toEqual(r);
   });
-  it("round_trip_root_foo", () => {
+  it("routing_round_trip_root_foo", () => {
     const f = new Foo({ v: 6 });
     expect(round_trip_root_foo(f)).toEqual(f);
   });
-  it("round_trip_lorem_resume_from_ipsum", () => {
+  it("routing_round_trip_lorem_resume_from_ipsum", () => {
     const r = new Resume({ name: "grace", email: "g@x.com" });
     expect(round_trip_lorem_resume_from_ipsum(r)).toEqual(r);
   });

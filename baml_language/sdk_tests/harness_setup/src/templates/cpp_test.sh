@@ -34,6 +34,13 @@ HAVE_TESTS=0
 if compgen -G "tests/*.cc" > /dev/null; then
     HAVE_TESTS=1
 fi
+# tests/cxx20/*.cc need C++20 (co_await coverage); they build as a second
+# executable only when the toolchain has C++20, so the main test binary
+# keeps verifying that the generated SDK compiles as plain C++17.
+HAVE_CXX20_TESTS=0
+if compgen -G "tests/cxx20/*.cc" > /dev/null; then
+    HAVE_CXX20_TESTS=1
+fi
 
 # Consumer-shaped shim project: add_subdirectory over the generated SDK,
 # plus the fixture tests when present.
@@ -49,6 +56,18 @@ mkdir -p "$BUILD_DIR"
         echo 'target_link_libraries(fixture_tests PRIVATE baml::sdk)'
         echo 'if(NOT MSVC)'
         echo '  target_compile_options(fixture_tests PRIVATE -Wall -Wextra)'
+        echo 'endif()'
+    fi
+    if [ "$HAVE_CXX20_TESTS" = 1 ]; then
+        echo 'if("cxx_std_20" IN_LIST CMAKE_CXX_COMPILE_FEATURES)'
+        echo "  file(GLOB CXX20_TEST_SOURCES \"$GENERATED/tests/cxx20/*.cc\")"
+        echo '  add_executable(fixture_tests_cxx20 ${CXX20_TEST_SOURCES})'
+        echo '  target_compile_features(fixture_tests_cxx20 PRIVATE cxx_std_20)'
+        echo "  target_include_directories(fixture_tests_cxx20 PRIVATE \"$COMMON_DIR\")"
+        echo '  target_link_libraries(fixture_tests_cxx20 PRIVATE baml::sdk)'
+        echo '  if(NOT MSVC)'
+        echo '    target_compile_options(fixture_tests_cxx20 PRIVATE -Wall -Wextra)'
+        echo '  endif()'
         echo 'endif()'
     fi
 } > "$BUILD_DIR/CMakeLists.txt"
@@ -81,4 +100,12 @@ if [ "$MODE" = run ]; then
     esac
     BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
         "$BUILD_DIR/build/fixture_tests"
+    if [ "$HAVE_CXX20_TESTS" = 1 ]; then
+        if [ -x "$BUILD_DIR/build/fixture_tests_cxx20" ]; then
+            BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
+                "$BUILD_DIR/build/fixture_tests_cxx20"
+        else
+            echo "note: toolchain lacks C++20; tests/cxx20 skipped"
+        fi
+    fi
 fi

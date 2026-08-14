@@ -13,6 +13,7 @@
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
 pub mod body;
+pub mod body_type_refs;
 mod builder;
 pub mod contributions;
 pub mod diagnostic;
@@ -31,11 +32,11 @@ use std::sync::Arc;
 
 use baml_base::SourceFile;
 pub use builder::SemanticIndexBuilder;
-pub use semantic_index::PathResolution;
+pub use semantic_index::{ExprMetadataKey, ExprMetadataScope, PathResolution};
 
 use crate::{
     contributions::FileSymbolContributions,
-    item_tree::{ItemTree, ItemTreeSourceMap},
+    item_tree::ItemTree,
     semantic_index::{FileSemanticIndex, ScopeBindings},
 };
 
@@ -144,8 +145,26 @@ unsafe impl salsa::Update for FileAst {
 pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let path = file.path(db);
+    let package = file_package::file_package(db, file);
+    let test_owner = if package.namespace_path.is_empty() {
+        "root".to_string()
+    } else {
+        format!(
+            "root.{}",
+            package
+                .namespace_path
+                .iter()
+                .map(baml_base::Name::as_str)
+                .collect::<Vec<_>>()
+                .join(".")
+        )
+    };
     let (items, diagnostics, env_var_refs) =
-        baml_compiler2_ast::lower_file_with_path(&tree, Some(path.as_path()));
+        baml_compiler2_ast::lower_file_with_path_and_test_owner(
+            &tree,
+            Some(path.as_path()),
+            Some(&test_owner),
+        );
     FileAst {
         items,
         diagnostics,
@@ -194,18 +213,14 @@ pub fn file_symbol_contributions(
 /// Returns the item tree for a file (clones the Arc — O(1)).
 ///
 /// Not tracked — the item tree is cached via `file_semantic_index`.
-/// This helper is for convenience in downstream queries.
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+///
+/// `pub(crate)`: the raw `ItemTree` is an implementation detail behind the
+/// PPIR item-data firewall (`baml_compiler2_ppir::item_data`). Consumers use
+/// the enumeration (`file_classes`/`file_functions`/…) and lookup
+/// (`class_data`/`function_data`/…) queries there, never the tree itself.
+pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
-}
-
-/// Returns the item tree source map for a file (clones the Arc — O(1)).
-///
-/// Not tracked — the source map is cached via `file_semantic_index`.
-pub fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
-    let index = file_semantic_index(db, file);
-    Arc::clone(&index.item_tree_source_map)
 }
 
 /// Returns the `ScopeBindings` for a given scope.
@@ -224,18 +239,4 @@ pub fn scope_bindings_query<'db>(
 /// Returns the env var references found in a file's expression bodies.
 pub fn file_env_var_refs(db: &dyn Db, file: SourceFile) -> &[baml_compiler2_ast::EnvVarRef] {
     &file_semantic_index(db, file).env_var_refs
-}
-
-/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
-///
-/// Not tracked — callers should use the cached `file_semantic_index` result.
-/// Returns `None` if `expr_id` was not recorded (i.e., single-segment paths
-/// or non-path expressions).
-pub fn path_resolution_query(
-    db: &dyn Db,
-    file: baml_base::SourceFile,
-    expr_id: baml_compiler2_ast::ExprId,
-) -> Option<PathResolution> {
-    let index = file_semantic_index(db, file);
-    index.path_resolution(expr_id).cloned()
 }

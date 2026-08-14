@@ -2,7 +2,7 @@ name: BAML Release - Build bridge_cffi
 
 # Builds the standalone `bridge_cffi` engine cdylib, one per target. This is a
 # LANGUAGE-NEUTRAL artifact: every dylib-loader SDK dlopens the same library at
-# runtime (the Rust `baml_bridge` crate today; the Go bridge when it migrates),
+# runtime (including the Rust `baml_bridge` crate and public `baml-go` module),
 # so it is built once here rather than inside any one language's SDK workflow.
 #
 # Adapts the legacy `libbaml-cffi` job shape (build -> rename to the loader's
@@ -38,10 +38,10 @@ name: BAML Release - Build bridge_cffi
 #   - linux musl x86_64/aarch64: `cross`, aws-lc-sys builds fine. musl defaults
 #     to `+crt-static`, which cannot emit a cdylib, so the build disables
 #     `crt-static` (RUSTFLAGS in the build step + `Cross.toml` passthrough) to
-#     produce a musl `.so` dynamically linked against musl libc. Experimental
-#     until an Alpine (or other real musl) dlopen smoke proves a consumer loads
-#     it.
-#   - windows aarch64: experimental until a native arm64 smoke runner exists.
+#     produce a musl `.so` dynamically linked against musl libc. The C++ and C#
+#     release consumers execute it in real musl userspace.
+#   - windows aarch64: required after native C++ and C# consumer execution on
+#     the windows-11-arm runner.
 #   - windows x86_64: `AWS_LC_SYS_PREBUILT_NASM=1` (below) lets aws-lc-sys use
 #     its prebuilt NASM objects if the runner has no NASM.
 
@@ -75,9 +75,9 @@ defaults:
 jobs:
   # The cffi build matrix is generated from the repository's platform contract
   # (`release/platforms.json`) so the target set + per-target build config live
-  # in one machine-readable place, not a hand-copied YAML list. The experimental
-  # musl + arm64-Windows targets carry `experimental: true` in the contract,
-  # which drives `continue-on-error` on the build job below.
+  # in one machine-readable place, not a hand-copied YAML list. Any future
+  # experimental target carries that tier in the contract, which drives
+  # `continue-on-error` on the build job below.
   matrix:
     name: Compute target matrix
     runs-on: ubuntu-latest
@@ -158,6 +158,19 @@ jobs:
         with:
           targets: ${{ matrix._.target }}
           enable-cache: false
+          skip-protoc: true
+
+      - name: Exclude optional AWS-LC jitter exports on Windows
+        if: contains(matrix._.target, 'windows-msvc')
+        shell: bash
+        run: |
+          set -euo pipefail
+          # aws-lc-sys 0.41.0's bundled jitter-entropy library marks nine
+          # internal functions __declspec(dllexport) under MSVC. Static
+          # linkage would therefore widen bridge_cffi.dll's public ABI. Use
+          # aws-lc-sys's supported non-FIPS opt-out on Windows only; AWS-LC
+          # remains the selected crypto backend and uses Windows OS entropy.
+          echo 'AWS_LC_SYS_NO_JITTER_ENTROPY=1' >> "$GITHUB_ENV"
 
       - name: Install cross (Linux targets)
         if: matrix._.use_cross
@@ -172,19 +185,109 @@ jobs:
           TARGET: ${{ matrix._.target }}
         run: |
           set -euo pipefail
+          # Rust panic locations otherwise retain runner/workspace/toolchain
+          # absolute paths in the stripped cdylib. Map both native-runner and
+          # cross-container roots to stable relative identities before build.
+          source_root="${GITHUB_WORKSPACE:-$(pwd -P)}"
+          rust_sysroot="$(rustc --print sysroot)"
+          cargo_bin="$(command -v cargo)"
+          cargo_root="$(cd "$(dirname "$cargo_bin")/.." && pwd -P)"
+          export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }\
+          --remap-path-prefix=$source_root=baml-source \
+          --remap-path-prefix=$rust_sysroot=rust-toolchain \
+          --remap-path-prefix=$cargo_root=cargo-home \
+          --remap-path-prefix=/project=baml-source \
+          --remap-path-prefix=/cargo=cargo-home \
+          --remap-path-prefix=/rust=rust-toolchain"
+          if [[ "$TARGET" == *-windows-msvc ]]; then
+            # Git Bash reports cargo's root as a POSIX path while rustc, MSVC,
+            # and CMake embed native drive-letter paths. Remap the exact native
+            # forms that those compilers see; do not assume a runner drive or
+            # username.
+            source_root_native="$(cygpath -aw "$source_root")"
+            cargo_root_native="$(cygpath -aw "$cargo_root")"
+            rust_sysroot_native="$(cygpath -aw "$rust_sysroot")"
+            source_root_native_short="$(cygpath --absolute --windows --short-name "$source_root")"
+            cargo_root_native_short="$(cygpath --absolute --windows --short-name "$cargo_root")"
+            rust_sysroot_native_short="$(cygpath --absolute --windows --short-name "$rust_sysroot")"
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }\
+          --remap-path-prefix=$source_root_native=baml-source \
+          --remap-path-prefix=$cargo_root_native=cargo-home \
+          --remap-path-prefix=$rust_sysroot_native=rust-toolchain \
+          --remap-path-prefix=$source_root_native_short=baml-source \
+          --remap-path-prefix=$cargo_root_native_short=cargo-home \
+          --remap-path-prefix=$rust_sysroot_native_short=rust-toolchain"
+            # MSVC's /pathmap only sanitizes debug metadata, not AWS-LC's
+            # __FILE__ strings. Use clang-cl for the native dependency build on
+            # both Windows targets: it is MSVC ABI-compatible and supports
+            # -ffile-prefix-map for debug data and predefined macros. CMake/cc
+            # may pass 8.3 short paths, so map both native representations.
+            command -v clang-cl >/dev/null
+            target_key="${TARGET//-/_}"
+            export "CC_${target_key}=clang-cl"
+            export "CXX_${target_key}=clang-cl"
+            native_path_maps="\
+          /clang:-ffile-prefix-map=$source_root_native=baml-source \
+          /clang:-ffile-prefix-map=$cargo_root_native=cargo-home \
+          /clang:-ffile-prefix-map=$rust_sysroot_native=rust-toolchain \
+          /clang:-ffile-prefix-map=$source_root_native_short=baml-source \
+          /clang:-ffile-prefix-map=$cargo_root_native_short=cargo-home \
+          /clang:-ffile-prefix-map=$rust_sysroot_native_short=rust-toolchain"
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          elif [[ "$TARGET" == *-unknown-linux-gnu ]]; then
+            # cross 0.2.5's GNU images intentionally use GCC 5 to retain an old
+            # glibc floor. GCC 5 supports debug-prefix remapping but predates
+            # -ffile-prefix-map/-fmacro-prefix-map. Override the diagnostic-only
+            # __FILE__ identity so AWS-LC cannot retain its /cargo source root,
+            # while still remapping any debug metadata before stripping.
+            native_path_maps="\
+          -fdebug-prefix-map=$source_root=baml-source \
+          -fdebug-prefix-map=$cargo_root=cargo-home \
+          -fdebug-prefix-map=$rust_sysroot=rust-toolchain \
+          -fdebug-prefix-map=/project=baml-source \
+          -fdebug-prefix-map=/cargo=cargo-home \
+          -fdebug-prefix-map=/rust=rust-toolchain \
+          -Wno-builtin-macro-redefined \
+          -D__FILE__=\"baml-source/native\""
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          else
+            native_path_maps="\
+          -ffile-prefix-map=$source_root=baml-source \
+          -ffile-prefix-map=$cargo_root=cargo-home \
+          -ffile-prefix-map=$rust_sysroot=rust-toolchain \
+          -ffile-prefix-map=/project=baml-source \
+          -ffile-prefix-map=/cargo=cargo-home \
+          -ffile-prefix-map=/rust=rust-toolchain"
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          fi
           # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
           # release artifact. `release-bridge-cffi` = release + panic = "unwind".
           #
+          # Setting RUSTFLAGS overrides target rustflags from Cargo config.
+          # Preserve the x64 Windows stack reservation explicitly.
+          if [[ "$TARGET" == "x86_64-pc-windows-msvc" ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=/STACK:67108864"
+          fi
+          if [[ "$TARGET" == "wasm32-unknown-unknown" ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg=getrandom_backend=\"wasm_js\""
+          fi
           # musl targets default to `+crt-static`, and rustc cannot emit a
           # cdylib under a static CRT — it silently drops the crate type and
           # produces only the `.rlib`. Disable `crt-static` so the build yields
           # a real musl `.so`, dynamically linked against musl libc and
-          # dlopen-loadable on a musl consumer (e.g. Alpine). Scoped to musl so
-          # the other targets keep their `.cargo/config.toml` rustflags (the
-          # Windows `/STACK` link-arg), which a blanket RUSTFLAGS would clobber.
-          # `cross` forwards RUSTFLAGS into the build container via `Cross.toml`.
+          # dlopen-loadable on a musl consumer (e.g. Alpine).
           if [[ "$TARGET" == *-musl ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
+          fi
+          # The shared macOS artifact is installed into host-language packages
+          # under an ecosystem-specific filename. Give the dylib a portable ID
+          # at production time so every consumer receives the exact producer
+          # bytes; package assembly must never rewrite a checksummed native.
+          if [[ "$TARGET" == *-apple-darwin ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-Wl,-install_name,@rpath/libbridge_cffi.dylib"
           fi
           ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "$TARGET"
 
@@ -224,6 +327,18 @@ jobs:
           echo "Built ${asset}"
           cat "${outdir}/${asset}.sha256"
 
+      - name: Verify shipping artifact hygiene
+        working-directory: baml_language
+        env:
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
+          TARGET: ${{ matrix._.target }}
+        run: |
+          set -euo pipefail
+          ../scripts/baml-bridge-cffi-hygiene verify \
+            --native "${ARTIFACT_DIR}/${ARTIFACT_ASSET}" \
+            --target "$TARGET"
+
       - name: Smoke test the public C and C++ ABI (Unix)
         if: ${{ matrix._.smoke && !contains(matrix._.target, 'windows') }}
         working-directory: baml_language
@@ -255,6 +370,35 @@ jobs:
           $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
           $expected = jq -r .canonical_version ..\release-plan.json
           $library = "$env:ARTIFACT_DIR/$env:ARTIFACT_ASSET"
+
+          # Rust exports the bridge entry points through linker directives,
+          # while native static dependencies may carry their own dllexport
+          # directives. Inspect the final DLL so an accidental dependency
+          # export fails at the producer boundary before artifact upload.
+          $dump = & cmd.exe /d /s /c "call `"$vcvars`" $env:MSVC_ARCH >nul && dumpbin /nologo /exports `"$library`""
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $actualExports = @(
+            $dump |
+              ForEach-Object {
+                if ($_ -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+(\S+)') {
+                  $Matches[1]
+                }
+              } |
+              Sort-Object -CaseSensitive -Unique
+          )
+          $expectedExports = @(
+            Get-Content ..\release\bridge-cffi-public-exports.txt |
+              Where-Object { $_ -ne "" } |
+              Sort-Object -CaseSensitive -Unique
+          )
+          $exportDifference = Compare-Object -CaseSensitive -ReferenceObject $expectedExports -DifferenceObject $actualExports
+          if ($exportDifference) {
+            $exportDifference | Format-Table | Out-String | Write-Host
+            throw "bridge_cffi.dll public exports differ from the release allowlist"
+          }
+
           & cmd.exe /d /s /c "call `"$vcvars`" $env:MSVC_ARCH && python3 crates/bridge_cffi/tests/run_abi_smoke.py `"$library`" `"$expected`""
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE

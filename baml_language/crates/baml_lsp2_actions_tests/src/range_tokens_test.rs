@@ -6,8 +6,9 @@
 mod tests {
     use std::path::Path;
 
-    use baml_lsp2_actions::tokens::{semantic_tokens, semantic_tokens_in_range};
+    use baml_lsp2_actions::tokens::{SemanticTokenType, semantic_tokens, semantic_tokens_in_range};
     use baml_project::ProjectDatabase;
+    use text_size::{TextRange, TextSize};
 
     fn check(src: &str) {
         let mut db = ProjectDatabase::new();
@@ -49,5 +50,36 @@ function use_it(b: Box<int>) -> int {
 }
 "#,
         );
+    }
+
+    #[test]
+    fn qualified_type_tokens_are_in_document_order() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new("."));
+        db.add_or_update_file(Path::new("ns_foo/types.baml"), "class Bar {}\n");
+        let source = "class Qualified { value: root.foo.Bar }\n";
+        let file = db.add_or_update_file(Path::new("ordered.baml"), source);
+
+        let tokens = semantic_tokens(&db, file);
+        assert!(
+            tokens
+                .windows(2)
+                .all(|pair| pair[0].range.start() <= pair[1].range.start()),
+            "semantic token ranges must be ordered for LSP delta encoding: {tokens:?}"
+        );
+
+        for (offset, _) in source.match_indices('.') {
+            let range = TextRange::at(
+                TextSize::new(u32::try_from(offset).unwrap()),
+                TextSize::new(1),
+            );
+            let token = tokens
+                .iter()
+                .find(|token| token.range == range)
+                .unwrap_or_else(|| {
+                    panic!("missing semantic token for namespace separator {range:?}")
+                });
+            assert_eq!(token.token_type, SemanticTokenType::Namespace);
+        }
     }
 }

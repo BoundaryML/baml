@@ -108,8 +108,8 @@ func TestEnumResult(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected DynamicEnum, got %T: %v", result, result)
 	}
-	if e.Name != "Color" {
-		t.Fatalf("expected enum name 'Color', got %q", e.Name)
+	if e.Name != "user.Color" {
+		t.Fatalf("expected enum name 'user.Color', got %q", e.Name)
 	}
 	if e.Value != "Red" {
 		t.Fatalf("expected enum value 'Red', got %q", e.Value)
@@ -126,8 +126,8 @@ func TestClassResult(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected DynamicClass, got %T: %v", result, result)
 	}
-	if c.Name != "Point" {
-		t.Fatalf("expected class name 'Point', got %q", c.Name)
+	if c.Name != "user.Point" {
+		t.Fatalf("expected class name 'user.Point', got %q", c.Name)
 	}
 	if c.Fields["x"] != int64(10) || c.Fields["y"] != int64(20) {
 		t.Fatalf("expected {x:10, y:20}, got %v", c.Fields)
@@ -146,8 +146,8 @@ func TestNestedClass(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected DynamicClass, got %T: %v", result, result)
 	}
-	if c.Name != "Contact" {
-		t.Fatalf("expected class name 'Contact', got %q", c.Name)
+	if c.Name != "user.Contact" {
+		t.Fatalf("expected class name 'user.Contact', got %q", c.Name)
 	}
 	if c.Fields["name"] != "Bob" {
 		t.Fatalf("expected name=Bob, got %v", c.Fields["name"])

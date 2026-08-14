@@ -3910,6 +3910,7 @@ class BamlValueUnionVariant final : public ::google::protobuf::MessageLite
     kValueFieldNumber = 6,
     kIsOptionalFieldNumber = 2,
     kIsSinglePatternFieldNumber = 3,
+    kSelectedOptionIndexFieldNumber = 8,
   };
   // string name = 1;
   void clear_name() ;
@@ -3991,11 +3992,22 @@ class BamlValueUnionVariant final : public ::google::protobuf::MessageLite
   void _internal_set_is_single_pattern(bool value);
 
   public:
+  // optional uint32 selected_option_index = 8;
+  bool has_selected_option_index() const;
+  void clear_selected_option_index() ;
+  ::uint32_t selected_option_index() const;
+  void set_selected_option_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_selected_option_index() const;
+  void _internal_set_selected_option_index(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlValueUnionVariant)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
+  static const ::google::protobuf::internal::TcParseTable<3, 7,
                                    2, 71,
                                    2>
       _table_;
@@ -4023,6 +4035,7 @@ class BamlValueUnionVariant final : public ::google::protobuf::MessageLite
     ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE value_;
     bool is_optional_;
     bool is_single_pattern_;
+    ::uint32_t selected_option_index_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8434,6 +8447,34 @@ inline void BamlValueUnionVariant::set_allocated_value(::baml_bridge::cffi::v1::
 
   _impl_.value_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundValue*>(value);
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlValueUnionVariant.value)
+}
+
+// optional uint32 selected_option_index = 8;
+inline bool BamlValueUnionVariant::has_selected_option_index() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000040u) != 0;
+  return value;
+}
+inline void BamlValueUnionVariant::clear_selected_option_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_option_index_ = 0u;
+  _impl_._has_bits_[0] &= ~0x00000040u;
+}
+inline ::uint32_t BamlValueUnionVariant::selected_option_index() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_option_index)
+  return _internal_selected_option_index();
+}
+inline void BamlValueUnionVariant::set_selected_option_index(::uint32_t value) {
+  _internal_set_selected_option_index(value);
+  _impl_._has_bits_[0] |= 0x00000040u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_option_index)
+}
+inline ::uint32_t BamlValueUnionVariant::_internal_selected_option_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.selected_option_index_;
+}
+inline void BamlValueUnionVariant::_internal_set_selected_option_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_option_index_ = value;
 }
 
 // -------------------------------------------------------------------

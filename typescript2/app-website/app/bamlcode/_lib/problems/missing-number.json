@@ -1,0 +1,18 @@
+{
+  "slug": "missing-number",
+  "id": 268,
+  "title": "Missing Number",
+  "difficulty": "Easy",
+  "category": "Bit Manipulation",
+  "statement": "Given an array `nums` containing `n` distinct numbers in the range `[0, n]`, return the one number in the range that is missing from the array.\n\n**Example**\n\n```\nnums = [3, 0, 1]        => 2\nnums = [0, 1]           => 2\nnums = [9,6,4,2,3,5,7,0,1] => 8\n```",
+  "signature": "function MissingNumber(nums: int[]) -> int",
+  "starter": "function MissingNumber(nums: int[]) -> int {\n  // Return the missing number from the range [0, n].\n  return 0;\n}",
+  "solution": "function MissingNumber(nums: int[]) -> int {\n  let n = nums.length();\n  let total = n * (n + 1) / 2;\n  let sum = 0;\n  let i = 0;\n  while (i < n) {\n    sum += nums[i];\n    i += 1;\n  }\n  return total - sum;\n}",
+  "tests": [
+    { "call": "MissingNumber([3, 0, 1])", "expected": "2" },
+    { "call": "MissingNumber([0, 1])", "expected": "2" },
+    { "call": "MissingNumber([9, 6, 4, 2, 3, 5, 7, 0, 1])", "expected": "8" },
+    { "call": "MissingNumber([0])", "expected": "1", "hidden": true },
+    { "call": "MissingNumber([1])", "expected": "0", "hidden": true }
+  ]
+}

@@ -13,8 +13,8 @@
 //! - the full conversion matrix (`From` widenings and `TryFrom` narrowings,
 //!   owned and by-reference) between every comparable pair of members.
 //!
-//! The semantic impls (`render_with`, `is_subtype_of`, `Display`, the
-//! `lower_to_runtime` boundary) stay hand-written on the generated types.
+//! The semantic impls (`render_with`, `Display`, the `lower_to_runtime`
+//! boundary) stay hand-written on the generated types.
 
 use proc_macro::TokenStream;
 use quote::quote;

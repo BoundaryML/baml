@@ -43,6 +43,18 @@ function MakeRect(w: int, h: int) -> Rect {
 function RectOrDirection(useRect: bool) -> Rect | Direction {
   if (useRect) { Rect { width: 5, height: 10 } } else { Direction.East }
 }
+
+function MakeAdder(offset: int) -> (value: int) -> int throws never {
+  return (value: int) -> int { offset + value }
+}
+
+function MakeCounter(start: int) -> () -> int throws never {
+  let current = start;
+  return () -> int {
+    current += 1;
+    current
+  }
+}
 `;
 
 function makeRuntime(bamlSource: string): BamlRuntime {
@@ -112,6 +124,19 @@ describe('callFunctionSync', () => {
 
     test('function not found', () => {
         expect(() => callFunctionSync(rt, 'NonExistent', {})).toThrow();
+    });
+
+    test('returned closure accepts args and decodes results', () => {
+        const addTen = callFunctionSync(rt, 'MakeAdder', { offset: 10 }).result() as (value: number) => number;
+        expect(typeof addTen).toBe('function');
+        expect(addTen(5)).toBe(15);
+        expect(addTen(7)).toBe(17);
+    });
+
+    test('returned closure is reusable and retains captures', () => {
+        const nextValue = callFunctionSync(rt, 'MakeCounter', { start: 40 }).result() as () => number;
+        expect(nextValue()).toBe(41);
+        expect(nextValue()).toBe(42);
     });
 });
 

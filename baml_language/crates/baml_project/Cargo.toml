@@ -18,18 +18,20 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_codegen_types = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
+baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_mir = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
-baml_compiler2_tir = { workspace = true }
 baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_lsp2_actions = { workspace = true }
+baml_surface = { workspace = true }
 baml_type = { workspace = true }
 baml_workspace = { workspace = true }
 bex_vm_types = { workspace = true }

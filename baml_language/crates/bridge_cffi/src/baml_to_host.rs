@@ -19,9 +19,12 @@
 
 use std::{panic::AssertUnwindSafe, sync::Arc};
 
-use bex_project::{Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError};
+use bex_project::{
+    Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError,
+    UnhandledSpawnError,
+};
 use bridge_ctypes::{
-    CffiHandleTableOptions,
+    CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
     baml_bridge::cffi::{
         BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, baml_outbound_result,
     },
@@ -222,6 +225,21 @@ pub fn result_to_outbound(
     }
 }
 
+pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> {
+    let options = CffiHandleTableOptions::for_in_process();
+    let trace = bridge_ctypes::format_traceback_lines(error.trace.iter().map(|frame| {
+        (
+            frame.file_path.as_str(),
+            frame.error_line,
+            frame.function_name.as_str(),
+        )
+    }));
+    BamlOutboundResult {
+        result: Some(thrown_arm(error.value, trace, &options)),
+    }
+    .encode_to_vec()
+}
+
 /// Encode a pre-call host-boundary [`BridgeError`] as `BamlOutboundResult`
 /// envelope bytes (32c). These failures never entered the VM, so they carry an
 /// empty trace and ride the *same* decode path as engine errors via
@@ -243,8 +261,8 @@ pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
 
         // Bad function name / arguments → InvalidArgument.
         err @ (BridgeError::Ctypes(_)
-        | BridgeError::NullFunctionName
-        | BridgeError::InvalidFunctionName(_)
+        | BridgeError::MissingCallTarget
+        | BridgeError::FunctionHandleTypeArgs
         | BridgeError::FunctionNotFound { .. }
         | BridgeError::MissingArgument { .. }
         | BridgeError::InvalidCallId) => infra_error_arm(
@@ -308,6 +326,7 @@ pub async fn call_and_encode(
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_in_process();
+    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
 
     let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
         .catch_unwind()
@@ -321,4 +340,150 @@ pub async fn call_and_encode(
     };
 
     result.encode_to_vec()
+}
+
+fn partition_callable_args(
+    handle_key: u64,
+    params: impl IntoIterator<Item = (String, bool)>,
+    mut supplied: IndexMap<String, BexExternalValue>,
+) -> Result<BexArgs, BridgeError> {
+    let mut required = IndexMap::new();
+    let mut optional = IndexMap::new();
+    for (name, is_required) in params {
+        let value = supplied.shift_remove(&name);
+        if !is_required {
+            if let Some(value) = value {
+                optional.insert(name, value);
+            }
+            continue;
+        }
+        let Some(value) = value else {
+            return Err(BridgeError::MissingArgument {
+                function: format!("function handle {handle_key}"),
+                parameter: name,
+            });
+        };
+        required.insert(name, value);
+    }
+    optional.extend(supplied);
+    Ok(BexArgs { required, optional })
+}
+
+/// Invoke an engine-owned callable referenced by an ordinary handle-table key
+/// and encode the result through the same envelope path as a named call.
+pub async fn call_handle_and_encode(
+    runtime: Arc<dyn Bex>,
+    handle_key: u64,
+    BexArgs { required, optional }: BexArgs,
+    call_ctx: FunctionCallContext,
+) -> Vec<u8> {
+    let mut supplied = required;
+    supplied.extend(optional);
+    let (handle, args) = match HANDLE_TABLE.resolve(handle_key) {
+        Some(entry) => match &*entry {
+            CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                ty: bex_project::RuntimeTy::Function { params, .. },
+                heap_handle,
+            }) => {
+                let params = params.iter().enumerate().map(|(index, parameter)| {
+                    (
+                        parameter
+                            .name
+                            .as_ref()
+                            .map_or_else(|| format!("arg{index}"), ToString::to_string),
+                        parameter.is_required(),
+                    )
+                });
+                let args = match partition_callable_args(handle_key, params, supplied) {
+                    Ok(args) => args,
+                    Err(err) => return error_to_outbound(err),
+                };
+                (heap_handle.clone(), args)
+            }
+            _ => {
+                return error_to_outbound(BridgeError::Internal(
+                    "handle does not reference a BAML callable".to_string(),
+                ));
+            }
+        },
+        None => {
+            return error_to_outbound(BridgeError::Internal(
+                "callable handle is no longer live".to_string(),
+            ));
+        }
+    };
+
+    let options = CffiHandleTableOptions::for_in_process();
+    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
+    let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
+        .catch_unwind()
+        .await;
+    let result = match caught {
+        Ok(call_result) => result_to_outbound(call_result, &options),
+        Err(panic_info) => BamlOutboundResult {
+            result: Some(sdk_panic_arm(panic_message(panic_info.as_ref()), &options)),
+        },
+    };
+    result.encode_to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use bridge_ctypes::baml_bridge::cffi::{
+        BamlOutboundResult, baml_outbound_result, baml_outbound_value,
+    };
+    use indexmap::IndexMap;
+    use prost::Message;
+
+    use super::{error_to_outbound, partition_callable_args};
+    use crate::BridgeError;
+
+    #[test]
+    fn function_handle_type_args_are_classified_as_invalid_argument() {
+        let encoded = error_to_outbound(BridgeError::FunctionHandleTypeArgs);
+        let envelope = BamlOutboundResult::decode(encoded.as_slice()).unwrap();
+        let Some(baml_outbound_result::Result::Error(error)) = envelope.result else {
+            panic!("expected an error envelope");
+        };
+        let Some(baml_outbound_value::Value::ClassValue(class)) =
+            error.value.and_then(|value| value.value)
+        else {
+            panic!("expected a structured error class");
+        };
+        assert_eq!(class.name, "baml.errors.InvalidArgument");
+    }
+
+    #[test]
+    fn callable_missing_required_argument_is_classified_as_invalid_argument() {
+        let Err(err) =
+            partition_callable_args(42, [("required_value".to_string(), true)], IndexMap::new())
+        else {
+            panic!("omitting a required callable argument must fail");
+        };
+        let encoded = error_to_outbound(err);
+        let envelope = BamlOutboundResult::decode(encoded.as_slice()).unwrap();
+        let Some(baml_outbound_result::Result::Error(error)) = envelope.result else {
+            panic!("expected an error envelope");
+        };
+        let Some(baml_outbound_value::Value::ClassValue(class)) =
+            error.value.and_then(|value| value.value)
+        else {
+            panic!("expected a structured error class");
+        };
+        assert_eq!(class.name, "baml.errors.InvalidArgument");
+        let message = class
+            .fields
+            .iter()
+            .find(|field| field.key == "message")
+            .and_then(|field| field.value.as_ref())
+            .and_then(|value| value.value.as_ref());
+        assert!(
+            matches!(
+                message,
+                Some(baml_outbound_value::Value::StringValue(message))
+                    if message.contains("required_value")
+            ),
+            "missing-argument envelope should name the omitted callable parameter"
+        );
+    }
 }

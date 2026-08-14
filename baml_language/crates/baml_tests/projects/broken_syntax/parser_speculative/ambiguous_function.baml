@@ -1,11 +1,11 @@
-// This could initially look like either type
+// A colon-prefixed field selects the LLM grammar.
 function Ambiguous(input: string) -> string {
-  client GPT4  // This keyword determines it's an LLM function
-  // Even though it starts like it could be expression function
+  client: GPT4
+  // Missing prompt field.
 }
 
-// This one has a typo but intent is clear
+// A misspelled first field does not select the LLM grammar.
 function AnotherLLM(input: string) -> string {
-  clent GPT4  // Typo in "client"
-  prompt #"Process: {{ input }}"#  // "prompt" keyword helps disambiguate
+  clent: GPT4
+  prompt: `Process: ${input}`
 }

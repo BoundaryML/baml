@@ -7,23 +7,29 @@
 use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(js_name = stageRuntimeBytecode)]
-pub fn stage_runtime_bytecode(_bytecode: &[u8]) -> Result<(), JsError> {
-    Err(JsError::new(
-        "@boundaryml/baml-bridge-web runtime support is not implemented yet",
-    ))
-}
+mod errors;
+#[cfg(target_arch = "wasm32")]
+pub mod handle;
+#[cfg(target_arch = "wasm32")]
+pub mod host_value;
+#[cfg(target_arch = "wasm32")]
+pub mod media;
+#[cfg(target_arch = "wasm32")]
+pub mod runtime;
+#[cfg(target_arch = "wasm32")]
+mod version;
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(js_name = callFunctionSync)]
-pub fn call_function_sync(function_name: &str, encoded_args: &[u8]) -> Vec<u8> {
-    bridge_cffi::call_function_in_wasm_sync(function_name, encoded_args)
-}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(js_name = callFunction)]
-pub async fn call_function(function_name: &str, encoded_args: &[u8]) -> Vec<u8> {
-    bridge_cffi::call_function_in_wasm(function_name, encoded_args).await
+#[wasm_bindgen(start)]
+pub fn init() -> Result<(), JsValue> {
+    bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
+        language: bridge_cffi::BridgeLanguage::Web,
+        bridge_runtime_name: version::BRIDGE_RUNTIME_NAME.to_string(),
+        bridge_runtime_version: version::BRIDGE_RUNTIME_VERSION.to_string(),
+        toolchain_version: version::TOOLCHAIN_VERSION.to_string(),
+    })
+    .map(|_| ())
+    .map_err(|error| JsValue::from_str(&error))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -37,3 +43,25 @@ pub fn new_function_call() -> u64 {
 pub fn cancel_function_call(call_id: u64) -> bool {
     bridge_cffi::cancel_function_call_by_id(call_id)
 }
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = getVersion)]
+pub fn get_version() -> String {
+    get_toolchain_version()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = getToolchainVersion)]
+pub fn get_toolchain_version() -> String {
+    version::TOOLCHAIN_VERSION.to_string()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = getBridgeRuntimeVersion)]
+pub fn get_bridge_runtime_version() -> String {
+    version::BRIDGE_RUNTIME_VERSION.to_string()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = flushEvents)]
+pub fn flush_events() {}

@@ -48,7 +48,7 @@ from baml_sdk.throws_test import MyError, ParseJson, SleepMs, ThrowMyError
 _BAD_JSON = "{not valid json"
 
 
-def test_stdlib_error_surfaces_as_baml_error():
+def test_errors_stdlib_error_surfaces_as_baml_error():
     """`baml.json.parse` on bad input → `BamlError` whose `.value` is a
     `JsonParseError` (a plain pydantic model). Proves stdlib error classes
     surface structured, independent of any `throws` clause."""
@@ -57,7 +57,7 @@ def test_stdlib_error_surfaces_as_baml_error():
     assert isinstance(exc_info.value.value, JsonParseError)
 
 
-def test_user_throw_surfaces_declared_instance():
+def test_errors_user_throw_surfaces_declared_instance():
     """A user `throw` of a declared error → `BamlError` whose `.value` is
     the declared user error instance itself (not a `.code` sub-field)."""
     with pytest.raises(BamlError) as exc_info:
@@ -65,7 +65,7 @@ def test_user_throw_surfaces_declared_instance():
     assert isinstance(exc_info.value.value, MyError)
 
 
-def test_union_throws_preserves_class_name():
+def test_errors_union_throws_preserves_class_name():
     """A throw escaping a *multi-member* `throws` union must carry the thrown
     value's class FQN in `class_name`, exactly like a single-member throws.
 
@@ -87,7 +87,7 @@ def test_union_throws_preserves_class_name():
     assert isinstance(union.value.value, ParseError)
 
 
-def test_host_invalid_argument_wraps_baml_errors_invalid_argument():
+def test_errors_host_invalid_argument_wraps_baml_errors_invalid_argument():
     """A host-side invalid argument (an extra kwarg the function doesn't
     declare) → `BamlError` wrapping `baml.errors.InvalidArgument`,
     synthesized host-side rather than thrown from the VM."""
@@ -96,7 +96,7 @@ def test_host_invalid_argument_wraps_baml_errors_invalid_argument():
     assert isinstance(exc_info.value.value, InvalidArgument)
 
 
-def test_user_panic_surfaces_as_baml_panic():
+def test_errors_user_panic_surfaces_as_baml_panic():
     """A user-initiated panic via `baml.sys.panic` → `BamlPanic` whose
     `.value` is a `baml.panics.UserPanic` (routed by the namespace check,
     distinct from a host-synthesized `SdkPanic`)."""
@@ -107,7 +107,7 @@ def test_user_panic_surfaces_as_baml_panic():
     assert isinstance(exc_info.value.value, UserPanic)
 
 
-async def test_cancellation_surfaces_as_baml_panic():
+async def test_errors_cancellation_surfaces_as_baml_panic():
     """Async cancellation maps to `asyncio.CancelledError` with BAML reason."""
     rt = get_runtime()
     ctx = BamlCallContext()
@@ -124,7 +124,7 @@ async def test_cancellation_surfaces_as_baml_panic():
     assert isinstance(exc_info.value.reason, BamlCancelledError)
 
 
-def test_str_is_non_empty():
+def test_errors_str_is_non_empty():
     """`str(e)` is non-empty — guards the `@trace` / telemetry path, which
     records `str(e)`."""
     with pytest.raises(BamlError) as exc_info:
@@ -153,7 +153,7 @@ def _python_traceback_line(line: str) -> str:
     return f'File "{m["file"]}", line {lineno}, in {m["func"]}'
 
 
-def test_baml_error_carries_baml_trace():
+def test_errors_baml_error_carries_baml_trace():
     """`.baml_trace` is the list of rendered BAML stack frames (one per
     frame), pointing into the throwing function's `.baml` source."""
     with pytest.raises(BamlError) as exc_info:
@@ -168,7 +168,7 @@ def test_baml_error_carries_baml_trace():
     assert int(m["line"]) >= 1
 
 
-def test_baml_trace_spliced_into_python_traceback():
+def test_errors_baml_trace_spliced_into_python_traceback():
     """The BAML frames are spliced into the exception's Python traceback, so
     `traceback.format_exception` renders the `.baml` source frame inline (not
     as a detached blob)."""
@@ -212,8 +212,7 @@ _EXIT_SNIPPET = textwrap.dedent(
 )
 
 
-@pytest.mark.parametrize("code", [0, 7])
-def test_clean_exit_terminates_process_with_code(code):
+def _assert_clean_exit_terminates_process_with_code(code: int) -> None:
     result = subprocess.run(
         [sys.executable, "-c", _EXIT_SNIPPET.format(code=code)],
         capture_output=True,
@@ -223,3 +222,11 @@ def test_clean_exit_terminates_process_with_code(code):
         f"stdout={result.stdout!r} stderr={result.stderr!r}"
     )
     assert b"UNREACHABLE" not in result.stdout
+
+
+def test_errors_clean_exit_terminates_process_with_code_0():
+    _assert_clean_exit_terminates_process_with_code(0)
+
+
+def test_errors_clean_exit_terminates_process_with_code_7():
+    _assert_clean_exit_terminates_process_with_code(7)

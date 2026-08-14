@@ -12,16 +12,16 @@ import {
 } from "./baml_sdk/enums/index.js";
 
 describe("roundtrip enums", () => {
-  it("pick_sentiment", () => {
+  it("enums_pick_sentiment", () => {
     expect(pick_sentiment(true)).toBe(Sentiment.Positive);
     expect(pick_sentiment(false)).toBe(Sentiment.Negative);
   });
-  it("pick_positive", () => expect(pick_positive()).toBe(Sentiment.Positive));
-  it("round_trip_sentiment", () =>
+  it("enums_pick_positive", () => expect(pick_positive()).toBe(Sentiment.Positive));
+  it("enums_round_trip_sentiment", () =>
     expect(round_trip_sentiment(Sentiment.Negative)).toBe(Sentiment.Negative));
-  it("round_trip_sentiment_positive", () =>
+  it("enums_round_trip_sentiment_positive", () =>
     expect(round_trip_sentiment_positive(Sentiment.Positive)).toBe(Sentiment.Positive));
-  it("round_trip_enums", () => {
+  it("enums_round_trip_enums", () => {
     const e = new Enums({ bare_enum: Sentiment.Positive, variant_as_type: Sentiment.Positive });
     expect(round_trip_enums(e)).toEqual(e);
   });

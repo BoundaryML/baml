@@ -2,52 +2,42 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:20:20 ]
-    │
- 20 │             let s: Self => "self",
-    │                    ──┬─  
-    │                      ╰─── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+  [type] E0002
 
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:25:18 ]
-    │
- 25 │         other is Self
-    │                  ──┬─  
-    │                    ╰─── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+  × unresolved type: Self
+    ╭─[main.baml:24:20]
+ 24 │             let s: Self => "self",
+    ·                    ────
+    ╰────
 
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:28:16 ]
-    │
- 28 │         let a: Self = other;
-    │                ──┬─  
-    │                  ╰─── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+  [type] E0002
 
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:33:20 ]
-    │
- 33 │             let s: Box<Self> => 1,
-    │                    ────┬────  
-    │                        ╰────── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+  × unresolved type: Self
+    ╭─[main.baml:29:18]
+ 29 │         other is Self
+    ·                  ────
+    ╰────
 
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:38:9 ]
-    │
- 38 │         reflect.type_of<Self>().to_string()
-    │         ───────────┬───────────  
-    │                    ╰───────────── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:32:16]
+ 32 │         let a: Self = other;
+    ·                ────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:37:24]
+ 37 │             let s: Box<Self> => 1,
+    ·                        ────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:42:25]
+ 42 │         reflect.type_of<Self>().to_string()
+    ·                         ────
+    ╰────

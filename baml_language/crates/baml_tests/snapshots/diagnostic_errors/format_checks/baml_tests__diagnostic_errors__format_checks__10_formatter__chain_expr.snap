@@ -73,21 +73,19 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
 
     // ===== Trivia in call (line comments) =====
     // 1 callee leading
-    items
-        .get( // 7 open paren trailing
-            // 8 arg leading
-            0, // 9 arg trailing
-            // 10 close paren leading
-        );
+    items.get( // 7 open paren trailing
+        // 8 arg leading
+        0, // 9 arg trailing
+        // 10 close paren leading
+    );
 
     // ===== Trivia in call (block comments) =====
     /* 1 callee leading */
-    items
-        .get( /* 7 open paren trailing */
-            /* 8 arg leading */
-            0, /* 9 arg trailing */
-            /* 10 close paren leading */
-        )/* 11 close paren trailing */;
+    items.get( /* 7 open paren trailing */
+        /* 8 arg leading */
+        0, /* 9 arg trailing */
+        /* 10 close paren leading */
+    )/* 11 close paren trailing */;
 
     // ===== Index access =====
     items[0];
@@ -115,11 +113,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     user.name.len().to_string();
 
     // ===== Long chain exceeding limit: many field accesses =====
-    user.profile
-        .settings
-        .preferences
-        .color
-        .len()
+    user.profile.settings.preferences.color.len()
         .to_string()
         .len()
         .to_string()
@@ -132,8 +126,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
 
     // ===== Long call args exceeding limit =====
-    user.profile
-        .items
+    user.profile.items
         .get(
             user.profile.items.len()
                 - 1
@@ -145,16 +138,15 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
         .label;
 
     // ===== Call with many args exceeding limit =====
-    user.profile
-        .items
-        .slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+    user.profile.items.slice(
+        0,
+        user.profile.items.len() - 1,
+        user.profile.settings.preferences.size,
+    );
 
     // ===== Trivia in long wrapping chain (line comments) =====
     // 1 leading
-    user.profile
-        .settings
-        .preferences
-        .color
+    user.profile.settings.preferences.color
         .len( // 18 trailing
         )
         .to_string( // 23 trailing
@@ -164,18 +156,13 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
 
     // ===== Trivia in long wrapping chain (block comments) =====
     /* 1 leading */
-    user.profile
-        .settings
-        .preferences
-        .color
-        .len(/* 18 trailing */)
+    user.profile.settings.preferences.color.len(/* 18 trailing */)
         .to_string(/* 23 trailing */)
         .len(/* 28 trailing */)/* 29 trailing */;
 
     // ===== Trivia in call with long args (line comments) =====
     // 1 leading
-    user.profile
-        .items
+    user.profile.items
         .get( // 12 trailing
             // 13 leading
             user.profile.items.len() - 1 + user.profile.items.len() - 2, // 14 trailing

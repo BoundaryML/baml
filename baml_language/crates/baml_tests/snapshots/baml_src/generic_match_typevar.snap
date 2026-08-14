@@ -3,72 +3,82 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function generic_match_typevar.$init_test_ns_generic_match_typevar_generic_match_typevar(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_arm_matches_realized_int"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_arm_rejects_non_member"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_arm_dynamic_first_match_capture"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_list_arm_matches_realized_element"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_list_arm_rejects_other_element"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_list_arm_dynamic_first_match_capture"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_map_arm_matches_realized_value_type"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_map_arm_rejects_other_value_type"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "is_typevar_member"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "is_typevar_non_member"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
 }
 
-function generic_match_typevar.is_t(x: T | string) -> bool {
+function generic_match_typevar.is_t(x: #0 | string) -> bool {
     load_var x
-    is_type #0?
+    is_type #0
     pop_jump_if_false L0
     jump L1
 
@@ -97,33 +107,31 @@ function generic_match_typevar.is_t_non_member_fn() -> bool {
     return
 }
 
-function generic_match_typevar.pick(x: T | string) -> string {
+function generic_match_typevar.pick(x: #0 | string) -> string {
     load_var x
-    is_type #0?
+    store_var _2
+    load_var _2
+    narrow_bind #0, slot=2
     pop_jump_if_false L0
-    load_const true
-    pop_jump_if_false L0
-    jump L3
+    jump L1
 
   L0:
     load_var x
-    is_type string
-    pop_jump_if_false L1
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=3
+    pop_jump_if_false L3
+    load_const "string"
     jump L2
 
   L1:
-    load_const "other"
-    jump L4
-
-  L2:
-    load_const "string"
-    jump L4
-
-  L3:
     load_const "T"
 
-  L4:
+  L2:
     return
+
+  L3:
+    unreachable
 }
 
 function generic_match_typevar.pick_dynamic_capture_fn() -> string {
@@ -140,17 +148,19 @@ function generic_match_typevar.pick_int_value_fn() -> string {
     return
 }
 
-function generic_match_typevar.pick_list(x: T[] | string[]) -> string {
+function generic_match_typevar.pick_list(x: #0[] | string[]) -> string {
     load_var x
-    is_type #0?[]
-    pop_jump_if_false L0
-    load_const true
+    store_var _2
+    load_var _2
+    narrow_bind #0[], slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var x
-    is_type string[]
+    store_var _3
+    load_var _3
+    narrow_bind string[], slot=3
     pop_jump_if_false L3
     load_const "string[]"
     jump L2
@@ -195,17 +205,19 @@ function generic_match_typevar.pick_list_string_fn() -> string {
     return
 }
 
-function generic_match_typevar.pick_map(x: map<string, T> | map<string, string>) -> string {
+function generic_match_typevar.pick_map(x: map<string, #0> | map<string, string>) -> string {
     load_var x
-    is_type map<string, #0?>
-    pop_jump_if_false L0
-    load_const true
+    store_var _2
+    load_var _2
+    narrow_bind map<string, #0>, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var x
-    is_type map<string, string>
+    store_var _3
+    load_var _3
+    narrow_bind map<string, string>, slot=3
     pop_jump_if_false L3
     load_const "map<string>"
     jump L2

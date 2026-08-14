@@ -21,9 +21,9 @@ use std::{collections::HashMap, sync::Arc};
 use baml_base::SourceFile;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId};
 use baml_compiler2_hir::scope::{ScopeId, ScopeKind};
-use baml_compiler2_tir::{
-    inference::{ScopeInference, infer_scope_types, scope_body, scope_inference_owner},
-    resolve::{ResolvedName, resolve_name_at, resolve_namespace_prefix, resolve_path_at},
+use baml_compiler2_hir_ty::{ide::scope_body, infer::InferenceResult};
+use baml_compiler2_ppir::resolve::{
+    ResolvedName, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
 };
 use text_size::{TextRange, TextSize};
 
@@ -59,12 +59,31 @@ pub(super) fn resolve_token_class(
     // scopes), so probe up the chain — each `scope_resolution_index` is cached.
     let mut fsi = sem_index.scope_at_offset(range.start(), None);
     loop {
-        let scope_id = sem_index.scope_ids[fsi.index() as usize];
-        // Normalize to the inference-owner scope so sibling block/template
-        // scopes that share an owner body hit one Salsa cache entry instead of
-        // each rebuilding the same `scope_resolution_index` under a distinct key
-        // (the `build` whole-file path already keys by the owner scope id).
-        let owner = scope_inference_owner(db, scope_id);
+        // Normalize to the nearest INDEX-bearing scope - a Function, Let,
+        // or (non-template) Lambda - so sibling block/template scopes that
+        // share a body hit one Salsa cache entry instead of each rebuilding
+        // the same `scope_resolution_index` under a distinct key. Lambdas
+        // keep their OWN granularity: each lambda's index roots at its body
+        // expression, and the owner-level index deliberately excludes
+        // lambda interiors.
+        let mut owner_fsi = fsi;
+        loop {
+            let scope = &sem_index.scopes[owner_fsi.index() as usize];
+            let stops = match scope.kind {
+                baml_compiler2_hir::scope::ScopeKind::Function
+                | baml_compiler2_hir::scope::ScopeKind::Let => true,
+                baml_compiler2_hir::scope::ScopeKind::Lambda => !scope.is_template_body,
+                _ => false,
+            };
+            if stops {
+                break;
+            }
+            let Some(parent) = scope.parent else {
+                break;
+            };
+            owner_fsi = parent;
+        }
+        let owner = sem_index.scope_ids[owner_fsi.index() as usize];
         if let Some(class) = scope_resolution_index(db, owner).get(&range).copied() {
             return Some(class);
         }
@@ -83,10 +102,11 @@ pub(super) fn scope_resolution_index(db: &dyn Db, scope_id: ScopeId<'_>) -> Arc<
     // Lambda / Let), so a token inside a `spawn`/block scope indexes — and is
     // found in — its owning body's index.
     if let Some(body) = scope_body(db, scope_id) {
-        let inference = infer_scope_types(db, body.scope);
+        let inference = baml_compiler2_hir_ty::infer::infer_body(db, body.owner);
         index_function(
             db,
             scope_id.file(db),
+            body.root,
             &body.expr_body,
             &body.source_map,
             inference,
@@ -124,12 +144,23 @@ pub(super) fn build(db: &dyn Db, file: SourceFile) -> ResolutionIndex {
 fn index_function(
     db: &dyn Db,
     file: SourceFile,
+    root: Option<baml_compiler2_ast::ExprId>,
     expr_body: &ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
-    inference: &ScopeInference<'_>,
+    inference: &InferenceResult<'_>,
     index: &mut ResolutionIndex,
 ) {
-    for (expr_id, expr) in expr_body.exprs.iter() {
+    // Only the expressions this scope's inference actually covers: lambda
+    // bodies share the arena but are typed by their own scope, so indexing them
+    // here would resolve them against the wrong tables.
+    let nodes = root
+        .map(|root| expr_body.reachable_excluding_lambdas(root))
+        .unwrap_or_default();
+    for node in nodes {
+        let baml_compiler2_ast::BodyNode::Expr(expr_id) = node else {
+            continue;
+        };
+        let expr = &expr_body.exprs[expr_id];
         match expr {
             Expr::Path(segments) if !segments.is_empty() => {
                 let seg_span = source_map.path_segment_span(expr_id, 0);
@@ -168,7 +199,7 @@ fn index_function(
             // a resolution like any other member, so an unresolved one is a real
             // unknown (e.g. a typo) and stays neutral.
             Expr::MemberAccess { .. } | Expr::OptionalMemberAccess { .. } => {
-                if let Some(res) = inference.resolution(expr_id) {
+                if let Some(res) = inference.member_resolutions.get(&expr_id) {
                     record(
                         index,
                         source_map.member_access_member_span(expr_id),
@@ -189,7 +220,7 @@ fn index_path_tail(
     expr_id: ExprId,
     segments: &[baml_base::Name],
     source_map: &baml_compiler2_ast::AstSourceMap,
-    inference: &ScopeInference<'_>,
+    inference: &InferenceResult<'_>,
     index: &mut ResolutionIndex,
 ) {
     // A local/parameter root (`self`, a `let` binding — resolved by offset, a
@@ -201,20 +232,23 @@ fn index_path_tail(
         ResolvedName::Local { .. }
     );
     // Per-segment member resolutions for local-rooted paths (`obj.a.b`).
-    let members = inference.path_member_resolution(expr_id);
+    let members = inference.path_resolutions.get(&expr_id);
     let leaf = segments.len() - 1;
 
     for k in 1..segments.len() {
         let span = source_map.path_segment_span(expr_id, k);
         // 1. A recorded field/variant/method resolution wins.
-        if let Some(res) = members.and_then(|m| m.get(k - 1)) {
+        if let Some(res) = members
+            .and_then(|m| m.segments.get(k))
+            .and_then(|s| s.resolution.as_ref())
+        {
             record(index, span, classify::classify_member(res));
             continue;
         }
         // 2. A type-rooted leaf member (e.g. `Status.Active`) lives in
         //    `resolution`, not `path_member_resolution`.
         if k == leaf && members.is_none() {
-            if let Some(res) = inference.resolution(expr_id) {
+            if let Some(res) = inference.member_resolutions.get(&expr_id) {
                 record(index, span, classify::classify_member(res));
                 continue;
             }

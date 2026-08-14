@@ -501,7 +501,6 @@ struct OutstandingRequest {
 }
 
 struct Session {
-    transport: TransportKind,
     lifecycle: LifecycleState,
     capabilities: Option<Arc<serde_json::Value>>,
     documents: BTreeMap<String, Option<i32>>,
@@ -591,7 +590,6 @@ impl IngressScheduler {
         self.sessions.insert(
             session_id,
             Session {
-                transport,
                 lifecycle: LifecycleState::PreInitialize,
                 capabilities: None,
                 documents: BTreeMap::new(),
@@ -609,11 +607,6 @@ impl IngressScheduler {
     #[must_use]
     pub fn lifecycle(&self, session_id: SessionId) -> Option<LifecycleState> {
         self.sessions.get(&session_id).map(|s| s.lifecycle)
-    }
-
-    #[must_use]
-    pub fn transport(&self, session_id: SessionId) -> Option<TransportKind> {
-        self.sessions.get(&session_id).map(|s| s.transport)
     }
 
     #[must_use]

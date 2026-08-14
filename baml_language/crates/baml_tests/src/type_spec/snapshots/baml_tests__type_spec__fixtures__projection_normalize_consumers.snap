@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+523..526 'get': throws never
+556..589 '{\n   ...     }': string
+570..579 'self.text': string
+608..615 'pn_take': throws never
+685..705 '{\n   ...t()\n}': string
+691..701 'source.get': (self: T) -> string throws never
+691..703 'source.get()': string
+716..725 'pn_concat': throws never
+760..816 '{\n   ...  s\n}': string
+766..771 'let s': string
+774..781 'pn_take': (source: user.PnText) -> string throws never
+774..784 'pn_take(t)': string
+774..790 'pn_tak... + ":"': string
+782..783 't': user.PnText
+787..790 '":"': ":"
+813..814 's': string
+827..835 'pn_chain': throws never
+867..923 '{\n   ...  n\n}': int
+873..878 'let n': int
+881..888 'pn_take': (source: user.PnText) -> string throws never
+881..891 'pn_take(t)': string
+881..898 'pn_tak...length': (self: baml.String) -> int throws never
+881..900 'pn_tak...ngth()': int
+889..890 't': user.PnText
+920..921 'n': int

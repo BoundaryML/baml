@@ -1,4 +1,4 @@
-// Native math operators (`+ - * / %` and unary `-`) for the numeric primitives,
+// Native math operators (`+ - * / %` and unary `-`) for primitive values,
 // declared as `baml.ops.{Add,Subtract,Multiply,Divide,Remainder,Negate}` and
 // implemented in `crates/bex_vm/src/package_baml/ops_math.rs`.
 //
@@ -23,72 +23,89 @@
 
 /// `self + rhs`
 interface Add<Rhs extends root.Concrete> requires root.Concrete {
-    type Output extends root.Concrete = Self;
+    type Output extends root.Concrete;
+    /// The `+` operator.
     function add(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self - rhs`
 interface Subtract<Rhs extends root.Concrete> requires root.Concrete {
-    type Output extends root.Concrete = Self;
+    type Output extends root.Concrete;
+    /// The `-` operator.
     function sub(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self * rhs`
 interface Multiply<Rhs extends root.Concrete> requires root.Concrete {
-    type Output extends root.Concrete = Self;
+    type Output extends root.Concrete;
+    /// The `*` operator.
     function mul(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self / rhs`
 interface Divide<Rhs extends root.Concrete> requires root.Concrete {
-    type Output extends root.Concrete = Self;
+    type Output extends root.Concrete;
+    /// The `/` operator.
     function div(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self % rhs`
 interface Remainder<Rhs extends root.Concrete> requires root.Concrete {
-    type Output extends root.Concrete = Self;
+    type Output extends root.Concrete;
+    /// The `%` operator.
     function rem(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `-self`
 interface Negate requires root.Concrete {
-    type Output extends root.Concrete = Self;
+    type Output extends root.Concrete;
+    /// The unary `-` operator.
     function neg(self) -> Self.Output throws never
 }
 
 // ==== int ====
 implement Add<int> for int {
+    type Output = int;
     //baml:fallible
     function add(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
+
 implement Subtract<int> for int {
+    type Output = int;
     //baml:fallible
     function sub(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
+
 implement Multiply<int> for int {
+    type Output = int;
     //baml:fallible
     function mul(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
+
 implement Divide<int> for int {
+    type Output = int;
     //baml:fallible
     function div(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
+
 implement Remainder<int> for int {
+    type Output = int;
     //baml:fallible
     function rem(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
+
 implement Negate for int {
+    type Output = int;
     //baml:fallible
     function neg(self) -> int throws never {
         $rust_function
@@ -97,61 +114,81 @@ implement Negate for int {
 
 // ==== float ====
 implement Add<float> for float {
+    type Output = float;
     function add(self, rhs: float) -> float throws never {
         $rust_function
     }
 }
+
 implement Subtract<float> for float {
+    type Output = float;
     function sub(self, rhs: float) -> float throws never {
         $rust_function
     }
 }
+
 implement Multiply<float> for float {
+    type Output = float;
     function mul(self, rhs: float) -> float throws never {
         $rust_function
     }
 }
+
 implement Divide<float> for float {
+    type Output = float;
     //baml:mut_vm
     //baml:fallible
     function div(self, rhs: float) -> float throws never {
         $rust_function
     }
 }
+
 implement Remainder<float> for float {
+    type Output = float;
     function rem(self, rhs: float) -> float throws never {
         $rust_function
     }
 }
+
 implement Negate for float {
+    type Output = float;
     function neg(self) -> float throws never {
         $rust_function
     }
 }
 
 implement Add<int> for float {
+    type Output = float;
     function add(self, rhs: int) -> float throws never {
         $rust_function
     }
 }
+
 implement Subtract<int> for float {
+    type Output = float;
     function sub(self, rhs: int) -> float throws never {
         $rust_function
     }
 }
+
 implement Multiply<int> for float {
+    type Output = float;
     function mul(self, rhs: int) -> float throws never {
         $rust_function
     }
 }
+
 implement Divide<int> for float {
+    type Output = float;
     //baml:mut_vm
     //baml:fallible
     function div(self, rhs: int) -> float throws never {
         $rust_function
     }
 }
+
 implement Remainder<int> for float {
+    type Output = float;
     function rem(self, rhs: int) -> float throws never {
         $rust_function
     }
@@ -163,18 +200,21 @@ implement Add<float> for int {
         $rust_function
     }
 }
+
 implement Subtract<float> for int {
     type Output = float;
     function sub(self, rhs: float) -> float throws never {
         $rust_function
     }
 }
+
 implement Multiply<float> for int {
     type Output = float;
     function mul(self, rhs: float) -> float throws never {
         $rust_function
     }
 }
+
 implement Divide<float> for int {
     type Output = float;
     //baml:mut_vm
@@ -183,6 +223,7 @@ implement Divide<float> for int {
         $rust_function
     }
 }
+
 implement Remainder<float> for int {
     type Output = float;
     function rem(self, rhs: float) -> float throws never {
@@ -192,65 +233,85 @@ implement Remainder<float> for int {
 
 // ==== bigint ====
 implement Add<bigint> for bigint {
+    type Output = bigint;
     function add(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Subtract<bigint> for bigint {
+    type Output = bigint;
     function sub(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Multiply<bigint> for bigint {
+    type Output = bigint;
     //baml:fallible
     function mul(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Divide<bigint> for bigint {
+    type Output = bigint;
     //baml:mut_vm
     //baml:fallible
     function div(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Remainder<bigint> for bigint {
+    type Output = bigint;
     //baml:mut_vm
     //baml:fallible
     function rem(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Negate for bigint {
+    type Output = bigint;
     function neg(self) -> bigint throws never {
         $rust_function
     }
 }
 
 implement Add<int> for bigint {
+    type Output = bigint;
     function add(self, rhs: int) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Subtract<int> for bigint {
+    type Output = bigint;
     function sub(self, rhs: int) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Multiply<int> for bigint {
+    type Output = bigint;
     //baml:fallible
     function mul(self, rhs: int) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Divide<int> for bigint {
+    type Output = bigint;
     //baml:mut_vm
     //baml:fallible
     function div(self, rhs: int) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Remainder<int> for bigint {
+    type Output = bigint;
     //baml:mut_vm
     //baml:fallible
     function rem(self, rhs: int) -> bigint throws never {
@@ -264,12 +325,14 @@ implement Add<bigint> for int {
         $rust_function
     }
 }
+
 implement Subtract<bigint> for int {
     type Output = bigint;
     function sub(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement Multiply<bigint> for int {
     type Output = bigint;
     //baml:fallible
@@ -277,6 +340,7 @@ implement Multiply<bigint> for int {
         $rust_function
     }
 }
+
 implement Divide<bigint> for int {
     type Output = bigint;
     //baml:mut_vm
@@ -285,6 +349,7 @@ implement Divide<bigint> for int {
         $rust_function
     }
 }
+
 implement Remainder<bigint> for int {
     type Output = bigint;
     //baml:mut_vm
@@ -295,12 +360,13 @@ implement Remainder<bigint> for int {
 }
 
 // ==== string ====
-//
-// Deliberately no impls: `string + string` concatenation is compiler
-// fast-path only, and `string + <non-string>` / `string * int` stay type
-// errors. `string` therefore never satisfies an `Add` bound and never
-// reaches the `__union_*` drivers (a union pair involving it fails the
-// type check first).
+
+implement Add<string> for string {
+    type Output = string;
+    function add(self, rhs: string) -> string throws never {
+        $rust_function
+    }
+}
 
 // ==== operator dispatch drivers ====
 //
@@ -321,26 +387,31 @@ implement Remainder<bigint> for int {
 function __union_add(a: unknown, b: unknown) -> unknown throws never {
     $rust_function
 }
+
 //baml:mut_vm
 //baml:may_yield
 function __union_sub(a: unknown, b: unknown) -> unknown throws never {
     $rust_function
 }
+
 //baml:mut_vm
 //baml:may_yield
 function __union_mul(a: unknown, b: unknown) -> unknown throws never {
     $rust_function
 }
+
 //baml:mut_vm
 //baml:may_yield
 function __union_div(a: unknown, b: unknown) -> unknown throws never {
     $rust_function
 }
+
 //baml:mut_vm
 //baml:may_yield
 function __union_rem(a: unknown, b: unknown) -> unknown throws never {
     $rust_function
 }
+
 // Unary `-a`: single dispatch on `a`'s runtime type through `baml.ops.Negate`.
 //baml:mut_vm
 //baml:may_yield

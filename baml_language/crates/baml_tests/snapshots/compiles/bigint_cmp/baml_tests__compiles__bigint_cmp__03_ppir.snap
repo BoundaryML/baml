@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6805
+---
+=== PPIR ===
+function user.EqDistinctAllocs() -> bool  [expr] {
+  { let a: bigint = 42n; let b: bigint = bigint.parse("42") } a Eq b
+}
+function user.EqSameAlloc() -> bool  [expr] {
+  {  } 42n Eq 42n
+}
+function user.OrderingGtEq() -> bool  [expr] {
+  {  } 5n Ge 5n
+}
+function user.OrderingLt() -> bool  [expr] {
+  {  } 3n Lt 5n
+}

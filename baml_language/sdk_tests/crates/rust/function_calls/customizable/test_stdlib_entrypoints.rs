@@ -1,5 +1,5 @@
 use baml_sdk::baml::fs::exists;
-use baml_sdk::baml::sys::now_ms;
+use baml_sdk::baml::sys::argv;
 
 /// Intrinsic-only modules are not emitted at all, so a missing file is fine;
 /// callers only need to confirm the symbol is absent when the file exists.
@@ -14,12 +14,14 @@ fn _generated_sdk_file(rel_path: &str) -> Option<String> {
     Some(std::fs::read_to_string(path).unwrap())
 }
 
-// `baml.sys.now_ms() -> int` is a `$rust_function` → `FunctionKind::Native`.
-// Calling it as an entry point should run the native and return a positive
-// millisecond timestamp, not reject with `NotInvokableAsEntry`.
+// `baml.sys.argv() -> string[]` is a `$rust_function` → `FunctionKind::Native`.
+// Calling it as an entry point should run the native and return the argument
+// array, not reject with `NotInvokableAsEntry`. The fixture host passes no
+// program arguments, so the array is legitimately empty — the shape is what
+// this asserts.
 #[test]
-fn test_native_now_ms_callable_as_entry_point() {
-    assert!(now_ms().unwrap() > 0);
+fn test_stdlib_entrypoints_native_argv_callable_as_entry_point() {
+    assert!(argv().is_ok());
 }
 
 // `baml.fs.exists(path: string) -> bool` is a `$rust_io_function` →
@@ -27,12 +29,12 @@ fn test_native_now_ms_callable_as_entry_point() {
 // filesystem sysop and return a bool. `.` exists in the generated fixture
 // directory on the test host.
 #[test]
-fn test_sysop_fs_exists_callable_as_entry_point() {
+fn test_stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point() {
     assert!(exists(".".to_string()).unwrap());
 }
 
 #[test]
-fn test_compiler_intrinsics_are_not_emitted_as_entry_points() {
+fn test_stdlib_entrypoints_compiler_intrinsics_are_not_emitted_as_entry_points() {
     // DIVERGENCE(rust): the python probe scans the generated package for
     // intrinsic entry-point bindings (`log.info` / `log.debug` / `log.warn` /
     // `log.error` and `baml.events.send`) that must not be emitted. In Rust

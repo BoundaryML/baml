@@ -2,13 +2,11 @@
 
 use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
-use baml_compiler2_tir::{
-    inference::infer_scope_types,
-    package_interface::{ExportedType, package_interface, package_resolution_context},
-    resolve::{ResolvedName, resolve_name_at_in_scope},
-    ty::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr},
-    type_context::GlobalTypeContext,
+use baml_compiler2_hir_ty::package_interface::{
+    ExportedType, package_interface, package_resolution_context,
 };
+use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
+use baml_type::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr};
 use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
@@ -149,7 +147,7 @@ fn unresolved_field() {
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
-        return x.missing : unknown
+        return x.missing : !error
       }
       !! 64..73: type `Foo` has no member `missing`
     }
@@ -180,7 +178,7 @@ function f(data: Data) -> string {
     }
     function user.f(data: user.Data) -> string throws never {
       { : never
-        return data.inner.foo : unknown
+        return data.inner.foo : !error
       }
       !! 73..87: type `Data` has no member `inner`
     }
@@ -211,7 +209,7 @@ function f(s: Sentiment) -> string {
     }
     function user.f(s: user.Sentiment) -> string throws never {
       { : never
-        return s.feelin : unknown
+        return s.feelin : !error
       }
       !! 83..91: type `Sentiment` has no member `feelin`
     }
@@ -237,9 +235,9 @@ function f() -> string {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> string throws never {
       { : never
-        return o.value : unknown
+        return o.value : !error
       }
-      !! 34..35: unresolved name: o
+      !! 34..41: unresolved name: o.value
     }
     ");
 }
@@ -302,6 +300,10 @@ fn if_else_joins_types() {
               2 : 2
             }
       }
+    }
+    block user.f {
+    }
+    block user.f {
     }
     ");
 }
@@ -459,14 +461,17 @@ fn function_type_throws_package_interface_exports_effect_params() {
     );
 
     let scope_id = find_function_scope_id(&db, file, "direct");
-    let _ = infer_scope_types(&db, scope_id);
+    let _ = baml_compiler2_hir_ty::ide::infer_for_scope(&db, scope_id);
 
     let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
     let exported = iface
         .lookup_function(&[], &Name::new("direct"))
         .expect("exported function");
 
-    assert_eq!(exported.generic_params, vec![Name::new("__effect_param_0")]);
+    assert_eq!(
+        exported.generic_params,
+        vec![baml_type::ParamTy::new(0, Name::new("__effect_param_0"))]
+    );
     assert_eq!(
         exported.params[0].ty.render_canonical(),
         "(value: int) -> string throws __effect_param_0"
@@ -524,9 +529,8 @@ implements ToJson for Dog {
 "#,
     );
 
-    let item_tree = baml_compiler2_hir::file_item_tree(&db, impl_file);
     assert_eq!(
-        item_tree.free_impls.len(),
+        baml_compiler2_ppir::item_data::file_free_impls(&db, impl_file).len(),
         1,
         "cross-file class target must remain a first-class out-of-body impl record"
     );
@@ -541,15 +545,8 @@ implements ToJson for Dog {
     // `TypeContext::implements_interface`); no type aliases are involved here.
     use baml_type::normalize::TypeContext;
     let pkg_id = PackageId::new(&db, Name::new("user"));
-    let res_ctx = package_resolution_context(&db, pkg_id);
-    let aliases = std::collections::HashMap::new();
-    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
-    let ctx = GlobalTypeContext {
-        db: &db,
-        res_ctx,
-        aliases: &aliases,
-        bounds: &bounds,
-    };
+    let _ = pkg_id;
+    let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
     let dog = Ty::Class(
         QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog")),
         vec![],
@@ -607,15 +604,8 @@ fn builtin_equals_compare_visible_from_user_package() {
 
     // The membership query walks the interface's package (`baml`) via the orphan
     // rule, so the builtin primitive impls are visible from the user package.
-    let res_ctx = package_resolution_context(&db, user_pkg);
-    let aliases = std::collections::HashMap::new();
-    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
-    let ctx = GlobalTypeContext {
-        db: &db,
-        res_ctx,
-        aliases: &aliases,
-        bounds: &bounds,
-    };
+    let _ = user_pkg;
+    let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
 
     // int implements both Equals and Compare (impls in `baml`).
     assert!(ctx.implements_interface(&int_ty, &equals));
@@ -696,39 +686,40 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
             matches!(scope.kind, ScopeKind::Lambda)
         })
         .expect("lambda scope");
-    let lambda_inference = infer_scope_types(&db, lambda_scope_id);
+    let lambda_inference = baml_compiler2_hir_ty::ide::infer_for_scope(&db, lambda_scope_id)
+        .expect("lambda scope has an owner");
 
-    let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
-    let (main_id, _) = item_tree
-        .functions
+    let main_loc = *baml_compiler2_ppir::item_data::file_functions(&db, file)
         .iter()
-        .find(|(_, func)| func.name.as_str() == "main")
+        .find(|&&loc| {
+            baml_compiler2_ppir::item_data::function_data(&db, loc)
+                .name
+                .as_str()
+                == "main"
+        })
         .expect("main function");
-    let main_loc = baml_compiler2_hir::loc::FunctionLoc::new(&db, file, main_id);
     let main_body = baml_compiler2_ppir::function_body(&db, main_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
         panic!("main expression body");
     };
-    let lambda_body = main_expr_body
+    // The lambda's body is an expression in `main`'s own arena.
+    let root_expr = main_expr_body
         .exprs
         .iter()
         .find_map(|(_, expr)| {
-            if let baml_compiler2_ast::Expr::Lambda(func_def) = expr
-                && let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lambda_body, _)) =
-                    &func_def.body
-            {
-                Some(lambda_body)
+            if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
+                func_def.body
             } else {
                 None
             }
         })
         .expect("lambda body");
-    let root_expr = lambda_body.root_expr.expect("lambda root expr");
 
     assert_eq!(
         lambda_inference
-            .expression_type(root_expr)
-            .map(ToString::to_string),
+            .type_of_expr
+            .get(&root_expr)
+            .map(|ty| ty.to_plain().to_string()),
         Some("int".to_string())
     );
 }
@@ -787,13 +778,13 @@ function demo() -> ((x: int) -> int throws never) -> int throws never {
     );
 }
 
-/// Helper: does compiling `source` produce a `type mismatch` diagnostic?
+/// Helper: does compiling `source` produce a type mismatch diagnostic?
 fn has_type_mismatch(source: &str) -> bool {
     let mut db = make_db();
     db.add_file("test.baml", source);
     baml_project::collect_compiler2_diagnostics(&db)
         .iter()
-        .any(|diag| diag.message.contains("type mismatch"))
+        .any(|diag| diag.id == baml_compiler_diagnostics::DiagnosticId::TypeMismatch)
 }
 
 // ─── B-236: reassigning an unannotated local across container kinds ──────────
@@ -987,4 +978,114 @@ fn narrowed_nullable_index_is_accepted() {
         ),
         "a nullable index narrowed to non-null must stay allowed"
     );
+}
+
+#[test]
+fn class_spread_requires_the_same_nominal_class_and_generic_arguments() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Left<T> { value T }
+class Right<T> { value T }
+class Wrapper<T, E> { body () -> T throws E }
+
+function infer_from_spread(source: Left<int>) -> int {
+  let copy = Left { ...source };
+  copy.value
+}
+
+function expected_type_supplies_omitted_arguments() -> Wrapper<int, null> {
+  Wrapper { body: () -> 1 }
+}
+
+function wrong_class() -> Left<int> {
+  Left<int> { ...Right<int> { value: 1 } }
+}
+
+function wrong_type_argument() -> Left<int> {
+  Left<int> { ...Left<string> { value: "bad" } }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(!tir.contains("cannot infer type parameter `T`"), "{tir}");
+    assert!(
+        !tir.contains("expected Wrapper<int, null>, got Wrapper<int, never>"),
+        "{tir}"
+    );
+    assert!(
+        tir.contains("type mismatch: expected Left<int>, got Right<int>"),
+        "{tir}"
+    );
+    assert!(
+        tir.contains("type mismatch: expected Left<int>, got Left<string>"),
+        "{tir}"
+    );
+}
+
+/// The declaration-site interface surface: required-method signatures resolve
+/// with `Self` symbolic (a projection over the rigid `Self` bound by the
+/// interface), method-level generic bounds resolve to interfaces, and field
+/// types resolve in the same scope. Locks the surface queries the handle
+/// layer reads.
+#[test]
+fn interface_declaration_surface_resolves_symbolically() {
+    use baml_compiler2_hir_ty::interfaces::{
+        resolve_interface_fields, resolve_interface_required_methods,
+    };
+
+    let mut db = make_db();
+    let file = db.add_file(
+        "iface.baml",
+        r#"
+interface Encoder {
+  type Error
+
+  limit int
+
+  function encode(self, value: string) -> string throws Self.Error
+  function pick<T extends Encoder>(self, options: T[]) -> T throws never
+}
+"#,
+    );
+
+    let iface_loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+        .iter()
+        .find(|&&i| {
+            baml_compiler2_ppir::item_data::interface_data(&db, i)
+                .name
+                .as_str()
+                == "Encoder"
+        })
+        .unwrap();
+
+    let fields = resolve_interface_fields(&db, iface_loc);
+    assert!(fields.diagnostics.is_empty(), "{:?}", fields.diagnostics);
+    assert_eq!(fields.fields.len(), 1);
+    assert_eq!(fields.fields[0].0.as_str(), "limit");
+    assert_eq!(fields.fields[0].1.render_canonical(), "int");
+
+    let methods = resolve_interface_required_methods(&db, iface_loc);
+    assert_eq!(methods.len(), 2);
+
+    let encode = &methods[0];
+    assert_eq!(encode.name.as_str(), "encode");
+    assert!(encode.diagnostics.is_empty(), "{:?}", encode.diagnostics);
+    assert!(encode.generic_params.is_empty());
+    // `Self` stays symbolic: the receiver is the rigid `Self` variable and the
+    // declared throws is a projection through the interface bound.
+    assert_eq!(
+        encode.function_ty.render_canonical(),
+        "(self: Self, value: string) -> string throws (Self as user.Encoder).Error"
+    );
+
+    let pick = &methods[1];
+    assert_eq!(pick.name.as_str(), "pick");
+    assert!(pick.diagnostics.is_empty(), "{:?}", pick.diagnostics);
+    assert_eq!(pick.generic_params.len(), 1);
+    let (param, bounds) = &pick.generic_params[0];
+    assert_eq!(param.name().as_str(), "T");
+    assert_eq!(bounds.len(), 1);
+    assert_eq!(bounds[0].name.render_user_facing(), "Encoder");
 }

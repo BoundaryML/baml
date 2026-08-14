@@ -311,8 +311,8 @@ fn resolve_variant(
             ));
         }
     };
-    // A variant need not carry a `TyAttr`: template-only leaves (`TypeArgRef`,
-    // `Wildcard`) are pure structure with no streaming metadata. The generated
+    // A variant need not carry a `TyAttr`: a template-only leaf (`TypeArgRef`)
+    // is pure structure with no streaming metadata. The generated
     // `attr()`/`with_attr()` accessors fall back to `TyAttr::EMPTY` / identity
     // for them (see `emit::attr_arm`). `has_attr` records which case applies so
     // the accessor arms don't need to re-derive it.

@@ -9,6 +9,10 @@ instances:
         branch: canary
 
 title: Boundary Documentation
+agents:
+  page-directive: |
+    Version notice: This site documents BAML v0, the legacy DSL. BAML v1 is a separate, fully featured programming language in public beta. If the user intends to use BAML v1, ignore this site's content and use the BAML v1 documentation instead. If the intended version is unclear, clarify it before using this page.
+    For clean Markdown of any page, append .md to the page URL. For the complete documentation index, see https://docs.boundaryml.com/llms.txt. For MCP access, connect to https://docs.boundaryml.com/_mcp/server.
 ai-chat:
   system-prompt: |
     You will be answering questions about BAML (Basically, a Made-up Language) -- an AI framework to write LLM prompts as functions. Here is some background:
@@ -817,9 +821,9 @@ navigation:
           - page: "Hugging Face (openai-generic)"
             slug: huggingface
             path: 03-reference/baml/clients/providers/huggingface.mdx
-          - page: "Keywords AI (openai-generic)"
-            slug: keywordsai
-            path: 03-reference/baml/clients/providers/keywordsai.mdx
+          - page: "Respan (openai-generic)"
+            slug: respan
+            path: 03-reference/baml/clients/providers/respan.mdx
           - page: "Llama API (openai-generic)"
             slug: llama-api
             path: 03-reference/baml/clients/providers/llama-api.mdx
@@ -852,6 +856,9 @@ navigation:
           - page: "Timeout Configuration"
             slug: timeouts
             path: 03-reference/baml/clients/timeouts.mdx
+          - page: "Connection Pooling"
+            slug: connection-pooling
+            path: 03-reference/baml/clients/connection-pooling.mdx
           - page: "Retry Policy"
             path: 03-reference/baml/clients/strategy/retry.mdx
           - page: "Fallback"
@@ -1119,7 +1126,7 @@ redirects:
   - source: "/docs/snippets/clients/providers/lmstudio"
     destination: "/ref/llm-client-providers/openai-generic-lm-studio"
   - source: "/docs/snippets/clients/providers/keywordsai"
-    destination: "/ref/llm-client-providers/openai-generic-keywords-ai"
+    destination: "/ref/llm-client-providers/respan"
   - source: "/docs/snippets/clients/fallback"
     destination: "/ref/llm-client-strategies/fallback"
   - source: "/docs/snippets/clients/round-robin"
@@ -1205,7 +1212,9 @@ redirects:
   - source: "/ref/llm-client-providers/openai-generic-hugging-face"
     destination: "/ref/llm-client-providers/huggingface"
   - source: "/ref/llm-client-providers/openai-generic-keywords-ai"
-    destination: "/ref/llm-client-providers/keywordsai"
+    destination: "/ref/llm-client-providers/respan"
+  - source: "/ref/llm-client-providers/keywordsai"
+    destination: "/ref/llm-client-providers/respan"
   - source: "/ref/llm-client-providers/openai-generic-litellm"
     destination: "/ref/llm-client-providers/litellm"
   - source: "/ref/llm-client-providers/openai-generic-lm-studio"

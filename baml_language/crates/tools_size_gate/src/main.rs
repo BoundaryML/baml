@@ -11,6 +11,7 @@ mod ceilings;
 mod compare;
 mod config;
 mod fetch;
+mod human_size;
 mod measure;
 mod output;
 
@@ -99,8 +100,8 @@ enum Command {
     ///
     /// Writes `.ci/size-gate/<platform>.toml` from each report's measured
     /// sizes and rewrites the per-platform ceilings in `.cargo/size-gate.toml`
-    /// to `--margin-pct` above them (comments preserved). Idempotent: when the
-    /// sizes already match, nothing is written.
+    /// to `--margin-pct` above them as human-readable KiB/MiB/GiB values.
+    /// Idempotent: when the sizes already match, nothing is written.
     Bake {
         /// JSON report files produced by `check --format json`. When omitted,
         /// reports are fetched from `--branch` instead.
@@ -454,7 +455,10 @@ fn cmd_bake(args: BakeArgs) -> Result<i32> {
             merged.insert(name.clone(), measurement.clone());
         }
 
-        if existing.as_ref().is_some_and(|e| e.artifacts == merged) {
+        if existing
+            .as_ref()
+            .is_some_and(|baseline| baseline.measurements_match(&merged))
+        {
             eprintln!("baseline unchanged: {}", path.display());
             continue;
         }

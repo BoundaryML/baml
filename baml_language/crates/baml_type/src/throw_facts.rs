@@ -1,7 +1,7 @@
 //! Per-function throw-analysis facts.
 //!
 //! These are the *inputs* to the package-level throw-inference solve
-//! (`baml_compiler2_tir::throw_inference`): everything extracted from one
+//! (`baml_compiler2_hir_ty::throw_facts`): everything extracted from one
 //! function's signature and body that the call-graph fixpoint needs. They
 //! are a pure function of the defining file's content plus name resolution,
 //! which is what makes them safe to persist and re-seed across compiles —

@@ -593,6 +593,11 @@ function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
 
 type DoubleMaybe = MaybeResult?
 
+// `DoubleMaybe` expands through two alias/optional layers; the match matrix
+// flattens the union recursively (`matrix_normalize_scrut`), so its columns
+// are the leaf members `Success | Failure | null` and these arms wrap onto
+// them exactly as they would for the single-layer alias.
+
 // Exhaustive: double optional (Result?? should be Success | Failure | null)
 // Note: T?? typically flattens to T? since (T | null) | null = T | null
 function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
@@ -608,6 +613,30 @@ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
     match (dm) {
         let s: Success => s.data,
         let f: Failure => f.reason
+    }
+}
+
+// ============================================================================
+// EDGE CASE: OVERLAPPING ALIAS UNIONS
+// Recursive flattening dedups canonically equivalent members
+// ============================================================================
+
+type Inner = int | string
+type Outer = Inner | int
+
+// Exhaustive: `Outer` flattens to `int | string | int`; the equivalent `int`
+// members dedup to one column ctor, so two arms cover everything.
+function ExhaustiveOverlappingAliasUnion(o: Outer) -> string {
+    match (o) {
+        let i: int => "int",
+        let s: string => "str"
+    }
+}
+
+// Non-exhaustive: the missing member is witnessed once, not once per copy.
+function NonExhaustiveOverlappingAliasUnion(o: Outer) -> string {
+    match (o) {
+        let i: int => "int"
     }
 }
 
@@ -739,15 +768,15 @@ function EnumVariantAfterTypedEnum(s: Status) -> string {
 // Matching wrong literal type against scrutinee
 // ============================================================================
 
-// Non-exhaustive: int literal pattern on bool scrutinee (type mismatch)
-// The literal 42 should NOT cover the bool type
+// Invalid int literal on bool skips match usefulness after a type error
+// Emit only this invalid pattern type mismatch.
 function WrongLiteralTypeBoolWithInt(b: bool) -> string {
     match (b) {
         42 => "wrong type"
     }
 }
 
-// Non-exhaustive: string literal on int scrutinee
+// Wrong string pattern skips usefulness analysis.
 function WrongLiteralTypeIntWithString(x: int) -> string {
     match (x) {
         "hello" => "wrong type"
@@ -999,5 +1028,22 @@ function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
         let d: Dog => "dog",
         let b: Bird => "bird",
         let f: Fish => "fish"
+    }
+}
+
+// An opaque (`unknown`) column has an infinite alphabet, so every present ctor
+// is its own branch rather than being drawn from a finite `all` set. Two
+// instantiations of one generic class are two such branches, and each has a
+// refutable field, so each contributes a witness. The two witnesses must stay
+// distinguishable: rendering them both as `WitBox { v: _ }` would ask for one
+// arm where two different ones are missing.
+class WitBox<T> {
+    v: T
+}
+
+function DistinctInstantiationWitnesses(x: unknown) -> int {
+    match (x) {
+        WitBox<int> { v: 1 } => 1,
+        WitBox<string> { v: "a" } => 2
     }
 }

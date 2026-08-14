@@ -47,7 +47,13 @@ pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
         use std::fmt::Write;
         let mut msg = String::from("Compilation produced diagnostic errors:\n");
         for (i, err) in errors.iter().enumerate() {
-            let _ = writeln!(msg, "  {}. [{}] {}", i + 1, err.code(), err.message);
+            let _ = writeln!(
+                msg,
+                "  {}. [{}] {}",
+                i + 1,
+                err.code(),
+                err.message_with_primary_label()
+            );
         }
         panic!("{msg}");
     }

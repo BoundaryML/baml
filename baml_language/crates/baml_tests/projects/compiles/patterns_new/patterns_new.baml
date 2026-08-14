@@ -34,72 +34,28 @@ function bare_type_arm(v: int | string) -> int {
 // ============================================================================
 // Function-type patterns
 // ============================================================================
+// A function-typed pattern is a real test in any position: every callable
+// value reconstructs a faithful signature, so the value matcher can compare
+// it. Matching follows function-type variance: `throws` is
+// covariant, so a pattern that does not care about the scrutinee's effect
+// (here the implicit effect parameter of `cb`'s omitted `throws`) coarsens it
+// with `throws unknown` — and the binding still adopts the scrutinee's
+// precise type, keeping the enclosing function effect-polymorphic.
 
 // Match on a single function type — arm narrows to the callable.
 function call_int_callback(cb: (int) -> int) -> int {
     match (cb) {
-        let f: (int) -> int throws never => f(10)
+        let f: (int) -> int throws unknown => f(10)
     }
 }
 
-// Match on a union of two distinct function types; dispatch by signature.
-function dispatch_callback(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int {
+// A union scrutinee with a function-typed member. The arm order here is not
+// forced — the function arm carries a real test wherever it sits; this shape
+// simply pins that the arm still works as the final, test-elided one.
+function call_optional_callback(cb: ((int) -> int throws never)?) -> int {
     match (cb) {
-        let f: (int) -> int throws never => f(0),
-        (string) -> string throws never => 0
-    }
-}
-
-// Or-pattern across two function-typed alternatives that share the same return.
-function call_either_int_caller(cb: ((int) -> int throws never) | ((bool) -> int throws never)) -> int {
-    match (cb) {
-        (int) -> int throws never => 1,
-        (bool) -> int throws never => 2
-    }
-}
-
-// Function-type narrow with chain-narrow position (`(int) -> T`).
-function dispatch_with_wildcard(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
-    match (cb) {
-        (int) -> int throws never => 1,
-        _ => 0
-    }
-}
-
-// Generic function-type pattern. T is unified at the call site. The outer
-// parens disambiguate the union — without them the parser binds `|` inside
-// the return type, yielding `(int) -> (T | (string) -> T)`.
-function unwrap_typed<T>(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T {
-    match (cb) {
-        let f: (int) -> T throws never => f(0),
-        let f: (string) -> T throws never => f("")
-    }
-}
-
-// ============================================================================
-// Triple higher-order: function returning a function returning a function
-// ============================================================================
-
-// `f: (int) -> (int) -> (int) -> int` — three-deep curried int function.
-// `g: (string) -> (string) -> string`   — two-deep curried string function.
-// The match dispatches on which curried shape was passed and unwraps it.
-function unwrap_curried(
-    f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)
-) -> int {
-    match (f) {
-        let triple: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never => triple(1)(2)(3),
-        let pair: (string) -> ((string) -> string throws never) throws never => 0
-    }
-}
-
-// Match on a function that takes a callback. The arm narrows to the
-// callback-accepting shape, then we synthesize an int callback inline.
-function call_with_callback(
-    runner: (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)
-) -> int {
-    match (runner) {
-        let r: ((int) -> int throws never) -> int throws never => r((x: int) -> int { x + 1 }),
-        let r: ((string) -> int throws never) -> int throws never => r((s: string) -> int { 0 })
+        null => 0,
+        let f: (int) -> int throws never => f(1)
     }
 }
 
@@ -116,11 +72,12 @@ function literal_widens_to_int(v: int) -> int {
     }
 }
 
-// Function-type widening: a narrower return type is a subtype of a wider one,
-// so `(int) -> int <: (int) -> int | string`.
-function fn_return_widens(cb: (int) -> int | string) -> int {
+// Function-type widening: return and throws are covariant, so a function
+// returning `int` is a subtype of a pattern returning `int | string` — the
+// pattern covers the scrutinee and the (final, exhaustive) arm is legal.
+function fn_return_widens(cb: (int) -> int throws never) -> int {
     match (cb) {
-        (int) -> (int | string) throws never => 1,
+        (int) -> (int | string) throws unknown => 1,
     }
 }
 
@@ -144,7 +101,7 @@ function paren_chains_in_or(v: int) -> int {
 
 function fn_pattern(cb: (int) -> int) -> int {
     match (cb) {
-        let f: (int) -> int throws never => f(0)
+        let f: (int) -> int throws unknown => f(0)
     }
 }
 

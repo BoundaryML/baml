@@ -3,202 +3,235 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function type_error_repro.$init_test_ns_type_error_repro_type_error_repro(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.type_error_repro"
     load_const "bytecode_1d_array_write_local"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "bytecode_1d_array_write_through_field"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "bytecode_1d_array_read_through_field"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "bytecode_2d_array_write_local"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "bytecode_2d_array_write_through_field"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "bytecode_map_write_through_field"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "bytecode_map_write_local"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "bytecode_non_self_param_array_write"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "array_index_with_int_works"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "int_through_function_call_as_index_works"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "nested_array_index_with_int_works"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "array_element_assignment_2d_type_error"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "array_element_assignment_1d"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_array_read_works"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_array_write_type_error"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "nested_array_read_with_variables"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "nested_array_write_with_variables"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "array_write_with_variable_index"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_1d_array_write_through_self"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_2d_array_write_through_self_literals"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_2d_array_write_minimal"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_map_write_through_self"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "map_write_local_variable"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_nested_field_array_write"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_map_then_array_write_through_self"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_3d_array_write_through_self"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "class_method_array_push_through_self"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "non_self_param_array_write"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "optional_index_with_null_index_returns_null"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "optional_index_with_valid_index_returns_element"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "negated_int_min_literal_is_valid"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "map_with_string_alias_key_is_accepted"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 31)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_error_repro"
     load_const "map_with_repeated_string_alias_union_key_is_accepted"
     make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 32)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -973,34 +1006,31 @@ function type_error_repro.int_through_function_call_as_index_works_body() -> str
 }
 
 function type_error_repro.map_with_repeated_string_alias_union_key_body() -> int {
-    load_type string | string
+    load_type string
     load_type int
     alloc_map 0
     store_var counts
-    load_type string | string
+    load_type string
     load_type int
     load_var counts
     load_const "x"
     load_const 1
     call baml.Map.set
     pop 1
-    load_type string | string
+    load_type string
     load_type int
     load_var counts
     load_const "x"
     call baml.Map.get
-    store_var _5
-    load_var _5
-    store_var _0
-    load_var _5
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 0
-    store_var _0
+    store_var _5
 
   L0:
-    load_var _0
+    load_var _5
     return
 }
 
@@ -1021,18 +1051,15 @@ function type_error_repro.map_with_string_alias_key_body() -> int {
     load_var counts
     load_const "x"
     call baml.Map.get
-    store_var _5
-    load_var _5
-    store_var _0
-    load_var _5
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 0
-    store_var _0
+    store_var _5
 
   L0:
-    load_var _0
+    load_var _5
     return
 }
 

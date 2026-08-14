@@ -117,6 +117,16 @@ fn host() -> &'static str {
     POSTHOG_HOST.trim_end_matches('/')
 }
 
+/// Crate-visible accessor for the PostHog key (used by `baml feedback`).
+pub(crate) fn posthog_api_key() -> &'static str {
+    POSTHOG_API_KEY
+}
+
+/// Crate-visible accessor for the PostHog host (used by `baml feedback`).
+pub(crate) fn posthog_host() -> &'static str {
+    POSTHOG_HOST
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

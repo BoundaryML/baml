@@ -167,9 +167,9 @@ implements W315Debuggable for int {
 }
 function w315_main() -> int {
     let a = reflect.type_of<int>().implements(reflect.type_of<W315Debuggable>())
-    let impls = reflect.type_of<W315Debuggable>().implementors()
-    if a { return 1000 + impls.length() }
-    return impls.length()
+    let b = reflect.type_of<W315Debuggable>().implemented_by(reflect.type_of<int>())
+    if a && b { return 1001 }
+    return 0
 }
 test "wf3_out_of_body_primitive_impl_visible_to_reflection_runtime" {
     assert.equal(w315_main(), 1001)
@@ -269,7 +269,10 @@ test "wf3_concrete_field_shadows_interface_views_pins" {
     assert.equal(w3cf_main(), "N")
 }
 
-// wf3_bare_generic_interface_reflection_is_wildcard_pins
+// wf3: generic-interface reflection is per-instantiation. A bare generic head
+// (`reflect.type_of<W3bgBox>()`) is an arity error like any other type
+// position (pinned in tests/interfaces.rs); each written instantiation
+// answers membership only for its own implementors.
 interface W3bgBox<T> {
     function get(self) -> T throws never
 }
@@ -284,31 +287,12 @@ class W3bgStringBox {
     }
 }
 function w3bg_main() -> bool {
-    let bare = reflect.type_of<W3bgBox>()
-    return bare.implemented_by(reflect.type_of<W3bgIntBox>())
-        && bare.implemented_by(reflect.type_of<W3bgStringBox>())
-        && bare.implementors().length() == 2
+    let int_box = reflect.type_of<W3bgBox<int>>()
+    return int_box.implemented_by(reflect.type_of<W3bgIntBox>())
+        && !int_box.implemented_by(reflect.type_of<W3bgStringBox>())
 }
-test "wf3_bare_generic_interface_reflection_is_wildcard_pins" {
+test "wf3_generic_interface_reflection_is_per_instantiation" {
     assert.is_true(w3bg_main())
-}
-
-// wf3_blanket_implementor_identity_is_bare_class_pins
-interface W3biPrintable {
-    function display(self) -> string throws never
-}
-class W3biBox<T> {
-    value: T
-}
-implements<T> W3biPrintable for W3biBox<T> {
-    function display(self) -> string { return "box" }
-}
-function w3bi_main() -> string {
-    let p = reflect.type_of<W3biPrintable>()
-    return p.implementors()[0].to_string()
-}
-test "wf3_blanket_implementor_identity_is_bare_class_pins" {
-    assert.equal(w3bi_main(), "interfaces.W3biBox")
 }
 
 // ─── union-fuzz findings + PR #3638 follow-ups ───────────────────────────────
@@ -468,18 +452,14 @@ function uf06_main() -> int {
     if ub.implements(fwd) { d1 = 1 }
     let d2 = 0
     if fwd.implemented_by(ub) { d2 = 1 }
-    let d3 = 0
-    if fwd.implementors().length() == 1 { d3 = 1 }
     let d4 = 0
     if ub.implements(rev) { d4 = 1 }
     let d5 = 0
     if rev.implemented_by(ub) { d5 = 1 }
-    let d6 = 0
-    if rev.implementors().length() == 1 { d6 = 1 }
-    return d1*100000 + d2*10000 + d3*1000 + d4*100 + d5*10 + d6
+    return d1*1000 + d2*100 + d4*10 + d5
 }
 test "union_fuzz_f06_reflection_generic_union_arg_order_insensitive" {
-    assert.equal(uf06_main(), 111111)
+    assert.equal(uf06_main(), 1111)
 }
 
 // union_fuzz_f08_interface_bounded_generic_identity_compiles

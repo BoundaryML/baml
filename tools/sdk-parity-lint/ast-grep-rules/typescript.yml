@@ -1,0 +1,79 @@
+id: typescript-test
+language: TypeScript
+rule:
+  pattern: '$TEST($ID, $$$ARGS)'
+constraints:
+  TEST:
+    regex: '^(it|test)$'
+---
+id: typescript-modified-test
+language: TypeScript
+rule:
+  any:
+    - pattern: '$TEST.$MOD($ID, $$$ARGS)'
+    - pattern: '$TEST.$MOD($ID)'
+constraints:
+  TEST:
+    regex: '^(it|test)$'
+  MOD:
+    regex: '^(only|skip|todo|concurrent)$'
+---
+id: typescript-runtime-test
+language: TypeScript
+rule:
+  pattern: '$TEST.runIf($COND)($ID, $$$ARGS)'
+constraints:
+  TEST:
+    regex: '^(it|test)$'
+---
+id: typescript-audit-direct
+language: TypeScript
+rule:
+  pattern: '$TEST($$$ARGS)'
+constraints:
+  TEST:
+    regex: '^(it|test)$'
+---
+id: typescript-audit-modifier
+language: TypeScript
+rule:
+  pattern: '$TEST.$MOD($$$ARGS)'
+constraints:
+  TEST:
+    regex: '^(it|test)$'
+---
+id: typescript-audit-curried
+language: TypeScript
+rule:
+  pattern: '$TEST.$MOD($$$INNER)($$$OUTER)'
+constraints:
+  TEST:
+    regex: '^(it|test)$'
+---
+id: typescript-audit-nested-modifier
+language: TypeScript
+rule:
+  pattern: '$TEST.$MOD1.$MOD2($$$ARGS)'
+constraints:
+  TEST:
+    regex: '^(it|test)$'
+---
+id: typescript-audit-nested-curried
+language: TypeScript
+rule:
+  pattern: '$TEST.$MOD1.$MOD2($$$INNER)($$$OUTER)'
+constraints:
+  TEST:
+    regex: '^(it|test)$'
+---
+id: typescript-suite-runtime-gate
+language: TypeScript
+rule:
+  pattern: 'describe.runIf($COND)($$$ARGS)'
+---
+id: sdk-parity-lint-skip
+language: TypeScript
+rule:
+  all:
+    - kind: comment
+    - regex: 'SDK_PARITY_LINT\(skip\):'

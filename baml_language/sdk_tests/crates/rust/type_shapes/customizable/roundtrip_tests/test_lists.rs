@@ -6,12 +6,12 @@ use baml_sdk::lists::{
 };
 
 #[test]
-fn test_round_trip_ints() {
+fn test_lists_round_trip_ints() {
     assert_eq!(round_trip_ints(vec![1, 2, 3]).unwrap(), vec![1, 2, 3]);
 }
 
 #[test]
-fn test_round_trip_empty_list() {
+fn test_lists_round_trip_empty_list() {
     // Regression pinned from the python encoder: an empty list used to
     // encode as an unset `list_value` oneof, which the engine read as null
     // and returned as `None`. An empty list must stay distinct from null on
@@ -20,7 +20,7 @@ fn test_round_trip_empty_list() {
 }
 
 #[test]
-fn test_round_trip_optional_strings() {
+fn test_lists_round_trip_optional_strings() {
     assert_eq!(
         round_trip_optional_strings(vec![Some("a".to_string()), None, Some("b".to_string())])
             .unwrap(),
@@ -29,7 +29,7 @@ fn test_round_trip_optional_strings() {
 }
 
 #[test]
-fn test_round_trip_union_list() {
+fn test_lists_round_trip_union_list() {
     let xs = vec![
         IntOrString::Int(1),
         IntOrString::String("two".to_string()),
@@ -39,7 +39,7 @@ fn test_round_trip_union_list() {
 }
 
 #[test]
-fn test_round_trip_list_container() {
+fn test_lists_round_trip_list_container() {
     let c = ListContainer {
         ints: vec![1, 2],
         optional_strings: vec![None, Some("z".to_string())],

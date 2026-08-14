@@ -1,11 +1,11 @@
 // This file contains invalid MDX header usage patterns
 
 function HeaderInPrompt() -> string {
-    client GPT4
-    prompt #"
+    client: GPT4
+    prompt: `
         //# This is inside a prompt
         It should be treated as literal text, not a header
-    "#
+    `
 }
 
 function MixedOnSameLine() -> string {
@@ -44,58 +44,34 @@ function HeaderInStringLiteral() -> string {
     x + y
 }
 
-// LLM function (not expression function) - headers should not be allowed
-function LLMFunction(input: string) -> string {
-    client GPT4
-    //# Section Header
-    // Should fail - only allowed in expression functions
-    prompt #"Process: {{ input }}"#
-}
-
-client<llm> GPT4 {
-    provider openai
-    options {
-        model gpt-4
-        api_key env.OPENAI_API_KEY
-    }
-}
+client GPT4 = openai.OpenAiClient.new(
+    model = "gpt-4",
+    api_key = env.OPENAI_API_KEY,
+);
 
 //----
 //- diagnostics
-// (expect errors for invalid header patterns)
-// error: Expected expression, found '#'
-//     ╭─[ headers_invalid.baml:12:21 ]
-//     │
+// E0010
+//
+//   × unexpected token
+//     ╭─[headers_invalid.baml:12:21]
 //  12 │     let x = "hello" ## Inline Header // Should fail
-//     │                     ┬
-//     │                     ╰── Expected expression, found '#'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found '#'
-//     ╭─[ headers_invalid.baml:12:22 ]
-//     │
+//     ·                     ┬
+//     ·                     ╰── expected `expression`, found `'#'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[headers_invalid.baml:12:22]
 //  12 │     let x = "hello" ## Inline Header // Should fail
-//     │                      ┬
-//     │                      ╰── Expected expression, found '#'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found '#'
-//     ╭─[ headers_invalid.baml:33:23 ]
-//     │
+//     ·                      ┬
+//     ·                      ╰── expected `expression`, found `'#'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[headers_invalid.baml:33:23]
 //  33 │     let x = "start" + # Middle Header // Should fail
-//     │                       ┬
-//     │                       ╰── Expected expression, found '#'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Header comments (//#) are not allowed inside LLM functions
-//     ╭─[ headers_invalid.baml:50:5 ]
-//     │
-//  50 │     //# Section Header
-//     │     ─────────┬────────
-//     │              ╰────────── Header comments (//#) are not allowed inside LLM functions
-//     │
-//     │ Note: Error code: E0010
-// ────╯
+//     ·                       ┬
+//     ·                       ╰── expected `expression`, found `'#'`
+//     ╰────

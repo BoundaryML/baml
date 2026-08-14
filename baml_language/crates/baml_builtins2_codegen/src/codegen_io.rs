@@ -15,7 +15,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::types::{BamlType, NativeBuiltin, NativeClassDef};
+use crate::{
+    rust_ident::rust_field_ident,
+    types::{BamlType, NativeBuiltin, NativeClassDef, Receiver},
+};
 
 // ============================================================================
 // Path configuration for generated code
@@ -71,7 +74,7 @@ impl IoNamespaceNode<'_> {
 /// All IO builtins start with "baml." and have a namespace as the second segment:
 /// - "baml.fs.open" → "fs"
 /// - "baml.fs.File.read" → "fs"
-/// - `"baml.llm.get_client"` → `"llm"`
+/// - `"baml.prompt.get_client"` → `"llm"`
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
     let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
     after_baml.split('.').next().unwrap_or("")
@@ -80,6 +83,24 @@ fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
 /// Extract the method name (last segment) from an IO builtin path.
 fn io_method_name(builtin: &NativeBuiltin) -> &str {
     builtin.path.rsplit('.').next().unwrap_or("")
+}
+
+/// The class-dispatch match key for an IO method: the path portion after
+/// `...{ClassName}.`.
+///
+/// A method declared inside an `implements I { ... }` block keeps the interface
+/// segment in its runtime path (`...{Class}.I.method`), so the key is
+/// `I.method`; a direct method is just `method`. The clean trait method name
+/// and glue still use the final segment (`io_method_name`).
+fn io_class_dispatch_key(builtin: &NativeBuiltin) -> String {
+    builtin
+        .receiver
+        .as_ref()
+        .and_then(|r| builtin.path.split_once(&format!(".{}.", r.class_name)))
+        .map_or_else(
+            || io_method_name(builtin).to_string(),
+            |(_, rest)| rest.to_string(),
+        )
 }
 
 fn build_io_namespace_tree<'a>(
@@ -420,7 +441,7 @@ fn into_owned_expr(
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    let field_ident = format_ident!("{}", field_name);
+    let field_ident = rust_field_ident(field_name);
     match ty {
         BamlType::Int | BamlType::Bool => {
             quote! { self.#field_ident()? }
@@ -705,6 +726,28 @@ fn class_trait_ident(ns: &str, class: &str) -> syn::Ident {
     format_ident!("IoClass{}{}", capitalize_first(ns), class)
 }
 
+/// Whether the clean trait method and glue thread an *extracted* receiver value
+/// to the impl.
+///
+/// True for a non-static receiver on an instance-backed (field-carrying) class:
+/// the receiver is materialized as an `owned::{ns}::{Class}` and passed through.
+///
+/// A fieldless marker class (e.g. `random.SystemRandom`) still takes `self` in
+/// BAML so it can satisfy an interface, but it carries no data and has no
+/// generated `owned::`/`view::` struct. Its `self` arg slot is still consumed
+/// by the glue (the VM pushes it), but the value is ignored and the clean
+/// method takes no receiver parameter. `consumes_self_slot` covers that case.
+fn receiver_is_extracted(receiver: &Receiver) -> bool {
+    !receiver.receiver_type.is_static() && receiver.instance_backed
+}
+
+/// Whether the method consumes a leading `self` arg slot on the operand stack.
+/// True for any non-static receiver, including fieldless marker classes whose
+/// receiver value is consumed but ignored.
+fn consumes_self_slot(receiver: &Receiver) -> bool {
+    !receiver.receiver_type.is_static()
+}
+
 // ============================================================================
 // Generate SysOp Enum
 // ============================================================================
@@ -951,7 +994,7 @@ fn emit_view_struct(
             let mut needs_heap = false;
             let ret_type = view_return_type(&field.field_type, &mut needs_heap);
             let body = view_accessor_body(&field.name, &field.field_type);
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
 
             if needs_heap {
                 quote! {
@@ -982,7 +1025,7 @@ fn emit_view_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
             let expr = into_owned_expr(&field.name, &field.field_type, class_ns_map, paths);
             quote! { #field_ident: #expr }
         })
@@ -1031,8 +1074,8 @@ fn emit_view_struct(
 /// A class is non-defaultable if it directly contains a `$rust_type` field,
 /// or if any of its fields transitively references a non-defaultable class.
 ///
-/// Both the fully-qualified name (`baml.llm.StreamAccumulator`) and the short
-/// name (`StreamAccumulator`) are stored, because field type references may use
+/// Both a fully-qualified name (for example `baml.sap.ParseCache`) and its
+/// short name are stored, because field type references may use
 /// either form depending on whether the path was single- or multi-segment.
 fn compute_non_defaultable_classes(
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
@@ -1158,7 +1201,7 @@ fn emit_owned_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
             let rust_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
             quote! { pub #field_ident: #rust_ty }
         })
@@ -1170,7 +1213,7 @@ fn emit_owned_struct(
         .iter()
         .map(|field| {
             let field_name_str = &field.name;
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
             let conv = owned_to_external_expr(
                 &quote! { self.#field_ident },
                 &field.field_type,
@@ -1185,7 +1228,7 @@ fn emit_owned_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
             let field_name_str = &field.name;
             let field_val = quote! {
                 fields.swap_remove(#field_name_str).unwrap_or(BexExternalValue::Null)
@@ -1305,12 +1348,12 @@ fn emit_one_class_trait(
                     compile_error!(concat!("missing receiver for method ", stringify!(#method_ident)));
                 };
             };
-            let receiver_param = if receiver.receiver_type.is_static() {
-                None
-            } else {
+            let receiver_param = if receiver_is_extracted(receiver) {
                 let receiver_param_ident = format_ident!("{}", class_name.to_lowercase());
                 let receiver_ty = quote! { #owned::#ns_ident::#class_ident };
                 Some(quote! { #receiver_param_ident: #receiver_ty,})
+            } else {
+                None
             };
 
             let extra_params: Vec<TokenStream> = m
@@ -1359,7 +1402,7 @@ fn emit_one_class_trait(
     let dispatch_arms: Vec<TokenStream> = methods
         .iter()
         .map(|m| {
-            let method_name_str = io_method_name(m);
+            let method_name_str = io_class_dispatch_key(m);
             let glue_ident = format_ident!("__glue_{}", m.fn_name);
             quote! {
                 #method_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id))
@@ -1413,10 +1456,14 @@ fn emit_glue_method(
     let class_ident = format_ident!("{}", class_name);
 
     // Arg extraction lets
-    let arg_self = if receiver.receiver_type.is_static() {
+    let arg_self = if !consumes_self_slot(receiver) {
         None
-    } else {
+    } else if receiver_is_extracted(receiver) {
         Some(quote! { let __arg_self = __args.next().unwrap(); })
+    } else {
+        // Fieldless marker receiver: consume the `self` slot but discard it —
+        // the clean method takes no receiver and there is no `view::` struct.
+        Some(quote! { let _ = __args.next().unwrap(); })
     };
 
     let arg_idents: Vec<syn::Ident> = (0..builtin.params.len())
@@ -1439,14 +1486,14 @@ fn emit_glue_method(
         .map(|id| quote! { let #id = __args.next().unwrap(); })
         .collect();
 
-    let receiver_extraction = if receiver.receiver_type.is_static() {
-        None
-    } else {
+    let receiver_extraction = if receiver_is_extracted(receiver) {
         Some(quote! {
             let __receiver = __arg_self
                 .as_builtin_class::<#view::#ns_ident::#class_ident>(heap.as_ref(), permit)?
                 .into_owned(heap.as_ref(), permit)?;
         })
+    } else {
+        None
     };
 
     // Extraction inside gc protection
@@ -1476,10 +1523,10 @@ fn emit_glue_method(
         .collect();
 
     // Tuple elements for Ok return
-    let receiver_ident = if receiver.receiver_type.is_static() {
-        None
-    } else {
+    let receiver_ident = if receiver_is_extracted(receiver) {
         Some(quote! { __receiver, })
+    } else {
+        None
     };
     let tuple_idents: Vec<syn::Ident> = builtin
         .params
@@ -2127,7 +2174,19 @@ fn emit_runtime_io_handles(
     let mut handles = Vec::new();
 
     for (ns, node) in tree {
-        for class_name in node.classes.keys() {
+        for (class_name, methods) in &node.classes {
+            // Fieldless marker classes (e.g. `random.SystemRandom`) have no
+            // generated `owned::` struct, so there is nothing to wrap in a
+            // handle and `from_external` would not resolve. They are never used
+            // as a receiver handle in the `RuntimeIo` trait either (see
+            // `emit_runtime_io_trait`), so skip them entirely.
+            let instance_backed = methods
+                .first()
+                .and_then(|m| m.receiver.as_ref())
+                .is_none_or(|r| r.instance_backed);
+            if !instance_backed {
+                continue;
+            }
             let handle_ident = handle_type_name(ns, class_name);
 
             // Find the class def to get non-opaque fields.
@@ -2143,7 +2202,7 @@ fn emit_runtime_io_handles(
                     if field.field_type == BamlType::RustType {
                         continue;
                     }
-                    let field_ident = format_ident!("{}", field.name);
+                    let field_ident = rust_field_ident(&field.name);
                     let field_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
                     pub_fields.push(quote! { pub #field_ident: #field_ty });
 
@@ -2216,12 +2275,16 @@ fn emit_runtime_io_trait(
 
         let mut params: Vec<TokenStream> = Vec::new();
 
-        // For class methods, the first param is a handle reference.
+        // For class methods, the first param is a handle reference. Fieldless
+        // marker receivers (e.g. `random.SystemRandom`) have no handle type, so
+        // they take no receiver param — the adapter synthesizes their `self`.
         if let Some(ref receiver) = builtin.receiver {
-            let ns = io_namespace_name(builtin);
-            let handle = handle_type_name(ns, &receiver.class_name);
-            let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
-            params.push(quote! { #param_ident: &#handle });
+            if receiver.instance_backed {
+                let ns = io_namespace_name(builtin);
+                let handle = handle_type_name(ns, &receiver.class_name);
+                let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
+                params.push(quote! { #param_ident: &#handle });
+            }
         }
 
         for p in &builtin.params {
@@ -2360,11 +2423,23 @@ fn emit_adapter_impl(
 
         if let Some(ref receiver) = builtin.receiver {
             let ns = io_namespace_name(builtin);
-            let handle = handle_type_name(ns, &receiver.class_name);
-            let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
-            params.push(quote! { #param_ident: &#handle });
-            ext_bindings.push(quote! { let __recv_raw = #param_ident.raw.clone(); });
-            arg_exprs.push(quote! { BexValue::ExternalValue(&__recv_raw) });
+            if receiver.instance_backed {
+                let handle = handle_type_name(ns, &receiver.class_name);
+                let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
+                params.push(quote! { #param_ident: &#handle });
+                ext_bindings.push(quote! { let __recv_raw = #param_ident.raw.clone(); });
+                arg_exprs.push(quote! { BexValue::ExternalValue(&__recv_raw) });
+            } else if !receiver.receiver_type.is_static() {
+                // Fieldless marker receiver: the SysOpFn glue still consumes a
+                // leading `self` slot, so synthesize an empty instance for it.
+                // The `RuntimeIo` method itself takes no receiver param.
+                let class_fqn = format!("baml.{}.{}", ns, receiver.class_name);
+                ext_bindings.push(quote! {
+                    let __recv_raw =
+                        BexExternalValue::instance(#class_fqn, indexmap::IndexMap::new());
+                });
+                arg_exprs.push(quote! { BexValue::ExternalValue(&__recv_raw) });
+            }
         }
 
         for (i, p) in builtin.params.iter().enumerate() {
@@ -2624,6 +2699,91 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 ctx: ctx.clone(),
                 #(#field_inits,)*
             })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, HashSet};
+
+    use super::{CodegenPaths, emit_owned_struct, emit_view_struct};
+    use crate::{
+        rust_ident::rust_field_ident,
+        types::{BamlType, NativeClassDef, NativeClassField},
+    };
+
+    #[test]
+    fn generated_keyword_fields_keep_original_vm_keys() {
+        const BAML_FIELD_NAMES: &[&str] = &[
+            "type",
+            "match",
+            "move",
+            "self",
+            "self_",
+            "Self",
+            "super",
+            "crate",
+            "_",
+            "dash-name",
+            "$data",
+            "__baml_field_73656c66",
+        ];
+        let class = NativeClassDef {
+            name: "KeywordFields".to_string(),
+            namespace_prefix: "baml.test".to_string(),
+            generic_params: Vec::new(),
+            fields: BAML_FIELD_NAMES
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(index, name)| NativeClassField {
+                    name: name.to_string(),
+                    field_type: BamlType::Bool,
+                    index,
+                })
+                .collect(),
+            source_file: "<test>/keywords.baml".to_string(),
+        };
+        let class_ns_map = BTreeMap::new();
+        let paths = CodegenPaths::inline();
+
+        let owned = crate::format_tokens(&emit_owned_struct(
+            &class,
+            &class_ns_map,
+            "test",
+            &paths,
+            &HashSet::new(),
+        ));
+        let view = crate::format_tokens(&emit_view_struct(&class, &class_ns_map, "test", &paths));
+        let compact_owned: String = owned.chars().filter(|c| !c.is_whitespace()).collect();
+        let compact_view: String = view.chars().filter(|c| !c.is_whitespace()).collect();
+
+        for baml_name in BAML_FIELD_NAMES {
+            let rust_name = rust_field_ident(baml_name);
+            assert!(
+                compact_owned.contains(&format!("pub{rust_name}:bool")),
+                "missing escaped owned field `{rust_name}`:\n{owned}"
+            );
+            assert!(
+                compact_view.contains(&format!("pubfn{rust_name}(")),
+                "missing escaped view accessor `{rust_name}`:\n{view}"
+            );
+        }
+
+        for baml_name in BAML_FIELD_NAMES {
+            assert!(
+                compact_owned.contains(&format!("\"{baml_name}\".to_string()")),
+                "external conversion changed the BAML key `{baml_name}`:\n{owned}"
+            );
+            assert!(
+                compact_owned.contains(&format!("fields.swap_remove(\"{baml_name}\")")),
+                "external lookup changed the BAML key `{baml_name}`:\n{owned}"
+            );
+            assert!(
+                compact_view.contains(&format!("self.cls.field(\"{baml_name}\")")),
+                "VM lookup changed the BAML key `{baml_name}`:\n{view}"
+            );
         }
     }
 }

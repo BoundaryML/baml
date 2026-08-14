@@ -1,495 +1,185 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 152
 ---
-function streaming_parsing.$init_test_ns_streaming_parsing_streaming_parsing(registry: testing.TestCollector) -> null {
-    load_var registry
-    load_const "parse_stream_companion_class_in_namespace"
-    make_closure .<lambda($init_test_ns_streaming_parsing_streaming_parsing, 0)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "stream_done_signal_required"
-    make_closure .<lambda($init_test_ns_streaming_parsing_streaming_parsing, 1)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_const null
-    return
-}
-
-function streaming_parsing.ExtractDoc(input: string, client: baml.llm.Client) -> streaming_parsing.Doc {
+function streaming_parsing.ExtractDoc(input: string, client: ai.Client | null) -> streaming_parsing.Doc {
     load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
+    load_const null
     store_var client
 
   L0:
     load_type streaming_parsing.Doc
+    load_const <omitted>
     load_var client
-    load_const "ExtractDoc"
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
     load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
-    return
-}
-
-function streaming_parsing.ExtractDoc$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "ExtractDoc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request
-    return
-}
-
-function streaming_parsing.ExtractDoc$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "ExtractDoc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request_stream
-    return
-}
-
-function streaming_parsing.ExtractDoc$parse(json: string, client: baml.llm.Client) -> streaming_parsing.Doc {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_type streaming_parsing.Doc$stream | null
-    load_type streaming_parsing.Doc
-    load_var json
-    call baml.llm.parse
-    return
-}
-
-function streaming_parsing.ExtractDoc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<streaming_parsing.Doc$stream | null, streaming_parsing.Doc> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_type streaming_parsing.Doc$stream | null
-    load_type streaming_parsing.Doc
-    load_var2 2 1
-    call baml.llm.Client.__make_stream
-    return
-}
-
-function streaming_parsing.ExtractDoc$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "ExtractDoc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.render_prompt
-    return
-}
-
-function streaming_parsing.ExtractDoc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<streaming_parsing.Doc$stream | null, streaming_parsing.Doc> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_type streaming_parsing.Doc$stream | null
-    load_type streaming_parsing.Doc
-    load_var client
-    load_const "ExtractDoc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
-    return
-}
-
-function streaming_parsing.SayHello(input: string, client: baml.llm.Client) -> string {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_type string
-    load_var client
-    load_const "SayHello"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
-    return
-}
-
-function streaming_parsing.SayHello$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "SayHello"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request
-    return
-}
-
-function streaming_parsing.SayHello$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "SayHello"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request_stream
-    return
-}
-
-function streaming_parsing.SayHello$parse(json: string, client: baml.llm.Client) -> string {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_type string | null
-    load_type string
-    load_var json
-    call baml.llm.parse
-    return
-}
-
-function streaming_parsing.SayHello$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_type string | null
-    load_type string
-    load_var2 2 1
-    call baml.llm.Client.__make_stream
-    return
-}
-
-function streaming_parsing.SayHello$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "SayHello"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.render_prompt
-    return
-}
-
-function streaming_parsing.SayHello$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.streaming_parsing.StreamParseClient
-    store_var client
-
-  L0:
-    load_type string | null
-    load_type string
-    load_var client
-    load_const "SayHello"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
-    return
-}
-
-function streaming_parsing.StreamParseClient$new(lenient: bool) -> null {
-    load_const "StreamParseClient"
-    load_const "openai"
-    load_const "gpt-4o"
-    load_const "http://localhost:1234"
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const "test-key"
-    load_const null
-    load_const null
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type unknown
-    alloc_map 0
-    init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
-    init_instance baml.llm.PrimitiveClient .name, .provider, .options
-    return
-}
-
-function streaming_parsing.openai_sse_body(chunks: string[], finish_reason: string) -> string {
-    load_const ""
-    store_var body
-    load_var chunks
-    load_type baml.iter.Iterable<Item = string, Error = never>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
+    call user.streaming_parsing.ExtractDoc$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<streaming_parsing.Doc, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<streaming_parsing.Doc>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
     store_var _4
-
-  L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = string, Error = never>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var _5
-    is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var body
-    load_const "data: {\"choices\":[{\"delta\":{\"content\":\""
-    bin_op +
-    load_var _5
-    bin_op +
-    load_const "\"}}]}\n\n"
-    bin_op +
-    store_var body
-    jump L0
-
-  L2:
-    load_var body
-    load_const "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\""
-    bin_op +
-    load_var finish_reason
-    bin_op +
-    load_const "\"}]}\n\n"
-    bin_op +
-    store_var_load_var body
-    load_const "data: [DONE]\n\n"
-    bin_op +
-    store_var body
-    load_var body
+    load_field .value
     return
 }
 
-function streaming_parsing.parse_stream_companion_class_in_namespace_fn() -> string {
+function streaming_parsing.ExtractDoc$parse(json: string) -> streaming_parsing.Doc {
+    load_type streaming_parsing.Doc
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function streaming_parsing.ExtractDoc$render_prompt(input: string) -> ai.Prompt {
+    load_var input
+    call user.streaming_parsing.ExtractDoc$spec
+    store_var _2
+    load_type streaming_parsing.Doc
+    call ai.wire.render_output_format
+    store_var _3
+    load_type streaming_parsing.Doc
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function streaming_parsing.ExtractDoc$spec(input: string) -> ai.FunctionSpec<streaming_parsing.Doc> {
     load_var ?1
     make_cell
     store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
-    load_const "{\\\"title\\\": \\\"Hello\\\", \\\"body\\\": \\\"Wor"
-    load_const "ld\\\", \\\"word_count\\\": 1}"
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "ExtractDoc"
+    load_deref ?1
+    load_const "input"
     load_type string
-    alloc_array 2
-    load_const "stop"
-    call user.streaming_parsing.openai_sse_body
-    store_deref ?1
-    load_const "127.0.0.1:0"
-    sys_op baml.http.Server.bind
-    store_deref ?2
-    load_var2 2 1
-    make_closure .<lambda(parse_stream_companion_class_in_namespace_fn, 0)>, 2
-    load_const null
-    load_const null
-    spawn
-    store_var _6
-    load_const "world"
+    load_type unknown
+    alloc_map 1
+    load_var input
+    make_closure .<lambda(ExtractDoc$spec, 0)>, 1
+    load_var _4
+    load_global user.streaming_parsing.StreamParseClient
+    load_type streaming_parsing.Doc
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function streaming_parsing.ExtractDoc$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<streaming_parsing.Doc$stream | null, streaming_parsing.Doc> {
+    load_var client
     load_const <omitted>
-    call user.streaming_parsing.ExtractDoc$build_request_stream
-    load_deref ?2
-    load_field .addr
-    call user.streaming_parsing.repoint_request
-    sys_op baml.http.fetch_sse
-    load_const <omitted>
-    call user.streaming_parsing.ExtractDoc$parse_stream
-    store_var s
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var input
+    call user.streaming_parsing.ExtractDoc$spec
+    store_var _4
     load_type streaming_parsing.Doc$stream | null
     load_type streaming_parsing.Doc
-    load_var s
-    call baml.llm.Stream.final
-    store_var d
-    load_var _6
-    call baml.future.Future.cancel
-    pop 1
-    load_var d
-    load_field .title
+    load_var2 3 2
+    call ai.stream.from_spec
     return
 }
 
-function streaming_parsing.repoint_request(req: baml.http.Request, addr: string) -> baml.http.Request {
-    load_var req
-    load_field .method
-    load_const "http://"
-    load_var addr
-    bin_op +
-    load_const "/chat/completions"
-    bin_op +
-    load_var req
-    load_field .headers
-    load_var req
-    load_field .body
-    init_instance baml.http.Request .method, .url, .headers, .body
+function streaming_parsing.SayHello(input: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var input
+    call user.streaming_parsing.SayHello$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
     return
 }
 
-function streaming_parsing.stream_done_signal_required_fn() -> bool {
+function streaming_parsing.SayHello$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function streaming_parsing.SayHello$render_prompt(input: string) -> ai.Prompt {
+    load_var input
+    call user.streaming_parsing.SayHello$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function streaming_parsing.SayHello$spec(input: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
-    load_const "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n"
-    store_deref ?1
-    load_const "127.0.0.1:0"
-    sys_op baml.http.Server.bind
-    store_deref ?2
-    load_var2 2 1
-    make_closure .<lambda(stream_done_signal_required_fn, 0)>, 2
-    load_const null
-    load_const null
-    spawn
-    store_var _5
-    load_const "world"
-    load_const <omitted>
-    call user.streaming_parsing.SayHello$build_request_stream
-    load_deref ?2
-    load_field .addr
-    call user.streaming_parsing.repoint_request
-    sys_op baml.http.fetch_sse
-    load_const <omitted>
-    call user.streaming_parsing.SayHello$parse_stream
-    store_var s
-    load_type string | null
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "SayHello"
+    load_deref ?1
+    load_const "input"
     load_type string
-    load_var s
-    call baml.llm.Stream.final
-    pop 1
-    load_const "expected final() to throw when the stream ends without a completion signal"
-    call baml.sys.panic
-    store_var ok
-    jump L2
-    load_var e
-    is_type baml.errors.LlmClient
+    load_type unknown
+    alloc_map 1
+    load_var input
+    make_closure .<lambda(SayHello$spec, 0)>, 1
+    load_var _4
+    load_global user.streaming_parsing.StreamParseClient
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function streaming_parsing.SayHello$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_const null
+    store_var client
 
   L0:
-    load_var e
-    rethrow
-
-  L1:
-    load_const true
-    store_var ok
-
-  L2:
-    load_var _5
-    call baml.future.Future.cancel
-    pop 1
-    load_var ok
+    load_var input
+    call user.streaming_parsing.SayHello$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
     return
 }

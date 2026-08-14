@@ -10,6 +10,7 @@ mod media;
 mod py_handle;
 pub mod runtime;
 pub mod types;
+mod unhandled_spawn;
 
 use pyo3::{
     Bound,
@@ -20,10 +21,24 @@ use pyo3::{
 };
 use pyo3_stub_gen::{define_stub_info_gatherer, derive::gen_stub_pyfunction};
 
+const BRIDGE_RUNTIME_NAME: &str = "baml-bridge";
+
 #[gen_stub_pyfunction]
 #[pyfunction]
 fn get_version() -> &'static str {
+    get_toolchain_version()
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+fn get_toolchain_version() -> &'static str {
     baml_version::CANONICAL_VERSION
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+fn get_bridge_runtime_version() -> &'static str {
+    baml_version::PYPI_VERSION
 }
 
 /// No-op: tracing has been removed. Kept as a live symbol for ABI stability
@@ -48,7 +63,9 @@ fn cancel_function_call(call_id: u64) -> bool {
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
         language: bridge_cffi::BridgeLanguage::Python,
-        sdk_version: baml_version::CANONICAL_VERSION.to_string(),
+        bridge_runtime_name: BRIDGE_RUNTIME_NAME.to_string(),
+        bridge_runtime_version: get_bridge_runtime_version().to_string(),
+        toolchain_version: get_toolchain_version().to_string(),
     })
     .map_err(PyImportError::new_err)?;
 
@@ -66,9 +83,15 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::collector::Usage>()?;
     m.add_class::<types::collector::LLMCall>()?;
     m.add_wrapped(wrap_pyfunction!(get_version))?;
+    m.add_wrapped(wrap_pyfunction!(get_toolchain_version))?;
+    m.add_wrapped(wrap_pyfunction!(get_bridge_runtime_version))?;
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
     m.add_wrapped(wrap_pyfunction!(new_function_call))?;
     m.add_wrapped(wrap_pyfunction!(cancel_function_call))?;
+    m.add_wrapped(wrap_pyfunction!(
+        unhandled_spawn::register_unhandled_spawn_error_callback
+    ))?;
+    m.add_wrapped(wrap_pyfunction!(unhandled_spawn::shutdown_runtime))?;
     m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
     m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;

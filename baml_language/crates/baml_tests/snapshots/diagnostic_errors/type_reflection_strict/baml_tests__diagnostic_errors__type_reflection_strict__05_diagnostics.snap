@@ -2,52 +2,45 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected int, got type
-    ╭─[ reflect_intrinsic_errors.baml:12:18 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[reflect_intrinsic_errors.baml:12:18]
  12 │     let x: int = reflect.type_of<User>();
-    │                  ───────────┬───────────  
-    │                             ╰───────────── type mismatch: expected int, got type
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                  ───────────┬───────────
+    ·                             ╰── expected `int`, found `type`
+    ╰────
 
-  [type] error: unresolved type: NonExistent
-    ╭─[ reflect_intrinsic_errors.baml:18:5 ]
-    │
+  [type] E0002
+
+  × unresolved type: NonExistent
+    ╭─[reflect_intrinsic_errors.baml:18:21]
  18 │     reflect.type_of<NonExistent>()
-    │     ───────────────┬──────────────  
-    │                    ╰──────────────── unresolved type: NonExistent
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                     ───────────
+    ╰────
 
-  [type] error: function `type_of` expects 1 type argument(s), got 2
-    ╭─[ reflect_intrinsic_errors.baml:25:5 ]
-    │
+  [type] E0005
+
+  × function `type_of` expects 1 type argument(s), got 2
+    ╭─[reflect_intrinsic_errors.baml:25:5]
  25 │     reflect.type_of<int, string>()
-    │     ───────────────┬──────────────  
-    │                    ╰──────────────── function `type_of` expects 1 type argument(s), got 2
-    │ 
-    │ Note: Error code: E0005
-────╯
+    ·     ──────────────────────────────
+    ╰────
 
-  [type] error: type mismatch: expected int, got type
-   ╭─[ strict_normalization.baml:8:18 ]
-   │
- 8 │     let x: int = baml.llm.get_return_type(function_name);
-   │                  ───────────────────┬───────────────────  
-   │                                     ╰───────────────────── type mismatch: expected int, got type
-   │ 
-   │ Note: Error code: E0001
-───╯
+  [type] E0001
 
-  [type] error: type mismatch: expected string, got type
-    ╭─[ strict_normalization.baml:15:12 ]
-    │
+  × mismatched types
+   ╭─[strict_normalization.baml:8:18]
+ 8 │     let x: int = baml.prompt.get_return_type(function_name);
+   ·                  ─────────────────────┬────────────────────
+   ·                                       ╰── expected `int`, found `type`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[strict_normalization.baml:15:12]
  15 │     return t;
-    │            ┬  
-    │            ╰── type mismatch: expected string, got type
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·            ┬
+    ·            ╰── expected `string`, found `type`
+    ╰────

@@ -11,25 +11,25 @@ use baml_sdk::symbol_collisions::foo::{make_foo_bar, round_trip_foo_bar};
 use baml_sdk::symbol_collisions::lorem::{make_ipsum, round_trip_ipsum};
 
 #[test]
-fn test_round_trip_foo_bar() {
+fn test_symbol_collisions_round_trip_foo_bar() {
     let bar = make_foo_bar("hi".to_string(), 2).unwrap();
     assert_eq!(round_trip_foo_bar(bar.clone()).unwrap(), bar);
 }
 
 #[test]
-fn test_round_trip_fizz_foo_bar() {
+fn test_symbol_collisions_round_trip_fizz_foo_bar() {
     let bar = make_fizz_foo_bar("t".to_string(), 1.5).unwrap();
     assert_eq!(round_trip_fizz_foo_bar(bar.clone()).unwrap(), bar);
 }
 
 #[test]
-fn test_round_trip_fizz_buzz_foo_bar() {
+fn test_symbol_collisions_round_trip_fizz_buzz_foo_bar() {
     let bar = make_fizz_buzz_foo_bar("f".to_string(), 2.5, true).unwrap();
     assert_eq!(round_trip_fizz_buzz_foo_bar(bar.clone()).unwrap(), bar);
 }
 
 #[test]
-fn test_round_trip_ipsum() {
+fn test_symbol_collisions_round_trip_ipsum() {
     let ipsum = make_ipsum(
         make_foo_bar("a".to_string(), 1).unwrap(),
         make_fizz_foo_bar("b".to_string(), 2.0).unwrap(),
@@ -40,7 +40,7 @@ fn test_round_trip_ipsum() {
 }
 
 #[test]
-fn test_round_trip_deep() {
+fn test_symbol_collisions_round_trip_deep() {
     let ipsum = make_ipsum(
         make_foo_bar("a".to_string(), 1).unwrap(),
         make_fizz_foo_bar("b".to_string(), 2.0).unwrap(),

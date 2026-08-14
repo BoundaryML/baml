@@ -248,12 +248,18 @@ fn elaborated_function_signature_with_source_map<'db>(
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();
-    let reserved_effect_param_names = item_tree
+    let reserved_effect_param_names: Vec<Name> = item_tree
         .enclosing_type_generic_params(function.id(db))
-        .to_vec();
+        .iter()
+        .map(|param| param.name.clone())
+        .collect();
     let signature = Arc::new(elaborate_function_signature_parts(
         func_data.name.clone(),
-        func_data.generic_params.clone(),
+        func_data
+            .generic_params
+            .iter()
+            .map(|param| param.name.clone())
+            .collect(),
         &reserved_effect_param_names,
         params,
         return_type,

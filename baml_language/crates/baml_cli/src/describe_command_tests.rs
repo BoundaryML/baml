@@ -42,6 +42,57 @@ fn capture_description(
     String::from_utf8(buf).unwrap()
 }
 
+fn truncation_budgets(output: &str) -> Vec<usize> {
+    output
+        .split("`--budget ")
+        .skip(1)
+        .map(|suffix| {
+            suffix
+                .split('`')
+                .next()
+                .expect("budget hint must have a closing backtick")
+                .parse()
+                .expect("budget hint must contain an integer")
+        })
+        .collect()
+}
+
+fn assert_reported_budget_is_minimum(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    probe_budget: usize,
+) -> usize {
+    let truncated = capture_description(db, desc, probe_budget);
+    let hinted_budgets = truncation_budgets(&truncated);
+    assert!(
+        !hinted_budgets.is_empty(),
+        "expected a budget hint:\n{truncated}"
+    );
+
+    let required = hinted_budgets[0];
+    assert!(
+        hinted_budgets.iter().all(|budget| *budget == required),
+        "all truncation markers must report the same full-output budget: {hinted_budgets:?}\n{truncated}"
+    );
+
+    let previous = required
+        .checked_sub(1)
+        .expect("a truncated description must require a positive budget");
+    let almost_full = capture_description(db, desc, previous);
+    assert!(
+        !truncation_budgets(&almost_full).is_empty(),
+        "the reported budget must be minimal; budget {previous} unexpectedly rendered everything:\n{almost_full}"
+    );
+
+    let exactly_full = capture_description(db, desc, required);
+    assert!(
+        truncation_budgets(&exactly_full).is_empty(),
+        "the reported budget must render the complete description:\n{exactly_full}"
+    );
+
+    required
+}
+
 /// Capture `write_keyword` output as a String.
 fn capture_keyword(name: &str) -> String {
     let mut buf = Vec::new();
@@ -378,12 +429,12 @@ fn render_builtin_namespace_env() {
     insta::assert_snapshot!(output);
 }
 
-/// `baml describe baml.llm` — list items in the `llm` sub-namespace.
+/// `baml describe baml.prompt` — list items in the `prompt` sub-namespace.
 #[test]
-fn render_builtin_namespace_llm() {
+fn render_builtin_namespace_prompt() {
     let db = simple_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("llm")];
+    let ns_path = vec![baml_db::Name::new("prompt")];
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -937,7 +988,7 @@ fn render_describe_methods_respect_budget() {
     for needle in [
         "methods:",
         "static_methods:",
-        "more lines (re-run with a higher --budget)",
+        "more lines (re-run with a higher `--budget` to see more; use `--budget ",
     ] {
         assert!(
             tight.contains(needle),
@@ -967,7 +1018,7 @@ fn render_describe_methods_respect_budget() {
         );
     }
     assert!(
-        !full.contains("re-run with a higher --budget"),
+        !full.contains("re-run with a higher `--budget`"),
         "no elision marker expected at budget 1000:\n{full}"
     );
     assert!(
@@ -979,6 +1030,23 @@ fn render_describe_methods_respect_budget() {
             && full.contains("function from_code_points(unicode: int[]) -> string"),
         "generous budgets should still show full method details:\n{full}"
     );
+
+    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 97);
+}
+
+#[test]
+fn render_describe_budget_hint_covers_dependencies_and_references() {
+    let db = simple_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let point = baml_lsp2_actions::describe(&db, &files, "Point");
+    assert_eq!(point.len(), 1);
+    assert_reported_budget_is_minimum(&db, &point[0], 0);
+
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let wrapper = baml_lsp2_actions::describe(&db, &files, "Wrapper");
+    assert_eq!(wrapper.len(), 1);
+    assert_reported_budget_is_minimum(&db, &wrapper[0], 0);
 }
 
 /// A class with a fields-only body (no docstring) still fits that body under a
@@ -993,7 +1061,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     let tight = capture_description(&db, &descs[0], 5);
     let full = capture_description(&db, &descs[0], 1000);
     assert!(
-        !tight.contains("[INFO] Showing"),
+        !tight.contains("[INFO] showing"),
         "fields-only body must not truncate at budget 5:\n{tight}"
     );
     // The header + body block is identical at both budgets; only the trailing
@@ -1001,7 +1069,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     let body_part = |s: &str| s[..s.find("\nmethods:").expect("methods section")].to_string();
     assert_eq!(body_part(&tight), body_part(&full));
     assert!(
-        tight.contains("more lines (re-run with a higher --budget)"),
+        tight.contains("more lines (re-run with a higher `--budget` to see more; use `--budget "),
         "methods exceeding the tight budget must be elided with a marker:\n{tight}"
     );
     for needle in ["class User {", "    name: string,", "    age: int,", "}"] {
@@ -1058,8 +1126,26 @@ fn render_keyword_class() {
 }
 
 #[test]
+fn render_keyword_generator() {
+    let output = capture_keyword("generator");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_if() {
     let output = capture_keyword("if");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_test() {
+    let output = capture_keyword("test");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_testset() {
+    let output = capture_keyword("testset");
     insta::assert_snapshot!(output);
 }
 
@@ -1142,6 +1228,25 @@ fn dispatch_language_topic_resolves_to_keyword() {
             "`{name}` should resolve to a keyword topic"
         );
     }
+}
+
+#[test]
+fn dispatch_schema_attributes_and_intrinsic_types_resolve_to_topics() {
+    let db = simple_project();
+    for name in ["alias", "description", "skip", "void", "never", "unknown"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`baml describe {name}` should resolve to a shared language topic"
+        );
+    }
+}
+
+#[test]
+fn render_schema_attribute_topic() {
+    let output = capture_keyword("alias");
+    assert!(output.contains("Overrides the serialized and parsed name"));
+    assert!(output.contains(r#"@alias("name")"#));
+    assert!(output.contains(r#"@@alias("name")"#));
 }
 
 #[test]

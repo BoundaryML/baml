@@ -87,7 +87,7 @@ pub(crate) fn member_variants<'a>(
 
 /// Generate the mechanical `attr` / `with_attr` accessors for a member. An
 /// attr-carrying variant exposes its `TyAttr` (a named `attr` field or the last
-/// tuple positional); an attr-less template leaf (`TypeArgRef`, `Wildcard`)
+/// tuple positional); an attr-less template leaf (`TypeArgRef`)
 /// borrows the shared [`TyAttr::EMPTY`] and ignores `with_attr` (it has nowhere
 /// to store one).
 fn gen_accessors(family: &Family, member: &Member) -> TokenStream {

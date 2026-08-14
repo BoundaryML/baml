@@ -9,12 +9,11 @@ import hashlib
 import json
 from pathlib import Path
 
+from baml_release_platforms import load_wrapper_targets, verify_wrapper_artifacts
+
 
 def _toolchain_required_targets() -> list[str]:
-    """Target triples the toolchain (and wrapper) release must ship, read from
-    the repository's platform contract (`release/platforms.json`) so the target
-    set lives in one machine-readable place instead of a hand-copied list.
-    Required = the `toolchain` artifact is present and not experimental."""
+    """Required toolchain target triples from the platform contract."""
     contract = json.loads(
         (Path(__file__).resolve().parent.parent / "release" / "platforms.json").read_text()
     )
@@ -26,7 +25,10 @@ def _toolchain_required_targets() -> list[str]:
     return targets
 
 
-TARGETS = _toolchain_required_targets()
+TOOLCHAIN_TARGETS = _toolchain_required_targets()
+WRAPPER_TARGETS = [
+    target.triple for target in load_wrapper_targets() if target.supports("self-update")
+]
 
 
 def sha256(path: Path) -> str:
@@ -42,7 +44,11 @@ def artifact_url(tag: str, path: Path) -> str:
 
 
 def collect_artifacts(
-    root: Path, product: str, version: str, tag: str | None = None
+    root: Path,
+    product: str,
+    version: str,
+    required_targets: list[str],
+    tag: str | None = None,
 ) -> dict[str, dict[str, str]]:
     artifacts = {}
     prefix = f"{product}-{version}-"
@@ -60,19 +66,22 @@ def collect_artifacts(
             "url": artifact_url(tag or f"{product}-{version}", path),
             "sha256": sha256(path),
         }
-    missing = sorted(set(TARGETS) - set(artifacts))
-    extra = sorted(set(artifacts) - set(TARGETS))
+    missing = sorted(set(required_targets) - set(artifacts))
+    extra = sorted(set(artifacts) - set(required_targets))
     if missing or extra:
-        raise SystemExit(f"{product} artifact target mismatch missing={missing} extra={extra}")
+        raise SystemExit(
+            f"{product} artifact target mismatch missing={missing} extra={extra}"
+        )
     return artifacts
 
 
 def collect_cffi_artifacts(root: Path, version: str) -> dict[str, dict[str, str]]:
     """The engine cdylibs (`libbaml_cffi-<triple>.{so,dylib}` /
-    `baml_cffi-<triple>.dll`), recorded as bookkeeping — the dylib-loader SDKs
-    construct these GitHub-release URLs directly, so the manifest does not need
-    to be consulted at load time. Only the targets actually built are recorded
-    (experimental targets may be absent), so no required/extra check applies.
+    `baml_cffi-<triple>.dll`). The public Go module resolves these exact URLs
+    and checksums from the immutable version manifest; other loaders may
+    construct the same URLs directly. Only the targets actually built are
+    recorded (experimental targets may be absent), so no required/extra check
+    applies.
     """
     tag = f"baml-language-{version}"
     artifacts: dict[str, dict[str, str]] = {}
@@ -106,23 +115,57 @@ def main() -> None:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--channel", required=True, choices=["canary", "nightly"])
     parser.add_argument("--version", required=True)
+    parser.add_argument("--released-at", required=True)
     parser.add_argument("--pypi-version", required=True)
-    # Optional until the crates.io publisher lands; when set, the toolchain
-    # manifest records `sdks.rust`. crates.io's version encoding is the identity
-    # of the canonical version (SemVer prereleases are valid).
+    # Registry coordinates are optional to keep this utility useful for partial
+    # fixture generation; the release workflow supplies every enabled SDK only
+    # after its publisher succeeds.
     parser.add_argument("--crates-io-version", default=None)
+    parser.add_argument("--nuget-version", default=None)
+    parser.add_argument("--nuget-package-sha256", default=None)
+    parser.add_argument("--swiftpm-version", default=None)
+    parser.add_argument("--swift-package-sha256", default=None)
     parser.add_argument("--wrapper-version", required=True)
     parser.add_argument("--wrapper-changed", action="store_true")
     args = parser.parse_args()
 
+    for version, digest, version_flag, digest_flag in (
+        (
+            args.nuget_version,
+            args.nuget_package_sha256,
+            "--nuget-version",
+            "--nuget-package-sha256",
+        ),
+        (
+            args.swiftpm_version,
+            args.swift_package_sha256,
+            "--swiftpm-version",
+            "--swift-package-sha256",
+        ),
+    ):
+        if (version is None) != (digest is None):
+            raise SystemExit(
+                f"{version_flag} and {digest_flag} must be supplied together"
+            )
+        if digest is not None and (
+            len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise SystemExit(f"{digest_flag} must be a lowercase SHA-256 digest")
+    try:
+        released_at = dt.datetime.fromisoformat(
+            args.released_at.replace("Z", "+00:00")
+        )
+    except ValueError as exc:
+        raise SystemExit("--released-at must be an ISO-8601 timestamp") from exc
+    if released_at.tzinfo is None or not args.released_at.endswith("Z"):
+        raise SystemExit("--released-at must be a UTC timestamp ending in Z")
+    if args.wrapper_changed:
+        verify_wrapper_artifacts(args.wrapper_dir, args.wrapper_version)
+
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "version").mkdir(parents=True, exist_ok=True)
-    released_at = (
-        dt.datetime.now(dt.timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    released_at = args.released_at
 
     vsix = next(args.vsix_dir.glob("*.vsix"), None)
     if vsix is None:
@@ -132,7 +175,12 @@ def main() -> None:
         "version": args.version,
         "channel": args.channel,
         "released_at": released_at,
-        "artifacts": collect_artifacts(args.toolchain_dir, "baml-language", args.version),
+        "artifacts": collect_artifacts(
+            args.toolchain_dir,
+            "baml-language",
+            args.version,
+            TOOLCHAIN_TARGETS,
+        ),
         "vsix": {
             "url": artifact_url(f"baml-language-{args.version}", vsix),
             "sha256": sha256(vsix),
@@ -146,17 +194,32 @@ def main() -> None:
         },
         "cffi": collect_cffi_artifacts(args.cffi_dir, args.version),
     }
-    # Generated-SDK registry coordinates, recorded once a language's publisher
-    # lands. Rust is gated on --crates-io-version so a manifest never claims a
-    # baml_bridge crate that has not been published to crates.io yet.
+    # Generated-SDK registry coordinates are supplied only after the matching
+    # publisher succeeds. Native packages also bind the manifest to the digest
+    # of the exact pre-publication package exercised by their consumer gates.
+    sdks = {}
     if args.crates_io_version:
-        toolchain["sdks"] = {
-            "rust": {
-                "registry": "crates_io",
-                "package": "baml_bridge",
-                "version": args.crates_io_version,
-            },
+        sdks["rust"] = {
+            "registry": "crates_io",
+            "package": "baml_bridge",
+            "version": args.crates_io_version,
         }
+    if args.nuget_version:
+        sdks["csharp"] = {
+            "registry": "nuget",
+            "package": "baml-bridge",
+            "version": args.nuget_version,
+            "verified_package_sha256": args.nuget_package_sha256,
+        }
+    if args.swiftpm_version:
+        sdks["swift"] = {
+            "registry": "swiftpm",
+            "package": "BoundaryML/baml-swift",
+            "version": args.swiftpm_version,
+            "verified_package_sha256": args.swift_package_sha256,
+        }
+    if sdks:
+        toolchain["sdks"] = sdks
     text = json.dumps(toolchain, indent=2, sort_keys=True) + "\n"
     (args.out / "version" / f"{args.version}.json").write_text(text)
     (args.out / f"{args.channel}.json").write_text(text)
@@ -166,9 +229,16 @@ def main() -> None:
             "schema": 1,
             "version": args.wrapper_version,
             "released_at": released_at,
-            "artifacts": collect_artifacts(args.wrapper_dir, "baml-wrapper", args.wrapper_version),
+            "artifacts": collect_artifacts(
+                args.wrapper_dir,
+                "baml-wrapper",
+                args.wrapper_version,
+                WRAPPER_TARGETS,
+            ),
         }
-        (args.out / "wrapper.json").write_text(json.dumps(wrapper, indent=2, sort_keys=True) + "\n")
+        (args.out / "wrapper.json").write_text(
+            json.dumps(wrapper, indent=2, sort_keys=True) + "\n"
+        )
 
 
 if __name__ == "__main__":

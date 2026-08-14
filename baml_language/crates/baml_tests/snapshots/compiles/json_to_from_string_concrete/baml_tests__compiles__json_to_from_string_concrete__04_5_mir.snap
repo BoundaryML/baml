@@ -2,22 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.deserialize_user(s: string) -> User {
-    // Locals:
-    let _0: User // _0 // return
-    let _1: string // s // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(User);
-        _0 = call const fn baml.json.from_string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.serialize_user(u: User) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -27,6 +11,22 @@ fn user.serialize_user(u: User) -> string {
     bb0: {
         _2 = load_type(User);
         _0 = call const fn baml.json.to_string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.deserialize_user(s: string) -> User {
+    // Locals:
+    let _0: User // _0 // return
+    let _1: string // s // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(User);
+        _0 = call const fn baml.json.from_string<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {

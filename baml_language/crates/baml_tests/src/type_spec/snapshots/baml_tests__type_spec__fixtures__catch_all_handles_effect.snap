@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+229..234 'risky': throws "bad"
+251..300 '{\n   ...  1\n}': 1
+257..292 'if (c)...n    }': void
+261..262 'c': bool
+264..292 '{\n   ...n    }': never
+280..285 '"bad"': "bad"
+297..298 '1': 1
+311..312 'g': throws never
+329..399 '{\n   ...  r\n}': int
+335..340 'let r': int
+343..348 'risky': (c: bool) -> int throws "bad"
+343..351 'risky(c)': int
+343..376 'risky(...=> 0 }': int
+349..350 'c': bool
+363..364 'e': "bad"
+368..369 '_': "bad"
+373..374 '0': 0
+396..397 'r': int

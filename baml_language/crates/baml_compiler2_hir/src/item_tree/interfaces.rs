@@ -4,20 +4,21 @@ use text_size::TextRange;
 
 use crate::{
     ids::{ClassMarker, FunctionMarker, LocalItemId},
-    item_tree::{Attribute, ClassField, FunctionParam},
+    item_tree::{Attribute, ClassField, GenericParam},
 };
 
 /// An interface (BEP-044) stored in the `ItemTree`.
 ///
-/// Default methods are stored as full `FunctionMarker` entries in `methods`
-/// (same as `Class::methods`). Required signatures live in `required_methods`.
+/// ALL methods - default (with a body) and required (without) - are full
+/// `FunctionMarker` entries in `methods`, the same item kind classes use;
+/// a required method is simply a `Function` whose `body` is `None`
+/// (rust-analyzer's shape: the has-body distinction matters only to body
+/// lowering, never to signatures or resolution).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interface {
     pub name: Name,
-    /// Generic type parameters declared on the interface.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
+    /// Generic type parameters declared on the interface, each with its bounds.
+    pub generic_params: Vec<GenericParam>,
     /// Required interfaces from `requires I1, I2, …`.
     pub requires: Vec<ast::TypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
@@ -25,26 +26,9 @@ pub struct Interface {
     pub fields: Vec<ClassField>,
     /// Associated type declarations on the interface (BEP-057).
     pub associated_types: Vec<ast::AssociatedTypeDef>,
-    /// Default methods (with bodies). Implementing classes inherit them.
-    pub default_methods: Vec<LocalItemId<FunctionMarker>>,
-    /// Required methods (no body). Implementing classes must provide a body.
-    pub required_methods: Vec<InterfaceMethodSig>,
-    pub attributes: Vec<Attribute>,
-    pub docstring: Option<String>,
-    pub span: TextRange,
-}
-
-/// A required (no-body) method signature on an interface (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterfaceMethodSig {
-    pub name: Name,
-    /// Generic type parameters local to this method.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
-    pub params: Vec<FunctionParam>,
-    pub return_type: Option<ast::TypeExpr>,
-    pub throws: Option<ast::TypeExpr>,
+    /// Every method, default and required alike (required = `body: None`),
+    /// in declaration-list order (defaults first, then required).
+    pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
     pub span: TextRange,
@@ -83,6 +67,9 @@ pub struct ImplBlock {
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub span: TextRange,
+    /// Leading `///` docstring — populated for free `implements … for …`
+    /// blocks; in-body `implements I { … }` blocks do not carry one today.
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,17 +79,6 @@ pub struct ImplementsBlock {
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub is_out_of_body: bool,
     pub span: TextRange,
-}
-
-/// A generic parameter on an out-of-body `implements` block, paired with its set
-/// of `&`-separated interface bounds (`<T>` → `bounds = []`; `<T extends A & B>`
-/// → `bounds = [A, B]`). Pairing name and bounds makes a length mismatch between
-/// the two unrepresentable. Bounds are unresolved `TypeExpr`s here; they resolve
-/// to `baml_type::Interface` constraints downstream.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GenericParam {
-    pub name: Name,
-    pub bounds: Vec<ast::TypeExpr>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

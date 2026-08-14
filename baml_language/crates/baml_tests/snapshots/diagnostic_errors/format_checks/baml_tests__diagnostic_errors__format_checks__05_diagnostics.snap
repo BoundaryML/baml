@@ -2,644 +2,1369 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type `string` has no member `len`
-    ╭─[ chain_expr.baml:86:5 ]
-    │
+  [type] E0007
+
+  × type `string` has no member `len`
+    ╭─[chain_expr.baml:86:5]
  86 │     user.name.len();
-    │     ──────┬──────  
-    │           ╰──────── type `string` has no member `len`
-    │ 
-    │ Note: Error code: E0007
-────╯
+    ·     ───────────────
+    ╰────
 
-  [type] error: type `ChainItem[]` has no member `len`
-    ╭─[ chain_expr.baml:87:5 ]
-    │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `len`
+    ╭─[chain_expr.baml:87:5]
  87 │     items.len();
-    │     ────┬────  
-    │         ╰────── type `ChainItem[]` has no member `len`
-    │ 
-    │ Note: Error code: E0007
-────╯
+    ·     ───────────
+    ╰────
 
-  [type] error: type `ChainItem[]` has no member `get`
-    ╭─[ chain_expr.baml:90:5 ]
-    │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `get`
+    ╭─[chain_expr.baml:90:5]
  90 │     user.profile.items.get(0);
-    │     ───────────┬──────────  
-    │                ╰──────────── type `ChainItem[]` has no member `get`
-    │ 
-    │ Note: Error code: E0007
-────╯
+    ·     ─────────────────────────
+    ╰────
 
-  [type] error: type `ChainItem[]` has no member `get`
-    ╭─[ chain_expr.baml:94:5 ]
-    │
- 94 │ ╭─▶     items // 2 callee trailing
-    ┆ ┆   
- 98 │ ├─▶     get // 6 method trailing
-    │ │                                  
-    │ ╰────────────────────────────────── type `ChainItem[]` has no member `get`
-    │     
-    │     Note: Error code: E0007
-────╯
+  [type] E0007
 
-  [type] error: type `ChainItem[]` has no member `get`
-     ╭─[ chain_expr.baml:108:5 ]
-     │
+  × type `ChainItem[]` has no member `get`
+     ╭─[chain_expr.baml:94:5]
+  94 │ ╭─▶     items // 2 callee trailing
+  95 │ │       // 3 open paren leading
+  96 │ │       . // 4 dot trailing
+  97 │ │       // 5 method leading
+  98 │ │       get // 6 method trailing
+  99 │ │       ( // 7 open paren trailing
+ 100 │ │       // 8 arg leading
+ 101 │ │       0 // 9 arg trailing
+ 102 │ │       // 10 close paren leading
+ 103 │ ╰─▶     ) // 11 close paren trailing
+     ╰────
+
+  [type] E0007
+
+  × type `ChainItem[]` has no member `get`
+     ╭─[chain_expr.baml:108:5]
  108 │ ╭─▶     items /* 2 callee trailing */
-     ┆ ┆   
- 112 │ ├─▶     get /* 6 method trailing */
-     │ │                                     
-     │ ╰───────────────────────────────────── type `ChainItem[]` has no member `get`
-     │     
-     │     Note: Error code: E0007
-─────╯
+ 109 │ │       /* 3 dot leading */
+ 110 │ │       . /* 4 dot trailing */
+ 111 │ │       /* 5 method leading */
+ 112 │ │       get /* 6 method trailing */
+ 113 │ │       ( /* 7 open paren trailing */
+ 114 │ │       /* 8 arg leading */
+ 115 │ │       0 /* 9 arg trailing */
+ 116 │ │       /* 10 close paren leading */
+ 117 │ ╰─▶     ) /* 11 close paren trailing */
+     ╰────
 
-  [type] error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:149:5 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:149:5]
  149 │     user.name.len().to_string();
-     │     ──────┬──────  
-     │           ╰──────── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·     ───────────────
+     ╰────
 
-  [type] error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:152:5 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
  152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │     ─────────────────────┬─────────────────────  
-     │                          ╰─────────────────────── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·     ─────────────────────────────────────────────
+     ╰────
 
-  [type] error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:155:44 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ───────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ─────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ───────────────────────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
  155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │                                            ─┬─  
-     │                                             ╰─── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·     ────────────────────────────────────────────
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `get`
-     ╭─[ chain_expr.baml:158:5 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ·     ──────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ·     ────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `ChainItem[]` has no member `get`
+     ╭─[chain_expr.baml:158:5]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │     ───────────┬──────────  
-     │                ╰──────────── type `ChainItem[]` has no member `get`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·     ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:158:28 ]
-     │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `len`
+     ╭─[chain_expr.baml:158:28]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                            ───────────┬──────────  
-     │                                       ╰──────────── type `ChainItem[]` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·                            ────────────────────────
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:158:59 ]
-     │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `len`
+     ╭─[chain_expr.baml:158:59]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                                           ───────────┬──────────  
-     │                                                                      ╰──────────── type `ChainItem[]` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·                                                           ────────────────────────
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:158:90 ]
-     │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `len`
+     ╭─[chain_expr.baml:158:90]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                                                                          ───────────┬──────────  
-     │                                                                                                     ╰──────────── type `ChainItem[]` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·                                                                                          ────────────────────────
+     ╰────
 
-  [type] error: expected 2 argument(s), got 3
-     ╭─[ chain_expr.baml:161:5 ]
-     │
+  [type] E0005
+
+  × expected 2 argument(s), got 3
+     ╭─[chain_expr.baml:161:5]
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     │     ────────────────────────────────────────────────┬────────────────────────────────────────────────  
-     │                                                     ╰────────────────────────────────────────────────── expected 2 argument(s), got 3
-     │ 
-     │ Note: Error code: E0005
-─────╯
+     ·     ─────────────────────────────────────────────────────────────────────────────────────────────────
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:161:33 ]
-     │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `len`
+     ╭─[chain_expr.baml:161:33]
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     │                                 ───────────┬──────────  
-     │                                            ╰──────────── type `ChainItem[]` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·                                 ────────────────────────
+     ╰────
 
-  [type] error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:165:5 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:165:5]
  165 │ ╭─▶     user // 2 trailing
-     ┆ ┆   
- 180 │ ├─▶     len // 17 trailing
-     │ │                            
-     │ ╰──────────────────────────── type `string` has no member `len`
-     │     
-     │     Note: Error code: E0007
-─────╯
+ 166 │ │       . // 3 trailing
+ 167 │ │       // 4 leading
+ 168 │ │       profile // 5 trailing
+ 169 │ │       . // 6 trailing
+ 170 │ │       // 7 leading
+ 171 │ │       settings // 8 trailing
+ 172 │ │       . // 9 trailing
+ 173 │ │       // 10 leading
+ 174 │ │       preferences // 11 trailing
+ 175 │ │       . // 12 trailing
+ 176 │ │       // 13 leading
+ 177 │ │       color // 14 trailing
+ 178 │ │       . // 15 trailing
+ 179 │ │       // 16 leading
+ 180 │ │       len // 17 trailing
+ 181 │ │       ( // 18 trailing
+ 182 │ ╰─▶     ) // 19 trailing
+     ╰────
 
-  [type] error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:197:5 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:165:5]
+ 165 │ ╭─▶     user // 2 trailing
+ 166 │ │       . // 3 trailing
+ 167 │ │       // 4 leading
+ 168 │ │       profile // 5 trailing
+ 169 │ │       . // 6 trailing
+ 170 │ │       // 7 leading
+ 171 │ │       settings // 8 trailing
+ 172 │ │       . // 9 trailing
+ 173 │ │       // 10 leading
+ 174 │ │       preferences // 11 trailing
+ 175 │ │       . // 12 trailing
+ 176 │ │       // 13 leading
+ 177 │ │       color // 14 trailing
+ 178 │ │       . // 15 trailing
+ 179 │ │       // 16 leading
+ 180 │ │       len // 17 trailing
+ 181 │ │       ( // 18 trailing
+ 182 │ │       ) // 19 trailing
+ 183 │ │       . // 20 trailing
+ 184 │ │       // 21 leading
+ 185 │ │       to_string // 22 trailing
+ 186 │ │       ( // 23 trailing
+ 187 │ │       ) // 24 trailing
+ 188 │ │       . // 25 trailing
+ 189 │ │       // 26 leading
+ 190 │ │       len // 27 trailing
+ 191 │ │       ( // 28 trailing
+ 192 │ ╰─▶     ) // 29 trailing
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:197:5]
  197 │ ╭─▶     user /* 2 trailing */
-     ┆ ┆   
- 212 │ ├─▶     len /* 17 trailing */
-     │ │                               
-     │ ╰─────────────────────────────── type `string` has no member `len`
-     │     
-     │     Note: Error code: E0007
-─────╯
+ 198 │ │       . /* 3 trailing */
+ 199 │ │       /* 4 leading */
+ 200 │ │       profile /* 5 trailing */
+ 201 │ │       . /* 6 trailing */
+ 202 │ │       /* 7 leading */
+ 203 │ │       settings /* 8 trailing */
+ 204 │ │       . /* 9 trailing */
+ 205 │ │       /* 10 leading */
+ 206 │ │       preferences /* 11 trailing */
+ 207 │ │       . /* 12 trailing */
+ 208 │ │       /* 13 leading */
+ 209 │ │       color /* 14 trailing */
+ 210 │ │       . /* 15 trailing */
+ 211 │ │       /* 16 leading */
+ 212 │ │       len /* 17 trailing */
+ 213 │ │       ( /* 18 trailing */
+ 214 │ ╰─▶     ) /* 19 trailing */
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `get`
-     ╭─[ chain_expr.baml:229:5 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:197:5]
+ 197 │ ╭─▶     user /* 2 trailing */
+ 198 │ │       . /* 3 trailing */
+ 199 │ │       /* 4 leading */
+ 200 │ │       profile /* 5 trailing */
+ 201 │ │       . /* 6 trailing */
+ 202 │ │       /* 7 leading */
+ 203 │ │       settings /* 8 trailing */
+ 204 │ │       . /* 9 trailing */
+ 205 │ │       /* 10 leading */
+ 206 │ │       preferences /* 11 trailing */
+ 207 │ │       . /* 12 trailing */
+ 208 │ │       /* 13 leading */
+ 209 │ │       color /* 14 trailing */
+ 210 │ │       . /* 15 trailing */
+ 211 │ │       /* 16 leading */
+ 212 │ │       len /* 17 trailing */
+ 213 │ │       ( /* 18 trailing */
+ 214 │ │       ) /* 19 trailing */
+ 215 │ │       . /* 20 trailing */
+ 216 │ │       /* 21 leading */
+ 217 │ │       to_string /* 22 trailing */
+ 218 │ │       ( /* 23 trailing */
+ 219 │ │       ) /* 24 trailing */
+ 220 │ │       . /* 25 trailing */
+ 221 │ │       /* 26 leading */
+ 222 │ │       len /* 27 trailing */
+ 223 │ │       ( /* 28 trailing */
+ 224 │ ╰─▶     ) /* 29 trailing */
+     ╰────
+
+  [type] E0007
+
+  × type `ChainItem[]` has no member `get`
+     ╭─[chain_expr.baml:229:5]
  229 │ ╭─▶     user // 2 trailing
-     ┆ ┆   
- 238 │ ├─▶     get // 11 trailing
-     │ │                            
-     │ ╰──────────────────────────── type `ChainItem[]` has no member `get`
-     │     
-     │     Note: Error code: E0007
-─────╯
+ 230 │ │       . // 3 trailing
+ 231 │ │       // 4 leading
+ 232 │ │       profile // 5 trailing
+ 233 │ │       . // 6 trailing
+ 234 │ │       // 7 leading
+ 235 │ │       items // 8 trailing
+ 236 │ │       . // 9 trailing
+ 237 │ │       // 10 leading
+ 238 │ │       get // 11 trailing
+ 239 │ │       ( // 12 trailing
+ 240 │ │       // 13 leading
+ 241 │ │       user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+ 242 │ ╰─▶     ) // 15 trailing
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:241:5 ]
-     │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `len`
+     ╭─[chain_expr.baml:241:5]
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     │     ───────────┬──────────  
-     │                ╰──────────── type `ChainItem[]` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·     ────────────────────────
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `len`
-     ╭─[ chain_expr.baml:241:36 ]
-     │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `len`
+     ╭─[chain_expr.baml:241:36]
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     │                                    ───────────┬──────────  
-     │                                               ╰──────────── type `ChainItem[]` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·                                    ────────────────────────
+     ╰────
 
-  [type] error: type `int[][]` has no member `len`
-     ╭─[ chain_expr.baml:251:17 ]
-     │
+  [type] E0007
+
+  × type `int[][]` has no member `len`
+     ╭─[chain_expr.baml:251:17]
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     │                 ───────┬───────  
-     │                        ╰───────── type `int[][]` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·                 ─────────────────
+     ╰────
 
-  [type] error: type `int[]` has no member `len`
-     ╭─[ chain_expr.baml:251:55 ]
-     │
+  [type] E0007
+
+  × type `int[]` has no member `len`
+     ╭─[chain_expr.baml:251:40]
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     │                                                       ─┬─  
-     │                                                        ╰─── type `int[]` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·                                        ────────────────────
+     ╰────
 
-  [type] error: type `ChainItem[]` has no member `get`
-     ╭─[ chain_expr.baml:256:5 ]
-     │
+  [type] E0007
+
+  × type `ChainItem[]` has no member `get`
+     ╭─[chain_expr.baml:256:5]
  256 │     items  .  get  (  0  );
-     │     ──────┬──────  
-     │           ╰──────── type `ChainItem[]` has no member `get`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·     ──────────────────────
+     ╰────
 
-  [type] error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:259:18 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:259:5]
  259 │     user.tags[0].len();
-     │                  ─┬─  
-     │                   ╰─── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·     ──────────────────
+     ╰────
 
-  [type] error: type `string` has no member `len`
-     ╭─[ chain_expr.baml:261:20 ]
-     │
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:261:5]
  261 │     items[0].label.len();
-     │                    ─┬─  
-     │                     ╰─── type `string` has no member `len`
-     │ 
-     │ Note: Error code: E0007
-─────╯
+     ·     ────────────────────
+     ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-    ╭─[ class_decls.baml:33:74 ]
-    │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+    ╭─[class_decls.baml:33:74]
  33 │     summary string? @description("A summary") @alias("sum") @stream.done @stream.not_null
-    │                                                                          ────────┬───────  
-    │                                                                                  ╰───────── unknown attribute
-    │ 
-    │ Note: Error code: E0015
-────╯
+    ·                                                                          ────────┬───────
+    ·                                                                                  ╰── unknown attribute
+    ╰────
 
-  [hir] error: Unknown attribute `@stream.not_null`
-     ╭─[ class_decls.baml:291:14 ]
-     │
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`
+     ╭─[class_decls.baml:291:14]
  291 │     e string @stream.not_null
-     │              ────────┬───────  
-     │                      ╰───────── unknown attribute
-     │ 
-     │ Note: Error code: E0015
-─────╯
+     ·              ────────┬───────
+     ·                      ╰── unknown attribute
+     ╰────
 
-  [type] error: unresolved name: MyRetryPolicy
-    ╭─[ config_decls.baml:13:1 ]
-    │
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client BasicClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:5:1]
+  5 │ ╭─▶ client<llm> BasicClient {
+  6 │ │       provider openai,
+  7 │ │       options {
+  8 │ │           model "gpt-4",
+  9 │ │       }
+ 10 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client FullClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:13:1]
  13 │ ╭─▶ client<llm> FullClient {
-    ┆ ┆   
+ 14 │ │       provider openai
+ 15 │ │       retry_policy MyRetryPolicy
+ 16 │ │       options {
+ 17 │ │           model: "gpt-4"
+ 18 │ │           max_tokens 100
+ 19 │ │           temperature 0.7,
+ 20 │ │           top_p 0.9
+ 21 │ │       }
  22 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: MyRetryPolicy
-    │     
-    │     Note: Error code: E0003
-────╯
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
 
-  [type] error: type mismatch: expected string, got map<string, bool | int | map<string, string>>
-     ╭─[ config_decls.baml:201:1 ]
-     │
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client StringProviderClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+    ╭─[config_decls.baml:25:1]
+ 25 │ ╭─▶ client<llm> StringProviderClient {
+ 26 │ │       provider "openai-generic"
+ 27 │ │       options {
+ 28 │ │           base_url "https://openrouter.ai/api/v1"
+ 29 │ │           model "mistralai/mistral-small-3.1-24b-instruct"
+ 30 │ │       }
+ 31 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client NestedConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:34:1]
+ 34 │ ╭─▶ client<llm> NestedConfigClient {
+ 35 │ │       provider openai
+ 36 │ │       options {
+ 37 │ │           model "gpt-4"
+ 38 │ │           headers {
+ 39 │ │               "X-API-Key" "my-key"
+ 40 │ │               "Authorization" "Bearer token"
+ 41 │ │           }
+ 42 │ │       }
+ 43 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:46:1]
+ 46 │ ╭─▶ client<llm> ArrayConfigClient {
+ 47 │ │       provider openai
+ 48 │ │       options {
+ 49 │ │           model "gpt-4",
+ 50 │ │           stop_sequences: ["END", "STOP", "DONE"]
+ 51 │ │       }
+ 52 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongOptionClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:55:1]
+ 55 │ ╭─▶ client<llm> LongOptionClient {
+ 56 │ │       provider openai
+ 57 │ │       options {
+ 58 │ │           model "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+ 59 │ │           base_url "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
+ 60 │ │       }
+ 61 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TypedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:64:1]
+ 64 │ ╭─▶ client<llm> TypedValuesClient {
+ 65 │ │       provider openai
+ 66 │ │       options {
+ 67 │ │           model "gpt-4"
+ 68 │ │           temperature: 0.5
+ 69 │ │           max_tokens 2048
+ 70 │ │           stream true
+ 71 │ │       }
+ 72 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client EnvClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:75:1]
+ 75 │ ╭─▶ client<llm> EnvClient {
+ 76 │ │       provider: openai
+ 77 │ │       options {
+ 78 │ │           api_key env.OPENAI_API_KEY
+ 79 │ │           model "gpt-4"
+ 80 │ │       }
+ 81 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayOfObjectsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:84:1]
+  84 │ ╭─▶ client<llm> ArrayOfObjectsClient {
+  85 │ │       provider openai
+  86 │ │       options: {
+  87 │ │           model "gpt-4",
+  88 │ │           tools [
+  89 │ │               {
+  90 │ │                   server_label "web_search"
+  91 │ │                   server_url "https://example.com"
+  92 │ │                   type "mcp"
+  93 │ │               }
+  94 │ │               {
+  95 │ │                   server_label "calculator"
+  96 │ │                   server_url "https://calc.example.com"
+  97 │ │               }
+  98 │ │           ]
+  99 │ │       }
+ 100 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client RawStringConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:103:1]
+ 103 │ ╭─▶ client<llm> RawStringConfigClient {
+ 104 │ │       provider openai,
+ 105 │ │       options: {
+ 106 │ │           model: "gpt-4"
+ 107 │ │           system_prompt #"
+ 108 │ │               You are a helpful assistant.
+ 109 │ │               Always be concise.
+ 110 │ │           "#
+ 111 │ │       },
+ 112 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client MixedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:115:1]
+ 115 │ ╭─▶ client<llm> MixedValuesClient {
+ 116 │ │       provider openai
+ 117 │ │       options {
+ 118 │ │           model "gpt-4"
+ 119 │ │           max_tokens 100
+ 120 │ │           temperature 0.7
+ 121 │ │           stream true
+ 122 │ │           stop ["END"]
+ 123 │ │           inline_string #"inline raw"#
+ 124 │ │           "string key" "value with spaces"
+ 125 │ │       }
+ 126 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:130:1]
+ 130 │ ╭─▶ client // 2 client keyword trailing
+ 131 │ │   // 3 type angle leading
+ 132 │ │   < // 4 open angle trailing
+ 133 │ │   // 5 type leading
+ 134 │ │   llm // 6 type trailing
+ 135 │ │   // 7 close angle leading
+ 136 │ │   > // 8 close angle trailing
+ 137 │ │   // 9 name leading
+ 138 │ │   TriviaClient // 10 name trailing
+ 139 │ │   // 11 open brace leading
+ 140 │ │   { // 12 open brace trailing
+ 141 │ │       // 13 provider key leading
+ 142 │ │       provider: // 14 provider key trailing
+ 143 │ │       // 15 provider value leading
+ 144 │ │       openai // 16 provider value trailing
+ 145 │ │       // 17 options key leading
+ 146 │ │       options // 18 options key trailing
+ 147 │ │       // 19 options brace leading
+ 148 │ │       { // 20 options open brace trailing
+ 149 │ │           // 21 first option leading
+ 150 │ │           model // 22 model key trailing
+ 151 │ │           // 23 model value leading
+ 152 │ │           "gpt-4" // 24 model value trailing
+ 153 │ │       // 25 options close brace leading
+ 154 │ │       } // 26 options close brace trailing
+ 155 │ │   // 27 close brace leading
+ 156 │ ├─▶ } // 28 close brace trailing
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:162:1]
+ 162 │ ╭─▶ client /* 2 client keyword trailing */
+ 163 │ │   /* 3 type angle leading */
+ 164 │ │   < /* 4 open angle trailing */
+ 165 │ │   /* 5 type leading */
+ 166 │ │   llm /* 6 type trailing */
+ 167 │ │   /* 7 close angle leading */
+ 168 │ │   > /* 8 close angle trailing */
+ 169 │ │   /* 9 name leading */
+ 170 │ │   TriviaClientBlock /* 10 name trailing */
+ 171 │ │   /* 11 open brace leading */
+ 172 │ │   { /* 12 open brace trailing */
+ 173 │ │       /* 13 provider key leading */
+ 174 │ │       provider /* 14 provider key trailing */
+ 175 │ │       /* 15 provider value leading */
+ 176 │ │       openai /* 16 provider value trailing */
+ 177 │ │       /* 17 options key leading */
+ 178 │ │       options: /* 18 options key trailing */
+ 179 │ │       /* 19 options brace leading */
+ 180 │ │       { /* 20 options open brace trailing */
+ 181 │ │           /* 21 first option leading */
+ 182 │ │           model /* 22 model key trailing */
+ 183 │ │           /* 23 model value leading */
+ 184 │ │           "gpt-4" /* 24 model value trailing */
+ 185 │ │       /* 25 options close brace leading */
+ 186 │ │       } /* 26 options close brace trailing */
+ 187 │ │   /* 27 close brace leading */
+ 188 │ ├─▶ } /* 28 close brace trailing */
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns =
+  │ openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:193:1]
+ 193 │ ╭─▶ client<llm> ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns {
+ 194 │ │       provider openai
+ 195 │ │       options {
+ 196 │ │           model "gpt-4"
+ 197 │ │       }
+ 198 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client DeeplyNestedClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:201:1]
  201 │ ╭─▶ client<llm> DeeplyNestedClient {
-     ┆ ┆   
+ 202 │ │       provider openai
+ 203 │ │       options {
+ 204 │ │           model "gpt-4"
+ 205 │ │           headers {
+ 206 │ │               "X-API-Key" "my-key"
+ 207 │ │               "Authorization" "Bearer token"
+ 208 │ │               custom_config {
+ 209 │ │                   retry_on_failure true
+ 210 │ │                   timeout_ms 30000
+ 211 │ │                   metadata {
+ 212 │ │                       team "platform"
+ 213 │ │                       environment "production"
+ 214 │ │                   }
+ 215 │ │               }
+ 216 │ │           }
+ 217 │ │       }
  218 │ ├─▶ }
-     │ │       
-     │ ╰─────── type mismatch: expected string, got map<string, bool | int | map<string, string>>
-     │     
-     │     Note: Error code: E0001
-─────╯
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
 
-  [validation] error: Name `ExtraWhitespace` defined 5 times as: class, enum, function, template_string, type
-     ╭─[ class_decls.baml:296:10 ]
-     │
- 296 │ class    ExtraWhitespace    {
-     │          ───────┬───────  
-     │                 ╰───────── first defined as class here
-     │
-     ├─[ enum_decls.baml:211:9 ]
-     │
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongNestedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:221:1]
+ 221 │ ╭─▶ client<llm> LongNestedValuesClient {
+ 222 │ │       provider openai
+ 223 │ │       options {
+ 224 │ │           model "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
+ 225 │ │           base_url "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
+ 226 │ │           headers {
+ 227 │ │               "Authorization" "Bearer some-extremely-long-api-token-value-that-is-used-for-authentication-and-exceeds-the-line-limit-easily-and-comfortably"
+ 228 │ │               "X-Custom-Header" "another-very-long-header-value-that-also-pushes-past-one-hundred-columns-for-testing-purposes"
+ 229 │ │           }
+ 230 │ │       }
+ 231 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ManyOptionsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:234:1]
+ 234 │ ╭─▶ client<llm> ManyOptionsClient {
+ 235 │ │       provider openai
+ 236 │ │       options {
+ 237 │ │           model "gpt-4"
+ 238 │ │           max_tokens 4096
+ 239 │ │           temperature 0.7
+ 240 │ │           top_p 0.95
+ 241 │ │           frequency_penalty 0.5
+ 242 │ │           presence_penalty 0.3
+ 243 │ │           stream true
+ 244 │ │           stop_sequences ["END", "STOP", "DONE", "COMPLETE", "FINISHED"]
+ 245 │ │           api_key env.OPENAI_API_KEY
+ 246 │ │           base_url "https://api.openai.com/v1"
+ 247 │ │       }
+ 248 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:251:1]
+ 251 │ ╭─▶ client<llm> LongArrayClient {
+ 252 │ │       provider openai
+ 253 │ │       options {
+ 254 │ │           model "gpt-4"
+ 255 │ │           stop_sequences ["STOP_GENERATION_NOW", "END_OF_RESPONSE_MARKER", "COMPLETION_FINISHED_SIGNAL", "TERMINATE_OUTPUT_HERE", "FINAL_ANSWER_DELIMITER"]
+ 256 │ │       }
+ 257 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayOfObjectsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:260:1]
+ 260 │ ╭─▶ client<llm> LongArrayOfObjectsClient {
+ 261 │ │       provider openai
+ 262 │ │       options {
+ 263 │ │           model "gpt-4"
+ 264 │ │           tools [
+ 265 │ │               {
+ 266 │ │                   server_label "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
+ 267 │ │                   server_url "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2"
+ 268 │ │                   type "mcp"
+ 269 │ │                   description "A very long description of the tool server that explains what it does and how it should be used by the model"
+ 270 │ │               }
+ 271 │ │               {
+ 272 │ │                   server_label "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects"
+ 273 │ │                   server_url "https://another-long-domain.internal.staging.example.com/tools/v1"
+ 274 │ │               }
+ 275 │ │           ]
+ 276 │ │       }
+ 277 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:281:1]
+ 281 │ ╭─▶ client // 2 client trailing
+ 282 │ │   < // 3 angle trailing
+ 283 │ │   llm // 4 type trailing
+ 284 │ │   > // 5 close angle trailing
+ 285 │ │   // 6 name leading
+ 286 │ │   TriviaDeeplyNestedClient // 7 name trailing
+ 287 │ │   // 8 open brace leading
+ 288 │ │   { // 9 open brace trailing
+ 289 │ │       // 10 provider leading
+ 290 │ │       provider // 11 provider trailing
+ 291 │ │       // 12 value leading
+ 292 │ │       openai // 13 value trailing
+ 293 │ │       // 14 options leading
+ 294 │ │       options // 15 options trailing
+ 295 │ │       // 16 options brace leading
+ 296 │ │       { // 17 options brace trailing
+ 297 │ │           // 18 model leading
+ 298 │ │           model // 19 model trailing
+ 299 │ │           // 20 model value leading
+ 300 │ │           "gpt-4" // 21 model value trailing
+ 301 │ │           // 22 headers leading
+ 302 │ │           headers // 23 headers trailing
+ 303 │ │           // 24 headers brace leading
+ 304 │ │           { // 25 headers brace trailing
+ 305 │ │               // 26 first header leading
+ 306 │ │               "X-API-Key" // 27 first header trailing
+ 307 │ │               // 28 first value leading
+ 308 │ │               "my-key" // 29 first value trailing
+ 309 │ │               // 30 second header leading
+ 310 │ │               "Authorization" // 31 second header trailing
+ 311 │ │               // 32 second value leading
+ 312 │ │               "Bearer token" // 33 second value trailing
+ 313 │ │           // 34 headers close leading
+ 314 │ │           } // 35 headers close trailing
+ 315 │ │       // 36 options close leading
+ 316 │ │       } // 37 options close trailing
+ 317 │ │   // 38 close brace leading
+ 318 │ ├─▶ } // 39 close brace trailing
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:324:1]
+ 324 │ ╭─▶ client /* 2 client trailing */
+ 325 │ │   < /* 3 angle trailing */
+ 326 │ │   llm /* 4 type trailing */
+ 327 │ │   > /* 5 close angle trailing */
+ 328 │ │   /* 6 name leading */
+ 329 │ │   TriviaDeeplyNestedClientBlock /* 7 name trailing */
+ 330 │ │   /* 8 open brace leading */
+ 331 │ │   { /* 9 open brace trailing */
+ 332 │ │       /* 10 provider leading */
+ 333 │ │       provider /* 11 provider trailing */
+ 334 │ │       /* 12 value leading */
+ 335 │ │       openai /* 13 value trailing */
+ 336 │ │       /* 14 options leading */
+ 337 │ │       options /* 15 options trailing */
+ 338 │ │       /* 16 options brace leading */
+ 339 │ │       { /* 17 options brace trailing */
+ 340 │ │           /* 18 model leading */
+ 341 │ │           model /* 19 model trailing */
+ 342 │ │           /* 20 model value leading */
+ 343 │ │           "gpt-4" /* 21 model value trailing */
+ 344 │ │           /* 22 headers leading */
+ 345 │ │           headers /* 23 headers trailing */
+ 346 │ │           /* 24 headers brace leading */
+ 347 │ │           { /* 25 headers brace trailing */
+ 348 │ │               /* 26 first header leading */
+ 349 │ │               "X-API-Key" /* 27 first header trailing */
+ 350 │ │               /* 28 first value leading */
+ 351 │ │               "my-key" /* 29 first value trailing */
+ 352 │ │               /* 30 second header leading */
+ 353 │ │               "Authorization" /* 31 second header trailing */
+ 354 │ │               /* 32 second value leading */
+ 355 │ │               "Bearer token" /* 33 second value trailing */
+ 356 │ │           /* 34 headers close leading */
+ 357 │ │           } /* 35 headers close trailing */
+ 358 │ │       /* 36 options close leading */
+ 359 │ │       } /* 37 options close trailing */
+ 360 │ │       /* 38 comma leading */
+ 361 │ │       , /* 39 comma trailing */
+ 362 │ │   /* 40 close brace leading */
+ 363 │ ├─▶ } /* 41 close brace trailing */
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:368:1]
+ 368 │ ╭─▶ client<llm> TriviaLongValueClient {
+ 369 │ │       provider openai
+ 370 │ │       options {
+ 371 │ │           // 1 key leading
+ 372 │ │           model // 2 key trailing
+ 373 │ │           // 3 value leading
+ 374 │ │           "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" // 4 value trailing
+ 375 │ │           // 5 next key leading
+ 376 │ │           base_url // 6 next key trailing
+ 377 │ │           // 7 next value leading
+ 378 │ │           "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" // 8 next value trailing
+ 379 │ │       }
+ 380 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:383:1]
+ 383 │ ╭─▶ client<llm> TriviaLongValueClientBlock {
+ 384 │ │       provider openai
+ 385 │ │       options {
+ 386 │ │           /* 1 key leading */
+ 387 │ │           model /* 2 key trailing */
+ 388 │ │           /* 3 value leading */
+ 389 │ │           "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" /* 4 value trailing */
+ 390 │ │           /* 5 next key leading */
+ 391 │ │           base_url /* 6 next key trailing */
+ 392 │ │           /* 7 next value leading */
+ 393 │ │           "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" /* 8 next value trailing */
+ 394 │ │       }
+ 395 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`BasicRetry` has no effect)
+     ╭─[config_decls.baml:398:1]
+ 398 │ ╭─▶ retry_policy BasicRetry {
+ 399 │ │       max_retries 3
+ 400 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`FullRetry` has no effect)
+     ╭─[config_decls.baml:403:1]
+ 403 │ ╭─▶ retry_policy FullRetry {
+ 404 │ │       max_retries 5
+ 405 │ │       backoff_multiplier 2.0
+ 406 │ │       initial_delay_ms 1000
+ 407 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);`
+  │ (`ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols` has no effect)
+     ╭─[config_decls.baml:410:1]
+ 410 │ ╭─▶ retry_policy ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols {
+ 411 │ │       max_retries 10
+ 412 │ │       backoff_multiplier 3.0
+ 413 │ │       initial_delay_ms 5000
+ 414 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`TriviaRetry` has no effect)
+     ╭─[config_decls.baml:418:1]
+ 418 │ ╭─▶ retry_policy // 2 keyword trailing
+ 419 │ │   // 3 name leading
+ 420 │ │   TriviaRetry // 4 name trailing
+ 421 │ │   // 5 open brace leading
+ 422 │ │   { // 6 open brace trailing
+ 423 │ │       // 7 first item leading
+ 424 │ │       max_retries // 8 key trailing
+ 425 │ │       // 9 value leading
+ 426 │ │       3 // 10 value trailing
+ 427 │ │   // 11 close brace leading
+ 428 │ ├─▶ } // 12 close brace trailing
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`TriviaRetryBlock` has no effect)
+     ╭─[config_decls.baml:432:1]
+ 432 │ ╭─▶ retry_policy /* 2 keyword trailing */
+ 433 │ │   /* 3 name leading */
+ 434 │ │   TriviaRetryBlock /* 4 name trailing */
+ 435 │ │   /* 5 open brace leading */
+ 436 │ │   { /* 6 open brace trailing */
+ 437 │ │       /* 7 first item leading */
+ 438 │ │       max_retries /* 8 key trailing */
+ 439 │ │       /* 9 value leading */
+ 440 │ │       3 /* 10 value trailing */
+ 441 │ │   /* 11 close brace leading */
+ 442 │ ├─▶ } /* 12 close brace trailing */
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `BasicClient`
+     ╭─[config_decls.baml:446:13]
+ 446 │     client: BasicClient
+     ·             ───────────
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:498:1]
+ 498 │ ╭─▶ client<llm> C {
+ 499 │ │       provider openai
+ 500 │ │       options {
+ 501 │ │           model "gpt-4"
+ 502 │ │       }
+ 503 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`R` has no effect)
+     ╭─[config_decls.baml:505:1]
+ 505 │ ╭─▶ retry_policy R {
+ 506 │ │       max_retries 1
+ 507 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:510:1]
+ 510 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
+ 511 │ │       provider    openai
+ 512 │ │       options    {
+ 513 │ │           model    "gpt-4"
+ 514 │ │       }
+ 515 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`ExtraWhitespaceRetry` has no effect)
+     ╭─[config_decls.baml:517:1]
+ 517 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
+ 518 │ │       max_retries    3
+ 519 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:522:1]
+ 522 │ ╭─▶ client<llm> CommaClient {
+ 523 │ │       provider openai,
+ 524 │ │       options {
+ 525 │ │           model "gpt-4",
+ 526 │ │           max_tokens 100,
+ 527 │ │       }
+ 528 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:531:1]
+ 531 │ ╭─▶ client<llm> SameLineClient {
+ 532 │ │       provider openai
+ 533 │ │       options { model "gpt-4" }
+ 534 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [validation] E0011
+
+  × name `ExtraWhitespace` defined 4 times as: class, enum, function, type
+     ╭─[enum_decls.baml:211:9]
  211 │ enum    ExtraWhitespace    {
-     │         ───────┬───────  
-     │                ╰───────── duplicate enum definition
-     │
-     ├─[ function_decls.baml:497:13 ]
-     │
- 497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
-     │             ───────┬───────  
-     │                    ╰───────── duplicate function definition
-     │
-     ├─[ template_string_decls.baml:364:20 ]
-     │
- 364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
-     │                    ───────┬───────  
-     │                           ╰───────── duplicate template_string definition
-     │
-     ├─[ type_alias_decls.baml:401:9 ]
-     │
- 401 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
-     │         ───────┬───────  
-     │                ╰───────── duplicate type definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
+     ·         ───────┬───────
+     ·                ╰── duplicate enum definition
+     ╰────
+  ├─▶   ☞ first defined as class here
+  │        ╭─[class_decls.baml:296:10]
+  │    296 │ class    ExtraWhitespace    {
+  │        ·          ───────────────
+  │        ╰────
+  ├─▶   ☞ duplicate function definition
+  │        ╭─[function_decls.baml:497:13]
+  │    497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
+  │        ·             ───────────────
+  │        ╰────
+  ╰─▶   ☞ duplicate type definition
+           ╭─[type_alias_decls.baml:401:9]
+       401 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
+           ·         ───────────────
+           ╰────
 
-  [validation] error: Name `Minimal` defined 2 times as: enum, function
-   ╭─[ enum_decls.baml:4:6 ]
-   │
- 4 │ enum Minimal {
-   │      ───┬───  
-   │         ╰───── first defined as enum here
-   │
-   ├─[ function_decls.baml:5:10 ]
-   │
+  [validation] E0011
+
+  × name `Minimal` defined 2 times as: enum, function
+   ╭─[function_decls.baml:5:10]
  5 │ function Minimal() -> int {
-   │          ───┬───  
-   │             ╰───── duplicate function definition
-   │ 
-   │ Note: Error code: E0011
-───╯
+   ·          ───┬───
+   ·             ╰── duplicate function definition
+   ╰────
+  ╰─▶   ☞ first defined as enum here
+         ╭─[enum_decls.baml:4:6]
+       4 │ enum Minimal {
+         ·      ───────
+         ╰────
 
-  [type] error: type mismatch: expected (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never, got 1
-    ╭─[ function_decls.baml:73:5 ]
-    │
- 73 │     1
-    │     ┬  
-    │     ╰── type mismatch: expected (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never, got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] E0001
 
-  [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:453:43 ]
-     │
- 453 │ ╭─▶ function LlmBasic(name: string) -> string {
-     ┆ ┆   
- 456 │ ├─▶ }
-     │ │       
-     │ ╰─────── unresolved name: GPT4
-     │     
-     │     Note: Error code: E0003
-─────╯
+  × mismatched types
+    ╭─[function_decls.baml:72:167]
+ 72 │ ╭─▶ function DeepFnReturn() -> (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never {
+ 73 │ │       1
+ 74 │ ├─▶ }
+    · ╰──── expected `(x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never`, found `1`
+    ╰────
 
-  [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:464:47 ]
-     │
- 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
-     ┆ ┆   
- 471 │ ├─▶ }
-     │ │       
-     │ ╰─────── unresolved name: GPT4
-     │     
-     │     Note: Error code: E0003
-─────╯
+  [type] E0003
 
-  [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:480:51 ]
-     │
- 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
-     ┆ ┆   
- 483 │ ├─▶ }
-     │ │       
-     │ ╰─────── unresolved name: GPT4
-     │     
-     │     Note: Error code: E0003
-─────╯
+  × unresolved name: `GPT4`
+     ╭─[function_decls.baml:454:13]
+ 454 │     client: GPT4
+     ·             ────
+     ╰────
 
-  [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:488:131 ]
-     │
- 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
-     ┆ ┆   
- 494 │ ├─▶ }
-     │ │       
-     │ ╰─────── unresolved name: GPT4
-     │     
-     │     Note: Error code: E0003
-─────╯
+  [type] E0003
 
-  [type] warning: unreachable code: 1 statement(s) after diverging statement
-     ╭─[ loop_stmts.baml:403:21 ]
-     │
+  × unresolved name: `GPT4`
+     ╭─[function_decls.baml:465:13]
+ 465 │     client: GPT4
+     ·             ────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+     ╭─[function_decls.baml:482:13]
+ 482 │     client: GPT4
+     ·             ────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+     ╭─[function_decls.baml:489:13]
+ 489 │     client: GPT4
+     ·             ────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[loop_stmts.baml:403:21]
  403 │                     break;
-     │                     ───┬──  
-     │                        ╰──── unreachable code: 1 statement(s) after diverging statement
-     │ 
-     │ Note: Error code: E0146
-─────╯
+     ·                     ──────
+     ╰────
 
-  [type] warning: unreachable code: 1 statement(s) after diverging statement
-     ╭─[ loop_stmts.baml:407:21 ]
-     │
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[loop_stmts.baml:407:21]
  407 │                     continue;
-     │                     ────┬────  
-     │                         ╰────── unreachable code: 1 statement(s) after diverging statement
-     │ 
-     │ Note: Error code: E0146
-─────╯
+     ·                     ─────────
+     ╰────
 
-  [type] error: type mismatch: expected "hello", got "bye"
-     ╭─[ match_exprs.baml:161:9 ]
-     │
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:577:5]
+ 577 │     assert x > 0;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:578:5]
+ 578 │     assert x < 100;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:582:5]
+ 582 │     assert // 2 assert keyword trailing
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:589:5]
+ 589 │     assert /* 2 assert keyword trailing */
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:595:5]
+ 595 │     assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:598:5]
+ 598 │     assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:602:5]
+ 602 │     assert // 2 assert trailing
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:611:5]
+ 611 │     assert /* 2 assert trailing */
+     ·     ──────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exprs.baml:161:9]
  161 │         "bye" => "farewell",
-     │         ──┬──  
-     │           ╰──── type mismatch: expected "hello", got "bye"
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·         ──┬──
+     ·           ╰── expected `"hello"`, found `"bye"`
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exprs.baml:162:14 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exprs.baml:161:18]
+ 161 │         "bye" => "farewell",
+     ·                  ──────────
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exprs.baml:162:14]
  162 │         _ => "other"
-     │              ───┬───  
-     │                 ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·              ───────
+     ╰────
 
-  [type] error: operator `*` cannot be applied to `bool` and `bool`
-     ╭─[ match_exprs.baml:311:20 ]
-     │
+  [type] E0004
+
+  × operator `*` cannot be applied to `bool` and `bool`
+     ╭─[match_exprs.baml:311:20]
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
-     │                    ──┬──  
-     │                      ╰──── operator `*` cannot be applied to `bool` and `bool`
-     │ 
-     │ Note: Error code: E0004
-─────╯
+     ·                    ─────
+     ╰────
 
-  [type] error: operator `*` cannot be applied to `int` and `bool`
-     ╭─[ match_exprs.baml:311:28 ]
-     │
+  [type] E0004
+
+  × operator `*` cannot be applied to `int` and `bool`
+     ╭─[match_exprs.baml:311:28]
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
-     │                            ──┬──  
-     │                              ╰──── operator `*` cannot be applied to `int` and `bool`
-     │ 
-     │ Note: Error code: E0004
-─────╯
+     ·                            ─────
+     ╰────
 
-  [type] error: operator `*` cannot be applied to `bool` and `bool`
-     ╭─[ match_exprs.baml:311:56 ]
-     │
+  [type] E0004
+
+  × operator `*` cannot be applied to `bool` and `bool`
+     ╭─[match_exprs.baml:311:56]
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
-     │                                                        ──┬──  
-     │                                                          ╰──── operator `*` cannot be applied to `bool` and `bool`
-     │ 
-     │ Note: Error code: E0004
-─────╯
+     ·                                                        ─────
+     ╰────
 
-  [type] error: operator `*` cannot be applied to `int` and `bool`
-     ╭─[ match_exprs.baml:311:68 ]
-     │
+  [type] E0004
+
+  × operator `*` cannot be applied to `int` and `bool`
+     ╭─[match_exprs.baml:311:68]
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
-     │                                                                    ──┬──  
-     │                                                                      ╰──── operator `*` cannot be applied to `int` and `bool`
-     │ 
-     │ Note: Error code: E0004
-─────╯
+     ·                                                                    ─────
+     ╰────
 
-  [type] error: operator `*` cannot be applied to `bool` and `int`
-     ╭─[ match_exprs.baml:311:80 ]
-     │
+  [type] E0004
+
+  × operator `*` cannot be applied to `bool` and `int`
+     ╭─[match_exprs.baml:311:80]
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
-     │                                                                                ──┬──  
-     │                                                                                  ╰──── operator `*` cannot be applied to `bool` and `int`
-     │ 
-     │ Note: Error code: E0004
-─────╯
+     ·                                                                                ─────
+     ╰────
 
-  [type] error: non-exhaustive match on type int; missing: _
-     ╭─[ match_exprs.baml:389:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type int; missing: _
+     ╭─[match_exprs.baml:389:5]
  389 │ ╭─▶     match (x) {
-     ┆ ┆   
- 391 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type int; missing: _
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 390 │ │           1 /* trail */ | 2 => 0
+ 391 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type int; missing: _
-     ╭─[ match_exprs.baml:394:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type int; missing: _
+     ╭─[match_exprs.baml:394:5]
  394 │ ╭─▶     match (x) {
-     ┆ ┆   
- 396 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type int; missing: _
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 395 │ │           1 | /* lead */ 2 => 0
+ 396 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type int; missing: _
-     ╭─[ match_exprs.baml:399:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type int; missing: _
+     ╭─[match_exprs.baml:399:5]
  399 │ ╭─▶     match (x) {
-     ┆ ┆   
- 401 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type int; missing: _
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 400 │ │           1 /* a */ | /* b */ 2 => 0
+ 401 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type int; missing: _
-     ╭─[ match_exprs.baml:404:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type int; missing: _
+     ╭─[match_exprs.baml:404:5]
  404 │ ╭─▶     match (x) {
-     ┆ ┆   
- 406 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type int; missing: _
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 405 │ │           1 | 2 /* mid */ | 3 => 0
+ 406 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type int; missing: _
-     ╭─[ match_exprs.baml:419:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type int; missing: _
+     ╭─[match_exprs.baml:419:5]
  419 │ ╭─▶     match (x) {
-     ┆ ┆   
- 421 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type int; missing: _
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 420 │ │           (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
+ 421 │ ╰─▶     }
+     ╰────
 
-  [type] error: type mismatch: expected string, got 0
-     ╭─[ match_exprs.baml:420:68 ]
-     │
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exprs.baml:420:68]
  420 │         (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
-     │                                                                    ┬  
-     │                                                                    ╰── type mismatch: expected string, got 0
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·                                                                    ┬
+     ·                                                                    ╰── expected `string`, found `0`
+     ╰────
 
-  [validation] error: Name `ManyParams` defined 2 times as: function, template_string
-    ╭─[ function_decls.baml:23:10 ]
-    │
- 23 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
-    │          ─────┬────  
-    │               ╰────── first defined as function here
-    │
-    ├─[ template_string_decls.baml:30:17 ]
-    │
- 30 │ template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) #"
-    │                 ─────┬────  
-    │                      ╰────── duplicate template_string definition
-    │ 
-    │ Note: Error code: E0011
-────╯
+  [validation] E0011
 
-  [validation] error: Name `MultiParamTrivia` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:135:10 ]
-     │
- 135 │ function MultiParamTrivia(
-     │          ────────┬───────  
-     │                  ╰───────── first defined as function here
-     │
-     ├─[ template_string_decls.baml:89:17 ]
-     │
-  89 │ template_string MultiParamTrivia(
-     │                 ────────┬───────  
-     │                         ╰───────── duplicate template_string definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
+  × duplicate function `ManyParams`
+    ╭─[template_string_decls.baml:28:10]
+ 28 │ function ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) -> string {
+    ·          ─────┬────
+    ·               ╰── duplicate function definition
+    ╰────
+  ╰─▶   ☞ first defined as function here
+          ╭─[function_decls.baml:23:10]
+       23 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+          ·          ──────────
+          ╰────
 
-  [validation] error: Name `MultiParamTriviaBlock` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:152:10 ]
-     │
- 152 │ function MultiParamTriviaBlock(
-     │          ──────────┬──────────  
-     │                    ╰──────────── first defined as function here
-     │
-     ├─[ template_string_decls.baml:106:17 ]
-     │
- 106 │ template_string MultiParamTriviaBlock(
-     │                 ──────────┬──────────  
-     │                           ╰──────────── duplicate template_string definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
+  [type] E0001
 
-  [validation] error: Name `SixLongParams` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:37:10 ]
-     │
-  37 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
-     │          ──────┬──────  
-     │                ╰──────── first defined as function here
-     │
-     ├─[ template_string_decls.baml:171:17 ]
-     │
- 171 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
-     │                 ──────┬──────  
-     │                       ╰──────── duplicate template_string definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
+  × cannot interpolate a value of type `string | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:7]
+ 37 │     `${name} ${age} ${items}`
+    ·       ──────
+    ╰────
 
-  [validation] error: Name `T` defined 2 times as: template_string, type
-     ╭─[ template_string_decls.baml:123:17 ]
-     │
- 123 │ template_string T(x: int) #"{{ x }}"#
-     │                 ┬  
-     │                 ╰── first defined as template_string here
-     │
-     ├─[ type_alias_decls.baml:398:6 ]
-     │
- 398 │ type T = int
-     │      ┬  
-     │      ╰── duplicate type definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
+  [type] E0001
+
+  × cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:15]
+ 37 │     `${name} ${age} ${items}`
+    ·               ─────
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate a value of type `string[] | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:22]
+ 37 │     `${name} ${age} ${items}`
+    ·                      ───────
+    ╰────

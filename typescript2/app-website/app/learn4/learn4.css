@@ -1,0 +1,635 @@
+/* =========================================================================
+   /learn4 — a long-scroll story page (bun-v1.0 register): sans-serif prose,
+   mono code, one section per viewport with generous air between sections.
+   Reuses learn2.css (code blocks, editors) and learn3.css (terminals,
+   infection graph, metrics dag) for the embedded components.
+   ========================================================================= */
+
+.l4 {
+  --l4-ink: #1a1612;
+  --l4-body: #2b2520;
+  --l4-muted: #6f6a63;
+  --l4-soft: #8a8580;
+  --l4-rule: #e2ddcf;
+  --l4-rule-strong: #d8cfbd;
+  --l4-green: #047857;
+  --l4-amber: #b45309;
+  --l4-red: #b42318;
+
+  background: #fdfbf5;
+  color: var(--l4-body);
+  font-family:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+}
+.l4 .font-mono,
+.l4 code,
+.l4 pre,
+.l4 kbd {
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+}
+.l4 code {
+  font-size: 0.92em;
+  background: rgba(26, 22, 18, 0.05);
+  border-radius: 4px;
+  padding: 0.08em 0.32em;
+}
+.l4 pre code {
+  background: none;
+  padding: 0;
+}
+
+/* ---- top bar ---- */
+.l4-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.5rem;
+  border-bottom: 1px solid var(--l4-rule);
+  background: rgba(253, 251, 245, 0.92);
+  backdrop-filter: blur(4px);
+  font-size: 12.5px;
+}
+.l4-head a {
+  color: var(--l4-ink);
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.l4-head a span {
+  color: var(--l4-soft);
+  font-weight: 400;
+  margin-left: 0.4rem;
+}
+.l4-head-install {
+  color: var(--l4-green);
+}
+
+/* ---- sections: one idea per viewport, centered, air between ---- */
+.l4-section {
+  min-height: 96vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 9vh 1.5rem;
+}
+.l4-section--tall {
+  min-height: 110vh;
+}
+
+/* content widths */
+.l4-prose {
+  width: 100%;
+  max-width: 70ch;
+}
+.l4-wide {
+  width: min(1180px, 96vw);
+}
+.l4-full {
+  width: min(1520px, 97vw);
+}
+
+/* section kicker: "01 · the stack" */
+.l4-kicker {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--l4-soft);
+  margin: 0 0 0.9rem;
+}
+/* the section number gets a hand-drawn circle */
+.l4-kicker b {
+  display: inline-block;
+  color: var(--l4-green);
+  font-weight: 600;
+  margin-right: 0.55rem;
+  padding: 1px 8px;
+  border: 1.4px solid var(--l4-green);
+  border-radius: 60% 40% 55% 45% / 50% 60% 40% 55%;
+  transform: rotate(-2deg);
+}
+.l4 h2 {
+  font-size: clamp(26px, 3.4vw, 38px);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  color: var(--l4-ink);
+  margin: 0 0 1.1rem;
+}
+.l4-lead {
+  font-size: clamp(17.5px, 1.9vw, 20px);
+  line-height: 1.6;
+  color: var(--l4-ink);
+  margin: 0 0 1rem;
+}
+.l4 p {
+  margin: 0 0 1rem;
+}
+.l4-dim {
+  color: var(--l4-muted);
+}
+.l4-note {
+  font-size: 13.5px;
+  color: var(--l4-muted);
+  border-left: 2px solid var(--l4-rule-strong);
+  padding-left: 0.9rem;
+  margin-top: 1.1rem;
+}
+
+/* ---- hero ---- */
+.l4-hero {
+  text-align: center;
+}
+.l4-hero-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.5rem, 2vw, 1.2rem);
+  margin-bottom: 1.6rem;
+}
+.l4-hero-sheep {
+  width: clamp(56px, 9vw, 104px);
+  height: auto;
+}
+.l4-hero-title {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: clamp(54px, 10vw, 112px);
+  line-height: 0.95;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  color: var(--l4-ink);
+  margin: 0;
+}
+.l4-hero-sub {
+  max-width: 56ch;
+  margin: 0 auto 0.6rem;
+  font-size: clamp(17px, 2vw, 21px);
+  line-height: 1.55;
+}
+.l4-hero-tag {
+  font-size: clamp(16px, 1.8vw, 19px);
+  color: var(--l4-ink);
+  font-weight: 550;
+  margin: 0.4rem 0 1.8rem;
+}
+.l4-hero .l2-terminal {
+  max-width: 420px;
+}
+.l4-scroll-hint {
+  margin-top: 3rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--l4-soft);
+}
+
+/* ---- two-up grid for before/after & terminal pairs ---- */
+.l4-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+  align-items: start;
+  margin-top: 1.4rem;
+}
+@media (max-width: 880px) {
+  .l4-pair {
+    grid-template-columns: 1fr;
+  }
+}
+.l4-pane-label {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--l4-soft);
+  margin: 0 0 0.5rem;
+}
+.l4-pane-label--after {
+  color: var(--l4-green);
+}
+.l4-stackv {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  min-width: 0;
+}
+
+/* ---- hover terms (dotted-underline jargon with a popover) ---- */
+.l4-feature-list {
+  list-style: none;
+  margin: 1.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  font-size: 17.5px;
+}
+.l4-feature-list li {
+  padding-left: 1.5rem;
+  position: relative;
+}
+.l4-feature-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 7px;
+  height: 7px;
+  background: var(--l4-green);
+  border-radius: 1px;
+}
+.l4-term {
+  position: relative;
+  border-bottom: 1.5px dashed var(--l4-green);
+  cursor: help;
+  font-weight: 550;
+  color: var(--l4-ink);
+}
+.l4-term-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 38ch;
+  background: #1f1b17;
+  color: #f3ede0;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(20, 18, 16, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 140ms;
+  pointer-events: none;
+  z-index: 10;
+}
+.l4-term-tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1f1b17;
+}
+.l4-term:hover .l4-term-tip,
+.l4-term:focus-visible .l4-term-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---- the stack tower ---- */
+.l4-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.6rem;
+  align-items: start;
+  margin-top: 1.6rem;
+}
+@media (max-width: 880px) {
+  .l4-stack {
+    grid-template-columns: 1fr;
+  }
+}
+.l4-stack-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+.l4-stack-col-title {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--l4-soft);
+}
+/* hand-drawn ("excalidraw") borders: two wobble variants so adjacent
+   boxes don't share the same imperfections */
+.l4-sketch-a {
+  border: 1.6px solid var(--l4-ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+}
+.l4-sketch-b {
+  border: 1.6px solid var(--l4-ink);
+  border-radius: 15px 225px 15px 255px / 255px 15px 225px 15px;
+}
+.l4-tower {
+  /* room for the slumped layers to lean out of the column */
+  padding: 0 14px;
+}
+.l4-layer {
+  background: #fffdf6;
+  padding: 0.55rem 0.95rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+/* the slump: every layer starts straight, then settles into its tilt */
+.l4-layer--slump {
+  animation: l4-slump 600ms cubic-bezier(0.34, 1.4, 0.5, 1) forwards;
+}
+@keyframes l4-slump {
+  to {
+    transform: var(--tilt);
+  }
+}
+.l4-layer-name {
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--l4-ink);
+}
+.l4-layer-who {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11.5px;
+  color: var(--l4-soft);
+  text-align: right;
+}
+/* a seam: the widening crack between layers, annotated by hand. Sits above
+   the tilted boxes (they lean into the gaps) with a paper backing so the
+   annotation stays legible. */
+.l4-seam {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.4rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11.5px;
+  color: var(--l4-red);
+  opacity: 0;
+  animation: l4-seam-in 300ms ease forwards;
+}
+.l4-seam-label {
+  display: inline-block;
+  background: #fdfbf5;
+  padding: 1px 7px;
+  border-radius: 6px;
+}
+@keyframes l4-seam-in {
+  to {
+    opacity: 1;
+  }
+}
+/* the integrated column — same sketchbook, standing straight */
+.l4-baml-col {
+  border-color: var(--l4-green);
+  background: #fffdf6;
+  overflow: hidden;
+}
+
+/* carry the sketchbook look to the other diagram panels on this page —
+   diagrams are hand-drawn, code and terminals stay machine-precise */
+.l4 .l2-race,
+.l4 .l3-inf,
+.l4 .l3-dag,
+.l4 .cu {
+  border: 1.6px solid var(--l4-ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+}
+.l4-baml-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.62rem 0.95rem;
+}
+.l4-baml-row + .l4-baml-row {
+  border-top: 1.4px dashed #bcdfd0;
+}
+.l4-baml-row-name {
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--l4-ink);
+}
+.l4-baml-row-what {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11.5px;
+  color: var(--l4-green);
+  text-align: right;
+}
+.l4-stack-caption {
+  grid-column: 1 / -1;
+  font-size: 13.5px;
+  color: var(--l4-muted);
+  margin: 0.4rem 0 0;
+}
+
+/* ---- sdk pipeline (embed section) ---- */
+.l4-pipe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.4rem 0;
+  margin: 1.2rem 0 1.6rem;
+}
+.l4-pipe-item {
+  display: flex;
+  align-items: center;
+}
+.l4-pipe-arrow {
+  padding: 0 0.55rem;
+  font-size: 19px;
+  color: var(--l4-soft);
+  opacity: 0;
+  animation: l4-seam-in 260ms ease forwards;
+}
+.l4-pipe-step {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #fffdf6;
+  padding: 0.5rem 0.9rem;
+  opacity: 0;
+  animation: l4-seam-in 300ms ease forwards;
+}
+.l4-pipe-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--l4-ink);
+}
+.l4-pipe-what {
+  font-size: 11.5px;
+  color: var(--l4-muted);
+}
+
+/* ---- rotating host-language pane ---- */
+.l4-rot {
+  display: grid;
+  min-width: 0;
+}
+.l4-rot > div {
+  grid-area: 1 / 1;
+  min-width: 0;
+  animation: l4-rot-a 11s linear infinite;
+}
+.l4-rot > div:nth-child(2) {
+  animation-name: l4-rot-b;
+}
+.l4-rot:hover > div {
+  animation-play-state: paused;
+}
+@keyframes l4-rot-a {
+  0%,
+  42% {
+    opacity: 1;
+    visibility: visible;
+  }
+  50%,
+  92% {
+    opacity: 0;
+    visibility: hidden;
+  }
+  100% {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+@keyframes l4-rot-b {
+  0%,
+  42% {
+    opacity: 0;
+    visibility: hidden;
+  }
+  50%,
+  92% {
+    opacity: 1;
+    visibility: visible;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* ---- pool schedule (TaskGroup limit animation) ---- */
+.l4-pool {
+  border: 1.6px solid var(--l4-ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  background: #fffdf6;
+  padding: 0.9rem 1rem 1rem;
+}
+.l4-pool-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+.l4-pool-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 3px 0;
+}
+.l4-pool-name {
+  flex: 0 0 4.6rem;
+  font-size: 11.5px;
+  color: var(--l4-ink);
+}
+.l4-pool-track {
+  flex: 1;
+  height: 14px;
+  background: #efe8d8;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.l4-pool-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: #047857;
+  border-radius: 3px;
+  animation: l2-fill linear forwards;
+}
+.l4-pool-status {
+  position: relative;
+  flex: 0 0 3.6rem;
+  font-size: 10.5px;
+  text-align: right;
+}
+.l4-pool-queued {
+  color: var(--l4-amber);
+  animation: l4-vanish 1ms linear forwards;
+}
+.l4-pool-done {
+  position: absolute;
+  inset: 0;
+  text-align: right;
+  color: var(--l4-green);
+  opacity: 0;
+  animation: l4-appear 180ms ease forwards;
+}
+@keyframes l4-vanish {
+  to {
+    visibility: hidden;
+  }
+}
+@keyframes l4-appear {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- big statement (the "program is the visualization" beat) ---- */
+.l4-statement {
+  font-size: clamp(24px, 3.2vw, 34px);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  color: var(--l4-ink);
+  margin: 1.6rem 0 0;
+  text-align: center;
+}
+.l4-statement em {
+  font-style: italic;
+  color: var(--l4-green);
+}
+
+/* the playground gets real height on this page */
+.l4 .l2-live {
+  height: min(74vh, 720px);
+}
+
+/* design-tag reuse, footer */
+.l4-close {
+  text-align: center;
+}
+.l4-close .l2-terminal {
+  max-width: 460px;
+}
+.l4-close-link {
+  display: inline-block;
+  margin-top: 1.4rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 14px;
+  color: var(--l4-green);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.l4-close-link:hover {
+  border-bottom-color: var(--l4-green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l4-seam,
+  .l4-layer--slump {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+}

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 26006
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -7,11 +8,11 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: (testing.TestCollector) -> void throws unknown
+    let _3: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test_set(copy _1, const "test", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root", const "test", copy _3, const null) -> [bb1];
     }
 
     bb1: {
@@ -25,9 +26,9 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: string[] // topics
     let _3: string[]
@@ -38,18 +39,18 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws unknown
+    let _11: (testing.TestCollector) -> void throws baml.errors.Io | baml.errors.LlmClient | baml.errors.Timeout | testing.InvalidTestName
     let _12: void
-    let _13: (testing.TestCollector) -> void throws unknown
+    let _13: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
         _3 = copy _2;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -82,9 +83,9 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) -> null {
+fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: baml.http.Response // req
     let _3: string
@@ -100,7 +101,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
     let _13: string // ex
     let _14: void
     let _15: string
-    let _16: () -> void throws unknown
+    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
 
     bb0: {
         _4 = copy capture[0];
@@ -114,16 +115,16 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
 
     bb2: {
         _7 = copy _5;
-        _6 = call const fn user.GenerateTests$parse(copy _7, const <omitted>) -> [bb3];
+        _6 = call const fn user.GenerateTests$parse(copy _7) -> [bb3];
     }
 
     bb3: {
         _8 = copy _6;
-        _9 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _8) -> [bb4];
+        _9 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _8) -> [bb4];
     }
 
     bb4: {
-        _10 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _9) -> [bb5];
+        _10 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _9) -> [bb5];
     }
 
     bb5: {
@@ -151,9 +152,9 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 1)>, 2)>() -> null {
+fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 1)>, 2)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: Sentiment // result
     let _2: null
     let _3: string
@@ -178,9 +179,9 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 1)>, 2)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) -> null {
+fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: string[] // topics
     let _3: string[]
@@ -191,16 +192,16 @@ fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) ->
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws unknown
+    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | testing.InvalidTestName | ai.errors.Failure
 
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
         _3 = copy _2;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -228,9 +229,9 @@ fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) ->
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.TestCollector) -> null {
+fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: string[] // tests
     let _3: string
@@ -242,7 +243,7 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.Test
     let _9: string // ex
     let _10: void
     let _11: string
-    let _12: () -> void throws unknown
+    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
 
     bb0: {
         _3 = copy capture[0];
@@ -251,11 +252,11 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.Test
 
     bb1: {
         _4 = copy _2;
-        _5 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
-        _6 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _5) -> [bb3];
+        _6 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _5) -> [bb3];
     }
 
     bb3: {
@@ -283,9 +284,9 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.Test
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>, 5)>() -> null {
+fn .<lambda(<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>, 5)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: Sentiment // result
     let _2: null
     let _3: string
@@ -309,14 +310,16 @@ fn .<lambda(<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>, 5)>() -> nul
     }
 }
 
-fn user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
+fn user.ClassifySentiment(text: string, client: null | ai.Client) -> Sentiment {
     // Locals:
     let _0: Sentiment // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: null | ai.Client // client // param
     let _3: bool
-    let _4: map<string, unknown>
-    let _5: type
+    let _4: ai.RunResult<Sentiment>
+    let _5: ai.Agent<Sentiment>
+    let _6: type
+    let _7: ai.FunctionSpec<Sentiment>
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -324,113 +327,188 @@ fn user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
+        _6 = load_type(Sentiment);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        _7 = call const fn user.ClassifySentiment$spec(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<Sentiment, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Sentiment>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.ClassifySentiment$parse(json: string) -> Sentiment {
+    // Locals:
+    let _0: Sentiment // _0 // return
+    let _1: string // json // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Sentiment);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ClassifySentiment$render_prompt(text: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // text // param
+    let _2: ai.FunctionSpec<Sentiment>
+    let _3: string
+    let _4: type
+    let _5: type
+
+    bb0: {
+        _2 = call const fn user.ClassifySentiment$spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(Sentiment);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
+    }
+
+    bb3: {
         _5 = load_type(Sentiment);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
+        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
     }
 
-    bb3: {
+    bb4: {
         return;
     }
 }
 
-fn user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<Sentiment> {
     // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
+    let _0: ai.FunctionSpec<Sentiment> // _0 // return
+    let _1: string // text // param [captured]
+    let _2: map<string, unknown>
+    let _3: (string) -> ai.Prompt throws never
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = { const "text": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _0 = ai.FunctionSpec<Sentiment> { const "ClassifySentiment", copy _2, copy _3, copy _4, const item user.GPT4o };
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
         return;
     }
 }
 
-fn user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
+// lambda[0]
+fn .<lambda(ClassifySentiment$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: string
+    let _7: int
+    let _8: string[]
+    let _9: string
+    let _10: type
+    let _11: int
+    let _12: unknown[]
+    let _13: string
+    let _14: type
+    let _15: int
+    let _16: string[]
+    let _17: ""
+    let _18: type
+    let _19: string[]
+    let _20: unknown[]
+    let _21: string[]
+    let _22: baml.TaggedString
+    let _23: unknown[]
+    let _24: baml.TaggedString
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _6 = copy _5;
+        _5 = copy _6 + const "classify ";
+        _8 = copy _3;
+        _9 = copy _5;
+        _10 = load_type(string);
+        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
-        goto -> bb2;
+        _5 = const "";
+        _12 = copy _4;
+        _13 = copy capture[0];
+        _14 = load_type(unknown);
+        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
     }
 
     bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
     }
 
     bb3: {
+        _19 = copy _3;
+        _20 = copy _4;
+        _2 = baml.TaggedString { copy _19, copy _20 };
+        _22 = copy _2;
+        _21 = copy _22.0;
+        _24 = copy _2;
+        _23 = copy _24.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
 
-fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.ClassifySentiment$stream(text: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<null | Sentiment$stream, Sentiment> {
     // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
+    let _0: ai.stream.Stream<null | Sentiment$stream, Sentiment> // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
-    let _4: map<string, unknown>
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
+    let _4: ai.FunctionSpec<Sentiment>
     let _5: type
+    let _6: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -438,101 +516,274 @@ fn user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _5 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn user.ClassifySentiment$spec(copy _1) -> [bb3];
     }
 
     bb3: {
+        _5 = load_type(Sentiment$stream | null);
+        _6 = load_type(Sentiment);
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
 
-fn user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateTests(count: int, topic: string, client: null | ai.Client) -> string[] {
     // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
+    let _0: string[] // _0 // return
+    let _1: int // count // param
+    let _2: string // topic // param
+    let _3: null | ai.Client // client // param
+    let _4: bool
+    let _5: ai.RunResult<string[]>
+    let _6: ai.Agent<string[]>
+    let _7: type
+    let _8: ai.FunctionSpec<string[]>
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _3 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
+        _7 = load_type(string[]);
+        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
+        _8 = call const fn user.GenerateTests$spec(copy _1, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _5.0;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
 
-fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateTests$parse(json: string) -> string[] {
     // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
+    let _0: string[] // _0 // return
+    let _1: string // json // param
+    let _2: type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = load_type(string[]);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
         return;
     }
 }
 
-fn user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.GenerateTests$render_prompt(count: int, topic: string) -> ai.Prompt {
     // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
+    let _0: ai.Prompt // _0 // return
+    let _1: int // count // param
+    let _2: string // topic // param
+    let _3: ai.FunctionSpec<string[]>
+    let _4: string
+    let _5: type
+    let _6: type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _3 = call const fn user.GenerateTests$spec(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _5 = load_type(string[]);
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn ai.wire.render_output_format(copy _5) -> [bb3];
     }
 
     bb3: {
+        _6 = load_type(string[]);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _6>(copy _3, copy _4) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[]> {
+    // Locals:
+    let _0: ai.FunctionSpec<string[]> // _0 // return
+    let _1: int // count // param [captured]
+    let _2: string // topic // param [captured]
+    let _3: map<string, unknown>
+    let _4: (string) -> ai.Prompt throws never
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+
+    bb0: {
+        _3 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1, copy _2);
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
+    }
+
+    bb1: {
+        _0 = ai.FunctionSpec<string[]> { const "GenerateTests", copy _3, copy _4, copy _5, const item user.GPT4o };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(GenerateTests$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: string
+    let _7: int
+    let _8: string[]
+    let _9: string
+    let _10: type
+    let _11: int
+    let _12: unknown[]
+    let _13: int
+    let _14: type
+    let _15: int
+    let _16: string[]
+    let _17: " tests about "
+    let _18: type
+    let _19: int
+    let _20: unknown[]
+    let _21: string
+    let _22: type
+    let _23: int
+    let _24: string[]
+    let _25: ""
+    let _26: type
+    let _27: string[]
+    let _28: unknown[]
+    let _29: string[]
+    let _30: baml.TaggedString
+    let _31: unknown[]
+    let _32: baml.TaggedString
+
+    bb0: {
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _6 = copy _5;
+        _5 = copy _6 + const "generate ";
+        _8 = copy _3;
+        _9 = copy _5;
+        _10 = load_type(string);
+        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
+    }
+
+    bb1: {
+        _5 = const "";
+        _12 = copy _4;
+        _13 = copy capture[0];
+        _14 = load_type(unknown);
+        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
+    }
+
+    bb2: {
+        _5 = const " tests about ";
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
+    }
+
+    bb3: {
+        _5 = const "";
+        _20 = copy _4;
+        _21 = copy capture[1];
+        _22 = load_type(unknown);
+        _19 = call const fn baml.Array.push<copy _22>(copy _20, copy _21) -> [bb4];
+    }
+
+    bb4: {
+        _24 = copy _3;
+        _25 = copy _5;
+        _26 = load_type(string);
+        _23 = call const fn baml.Array.push<copy _26>(copy _24, copy _25) -> [bb5];
+    }
+
+    bb5: {
+        _27 = copy _3;
+        _28 = copy _4;
+        _2 = baml.TaggedString { copy _27, copy _28 };
+        _30 = copy _2;
+        _29 = copy _30.0;
+        _32 = copy _2;
+        _31 = copy _32.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _29, copy _31) -> [bb6];
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.GenerateTests$stream(count: int, topic: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string[], string[]> {
+    // Locals:
+    let _0: ai.stream.Stream<string[], string[]> // _0 // return
+    let _1: int // count // param
+    let _2: string // topic // param
+    let _3: null | ai.stream.StreamingClient // client // param
+    let _4: bool
+    let _5: ai.FunctionSpec<string[]>
+    let _6: type
+    let _7: type
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn user.GenerateTests$spec(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(string[]);
+        _7 = load_type(string[]);
+        _0 = call const fn ai.stream.from_spec<copy _6, copy _7>(copy _5, copy _3) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -583,26 +834,116 @@ fn user.Foo() -> string | image {
     }
 }
 
-fn user.GPT4o$new(lenient: bool) -> null {
+fn user.ClassifySentiment2(text: string, client: null | ai.Client) -> string {
     // Locals:
-    let _0: null // _0 // return
-    let _1: bool // lenient // param
-    let _2: baml.llm.PrimitiveClientOptions
-    let _3: string
-    let _4: map<string, string>
-    let _5: map<string, string>
-    let _6: map<string, unknown>
+    let _0: string // _0 // return
+    let _1: string // text // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.RunResult<string>
+    let _5: ai.Agent<string>
+    let _6: type
+    let _7: ai.FunctionSpec<string>
 
     bb0: {
-        _3 = call const fn baml.env.get_or_panic_lenient(const "OPENAI_API_KEY", copy _1) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
-        _4 = {  }: map<string, string>;
-        _5 = {  }: map<string, string>;
-        _6 = {  }: map<string, unknown>;
-        _2 = baml.llm.PrimitiveClientOptions { const "gpt-4o", const null, const null, const null, const null, const null, const null, const null, const null, copy _3, const null, const null, copy _4, copy _5, copy _6 };
-        _0 = baml.llm.PrimitiveClient { const "GPT4o", const "openai", copy _2 };
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = load_type(string);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        _7 = call const fn user.ClassifySentiment2$spec(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.ClassifySentiment2$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ClassifySentiment2$render_prompt(text: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // text // param
+    let _2: ai.FunctionSpec<string>
+    let _3: string
+    let _4: type
+    let _5: type
+
+    bb0: {
+        _2 = call const fn user.ClassifySentiment2$spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
+    // Locals:
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: string // text // param [captured]
+    let _2: map<string, unknown>
+    let _3: (string) -> ai.Prompt throws never
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+
+    bb0: {
+        _2 = { const "text": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _0 = ai.FunctionSpec<string> { const "ClassifySentiment2", copy _2, copy _3, copy _4, const item user.GPT4o };
         goto -> bb2;
     }
 
@@ -611,120 +952,109 @@ fn user.GPT4o$new(lenient: bool) -> null {
     }
 }
 
-fn user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> string[] {
+// lambda[0]
+fn .<lambda(ClassifySentiment2$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     // Locals:
-    let _0: string[] // _0 // return
-    let _1: int // count // param
-    let _2: string // topic // param
-    let _3: baml.llm.Client // client // param
-    let _4: bool
-    let _5: map<string, unknown>
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: string
+    let _7: int
+    let _8: string[]
+    let _9: string
+    let _10: type
+    let _11: int
+    let _12: unknown[]
+    let _13: string
+    let _14: type
+    let _15: int
+    let _16: string[]
+    let _17: ""
+    let _18: type
+    let _19: string[]
+    let _20: unknown[]
+    let _21: string[]
+    let _22: baml.TaggedString
+    let _23: unknown[]
+    let _24: baml.TaggedString
+
+    bb0: {
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _6 = copy _5;
+        _5 = copy _6 + const "classify ";
+        _8 = copy _3;
+        _9 = copy _5;
+        _10 = load_type(string);
+        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
+    }
+
+    bb1: {
+        _5 = const "";
+        _12 = copy _4;
+        _13 = copy capture[0];
+        _14 = load_type(unknown);
+        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
+    }
+
+    bb2: {
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
+    }
+
+    bb3: {
+        _19 = copy _3;
+        _20 = copy _4;
+        _2 = baml.TaggedString { copy _19, copy _20 };
+        _22 = copy _2;
+        _21 = copy _22.0;
+        _24 = copy _2;
+        _23 = copy _24.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.ClassifySentiment2$stream(text: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string | null, string> {
+    // Locals:
+    let _0: ai.stream.Stream<string | null, string> // _0 // return
+    let _1: string // text // param
+    let _2: null | ai.stream.StreamingClient // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
     let _6: type
 
     bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
-        _3 = const fn user.GPT4o;
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
-        _6 = load_type(string[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
+        _4 = call const fn user.ClassifySentiment2$spec(copy _1) -> [bb3];
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: int // count // param
-    let _2: string // topic // param
-    let _3: baml.llm.Client // client // param
-    let _4: bool
-    let _5: map<string, unknown>
-
-    bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
+        _5 = load_type(string | null);
+        _6 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 
-    bb1: {
-        _3 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: int // count // param
-    let _2: string // topic // param
-    let _3: baml.llm.Client // client // param
-    let _4: bool
-    let _5: map<string, unknown>
-
-    bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: int // count // param
-    let _2: string // topic // param
-    let _3: baml.llm.Client // client // param
-    let _4: bool
-    let _5: map<string, unknown>
-
-    bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
+    bb4: {
         return;
     }
 }

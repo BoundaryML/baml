@@ -1,0 +1,61 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0012
+
+  × duplicate parameter `value` in `named_first`
+   ╭─[main.baml:1:34]
+ 1 │ function named_first(value: int, value: string) -> int {
+   ·                      ──┬──       ──┬──
+   ·                        │           ╰── duplicate parameter definition
+   ·                        ╰── first defined as parameter here
+   ╰────
+
+  [hir] E0012
+
+  × duplicate parameter `value` in `named_last`
+   ╭─[main.baml:5:36]
+ 5 │ function named_last(value: string, value: int) -> string {
+   ·                     ──┬──          ──┬──
+   ·                       │              ╰── duplicate parameter definition
+   ·                       ╰── first defined as parameter here
+   ╰────
+
+  [hir] E0012
+
+  × duplicate parameter `value` in `lambda_first`
+    ╭─[main.baml:10:26]
+ 10 │     let f = (value: int, value: string) -> int {
+    ·              ──┬──       ──┬──
+    ·                │           ╰── duplicate parameter definition
+    ·                ╰── first defined as parameter here
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:11:17]
+ 11 │         value = true;
+    ·                 ──┬─
+    ·                   ╰── expected `int`, found `true`
+    ╰────
+
+  [hir] E0012
+
+  × duplicate parameter `value` in `lambda_last`
+    ╭─[main.baml:18:29]
+ 18 │     let f = (value: string, value: int) -> string {
+    ·              ──┬──          ──┬──
+    ·                │              ╰── duplicate parameter definition
+    ·                ╰── first defined as parameter here
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:19:17]
+ 19 │         value = true;
+    ·                 ──┬─
+    ·                   ╰── expected `string`, found `true`
+    ╰────

@@ -27,15 +27,17 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 
 //----
 //- diagnostics
-// warning: extraneous throws declaration: int
-//     ╭─[ throws_clause.baml:21:52 ]
-//     │
-//  21 │ function MayThrowMultiple(x: int) -> string throws string | int {
-//     │                                                    ──────┬─────
-//     │                                                          ╰─────── extraneous throws declaration: int
-//     │
-//     │ Note: Error code: E0097
-// ────╯
+// E0097
+//
+//   ⚠ extraneous throws declaration: int
+//     ╭─[throws_clause.baml:21:65]
+//  21 │ ╭─▶ function MayThrowMultiple(x: int) -> string throws string | int {
+//  22 │ │     if (x < 0) {
+//  23 │ │       throw "negative"
+//  24 │ │     }
+//  25 │ │     "ok"
+//  26 │ ╰─▶ }
+//     ╰────
 //
 //- semantic_tokens
 // throws_clause.baml:1:1 (comment) len=56 "// BEP-007: Basic throws syntax on function declarations"

@@ -1,0 +1,18 @@
+{
+  "slug": "valid-palindrome",
+  "id": 125,
+  "title": "Valid Palindrome",
+  "difficulty": "Easy",
+  "category": "Two Pointers",
+  "statement": "A phrase is a **palindrome** if, after converting all uppercase letters to lowercase and removing all non-alphanumeric characters, it reads the same forward and backward.\n\nGiven a string `s`, return `true` if it is a palindrome, or `false` otherwise.\n\n**Example**\n\n```\n\"A man, a plan, a canal: Panama\"  => true\n\"race a car\"                      => false\n```",
+  "signature": "function IsPalindrome(s: string) -> bool",
+  "starter": "function IsPalindrome(s: string) -> bool {\n  // Ignore case and non-alphanumeric characters.\n  return false;\n}",
+  "solution": "function IsPalindrome(s: string) -> bool {\n  let cleaned: string[] = [];\n  let chars = s.chars();\n  let n = chars.length();\n  let i = 0;\n  while (i < n) {\n    let c = chars[i];\n    if (c.is_alphanumeric()) {\n      cleaned.push(c.to_lower_case());\n    }\n    i += 1;\n  }\n  let lo = 0;\n  let hi = cleaned.length() - 1;\n  while (lo < hi) {\n    if (cleaned[lo] != cleaned[hi]) {\n      return false;\n    }\n    lo += 1;\n    hi -= 1;\n  }\n  return true;\n}",
+  "tests": [
+    { "call": "IsPalindrome(\"A man, a plan, a canal: Panama\")", "expected": "true" },
+    { "call": "IsPalindrome(\"race a car\")", "expected": "false" },
+    { "call": "IsPalindrome(\" \")", "expected": "true" },
+    { "call": "IsPalindrome(\"ab_a\")", "expected": "true", "hidden": true },
+    { "call": "IsPalindrome(\"0P\")", "expected": "false", "hidden": true }
+  ]
+}

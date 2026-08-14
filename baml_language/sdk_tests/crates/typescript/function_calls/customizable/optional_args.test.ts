@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { OptBox, optional_args_probe, optional_args_probe_async } from "./baml_sdk/index.js";
 
 describe("function_calls — optional_args_probe", () => {
-  it("covers the runtime matrix", () => {
+  it("optional_args_covers_the_runtime_matrix", () => {
     expect(optional_args_probe(1)).toEqual([1, 5, 99]);
     expect(optional_args_probe(1, {})).toEqual([1, 5, 99]);
     expect(optional_args_probe(1, undefined)).toEqual([1, 5, 99]);
@@ -15,18 +15,18 @@ describe("function_calls — optional_args_probe", () => {
     expect(optional_args_probe(1, { opt1: 8, opt2: 9 })).toEqual([1, 8, 9]);
   });
 
-  it("treats undefined as omitted and keeps null distinct", () => {
+  it("optional_args_treats_undefined_as_omitted_and_keeps_null_distinct", () => {
     expect(optional_args_probe(1, { opt1: undefined })).toEqual([1, 5, 99]);
     expect(optional_args_probe(1, { opt1: undefined, opt2: null })).toEqual([1, 5, null]);
   });
 
-  it("covers async samples", async () => {
+  it("optional_args_async_samples", async () => {
     expect(await optional_args_probe_async(1)).toEqual([1, 5, 99]);
     expect(await optional_args_probe_async(1, { opt1: null })).toEqual([1, null, 99]);
     expect(await optional_args_probe_async(1, { opt2: 9 })).toEqual([1, 5, 9]);
   });
 
-  it("rejects invalid runtime calls that bypass types", async () => {
+  it("optional_args_rejects_invalid_runtime_calls_that_bypass_types", async () => {
     expect(() => (optional_args_probe as any)(1, { opt3: 1 })).toThrow();
     await expect((optional_args_probe_async as any)(1, { opt3: 1 })).rejects.toThrow();
     expect(() => (optional_args_probe as any)()).toThrow();
@@ -34,7 +34,7 @@ describe("function_calls — optional_args_probe", () => {
 });
 
 describe("function_calls — OptBox optional method args", () => {
-  it("covers static and instance optional args", () => {
+  it("optional_args_covers_static_and_instance_optional_args", () => {
     const box = OptBox.make(10);
     expect(box.base).toBe(17);
 

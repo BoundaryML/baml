@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+    <IsPackable>true</IsPackable>
+    <PackageId>Baml.Bridge.MultiRidPackageProbe</PackageId>
+    <PackageVersion>0.0.0-b4</PackageVersion>
+    <AssemblyName>Baml.Bridge</AssemblyName>
+    <RootNamespace>Baml</RootNamespace>
+    <Authors>BoundaryML</Authors>
+    <Description>Repository-only eight-RID package fixture for the BAML C# entry gate.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <_BamlNativePackageAsset
+      Include="$(BamlNativeAssetRoot)/runtimes/**/*"
+      Condition="'$(BamlNativeAssetRoot)' != ''" />
+  </ItemGroup>
+
+  <Target
+    Name="RequireAllNativeProbeAssets"
+    BeforeTargets="PrepareForBuild;Pack">
+    <Error
+      Condition="'$(BamlNativeAssetRoot)' == ''"
+      Text="BamlNativeAssetRoot must identify the staged eight-RID runtime tree." />
+    <Error
+      Condition="'@(_BamlNativePackageAsset->Count())' != '8'"
+      Text="The staged runtime tree must contain exactly eight native assets; found @(_BamlNativePackageAsset->Count())." />
+    <Error
+      Condition="'$(BamlGeneratedTargetsPath)' == ''"
+      Text="BamlGeneratedTargetsPath must identify the platform-contract-derived buildTransitive target." />
+    <Error
+      Condition="'$(BamlGeneratedTargetsPath)' != '' and !Exists('$(BamlGeneratedTargetsPath)')"
+      Text="The platform-contract-derived buildTransitive target does not exist: $(BamlGeneratedTargetsPath)." />
+  </Target>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None
+      Include="$(BamlGeneratedTargetsPath)"
+      Pack="true"
+      PackagePath="buildTransitive/Baml.Bridge.MultiRidPackageProbe.targets"
+      Visible="false" />
+    <None
+      Include="@(_BamlNativePackageAsset)"
+      Pack="true"
+      PackagePath="runtimes/%(_BamlNativePackageAsset.RecursiveDir)%(_BamlNativePackageAsset.Filename)%(_BamlNativePackageAsset.Extension)"
+      Visible="false" />
+  </ItemGroup>
+</Project>

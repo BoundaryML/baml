@@ -368,7 +368,7 @@ fn load_callable_throws(
     cache: &bex_cache::BytecodeCache,
     manifest: &bex_cache::ProjectManifest,
 ) -> BTreeMap<String, BTreeMap<u32, Ty>> {
-    use baml_db::baml_compiler2_tir::package_interface::CallableThrowsFragment;
+    use baml_db::baml_compiler2_hir_ty::package_interface::CallableThrowsFragment;
     use bex_cache::{CacheKey, unit_key};
     use bex_vm_types::CompilationUnit;
 
@@ -406,9 +406,10 @@ fn load_callable_throws(
 mod tests {
     use baml_db::{
         Name, baml_compiler2_hir,
-        baml_compiler2_tir::{
-            callable::callable_throws, package_interface, throw_inference::file_throw_facts,
+        baml_compiler2_hir_ty::{
+            callable::callable_throws, package_interface, throw_facts::file_throw_facts,
         },
+        baml_compiler2_ppir,
     };
     use baml_project::ProjectDatabase;
 
@@ -515,9 +516,11 @@ mod tests {
 
     fn first_func_throws(db: &ProjectDatabase, file: &str) -> String {
         let sf = source_file(db, file);
-        let it = baml_compiler2_hir::file_item_tree(db, sf);
-        let local_id = *it.functions.keys().next().expect("one function");
-        let loc = baml_compiler2_hir::loc::FunctionLoc::new(db, sf, local_id);
+        // The fixture defines exactly one function; the firewall enumeration is
+        // source-ordered, so the first loc is that function.
+        let loc = *baml_compiler2_ppir::item_data::file_functions(db, sf)
+            .first()
+            .expect("one function");
         format!("{:?}", callable_throws(db, loc))
     }
 
@@ -749,6 +752,9 @@ mod tests {
                 sig_referenced_names: Vec::new(),
                 throw_facts: Vec::new(), // poison: honest is non-empty
                 diagnostics: Vec::new(),
+                // Non-empty sentinel bytes: the manifest's verbatim fragment
+                // carry must survive the disk round-trip untouched.
+                callable_throws_fragment: vec![0xca, 0xfe, 0xf0, 0x0d],
                 unit_key: [0u8; 32], // no unit → callable_throws seed empty
             }],
         };
@@ -764,6 +770,22 @@ mod tests {
                 &borsh::to_vec(&manifest).unwrap(),
             )
             .unwrap();
+        let manifest_bytes = cache
+            .load_raw(&bex_cache::manifest_key(
+                &fingerprint,
+                super::LSP_OPT_LEVEL,
+                super::LSP_EMIT_TEST_CASES,
+                &root,
+                None,
+            ))
+            .expect("manifest reloads from disk");
+        let reloaded: bex_cache::ProjectManifest =
+            borsh::from_slice(&manifest_bytes).expect("manifest decodes");
+        assert_eq!(
+            reloaded.files[0].callable_throws_fragment,
+            vec![0xca, 0xfe, 0xf0, 0x0d],
+            "the fragment blob round-trips through disk serialization verbatim"
+        );
 
         // Load from disk: both the stdlib and per-file seeds must decode.
         let loaded = LspSeedCache::load_for_root(&root).expect("blobs must load from disk");

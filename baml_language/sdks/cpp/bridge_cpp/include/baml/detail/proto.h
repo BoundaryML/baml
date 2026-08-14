@@ -3,9 +3,9 @@
 
 // The typed wire layer over the generated protobuf-lite bindings for the
 // bridge_ctypes CFFI schemas (checked-in under bridge_cpp/pb/, pinned to
-// the repo's vendored protoc). ArgsEncoder builds one CallFunctionArgs;
+// the repo's vendored protoc). args_encoder builds one CallFunctionArgs;
 // the helpers here normalize outbound values (union unwrap, arm naming)
-// for the Codec layer. Copies are deliberate and visible (contract:
+// for the codec layer. Copies are deliberate and visible (contract:
 // coarse-grained boundary, measurable copies).
 
 #include <cstdint>
@@ -20,7 +20,7 @@ namespace detail {
 namespace pb = ::baml_bridge::cffi::v1;
 
 // Human-readable arm name for decode diagnostics.
-inline const char* ArmName(pb::BamlOutboundValue::ValueCase c) {
+inline const char* arm_name(pb::BamlOutboundValue::ValueCase c) {
   switch (c) {
     case pb::BamlOutboundValue::kNullValue:
     case pb::BamlOutboundValue::VALUE_NOT_SET:
@@ -61,10 +61,10 @@ inline const char* ArmName(pb::BamlOutboundValue::ValueCase c) {
   return "?";
 }
 
-// Union variants carry metadata the C++ surface drops (Python parity):
+// variant variants carry metadata the C++ surface drops (Python parity):
 // resolve to the innermost non-union value. A variant with no inner value
 // resolves to the default instance, whose arm is VALUE_NOT_SET (= null).
-inline const pb::BamlOutboundValue& Unwrap(const pb::BamlOutboundValue& v) {
+inline const pb::BamlOutboundValue& unwrap(const pb::BamlOutboundValue& v) {
   const pb::BamlOutboundValue* cur = &v;
   while (cur->value_case() == pb::BamlOutboundValue::kUnionVariantValue) {
     cur = &cur->union_variant_value().value();
@@ -73,20 +73,27 @@ inline const pb::BamlOutboundValue& Unwrap(const pb::BamlOutboundValue& v) {
 }
 
 // Builds one CallFunctionArgs message: kwargs entries are filled via the
-// value-writer callbacks that Codec<T>::Encode provides, then Finish()
+// value-writer callbacks that codec<T>::encode provides, then finish()
 // stamps the engine call id and serializes.
-class ArgsEncoder {
+class args_encoder {
  public:
   // `write_value` fills the InboundValue for this argument.
   template <typename WriteValue>
-  void AddArg(const std::string& name, WriteValue&& write_value) {
+  void add_arg(const std::string& name, WriteValue&& write_value) {
     pb::InboundMapEntry* entry = args_.add_kwargs();
     entry->set_string_key(name);
     write_value(*entry->mutable_value());
   }
 
-  std::string Finish(uint64_t call_id) {
+  std::string finish(uint64_t call_id, const std::string& function_name) {
     args_.set_call_id(call_id);
+    args_.set_function_name(function_name);
+    return args_.SerializeAsString();
+  }
+
+  std::string finish(uint64_t call_id, uint64_t function_handle) {
+    args_.set_call_id(call_id);
+    args_.set_function_handle(function_handle);
     return args_.SerializeAsString();
   }
 

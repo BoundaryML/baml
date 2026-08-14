@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15489
+---
+=== PPIR ===
+class user.Container {
+  item: T
+}
+class user.Container$stream {
+  item: T | null
+}
+class user.User {
+  name: string
+}
+class user.User$stream {
+  name: string | null
+}
+function user.decode_container(s: string) -> user.Container<user.User>  [expr] {
+  {  } baml.json.from_string(s)
+}

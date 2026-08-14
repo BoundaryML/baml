@@ -106,7 +106,7 @@ def test_base_class_for_fqn_passes_non_generic_through():
 
 
 def test_inbound_class_value_carries_base_fqn():
-    """13b §2.1 — `Box[int](item=5)` serializes with `cv.class_ty.name` set to
+    """13b §2.1 — `Box[int](item=5)` serializes with `value_type.class_ty.name` set to
     the base class's FQN, not the parameterized form. The runtime here is
     not initialized so `_derive_baml_fqn` returns ""; what matters is that
     the encoder reaches the Pydantic branch with the *base* class on the
@@ -386,7 +386,7 @@ def test_decode_class_nested_generic():
 
 
 # ---------------------------------------------------------------------------
-# Phase 2/4: generic instance args carry `class_ty`; `_types=` is dict-only
+# Phase 2/4: generic instance args carry sparse `value_type`; `_types=` is dict-only
 # ---------------------------------------------------------------------------
 
 import pytest  # noqa: E402
@@ -395,25 +395,32 @@ from baml_bridge import _resolve_types_kwarg  # noqa: E402
 from baml_bridge.cffi.v1 import baml_type_pb2  # noqa: E402
 
 
-def test_generic_instance_carries_class_ty():
+def test_generic_instance_carries_sparse_value_type():
     """A generic instance argument (`Box[int]`) carries its concrete class type
-    args in the value-level `class_ty` channel."""
+    args in the node-level `value_type` channel."""
     inbound = baml_inbound_pb2.InboundValue()
     _set_inbound_value(inbound, Box[int](item=5), kwarg_name="x")
-    cv = inbound.class_value
-    assert cv.HasField("class_ty")
-    assert len(cv.class_ty.type_args) == 1
-    assert cv.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
+    assert inbound.HasField("value_type")
+    assert len(inbound.value_type.class_ty.type_args) == 1
+    assert inbound.value_type.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
 
 
-def test_non_generic_instance_class_ty_has_no_type_args():
-    """A non-generic instance still binds its class via `class_ty` (the FQN
+def test_unbound_generic_instance_carries_nominal_sparse_value_type():
+    """An erased generic keeps nominal identity while omitting unknown args."""
+    inbound = baml_inbound_pb2.InboundValue()
+    _set_inbound_value(inbound, Box(item=5), kwarg_name="x")
+    assert inbound.WhichOneof("value") == "class_value"
+    assert inbound.HasField("value_type")
+    assert len(inbound.value_type.class_ty.type_args) == 0
+
+
+def test_non_generic_instance_value_type_has_no_type_args():
+    """A non-generic instance still binds its class via `value_type` (the FQN
     channel, now the sole class-name source) but carries no type args."""
     inbound = baml_inbound_pb2.InboundValue()
     _set_inbound_value(inbound, Plain(a=1), kwarg_name="x")
-    cv = inbound.class_value
-    assert cv.HasField("class_ty")
-    assert len(cv.class_ty.type_args) == 0
+    assert inbound.HasField("value_type")
+    assert len(inbound.value_type.class_ty.type_args) == 0
 
 
 def test_resolve_types_requires_dict_for_generic():

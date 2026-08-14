@@ -8,7 +8,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "Derive macros for BAML types"
+description = "BAML v0 — Rust derive macros"
 readme = "README.md"
 keywords = ["baml", "boundaryml", "boundary", "llm", "programming-language"]
 categories = ["development-tools", "no-std"]

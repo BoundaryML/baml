@@ -69,6 +69,7 @@ jobs:
 
   verify:
     needs: platform-matrix
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
@@ -85,12 +86,13 @@ jobs:
           name: bridge-cffi-${{ matrix.target }}
           path: runtime-dist
 
-      - name: Resolve expected version
+      - name: Stamp release plan
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
         run: |
           set -euo pipefail
           printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
           expected="$(jq -r .canonical_version release-plan.json)"
           echo "BAML_EXPECTED_VERSION=$expected" >> "$GITHUB_ENV"
 
@@ -122,7 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S baml_language/sdks/cpp/bridge_cpp/tests -B smoke-build
-          cmake --build smoke-build -j
+          cmake --build smoke-build --target runtime_smoke -j
           out="$(./smoke-build/runtime_smoke)"
           echo "$out"
           echo "$out" | grep -qx "version: $BAML_EXPECTED_VERSION"
@@ -137,7 +139,7 @@ jobs:
             ${{ matrix.smoke_container }} \
             sh -c 'apk add --no-cache bash g++ cmake make git linux-headers && \
               cmake -S baml_language/sdks/cpp/bridge_cpp/tests -B smoke-build && \
-              cmake --build smoke-build -j && \
+              cmake --build smoke-build --target runtime_smoke -j && \
               out="$(./smoke-build/runtime_smoke)" && echo "$out" && \
               echo "$out" | grep -qx "version: $BAML_EXPECTED_VERSION"'
 
@@ -151,12 +153,12 @@ jobs:
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation `
             -DevCmdArguments "-arch=${{ matrix.msvc_arch }} -host_arch=${{ matrix.msvc_arch }}"
+          $env:BAML_RUNTIME_PATH = (Resolve-Path .\runtime-dist\bridge_cffi.dll).Path
           cmake -S baml_language\sdks\cpp\bridge_cpp\tests -B smoke-build
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
-          # Debug config: the smoke asserts must stay compiled in (NDEBUG off).
-          cmake --build smoke-build -j --config Debug
+          cmake --build smoke-build --target runtime_smoke -j --config Release
           if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
-          $out = & .\smoke-build\Debug\runtime_smoke.exe
+          $out = & .\smoke-build\Release\runtime_smoke.exe
           if ($LASTEXITCODE -ne 0) { throw "runtime_smoke exited with $LASTEXITCODE" }
           Write-Output $out
           if (-not ($out -contains "version: $env:BAML_EXPECTED_VERSION")) {

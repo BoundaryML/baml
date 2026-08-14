@@ -150,13 +150,6 @@ impl CooperativeProfileDrain {
         output
     }
 
-    pub fn close_engine(&mut self, engine_id: u64) -> Option<ProfileArtifactSnapshot> {
-        let snapshot = self.artifact_snapshot(engine_id);
-        let _ = metadata::remove_engine_metadata(engine_id);
-        self.closed_engines.insert(engine_id);
-        snapshot
-    }
-
     fn transcode(
         &mut self,
         ring: &'static Ring,

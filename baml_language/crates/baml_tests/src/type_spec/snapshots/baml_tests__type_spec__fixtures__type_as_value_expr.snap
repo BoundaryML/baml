@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+439..440 'f': throws never
+463..522 '{\n   ...  0\n}': 0
+469..482 'let a: string': string
+476..482 'string': string
+485..488 '"x"': "x"
+519..520 '0': 0

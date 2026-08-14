@@ -93,3 +93,15 @@ pub(crate) fn run_flush_child() {
     let telemetry = Telemetry::load();
     queue::drain(&queue::queue_dir(), !telemetry.is_enabled());
 }
+
+/// The PostHog project API key, shared with `baml feedback` (which sends
+/// person-profile events, unlike telemetry). Public write-only `phc_...`
+/// ingestion key; safe to embed.
+pub(crate) fn posthog_api_key() -> &'static str {
+    post::posthog_api_key()
+}
+
+/// The PostHog ingestion host, shared with `baml feedback`.
+pub(crate) fn posthog_host() -> &'static str {
+    post::posthog_host()
+}

@@ -11,6 +11,19 @@ class Media {
   pdf_field pdf
 }
 
+class MediaShapes {
+  optional_image image?
+  images image[]
+  optional_images image?[]
+  images_by_name map<string, image>
+  optional_list image[]?
+}
+
+// A nominal type whose projected component collides with the image primitive.
+class Image {
+  label string
+}
+
 function return_image(url: string, mime: string?) -> image {
   image.from_url(url, mime)
 }
@@ -45,4 +58,41 @@ function round_trip_pdf(x: pdf) -> pdf {
 
 function round_trip_media(m: Media) -> Media {
   m
+}
+
+function round_trip_optional_image(x: image?) -> image? {
+  x
+}
+
+function round_trip_image_list(x: image[]) -> image[] {
+  x
+}
+
+function round_trip_image_map(x: map<string, image>) -> map<string, image> {
+  x
+}
+
+function round_trip_media_shapes(x: MediaShapes) -> MediaShapes {
+  x
+}
+
+function round_trip_image_or_audio(x: image | audio) -> image | audio {
+  x
+}
+
+function round_trip_media_or_image_class(x: image | Image) -> image | Image {
+  x
+}
+
+// Four candidates exceed the default precise-union threshold. Go therefore
+// projects this signature as `any` while preserving concrete media values at
+// runtime.
+function round_trip_all_media(x: image | audio | video | pdf) -> image | audio | video | pdf {
+  x
+}
+
+// Generator-owned local names stay legal media parameters and retain their
+// exact wire spellings.
+function reserved_media_names(ctx: image, result: audio, err: video, bootstrap: pdf) -> image {
+  ctx
 }

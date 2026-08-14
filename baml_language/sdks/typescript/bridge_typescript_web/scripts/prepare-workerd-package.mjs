@@ -26,16 +26,39 @@ if (workerdSafeProto === workerdProto) {
 }
 writeFileSync(workerdProtoPath, workerdSafeProto);
 
+const workerdIndexPath = resolve(workerd, "index.js");
+const workerdIndex = readFileSync(workerdIndexPath, "utf8");
+writeFileSync(workerdIndexPath, `import { readFileSync } from "node:fs";
+import { installReadFileSync } from "./native.js";
+
+installReadFileSync((path) => readFileSync(path));
+
+${workerdIndex}`);
+
 const browserCoreImport = 'from "./wasm/bridge_web_core.js";';
 const workerdCoreImport = 'from "../workerd-wasm/bridge_web_core.js";';
+const browserDefaultImport = "import initWasm, {";
+const browserInitCall = "await initWasm();";
+const browserSourceMap = "//# sourceMappingURL=native.js.map";
 const browserNative = readFileSync(resolve(dist, "native.js"), "utf8");
+for (const expected of [browserDefaultImport, browserCoreImport, browserInitCall, browserSourceMap]) {
+  if (!browserNative.includes(expected)) {
+    throw new Error("could not prepare the workerd WASM loader");
+  }
+}
 const workerdNative = browserNative
-  .replace("import initWasm, {", "import {")
+  .replace(browserDefaultImport, "import {")
   .replace(browserCoreImport, workerdCoreImport)
-  .replace("await initWasm();", "")
-  .replace("//# sourceMappingURL=native.js.map", "");
+  .replace(browserInitCall, "")
+  .replace(browserSourceMap, "");
 
-if (workerdNative === browserNative || !workerdNative.includes(workerdCoreImport)) {
+if (
+  !workerdNative.includes(workerdCoreImport) ||
+  workerdNative.includes(browserDefaultImport) ||
+  workerdNative.includes(browserCoreImport) ||
+  workerdNative.includes(browserInitCall) ||
+  workerdNative.includes(browserSourceMap)
+) {
   throw new Error("could not prepare the workerd WASM loader");
 }
 writeFileSync(resolve(workerd, "native.js"), workerdNative);
@@ -51,6 +74,7 @@ const instance = new WebAssembly.Instance(workerdModule, {
   "./bridge_web_core_bg.js": imports,
 });
 imports.__wbg_set_wasm(instance.exports);
+instance.exports.__wbindgen_start();
 
 export default async function initWasm() {}
 export * from "./bridge_web_core_bg.js";

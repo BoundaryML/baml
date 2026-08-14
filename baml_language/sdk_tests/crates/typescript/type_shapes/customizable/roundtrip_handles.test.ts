@@ -22,17 +22,15 @@ const PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk" +
   "+M8AAAQEAQB9eIv5AAAAAElFTkSuQmCC";
 
-describe.runIf(isTestRuntime("node"))(
-  "roundtrip handles — media Image.fromBase64",
-  () => {
-    it("image_from_base64 roundtrips payload", () => {
-      const img = baml.media.Image.fromBase64(PNG_B64, "image/png");
-      expect(img.mimeType()).toBe("image/png");
-      expect(img.base64()).toBe(PNG_B64);
-    });
-  },
-);
+describe("roundtrip handles — media Image.fromBase64", () => {
+  it("handles_image_from_base64_roundtrips_payload", () => {
+    const img = baml.media.Image.fromBase64(PNG_B64, "image/png");
+    expect(img.mimeType()).toBe("image/png");
+    expect(img.base64()).toBe(PNG_B64);
+  });
+});
 
+// This fixture owns a local node:http listener, which is not a browser or Workers capability.
 describe.runIf(isTestRuntime("node"))(
   "roundtrip handles — baml.http.Response",
   () => {
@@ -60,7 +58,7 @@ describe.runIf(isTestRuntime("node"))(
       await new Promise<void>((resolve) => server.close(() => resolve()));
     });
 
-    it("http_get response fields and body roundtrip", async () => {
+    it("handles_http_get_response_fields_and_methods", async () => {
       // Must be async: the sync path blocks the Node main thread, starving the
       // libuv loop the localhost server runs on (Python runs it in a thread).
       const resp = await baml.http.fetch_async(url);
@@ -70,6 +68,7 @@ describe.runIf(isTestRuntime("node"))(
   },
 );
 
+// These cases create and mutate temporary host files through Node filesystem APIs.
 describe.runIf(isTestRuntime("node"))(
   "roundtrip handles — baml.fs.File",
   () => {
@@ -86,14 +85,14 @@ describe.runIf(isTestRuntime("node"))(
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it("baml.fs.open returns a typed File handle", () => {
+    it("handles_baml_fs_open_returns_a_typed_file_handle", () => {
       const f = baml.fs.open(filePath, "r");
       expect(f).toBeDefined();
       expect(f.constructor.name).toBe("File");
       expect(f.close()).toBeNull();
     });
 
-    it("cursor state persists across calls", () => {
+    it("handles_file_cursor_state_persists_across_calls", () => {
       const f = baml.fs.open(filePath, "r");
 
       expect(f.read(3)).toBe("012");

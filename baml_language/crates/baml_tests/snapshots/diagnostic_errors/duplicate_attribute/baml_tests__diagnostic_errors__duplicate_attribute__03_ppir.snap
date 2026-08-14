@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 42268
+---
+=== PPIR ===
+class user.AliasAndDescription {
+  a: string
+}
+class user.AliasAndDescription$stream {
+  a: string | null
+}
+class user.SingleAlias {
+  a: string
+}
+class user.SingleAlias$stream {
+  a: string | null
+}
+class user.TwoFieldAlias {
+  a: string
+}
+class user.TwoFieldAlias$stream {
+  a: string | null
+}
+class user.TwoFieldDescription {
+  a: string
+}
+class user.TwoFieldDescription$stream {
+  a: string | null
+}
+enum user.SingleVariantAlias {RED, BLUE}
+enum user.TwoVariantAlias {ACTIVE, INACTIVE}

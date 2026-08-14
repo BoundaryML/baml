@@ -155,7 +155,7 @@ test "sort_ints_in_place_returns_self" {
     let result = xs.sort();
     let expected = [1, 2, 3];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_empty_is_noop" {
@@ -163,28 +163,28 @@ test "sort_empty_is_noop" {
     let result = xs.sort();
     let expected: int[] = [];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_duplicates" {
     let xs = [3, 1, 2, 1, 3];
     xs.sort();
     let expected = [1, 1, 2, 3, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_strings_match_sort" {
     let xs = ["b", "a", "aa"];
     xs.sort();
     let expected = ["a", "aa", "b"];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_bigints_match_sort" {
     let xs = [3n, 1n, 2n];
     xs.sort();
     let expected = [1n, 2n, 3n];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // float's SortError is `never` (total_cmp decision) — infallible like int.
@@ -196,7 +196,7 @@ test "sort_floats_match_sort" {
     let xs = [2.5, 0.5, 1.5];
     xs.sort();
     let expected = [0.5, 1.5, 2.5];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // DECISION TEST (02-plan Phase 3): NaN no longer throws — `total_cmp` is a
@@ -204,7 +204,7 @@ test "sort_floats_match_sort" {
 test "sort_floats_nan_sorts_last" {
     let xs = [1.0, float.nan(), 0.5];
     xs.sort();
-    assert.is_true(baml.deep_equals(xs.length(), 3));
+    assert.equal(xs.length(), 3);
     assert.equal(xs.at(0), 0.5);
     assert.equal(xs.at(1), 1.0);
     // NaN != NaN under `==`; assert positionally via is_nan.
@@ -246,7 +246,7 @@ test "sort_user_class_sorts_by_compare" {
     assert.is_true(result == xs);
     let labels = xs.map((x: SortableItem) -> string { x.label });
     let expected = ["a", "b", "c"];
-    assert.is_true(baml.deep_equals(labels, expected))
+    assert.equal(labels, expected)
 }
 
 test "sort_user_class_is_stable" {
@@ -259,7 +259,7 @@ test "sort_user_class_is_stable" {
     xs.sort();
     let labels = xs.map((x: SortableItem) -> string { x.label });
     let expected = ["b", "d", "a", "c"];
-    assert.is_true(baml.deep_equals(labels, expected))
+    assert.equal(labels, expected)
 }
 
 // Fallible comparator (CompareError = ComparableCompareError): the call site must
@@ -286,7 +286,7 @@ test "sort_fallible_comparator_throw_rolls_back" {
         if let v: int = x.value { v } else { -1 }
     });
     let expected = [3, -1, 1];
-    assert.is_true(baml.deep_equals(vals, expected))
+    assert.equal(vals, expected)
 }
 
 test "sort_fallible_comparator_happy_path" {
@@ -308,7 +308,7 @@ test "sort_fallible_comparator_happy_path" {
         if let v: int = x.value { v } else { -1 }
     });
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(vals, expected))
+    assert.equal(vals, expected)
 }
 
 // Generic propagation: a function over `U extends Comparable` may call
@@ -328,7 +328,7 @@ function run_sort_generic_ints() -> int[] throws never {
 test "sort_generic_propagation" {
     let result = run_sort_generic_ints();
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // ─── out-of-body `implements baml.Comparable for <class>` ───────────────────
@@ -358,7 +358,7 @@ test "sort_user_class_out_of_body_impl" {
     xs.sort();
     let pts = xs.map((x: OutOfBodyScore) -> int { x.points });
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(pts, expected))
+    assert.equal(pts, expected)
 }
 
 //----
@@ -395,6 +395,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:21:20 (operator) len=1 "="
 // interfaces_sort_comparable.baml:21:22 (number) len=1 "3"
 // interfaces_sort_comparable.baml:22:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:22:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:22:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:22:20 (variable) len=4 "five"
 // interfaces_sort_comparable.baml:22:25 (method) len=7 "compare"
@@ -402,6 +403,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:22:36 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:22:38 (number) len=1 "0"
 // interfaces_sort_comparable.baml:23:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:23:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:23:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:23:20 (variable) len=5 "three"
 // interfaces_sort_comparable.baml:23:26 (method) len=7 "compare"
@@ -409,6 +411,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:23:37 (operator) len=1 "<"
 // interfaces_sort_comparable.baml:23:39 (number) len=1 "0"
 // interfaces_sort_comparable.baml:24:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:24:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:24:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:24:20 (variable) len=5 "three"
 // interfaces_sort_comparable.baml:24:26 (method) len=7 "compare"
@@ -436,6 +439,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:33:20 (operator) len=1 "="
 // interfaces_sort_comparable.baml:33:22 (string) len=4 "\"aa\""
 // interfaces_sort_comparable.baml:34:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:34:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:34:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:34:20 (variable) len=1 "a"
 // interfaces_sort_comparable.baml:34:22 (method) len=7 "compare"
@@ -443,6 +447,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:34:35 (operator) len=1 "<"
 // interfaces_sort_comparable.baml:34:37 (number) len=1 "0"
 // interfaces_sort_comparable.baml:35:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:35:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:35:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:35:20 (variable) len=1 "b"
 // interfaces_sort_comparable.baml:35:22 (method) len=7 "compare"
@@ -450,6 +455,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:35:35 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:35:37 (number) len=1 "0"
 // interfaces_sort_comparable.baml:36:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:36:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:36:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:36:20 (variable) len=2 "aa"
 // interfaces_sort_comparable.baml:36:23 (method) len=7 "compare"
@@ -457,6 +463,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:36:36 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:36:38 (number) len=1 "0"
 // interfaces_sort_comparable.baml:37:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:37:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:37:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:37:20 (variable) len=1 "a"
 // interfaces_sort_comparable.baml:37:22 (method) len=7 "compare"
@@ -476,6 +483,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:42:21 (operator) len=1 "="
 // interfaces_sort_comparable.baml:42:23 (number) len=2 "2n"
 // interfaces_sort_comparable.baml:43:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:43:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:43:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:43:20 (variable) len=3 "two"
 // interfaces_sort_comparable.baml:43:24 (method) len=7 "compare"
@@ -483,6 +491,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:43:36 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:43:38 (number) len=1 "0"
 // interfaces_sort_comparable.baml:44:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:44:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:44:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:44:20 (variable) len=3 "one"
 // interfaces_sort_comparable.baml:44:24 (method) len=7 "compare"
@@ -490,6 +499,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:44:36 (operator) len=1 "<"
 // interfaces_sort_comparable.baml:44:38 (number) len=1 "0"
 // interfaces_sort_comparable.baml:45:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:45:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:45:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:45:20 (variable) len=3 "two"
 // interfaces_sort_comparable.baml:45:24 (method) len=7 "compare"
@@ -510,6 +520,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:51:19 (operator) len=1 "="
 // interfaces_sort_comparable.baml:51:21 (number) len=3 "2.5"
 // interfaces_sort_comparable.baml:52:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:52:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:52:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:52:20 (variable) len=2 "hi"
 // interfaces_sort_comparable.baml:52:23 (method) len=7 "compare"
@@ -517,6 +528,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:52:36 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:52:38 (number) len=1 "0"
 // interfaces_sort_comparable.baml:53:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:53:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:53:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:53:20 (variable) len=2 "lo"
 // interfaces_sort_comparable.baml:53:23 (method) len=7 "compare"
@@ -524,6 +536,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:53:36 (operator) len=1 "<"
 // interfaces_sort_comparable.baml:53:38 (number) len=1 "0"
 // interfaces_sort_comparable.baml:54:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:54:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:54:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:54:20 (variable) len=2 "lo"
 // interfaces_sort_comparable.baml:54:23 (method) len=7 "compare"
@@ -541,6 +554,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:61:20 (operator) len=1 "="
 // interfaces_sort_comparable.baml:61:22 (number) len=3 "1.0"
 // interfaces_sort_comparable.baml:62:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:62:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:62:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:62:20 (variable) len=3 "one"
 // interfaces_sort_comparable.baml:62:24 (method) len=7 "compare"
@@ -549,6 +563,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:62:45 (operator) len=1 "<"
 // interfaces_sort_comparable.baml:62:47 (number) len=1 "0"
 // interfaces_sort_comparable.baml:63:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:63:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:63:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:63:20 (type) [defaultLibrary] len=5 "float"
 // interfaces_sort_comparable.baml:63:26 (method) len=3 "nan"
@@ -557,6 +572,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:63:45 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:63:47 (number) len=1 "0"
 // interfaces_sort_comparable.baml:64:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:64:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:64:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:64:20 (type) [defaultLibrary] len=5 "float"
 // interfaces_sort_comparable.baml:64:26 (method) len=3 "nan"
@@ -566,6 +582,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:64:53 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:64:55 (number) len=1 "0"
 // interfaces_sort_comparable.baml:65:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:65:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:65:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:65:20 (type) [defaultLibrary] len=5 "float"
 // interfaces_sort_comparable.baml:65:26 (method) len=3 "nan"
@@ -591,7 +608,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:81:12 (type) [defaultLibrary] len=3 "int"
 // interfaces_sort_comparable.baml:82:5 (keyword) len=10 "implements"
 // interfaces_sort_comparable.baml:82:16 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:82:20 (operator) len=1 "."
+// interfaces_sort_comparable.baml:82:20 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:82:21 (interface) [defaultLibrary] len=10 "Comparable"
 // interfaces_sort_comparable.baml:83:9 (keyword) len=4 "type"
 // interfaces_sort_comparable.baml:83:14 (type) [declaration] len=12 "CompareError"
@@ -613,6 +630,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:90:1 (keyword) len=4 "test"
 // interfaces_sort_comparable.baml:90:6 (string) len=49 "\"comparable_user_class_default_cmperror_is_never\""
 // interfaces_sort_comparable.baml:91:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:91:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:91:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:91:20 (class) len=15 "ComparableScore"
 // interfaces_sort_comparable.baml:91:38 (property) len=6 "points"
@@ -624,6 +642,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:91:89 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:91:91 (number) len=1 "0"
 // interfaces_sort_comparable.baml:92:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:92:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:92:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:92:20 (class) len=15 "ComparableScore"
 // interfaces_sort_comparable.baml:92:38 (property) len=6 "points"
@@ -635,6 +654,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:92:89 (operator) len=1 "<"
 // interfaces_sort_comparable.baml:92:91 (number) len=1 "0"
 // interfaces_sort_comparable.baml:93:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:93:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:93:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:93:20 (class) len=15 "ComparableScore"
 // interfaces_sort_comparable.baml:93:38 (property) len=6 "points"
@@ -656,7 +676,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:102:11 (type) [defaultLibrary] len=3 "int"
 // interfaces_sort_comparable.baml:103:5 (keyword) len=10 "implements"
 // interfaces_sort_comparable.baml:103:16 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:103:20 (operator) len=1 "."
+// interfaces_sort_comparable.baml:103:20 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:103:21 (interface) [defaultLibrary] len=10 "Comparable"
 // interfaces_sort_comparable.baml:104:9 (keyword) len=4 "type"
 // interfaces_sort_comparable.baml:104:14 (type) [declaration] len=12 "CompareError"
@@ -698,6 +718,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:120:1 (keyword) len=4 "test"
 // interfaces_sort_comparable.baml:120:6 (string) len=43 "\"comparable_user_class_fallible_happy_path\""
 // interfaces_sort_comparable.baml:121:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:121:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:121:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:121:21 (class) len=15 "ComparableFlaky"
 // interfaces_sort_comparable.baml:121:39 (property) len=5 "value"
@@ -734,6 +755,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:131:35 (parameter) len=1 "e"
 // interfaces_sort_comparable.baml:131:37 (property) len=7 "message"
 // interfaces_sort_comparable.baml:133:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:133:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:133:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:133:20 (variable) len=3 "msg"
 // interfaces_sort_comparable.baml:133:24 (method) len=7 "matches"
@@ -797,16 +819,16 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:156:24 (number) len=1 "2"
 // interfaces_sort_comparable.baml:156:27 (number) len=1 "3"
 // interfaces_sort_comparable.baml:157:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:157:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:157:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:157:20 (variable) len=6 "result"
 // interfaces_sort_comparable.baml:157:27 (operator) len=2 "=="
 // interfaces_sort_comparable.baml:157:30 (variable) len=2 "xs"
 // interfaces_sort_comparable.baml:158:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:158:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:158:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:158:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:158:37 (variable) len=2 "xs"
-// interfaces_sort_comparable.baml:158:41 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:158:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:158:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:158:18 (variable) len=2 "xs"
+// interfaces_sort_comparable.baml:158:22 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:161:1 (keyword) len=4 "test"
 // interfaces_sort_comparable.baml:161:6 (string) len=20 "\"sort_empty_is_noop\""
 // interfaces_sort_comparable.baml:162:5 (keyword) len=3 "let"
@@ -823,16 +845,16 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:164:19 (type) [defaultLibrary] len=3 "int"
 // interfaces_sort_comparable.baml:164:25 (operator) len=1 "="
 // interfaces_sort_comparable.baml:165:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:165:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:165:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:165:20 (variable) len=6 "result"
 // interfaces_sort_comparable.baml:165:27 (operator) len=2 "=="
 // interfaces_sort_comparable.baml:165:30 (variable) len=2 "xs"
 // interfaces_sort_comparable.baml:166:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:166:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:166:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:166:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:166:37 (variable) len=2 "xs"
-// interfaces_sort_comparable.baml:166:41 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:166:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:166:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:166:18 (variable) len=2 "xs"
+// interfaces_sort_comparable.baml:166:22 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:169:1 (keyword) len=4 "test"
 // interfaces_sort_comparable.baml:169:6 (string) len=17 "\"sort_duplicates\""
 // interfaces_sort_comparable.baml:170:5 (keyword) len=3 "let"
@@ -854,11 +876,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:172:30 (number) len=1 "3"
 // interfaces_sort_comparable.baml:172:33 (number) len=1 "3"
 // interfaces_sort_comparable.baml:173:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:173:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:173:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:173:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:173:37 (variable) len=2 "xs"
-// interfaces_sort_comparable.baml:173:41 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:173:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:173:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:173:18 (variable) len=2 "xs"
+// interfaces_sort_comparable.baml:173:22 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:176:1 (keyword) len=4 "test"
 // interfaces_sort_comparable.baml:176:6 (string) len=25 "\"sort_strings_match_sort\""
 // interfaces_sort_comparable.baml:177:5 (keyword) len=3 "let"
@@ -876,11 +897,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:179:26 (string) len=4 "\"aa\""
 // interfaces_sort_comparable.baml:179:32 (string) len=3 "\"b\""
 // interfaces_sort_comparable.baml:180:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:180:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:180:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:180:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:180:37 (variable) len=2 "xs"
-// interfaces_sort_comparable.baml:180:41 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:180:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:180:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:180:18 (variable) len=2 "xs"
+// interfaces_sort_comparable.baml:180:22 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:183:1 (keyword) len=4 "test"
 // interfaces_sort_comparable.baml:183:6 (string) len=25 "\"sort_bigints_match_sort\""
 // interfaces_sort_comparable.baml:184:5 (keyword) len=3 "let"
@@ -898,11 +918,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:186:25 (number) len=2 "2n"
 // interfaces_sort_comparable.baml:186:29 (number) len=2 "3n"
 // interfaces_sort_comparable.baml:187:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:187:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:187:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:187:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:187:37 (variable) len=2 "xs"
-// interfaces_sort_comparable.baml:187:41 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:187:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:187:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:187:18 (variable) len=2 "xs"
+// interfaces_sort_comparable.baml:187:22 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:190:1 (comment) len=77 "// float's SortError is `never` (total_cmp decision) — infallible like int."
 // interfaces_sort_comparable.baml:191:1 (keyword) len=8 "function"
 // interfaces_sort_comparable.baml:191:10 (function) [declaration] len=11 "sort_floats"
@@ -930,11 +949,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:198:26 (number) len=3 "1.5"
 // interfaces_sort_comparable.baml:198:31 (number) len=3 "2.5"
 // interfaces_sort_comparable.baml:199:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:199:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:199:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:199:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:199:37 (variable) len=2 "xs"
-// interfaces_sort_comparable.baml:199:41 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:199:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:199:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:199:18 (variable) len=2 "xs"
+// interfaces_sort_comparable.baml:199:22 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:202:1 (comment) len=77 "// DECISION TEST (02-plan Phase 3): NaN no longer throws — `total_cmp` is a"
 // interfaces_sort_comparable.baml:203:1 (comment) len=75 "// total order over all doubles, so NaN sorts deterministically after +inf."
 // interfaces_sort_comparable.baml:204:1 (keyword) len=4 "test"
@@ -949,19 +967,20 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:206:5 (variable) len=2 "xs"
 // interfaces_sort_comparable.baml:206:8 (method) len=4 "sort"
 // interfaces_sort_comparable.baml:207:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:207:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:207:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:207:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:207:37 (variable) len=2 "xs"
-// interfaces_sort_comparable.baml:207:40 (method) len=6 "length"
-// interfaces_sort_comparable.baml:207:50 (number) len=1 "3"
+// interfaces_sort_comparable.baml:207:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:207:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:207:18 (variable) len=2 "xs"
+// interfaces_sort_comparable.baml:207:21 (method) len=6 "length"
+// interfaces_sort_comparable.baml:207:31 (number) len=1 "3"
 // interfaces_sort_comparable.baml:208:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:208:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:208:12 (function) len=5 "equal"
 // interfaces_sort_comparable.baml:208:18 (variable) len=2 "xs"
 // interfaces_sort_comparable.baml:208:21 (method) len=2 "at"
 // interfaces_sort_comparable.baml:208:24 (number) len=1 "0"
 // interfaces_sort_comparable.baml:208:28 (number) len=3 "0.5"
 // interfaces_sort_comparable.baml:209:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:209:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:209:12 (function) len=5 "equal"
 // interfaces_sort_comparable.baml:209:18 (variable) len=2 "xs"
 // interfaces_sort_comparable.baml:209:21 (method) len=2 "at"
@@ -978,12 +997,14 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:212:12 (variable) len=4 "last"
 // interfaces_sort_comparable.baml:213:9 (type) [defaultLibrary] len=4 "null"
 // interfaces_sort_comparable.baml:213:17 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:213:23 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:213:24 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:213:32 (boolean) len=5 "false"
 // interfaces_sort_comparable.baml:214:9 (keyword) len=3 "let"
 // interfaces_sort_comparable.baml:214:13 (variable) [declaration] len=1 "f"
 // interfaces_sort_comparable.baml:214:16 (type) [defaultLibrary] len=5 "float"
 // interfaces_sort_comparable.baml:214:25 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:214:31 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:214:32 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:214:40 (variable) len=1 "f"
 // interfaces_sort_comparable.baml:214:42 (method) len=6 "is_nan"
@@ -997,7 +1018,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:222:11 (type) [defaultLibrary] len=6 "string"
 // interfaces_sort_comparable.baml:223:5 (keyword) len=10 "implements"
 // interfaces_sort_comparable.baml:223:16 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:223:20 (operator) len=1 "."
+// interfaces_sort_comparable.baml:223:20 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:223:21 (interface) [defaultLibrary] len=10 "Comparable"
 // interfaces_sort_comparable.baml:224:9 (keyword) len=4 "type"
 // interfaces_sort_comparable.baml:224:14 (type) [declaration] len=12 "CompareError"
@@ -1055,6 +1076,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:245:18 (variable) len=2 "xs"
 // interfaces_sort_comparable.baml:245:21 (method) len=4 "sort"
 // interfaces_sort_comparable.baml:246:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:246:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:246:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:246:20 (variable) len=6 "result"
 // interfaces_sort_comparable.baml:246:27 (operator) len=2 "=="
@@ -1076,11 +1098,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:248:26 (string) len=3 "\"b\""
 // interfaces_sort_comparable.baml:248:31 (string) len=3 "\"c\""
 // interfaces_sort_comparable.baml:249:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:249:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:249:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:249:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:249:37 (variable) len=6 "labels"
-// interfaces_sort_comparable.baml:249:45 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:249:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:249:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:249:18 (variable) len=6 "labels"
+// interfaces_sort_comparable.baml:249:26 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:252:1 (keyword) len=4 "test"
 // interfaces_sort_comparable.baml:252:6 (string) len=27 "\"sort_user_class_is_stable\""
 // interfaces_sort_comparable.baml:253:5 (keyword) len=3 "let"
@@ -1126,11 +1147,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:261:31 (string) len=3 "\"a\""
 // interfaces_sort_comparable.baml:261:36 (string) len=3 "\"c\""
 // interfaces_sort_comparable.baml:262:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:262:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:262:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:262:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:262:37 (variable) len=6 "labels"
-// interfaces_sort_comparable.baml:262:45 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:262:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:262:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:262:18 (variable) len=6 "labels"
+// interfaces_sort_comparable.baml:262:26 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:265:1 (comment) len=82 "// Fallible comparator (CompareError = ComparableCompareError): the call site must"
 // interfaces_sort_comparable.baml:266:1 (comment) len=70 "// handle it, and a throw mid-sort leaves the array in pre-sort state."
 // interfaces_sort_comparable.baml:267:1 (keyword) len=8 "function"
@@ -1168,6 +1188,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:281:35 (parameter) len=1 "e"
 // interfaces_sort_comparable.baml:281:37 (property) len=7 "message"
 // interfaces_sort_comparable.baml:283:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:283:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:283:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:283:20 (variable) len=3 "msg"
 // interfaces_sort_comparable.baml:283:24 (method) len=7 "matches"
@@ -1200,11 +1221,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:288:25 (number) len=1 "1"
 // interfaces_sort_comparable.baml:288:28 (number) len=1 "1"
 // interfaces_sort_comparable.baml:289:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:289:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:289:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:289:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:289:37 (variable) len=4 "vals"
-// interfaces_sort_comparable.baml:289:43 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:289:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:289:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:289:18 (variable) len=4 "vals"
+// interfaces_sort_comparable.baml:289:24 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:292:1 (keyword) len=4 "test"
 // interfaces_sort_comparable.baml:292:6 (string) len=37 "\"sort_fallible_comparator_happy_path\""
 // interfaces_sort_comparable.baml:293:5 (keyword) len=3 "let"
@@ -1223,6 +1243,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:299:5 (comment) len=72 "// Asserted inline — a catch result stored in a test-block `let` stays"
 // interfaces_sort_comparable.baml:300:5 (comment) len=70 "// boxed (same VM quirk as above) and `== false` would reject the box."
 // interfaces_sort_comparable.baml:301:5 (namespace) [defaultLibrary] len=6 "assert"
+// interfaces_sort_comparable.baml:301:11 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:301:12 (function) len=7 "is_true"
 // interfaces_sort_comparable.baml:302:9 (function) len=10 "sort_flaky"
 // interfaces_sort_comparable.baml:302:20 (variable) len=2 "xs"
@@ -1259,11 +1280,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:310:24 (number) len=1 "2"
 // interfaces_sort_comparable.baml:310:27 (number) len=1 "3"
 // interfaces_sort_comparable.baml:311:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:311:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:311:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:311:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:311:37 (variable) len=4 "vals"
-// interfaces_sort_comparable.baml:311:43 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:311:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:311:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:311:18 (variable) len=4 "vals"
+// interfaces_sort_comparable.baml:311:24 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:314:1 (comment) len=71 "// Generic propagation: a function over `U extends Comparable` may call"
 // interfaces_sort_comparable.baml:315:1 (comment) len=74 "// `xs.sort()`, propagating `U.CompareError` symbolically; the test routes"
 // interfaces_sort_comparable.baml:316:1 (comment) len=75 "// through it to pin the runtime instantiation too. The array is built in a"
@@ -1275,7 +1295,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:319:23 (typeParameter) [declaration] len=1 "U"
 // interfaces_sort_comparable.baml:319:25 (keyword) len=7 "extends"
 // interfaces_sort_comparable.baml:319:33 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:319:37 (operator) len=1 "."
+// interfaces_sort_comparable.baml:319:37 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:319:38 (interface) [defaultLibrary] len=10 "Comparable"
 // interfaces_sort_comparable.baml:319:48 (operator) len=1 ">"
 // interfaces_sort_comparable.baml:319:50 (parameter) [declaration] len=2 "xs"
@@ -1313,11 +1333,10 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:330:24 (number) len=1 "2"
 // interfaces_sort_comparable.baml:330:27 (number) len=1 "3"
 // interfaces_sort_comparable.baml:331:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:331:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:331:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:331:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:331:37 (variable) len=6 "result"
-// interfaces_sort_comparable.baml:331:45 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:331:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:331:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:331:18 (variable) len=6 "result"
+// interfaces_sort_comparable.baml:331:26 (variable) len=8 "expected"
 // interfaces_sort_comparable.baml:334:1 (comment) len=123 "// ─── out-of-body `implements baml.Comparable for <class>` ───────────────────"
 // interfaces_sort_comparable.baml:335:1 (comment) len=2 "//"
 // interfaces_sort_comparable.baml:336:1 (comment) len=73 "// The impl methods register under the synthetic `Comparable$for$<class>`"
@@ -1331,7 +1350,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:342:12 (type) [defaultLibrary] len=3 "int"
 // interfaces_sort_comparable.baml:345:1 (keyword) len=10 "implements"
 // interfaces_sort_comparable.baml:345:12 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:345:16 (operator) len=1 "."
+// interfaces_sort_comparable.baml:345:16 (namespace) [defaultLibrary] len=1 "."
 // interfaces_sort_comparable.baml:345:17 (interface) [defaultLibrary] len=10 "Comparable"
 // interfaces_sort_comparable.baml:345:28 (keyword) len=3 "for"
 // interfaces_sort_comparable.baml:345:32 (class) len=14 "OutOfBodyScore"
@@ -1385,8 +1404,7 @@ test "sort_user_class_out_of_body_impl" {
 // interfaces_sort_comparable.baml:360:24 (number) len=1 "2"
 // interfaces_sort_comparable.baml:360:27 (number) len=1 "3"
 // interfaces_sort_comparable.baml:361:5 (namespace) [defaultLibrary] len=6 "assert"
-// interfaces_sort_comparable.baml:361:12 (function) len=7 "is_true"
-// interfaces_sort_comparable.baml:361:20 (namespace) [defaultLibrary] len=4 "baml"
-// interfaces_sort_comparable.baml:361:25 (function) len=11 "deep_equals"
-// interfaces_sort_comparable.baml:361:37 (variable) len=3 "pts"
-// interfaces_sort_comparable.baml:361:42 (variable) len=8 "expected"
+// interfaces_sort_comparable.baml:361:11 (namespace) [defaultLibrary] len=1 "."
+// interfaces_sort_comparable.baml:361:12 (function) len=5 "equal"
+// interfaces_sort_comparable.baml:361:18 (variable) len=3 "pts"
+// interfaces_sort_comparable.baml:361:23 (variable) len=8 "expected"

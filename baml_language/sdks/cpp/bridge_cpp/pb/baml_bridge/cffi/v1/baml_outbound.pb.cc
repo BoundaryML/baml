@@ -444,7 +444,8 @@ inline constexpr BamlValueUnionVariant::Impl_::Impl_(
         self_type_{nullptr},
         value_{nullptr},
         is_optional_{false},
-        is_single_pattern_{false} {}
+        is_single_pattern_{false},
+        selected_option_index_{0u} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR BamlValueUnionVariant::BamlValueUnionVariant(::_pbi::ConstantInitialized)
@@ -4977,9 +4978,9 @@ BamlValueUnionVariant::BamlValueUnionVariant(
                offsetof(Impl_, is_optional_),
            reinterpret_cast<const char *>(&from._impl_) +
                offsetof(Impl_, is_optional_),
-           offsetof(Impl_, is_single_pattern_) -
+           offsetof(Impl_, selected_option_index_) -
                offsetof(Impl_, is_optional_) +
-               sizeof(Impl_::is_single_pattern_));
+               sizeof(Impl_::selected_option_index_));
 
   // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlValueUnionVariant)
 }
@@ -4995,9 +4996,9 @@ inline void BamlValueUnionVariant::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char *>(&_impl_) +
                offsetof(Impl_, self_type_),
            0,
-           offsetof(Impl_, is_single_pattern_) -
+           offsetof(Impl_, selected_option_index_) -
                offsetof(Impl_, self_type_) +
-               sizeof(Impl_::is_single_pattern_));
+               sizeof(Impl_::selected_option_index_));
 }
 BamlValueUnionVariant::~BamlValueUnionVariant() {
   // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlValueUnionVariant)
@@ -5054,16 +5055,16 @@ BamlValueUnionVariant::GetClassData() const {
   return BamlValueUnionVariant_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 6, 2, 71, 2>
+const ::_pbi::TcParseTable<3, 7, 2, 71, 2>
 BamlValueUnionVariant::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(BamlValueUnionVariant, _impl_._has_bits_),
     0, // no _extensions_
-    6, 56,  // max_field_number, fast_idx_mask
+    8, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967232,  // skipmap
+    4294967104,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    6,  // num_field_entries
+    7,  // num_field_entries
     2,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     BamlValueUnionVariant_class_data_.base(),
@@ -5073,7 +5074,9 @@ BamlValueUnionVariant::_table_ = {
     ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlValueUnionVariant>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    {::_pbi::TcParser::MiniParse, {}},
+    // optional uint32 selected_option_index = 8;
+    {::_pbi::TcParser::FastV32S1,
+     {64, 6, 0, PROTOBUF_FIELD_OFFSET(BamlValueUnionVariant, _impl_.selected_option_index_)}},
     // string name = 1;
     {::_pbi::TcParser::FastUS1,
      {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlValueUnionVariant, _impl_.name_)}},
@@ -5114,6 +5117,9 @@ BamlValueUnionVariant::_table_ = {
     // .baml_bridge.cffi.v1.BamlOutboundValue value = 6;
     {PROTOBUF_FIELD_OFFSET(BamlValueUnionVariant, _impl_.value_), _Internal::kHasBitsOffset + 3, 1,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // optional uint32 selected_option_index = 8;
+    {PROTOBUF_FIELD_OFFSET(BamlValueUnionVariant, _impl_.selected_option_index_), _Internal::kHasBitsOffset + 6, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
@@ -5150,9 +5156,11 @@ PROTOBUF_NOINLINE void BamlValueUnionVariant::Clear() {
       _impl_.value_->Clear();
     }
   }
-  ::memset(&_impl_.is_optional_, 0, static_cast<::size_t>(
-      reinterpret_cast<char*>(&_impl_.is_single_pattern_) -
-      reinterpret_cast<char*>(&_impl_.is_optional_)) + sizeof(_impl_.is_single_pattern_));
+  if ((cached_has_bits & 0x00000070u) != 0) {
+    ::memset(&_impl_.is_optional_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.selected_option_index_) -
+        reinterpret_cast<char*>(&_impl_.is_optional_)) + sizeof(_impl_.selected_option_index_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
 }
@@ -5225,6 +5233,13 @@ PROTOBUF_NOINLINE void BamlValueUnionVariant::Clear() {
         stream);
   }
 
+  // optional uint32 selected_option_index = 8;
+  if ((cached_has_bits & 0x00000040u) != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+        8, this_._internal_selected_option_index(), target);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(
         this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
@@ -5250,7 +5265,7 @@ PROTOBUF_NOINLINE void BamlValueUnionVariant::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if ((cached_has_bits & 0x0000003fu) != 0) {
+  if ((cached_has_bits & 0x0000007fu) != 0) {
     // string name = 1;
     if ((cached_has_bits & 0x00000001u) != 0) {
       if (!this_._internal_name().empty()) {
@@ -5287,6 +5302,11 @@ PROTOBUF_NOINLINE void BamlValueUnionVariant::Clear() {
         total_size += 2;
       }
     }
+    // optional uint32 selected_option_index = 8;
+    if ((cached_has_bits & 0x00000040u) != 0) {
+      total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+          this_._internal_selected_option_index());
+    }
   }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
@@ -5305,7 +5325,7 @@ void BamlValueUnionVariant::MergeImpl(::google::protobuf::MessageLite& to_msg, c
   (void) cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if ((cached_has_bits & 0x0000003fu) != 0) {
+  if ((cached_has_bits & 0x0000007fu) != 0) {
     if ((cached_has_bits & 0x00000001u) != 0) {
       if (!from._internal_name().empty()) {
         _this->_internal_set_name(from._internal_name());
@@ -5350,6 +5370,9 @@ void BamlValueUnionVariant::MergeImpl(::google::protobuf::MessageLite& to_msg, c
         _this->_impl_.is_single_pattern_ = from._impl_.is_single_pattern_;
       }
     }
+    if ((cached_has_bits & 0x00000040u) != 0) {
+      _this->_impl_.selected_option_index_ = from._impl_.selected_option_index_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -5372,8 +5395,8 @@ void BamlValueUnionVariant::InternalSwap(BamlValueUnionVariant* PROTOBUF_RESTRIC
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.value_option_name_, &other->_impl_.value_option_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BamlValueUnionVariant, _impl_.is_single_pattern_)
-      + sizeof(BamlValueUnionVariant::_impl_.is_single_pattern_)
+      PROTOBUF_FIELD_OFFSET(BamlValueUnionVariant, _impl_.selected_option_index_)
+      + sizeof(BamlValueUnionVariant::_impl_.selected_option_index_)
       - PROTOBUF_FIELD_OFFSET(BamlValueUnionVariant, _impl_.self_type_)>(
           reinterpret_cast<char*>(&_impl_.self_type_),
           reinterpret_cast<char*>(&other->_impl_.self_type_));

@@ -15,14 +15,16 @@ option go_package = "./cffi";
 option optimize_for = LITE_RUNTIME;
 
 // -----------------------------------------------------------------------------
-// Inbound values — host language to engine (value-only, no type metadata)
+// Inbound values — host language to engine
 // -----------------------------------------------------------------------------
 
-// Core value type. No type metadata because not every language has union/class
-// concepts (e.g. JS uses plain interfaces). Engine resolves types from function
-// signatures.
+// Core value type. `value_type` is a sparse exact-type annotation for this
+// node, never a copy of the enclosing union. Most values omit it and are
+// decoded from the declared contextual type plus payload shape. Hosts set it
+// only when shape/context cannot preserve their choice (for example an empty
+// container, an overlapping union arm, or a literal-vs-primitive selection).
 message InboundValue {
-  reserved 1;
+  BamlTy value_type = 1;
   oneof value {
     string string_value = 2;
     int64 int_value = 3;
@@ -62,12 +64,8 @@ message InboundMapEntry {
 }
 
 message InboundClassValue {
-  reserved 1;  // formerly `name` — the class FQN now lives on `class_ty.name`
+  reserved 1;
   repeated InboundMapEntry fields = 2;
-  // The instance's class as a nominal type: `class_ty.name` is the FQN used to
-  // bind the class, and `class_ty.type_args` carries a generic instance's
-  // concrete args. Always set for a well-formed class value.
-  BamlTyClass class_ty = 3;
 }
 
 message InboundEnumValue {
@@ -98,6 +96,10 @@ message CallFunctionArgs {
   // generic params (see `set_entry_point_with_type_args`). Empty for
   // non-generic calls.
   repeated BamlTyArg type_args = 3;
+  oneof call_target {
+    string function_name = 4;
+    uint64 function_handle = 5;
+  }
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

@@ -50,7 +50,7 @@ async fn await_inside_direct_closure() {
         function one() -> int { 7 }
         function main() -> int {
             let fut = spawn { one() };
-            let g = (x: baml.future.Future<int, null>) -> { await x };
+            let g = (x: baml.future.Future<int, never>) -> { await x };
             g(fut)
         }
     "#;

@@ -32,6 +32,10 @@ fn run_list(
     cmd.args(args);
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
+    // Pin the human output preset: under a coding agent the inherited
+    // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
+    // `agent`, which disables the progress lines some assertions read.
+    cmd.env("BAML_OUTPUT_PRESET", "human");
     cmd.env("BAML_HOME", &home);
     cmd.env("BAML_CACHE_DIR", cache_dir);
     cmd.env("BAML_CACHE_DEBUG", "1");
@@ -42,8 +46,7 @@ fn run_list(
 }
 
 /// A project exercising the discovery paths `--list` renders: top-level tests
-/// (empty testset segment → `::name`), a named testset with leaves, and a
-/// nested testset (slash path → `suite/nested/deep`).
+/// (`root::name`), a named testset with leaves, and a nested canonical id.
 fn create_test_project(dir: &Path) {
     std::fs::write(
         dir.join("baml.toml"),
@@ -99,7 +102,24 @@ fn assert_cold_equals_warm(cli: &Path, extra: &[&str]) {
     let mut args = vec!["test", "--list", "--from", "."];
     args.extend_from_slice(extra);
 
-    let cold = run_list(cli, tmp.path(), &cache_dir, &args, &[]);
+    // The honest filtered path must not populate an unfiltered cache by
+    // expanding profile-excluded lazy testsets. Force honest discovery, then
+    // independently populate the cache with an explicitly unfiltered list and
+    // prove that applying `extra` to that cache is output-identical.
+    let cold = run_list(
+        cli,
+        tmp.path(),
+        &cache_dir,
+        &args,
+        &[("BAML_NO_DISCOVERY_CACHE", "1")],
+    );
+    let _populate = run_list(
+        cli,
+        tmp.path(),
+        &cache_dir,
+        &["test", "--list", "--from", "."],
+        &[],
+    );
     let warm = run_list(cli, tmp.path(), &cache_dir, &args, &[]);
 
     assert_eq!(
@@ -152,7 +172,7 @@ fn list_unfiltered_cold_equals_warm() {
     );
     assert!(out.status.success(), "unfiltered `--list` should exit 0");
     assert!(
-        stdout_of(&out).contains("suite::nested/deep"),
+        stdout_of(&out).contains("root::suite::nested::deep"),
         "unfiltered list should render the nested leaf, got:\n{}",
         stdout_of(&out),
     );
@@ -165,15 +185,15 @@ fn list_unfiltered_cold_equals_warm() {
 fn list_filtered_cold_equals_warm_across_matrix() {
     let cli = common::baml_cli();
     for extra in [
-        vec!["-i", "suite::"],                     // whole named testset (+ nested)
-        vec!["-i", "suite::one"],                  // exact leaf
-        vec!["-i", "suite::nested/deep"],          // exact nested leaf (slash tail)
-        vec!["-i", "::top_alpha"],                 // top-level (empty segment)
-        vec!["-i", "*::solo"],                     // wildcard on the testset segment
-        vec!["-i", "suite::*"],                    // wildcard on the test segment
-        vec!["-x", "suite::"],                     // exclude a whole testset
-        vec!["-i", "suite::", "-x", "suite::two"], // mixed include + exclude
-        vec!["-i", "totally-bogus-selector-xyz"],  // no match (exit 5, empty stdout)
+        vec!["-i", "root::suite::*"],
+        vec!["-i", "root::suite::one"],
+        vec!["-i", "root::suite::nested::deep"],
+        vec!["-i", "root::top_alpha"],
+        vec!["-i", "*::solo"],
+        vec!["-i", "root::suite::*"],
+        vec!["-x", "root::suite::*"],
+        vec!["-i", "root::suite::*", "-x", "root::suite::two"],
+        vec!["-i", "totally-bogus-selector-xyz"], // no match (exit 5, empty stdout)
     ] {
         assert_cold_equals_warm(&cli, &extra);
     }

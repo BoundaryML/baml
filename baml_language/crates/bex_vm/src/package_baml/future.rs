@@ -39,10 +39,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
         let Some(fut) = as_future(future) else {
             return false;
         };
-        // CAS Pending → Cancelled inside settle_cancelled; also fires the
-        // cancel token (so the producer's next await checkpoint observes
-        // it) and the SetOnce (so any current awaiter resumes).
-        fut.settle_cancelled()
+        fut.request_cancel()
     }
 
     fn is_settled(future: &Value) -> bool {
@@ -75,7 +72,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
         // `FutureState` has no separate `InternalError` variant.
         matches!(
             fut.read(),
-            FutureRead::Error(_) | FutureRead::InternalError(_) | FutureRead::ErrorPending(_)
+            FutureRead::Error(_) | FutureRead::InternalError(_)
         )
     }
 
@@ -87,9 +84,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
             FutureRead::Pending(_) => "Pending",
             FutureRead::Ready(_) => "Ready",
             // Surface InternalError as Error — see is_error.
-            FutureRead::Error(_) | FutureRead::InternalError(_) | FutureRead::ErrorPending(_) => {
-                "Error"
-            }
+            FutureRead::Error(_) | FutureRead::InternalError(_) => "Error",
             FutureRead::Cancelled => "Cancelled",
         };
         let Some(enm_ptr) = vm.lookup_type_by_fqn("baml.future.FutureState") else {

@@ -1,0 +1,1102 @@
+---
+title: Every Way To Get Structured Output From LLMs
+description: A survey of every framework for extracting structured output from LLMs, and how they compare.
+slug: structured-output-from-llms
+date: Nov 26, 2024
+tags: ['research']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+  linkedin: https://www.linkedin.com/in/sxlijin/
+---
+import Image from 'next/image'
+
+<div>
+{/* ## > Introduction */}
+
+_Update (Nov 26): Added some more details to a few providers_
+
+_Update (Jun 18): check out the discussion on [Hacker News][discuss-hn] and [/r/LocalLLaMA][discuss-reddit]! Thanks
+for all the feedback and comments, folks- keep it coming!_
+
+[discuss-hn]: https://news.ycombinator.com/item?id=40713952
+[discuss-reddit]: https://www.reddit.com/r/LocalLLaMA/comments/1di2r2x/every_way_to_get_structured_output_from_llms/
+
+This post will be interesting to you if:
+
+  - you're trying to get structured output from an LLM,
+  - you've tried `response_format: "json"` and function calling and been disappointed by the results,
+  - you're tired of stacking regex on regex on regex to extract JSON from an LLM,
+  - you're trying to figure out what your options are.
+
+Everyone using LLMs in production runs into this problem sooner or later: what
+we really want is a magical black box that returns JSON in exactly the format we
+want. Unfortunately, LLMs return English, not JSON, and it turns out that
+converting English to JSON is kinda hard.
+
+Here's every framework we could find that solves this problem, and how they compare.
+
+(Disclaimer: as a player in this space, we're a little biased! We're the creators of BAML.)
+
+## <a style={{textDecorationLine: "none"}} id="comparison">Comparison</a>
+
+    <style jsx="true">{`
+      .table-container {
+        display: flex;
+        flex-direction: column;
+        overflow-x: scroll;
+        align-items: flex-start;
+        width: 100vw;
+        margin-left: min(0px, calc(50% - 50vw));
+        padding: 0 1em;
+      }
+      table {
+        table-layout: fixed;
+        max-width: 80em;
+        margin-left: max(0px, calc(50vw - 40em));
+      }
+    `}</style>
+
+<div className="table-container">
+<table>
+  <thead>
+    <tr>
+      <th>Framework</th>
+      <th style={{width: "11em"}}>Language Support</th>
+      <th style={{width: "10em"}}>Does it handle or prevent malformed JSON?</th>
+      <th>How do I build the prompt?</th>
+      <th>Do I have full control over the prompt?</th>
+      <th>How do I see the final prompt?</th>
+      <th style={{width: "10em"}}>Supported Model Providers</th>
+      <th>API flavors</th>
+      <th>How do I define output types?</th>
+      <th>Test Framework?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row" rowSpan="4">
+        [BAML](#example-baml-python)
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px", }}>
+        [Python <img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/baml-py.svg?logo=python&label=installs"/>][link-baml-python]
+        [example code](#example-baml-python)
+      </td>
+      <td className="align-middle" rowSpan="4">✅ Yes, using a new Rust-based error-tolerant parser (e.g. can parse `{"foo": "bar}`)</td>
+      <td className="align-middle" rowSpan="4">Jinja templates</td>
+      <td className="align-middle" rowSpan="4">✅ Yes</td>
+      <td className="align-middle" rowSpan="4">VSCode extension</td>
+      <td className="align-middle" rowSpan="4">
+        ✅ OpenAI<br/>
+        ✅ Azure<br/>
+        ✅ Bedrock<br/>
+        ✅ Gemini<br/>
+        ✅ Anthropic<br/>
+        ✅ Ollama<br/>
+        ✅ OpenAI-compatible models
+      </td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        ✅&nbsp;streaming
+      </td>
+      <td className="align-middle">BAML schemas, transpiled to Pydantic</td>
+      <td className="align-middle" rowSpan="4">✅ VSCode Extension<br />🚧 CLI</td>
+    </tr>
+    <tr>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [TypeScript <img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/npm/dw/%40boundaryml%2Fbaml.svg?logo=npm&label=installs"/>][link-baml-ts]
+        [example code](#example-baml-ts)
+      </td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        ✅&nbsp;streaming
+      </td>
+      <td className="align-middle">BAML schemas, transpiled to TS</td>
+    </tr>
+    <tr>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Ruby&nbsp;(beta) <img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/gem/dt/baml?logo=ruby&label=installs"/>][link-baml-ruby]
+        [example code](#example-baml-ruby)
+      </td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ❌&nbsp;async<br/>
+        ❌&nbsp;streaming<br/>
+      </td>
+      <td className="align-middle">BAML schemas, transpiled to Sorbet</td>
+    </tr>
+    <tr>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        All other languages (via REST server + OpenAPI adapter)
+      </td>
+
+
+      <td className="align-middle">
+        ❌&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        ❌&nbsp;streaming
+      </td>
+      <td className="align-middle">BAML schemas, hosted on REST server</td>
+    </tr>
+
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row" rowSpan="2">
+        [Instructor][link-instructor]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Python][link-instructor-python-src]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/instructor.svg?logo=python&label=installs"/>][link-instructor-python]
+        [example code](#example-instructor)
+      </td>
+      <td className="align-middle" rowSpan="2">⚠️ Supports [LLM-based retries][llm-based-retries-instructor] (none by default)</td>
+      <td className="align-middle">Build the `messages` array</td>
+      <td className="align-middle">[❌ No][hardcoded-template-instructor] ([feature request][hardcoded-template-instructor-issue])</td>
+      <td className="align-middle" rowSpan="2">No supported mechanism</td>
+      <td className="align-middle">
+        ✅ OpenAI<br/>
+        ✅ Anthropic<br/>
+        ✅ Cohere<br/>
+        ✅ Gemini<br/>
+        ✅ LiteLLM
+      </td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        ✅&nbsp;streaming
+      </td>
+      <td className="align-middle">Pydantic</td>
+      <td className="align-middle" rowSpan="2">Via the [Parea platform][testing-instructor]</td>
+    </tr>
+    <tr>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [TypeScript][link-instructor-ts-src]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/npm/dw/%40instructor-ai%2Finstructor.svg?logo=npm&label=installs"/>][link-instructor-ts]
+        [example code](#example-instructor-js)
+      </td>
+      <td className="align-middle">Build the `messages` array</td>
+      <td className="align-middle">[❌ No][hardcoded-template-instructor-js]</td>
+      <td className="align-middle">
+        ✅ OpenAI<br/>
+        ⚠️ [support for others][instructor-others] in [beta][llm-polyglot-in-beta]
+      </td>
+      <td className="align-middle">
+        ❌&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        ✅&nbsp;streaming
+      </td>
+      <td className="align-middle">Zod</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row" rowSpan="3">[TypeChat][link-typechat]</th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        <a href="https://github.com/microsoft/TypeChat/blob/main/python/README.md">Python</a> ([not on PyPI][typechat-not-on-pypi])<br/>
+        [example code](#example-typechat-python)
+      </td>
+      <td className="align-middle" rowSpan="3">⚠️ Automatic [LLM-based retries][llm-based-retries-typechat]</td>
+      <td className="align-middle">[pass in a string][build-prompt-typechat-py]</td>
+      <td className="align-middle">[❌ No][hardcoded-template-typechat-python]</td>
+      <td className="align-middle" rowSpan="3">n/a</td>
+      <td className="align-middle" rowSpan="3">
+        ✅ OpenAI<br/>
+        ✅ Azure&nbsp;OpenAI<br/>
+        [bring-your-own][bring-your-own-typechat]
+      </td>
+      <td className="align-middle" rowSpan="3">
+        ❌&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        [❌&nbsp;streaming](https://github.com/microsoft/TypeChat/issues/70)
+      </td>
+      <td className="align-middle">Pydantic</td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [TypeScript][link-typechat-ts-src]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/npm/dw/%40boundaryml%2Fbaml.svg?logo=npm&label=installs"/>][link-typechat-ts]
+        [example code](#example-typechat-ts)
+      </td>
+      <td className="align-middle">[pass in a string][build-prompt-typechat-ts]</td>
+      <td className="align-middle">[❌ No][hardcoded-template-typechat-ts]</td>
+      <td className="align-middle">Zod</td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [C#/.NET][link-typechat-dotnet-src]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/nuget/dt/Microsoft.TypeChat.svg?logo=nuget&label=installs"/>][link-typechat-dotnet]
+        [example code](#example-typechat-dotnet)
+      </td>
+      <td className="align-middle">[pass in a string][build-prompt-typechat-dotnet]</td>
+      <td className="align-middle">[❌ No][hardcoded-template-typechat-dotnet]</td>
+      <td className="align-middle">C# class</td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row">
+        [Marvin][link-marvin]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Python][link-marvin-src]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/marvin.svg?logo=python&label=installs"/>][link-marvin-python]
+        [example code](#example-marvin)
+      </td>
+      <td className="align-middle">⚠️ Supports [LLM-based retries][llm-based-retries-marvin] (none by default)</td>
+      <td className="align-middle">[Jinja templates][build-prompt-marvin]</td>
+      <td className="align-middle">[❌ No][hardcoded-template-marvin]</td>
+      <td className="align-middle">No supported mechanism</td>
+      <td className="align-middle">OpenAI</td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        [✅&nbsp;streaming](https://github.com/PrefectHQ/marvin/pull/624/files)
+      </td>
+      <td className="align-middle">Pydantic</td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row">
+        [Outlines][link-outlines]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Python][link-outlines-src]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/outlines.svg?logo=python&label=installs"/>][link-outlines-python]
+        (Example pending)
+      </td>
+      <td className="align-middle">
+        ❌&nbsp;[OpenAI][constraints-outlines-do-not-work]<br/>
+        ✅️️ Self-hosted models can be constrained ([structured generation][constraints-outlines])
+      </td>
+      <td className="align-middle">pass in a string</td>
+      <td className="align-middle">✅ Yes</td>
+      <td className="align-middle">n/a</td>
+      <td className="align-middle">
+        [⚠️️ OpenAI][constraints-outlines-do-not-work]<sup>1</sup><br/>
+        ✅ Transformers<sup>2</sup><br/>
+        ✅ llama.cpp<br/>
+        ⚠️ [.txt (private&nbsp;beta)](https://dottxt.co/)
+      </td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        ⚠️&nbsp;streaming<sup>3</sup>
+      </td>
+      <td className="align-middle">
+        Pydantic<br/>
+        JSON&nbsp;schema<br/>
+        EBNF&nbsp;grammar
+      </td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row">
+        [Guidance][link-guidance]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Python][link-guidance-src]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/guidance.svg?logo=python&label=installs"/>][link-guidance-python]
+        (Example pending)
+      </td>
+      <td className="align-middle">
+        ⚠️&nbsp;OpenAI<br/>
+        ✅️ Self-hosted models can be constrained ([token healing][constraints-guidance])
+      </td>
+      <td className="align-middle">pass in a string</td>
+      <td className="align-middle">✅ Yes</td>
+      <td className="align-middle">n/a</td>
+      <td className="align-middle">
+        ✅ llama.cpp<br/>
+        [⚠️ Anthropic][constraints-guidance-do-not-work]<br/>
+        [⚠️ Azure&nbsp;OpenAI][constraints-guidance-do-not-work]<br/>
+        [⚠️ Cohere][constraints-guidance-do-not-work]<br/>
+        [⚠️ Google&nbsp;AI][constraints-guidance-do-not-work]<br/>
+        [⚠️ LiteLLM][constraints-guidance-do-not-work]<br/>
+        [⚠️ OpenAI<sup>1</sup>][constraints-guidance-do-not-work]<br/>
+        ✅ Transformers<sup>2</sup><br/>
+        [⚠️ Vertex&nbsp;AI][constraints-guidance-do-not-work]<br/>
+      </td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        ⚠️&nbsp;streaming<sup>3</sup>
+      </td>
+      <td className="align-middle">
+        [Enums](https://guidance.readthedocs.io/en/latest/generated/guidance.select.html)<br/>
+        [Regex](https://guidance.readthedocs.io/en/latest/generated/guidance.gen.html)<br/>
+        [Pydantic](https://guidance.readthedocs.io/en/latest/generated/guidance.json.html)<br/>
+        [JSON&nbsp;schema](https://guidance.readthedocs.io/en/latest/generated/guidance.json.html)
+      </td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row">
+        [LMQL][link-lmql]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Python][link-lmql-python-docs]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/lmql.svg?logo=python&label=installs"/>][link-lmql-python]
+        (Example pending)
+      </td>
+      <td className="align-middle">
+        ❌&nbsp;OpenAI<br/>
+        ✅️ Self-hosted models can be constrained ([token masking][constraints-lmql])
+      </td>
+      <td className="align-middle">pass in a string</td>
+      <td className="align-middle">✅ Yes</td>
+      <td className="align-middle">n/a</td>
+      <td className="align-middle">
+        OpenAI<sup>1</sup><br/>
+        Transformers<sup>2</sup><br/>
+        Azure&nbsp;OpenAI<br/>
+        llama.cpp<br/>
+        Replicate
+      </td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ✅&nbsp;async<br/>
+        ⚠️&nbsp;streaming<sup>3</sup>
+      </td>
+      <td className="align-middle">
+      [LMQL constraints](https://lmql.ai/docs/language/constraints.html)
+      </td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row">
+        [JSONformer][link-jsonformer]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Python <img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/jsonformer.svg?logo=python&label=installs"/>][link-jsonformer-python]
+        (Example pending)
+      </td>
+      <td className="align-middle">
+        ❌&nbsp;OpenAI<br/>
+        ✅️ Self-hosted models can be constrained ([content tokens][constraints-jsonformer])
+      </td>
+      <td className="align-middle">pass in a string</td>
+      <td className="align-middle">✅ Yes</td>
+      <td className="align-middle">n/a</td>
+      <td className="align-middle">
+        Transformers<sup>2</sup>
+      </td>
+      <td className="align-middle">
+        ✅&nbsp;sync<br/>
+        ❌&nbsp;async<br/>
+        ❌&nbsp;streaming
+      </td>
+      <td className="align-middle">
+        JSON&nbsp;schema
+      </td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row">
+        [Firebase Genkit][link-genkit]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [TypeScript][link-genkit-ts-src]
+        [<img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/npm/dw/genkit.svg?logo=npm&label=installs"/>][link-genkit-ts]
+        (Example pending)
+      </td>
+      <td className="align-middle">
+        ❌&nbsp;[No][genkit-no]<br/>
+      </td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">
+        ⚠️ Google&nbsp;AI<br/>
+      </td>
+      <td className="align-middle">
+        TODO
+      </td>
+      <td className="align-middle">
+        Zod
+      </td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row">
+        [SGLang][link-sglang]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Python <img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/sglang.svg?logo=python&label=installs"/>][link-sglang-python]
+      </td>
+      <td className="align-middle">
+        ❌&nbsp;OpenAI<br/>
+        ✅&nbsp;Self-hosted models can be constrained ([regex][constraints-sglang])
+      </td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">
+      TODO
+      </td>
+      <td className="align-middle">
+        TODO
+      </td>
+      <td className="align-middle">
+        Regex
+      </td>
+      <td className="align-middle">None</td>
+    </tr>
+    <tr style={{borderTop: "3px solid gray"}}>
+      <th scope="row">
+        [lm-format-enforcer][link-lm-format-enforcer]
+      </th>
+      <td className="align-middle" style={{paddingInlineStart: "8px"}}>
+        [Python <img style={{display: "inline-block", margin: 0}} src="https://img.shields.io/pypi/dw/lm-format-enforcer.svg?logo=python&label=installs"/>][link-lm-format-enforcer-python]
+      </td>
+      <td className="align-middle">
+        ❌&nbsp;OpenAI<br/>
+        ✅&nbsp;Self-hosted models can be constrained ([token filtering][constraints-lm-format-enforcer])
+      </td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">TODO</td>
+      <td className="align-middle">
+      TODO
+      </td>
+      <td className="align-middle">
+        TODO
+      </td>
+      <td className="align-middle">
+        JSON schema<br/>
+        JSON<br/>
+        Regex<br/>
+      </td>
+      <td className="align-middle">None</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+<sup>**</sup>: Honorable mention to Microsoft's [AICI][link-aici], which is
+working on creating a shim for cooperative constraints implemented in
+Python/JS using a WASM runtime. Haven't included it in the list because it
+seems more low-level than the others, and setup is very involved.
+
+<sup>1</sup>: Applying constraints to OpenAI models can be very error-prone,
+because the OpenAI API does not expose sufficient information about the
+underlying model operations for the framework to actually apply constraints
+effectively. See [this discussion about
+limitations](https://lmql.ai/docs/models/openai.html#openai-api-limitations)
+from the LMQL documentation.
+
+<sup>2</sup>: Transformers refers to "HuggingFace Transformers"
+
+<sup>3</sup>: Constrained streaming generation produces partial objects, but
+no good ways of interacting with the partial objects, since they are not yet
+parse-able. We only consider a framework to support streaming if it allows
+interacting with the partial objects (e.g. if streaming back an object with
+properties `foo` and `bar`, you can access `obj.foo` before `bar` has been
+streamed to the client).
+
+[link-instructor]: https://useinstructor.com/
+[link-instructor-python-src]: https://github.com/jxnl/instructor
+[link-instructor-python]: https://pypistats.org/packages/instructor
+[link-instructor-ts-src]: https://github.com/instructor-ai/instructor-js
+[link-instructor-ts]: https://www.npmjs.com/package/@instructor-ai/instructor
+[link-baml]: https://github.com/BoundaryML/baml
+[link-baml-python]: https://pypistats.org/packages/baml-py
+[link-baml-ts]: https://www.npmjs.com/package/@boundaryml/baml
+[link-baml-ruby]: https://rubygems.org/gems/baml
+[link-typechat]: https://github.com/microsoft/TypeChat?tab=readme-ov-file#typechat
+[link-typechat-ts-src]: https://github.com/microsoft/TypeChat/blob/main/typescript/README.md
+[link-typechat-ts]: https://www.npmjs.com/package/typechat
+[link-typechat-dotnet-src]: https://github.com/microsoft/TypeChat.net
+[link-typechat-dotnet]: https://www.nuget.org/packages/Microsoft.TypeChat/
+[link-marvin]: https://www.askmarvin.ai/welcome/what_is_marvin/
+[link-marvin-src]: https://github.com/prefecthq/marvin
+[link-marvin-python]: https://pypistats.org/packages/marvin
+[link-outlines]: https://outlines-dev.github.io/outlines/welcome/
+[link-outlines-src]: https://github.com/outlines-dev/outlines
+[link-outlines-python]: https://pypistats.org/packages/outlines
+[link-guidance]: https://guidance.readthedocs.io/en/latest/index.html
+[link-guidance-src]: https://github.com/guidance-ai/guidance
+[link-guidance-python]: https://pypistats.org/packages/guidance
+[link-lmql]: https://lmql.ai/
+[link-lmql-python-docs]: https://lmql.ai/docs/lib/python.html
+[link-lmql-python]: https://pypistats.org/packages/lmql
+[link-jsonformer]: https://github.com/1rgs/jsonformer
+[link-jsonformer-python]: https://pypistats.org/packages/jsonformer
+[link-genkit]: https://firebase.google.com/docs/genkit#2_structured_output
+[link-genkit-ts-src]: https://github.com/firebase/genkit
+[link-genkit-ts]: https://www.npmjs.com/package/genkit
+[link-aici]: https://github.com/microsoft/aici
+[link-sglang]: https://github.com/microsoft/aici
+[link-sglang-python]: https://pypistats.org/packages/sglang
+[link-lm-format-enforcer]: https://github.com/noamgat/lm-format-enforcer
+[link-lm-format-enforcer-python]: https://pypistats.org/packages/lm-format-enforcer
+
+[genkit-no]: https://github.com/firebase/genkit/blob/71efe6a135fb39fdf0c1e253969379a702aebc40/js/ai/src/generate.ts#L216-L218
+
+
+[constraints-outlines]: https://github.com/outlines-dev/outlines?tab=readme-ov-file#structured-generation
+[constraints-guidance]: https://guidance.readthedocs.io/en/latest/example_notebooks/tutorials/token_healing.html
+[constraints-lmql]: https://lmql.ai/docs/language/constraints.html#how-do-lmql-constraints-work
+[constraints-jsonformer]: https://github.com/1rgs/jsonformer?tab=readme-ov-file#solution-only-generate-the-content-tokens-and-fill-in-the-fixed-tokens
+[constraints-lm-format-enforcer]: https://github.com/noamgat/lm-format-enforcer?tab=readme-ov-file#how-does-it-work
+[constraints-sglang]: https://github.com/sgl-project/sglang?tab=readme-ov-file#constrained-decoding
+
+[constraints-outlines-do-not-work]: https://github.com/outlines-dev/outlines/blob/7723ce8d091230249db8840463c5cdefdb408b8e/outlines/generate/json.py#L71-L78
+[constraints-guidance-do-not-work]: https://github.com/guidance-ai/guidance/blob/c009b1a7b7b084659b698cd58491ee065d376cb4/guidance/models/_grammarless.py#L416-L422
+
+[build-prompt-typechat-py]: https://github.com/microsoft/TypeChat/blob/ce83b7f63f19786106f82a37ca154bbb579d960b/python/examples/sentiment/demo.py#L15
+[build-prompt-typechat-ts]: https://github.com/microsoft/TypeChat/blob/ce83b7f63f19786106f82a37ca154bbb579d960b/typescript/examples/sentiment/src/main.ts#L22
+[build-prompt-typechat-dotnet]: https://github.com/microsoft/typechat.net/blob/0f1c2f038d86dd954bd5eef3b03eb861c1cf0fb5/examples/Sentiment/Program.cs#L21
+[build-prompt-marvin]: https://www.askmarvin.ai/docs/text/functions/#templating
+
+[typechat-not-on-pypi]: https://github.com/microsoft/TypeChat/tree/main/python#getting-started
+[bring-your-own-typechat]: https://github.com/microsoft/TypeChat/issues/61
+
+[hardcoded-template-instructor]: https://github.com/jxnl/instructor/blob/81b6a7607ccb701e00a35a5f90dda72ceb75f995/instructor/process_response.py#L244-L249
+[hardcoded-template-instructor-issue]: https://github.com/jxnl/instructor/issues/258
+[hardcoded-template-instructor-js]: https://github.com/instructor-ai/instructor-js/issues/171#issuecomment-2090639347
+[hardcoded-template-typechat-python]: https://github.com/microsoft/TypeChat/blob/ce83b7f63f19786106f82a37ca154bbb579d960b/python/src/typechat/_internal/translator.py#L103-L115
+[hardcoded-template-typechat-ts]: https://github.com/microsoft/TypeChat/blob/ce83b7f63f19786106f82a37ca154bbb579d960b/typescript/src/typechat.ts#L110-L116
+[hardcoded-template-typechat-dotnet]: https://github.com/microsoft/typechat.net/blob/0f1c2f038d86dd954bd5eef3b03eb861c1cf0fb5/src/typechat.program/ProgramTranslatorPrompts.cs#L31-L34
+[hardcoded-template-marvin]: https://github.com/PrefectHQ/marvin/blob/95e2936f576e28af7aa354c77c03a307ea4471c7/src/marvin/ai/prompts/text_prompts.py
+
+[instructor-others]: https://github.com/instructor-ai/instructor-js?tab=readme-ov-file#using-non-openai-providers-with-llm-polyglot
+[llm-polyglot-in-beta]: https://github.com/hack-dance/island-ai/tree/main/public-packages/llm-client#llm-polyglot
+
+[llm-based-retries-instructor]: https://jxnl.github.io/instructor/concepts/reask_validation/#llm-based-validation-example
+[llm-based-retries-typechat]: https://github.com/microsoft/TypeChat/blob/ce83b7f63f19786106f82a37ca154bbb579d960b/README.md?plain=1#L14
+[llm-based-retries-marvin]: https://github.com/PrefectHQ/marvin/blob/95e2936f576e28af7aa354c77c03a307ea4471c7/src/marvin/beta/retries.py#L30
+
+[debug-logs-marvin]: https://github.com/PrefectHQ/marvin/issues/363
+
+[testing-instructor]: https://useinstructor.com/blog/2024/05/21/parea-for-observing-testing--fine-tuning-of-instructor/?h=testing
+
+## <a style={{textDecorationLine: "none"}} id="criteria">Criteria</a>
+
+Most of our criteria are pretty self-explanatory, but there are two that we
+want to call out:
+
+### Does it handle/prevent malformed JSON? If so, how?
+
+LLMs make a lot of the same mistakes that humans do when producing JSON
+(e.g. a } in the wrong place or a missing comma), so
+it's important that the framework can help you handle these errors.
+
+A lot of frameworks "solve" this by feeding the malformed JSON back into the LLM
+and asking it to repair the JSON. This kinda works, but it's also slow and
+expensive. If your LLM calls individually take multiple seconds already, you
+don't really want to make that even slower!
+
+There are two techniques that exist for handling or preventing this: actually
+parse the malformed JSON (BAML takes this approach) or constrain the LLM's token
+generation to guarantee that valid JSON is produced (this is what Outlines,
+Guidance, and a few others do).
+
+**Parsing the malformed JSON is our preferred approach**: it most closely aligns
+with what the LLM was designed to do (emit tokens), is fast (takes microseconds),
+and flexible (allows working with any LLM). It does have limitations: it can't
+magically make sense of completely nonsensical JSON, after all.
+
+Applying constraints to LLM token generation, by contrast, can be robust, but
+has its own issues: doing this efficiently requires applying runtime transforms
+to the model itself, so this only works with self-hosted models (e.g. Llama,
+Transformers) and does not work with models like OpenAI's ChatGPT or Anthropic's
+Claude.
+
+### Can you see the actual prompt? Do you have full control over the prompt?
+
+<figure>
+  <img className="mx-auto my-0 h-[300px]" src="/batman-show-me-the-prompt.jpeg"/>
+  <figcaption className="text-center">You might remember this from ["Fuck You, Show Me The Prompt"](https://hamel.dev/blog/posts/prompt/).</figcaption>
+</figure>
+
+Prompts are how we "program" LLMs to give us output.
+
+The best way to get an LLM to return structured data is to craft a prompt
+designed to return data matching your specific schema. To do that, you need to
+
+  1. see the prompt actually getting sent to ChatGPT, and
+  2. try different prompts.
+
+Most frameworks, unfortunately, have hardcoded templates baked in which
+prevent doing this.
+
+
+## Example code
+
+For each framework listed above, we've included example code, from the framework's documentation,
+provides for how you would use it.
+
+---
+### <a style={{textDecorationLine: "none"}} id="example-baml-python">BAML (Python)</a>
+
+<BamlBlock name="1" bamlCode={`class Resume {
+  name string
+  education Education[]
+  skills string[]
+}
+
+class Education {
+  school string
+  degree string
+  year int
+}
+
+function ExtractResume(raw_text: string) -> Resume {
+  client "openai/gpt-4o"
+  prompt #"
+    Parse the following resume and return a structured representation of the data in the schema below.
+
+    Resume:
+    ---
+    {{raw_text}}
+    ---
+
+    {{ ctx.output_format }}
+  "#
+}
+
+test TestName {
+  functions [ExtractResume]
+  args {
+    raw_text #"
+      John Doe,
+      Education:
+        - University of California, Berkeley
+        - Bachelor of Science in Computer Science
+        - 2020-2024
+      Skills:
+        - Python
+        - JavaScript
+        - SQL
+        - Java
+    "#
+  }
+}
+
+`}
+
+languageCode={`from baml_client import b
+
+resume = """John Doe [...] Experience: Software Engineer Intern [...]"""
+
+
+async def streamed_call():
+  stream = b.stream.ExtractResume(resume)
+  async for partial in stream:
+    print(partial) # This is an object with auto complete for the partial Resume type
+  response = await stream.get_final_result() # auto complete here to the full Resume type
+
+# normal call
+parsed = b.ExtractResume(resume)
+print(parsed)
+`}
+
+language="python"
+/>
+
+From [`baml-examples/fastapi-starter/baml_src/extract_resume.baml`](https://github.com/BoundaryML/baml-examples/blob/main/fastapi-starter/baml_src/extract_resume.baml)
+
+---
+### <a style={{textDecorationLine: "none"}} id="example-baml-ts">BAML (TS)</a>
+
+<BamlBlock name="2" bamlCode={`enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+class Message {
+  role Role
+  content string
+}
+
+enum Role {
+  Customer
+  Assistant
+}
+
+template_string PrintMessage(msg: Message, prefix: string?) #"
+  {{ _.role('user' if msg.role == "Customer" else 'assistant') }}
+  {% if prefix %}
+  {{ prefix }}
+  {% endif %}
+  {{ msg.content }}
+"#
+
+function ClassifyMessage(convo: Message[]) -> Category[] {
+  client "openai/gpt-4o"
+  prompt #"
+    {#
+      Prompts are auto-dedented and trimmed.
+      We use JINJA for our prompt syntax
+      (but we added some static analysis to make sure it's valid!)
+    #}
+
+    {{ ctx.output_format(prefix="Classify with the following json:") }}
+
+    {% for c in convo %}
+    {{ PrintMessage(c,
+      'This is the message to classify:' if loop.last and convo|length > 1 else none
+    ) }}
+    {% endfor %}
+
+    {{ _.role('assistant') }}
+    JSON array of categories that match:
+  "#
+}
+
+test TestName {
+  functions [ClassifyMessage]
+  args {
+    convo [
+      {
+        role "Customer",
+        content "I want to cancel my subscription"
+      }
+    ]
+  }
+}
+
+`}
+
+languageCode={`import { b } from './baml_client'
+import { Role } from './baml_client/types';
+
+// Async call
+async function async_call() {
+  const result = await b.ClassifyMessage([
+      {
+          role: Role.Customer,
+          content: "I want to cancel my subscription"
+      }
+  ]);
+  console.log("async call")
+  console.log(result);
+}
+
+// Streamed call
+async function streamed_call() {
+  const stream = b.stream.ClassifyMessage([
+      {
+          role: Role.Customer,
+          content: "I want to cancel my subscription"
+      }
+  ]);
+
+  for await (const partial of stream) {
+    console.log(partial); // Autocompletes to a Category[]
+  }
+  const final = await stream.get_final_result(); // Autocompletes to a Category[]
+}
+
+async_call()
+`}
+
+language="typescript"
+/>
+
+From [`baml-examples/nextjs-starter/baml_src/classify_message.baml`](https://github.com/BoundaryML/baml-examples/blob/main/fastapi-starter/baml_src/classify_message.baml)
+
+---
+### <a style={{textDecorationLine: "none"}} id="example-baml-ruby">BAML (Ruby)</a>
+
+From [`baml-ruby-starter/examples.rb`](https://github.com/BoundaryML/baml-ruby-starter/blob/main/examples.rb):
+
+```ruby
+require_relative "baml_client/client"
+
+b = Baml::BamlClient.from_directory("baml_src")
+
+input = "Can't access my account using my usual login credentials"
+classified = b.ClassifyMessage(input: input)
+
+puts classified.categories
+```
+
+From [`baml-ruby-starter/baml_src/classify_message.baml`](https://github.com/BoundaryML/baml-ruby-starter/blob/main/baml_src/classify_message.baml):
+
+```baml
+enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+class MessageFeatures {
+    categories Category[]
+}
+
+function ClassifyMessage(input: string) -> MessageFeatures {
+  client GPT4Turbo
+
+  prompt #"
+    {# _.role("system") starts a system message #}
+    {{ _.role("system") }}
+
+    Classify the following INPUT.
+
+    {{ ctx.output_format }}
+
+    {# This starts a user message #}
+    {{ _.role("user") }}
+
+    INPUT: {{ input }}
+
+    Response:
+  "#
+}
+```
+
+
+---
+### <a style={{textDecorationLine: "none"}} id="example-instructor">Instructor (Python)</a>
+
+From [`simple_prediction.py`](https://github.com/jxnl/instructor/blob/81b6a7607ccb701e00a35a5f90dda72ceb75f995/examples/classification/simple_prediction.py#L23-L37):
+
+```python
+class Labels(str, enum.Enum):
+    SPAM = "spam"
+    NOT_SPAM = "not_spam"
+
+class SinglePrediction(BaseModel):
+    """
+    Correct class label for the given text
+    """
+
+    class_label: Labels
+
+def classify(data: str) -> SinglePrediction:
+    return client.chat.completions.create(
+        model="gpt-3.5-turbo-0613",
+        response_model=SinglePrediction,
+        messages=[
+            {
+                "role": "user",
+                "content": f"Classify the following text: {data}",
+            },
+        ],
+    )  # type: ignore
+
+prediction = classify("Hello there I'm a nigerian prince and I want to give you money")
+assert prediction.class_label == Labels.SPAM
+```
+
+---
+### <a style={{textDecorationLine: "none"}} id="example-instructor-js">instructor-js</a>
+
+From [`simple_prediction/index.ts`](https://github.com/instructor-ai/instructor-js/blob/f386ad71a48bc4b39c454bad1e4302e171e2dc78/examples/classification/simple_prediction/index.ts#L25-L47):
+
+```ts
+import { z } from "zod"
+
+enum CLASSIFICATION_LABELS {
+  "SPAM" = "SPAM",
+  "NOT_SPAM" = "NOT_SPAM"
+}
+
+const SimpleClassificationSchema = z.object({
+  class_label: z.nativeEnum(CLASSIFICATION_LABELS)
+})
+
+const createClassification = async (data: string) => {
+  const classification = await client.chat.completions.create({
+    messages: [{ role: "user", content: `"Classify the following text: ${data}` }],
+    model: "gpt-3.5-turbo",
+    response_model: { schema: SimpleClassificationSchema, name: "SimpleClassification" },
+    max_retries: 3,
+    seed: 1
+  })
+
+  return classification
+}
+
+const classification = await createClassification(
+  "Hello there I'm a nigerian prince and I want to give you money"
+)
+// OUTPUT: { class_label: 'SPAM' }
+
+console.log({ classification })
+
+assert(
+  classification?.class_label === CLASSIFICATION_LABELS.SPAM,
+  `Expected ${classification?.class_label} to be ${CLASSIFICATION_LABELS.SPAM}`
+)
+```
+---
+### <a style={{textDecorationLine: "none"}} id="example-typechat-python">TypeChat (Python)</a>
+
+From [`examples/sentiment/demo.py`](https://github.com/microsoft/TypeChat/blob/main/python/examples/sentiment/demo.py):
+
+```python
+import asyncio
+
+import sys
+from dotenv import dotenv_values
+import schema as sentiment
+from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
+
+async def main():
+    env_vals = dotenv_values()
+    model = create_language_model(env_vals)
+    validator = TypeChatValidator(sentiment.Sentiment)
+    translator = TypeChatJsonTranslator(model, validator, sentiment.Sentiment)
+
+    async def request_handler(message: str):
+        result = await translator.translate(message)
+        if isinstance(result, Failure):
+            print(result.message)
+        else:
+            result = result.value
+            print(f"The sentiment is {result.sentiment}")
+
+    file_path = sys.argv[1] if len(sys.argv) == 2 else None
+    await process_requests("😀> ", file_path, request_handler)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+From [`examples/sentiment/schema.py`](https://github.com/microsoft/TypeChat/blob/main/python/examples/sentiment/schema.py):
+
+```python
+from dataclasses import dataclass
+from typing_extensions import Literal, Annotated, Doc
+
+@dataclass
+class Sentiment:
+    """
+    The following is a schema definition for determining the sentiment of a some user input.
+    """
+
+    sentiment: Annotated[Literal["negative", "neutral", "positive"],
+                         Doc("The sentiment for the text")]
+```
+
+---
+### <a style={{textDecorationLine: "none"}} id="example-typechat-ts">TypeChat (TypeScript)</a>
+
+From [`examples/sentiment/src/main.ts`](https://github.com/microsoft/TypeChat/blob/main/typescript/examples/sentiment/src/main.ts):
+
+```ts
+import { createJsonTranslator, createLanguageModel } from "typechat";
+import { processRequests } from "typechat/interactive";
+import { createTypeScriptJsonValidator } from "typechat/ts";
+import { SentimentResponse } from "./sentimentSchema";
+
+const dotEnvPath = findConfig(".env");
+assert(dotEnvPath, ".env file not found!");
+dotenv.config({ path: dotEnvPath });
+
+const model = createLanguageModel(process.env);
+const schema = fs.readFileSync(path.join(__dirname, "sentimentSchema.ts"), "utf8");
+const validator = createTypeScriptJsonValidator<SentimentResponse>(schema, "SentimentResponse");
+const translator = createJsonTranslator(model, validator);
+
+// Process requests interactively or from the input file specified on the command line
+processRequests("😀> ", process.argv[2], async (request) => {
+    const response = await translator.translate(request);
+    if (!response.success) {
+        console.log(response.message);
+        return;
+    }
+    console.log(`The sentiment is ${response.data.sentiment}`);
+});
+```
+
+From [`examples/sentiment/src/sentimentSchema.ts`](https://github.com/microsoft/TypeChat/blob/main/typescript/examples/sentiment/src/sentimentSchema.ts):
+
+```ts
+export interface SentimentResponse {
+    sentiment: "negative" | "neutral" | "positive";  // The sentiment of the text
+}
+```
+
+---
+### <a style={{textDecorationLine: "none"}} id="example-typechat-dotnet">TypeChat (C#/.NET)</a>
+
+From [`examples/Sentiment/Program.cs`](https://github.com/microsoft/typechat.net/blob/main/examples/Sentiment/Program.cs):
+
+```csharp
+using Microsoft.TypeChat;
+
+namespace Sentiment;
+
+public class SentimentApp : ConsoleApp
+{
+    JsonTranslator<SentimentResponse> _translator;
+
+    public SentimentApp()
+    {
+        OpenAIConfig config = Config.LoadOpenAI();
+        // Although this sample uses config files, you can also load config from environment variables
+        // OpenAIConfig config = OpenAIConfig.LoadFromJsonFile("your path");
+        // OpenAIConfig config = OpenAIConfig.FromEnvironment();
+        _translator = new JsonTranslator<SentimentResponse>(new LanguageModel(config));
+    }
+
+    public override async Task ProcessInputAsync(string input, CancellationToken cancelToken)
+    {
+        SentimentResponse response = await _translator.TranslateAsync(input, cancelToken);
+        Console.WriteLine($"The sentiment is {response.Sentiment}");
+    }
+}
+```
+
+From [`examples/Sentiment/SentimentSchema.cs`](https://github.com/microsoft/typechat.net/blob/main/examples/Sentiment/SentimentSchema.cs):
+
+```csharp
+using System.Text.Json.Serialization;
+using Microsoft.TypeChat.Schema;
+
+namespace Sentiment;
+
+public class SentimentResponse
+{
+    [JsonPropertyName("sentiment")]
+    [JsonVocab("negative | neutral | positive")]
+    public string Sentiment { get; set; }
+}
+```
+
+---
+### <a style={{textDecorationLine: "none"}} id="example-marvin">Marvin</a>
+
+From the [Marvin docs](https://www.askmarvin.ai/docs/text/functions/#parameters):
+
+```python
+import marvin
+from pydantic import BaseModel
+
+class Recipe(BaseModel):
+    name: str
+    cook_time_minutes: int
+    ingredients: list[str]
+    steps: list[str]
+
+@marvin.fn
+def recipe(
+    ingredients: list[str],
+    max_cook_time: int = 15,
+    cuisine: str = "North Italy",
+    experience_level:str = "beginner"
+) -> Recipe:
+    """
+    Returns a complete recipe that uses all the `ingredients` and
+    takes less than `max_cook_time`  minutes to prepare. Takes
+    `cuisine` style and the chef's `experience_level` into account
+    as well.
+    """
+```
+</div>
+
+## Last thoughts
+
+This is a living document, and we'll be updating it as we learn more about other frameworks.
+
+If you have any questions, comments, or suggestions, feel free to reach out to us on [Discord](https://discord.gg/BTNBeXGuaS) or Twitter at [@boundaryml](https://x.com/boundaryML). We're happy to also meet and help with any prompting / AI engineering questions you might have.

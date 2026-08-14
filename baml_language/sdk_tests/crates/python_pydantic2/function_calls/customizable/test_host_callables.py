@@ -33,10 +33,13 @@ from baml_sdk.host_callable_tests import (
     call_with_two_args,
     call_with_typed_throws,
     call_with_typed_throws_propagating,
+    make_adder,
+    make_counter,
+    make_pair_builder,
 )
 
 
-def test_simple_sync_callable_returns_string():
+def test_host_callables_simple_sync_callable_returns_string():
     def cb(x: int) -> str:
         return f"got {x}"
 
@@ -44,7 +47,7 @@ def test_simple_sync_callable_returns_string():
     assert result == "got 5"
 
 
-def test_two_arg_callable_unpacks_positional_args():
+def test_host_callables_two_arg_callable_unpacks_positional_args():
     def cb(x: int, prefix: str) -> str:
         return f"{prefix}:{x}"
 
@@ -52,7 +55,7 @@ def test_two_arg_callable_unpacks_positional_args():
     assert result == "answer:7"
 
 
-def test_int_return_callable_round_trip():
+def test_host_callables_int_return_callable_round_trip():
     def cb(x: int) -> int:
         return x * 2
 
@@ -60,7 +63,29 @@ def test_int_return_callable_round_trip():
     assert result == 42
 
 
-def test_throwing_callable_round_trips_original_python_exception():
+# SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness
+def test_baml_closure_is_a_native_callable_with_host_language_arguments():
+    add_ten = make_adder(offset=10)
+    assert callable(add_ten)
+    assert add_ten(5) == 15
+    assert add_ten(value=7) == 17
+
+
+# SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness
+def test_baml_closure_decodes_multiple_args_and_structured_return_values():
+    build = make_pair_builder(base=30)
+    assert build(12, "Ada") == Person(name="Ada", age=42)
+    assert build(delta=5, label="Grace") == Person(name="Grace", age=35)
+
+
+# SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness
+def test_baml_closure_is_reusable_and_retains_mutable_captures():
+    next_value = make_counter(start=40)
+    assert next_value() == 41
+    assert next_value() == 42
+
+
+def test_host_callables_throwing_callable_round_trips_original_python_exception():
     """A native Python exception raised inside a host callable surfaces
     back to the caller as the *same* exception object (`raised is caught`
     identity), not flattened into a `BamlError(HostCallable(...))`
@@ -80,7 +105,7 @@ def test_throwing_callable_round_trips_original_python_exception():
     assert str(exc_info.value) == "nope"
 
 
-def test_throwing_callable_keyerror_round_trips_with_identity():
+def test_host_callables_throwing_callable_keyerror_round_trips_with_identity():
     """The native-exception rehydration path is class-agnostic: any
     `BaseException` subclass round-trips by reference, not just
     `ValueError`. Different exception classes should not collide in the
@@ -95,7 +120,7 @@ def test_throwing_callable_keyerror_round_trips_with_identity():
     assert exc_info.value is raised
 
 
-def test_throwing_callable_custom_python_exception_round_trips_with_identity():
+def test_host_callables_throwing_callable_custom_python_exception_round_trips_with_identity():
     """A user-defined Python exception subclass also round-trips by
     identity — the bridge doesn't care about the concrete type."""
 
@@ -115,7 +140,7 @@ def test_throwing_callable_custom_python_exception_round_trips_with_identity():
     assert exc_info.value.code == 42
 
 
-def test_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml():
+def test_host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml():
     """When the host raises `BamlError(value=<codegenned BAML class>)`,
     the bridge unwraps the inner pydantic model and emits it as that
     real BAML class on the wire — not as an opaque `HostCallable` with
@@ -137,7 +162,7 @@ def test_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml
     assert result == "caught: bad shape"
 
 
-def test_throwing_callable_bamlerror_propagates_back_with_typed_fields():
+def test_host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields():
     """The same `BamlError(ValidationError(...))` raised by the host,
     when *not* caught in BAML, propagates back out to Python with all
     typed fields preserved on the pydantic instance — the engine
@@ -164,7 +189,7 @@ def test_throwing_callable_bamlerror_propagates_back_with_typed_fields():
     assert decoded.fields == ["x", "y"]
 
 
-def test_throwing_async_callable_round_trips_original_python_exception():
+def test_host_callables_throwing_async_callable_round_trips_original_python_exception():
     """Async callables go through the same `run_if_coroutine` dispatch
     path; native exceptions raised inside the coroutine should round-trip
     by identity just like the sync case."""
@@ -178,7 +203,7 @@ def test_throwing_async_callable_round_trips_original_python_exception():
     assert exc_info.value is raised
 
 
-def test_multiple_throws_in_flight_do_not_collide_in_registry():
+def test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry():
     """Each host throw mints a fresh host-value key; calls in quick
     succession must not see the wrong original exception. Exercises the
     `next_key()` minting + per-call cleanup invariant of the
@@ -208,7 +233,7 @@ def test_multiple_throws_in_flight_do_not_collide_in_registry():
     "collects.",
     strict=False,
 )
-def test_release_fires_on_drop_of_callable():
+def test_host_callables_release_fires_on_drop_of_callable():
     """After BAML finishes invoking the callable and the engine GCs the
     `Object::HostClosure` it allocated, the registered release callback
     removes the Python callable from the bridge's host-value table.
@@ -229,7 +254,7 @@ def test_release_fires_on_drop_of_callable():
     assert wr() is None, "host callable should be released after BAML drops it"
 
 
-def test_lambda_round_trip():
+def test_host_callables_lambda_round_trip():
     """Lambdas are callable and not pydantic models, so they hit the
     callable-encoding branch in `_set_inbound_value`.
     """
@@ -237,7 +262,7 @@ def test_lambda_round_trip():
     assert result == "lambda-99"
 
 
-def test_async_callable_runs_to_completion():
+def test_host_callables_async_callable_runs_to_completion():
     """Async callables are detected (via `asyncio.iscoroutine` on the
     return value) and run to completion on a fresh asyncio loop inside
     the dispatch thread."""
@@ -252,7 +277,7 @@ def test_async_callable_runs_to_completion():
     assert result == "async-4"
 
 
-def test_multiple_callable_keys_are_distinct():
+def test_host_callables_multiple_callable_keys_are_distinct():
     """Two separately-registered callables must produce two distinct
     keys; invoking one must not call the other."""
 
@@ -271,7 +296,7 @@ def test_multiple_callable_keys_are_distinct():
     assert counter == {"a": 1, "b": 1}
 
 
-def test_class_callback_round_trips_pydantic_model():
+def test_host_callables_class_callback_round_trips_pydantic_model():
     """A user-defined `Person` class round-trips through the callable
     boundary: BAML encodes the `Person` for the engine→host call; the
     Python dispatcher decodes it into the codegen-emitted pydantic
@@ -286,7 +311,7 @@ def test_class_callback_round_trips_pydantic_model():
     assert result == "Ada is 37"
 
 
-def test_call_repeatedly_invokes_callback_n_times():
+def test_host_callables_call_repeatedly_invokes_callback_n_times():
     """Exercises N round-trips through `SysOp::BamlHostCallHostValue`:
     BAML's `for` loop invokes the callable for each iteration; the
     result list collects every callback return value.
@@ -303,7 +328,7 @@ def test_call_repeatedly_invokes_callback_n_times():
     assert invocations == list(range(5))
 
 
-def test_call_repeatedly_with_zero_n_returns_empty_list():
+def test_host_callables_call_repeatedly_with_zero_n_returns_empty_list():
     """N == 0 should produce no callback invocations and an empty
     result list — covers the loop's zero-iteration edge case.
     """
@@ -319,7 +344,7 @@ def test_call_repeatedly_with_zero_n_returns_empty_list():
     assert invocations == []
 
 
-def test_call_with_throwing_in_baml_catches_host_callable_error():
+def test_host_callables_call_with_throwing_in_baml_catches_host_callable_error():
     """The BAML `catch (e)` clause around a host-callable invocation now
     intercepts a host-thrown `baml.errors.HostCallable` and returns the
     recovery branch.
@@ -362,7 +387,7 @@ def optional_args_cb(x: int, y: int = 8, z: int = 9) -> int:
     return x * 100 + y * 10 + z
 
 
-def test_optional_args_all_unset_apply_host_defaults():
+def test_host_callables_optional_args_all_unset_apply_host_defaults():
     """`callback(x)` supplies neither optional. Both are dropped before dispatch,
     so the Python callback runs with only `x` and its own defaults fill `y`/`z`
     (8 and 9), yielding `5*100 + 8*10 + 9 = 589`."""
@@ -371,7 +396,7 @@ def test_optional_args_all_unset_apply_host_defaults():
     ) == [589]
 
 
-def test_optional_args_partially_set_deliver_by_name():
+def test_host_callables_optional_args_partially_set_deliver_by_name():
     """Two calls each supplying exactly one optional by name:
     `callback(x, y = 2)` (→ `500 + 20 + 9 = 529`) then `callback(x, z = 3)`
     (→ `500 + 80 + 3 = 583`). Optionals cross by name, so each supplied value is
@@ -383,7 +408,7 @@ def test_optional_args_partially_set_deliver_by_name():
     ) == [529, 583]
 
 
-def test_optional_args_all_set_deliver_both():
+def test_host_callables_optional_args_all_set_deliver_both():
     """`callback(x, y = 2, z = 3)` supplies both optionals; both arrive by name
     and override the host defaults, yielding `500 + 20 + 3 = 523`."""
     assert call_callback_with_optional_args_all_set(

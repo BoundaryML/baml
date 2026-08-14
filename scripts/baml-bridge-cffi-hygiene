@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""Reject build-machine paths and credential-shaped strings in shipping CFFI binaries."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+
+MAX_PATH_EXAMPLES = 8
+
+ASCII_STRINGS = re.compile(rb"[\x20-\x7e]{4,}")
+UTF16LE_STRINGS = re.compile(rb"(?:[\x20-\x7e]\x00){4,}")
+
+PATH_PATTERNS = (
+    re.compile(
+        r"/home/runner/(?:work|\.cargo|\.rustup)/[^\x00\r\n\t \"']*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"/Users/runner/(?:work|\.cargo|\.rustup)/[^\x00\r\n\t \"']*",
+        re.IGNORECASE,
+    ),
+    re.compile(r"/github/workspace/[^\x00\r\n\t \"']*", re.IGNORECASE),
+    re.compile(
+        r"/root/(?:dev|\.cargo|\.rustup)/[^\x00\r\n\t \"']*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"/usr/local/(?:cargo|rustup)/[^\x00\r\n\t \"']*",
+        re.IGNORECASE,
+    ),
+    re.compile(r"/builds/[^\x00\r\n\t \"']*", re.IGNORECASE),
+    re.compile(
+        r"(?<![^\s=\"'])/project/[^\x00\r\n\t \"']*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![^\s=\"'])/cargo/[^\x00\r\n\t \"']*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![^\s=\"'])/rust/(?:toolchains|downloads|tmp)/[^\x00\r\n\t \"']*",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(?<![^\s=\"'])/rust/settings\.toml", re.IGNORECASE),
+    re.compile(
+        r"[A-Z]:[\\/](?:Users|a)[\\/][^\x00\r\n\t \"']*",
+        re.IGNORECASE,
+    ),
+)
+
+CREDENTIAL_PATTERNS = (
+    (
+        "private-key header",
+        re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    ),
+    (
+        "GitHub token",
+        re.compile(r"(?:github_pat_[A-Za-z0-9_]+|ghp_[A-Za-z0-9]{20,})"),
+    ),
+    ("AWS access key", re.compile(r"AKIA[0-9A-Z]{16}")),
+)
+
+
+def binary_strings(data: bytes) -> list[str]:
+    """Return printable ASCII and UTF-16LE strings without invoking platform tools."""
+    strings = [
+        match.group().decode("ascii", errors="strict")
+        for match in ASCII_STRINGS.finditer(data)
+    ]
+    strings.extend(
+        match.group().decode("utf-16le", errors="strict")
+        for match in UTF16LE_STRINGS.finditer(data)
+    )
+    return strings
+
+
+def redact_credentials(value: str) -> str:
+    """Replace credential-shaped material before rendering diagnostics."""
+    for _category, pattern in CREDENTIAL_PATTERNS:
+        value = pattern.sub("<redacted>", value)
+    return value
+
+
+def find_path_violations(strings: list[str]) -> list[str]:
+    """Collect unique forbidden build paths from extracted binary strings."""
+    violations: set[str] = set()
+    for value in strings:
+        for pattern in PATH_PATTERNS:
+            for match in pattern.finditer(value):
+                violations.add(redact_credentials(match.group())[:240])
+    return sorted(violations, key=str.casefold)
+
+
+def find_credential_categories(strings: list[str]) -> list[str]:
+    """Return credential categories without retaining or exposing their values."""
+    categories = {
+        category
+        for value in strings
+        for category, pattern in CREDENTIAL_PATTERNS
+        if pattern.search(value)
+    }
+    return sorted(categories)
+
+
+def verify(native: Path, target: str) -> int:
+    """Verify one native artifact and return a process-style exit status."""
+    if not native.is_file():
+        print(f"native artifact does not exist: {native}", file=sys.stderr)
+        return 1
+
+    strings = binary_strings(native.read_bytes())
+    paths = find_path_violations(strings)
+    credentials = find_credential_categories(strings)
+
+    if paths:
+        print(
+            f"shipping native contains absolute build-tree paths: {target}",
+            file=sys.stderr,
+        )
+        for path in paths[:MAX_PATH_EXAMPLES]:
+            print(f"  - {path}", file=sys.stderr)
+        if len(paths) > MAX_PATH_EXAMPLES:
+            print(
+                f"  - showing {MAX_PATH_EXAMPLES} of {len(paths)} unique paths",
+                file=sys.stderr,
+            )
+
+    if credentials:
+        print(
+            "shipping native contains credential-shaped material: "
+            f"{target} ({', '.join(credentials)})",
+            file=sys.stderr,
+        )
+
+    if paths or credentials:
+        return 1
+
+    print(f"artifact hygiene verified: {target}")
+    return 0
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse the hygiene checker's command-line interface."""
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="verify one shipping native artifact",
+    )
+    verify_parser.add_argument("--native", type=Path, required=True)
+    verify_parser.add_argument("--target", required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    """Run the requested hygiene command."""
+    args = parse_args()
+    if args.command == "verify":
+        return verify(args.native, args.target)
+    raise AssertionError(f"unhandled command: {args.command}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
