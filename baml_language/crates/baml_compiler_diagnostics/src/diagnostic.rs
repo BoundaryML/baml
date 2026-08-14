@@ -157,12 +157,6 @@ pub enum DiagnosticId {
     TestFieldAttribute,
     UnknownFunctionInTest,
 
-    // Type builder diagnostics (E0040-E0043)
-    TypeBuilderInNonTestContext,
-    DuplicateTypeBuilderBlock,
-    IncompleteDynamicDefinition,
-    TypeBuilderSyntaxError,
-
     // Reserved prefix diagnostics
     ReservedStreamPrefix,
 
@@ -454,12 +448,6 @@ impl DiagnosticId {
             DiagnosticId::MissingTestProperty => "E0035",
             DiagnosticId::TestFieldAttribute => "E0036",
             DiagnosticId::UnknownFunctionInTest => "E0088",
-
-            // Type builder diagnostics
-            DiagnosticId::TypeBuilderInNonTestContext => "E0040",
-            DiagnosticId::DuplicateTypeBuilderBlock => "E0041",
-            DiagnosticId::IncompleteDynamicDefinition => "E0042",
-            DiagnosticId::TypeBuilderSyntaxError => "E0043",
 
             // Cycle detection diagnostics
             DiagnosticId::AliasCycle => "E0068",

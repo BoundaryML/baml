@@ -15,9 +15,9 @@ use crate::{
     ast::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
-        LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param, PatId,
-        Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
-        TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
+        LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin, MapExprEntry, MatchArm, MatchArmId,
+        ObjectExprField, Param, PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch,
+        TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
 
@@ -333,7 +333,7 @@ pub(crate) fn synthesize_llm_spec_body(
     );
 
     // args: { "p": p, ... }
-    let entries: Vec<(ExprId, ExprId)> = param_names
+    let entries: Vec<MapExprEntry> = param_names
         .iter()
         .map(|name| {
             let key = ctx.alloc_expr(
@@ -341,7 +341,7 @@ pub(crate) fn synthesize_llm_spec_body(
                 span,
             );
             let value = ctx.alloc_expr(Expr::Path(vec![name.clone()]), span);
-            (key, value)
+            MapExprEntry::explicit(key, value)
         })
         .collect();
     let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
@@ -368,7 +368,10 @@ pub(crate) fn synthesize_llm_spec_body(
         Expr::Object {
             type_name: baml_base::TypePath::from_dotted("ai.internal.SpecCtx"),
             type_args: vec![],
-            fields: vec![(Name::new("output_format"), of_ref)],
+            fields: vec![ObjectExprField::explicit(
+                Name::new("output_format"),
+                of_ref,
+            )],
             spreads: vec![],
         },
         prompt_start,
@@ -635,11 +638,11 @@ pub(crate) fn synthesize_llm_spec_body(
             type_name: baml_base::TypePath::from_dotted("ai.FunctionSpec"),
             type_args,
             fields: vec![
-                (Name::new("spec_name"), name_lit),
-                (Name::new("args"), args_map),
-                (Name::new("prompt_template"), prompt_lambda),
-                (Name::new("toolbox"), toolbox),
-                (Name::new("default_client"), default_client),
+                ObjectExprField::explicit(Name::new("spec_name"), name_lit),
+                ObjectExprField::explicit(Name::new("args"), args_map),
+                ObjectExprField::explicit(Name::new("prompt_template"), prompt_lambda),
+                ObjectExprField::explicit(Name::new("toolbox"), toolbox),
+                ObjectExprField::explicit(Name::new("default_client"), default_client),
             ],
             spreads: vec![],
         },
@@ -4162,8 +4165,8 @@ impl LoweringContext {
                 type_name: baml_base::TypePath::from_dotted("baml.TaggedString"),
                 type_args: Vec::new(),
                 fields: vec![
-                    (Name::new("parts"), parts_ref),
-                    (Name::new("values"), values_ref),
+                    ObjectExprField::explicit(Name::new("parts"), parts_ref),
+                    ObjectExprField::explicit(Name::new("values"), values_ref),
                 ],
                 spreads: Vec::new(),
             },
@@ -4752,7 +4755,6 @@ impl LoweringContext {
                     {
                         let val_id =
                             self.alloc_expr(Expr::Path(vec![Name::new(&key_segments[0])]), span);
-                        self.source_map.property_shorthand_exprs.insert(val_id);
                         val = Some(val_id);
                     }
                     let key = if key_segments.is_empty() {
@@ -4764,7 +4766,12 @@ impl LoweringContext {
                         if let Some(span) = key_span {
                             field_name_spans.push((val_id, span));
                         }
-                        fields.push((k, val_id));
+                        let field = if seen_colon {
+                            ObjectExprField::explicit(k, val_id)
+                        } else {
+                            ObjectExprField::shorthand(k, val_id)
+                        };
+                        fields.push(field);
                     }
                     position += 1;
                 }
@@ -4858,12 +4865,15 @@ impl LoweringContext {
 
                 if !seen_colon && let Some((name, span)) = shorthand_name {
                     let value = self.alloc_expr(Expr::Path(vec![name]), span);
-                    self.source_map.property_shorthand_exprs.insert(value);
                     val_expr = Some(value);
                 }
 
                 match (key_expr, val_expr) {
-                    (Some(k), Some(v)) => Some((k, v)),
+                    (Some(k), Some(v)) => Some(if seen_colon {
+                        MapExprEntry::explicit(k, v)
+                    } else {
+                        MapExprEntry::shorthand(k, v)
+                    }),
                     _ => None,
                 }
             })

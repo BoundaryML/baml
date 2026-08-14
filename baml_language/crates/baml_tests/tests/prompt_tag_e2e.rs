@@ -100,8 +100,8 @@ async fn backtick_prompt_streams_through_orchestrator() {
         {client}
 
         function Greet(name: string) -> string {{
-            client TestClient
-            prompt `Hello ${{name}}!`
+            client: TestClient
+            prompt: `Hello ${{name}}!`
         }}
 
         function main() -> string {{
@@ -154,8 +154,8 @@ async fn backtick_streaming_renders_output_format() {
         class Person {{ name string }}
 
         function GetPerson() -> Person {{
-            client TestClient
-            prompt `Make a person.${{ctx.output_format}}`
+            client: TestClient
+            prompt: `Make a person.${{ctx.output_format}}`
         }}
 
         function main() -> Person {{

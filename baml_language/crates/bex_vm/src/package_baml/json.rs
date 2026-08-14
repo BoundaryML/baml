@@ -1013,13 +1013,7 @@ fn serialize_class_instance(
 /// runtime media value is an `Object::Instance` of one of these std classes
 /// (carrying a `$rust_type` `_data` field); there is no `Generic` media *value*.
 pub(crate) fn media_kind_from_fqn(fqn: &str) -> Option<MediaKind> {
-    match fqn {
-        "baml.media.Image" => Some(MediaKind::Image),
-        "baml.media.Audio" => Some(MediaKind::Audio),
-        "baml.media.Video" => Some(MediaKind::Video),
-        "baml.media.Pdf" => Some(MediaKind::Pdf),
-        _ => None,
-    }
+    MediaKind::from_wrapper_class_name(fqn)
 }
 
 /// Emit a tagged JSON object for a media value.
@@ -1400,21 +1394,14 @@ fn deserialize_media_by_kind(
     kind: MediaKind,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
-    let class_short = match kind {
-        MediaKind::Image => "Image",
-        MediaKind::Audio => "Audio",
-        MediaKind::Video => "Video",
-        MediaKind::Pdf => "Pdf",
-        MediaKind::Generic => {
-            return Err(raise_decode(
-                vm,
-                "cannot deserialize generic media — type must be concrete (image|audio|video|pdf)",
-                path,
-            ));
-        }
+    let Some(fqn) = kind.wrapper_class_name() else {
+        return Err(raise_decode(
+            vm,
+            "cannot deserialize generic media - type must be concrete (image|audio|video|pdf)",
+            path,
+        ));
     };
-    let fqn_string = format!("baml.media.{class_short}");
-    let qtn = TypeName::from_dotted_path(&fqn_string);
+    let qtn = TypeName::from_dotted_path(fqn);
     deserialize_media(vm, json, kind, &qtn, path)
 }
 
@@ -1435,35 +1422,20 @@ fn deserialize_media(
             ));
         }
     };
-
-    // The envelope's `kind` tag is the discriminant, so it must agree with the
-    // target media kind. Without this check nothing in a media decode can
-    // reject a mismatched envelope, and the first-match-wins union arm in
-    // `ty_serde_to_value` collapses every media kind onto the union's first
-    // member (an audio envelope decoding as an `Image` through
-    // `image | audio`). `Generic` is the "any media" tag and discriminates
-    // nothing. An absent (or null) `kind` is accepted for any target —
-    // hand-built `{source, value, mime}` objects stay decodable — which also
-    // means such an envelope still selects a media union's first member.
-    match map.get("kind") {
-        None | Some(serde_json::Value::Null) => {}
-        Some(serde_json::Value::String(tag))
-            if kind == MediaKind::Generic
-                || tag == kind.tag_str()
-                || tag == MediaKind::Generic.tag_str() => {}
-        Some(serde_json::Value::String(tag)) => {
-            let expected = kind.tag_str();
-            return Err(raise_decode(
-                vm,
-                format!("media kind mismatch: envelope is `{tag}`, expected `{expected}`"),
-                path,
-            ));
-        }
-        Some(_) => {
-            return Err(raise_decode(vm, "media object `kind` must be a string", path));
-        }
+    let tagged_kind = map
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| raise_decode(vm, "media object missing `kind`", path))?;
+    if tagged_kind != kind.tag_str() {
+        return Err(raise_decode(
+            vm,
+            format!(
+                "media kind mismatch: expected `{}`, got `{tagged_kind}`",
+                kind.tag_str()
+            ),
+            path,
+        ));
     }
-
     let source = map
         .get("source")
         .and_then(serde_json::Value::as_str)

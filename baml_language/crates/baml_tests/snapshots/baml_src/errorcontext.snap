@@ -150,8 +150,7 @@ function errorcontext.ec_deferthrow_check() -> bool {
     load_var rendered
     load_const "origin"
     call baml.String.index_of
-    store_var _3
-    load_var _3
+    store_var_load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
@@ -165,14 +164,15 @@ function errorcontext.ec_deferthrow_check() -> bool {
   L1:
     load_const 1
     unary_op -
-    store_var origin_at
+    store_var _3
 
-  L2:
+  L0:
+    load_var _3
+    store_var origin_at
     load_var rendered
     load_const "wrap"
     call baml.String.index_of
-    store_var _6
-    load_var _6
+    store_var_load_var _7
     load_const null
     cmp_op ==
     pop_jump_if_false L3
@@ -186,14 +186,15 @@ function errorcontext.ec_deferthrow_check() -> bool {
   L4:
     load_const 1
     unary_op -
-    store_var wrap_at
+    store_var _7
 
-  L5:
+  L1:
+    load_var _7
+    store_var wrap_at
     load_var rendered
     load_const "cleanup"
     call baml.String.index_of
-    store_var _9
-    load_var _9
+    store_var_load_var _11
     load_const null
     cmp_op ==
     pop_jump_if_false L6
@@ -207,9 +208,11 @@ function errorcontext.ec_deferthrow_check() -> bool {
   L7:
     load_const 1
     unary_op -
-    store_var cleanup_at
+    store_var _11
 
-  L8:
+  L2:
+    load_var _11
+    store_var cleanup_at
     load_var origin_at
     load_const 0
     cmp_int_op >=

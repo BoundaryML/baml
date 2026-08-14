@@ -11,20 +11,14 @@ function user.use_method_type_args() -> int {
     load_const "x"
     init_instance user.Foo .tag
     call user.Foo.zero
-    store_var _3
-    load_var _3
+    store_var_load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_const 5
+    store_var _3
 
   L0:
     load_var _3
-    jump L2
-
-  L1:
-    load_const 5
-
-  L2:
     return
 }

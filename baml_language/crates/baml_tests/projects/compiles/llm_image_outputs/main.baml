@@ -4,24 +4,24 @@
 // the runner builds these output types from.
 
 function GenerateImage(prompt: string) -> image {
-  client "openai-images/gpt-image-1"
-  prompt `
+  client: OpenAIImageResponses
+  prompt: `
     Generate an image for this prompt:
     ${prompt}
   `
 }
 
 function GenerateImageSet(prompt: string) -> image[] {
-  client "openai-images/gpt-image-1"
-  prompt `
+  client: OpenAIImageResponses
+  prompt: `
     Generate multiple distinct image outputs for this prompt:
     ${prompt}
   `
 }
 
 function GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
-  client "openai/gpt-4.1"
-  prompt `
+  client: OpenAIImageResponses
+  prompt: `
     Generate a short narrative with text captions and image outputs for:
     ${prompt}
 

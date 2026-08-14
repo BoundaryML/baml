@@ -28,8 +28,8 @@ fn editing_function_body_preserves_item_tree() {
         "test.baml",
         r##"
 function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 "##,
     );
@@ -45,8 +45,8 @@ function Greet(name: string) -> string {
     // Modify only the prompt (body change)
     file.set_text(test_db.db_mut()).to(r##"
 function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hi there ${name}!`
+    client: GPT4
+    prompt: `Hi there ${name}!`
 }
 "##
     .to_string());
@@ -71,8 +71,8 @@ fn renaming_function_invalidates_item_tree() {
         "test.baml",
         r##"
 function OldName(x: string) -> string {
-    client GPT4
-    prompt `test`
+    client: GPT4
+    prompt: `test`
 }
 "##,
     );
@@ -88,8 +88,8 @@ function OldName(x: string) -> string {
     // Rename the function
     file.set_text(test_db.db_mut()).to(r##"
 function NewName(x: string) -> string {
-    client GPT4
-    prompt `test`
+    client: GPT4
+    prompt: `test`
 }
 "##
     .to_string());
@@ -264,8 +264,8 @@ fn type_inference_cached_on_no_change() {
         "test.baml",
         r##"
 function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 "##,
     );
@@ -285,8 +285,8 @@ fn type_inference_cached_on_whitespace_change() {
     let file = test_db.db_mut().add_file(
         "test.baml",
         r##"function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }"##,
     );
 
@@ -296,8 +296,8 @@ fn type_inference_cached_on_whitespace_change() {
     // Add whitespace (blank lines at end)
     file.set_text(test_db.db_mut())
         .to(r##"function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 
 
@@ -322,8 +322,8 @@ fn type_inference_invalidated_on_signature_change() {
         "test.baml",
         r##"
 function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 "##,
     );
@@ -334,8 +334,8 @@ function Greet(name: string) -> string {
     // Change the return type
     file.set_text(test_db.db_mut()).to(r##"
 function Greet(name: string) -> int {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 "##
     .to_string());
@@ -613,7 +613,7 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
          function Sub(x: int, y: int) -> int {\n  x - y\n}\n\n\
          class Holder {\n  n int\n\n  function get(self) -> int {\n    self.n\n  }\n}\n\n\
          function Greet(name: string) -> string {\n  \
-         client \"openai/gpt-4o-mini\"\n  prompt `Hello ${name}`\n}\n",
+         client: \"openai/gpt-4o-mini\"\n  prompt: `Hello ${name}`\n}\n",
     );
 
     let db = test_db.db();
@@ -927,7 +927,7 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
 
     let file = test_db.db_mut().add_file(
         "test.baml",
-        "function Greet(name: string) -> string {\n  client GPT4\n  prompt `Hi ${name}`\n}\n",
+        "function Greet(name: string) -> string {\n  client: GPT4\n  prompt: `Hi ${name}`\n}\n",
     );
 
     let before = {
@@ -939,7 +939,7 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
     // Rewrite only the prompt — the client (the one fact the projection keeps) is
     // untouched.
     file.set_text(test_db.db_mut()).to(
-        "function Greet(name: string) -> string {\n  client GPT4\n  prompt `Hello there ${name}!`\n}\n"
+        "function Greet(name: string) -> string {\n  client: GPT4\n  prompt: `Hello there ${name}!`\n}\n"
             .to_string(),
     );
 

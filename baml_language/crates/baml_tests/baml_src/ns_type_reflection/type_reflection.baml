@@ -20,13 +20,13 @@ class Foo { x int }
 class Bar { y string }
 
 function GetFoo() -> Foo {
-    client TestClient
-    prompt `hi`
+    client: TestClient
+    prompt: `hi`
 }
 
 function GetBar() -> Bar {
-    client TestClient
-    prompt `hi`
+    client: TestClient
+    prompt: `hi`
 }
 
 // ─── Equality / inequality tests ─────────────────────────────────────────────

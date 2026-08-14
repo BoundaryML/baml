@@ -4,368 +4,189 @@ source: crates/baml_tests/tests/baml_src.rs
 function media_json_union.$init_test_ns_media_json_union_media_json_union(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.media_json_union"
-    load_const "media_json_union_audio_decodes_as_audio_when_image_is_first"
+    load_const "media JSON unions roundtrip every kind"
     make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 0)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.media_json_union"
-    load_const "media_json_union_image_decodes_as_image_when_audio_is_first"
+    load_const "media JSON unions respect reversed order"
     make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 1)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.media_json_union"
-    load_const "media_json_union_string_roundtrip_discriminates"
+    load_const "media JSON rejects missing kind"
     make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 2)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.media_json_union"
-    load_const "media_json_union_four_way_primitive_union"
+    load_const "media JSON rejects mismatched concrete kind"
     make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 3)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.media_json_union"
-    load_const "media_json_union_preserves_url_payload"
+    load_const "media JSON rejects generic kind"
     make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 4)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
-    load_var registry
-    load_const "root.media_json_union"
-    load_const "media_json_union_wrapper_class_union_audio"
-    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 5)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.media_json_union"
-    load_const "media_json_union_wrapper_class_union_image"
-    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 6)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.media_json_union"
-    load_const "media_json_union_ai_media_part_four_way"
-    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 7)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.media_json_union"
-    load_const "media_json_union_ai_content_media_new_kinds"
-    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 8)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.media_json_union"
-    load_const "media_json_union_class_or_image"
-    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 9)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.media_json_union"
-    load_const "media_json_union_direct_mismatched_kind_fails"
-    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 10)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.media_json_union"
-    load_const "media_json_union_direct_matching_kind_succeeds"
-    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 11)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.media_json_union"
-    load_const "media_json_union_kindless_envelope_still_decodes"
-    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 12)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
     load_const null
     return
 }
 
-function media_json_union.mju_audio() -> audio {
-    load_const "d29ybGQ="
-    load_const "audio/mpeg"
-    call baml.media.Audio.from_base64
-    return
-}
-
-function media_json_union.mju_audio_through_image_first() -> string {
-    call user.media_json_union.mju_audio
-    store_var _3
-    load_type audio
-    load_var _3
-    call baml.json.to_json
-    store_var _2
-    load_type image | audio
-    load_var _2
-    call baml.json.from_json
-    call user.media_json_union.mju_describe
-    return
-}
-
-function media_json_union.mju_content_media_kinds() -> string {
-    call user.media_json_union.mju_image
-    load_const <omitted>
-    load_const <omitted>
-    call ai.content.Media.new
-    store_var i
-    call user.media_json_union.mju_audio
-    load_const <omitted>
-    load_const <omitted>
-    call ai.content.Media.new
-    store_var a
-    call user.media_json_union.mju_video
-    load_const <omitted>
-    load_const <omitted>
-    call ai.content.Media.new
-    store_var v
-    call user.media_json_union.mju_pdf
-    load_const <omitted>
-    load_const <omitted>
-    call ai.content.Media.new
-    store_var p
-    load_var i
-    call ai.content.Media.kind
-    store_var _15
-    load_type string
-    load_var _15
-    call baml.String.from
-    store_var _14
-    load_var a
-    call ai.content.Media.kind
-    store_var _18
-    load_type string
-    load_var _18
-    call baml.String.from
-    store_var _17
-    load_var v
-    call ai.content.Media.kind
-    store_var _21
-    load_type string
-    load_var _21
-    call baml.String.from
-    store_var _20
-    load_var p
-    call ai.content.Media.kind
-    store_var _24
-    load_type string
-    load_var _24
-    call baml.String.from
-    store_var _23
-    load_var _14
-    load_const "|"
-    bin_op +
-    load_var _17
-    bin_op +
-    load_const "|"
-    bin_op +
-    load_var _20
-    bin_op +
-    load_const "|"
-    bin_op +
-    load_var _23
-    bin_op +
-    return
-}
-
-function media_json_union.mju_describe(v: image | audio | video | pdf) -> string {
-    load_var v
-    store_var _2
-    load_var _2
-    narrow_bind image, slot=2
+function media_json_union.classify_media_json_union(value: image | audio | video | pdf) -> string {
+    load_var value
+    is_type image
     pop_jump_if_false L0
-    jump L14
-
-  L0:
-    load_var v
-    store_var _9
-    load_var _9
-    narrow_bind audio, slot=6
-    pop_jump_if_false L1
-    jump L10
-
-  L1:
-    load_var v
-    store_var _16
-    load_var _16
-    narrow_bind video, slot=10
-    pop_jump_if_false L2
-    jump L6
-
-  L2:
-    load_var v
-    call baml.media.Pdf.mime_type
-    store_var _26
-    load_var _26
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _26
-    store_var _25
     jump L5
 
+  L0:
+    load_var value
+    is_type audio
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var value
+    is_type video
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "pdf"
+    jump L6
+
+  L3:
+    load_const "video"
+    jump L6
+
   L4:
-    load_const "none"
-    store_var _25
+    load_const "audio"
+    jump L6
 
   L5:
-    load_type string
-    load_var _25
-    call baml.String.from
-    store_var _24
-    load_const "pdf|"
-    load_var _24
-    bin_op +
-    jump L18
+    load_const "image"
 
   L6:
-    load_var _16
-    call baml.media.Video.mime_type
-    store_var _20
-    load_var _20
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L7
-    jump L8
-
-  L7:
-    load_var _20
-    store_var _19
-    jump L9
-
-  L8:
-    load_const "none"
-    store_var _19
-
-  L9:
-    load_type string
-    load_var _19
-    call baml.String.from
-    store_var _18
-    load_const "video|"
-    load_var _18
-    bin_op +
-    jump L18
-
-  L10:
-    load_var _9
-    call baml.media.Audio.mime_type
-    store_var _13
-    load_var _13
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L11
-    jump L12
-
-  L11:
-    load_var _13
-    store_var _12
-    jump L13
-
-  L12:
-    load_const "none"
-    store_var _12
-
-  L13:
-    load_type string
-    load_var _12
-    call baml.String.from
-    store_var _11
-    load_const "audio|"
-    load_var _11
-    bin_op +
-    jump L18
-
-  L14:
-    load_var _2
-    call baml.media.Image.mime_type
-    store_var _6
-    load_var _6
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L15
-    jump L16
-
-  L15:
-    load_var _6
-    store_var _5
-    jump L17
-
-  L16:
-    load_const "none"
-    store_var _5
-
-  L17:
-    load_type string
-    load_var _5
-    call baml.String.from
-    store_var _4
-    load_const "image|"
-    load_var _4
-    bin_op +
-
-  L18:
     return
 }
 
-function media_json_union.mju_direct_match_still_works() -> string {
-    call user.media_json_union.mju_audio
+function media_json_union.media_json_union_respects_reversed_order() -> string {
+    load_const "aGk="
+    load_const "image/png"
+    call baml.media.Image.from_base64
     store_var _2
-    load_type audio
+    load_type image
     load_var _2
     call baml.json.to_json
-    store_var envelope
-    load_type audio
-    load_var envelope
+    store_var json
+    load_type audio | image
+    load_var json
     call baml.json.from_json
-    call baml.media.Audio.mime_type
-    store_var _4
-    load_var _4
-    load_const null
-    cmp_op ==
+    is_type audio
     pop_jump_if_false L0
     jump L1
 
   L0:
-    load_var _4
+    load_const "image"
     jump L2
 
   L1:
-    load_const "none"
+    load_const "audio"
 
   L2:
     return
 }
 
-function media_json_union.mju_direct_mismatch() -> string {
-    call user.media_json_union.mju_audio
+function media_json_union.media_json_union_roundtrips_every_kind() -> string {
+    load_const "aGk="
+    load_const "image/png"
+    call baml.media.Image.from_base64
     store_var _2
-    load_type audio
+    load_type image
     load_var _2
     call baml.json.to_json
-    store_var envelope
-    load_type image
-    load_var envelope
+    store_var image_json
+    load_const "aGk="
+    load_const "audio/mpeg"
+    call baml.media.Audio.from_base64
+    store_var _5
+    load_type audio
+    load_var _5
+    call baml.json.to_json
+    store_var audio_json
+    load_const "aGk="
+    load_const "video/mp4"
+    call baml.media.Video.from_base64
+    store_var _8
+    load_type video
+    load_var _8
+    call baml.json.to_json
+    store_var video_json
+    load_const "aGk="
+    load_const "application/pdf"
+    call baml.media.Pdf.from_base64
+    store_var _11
+    load_type pdf
+    load_var _11
+    call baml.json.to_json
+    store_var pdf_json
+    load_type image | audio | video | pdf
+    load_var image_json
     call baml.json.from_json
-    store_var decoded
+    store_var image_value
+    load_type image | audio | video | pdf
+    load_var audio_json
+    call baml.json.from_json
+    store_var audio_value
+    load_type image | audio | video | pdf
+    load_var video_json
+    call baml.json.from_json
+    store_var video_value
+    load_type image | audio | video | pdf
+    load_var pdf_json
+    call baml.json.from_json
+    store_var pdf_value
+    load_var image_value
+    call user.media_json_union.classify_media_json_union
+    store_var _30
+    load_var audio_value
+    call user.media_json_union.classify_media_json_union
+    store_var _32
+    load_var video_value
+    call user.media_json_union.classify_media_json_union
+    store_var _34
+    load_var pdf_value
+    call user.media_json_union.classify_media_json_union
+    store_var _36
+    load_var _30
+    load_const ","
+    bin_op +
+    load_var _32
+    bin_op +
+    load_const ","
+    bin_op +
+    load_var _34
+    bin_op +
+    load_const ","
+    bin_op +
+    load_var _36
+    bin_op +
+    return
+}
+
+function media_json_union.rejects_media_json(json: string) -> bool {
+    load_type #0
+    load_var json
+    call baml.json.from_string
+    pop 1
     jump L2
     load_var e
     is_type baml.json.JsonDecodeError
@@ -377,664 +198,12 @@ function media_json_union.mju_direct_mismatch() -> string {
     rethrow
 
   L1:
-    load_const null
-    store_var decoded
-
-  L2:
-    load_var decoded
-    store_var _9
-    load_var _9
-    narrow_bind image, slot=5
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const "decode-error"
-    jump L8
-
-  L4:
-    load_var _9
-    call baml.media.Image.mime_type
-    store_var _13
-    load_var _13
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_var _13
-    store_var _12
-    jump L7
-
-  L6:
-    load_const "none"
-    store_var _12
-
-  L7:
-    load_type string
-    load_var _12
-    call baml.String.from
-    store_var _11
-    load_const "decoded:"
-    load_var _11
-    bin_op +
-
-  L8:
-    return
-}
-
-function media_json_union.mju_four_way_tags() -> string {
-    call user.media_json_union.mju_image
-    store_var _3
-    load_type image
-    load_var _3
-    call baml.json.to_json
-    store_var _2
-    load_type image | audio | video | pdf
-    load_var _2
-    call baml.json.from_json
-    store_var i
-    call user.media_json_union.mju_audio
-    store_var _8
-    load_type audio
-    load_var _8
-    call baml.json.to_json
-    store_var _7
-    load_type image | audio | video | pdf
-    load_var _7
-    call baml.json.from_json
-    store_var a
-    call user.media_json_union.mju_video
-    store_var _13
-    load_type video
-    load_var _13
-    call baml.json.to_json
-    store_var _12
-    load_type image | audio | video | pdf
-    load_var _12
-    call baml.json.from_json
-    store_var v
-    call user.media_json_union.mju_pdf
-    store_var _18
-    load_type pdf
-    load_var _18
-    call baml.json.to_json
-    store_var _17
-    load_type image | audio | video | pdf
-    load_var _17
-    call baml.json.from_json
-    store_var p
-    load_var i
-    call user.media_json_union.mju_tag
-    store_var _27
-    load_type string
-    load_var _27
-    call baml.String.from
-    store_var _26
-    load_var a
-    call user.media_json_union.mju_tag
-    store_var _31
-    load_type string
-    load_var _31
-    call baml.String.from
-    store_var _30
-    load_var v
-    call user.media_json_union.mju_tag
-    store_var _35
-    load_type string
-    load_var _35
-    call baml.String.from
-    store_var _34
-    load_var p
-    call user.media_json_union.mju_tag
-    store_var _39
-    load_type string
-    load_var _39
-    call baml.String.from
-    store_var _38
-    load_var _26
-    load_const "|"
-    bin_op +
-    load_var _30
-    bin_op +
-    load_const "|"
-    bin_op +
-    load_var _34
-    bin_op +
-    load_const "|"
-    bin_op +
-    load_var _38
-    bin_op +
-    return
-}
-
-function media_json_union.mju_image() -> image {
-    load_const "aGVsbG8="
-    load_const "image/png"
-    call baml.media.Image.from_base64
-    return
-}
-
-function media_json_union.mju_image_through_audio_first() -> string {
-    call user.media_json_union.mju_image
-    store_var _3
-    load_type image
-    load_var _3
-    call baml.json.to_json
-    store_var _2
-    load_type audio | image
-    load_var _2
-    call baml.json.from_json
-    call user.media_json_union.mju_describe
-    return
-}
-
-function media_json_union.mju_kindless_envelope() -> string {
-    load_type baml.json.json
-    load_const "{\"source\":\"base64\",\"value\":\"aGVsbG8=\",\"mime\":\"image/png\"}"
-    call baml.json.from_string
-    store_var envelope
-    load_type image
-    load_var envelope
-    call baml.json.from_json
-    call user.media_json_union.mju_describe
-    return
-}
-
-function media_json_union.mju_media_part_tags() -> string {
-    call user.media_json_union.mju_image
-    store_var _3
-    load_type image
-    load_var _3
-    call baml.json.to_json
-    store_var _2
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
-    load_var _2
-    call baml.json.from_json
-    store_var i
-    call user.media_json_union.mju_audio
-    store_var _8
-    load_type audio
-    load_var _8
-    call baml.json.to_json
-    store_var _7
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
-    load_var _7
-    call baml.json.from_json
-    store_var a
-    call user.media_json_union.mju_video
-    store_var _13
-    load_type video
-    load_var _13
-    call baml.json.to_json
-    store_var _12
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
-    load_var _12
-    call baml.json.from_json
-    store_var v
-    call user.media_json_union.mju_pdf
-    store_var _18
-    load_type pdf
-    load_var _18
-    call baml.json.to_json
-    store_var _17
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
-    load_var _17
-    call baml.json.from_json
-    store_var p
-    load_var i
-    call user.media_json_union.mju_part_tag
-    store_var _27
-    load_type string
-    load_var _27
-    call baml.String.from
-    store_var _26
-    load_var a
-    call user.media_json_union.mju_part_tag
-    store_var _31
-    load_type string
-    load_var _31
-    call baml.String.from
-    store_var _30
-    load_var v
-    call user.media_json_union.mju_part_tag
-    store_var _35
-    load_type string
-    load_var _35
-    call baml.String.from
-    store_var _34
-    load_var p
-    call user.media_json_union.mju_part_tag
-    store_var _39
-    load_type string
-    load_var _39
-    call baml.String.from
-    store_var _38
-    load_var _26
-    load_const "|"
-    bin_op +
-    load_var _30
-    bin_op +
-    load_const "|"
-    bin_op +
-    load_var _34
-    bin_op +
-    load_const "|"
-    bin_op +
-    load_var _38
-    bin_op +
-    return
-}
-
-function media_json_union.mju_mixed_note_first() -> string {
-    load_type media_json_union.MjuNote
-    load_const "hi"
-    init_instance user.media_json_union.MjuNote .text
-    call baml.json.to_json
-    store_var _2
-    load_type media_json_union.MjuNote | image
-    load_var _2
-    call baml.json.from_json
-    store_var n
-    call user.media_json_union.mju_image
-    store_var _8
-    load_type image
-    load_var _8
-    call baml.json.to_json
-    store_var _7
-    load_type media_json_union.MjuNote | image
-    load_var _7
-    call baml.json.from_json
-    store_var i
-    load_var n
-    call user.media_json_union.mju_mixed_tag
-    store_var _13
-    load_type string
-    load_var _13
-    call baml.String.from
-    store_var _12
-    load_var i
-    call user.media_json_union.mju_mixed_tag
-    store_var _17
-    load_type string
-    load_var _17
-    call baml.String.from
-    store_var _16
-    load_var _12
-    load_const "|"
-    bin_op +
-    load_var _16
-    bin_op +
-    return
-}
-
-function media_json_union.mju_mixed_tag(v: media_json_union.MjuNote | image) -> string {
-    load_var v
-    store_var _2
-    load_var _2
-    narrow_bind media_json_union.MjuNote, slot=2
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
-    load_var v
-    call baml.media.Image.mime_type
-    store_var _10
-    load_var _10
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var _10
-    store_var _9
+    load_const true
     jump L3
 
   L2:
-    load_const "none"
-    store_var _9
+    load_const false
 
   L3:
-    load_type string
-    load_var _9
-    call baml.String.from
-    store_var _8
-    load_const "image:"
-    load_var _8
-    bin_op +
-    jump L5
-
-  L4:
-    load_type string
-    load_var _2
-    load_field .text
-    call baml.String.from
-    store_var _4
-    load_const "note:"
-    load_var _4
-    bin_op +
-
-  L5:
-    return
-}
-
-function media_json_union.mju_part_tag(v: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf) -> string {
-    load_var v
-    store_var _2
-    load_var _2
-    narrow_bind baml.media.Image, slot=2
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
-    load_var v
-    store_var _3
-    load_var _3
-    narrow_bind baml.media.Audio, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var v
-    store_var _4
-    load_var _4
-    narrow_bind baml.media.Video, slot=4
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_const "pdf"
-    jump L6
-
-  L3:
-    load_const "video"
-    jump L6
-
-  L4:
-    load_const "audio"
-    jump L6
-
-  L5:
-    load_const "image"
-
-  L6:
-    return
-}
-
-function media_json_union.mju_pdf() -> pdf {
-    load_const "cGRm"
-    load_const "application/pdf"
-    call baml.media.Pdf.from_base64
-    return
-}
-
-function media_json_union.mju_string_roundtrip_tags() -> string {
-    call user.media_json_union.mju_audio
-    store_var _3
-    load_type audio
-    load_var _3
-    call baml.json.to_string
-    store_var _2
-    load_type image | audio
-    load_var _2
-    call baml.json.from_string
-    store_var a
-    call user.media_json_union.mju_image
-    store_var _8
-    load_type image
-    load_var _8
-    call baml.json.to_string
-    store_var _7
-    load_type audio | image
-    load_var _7
-    call baml.json.from_string
-    store_var i
-    load_var a
-    call user.media_json_union.mju_tag
-    store_var _13
-    load_type string
-    load_var _13
-    call baml.String.from
-    store_var _12
-    load_var i
-    call user.media_json_union.mju_tag
-    store_var _17
-    load_type string
-    load_var _17
-    call baml.String.from
-    store_var _16
-    load_var _12
-    load_const "|"
-    bin_op +
-    load_var _16
-    bin_op +
-    return
-}
-
-function media_json_union.mju_tag(v: image | audio | video | pdf) -> string {
-    load_var v
-    store_var _2
-    load_var _2
-    narrow_bind image, slot=2
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
-    load_var v
-    store_var _3
-    load_var _3
-    narrow_bind audio, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var v
-    store_var _4
-    load_var _4
-    narrow_bind video, slot=4
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_const "pdf"
-    jump L6
-
-  L3:
-    load_const "video"
-    jump L6
-
-  L4:
-    load_const "audio"
-    jump L6
-
-  L5:
-    load_const "image"
-
-  L6:
-    return
-}
-
-function media_json_union.mju_video() -> video {
-    load_const "https://example.com/clip.mp4"
-    load_const "video/mp4"
-    call baml.media.Video.from_url
-    return
-}
-
-function media_json_union.mju_video_url_roundtrip() -> string {
-    call user.media_json_union.mju_video
-    store_var _3
-    load_type video
-    load_var _3
-    call baml.json.to_json
-    store_var _2
-    load_type image | video
-    load_var _2
-    call baml.json.from_json
-    store_var _1
-    load_var _1
-    store_var _6
-    load_var _6
-    narrow_bind image, slot=4
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
-    load_var _1
-    call baml.media.Video.url
-    store_var _16
-    load_var _16
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var _16
-    store_var _15
-    jump L3
-
-  L2:
-    load_const "none"
-    store_var _15
-
-  L3:
-    load_type string
-    load_var _15
-    call baml.String.from
-    store_var _14
-    load_const "video|"
-    load_var _14
-    bin_op +
-    jump L8
-
-  L4:
-    load_var _6
-    call baml.media.Image.url
-    store_var _10
-    load_var _10
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_var _10
-    store_var _9
-    jump L7
-
-  L6:
-    load_const "none"
-    store_var _9
-
-  L7:
-    load_type string
-    load_var _9
-    call baml.String.from
-    store_var _8
-    load_const "image|"
-    load_var _8
-    bin_op +
-
-  L8:
-    return
-}
-
-function media_json_union.mju_wrapper_audio() -> string {
-    call user.media_json_union.mju_audio
-    store_var _3
-    load_type audio
-    load_var _3
-    call baml.json.to_json
-    store_var _2
-    load_type baml.media.Image | baml.media.Audio
-    load_var _2
-    call baml.json.from_json
-    call user.media_json_union.mju_wrapper_describe
-    return
-}
-
-function media_json_union.mju_wrapper_describe(v: baml.media.Image | baml.media.Audio) -> string {
-    load_var v
-    store_var _2
-    load_var _2
-    narrow_bind baml.media.Image, slot=2
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
-    load_var v
-    call baml.media.Audio.mime_type
-    store_var _12
-    load_var _12
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var _12
-    store_var _11
-    jump L3
-
-  L2:
-    load_const "none"
-    store_var _11
-
-  L3:
-    load_type string
-    load_var _11
-    call baml.String.from
-    store_var _10
-    load_const "audio|"
-    load_var _10
-    bin_op +
-    jump L8
-
-  L4:
-    load_var _2
-    call baml.media.Image.mime_type
-    store_var _6
-    load_var _6
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_var _6
-    store_var _5
-    jump L7
-
-  L6:
-    load_const "none"
-    store_var _5
-
-  L7:
-    load_type string
-    load_var _5
-    call baml.String.from
-    store_var _4
-    load_const "image|"
-    load_var _4
-    bin_op +
-
-  L8:
-    return
-}
-
-function media_json_union.mju_wrapper_image() -> string {
-    call user.media_json_union.mju_image
-    store_var _3
-    load_type image
-    load_var _3
-    call baml.json.to_json
-    store_var _2
-    load_type baml.media.Image | baml.media.Audio
-    load_var _2
-    call baml.json.from_json
-    call user.media_json_union.mju_wrapper_describe
     return
 }

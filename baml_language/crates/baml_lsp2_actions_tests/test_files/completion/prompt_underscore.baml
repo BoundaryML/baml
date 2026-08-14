@@ -3,8 +3,8 @@
 client GPT4 = openai.ResponsesClient.new(model = "gpt-4");
 
 function Chat() -> string {
-    client GPT4
-    prompt `
+    client: GPT4
+    prompt: `
         _.<[CURSOR]
     `
 }

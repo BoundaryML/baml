@@ -22,8 +22,8 @@ class Item {
 // the receipt can be an image OR text here!
 function ExtractReceipt(receipt: image | string) -> Receipt {
   // see clients.baml
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     Extract info from this receipt:
     ${receipt}
 
@@ -73,10 +73,10 @@ class Education {
 
 function ExtractResume(resume_text: string) -> Resume {
   // see clients.baml
-  client GPT4o
+  client: GPT4o
 
   // Change the models or this text and watch the prompt preview change!
-  prompt `
+  prompt: `
     Parse the following resume and return a structured representation of the data in the schema below.
 
     Resume:
@@ -124,9 +124,9 @@ class Message {
 
 // inputs can be more complex than just a string
 function ClassifyMessage(message: Message) -> Category {
-  client GPT4o
+  client: GPT4o
 
-  prompt `
+  prompt: `
     Classify the following INPUT into ONE
     of categories listed.
 
@@ -210,8 +210,8 @@ class WeatherAPI {
 }
 
 function UseTool(user_message: string) -> WeatherAPI {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     Extract the info from this message
     ---
     ${user_message}
@@ -244,8 +244,8 @@ class SendEmail {
 }
 
 function ChooseOneTool(user_message: string) -> WeatherAPI2 | SendEmail {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     Choose the right schema that contains all the information in this message:
     ---
     ${user_message}
@@ -277,8 +277,8 @@ test TestOneFunc2 {
 
 
 function ChooseNTools(user_message: string) -> (WeatherAPI2 | SendEmail)[] {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     Choose the right schema(s) that contains all the information in this message:
     ---
     ${user_message}
@@ -304,8 +304,8 @@ test TestNTools {
 // BAML supports multi-modal inputs!
 
 function AudioInput(audioInput: audio) -> string {
-  client Gemini
-  prompt `
+  client: Gemini
+  prompt: `
    Does this sound like a roar? Yes or no? One word no other characters.
 
     ${audioInput}
@@ -330,8 +330,8 @@ class ImageDescription {
 }
 
 function DescribeImage(myImage: image) -> ImageDescription {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     Describe this in 2 sentences: ${myImage}
 
     ${ctx.output_format}
@@ -349,8 +349,8 @@ test ImageTest {
 // BAML supports multi-modal inputs including Pdfs!
 
 function PdfInput(pdfInput: pdf) -> string {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     Get the title of the pdfs
 
     ${pdfInput}
@@ -369,8 +369,8 @@ test TestFilePdfInput {
 // Note: Video input only works with Google models (Gemini)
 
 function VideoInput(videoInput: video) -> string {
-  client Gemini
-  prompt `
+  client: Gemini
+  prompt: `
     Describe what happens in this video in 5 words or less.
 
     ${videoInput}
@@ -400,12 +400,12 @@ class OEducation {
 
 function ExtractResumeUsingOllama(resume_text: string) -> OResume {
   // see ollama-clients.baml
-  client Llama3
+  client: Llama3
   // client Mistral
   // client Gemma2
   // client Phi3
 
-  prompt `
+  prompt: `
     Parse the following resume and return a structured representation of the data in the schema below.
 
     Resume:
@@ -454,12 +454,12 @@ class OMessage {
 // This will be available as an enum in your Python and Typescript code.
 // inputs can be more complex than just a string
 function ClassifyMessageUsingOllama(message: OMessage) -> OCategory {
-  client Llama3
+  client: Llama3
   // client Mistral
   // client Gemma2
   // client Phi3
 
-  prompt `
+  prompt: `
     Classify the following INPUT into ONE
     of categories listed.
 
@@ -534,8 +534,8 @@ class OrderInfo {
 }
 
 function GetOrderInfo(email: Email) -> OrderInfo {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     Extract the info from this email in the INPUT:
 
     INPUT:
@@ -606,9 +606,9 @@ enum MyClass {
 }
 
 function ClassifyMessageWithSymbol(input: string) -> MyClass {
-  client GPT4o
+  client: GPT4o
 
-  prompt `
+  prompt: `
     Classify the following INPUT into ONE
     of the following categories:
 
@@ -637,9 +637,9 @@ enum MyCategory {
 
 // Prompts are instructions-only now; role markers are gone.
 function ClassifyMessageWithRoles(input: string) -> MyCategory {
-  client GPT4o
+  client: GPT4o
 
-  prompt `
+  prompt: `
     Classify the following INPUT into ONE
     of the following categories:
 
@@ -664,8 +664,8 @@ class User {
 
 // Jinja conditionals are gone; interpolate the flag and let the model decide.
 function FunctionWithConditionals(user: User) -> string {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     The user is ${user.name}. Active: ${user.is_active}.
     If the user is active, greet them; otherwise tell them to activate
     their account.
@@ -678,8 +678,8 @@ class MyUserMessage {
 
 // Jinja loops are gone; interpolate the list directly.
 function FunctionWithLoops(messages: MyUserMessage[]) -> string {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     ${messages}
   `
 }
@@ -706,8 +706,8 @@ class UserMessage {
 }
 
 function ClassifyConversation(messages: UserMessage[]) -> Category[] {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     Classify this conversation:
     ${messages}
 

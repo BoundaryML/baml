@@ -1,7 +1,7 @@
 // The colon-free config dictionary surface now lives in test args blocks.
 function DictionaryProbe(payload: string) -> string {
-  client "openai/gpt-4o-mini"
-  prompt `Use ${payload} ${ctx.output_format}`
+  client: "openai/gpt-4o-mini"
+  prompt: `Use ${payload} ${ctx.output_format}`
 }
 
 test DictionaryTest {
@@ -66,13 +66,13 @@ test DictionaryTest {
 // config_dictionary.baml:2:35 (type) [defaultLibrary] len=6 "string"
 // config_dictionary.baml:2:46 (type) [defaultLibrary] len=6 "string"
 // config_dictionary.baml:3:3 (property) len=6 "client"
-// config_dictionary.baml:3:10 (string) len=20 "\"openai/gpt-4o-mini\""
+// config_dictionary.baml:3:11 (string) len=20 "\"openai/gpt-4o-mini\""
 // config_dictionary.baml:4:3 (property) [declaration] len=6 "prompt"
-// config_dictionary.baml:4:10 (string) len=1 "`"
-// config_dictionary.baml:4:11 (string) len=3 "Use"
-// config_dictionary.baml:4:17 (parameter) len=7 "payload"
-// config_dictionary.baml:4:32 (property) len=13 "output_format"
-// config_dictionary.baml:4:46 (string) len=1 "`"
+// config_dictionary.baml:4:11 (string) len=1 "`"
+// config_dictionary.baml:4:12 (string) len=3 "Use"
+// config_dictionary.baml:4:18 (parameter) len=7 "payload"
+// config_dictionary.baml:4:33 (property) len=13 "output_format"
+// config_dictionary.baml:4:47 (string) len=1 "`"
 // config_dictionary.baml:7:1 (keyword) len=4 "test"
 // config_dictionary.baml:7:6 (struct) [declaration] len=14 "DictionaryTest"
 // config_dictionary.baml:8:3 (property) len=9 "functions"

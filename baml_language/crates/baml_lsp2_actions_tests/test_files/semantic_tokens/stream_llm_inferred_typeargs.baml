@@ -8,8 +8,8 @@ client TestClient = openai.ResponsesClient.new(
 );
 
 function TestFunc(input: string) -> string {
-    client TestClient
-    prompt `hi ${input}`
+    client: TestClient
+    prompt: `hi ${input}`
 }
 
 function call_stream_inferred() -> ai.stream.Stream<string | null, string> {
@@ -44,12 +44,12 @@ function call_stream_inferred() -> ai.stream.Stream<string | null, string> {
 // stream_llm_inferred_typeargs.baml:10:26 (type) [defaultLibrary] len=6 "string"
 // stream_llm_inferred_typeargs.baml:10:37 (type) [defaultLibrary] len=6 "string"
 // stream_llm_inferred_typeargs.baml:11:5 (property) len=6 "client"
-// stream_llm_inferred_typeargs.baml:11:12 (variable) len=10 "TestClient"
+// stream_llm_inferred_typeargs.baml:11:13 (variable) len=10 "TestClient"
 // stream_llm_inferred_typeargs.baml:12:5 (property) [declaration] len=6 "prompt"
-// stream_llm_inferred_typeargs.baml:12:12 (string) len=1 "`"
-// stream_llm_inferred_typeargs.baml:12:13 (string) len=2 "hi"
-// stream_llm_inferred_typeargs.baml:12:18 (parameter) len=5 "input"
-// stream_llm_inferred_typeargs.baml:12:24 (string) len=1 "`"
+// stream_llm_inferred_typeargs.baml:12:13 (string) len=1 "`"
+// stream_llm_inferred_typeargs.baml:12:14 (string) len=2 "hi"
+// stream_llm_inferred_typeargs.baml:12:19 (parameter) len=5 "input"
+// stream_llm_inferred_typeargs.baml:12:25 (string) len=1 "`"
 // stream_llm_inferred_typeargs.baml:15:1 (keyword) len=8 "function"
 // stream_llm_inferred_typeargs.baml:15:10 (function) [declaration] len=20 "call_stream_inferred"
 // stream_llm_inferred_typeargs.baml:15:36 (namespace) [defaultLibrary] len=2 "ai"

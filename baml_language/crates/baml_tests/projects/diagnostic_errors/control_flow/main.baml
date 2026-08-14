@@ -103,8 +103,8 @@ function NestedControlFlow(x: int) -> string {
 client TestClient = openai.ResponsesClient.new(model = "gpt-4");
 
 function LlmFunction(input: string) -> string {
-    client TestClient
-    prompt `
+    client: TestClient
+    prompt: `
         Echo: ${input}
     `
 }

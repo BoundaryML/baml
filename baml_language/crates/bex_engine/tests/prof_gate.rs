@@ -106,8 +106,8 @@ fn llm_function_capture_defaults_auto_inputs_outputs_errors() {
         client C = openai.ResponsesClient.new(model = "gpt-4o", api_key = "sk-test");
 
         function capture_phase6_llm(name: string) -> string {
-            client C
-            prompt `Hello, ${name}`
+            client: C
+            prompt: `Hello, ${name}`
         }
 
         function capture_phase6_plain(name: string) -> string {

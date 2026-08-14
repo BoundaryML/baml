@@ -23,7 +23,6 @@ pub enum SyntaxKind {
     KW_TESTSET,
     KW_RETRY_POLICY,
     KW_TEMPLATE_STRING,
-    KW_TYPE_BUILDER,
 
     // Control flow keywords
     KW_IF,
@@ -49,7 +48,6 @@ pub enum SyntaxKind {
     // Other keywords
     KW_INSTANCEOF,
     KW_IS,
-    KW_DYNAMIC,
     KW_WITH,
     // Contextual keywords re-lexed from a `Word` at parse time (no lexer token).
     KW_AS,    // `.as<T>` cast / `(T as I)` / `field as field`
@@ -168,8 +166,6 @@ pub enum SyntaxKind {
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,
     TYPE_ALIAS_DEF,
-    TYPE_BUILDER_BLOCK, // type_builder { ... } inside test definitions
-    DYNAMIC_TYPE_DEF,   // dynamic class/enum inside type_builder blocks
 
     // Function components
     PARAMETER_LIST,
@@ -226,8 +222,8 @@ pub enum SyntaxKind {
     FUNCTION_TYPE_PARAM, // x: int (or just int)
 
     // Attributes
-    ATTRIBUTE,       // @alias("name")
-    BLOCK_ATTRIBUTE, // @@dynamic
+    ATTRIBUTE, // @alias("name")
+    BLOCK_ATTRIBUTE,
     ATTRIBUTE_ARGS,
 
     // Expressions (for attributes and function bodies)
@@ -533,7 +529,6 @@ impl SyntaxKind {
                 | Self::KW_TESTSET
                 | Self::KW_RETRY_POLICY
                 | Self::KW_TEMPLATE_STRING
-                | Self::KW_TYPE_BUILDER
                 | Self::KW_IF
                 | Self::KW_ELSE
                 | Self::KW_FOR
@@ -555,7 +550,6 @@ impl SyntaxKind {
                 | Self::KW_AWAIT
                 | Self::KW_DEFER
                 | Self::KW_INSTANCEOF
-                | Self::KW_DYNAMIC
                 | Self::KW_WITH
                 | Self::KW_AS
                 | Self::KW_TYPE

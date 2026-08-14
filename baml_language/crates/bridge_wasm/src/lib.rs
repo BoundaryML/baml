@@ -547,6 +547,12 @@ pub fn version() -> String {
     baml_version::CANONICAL_VERSION.to_string()
 }
 
+/// Get the Git commit used to build the `bridge_wasm` crate.
+#[wasm_bindgen(js_name = commitHash)]
+pub fn commit_hash() -> String {
+    env!("BRIDGE_WASM_GIT_SHA").to_string()
+}
+
 /// Returns the build timestamp (unix seconds) for hot-reload / build-identity checks.
 #[wasm_bindgen(js_name = getBuildTime)]
 pub fn get_build_time() -> String {

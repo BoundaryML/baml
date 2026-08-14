@@ -18,11 +18,11 @@ client Gpt4oClient = openai.ResponsesClient.new(
 );
 
 function AskO1(question: string) -> string {
-    client O1Client
-    prompt `${question}`
+    client: O1Client
+    prompt: `${question}`
 }
 
 function AskGpt4o(question: string) -> string {
-    client Gpt4oClient
-    prompt `${question}`
+    client: Gpt4oClient
+    prompt: `${question}`
 }

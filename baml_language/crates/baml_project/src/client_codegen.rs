@@ -846,7 +846,7 @@ mod tests {
         db.set_project_root(root);
         db.add_or_update_file(
             root.join("main.baml").as_path(),
-            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client \"openai/gpt-4o\"\n    prompt `Extract resume from ${resume} ${ctx.output_format}`\n}\n",
+            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `Extract resume from ${resume} ${ctx.output_format}`\n}\n",
         );
 
         let pool = build_symbol_pool(&db);
@@ -881,8 +881,8 @@ mod tests {
 class Resume { name string }
 
 function ExtractResume(resume: string) -> Resume {
-  client "openai/gpt-4o"
-  prompt `Extract resume from ${resume} ${ctx.output_format}`
+  client: "openai/gpt-4o"
+  prompt: `Extract resume from ${resume} ${ctx.output_format}`
 }
 "##,
         );
@@ -925,8 +925,8 @@ client<llm> GPT4 {
 }
 
 function Extract(client: string, text: string) -> string {
-  client GPT4
-  prompt `${text}`
+  client: GPT4
+  prompt: `${text}`
 }
 "##,
         );

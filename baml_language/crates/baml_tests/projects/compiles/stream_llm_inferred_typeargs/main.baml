@@ -8,8 +8,8 @@ client TestClient = openai.ResponsesClient.new(
 );
 
 function TestFunc(input: string) -> string {
-    client TestClient
-    prompt `hi ${input}`
+    client: TestClient
+    prompt: `hi ${input}`
 }
 
 function call_stream_inferred() -> ai.stream.Stream<string | null, string> {

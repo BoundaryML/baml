@@ -186,8 +186,8 @@ mod tests {
             "main.baml",
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 "##,
         );

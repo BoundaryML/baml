@@ -176,3 +176,19 @@ function exec_echo_fn() -> bool {
 test "exec_echo" {
     assert.is_true(exec_echo_fn())
 }
+
+// ============================================================================
+// pid() tests
+// ============================================================================
+
+// A live process always has a positive ID, on every platform. The exact value
+// is asserted from Rust (`tests/shell.rs::pid_is_the_host_process`), where the
+// host PID is knowable.
+test "pid_is_positive" {
+    assert.is_true(baml.sys.pid() > 0);
+}
+
+// The PID identifies the running process, so it never changes between calls.
+test "pid_is_stable" {
+    assert.equal(baml.sys.pid(), baml.sys.pid());
+}

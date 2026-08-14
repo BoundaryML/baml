@@ -11,8 +11,8 @@ enum Category {
 client GPT4 = openai.ResponsesClient.new(model = "gpt-4");
 
 function ClassifyEmail(email: Email) -> Category {
-  client GPT4
-  prompt `
+  client: GPT4
+  prompt: `
     Classify this email:
     Subject: ${email.subject}
     Body: ${email.body}
@@ -51,9 +51,9 @@ function ClassifyEmail(email: Email) -> Category {
 // llm_function.baml:13:31 (class) len=5 "Email"
 // llm_function.baml:13:41 (enum) len=8 "Category"
 // llm_function.baml:14:3 (property) len=6 "client"
-// llm_function.baml:14:10 (variable) len=4 "GPT4"
+// llm_function.baml:14:11 (variable) len=4 "GPT4"
 // llm_function.baml:15:3 (property) [declaration] len=6 "prompt"
-// llm_function.baml:15:10 (string) len=1 "`"
+// llm_function.baml:15:11 (string) len=1 "`"
 // llm_function.baml:16:5 (string) len=8 "Classify"
 // llm_function.baml:16:14 (string) len=4 "this"
 // llm_function.baml:16:19 (string) len=5 "email"

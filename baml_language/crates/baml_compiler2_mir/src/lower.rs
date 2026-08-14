@@ -5066,7 +5066,12 @@ impl LoweringContext<'_> {
             AstExpr::Map { entries } => {
                 let pairs: Vec<(Operand, Operand)> = entries
                     .iter()
-                    .map(|&(k, v)| (self.lower_to_operand(k), self.lower_to_operand(v)))
+                    .map(|entry| {
+                        (
+                            self.lower_to_operand(entry.key),
+                            self.lower_to_operand(entry.value),
+                        )
+                    })
                     .collect();
                 let (key_ty, value_ty) = self.map_kv_templates(expr_id);
                 self.builder
@@ -6533,21 +6538,22 @@ impl LoweringContext<'_> {
     /// Lower `a ?? b` — evaluate `a`, if null then evaluate `b`, otherwise use `a`.
     fn lower_null_coalesce(
         &mut self,
-        _expr_id: AstExprId,
+        expr_id: AstExprId,
         lhs: AstExprId,
         rhs: AstExprId,
         dest: Place,
     ) {
-        // INVARIANT: `dest` may alias a place the RHS reads (`a = n ?? a`,
-        // `s.a = n ?? s.a`), so it must be written on exactly one path, after
-        // that path's value is known — never eagerly before the branch. Same
-        // shape as `lower_if`: each arm writes `dest`, the join reads it.
+        let result = self.builder.temp(self.expr_ty(expr_id));
+        let result_place = Place::local(result);
+
         let lhs_op = self.lower_to_operand(lhs);
+        self.builder
+            .assign(result_place.clone(), Rvalue::Use(lhs_op));
 
         // Test: lhs == null
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
-            left: lhs_op.clone(),
+            left: Operand::Copy(result_place.clone()),
             right: Operand::Constant(Constant::Null),
         };
         let test_local = self.builder.temp(RuntimeTy::Bool {
@@ -6564,7 +6570,7 @@ impl LoweringContext<'_> {
             .branch(Operand::Copy(Place::Local(test_local)), bb_rhs, bb_lhs);
 
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr(rhs, dest.clone());
+        self.lower_expr(rhs, result_place.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
@@ -6574,6 +6580,8 @@ impl LoweringContext<'_> {
         self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
+        self.builder
+            .assign(dest, Rvalue::Use(Operand::Copy(result_place)));
     }
 
     /// Lower `OptionalChain { expr }` — set up shared null exit for the entire chain.
@@ -9308,7 +9316,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         type_name: &TypePath,
         type_args: &[AstTypeExpr],
-        fields: &[(Name, AstExprId)],
+        fields: &[baml_compiler2_ast::ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
     ) {
@@ -9361,9 +9369,9 @@ impl<'db> LoweringContext<'db> {
                 let mut result: Vec<Operand> = (0..field_slot_count(&field_name_to_idx))
                     .map(|_| Operand::Constant(Constant::Null))
                     .collect();
-                for (name, expr) in fields {
-                    if let Some(&idx) = field_name_to_idx.get(&name.to_string()) {
-                        result[idx] = self.lower_to_operand(*expr);
+                for field in fields {
+                    if let Some(&idx) = field_name_to_idx.get(&field.name.to_string()) {
+                        result[idx] = self.lower_to_operand(field.value);
                     }
                 }
                 result
@@ -9374,7 +9382,7 @@ impl<'db> LoweringContext<'db> {
                 // matches the class definition.
                 fields
                     .iter()
-                    .map(|(_, e)| self.lower_to_operand(*e))
+                    .map(|field| self.lower_to_operand(field.value))
                     .collect()
             };
             let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
@@ -9423,13 +9431,17 @@ impl<'db> LoweringContext<'db> {
                 let mut pos = 0usize;
                 fields
                     .iter()
-                    .map(|(name, e)| {
+                    .map(|field| {
                         while spread_positions.contains(&pos) {
                             pos += 1;
                         }
                         let cur = pos;
                         pos += 1;
-                        (cur, name.to_string(), self.lower_to_operand(*e))
+                        (
+                            cur,
+                            field.name.to_string(),
+                            self.lower_to_operand(field.value),
+                        )
                     })
                     .collect()
             };
@@ -9445,7 +9457,7 @@ impl<'db> LoweringContext<'db> {
                     // Unknown class — just emit named fields in order.
                     let field_operands: Vec<Operand> = fields
                         .iter()
-                        .map(|(_, e)| self.lower_to_operand(*e))
+                        .map(|field| self.lower_to_operand(field.value))
                         .collect();
                     let type_arg_templates =
                         self.object_class_type_arg_templates(expr_id, type_args);

@@ -35,8 +35,8 @@ source: crates/baml_tests/src/generated_tests.rs
   │ openai.GenericClient.new(base_url = ..., model = "anthropic.claude-3-haiku"))
     ╭─[client_option_types.baml:38:57]
  38 │ ╭─▶ function UnknownProviderPrefix(input: string) -> string {
- 39 │ │       client "aws-bedrock/anthropic.claude-3-haiku"
- 40 │ │       prompt `${input}`
+ 39 │ │       client: "aws-bedrock/anthropic.claude-3-haiku"
+ 40 │ │       prompt: `${input}`
  41 │ ├─▶ }
     · ╰──── use a "provider/model" string or an expression evaluating to ai.Client
     ╰────

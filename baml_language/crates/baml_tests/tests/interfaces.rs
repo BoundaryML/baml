@@ -3735,8 +3735,8 @@ fn llm_function_can_return_interface_type() {
             }
         }
         function detect_animal(description: string) -> Animal {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Identify the animal from the description: ${description}.
                 ${ctx.output_format}
             `
@@ -3771,8 +3771,8 @@ fn llm_function_returning_interface_enumerates_implementors_in_schema() {
             }
         }
         function detect_animal(description: string) -> Animal {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Identify the animal: ${description}.
                 ${ctx.output_format}
             `
@@ -4894,8 +4894,8 @@ fn llm_function_with_interface_array_return_compiles() {
             }
         }
         function detect_zoo(description: string) -> Animal[] {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Identify every animal mentioned in ${description}.
                 ${ctx.output_format}
             `
@@ -4919,8 +4919,8 @@ fn llm_function_with_interface_in_union_return_compiles() {
             }
         }
         function detect_or_describe(description: string) -> Animal | string {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 If ${description} clearly identifies an animal, return one.
                 Otherwise, paraphrase the description.
                 ${ctx.output_format}
@@ -4949,8 +4949,8 @@ fn llm_function_takes_interface_typed_parameter_compiles() {
             }
         }
         function describe_animal(a: Animal) -> string {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Describe the animal named ${a.name}.
                 ${ctx.output_format}
             `

@@ -3,8 +3,8 @@
 client MyClient = openai.ResponsesClient.new(model = "gpt-4o");
 
 function TestRemap(input: string) -> string {
-  client MyClient
-  prompt `
+  client: MyClient
+  prompt: `
     Test message: ${input}
   `
 }
@@ -31,9 +31,9 @@ function TestRemap(input: string) -> string {
 // remap_role.baml:5:27 (type) [defaultLibrary] len=6 "string"
 // remap_role.baml:5:38 (type) [defaultLibrary] len=6 "string"
 // remap_role.baml:6:3 (property) len=6 "client"
-// remap_role.baml:6:10 (variable) len=8 "MyClient"
+// remap_role.baml:6:11 (variable) len=8 "MyClient"
 // remap_role.baml:7:3 (property) [declaration] len=6 "prompt"
-// remap_role.baml:7:10 (string) len=1 "`"
+// remap_role.baml:7:11 (string) len=1 "`"
 // remap_role.baml:8:5 (string) len=4 "Test"
 // remap_role.baml:8:10 (string) len=7 "message"
 // remap_role.baml:8:17 (string) len=1 ":"
