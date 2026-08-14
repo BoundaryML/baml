@@ -1406,6 +1406,7 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_ppir",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",

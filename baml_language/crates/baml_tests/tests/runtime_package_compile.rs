@@ -16,8 +16,8 @@ client TestClient = openai.OpenAiClient.new(
 );
 
 function Extract<T>(document: string) -> T {
-  client TestClient
-  prompt `Extract the document using this schema:\n${ctx.output_format}`
+  client: TestClient
+  prompt: `Extract the document using this schema:\n${ctx.output_format}`
 }
 
 function main() -> string throws unknown {
@@ -84,8 +84,7 @@ client InitClient = openai.OpenAiClient.new(
     api_key = "unused",
 );
 function init_ready() -> bool {
-  let c = InitClient
-  c.model == "unused-network-free-init-check"
+  InitClient != null
 }
 class Ready { value string }
 "# })

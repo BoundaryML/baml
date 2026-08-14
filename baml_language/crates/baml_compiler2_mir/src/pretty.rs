@@ -267,6 +267,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
+            runtime_type_check,
             destination,
             target,
             unwind,
@@ -294,6 +295,9 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
+            if *runtime_type_check {
+                write!(f, "; runtime_type_check")?;
+            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -306,6 +310,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
+            runtime_type_check,
             destination,
             target,
             unwind,
@@ -332,6 +337,9 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
+            if *runtime_type_check {
+                write!(f, "; runtime_type_check")?;
+            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;

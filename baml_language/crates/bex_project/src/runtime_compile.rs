@@ -14,11 +14,11 @@ use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
 use baml_compiler2_emit::{CompileOptions, OptLevel, emit_units};
 use baml_compiler2_hir::{
-    body::{LetBody, let_body},
+    body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
     package::PackageId,
 };
-use baml_compiler2_tir::package_interface::package_interface;
+use baml_compiler2_hir_ty::package_interface::package_interface;
 use baml_project::{ProjectDatabase, collect_diagnostics};
 use bex_engine::RuntimeCompiler;
 use bex_vm_types::{
@@ -32,12 +32,116 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 use rowan::ast::AstNode;
 
+type RuntimeLinkStub = (Vec<Name>, Name, String);
+type EnrichedRuntimeMount = (Vec<u8>, Vec<RuntimeLinkStub>);
+
 fn enrich_runtime_mount(
+    alias: &str,
     mut package: RuntimePackageMount,
-) -> Result<Vec<u8>, RuntimeCompileDiagnostic> {
-    use baml_compiler2_tir::package_interface::{
-        ExportedFieldAttrs, ExportedImpl, ExportedImplOrigin, ExportedType, PackageInterface,
+) -> Result<EnrichedRuntimeMount, RuntimeCompileDiagnostic> {
+    use baml_compiler2_hir_ty::package_interface::{
+        ExportedFieldAttrs, ExportedFunction, ExportedImpl, ExportedImplOrigin, ExportedType,
+        PackageInterface,
     };
+
+    fn source_identifier(name: &Name) -> bool {
+        let mut chars = name.as_str().chars();
+        chars
+            .next()
+            .is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '_')
+            && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+    }
+
+    fn relocate_function(
+        function: &mut ExportedFunction,
+        alias: &Name,
+        stubs: &mut Vec<(Vec<Name>, Name, String)>,
+    ) {
+        use baml_compiler2_hir_ty::callable::{ExternalCallTarget, ExternalLinkability};
+        if !matches!(function.linkability, ExternalLinkability::Linkable) {
+            return;
+        }
+        let (namespace, name) = match &mut function.target {
+            ExternalCallTarget::Free {
+                package,
+                namespace,
+                name,
+            } => {
+                *package = alias.clone();
+                (namespace.clone(), name.clone())
+            }
+            ExternalCallTarget::Method {
+                package,
+                namespace,
+                class,
+                name,
+            } => {
+                *package = alias.clone();
+                let mut target_namespace = namespace.clone();
+                target_namespace.push(class.clone());
+                (target_namespace, name.clone())
+            }
+            ExternalCallTarget::Interface { interface, method } => {
+                let mut target_namespace = interface.namespace().clone();
+                target_namespace.push(interface.name().clone());
+                *interface = baml_type::QualifiedTypeName::new(
+                    alias.clone(),
+                    interface.namespace().clone(),
+                    interface.name().clone(),
+                );
+                (target_namespace, method.clone())
+            }
+        };
+        // Compiler-generated init/test helpers are not part of the mounted
+        // callable ABI. They can carry internal-only signature forms that are
+        // intentionally not source-spellable, and no consumer can name them.
+        if name.as_str().starts_with('$') {
+            return;
+        }
+        let generic_params = function
+            .generic_params
+            .iter()
+            .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let generic_suffix = if generic_params.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", generic_params.join(", "))
+        };
+        let params = function
+            .params
+            .iter()
+            .enumerate()
+            .map(|(index, param)| {
+                let param_name = param
+                    .name
+                    .as_ref()
+                    .filter(|name| name.as_str() != "self")
+                    .map_or_else(|| format!("arg{index}"), ToString::to_string);
+                let default = if param.is_optional() { " = null" } else { "" };
+                format!("{param_name}: unknown{default}")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let throws = if matches!(
+            function.callable_throws,
+            baml_type::Ty::Never { .. } | baml_type::Ty::Void { .. }
+        ) {
+            String::new()
+        } else {
+            // The link stub preserves only the may-throw ABI bit. Named error
+            // types retain the dependency package's nominal identity in the
+            // mounted interface and are not necessarily source-spellable from
+            // this synthetic alias package.
+            " throws unknown".to_string()
+        };
+        let source = format!(
+            "function {name}{generic_suffix}({params}) -> {}{throws} {{ $rust_function }}\n",
+            function.return_type
+        );
+        stubs.push((namespace, name, source));
+    }
 
     let mut interface =
         borsh::from_slice::<PackageInterface>(&package.interface_blob).map_err(|error| {
@@ -48,6 +152,127 @@ fn enrich_runtime_mount(
                 span: None,
             }
         })?;
+    // A package object may be mounted under any source-visible alias. Its
+    // exported call targets retain the package's original identity in the
+    // persisted interface, so relocate those symbolic link names to the alias.
+    // Runtime linking resolves the alias back to the live dependency object.
+    let alias = Name::new(alias);
+    let mut stubs = Vec::new();
+    for function in interface
+        .functions
+        .values_mut()
+        .flat_map(|namespace| namespace.values_mut())
+    {
+        relocate_function(function, &alias, &mut stubs);
+    }
+    for (export_namespace, exported_types) in &mut interface.types {
+        for (export_name, exported) in exported_types {
+            match exported {
+                ExportedType::Class {
+                    fields,
+                    methods,
+                    generic_params,
+                    ..
+                } => {
+                    // The emitter needs a concrete class object in the mounted
+                    // package's discarded source units so a consumer literal
+                    // decomposes to an external object reference. At runtime
+                    // that reference is resolved to the dependency's actual
+                    // class object, preserving a mounted runtime mint instead
+                    // of allocating a structurally-similar local class.
+                    if source_identifier(export_name)
+                        && export_namespace.iter().all(source_identifier)
+                        && fields.iter().all(|(name, ..)| source_identifier(name))
+                    {
+                        let generics = generic_params
+                            .iter()
+                            .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>();
+                        let generic_suffix = if generics.is_empty() {
+                            String::new()
+                        } else {
+                            format!("<{}>", generics.join(", "))
+                        };
+                        let mut source = format!("class {export_name}{generic_suffix} {{\n");
+                        for (field, ..) in fields.iter() {
+                            // Mounted inference owns the exact field type. The
+                            // source stub exists only to allocate/link the
+                            // positional class object, so `unknown` avoids
+                            // re-spelling hidden runtime-qualified names.
+                            writeln!(&mut source, "  {field} unknown")
+                                .expect("writing to String is infallible");
+                        }
+                        source.push_str("}\n");
+                        stubs.push((export_namespace.clone(), export_name.clone(), source));
+                    }
+                    for function in methods {
+                        relocate_function(function, &alias, &mut stubs);
+                    }
+                }
+                ExportedType::Interface {
+                    qtn,
+                    generic_params,
+                    associated_types,
+                    fields,
+                    required_methods,
+                    default_methods,
+                    ..
+                } => {
+                    for function in required_methods.iter_mut().chain(default_methods) {
+                        relocate_function(function, &alias, &mut stubs);
+                    }
+                    let namespace = qtn.namespace().clone();
+                    let name = qtn.name().clone();
+                    *qtn = baml_type::QualifiedTypeName::new(
+                        alias.clone(),
+                        namespace.clone(),
+                        name.clone(),
+                    );
+                    let generics = generic_params
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>();
+                    let generic_suffix = if generics.is_empty() {
+                        String::new()
+                    } else {
+                        format!("<{}>", generics.join(", "))
+                    };
+                    let mut source = format!("interface {name}{generic_suffix} {{\n");
+                    for associated in associated_types {
+                        writeln!(&mut source, "  type {}", associated.name)
+                            .expect("writing to String is infallible");
+                    }
+                    for (field, ty, _) in fields {
+                        writeln!(&mut source, "  {field}: {ty}")
+                            .expect("writing to String is infallible");
+                    }
+                    source.push_str("}\n");
+                    stubs.push((namespace, name, source));
+                }
+                ExportedType::Enum { variants, .. } => {
+                    if source_identifier(export_name)
+                        && export_namespace.iter().all(source_identifier)
+                        && variants.iter().all(source_identifier)
+                    {
+                        let mut source = format!("enum {export_name} {{\n");
+                        for variant in variants {
+                            writeln!(&mut source, "  {variant}")
+                                .expect("writing to String is infallible");
+                        }
+                        source.push_str("}\n");
+                        stubs.push((export_namespace.clone(), export_name.clone(), source));
+                    }
+                }
+                ExportedType::TypeAlias { .. } => {}
+            }
+        }
+    }
+    for implementation in &mut interface.impls {
+        for function in &mut implementation.methods {
+            relocate_function(function, &alias, &mut stubs);
+        }
+    }
     for mount in package.types.drain(..) {
         let root_types = interface.types.entry(Vec::new()).or_default();
         if root_types.contains_key(&mount.export_name) {
@@ -140,6 +365,48 @@ fn enrich_runtime_mount(
             severity: RuntimeDiagnosticSeverity::Error,
             span: None,
         })?;
+        match &exported {
+            ExportedType::Class {
+                fields,
+                generic_params,
+                ..
+            } if source_identifier(&mount.export_name)
+                && fields.iter().all(|(name, ..)| source_identifier(name)) =>
+            {
+                let generics = generic_params
+                    .iter()
+                    .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>();
+                let generic_suffix = if generics.is_empty() {
+                    String::new()
+                } else {
+                    format!("<{}>", generics.join(", "))
+                };
+                let mut source = format!("class {}{generic_suffix} {{\n", mount.export_name);
+                for (field, ..) in fields {
+                    writeln!(&mut source, "  {field} unknown")
+                        .expect("writing to String is infallible");
+                }
+                source.push_str("}\n");
+                stubs.push((Vec::new(), mount.export_name.clone(), source));
+            }
+            ExportedType::Enum { variants, .. }
+                if source_identifier(&mount.export_name)
+                    && variants.iter().all(source_identifier) =>
+            {
+                let mut source = format!("enum {} {{\n", mount.export_name);
+                for variant in variants {
+                    writeln!(&mut source, "  {variant}").expect("writing to String is infallible");
+                }
+                source.push_str("}\n");
+                stubs.push((Vec::new(), mount.export_name.clone(), source));
+            }
+            ExportedType::Class { .. }
+            | ExportedType::Enum { .. }
+            | ExportedType::Interface { .. }
+            | ExportedType::TypeAlias { .. } => {}
+        }
         interface
             .types
             .entry(Vec::new())
@@ -159,20 +426,24 @@ fn enrich_runtime_mount(
             });
         }
     }
-    borsh::to_vec(&interface).map_err(|error| RuntimeCompileDiagnostic {
-        code: "E_RUNTIME_INTERFACE".to_string(),
-        message: error.to_string(),
-        severity: RuntimeDiagnosticSeverity::Error,
-        span: None,
-    })
+    stubs.sort();
+    stubs.dedup();
+    borsh::to_vec(&interface)
+        .map(|blob| (blob, stubs))
+        .map_err(|error| RuntimeCompileDiagnostic {
+            code: "E_RUNTIME_INTERFACE".to_string(),
+            message: error.to_string(),
+            severity: RuntimeDiagnosticSeverity::Error,
+            span: None,
+        })
 }
 
 /// Stateless compiler provider. A fresh database is allocated inside every
 /// [`RuntimeCompiler::compile`] call and dropped before the call returns.
 #[derive(Debug, Default)]
-pub struct ProjectRuntimeCompiler;
+struct ProjectRuntimeCompiler;
 
-pub fn runtime_compiler() -> Arc<dyn RuntimeCompiler> {
+pub(crate) fn runtime_compiler() -> Arc<dyn RuntimeCompiler> {
     Arc::new(ProjectRuntimeCompiler)
 }
 
@@ -585,14 +856,17 @@ fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::T
     let Definition::Let(let_loc) = package_items.lookup_value(&[], &Name::new(name))? else {
         return None;
     };
-    let scope = baml_compiler2_ppir::item_data::let_scope(db, let_loc)?;
-    let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope);
+    let inference = baml_compiler2_hir_ty::infer::infer_body(db, BodyOwnerId::Let(let_loc));
     let body = let_body(db, let_loc);
     let LetBody::Expr(body) = body.as_ref() else {
         return None;
     };
-    body.root_expr
-        .and_then(|root| inference.expression_type(root).cloned())
+    body.root_expr.and_then(|root| {
+        inference
+            .type_of_expr
+            .get(&root)
+            .map(baml_type::interned::Ty::to_plain)
+    })
 }
 
 fn lower_session_submission(
@@ -1187,12 +1461,36 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         // either return type, and all retained values below are deep-owned.
         let mut db = ProjectDatabase::new();
         db.set_project_root(Path::new("<runtime>"));
-        let mounted = packages
+        let enriched = packages
             .into_iter()
-            .map(|(name, package)| enrich_runtime_mount(package).map(|blob| (name, blob)))
-            .collect::<Result<BTreeMap<_, _>, _>>()
+            .map(|(name, package)| {
+                enrich_runtime_mount(&name, package).map(|(blob, stubs)| (name, blob, stubs))
+            })
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|diagnostic| vec![diagnostic])?;
+        let mounted = enriched
+            .iter()
+            .map(|(name, blob, _)| (name.clone(), blob.clone()))
+            .collect::<BTreeMap<_, _>>();
         db.set_mounted_packages(mounted);
+        // Emit needs concrete pool/global slots while producing the consumer's
+        // relocatable units. Materialize link-only native stubs in the mounted
+        // package; the mounted interface remains the semantic authority, and
+        // the stub units are discarded below so the final artifact keeps the
+        // dependency references unresolved for the runtime linker.
+        for (mount_index, (alias, _, stubs)) in enriched.iter().enumerate() {
+            if baml_compiler2_hir::package::is_reserved_package_name(alias) {
+                continue;
+            }
+            for (stub_index, (namespace, _name, source)) in stubs.iter().enumerate() {
+                let mut path = std::path::PathBuf::from(format!("<builtin>/{alias}"));
+                for segment in namespace {
+                    path.push(format!("ns_{segment}"));
+                }
+                path.push(format!("runtime_mount_{mount_index}_{stub_index}.baml"));
+                db.add_compiler2_virtual_file(path, source);
+            }
+        }
         for (path, source) in files {
             // Runtime input names are package-relative. Mounting them beneath
             // the synthetic root makes `ns_foo/` namespace derivation behave
@@ -1223,20 +1521,10 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             let result_name = result_global
                 .strip_prefix("user.")
                 .unwrap_or(result_global.as_str());
-            let package_id = PackageId::new(&db, Name::new("user"));
             let actual =
                 let_initializer_type(&db, result_name).unwrap_or_else(baml_type::Ty::unknown);
             let expected = baml_type::Ty::from(expected.clone());
-            let aliases = baml_compiler2_tir::inference::package_resolved_aliases(&db, package_id);
-            let res_ctx =
-                baml_compiler2_tir::package_interface::package_resolution_context(&db, package_id);
-            let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
-            let context = baml_compiler2_tir::type_context::GlobalTypeContext {
-                db: &db,
-                res_ctx,
-                aliases,
-                bounds: &bounds,
-            };
+            let context = baml_compiler2_hir_ty::facts::Facts::new(&db);
             if !baml_type::normalize::is_subtype(&actual, &expected, &context) {
                 let file = session_artifact
                     .as_ref()

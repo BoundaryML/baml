@@ -638,6 +638,19 @@ impl ProjectDatabase {
         self.add_or_update_file(path.as_ref(), content)
     }
 
+    /// Add compiler-generated source for a `Session.eval` submission. Session
+    /// files use the dedicated CST→AST lowering mode that admits persistent
+    /// root bindings; ordinary source files remain unchanged.
+    pub fn add_session_file(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+        content: &str,
+    ) -> SourceFile {
+        let file = self.add_or_update_file(path.as_ref(), content);
+        file.set_is_session_submission(self).to(true);
+        file
+    }
+
     /// Get all file paths currently tracked by the database.
     pub fn non_builtin_file_paths(&self) -> impl Iterator<Item = std::path::PathBuf> {
         self.file_map

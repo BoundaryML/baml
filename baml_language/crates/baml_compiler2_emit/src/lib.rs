@@ -278,6 +278,122 @@ fn build_interface_def(
 /// the [`build_packages`] prepass entry per assoc-carrying interface.
 type IfaceAssocDecls = (ParamTy, Vec<ParamTy>, Vec<(Name, Option<baml_type::Ty>)>);
 
+/// The source-less package surface captured before MIR/codegen starts.
+///
+/// Some interface leaves share salsa queries with function lowering. Capture
+/// the artifact serially at the emit boundary so codegen scheduling cannot
+/// affect the package metadata persisted in the executable image.
+struct PackageExportArtifact {
+    interface_blob: Vec<u8>,
+    exported_names: Vec<bex_vm_types::types::LocalName>,
+    functions: Vec<(bex_vm_types::types::LocalName, String)>,
+}
+
+/// Read-only whole-project facts consumed while assembling runtime packages.
+struct PackageBuildMetadata<'a> {
+    /// Field-name → slot for each emitted class, keyed by rendered FQN.
+    class_field_indices: &'a HashMap<String, HashMap<String, usize>>,
+    /// Typed source-less export artifacts captured before parallel codegen.
+    package_exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
+}
+
+fn external_call_target_name(
+    target: &baml_compiler2_hir_ty::callable::ExternalCallTarget,
+) -> String {
+    use baml_compiler2_hir_ty::callable::ExternalCallTarget;
+    let (package, namespace, owner, name) = match target {
+        ExternalCallTarget::Free {
+            package,
+            namespace,
+            name,
+        } => (package, namespace.as_slice(), None, name),
+        ExternalCallTarget::Method {
+            package,
+            namespace,
+            class,
+            name,
+        } => (package, namespace.as_slice(), Some(class), name),
+        ExternalCallTarget::Interface { interface, method } => (
+            interface.package(),
+            interface.namespace().as_slice(),
+            Some(interface.name()),
+            method,
+        ),
+    };
+    let mut parts = Vec::with_capacity(2 + namespace.len());
+    parts.push(package.as_str());
+    parts.extend(namespace.iter().map(Name::as_str));
+    if let Some(owner) = owner {
+        parts.push(owner.as_str());
+    }
+    parts.push(name.as_str());
+    parts.join(".")
+}
+
+fn capture_package_exports(
+    db: &dyn baml_compiler2_mir::Db,
+    all_files: &[baml_base::SourceFile],
+) -> indexmap::IndexMap<Name, PackageExportArtifact> {
+    let package_names: std::collections::BTreeSet<_> = all_files
+        .iter()
+        .map(|file| file_package(db, *file).package)
+        .collect();
+    package_names
+        .into_iter()
+        .map(|package_name| {
+            let package_id = PackageId::new(db, package_name.clone());
+            let interface =
+                baml_compiler2_hir_ty::package_interface::package_interface(db, package_id);
+            // Runtime compilers already own the exact stdlib sources, so only
+            // mountable packages need to carry a serialized compiler surface.
+            let interface_blob =
+                if baml_builtins2::stdlib_package_names().contains(&package_name.as_str()) {
+                    Vec::new()
+                } else {
+                    borsh::to_vec(interface)
+                        .expect("PackageInterface serialization into Vec is infallible")
+                };
+            let mut functions = interface
+                .functions
+                .iter()
+                .flat_map(|(namespace, functions)| {
+                    functions.iter().map(|(name, function)| {
+                        (
+                            bex_vm_types::types::LocalName {
+                                namespace: namespace.clone(),
+                                name: name.clone(),
+                            },
+                            external_call_target_name(&function.target),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
+            functions.sort_by(|(left, _), (right, _)| left.cmp(right));
+            let mut exported_names = interface
+                .types
+                .iter()
+                .flat_map(|(namespace, types)| {
+                    types.keys().map(|name| bex_vm_types::types::LocalName {
+                        namespace: namespace.clone(),
+                        name: name.clone(),
+                    })
+                })
+                .chain(functions.iter().map(|(name, _)| name.clone()))
+                .collect::<Vec<_>>();
+            exported_names.sort();
+            exported_names.dedup();
+            (
+                package_name,
+                PackageExportArtifact {
+                    interface_blob,
+                    exported_names,
+                    functions,
+                },
+            )
+        })
+        .collect()
+}
+
 fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
@@ -288,7 +404,7 @@ fn build_packages(
     // name. This is the *same* map the class pass built `Class::fields` from, threaded
     // in rather than recomputed: a second derivation of the layout that drifted would
     // make every virtual field access read the wrong slot, silently.
-    class_field_indices: &HashMap<String, HashMap<String, usize>>,
+    metadata: &PackageBuildMetadata<'_>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
@@ -332,6 +448,9 @@ fn build_packages(
             .collect();
         Some((qtn.clone(), arg_templates, assoc_templates))
     }
+
+    let class_field_indices = metadata.class_field_indices;
+    let package_exports = metadata.package_exports;
 
     // Resolve a function FQN to its emitted object index. `function_indices` holds
     // every function except `$compiler_intrinsic` / `$await_any` bodies, which
@@ -431,6 +550,61 @@ fn build_packages(
                     function_data(db, m).name.clone(),
                     def_to_item_ref(db, Definition::Function(m)).to_string(),
                 );
+            }
+        }
+    }
+    // Source-less interfaces participate in consumer-owned impl rules through
+    // exactly the same runtime tables.  Seed their declaration facts from the
+    // mounted artifact before walking the consumer's source blocks: otherwise
+    // `class Local { implements dep.I {} }` would prove membership at check
+    // time but emit neither inherited defaults nor virtual-field links.
+    for package in baml_compiler2_hir::package::mounted_package_names(db) {
+        let Some(interface) =
+            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
+        else {
+            continue;
+        };
+        for exported in interface
+            .types
+            .values()
+            .flat_map(|namespace| namespace.values())
+        {
+            let baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
+                qtn,
+                self_param,
+                generic_params,
+                associated_types,
+                fields,
+                default_methods,
+                ..
+            } = exported
+            else {
+                continue;
+            };
+            if !fields.is_empty() {
+                iface_field_decls
+                    .entry(qtn.clone())
+                    .or_insert_with(|| fields.iter().map(|(name, ..)| name.clone()).collect());
+            }
+            if !associated_types.is_empty() {
+                iface_assoc_decls.entry(qtn.clone()).or_insert_with(|| {
+                    (
+                        self_param.clone(),
+                        generic_params.clone(),
+                        associated_types
+                            .iter()
+                            .map(|assoc| (assoc.name.clone(), assoc.default.clone()))
+                            .collect(),
+                    )
+                });
+            }
+            if !default_methods.is_empty() {
+                let defaults = iface_defaults.entry(qtn.clone()).or_default();
+                for method in default_methods {
+                    defaults
+                        .entry(method.name.clone())
+                        .or_insert_with(|| external_call_target_name(&method.target));
+                }
             }
         }
     }
@@ -945,6 +1119,34 @@ fn build_packages(
         }
     }
 
+    // Project the compiler's enriched export surface into the runtime package
+    // record. A functions-only package has no type/impl pass to create its row,
+    // so establish every source-backed package here before copying the table.
+    for (package_name, exports) in package_exports {
+        let package = program_packages.entry(package_name.clone()).or_default();
+        package.interface_blob.clone_from(&exports.interface_blob);
+        package.exported_names.clone_from(&exports.exported_names);
+        package.functions.clear();
+        for (local_name, callable_fqn) in &exports.functions {
+            let Some(&index) = function_indices.get(callable_fqn) else {
+                // Compiler intrinsics deliberately have no callable object.
+                continue;
+            };
+            package
+                .functions
+                .insert(local_name.clone(), ObjectIndex::from_raw(index));
+        }
+        let test_init_name = if package_name.as_str() == "user" {
+            "$init_test".to_string()
+        } else {
+            format!("{package_name}.$init_test")
+        };
+        package.test_init = function_indices
+            .get(&test_init_name)
+            .copied()
+            .map(ObjectIndex::from_raw);
+    }
+
     // Deterministic order: files/classes iterate from unordered maps. Impl rules
     // are keyed by their interface's object index (assigned in deterministic
     // emission order); within one interface a `for_ty_pattern` is unique (overlap
@@ -1106,6 +1308,30 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
+#[derive(Debug)]
+pub enum MountedPackageLinkError {
+    DependencyLink(bex_vm_types::link::LinkError),
+    Consumer(LoweringError),
+}
+
+impl std::fmt::Display for MountedPackageLinkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DependencyLink(error) => write!(f, "link mounted dependency units: {error}"),
+            Self::Consumer(error) => write!(f, "compile mounted-package consumer: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for MountedPackageLinkError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::DependencyLink(error) => Some(error),
+            Self::Consumer(error) => Some(error),
+        }
+    }
+}
+
 /// Extract `@description`, `@alias`, `@skip` from span-free HIR attributes.
 ///
 /// Returns `(description, alias, skip)`. Invalid attribute usage is diagnosed
@@ -1245,6 +1471,21 @@ pub fn generate_project_bytecode_with_stdlib(
     base: &Program,
 ) -> Result<Program, LoweringError> {
     generate_impl(db, options, opt, Some(base), false, None)
+}
+
+/// Compile and link a source consumer against independently emitted mounted
+/// dependency units. The database's package-interface blobs provide semantic
+/// resolution; `dependency_units` provide the matching runtime symbols.
+pub fn generate_project_bytecode_with_mounted_units(
+    db: &dyn crate::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    dependency_units: &[CompilationUnit],
+) -> Result<Program, MountedPackageLinkError> {
+    let base = bex_vm_types::link::link(dependency_units)
+        .map_err(MountedPackageLinkError::DependencyLink)?;
+    generate_impl(db, options, opt, Some(&base), false, None)
+        .map_err(MountedPackageLinkError::Consumer)
 }
 
 /// Incremental compile that lowers function bodies only for dirty files, reuses
@@ -2189,6 +2430,7 @@ fn build_package_fragment(
         }
     };
     let mut frag = ProgramPackageFrag::default();
+    frag.exported_names.clone_from(&pkg.exported_names);
     for (local, &idx) in &pkg.classes {
         frag.classes.push((local.clone(), obj_fq(idx)?));
     }
@@ -2197,6 +2439,9 @@ fn build_package_fragment(
     }
     for (local, &idx) in &pkg.interfaces {
         frag.interfaces.push((local.clone(), obj_fq(idx)?));
+    }
+    for (local, &idx) in &pkg.functions {
+        frag.functions.push((local.clone(), obj_fq(idx)?));
     }
     for (local, ty) in &pkg.recursive_type_aliases {
         frag.recursive_type_aliases
@@ -2228,6 +2473,8 @@ fn build_package_fragment(
         }
         frag.impl_rules.push((iface_fq, rule_frags));
     }
+    frag.interface_blob.clone_from(&pkg.interface_blob);
+    frag.test_init = pkg.test_init.map(obj_fq).transpose()?;
     Ok(frag)
 }
 
@@ -2478,6 +2725,7 @@ fn generate_impl(
         // stdlib" is the full pipeline over the builtin files alone.
         all_files.truncate(builtin_count);
     }
+    let package_exports = capture_package_exports(db, &all_files);
     let alias_caches = build_alias_caches(db, &all_files);
 
     // Emit in two file groups — builtin stubs first, then user files — so the
@@ -2553,9 +2801,38 @@ fn generate_impl(
         &alias_caches,
         &program.function_indices,
         &tables.interface_object_indices,
-        &tables.classes,
+        &PackageBuildMetadata {
+            class_field_indices: &tables.classes,
+            package_exports: &package_exports,
+        },
         &mut tables.program_packages,
     );
+    // Mounted packages contribute no source files to this database. Preserve
+    // their compiled package records from the linked prefix after the ordinary
+    // source-backed package pass rebuilds the consumer metadata.
+    if let Some(base) = base {
+        for pkg_name in baml_compiler2_hir::package::mounted_package_names(db) {
+            let Some(base_pkg) = base.packages.get(&pkg_name) else {
+                continue;
+            };
+            match tables.program_packages.get_mut(&pkg_name) {
+                Some(pkg) => {
+                    pkg.functions.clone_from(&base_pkg.functions);
+                    pkg.exported_names.clone_from(&base_pkg.exported_names);
+                    pkg.interface_blob.clone_from(&base_pkg.interface_blob);
+                    pkg.test_init = base_pkg.test_init;
+                    pkg.impl_rules.clone_from(&base_pkg.impl_rules);
+                    pkg.recursive_type_aliases
+                        .clone_from(&base_pkg.recursive_type_aliases);
+                }
+                None => {
+                    tables
+                        .program_packages
+                        .insert(pkg_name.clone(), base_pkg.clone());
+                }
+            }
+        }
+    }
     tables.program_packages.sort_keys();
     program.packages = tables.program_packages;
 

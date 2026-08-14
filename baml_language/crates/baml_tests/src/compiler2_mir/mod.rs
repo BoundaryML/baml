@@ -573,6 +573,65 @@ fn reflect_type_of_array_of_typevar() {
     mir_snapshot!("reflect_type_of_array_of_typevar", render_mir(&db, file));
 }
 
+/// Runtime type syntax is consumed from hir_ty's durable plan: bind the
+/// lexical slot once, pass the stored runtime type operand to the generic call,
+/// retain its checked-call flag, and use the bound value for `is T`.
+#[test]
+fn runtime_type_plan_operations_are_explicit() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function accept<T>(value: T) -> T { value }
+
+function f(t: type, value: unknown) -> bool {
+    type T = unreflect(t)
+    let result = accept<unreflect(t)>(value)
+    result is T && result is unreflect(t)
+}
+"#,
+    );
+    baml_project::testing::assert_no_diagnostic_errors(&db);
+    mir_snapshot!(
+        "runtime_type_plan_operations_are_explicit",
+        render_mir(&db, file)
+    );
+}
+
+/// A source-less callable keeps its symbolic package target all the way into
+/// MIR while runtime generic operands still come exclusively from the solved
+/// call plan.
+#[test]
+fn mounted_loc_free_runtime_call_target_is_explicit() {
+    let mut library = make_db();
+    library.add_compiler2_virtual_file(
+        "<builtin>/app/lib.baml",
+        "function accept<T>(value: T) -> T { value }",
+    );
+    baml_project::testing::assert_no_diagnostic_errors(&library);
+    let interface = baml_compiler2_hir_ty::package_interface::package_interface(
+        &library,
+        baml_compiler2_hir::package::PackageId::new(&library, baml_base::Name::new("app")),
+    );
+    let blob = borsh::to_vec(interface).expect("serialize mounted interface");
+
+    let mut db = make_db();
+    db.set_mounted_packages([("app".to_string(), blob)].into());
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(t: type, value: unknown) -> unknown {
+    app.accept<unreflect(t)>(value)
+}
+"#,
+    );
+    baml_project::testing::assert_no_diagnostic_errors(&db);
+    mir_snapshot!(
+        "mounted_loc_free_runtime_call_target_is_explicit",
+        render_mir(&db, file)
+    );
+}
+
 /// Bare `$id` read is a special form: it must lower to a call of
 /// `baml.id.current` — never to a name lookup or a local read.
 #[test]

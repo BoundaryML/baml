@@ -13,7 +13,7 @@ that code exists.
 
 | Done | Fact | Slice | Acceptance condition |
 | --- | --- | --- | --- |
-| [ ] | I-01 | 3, 4, 7 | Loc-free external calls preserve a symbolic free/method/interface target, receiver mode, user generic frames and bounds, and linkability through inference and MIR. |
+| [x] | I-01 | 3, 4, 7 | Loc-free external calls preserve a symbolic free/method/interface target, receiver mode, user generic frames and bounds, and linkability through inference and MIR. |
 | [x] | I-02 | 3, 6 | Mounted aliases and enum variants are supplied by `PackageInterface` to the same fact consumers as source-backed definitions. |
 | [x] | I-03 | 3, 6 | Mounted interface associated-type lookup closes transitively over `requires` with cycle termination. |
 | [x] | L-01 | 3 | Type lookup distinguishes source-backed definitions from source-less exported types without reaching into absent dependency source. |
@@ -23,7 +23,7 @@ that code exists.
 | [x] | L-05 | 4 | Only the exact extraction contract permits an outer function type without `throws`; ordinary function types retain current diagnostics and recovery. |
 | [x] | R-01 | 3 | Value roots `reflect`, `type`, and `json` fall back to package `baml` only after ordinary resolution fails, preserving the full path. |
 | [x] | T-01 | 2, 5 | Runtime type operands and type-binding values are ordinary hidden expression edges for throw-fact traversal. |
-| [ ] | B-01 | 2, 4 | Runtime slots and loc-free callables are isolated per body/default run and survive only in durable result tables. |
+| [x] | B-01 | 2, 4 | Runtime slots and loc-free callables are isolated per body/default run and survive only in durable result tables. |
 | [x] | B-02 | 5 | Inference-time type lowering sees declared generics plus the active scoped overlay. |
 | [x] | B-03 | 4 | Only the special `Session.eval` result slot defaults an uninferable generic to `unknown`; ordinary slots keep current errors. |
 | [x] | B-04 | 3, 4 | Mounted owner/function generics and bounds instantiate normally, synthetic effect parameters do not affect user arity, and bound receivers seed owner substitutions. |
@@ -31,7 +31,7 @@ that code exists.
 | [x] | B-06 | 4 | A bare value in a generic slot reports the targeted “requires `unreflect`” diagnostic. |
 | [x] | B-07 | 4 | Every runtime operand is inferred and checked below primitive `type`, with normal error/pending cascade suppression. |
 | [x] | B-08 | 4 | Only checks that depend on a runtime slot are deferred; operands are still inferred and unrelated static bounds remain enforced. |
-| [ ] | B-09 | 4, 7 | Exact `baml.reflect.Package.get_function<F>` extraction uses its special type position and MIR consumes the solved plan without re-lowering syntax. |
+| [x] | B-09 | 4, 7 | Exact `baml.reflect.Package.get_function<F>` extraction uses its special type position and MIR consumes the solved plan without re-lowering syntax. |
 | [x] | B-10 | 4 | Argument binding enriches one call plan without erasing type slots; optional and ordinary calls use the same write path. |
 | [x] | B-11 | 4 | Uncontracted render/build helpers seed schema `T` from a named, non-generic LLM function return type. |
 | [x] | B-12 | 2, 5 | Default and forward-reference traversal visits hidden operands exactly once and default inference cannot leak per-body external-call state. |

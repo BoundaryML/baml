@@ -1,5 +1,3 @@
-#![cfg(any())]
-
 //! BEP-066 mounted-package linking: CALLS into MOUNTED (source-less) packages, end to end —
 //! check → MIR → emit → link → run.
 //!
@@ -33,7 +31,7 @@ use baml_compiler2_emit::{
     CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_mounted_units,
 };
 use baml_compiler2_hir::package::PackageId;
-use baml_compiler2_tir::package_interface::package_interface;
+use baml_compiler2_hir_ty::package_interface::package_interface;
 use baml_project::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::run_compiled;
 use bex_engine::BexExternalValue;
@@ -153,7 +151,7 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     assert!(
         matches!(
             iface.lookup_type(&[], &Name::new("Widget$stream")),
-            Some(baml_compiler2_tir::package_interface::ExportedType::Class { .. })
+            Some(baml_compiler2_hir_ty::package_interface::ExportedType::Class { .. })
         ),
         "canonical PPIR companions must be part of the mounted export surface"
     );
@@ -421,8 +419,8 @@ client Dummy = openai.OpenAiClient.new(
 );
 
 function Ask() -> app.Widget {
-    client Dummy
-    prompt `Return a widget`
+    client: Dummy
+    prompt: `Return a widget`
 }
 "##,
     );
@@ -539,7 +537,7 @@ function main() -> int throws never {
         .filter(|error| error.contains("E0158") && error.contains("mounted"))
         .count();
     assert_eq!(
-        reserved, 2,
-        "both the bare reference and call must report reserved E0158, got:\n{errors:#?}"
+        reserved, 1,
+        "a bare reference is legal; invoking the reserved callable reports E0158, got:\n{errors:#?}"
     );
 }

@@ -1222,6 +1222,7 @@ fn infer_body_impl<'db>(
     );
     ctx.declared_throws = declared_throws;
     ctx.declared_throws_open = declared_throws_open;
+    ctx.body_owner_id = Some(owner);
     ctx.body_owner = match owner {
         BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
             Some(function)
@@ -1408,6 +1409,10 @@ struct InferenceContext<'db> {
     /// Stable hash of the body owner, combined with `StmtId` for scoped rigid
     /// parameter identity.
     body_owner_identity: u32,
+    /// Full owner identity for the Session top-level-let value tier. Keeping
+    /// this lets a malformed self-reference fail closed instead of recursively
+    /// asking Salsa for the inference result currently being built.
+    body_owner_id: Option<BodyOwnerId<'db>>,
     /// The owner's parameter types, from its lowered signature, indexed by
     /// declaration position.
     param_tys: Vec<Ty>,
@@ -1555,6 +1560,7 @@ impl<'db> InferenceContext<'db> {
             lower,
             scoped_type_bindings: Vec::new(),
             body_owner_identity,
+            body_owner_id: None,
             param_tys,
             type_refs,
             return_ty,
@@ -5568,6 +5574,25 @@ impl<'db> InferenceContext<'db> {
             let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
             self.write_resolved_path(expr, steps);
             return ty;
+        }
+        // Session submissions persist root bindings as top-level `let`s. A
+        // let has no declaration signature, so recover its value type from the
+        // initializer's durable inference result and feed that through the same
+        // member walk used for lexical locals. Session history is commit-ordered;
+        // the owner guard prevents a self-reference from forming a query cycle.
+        if let Some(Definition::Let(let_binding)) = self.lower.resolve_value(&segments[..1])
+            && self.body_owner_id != Some(BodyOwnerId::Let(let_binding))
+        {
+            let inference = infer_body(self.db, BodyOwnerId::Let(let_binding));
+            let body = baml_compiler2_hir::body::let_body(self.db, let_binding);
+            if let baml_compiler2_hir::body::LetBody::Expr(body) = body.as_ref()
+                && let Some(root) = body.root_expr
+                && let Some(root_ty) = inference.type_of_expr.get(&root).cloned()
+            {
+                let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
+                self.write_resolved_path(expr, steps);
+                return ty;
+            }
         }
         if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
             self.lower.resolve_value(segments)

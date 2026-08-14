@@ -129,7 +129,7 @@ function scenario_7() -> bool throws unknown {
     _ => throw e,
   }
   let x = s.eval<int>(#"x"#)
-  let y_missing = s.eval<string>(#"y"#) catch (_) {
+  let y_missing = (s.eval<string>(#"y"#) == "") catch (_) {
     baml.reflect.errors.CompilationError => true,
     _ => false,
   }
@@ -143,9 +143,10 @@ function scenario_7() -> bool throws unknown {
   let b = s.eval<string>(#"shout("Ada")"#)
 
   // A failed compile never poisons the Session.
-  let compile_failed = s.eval(#"let broken: MissingType = null"#) catch (_) {
-    baml.reflect.errors.CompilationError => true,
-    _ => false,
+  let compile_failed = false
+  let _ = s.eval(#"let broken: MissingType = null"#) catch (_) {
+    baml.reflect.errors.CompilationError => { compile_failed = true },
+    _ => null,
   }
   let continued = s.eval<int>(#"x + 1"#)
 
@@ -162,35 +163,37 @@ function scenario_7() -> bool throws unknown {
 
 function diagnostic_submission_name() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let bad: MissingType = null"#) catch (_) {
-    baml.reflect.errors.CompilationError { diagnostics } => {
-      let span = diagnostics[0].span ?? throw "missing diagnostic span"
-      span.file ?? ""
+  let _ = s.eval(#"let bad: MissingType = null"#) catch (e) {
+    baml.reflect.errors.CompilationError => {
+      let span = e.diagnostics[0].span ?? throw "missing diagnostic span"
+      return span.file ?? ""
     },
-    _ => "wrong error",
+    _ => return "wrong error",
   }
+  "unexpected success"
 }
 
 function package_current_is_rejected() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"reflect.Package.current()"#) catch (_) {
-    baml.reflect.errors.CompilationError => true,
-    _ => false,
+  let _ = s.eval(#"reflect.Package.current()"#) catch (_) {
+    baml.reflect.errors.CompilationError => return true,
+    _ => return false,
   }
+  false
 }
 
 function runtime_and_failed_contracts() -> bool throws unknown {
   let s = reflect.Session.new()
   let string_t = type.of<string>()
   let value = s.eval<unreflect(string_t)>(#""ok""#)
-  let rejected = s.eval<string>(#"
+  let rejected = (s.eval<string>(#"
     let should_not_exist = 7
     42
-  "#) catch (_) {
+  "#) == "") catch (_) {
     baml.reflect.errors.CompilationError => true,
     _ => false,
   }
-  let missing = s.eval<int>(#"should_not_exist"#) catch (_) {
+  let missing = (s.eval<int>(#"should_not_exist"#) == 0) catch (_) {
     baml.reflect.errors.CompilationError => true,
     _ => false,
   }
@@ -201,7 +204,7 @@ function concurrent_eval_is_busy() -> bool throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
   let pending = spawn { s.eval<int>(#"app.Wait()"#) }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
-  let busy = s.eval<int>(#"1"#) catch (_) {
+  let busy = (s.eval<int>(#"1"#) == 0) catch (_) {
     baml.reflect.errors.SessionBusy => true,
     _ => false,
   }
@@ -217,7 +220,7 @@ function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unk
   }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
   pending.cancel()
-  let cancelled = (await pending) catch (e) {
+  let cancelled = ((await pending) == 0) catch (e) {
     baml.panics.Cancelled => true,
     _ => false,
   }

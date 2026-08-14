@@ -1,5 +1,3 @@
-#![cfg(any())]
-
 //! BEP-066 mounted-package linking capstone: consuming a dependency from source and from its
 //! `PackageInterface` blob must be observationally equivalent.
 //!
@@ -31,7 +29,7 @@ use baml_compiler2_emit::{
     generate_project_bytecode_with_mounted_units, generate_project_bytecode_with_opt,
 };
 use baml_compiler2_hir::package::PackageId;
-use baml_compiler2_tir::package_interface::{ExportedType, PackageInterface, package_interface};
+use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
 use baml_project::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::run_compiled;
 use bex_engine::BexExternalValue;
@@ -598,11 +596,11 @@ fn exported_impl_method_preserves_synthetic_callback_effect_params() {
         .iter()
         .find(|method| method.name.as_str() == "apply")
         .expect("apply override export");
-    assert_eq!(apply.sig.generic_params.len(), 1);
+    assert_eq!(apply.generic_params.len(), 1);
     assert!(baml_type::is_synthetic_effect_param(
-        apply.sig.generic_params[0].name()
+        apply.generic_params[0].name()
     ));
-    assert_eq!(apply.sig.generic_param_bounds, vec![Vec::new()]);
+    assert_eq!(apply.generic_param_bounds, vec![Vec::new()]);
 }
 
 #[test]
