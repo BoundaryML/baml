@@ -119,7 +119,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
     builtin!("baml", "ns_prompt/prompt.baml"),
-    builtin!("baml", "ns_prompt/sys_llm_types.baml"),
     builtin!("baml", "ns_sap/sap.baml"),
     builtin!("baml", "ns_ws/ws.baml"),
     builtin!("baml", "ns_iter/iter.baml"),

@@ -16,18 +16,23 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var ?20
     load_deref ?1
     load_field .client
-    store_var _4
-    load_var _4
-    store_var selected
-    load_var _4
+    store_var_load_var _4
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _4
+    store_var selected
+    jump L2
+
+  L1:
     load_deref ?2
     load_field .default_client
     store_var selected
 
-  L0:
+  L2:
     load_type #0
     load_deref ?2
     call ai.Journal.new
@@ -51,20 +56,20 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     alloc_map 0
     store_var fail_counts
 
-  L1:
+  L3:
     load_var steps
     load_deref ?1
     load_field .max_steps
     cmp_int_op <
-    pop_jump_if_false L2
-    jump L3
+    pop_jump_if_false L4
+    jump L5
 
-  L2:
+  L4:
     load_var steps
     init_instance ai.errors.StepBudgetExceeded .steps
     throw
 
-  L3:
+  L5:
     load_type #0
     load_deref ?1
     load_var selected
@@ -93,36 +98,42 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var _28
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L4
-    jump L10
+    pop_jump_if_false L6
+    jump L14
 
-  L4:
+  L6:
     load_var turn
     call ai.ModelTurn.terminal_text
     store_var _96
     load_var _96
-    store_var candidate
-    load_var _96
     load_const null
     cmp_op ==
-    pop_jump_if_false L5
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_var _96
+    store_var candidate
+    jump L9
+
+  L8:
     load_const ""
     store_var candidate
 
-  L5:
+  L9:
     load_type #0
     load_deref ?1
     load_var turn
     call ai.Agent._has_media_output
-    pop_jump_if_false L6
-    jump L7
+    pop_jump_if_false L10
+    jump L11
 
-  L6:
+  L10:
     load_type #0
     load_var candidate
     call baml.sap.parse
     store_var value
-    jump L8
+    jump L12
     load_var e
     throw_if_panic
     load_var selected
@@ -130,11 +141,11 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
     store_var _109
-    load_var2 38 33
+    load_var2 37 32
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
-  L7:
+  L11:
     load_var selected
     load_type ai.Client
     load_const "id"
@@ -142,28 +153,28 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var _103
     load_type #0
     load_deref ?1
-    load_var2 10 36
+    load_var2 10 35
     call ai.Agent._media_value
     store_var value
 
-  L8:
+  L12:
     load_type #0
     load_var value
     call baml.json.to_json
-    jump L9
+    jump L13
     load_var e
     throw_if_panic
     load_type baml.json.JsonSerializationError
     load_var e
     call baml.String.from
     store_var _118
-    load_var2 39 40
+    load_var2 38 39
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L9:
+  L13:
     call baml.json.stringify
     store_var _123
     load_deref ?5
@@ -186,7 +197,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     init_instance<1> ai.RunResult .value, .journal, .usage
     return
 
-  L10:
+  L14:
     load_deref ?5
     call ai.Journal.entries
     container_len
@@ -219,7 +230,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var before
     store_var i
 
-  L11:
+  L15:
     load_var i
     store_var _47
     load_var entries
@@ -227,14 +238,14 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var _48
     load_var2 17 18
     cmp_int_op <
-    pop_jump_if_false L1
+    pop_jump_if_false L3
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 15 16
     call baml.Array.at
     store_var _52
     load_var _52
     narrow_bind ai.events.ToolFailed, slot=19
-    pop_jump_if_false L13
+    pop_jump_if_false L19
     load_var _52
     store_deref ?20
     load_type ai.content.ToolUse
@@ -247,7 +258,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var _58
     load_var _58
     narrow_bind ai.content.ToolUse, slot=21
-    pop_jump_if_false L13
+    pop_jump_if_false L19
     load_var _58
     store_var known
     load_type string
@@ -272,16 +283,19 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     call baml.Map.get
     store_var _70
     load_var _70
-    store_var _69
-    load_var _70
     load_const null
     cmp_op ==
-    pop_jump_if_false L12
-    load_const 0
-    store_var _69
+    pop_jump_if_false L16
+    jump L17
 
-  L12:
-    load_var _69
+  L16:
+    load_var _70
+    jump L18
+
+  L17:
+    load_const 0
+
+  L18:
     load_const 1
     add_int
     store_var n
@@ -294,17 +308,17 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var n
     load_const 3
     cmp_int_op >=
-    pop_jump_if_false L13
-    jump L14
+    pop_jump_if_false L19
+    jump L20
 
-  L13:
+  L19:
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L11
+    jump L15
 
-  L14:
+  L20:
     load_var known
     load_field .id
     store_var _83
@@ -320,7 +334,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_field .message
     call baml.String.from
     store_var _91
-    load_var2 29 30
+    load_var2 28 29
     load_const "the same tool call failed "
     load_var _88
     bin_op +
@@ -358,7 +372,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     store_var _15
     load_var _15
     narrow_bind ai.events.Usage, slot=11
-    pop_jump_if_false L3
+    pop_jump_if_false L7
     load_var _15
     store_var u
     load_var total
@@ -380,55 +394,65 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     store_var _20
     load_var _20
     narrow_bind int, slot=13
-    pop_jump_if_false L1
+    pop_jump_if_false L3
     load_var _20
     store_var ci
     load_var total
     load_field .cached_input_tokens
-    store_var _23
-    load_var _23
-    store_var _22
-    load_var _23
+    store_var_load_var _23
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _23
+    store_var _22
+    jump L2
+
+  L1:
     load_const 0
     store_var _22
 
-  L0:
+  L2:
     load_var2 5 15
     load_var ci
     bin_op +
     store_field .cached_input_tokens
 
-  L1:
+  L3:
     load_var u
     load_field .reasoning_tokens
     store_var _27
     load_var _27
     narrow_bind int, slot=17
-    pop_jump_if_false L3
+    pop_jump_if_false L7
     load_var _27
     store_var rt
     load_var total
     load_field .reasoning_tokens
-    store_var _30
-    load_var _30
-    store_var _29
-    load_var _30
+    store_var_load_var _30
     load_const null
     cmp_op ==
-    pop_jump_if_false L2
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _30
+    store_var _29
+    jump L6
+
+  L5:
     load_const 0
     store_var _29
 
-  L2:
+  L6:
     load_var2 5 19
     load_var rt
     bin_op +
     store_field .reasoning_tokens
 
-  L3:
+  L7:
     load_var turn
     load_field .content
     store_var _35
@@ -449,7 +473,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     virtual_call nargs=1 ntypeargs=0
     store_var _38
 
-  L4:
+  L8:
     load_var _38
     load_type baml.iter.Iterator<Error = never, Item = ai.content.ToolUse>
     load_const "next"
@@ -457,10 +481,10 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     store_var _39
     load_var _39
     is_type baml.iter.Done
-    pop_jump_if_false L5
-    jump L6
+    pop_jump_if_false L9
+    jump L10
 
-  L5:
+  L9:
     load_var _39
     store_var u
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
@@ -473,34 +497,40 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     init_instance ai.events.ToolRequested .id, .name, .args
     call baml.Array.push
     pop 1
-    jump L4
+    jump L8
 
-  L6:
+  L10:
     load_var turn
     load_field .usage
     store_var _50
     load_var _50
     narrow_bind ai.events.Usage, slot=27
-    pop_jump_if_false L7
+    pop_jump_if_false L11
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 21 27
     call baml.Array.push
     pop 1
 
-  L7:
+  L11:
     load_var turn
     call ai.ModelTurn.terminal_text
     store_var _56
     load_var _56
-    store_var candidate
-    load_var _56
     load_const null
     cmp_op ==
-    pop_jump_if_false L8
+    pop_jump_if_false L12
+    jump L13
+
+  L12:
+    load_var _56
+    store_var candidate
+    jump L14
+
+  L13:
     load_const ""
     store_var candidate
 
-  L8:
+  L14:
     load_var turn
     call ai.ModelTurn.tool_uses
     container_len
@@ -508,10 +538,10 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_var _62
     load_const 0
     cmp_int_op >
-    jump_if_false L9
-    jump L10
+    jump_if_false L15
+    jump L16
 
-  L9:
+  L15:
     pop 1
     load_var turn
     load_field .stop_reason
@@ -519,11 +549,11 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     alloc_variant ai.content.StopReason
     call baml.ops.equals_equals
 
-  L10:
-    jump_if_false L11
-    jump L12
+  L16:
+    jump_if_false L17
+    jump L18
 
-  L11:
+  L17:
     pop 1
     load_var turn
     load_field .stop_reason
@@ -531,29 +561,29 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     alloc_variant ai.content.StopReason
     call baml.ops.equals_equals
 
-  L12:
-    jump_if_false L13
-    jump L14
+  L18:
+    jump_if_false L19
+    jump L20
 
-  L13:
+  L19:
     pop 1
     load_type #0
     load_var2 1 7
     load_var candidate
     call ai.Agent._parses
 
-  L14:
-    pop_jump_if_false L15
-    jump L18
+  L20:
+    pop_jump_if_false L21
+    jump L24
 
-  L15:
+  L21:
     load_var attempts_left
     load_const 1
     cmp_int_op >
-    pop_jump_if_false L16
-    jump L17
+    pop_jump_if_false L22
+    jump L23
 
-  L16:
+  L22:
     load_var2 4 21
     call ai.Journal.append_all
     pop 1
@@ -566,7 +596,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
-  L17:
+  L23:
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var batch
     load_const "The reply did not match the required schema. Answer again with only the corrected value."
@@ -583,9 +613,9 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_const 1
     sub_int
     call ai.Agent._attempt_turn
-    jump L21
+    jump L27
 
-  L18:
+  L24:
     load_var2 4 21
     call ai.Journal.append_all
     pop 1
@@ -594,25 +624,25 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     discriminant
     load_const StopReason.MaxTokens
     cmp_int_op ==
-    pop_jump_if_false L19
-    jump L23
+    pop_jump_if_false L25
+    jump L29
 
-  L19:
+  L25:
     load_var turn
     load_field .stop_reason
     discriminant
     load_const StopReason.Refused
     cmp_int_op ==
-    pop_jump_if_false L20
-    jump L22
+    pop_jump_if_false L26
+    jump L28
 
-  L20:
+  L26:
     load_var turn
 
-  L21:
+  L27:
     return
 
-  L22:
+  L28:
     load_var c
     load_type ai.Client
     load_const "id"
@@ -624,7 +654,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     init_instance ai.errors.Refused .provider, .reason, .raw_body
     throw
 
-  L23:
+  L29:
     load_var c
     load_type ai.Client
     load_const "id"
@@ -737,39 +767,45 @@ function ai.Agent._has_media_output(self: ai.Agent<#0>, turn: ai.ModelTurn) -> b
     call baml.Array.at
     store_var _6
     load_var _6
-    store_var form
-    load_var _6
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _6
+    store_var form
+    jump L2
+
+  L1:
     load_const ""
     store_var form
 
-  L0:
+  L2:
     load_var form
     load_const ""
     cmp_op ==
-    pop_jump_if_false L1
-    jump L7
+    pop_jump_if_false L3
+    jump L11
 
-  L1:
+  L3:
     load_var form
     load_const "mixed"
     cmp_op ==
-    jump_if_false L2
-    jump L3
+    jump_if_false L4
+    jump L5
 
-  L2:
+  L4:
     pop 1
     load_var form
     load_const "mixedlist"
     cmp_op ==
 
-  L3:
-    pop_jump_if_false L4
-    jump L6
+  L5:
+    pop_jump_if_false L6
+    jump L10
 
-  L4:
+  L6:
     load_var shape
     load_const ":"
     call baml.String.split
@@ -780,15 +816,21 @@ function ai.Agent._has_media_output(self: ai.Agent<#0>, turn: ai.ModelTurn) -> b
     call baml.Array.at
     store_var _21
     load_var _21
-    store_var _20
-    load_var _21
     load_const null
     cmp_op ==
-    pop_jump_if_false L5
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_var _21
+    store_var _20
+    jump L9
+
+  L8:
     load_const ""
     store_var _20
 
-  L5:
+  L9:
     load_var2 2 9
     call ai._media_of_kind
     container_len
@@ -796,9 +838,9 @@ function ai.Agent._has_media_output(self: ai.Agent<#0>, turn: ai.ModelTurn) -> b
     load_var _18
     load_const 0
     cmp_int_op >
-    jump L8
+    jump L12
 
-  L6:
+  L10:
     load_var turn
     call ai._media_mixed_parts
     container_len
@@ -806,12 +848,12 @@ function ai.Agent._has_media_output(self: ai.Agent<#0>, turn: ai.ModelTurn) -> b
     load_var _16
     load_const 0
     cmp_int_op >
-    jump L8
+    jump L12
 
-  L7:
+  L11:
     load_const false
 
-  L8:
+  L12:
     return
 }
 
@@ -831,15 +873,21 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     call baml.Array.at
     store_var _8
     load_var _8
-    store_var form
-    load_var _8
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _8
+    store_var form
+    jump L2
+
+  L1:
     load_const ""
     store_var form
 
-  L0:
+  L2:
     load_var shape
     load_const ":"
     call baml.String.split
@@ -850,36 +898,42 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     call baml.Array.at
     store_var _13
     load_var _13
-    store_var kind
-    load_var _13
     load_const null
     cmp_op ==
-    pop_jump_if_false L1
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _13
+    store_var kind
+    jump L5
+
+  L4:
     load_const ""
     store_var kind
 
-  L1:
+  L5:
     load_var form
     load_const "mixedlist"
     cmp_op ==
-    pop_jump_if_false L2
-    jump L22
+    pop_jump_if_false L6
+    jump L26
 
-  L2:
+  L6:
     load_var form
     load_const "mixed"
     cmp_op ==
-    pop_jump_if_false L3
-    jump L14
+    pop_jump_if_false L7
+    jump L18
 
-  L3:
+  L7:
     load_var form
     load_const "list"
     cmp_op ==
-    pop_jump_if_false L4
-    jump L13
+    pop_jump_if_false L8
+    jump L17
 
-  L4:
+  L8:
     load_var2 2 9
     call ai._media_of_kind
     store_var parts
@@ -893,10 +947,10 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_var _58
     load_const 1
     cmp_int_op !=
-    pop_jump_if_false L5
-    jump L9
+    pop_jump_if_false L9
+    jump L13
 
-  L5:
+  L9:
     load_const null
     store_var only
     load_var parts
@@ -905,7 +959,7 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     virtual_call nargs=1 ntypeargs=0
     store_var _98
 
-  L6:
+  L10:
     load_var _98
     load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
@@ -913,27 +967,27 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     store_var _99
     load_var _99
     is_type baml.iter.Done
-    pop_jump_if_false L7
-    jump L8
+    pop_jump_if_false L11
+    jump L12
 
-  L7:
+  L11:
     load_var _99
     store_var only
-    jump L6
+    jump L10
 
-  L8:
+  L12:
     load_var only
     store_var payload
-    jump L23
+    jump L27
 
-  L9:
+  L13:
     load_var form
     load_const "one"
     cmp_op ==
-    pop_jump_if_false L10
-    jump L11
+    pop_jump_if_false L14
+    jump L15
 
-  L10:
+  L14:
     load_type string
     load_var kind
     call baml.String.from
@@ -974,9 +1028,9 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_const "[] for multiple outputs."
     bin_op +
     store_var _60
-    jump L12
+    jump L16
 
-  L11:
+  L15:
     load_type string
     load_var kind
     call baml.String.from
@@ -1007,12 +1061,12 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     bin_op +
     store_var _60
 
-  L12:
+  L16:
     load_var2 3 24
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
-  L13:
+  L17:
     load_var2 2 9
     load_var provider
     call ai._media_reject_mixed
@@ -1020,9 +1074,9 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_var2 2 9
     call ai._media_of_kind
     store_var payload
-    jump L23
+    jump L27
 
-  L14:
+  L18:
     load_var turn
     call ai._media_mixed_parts
     store_var items
@@ -1032,16 +1086,16 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_var _25
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L15
-    jump L18
+    pop_jump_if_false L19
+    jump L22
 
-  L15:
+  L19:
     load_var items
     call ai._media_all_text
-    pop_jump_if_false L16
-    jump L17
+    pop_jump_if_false L20
+    jump L21
 
-  L16:
+  L20:
     load_var t
     call baml.TypeValue.baml.ToString.to_string
     store_var _42
@@ -1069,13 +1123,13 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
-  L17:
+  L21:
     load_var items
     call ai._media_join_text
     store_var payload
-    jump L23
+    jump L27
 
-  L18:
+  L22:
     load_const null
     store_var only
     load_var items
@@ -1084,7 +1138,7 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     virtual_call nargs=1 ntypeargs=0
     store_var _28
 
-  L19:
+  L23:
     load_var _28
     load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
@@ -1092,29 +1146,29 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     store_var _29
     load_var _29
     is_type baml.iter.Done
-    pop_jump_if_false L20
-    jump L21
+    pop_jump_if_false L24
+    jump L25
 
-  L20:
+  L24:
     load_var _29
     store_var only
-    jump L19
-
-  L21:
-    load_var only
-    store_var payload
     jump L23
 
-  L22:
+  L25:
+    load_var only
+    store_var payload
+    jump L27
+
+  L26:
     load_var turn
     call ai._media_mixed_parts
     store_var payload
 
-  L23:
+  L27:
     load_type #0
     load_var payload
     call baml.json.from_json
-    jump L24
+    jump L28
     load_var e
     throw_if_panic
     load_type string
@@ -1151,7 +1205,7 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
-  L24:
+  L28:
     return
 }
 
@@ -1206,7 +1260,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_field .name
     call baml.String.from
     store_var _43
-    load_var2 4 19
+    load_var2 4 18
     load_const "tool is not in the active toolbox: "
     load_var _43
     bin_op +
@@ -1216,7 +1270,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     call ai.Journal.append_all
     pop 1
     load_const null
-    jump L10
+    jump L12
 
   L1:
     load_var _7
@@ -1225,7 +1279,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_field .args
     call ai.tools.Tool.call
     store_var outcome
-    jump L8
+    jump L10
     load_var e
     throw_if_panic
     load_var call
@@ -1244,48 +1298,50 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     pop 1
     load_var t
     load_field .on_error
-    store_var _20
-    load_var _20
-    store_var _19
-    load_var _20
+    store_var_load_var _20
     load_const null
     cmp_op ==
     pop_jump_if_false L2
-    load_var self
-    load_field .tool_errors
-    store_var _19
+    jump L3
 
   L2:
-    load_var _19
-    load_const ai.tools.ErrorMode.Raise
-    alloc_variant ai.tools.ErrorMode
-    call baml.ops.equals_equals
-    pop_jump_if_false L3
+    load_var _20
     jump L4
 
   L3:
-    load_const null
-    store_var outcome
-    jump L8
+    load_var self
+    load_field .tool_errors
 
   L4:
-    load_var e
-    store_var _23
-    load_var _23
-    narrow_bind ai.errors.Failure, slot=14
+    load_const ai.tools.ErrorMode.Raise
+    alloc_variant ai.tools.ErrorMode
+    call baml.ops.equals_equals
     pop_jump_if_false L5
     jump L6
 
   L5:
     load_const null
-    store_var classified
-    jump L7
+    store_var outcome
+    jump L10
 
   L6:
+    load_var e
+    store_var _23
+    load_var _23
+    narrow_bind ai.errors.Failure, slot=13
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_const null
+    store_var classified
+    jump L9
+
+  L8:
     load_var _23
     store_var classified
 
-  L7:
+  L9:
     load_var call
     load_field .id
     store_var _26
@@ -1296,17 +1352,17 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_var e
     call baml.String.from
     store_var _28
-    load_var2 15 16
-    load_var2 17 13
+    load_var2 14 15
+    load_var2 16 12
     init_instance ai.errors.ToolFailedError .id, .name, .message, .cause
     throw
 
-  L8:
+  L10:
     load_var outcome
     store_var _31
     load_var _31
-    narrow_bind string, slot=18
-    pop_jump_if_false L9
+    narrow_bind string, slot=17
+    pop_jump_if_false L11
     load_var2 4 3
     load_field .id
     load_var _31
@@ -1316,10 +1372,10 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     call ai.Journal.append_all
     pop 1
 
-  L9:
+  L11:
     load_const null
 
-  L10:
+  L12:
     return
 }
 
@@ -1358,16 +1414,22 @@ function ai.Agent.new(max_steps: int, client: ai.Client | null, tool_errors: ai.
 
   L3:
     load_var on_event
-    store_var _9
-    load_var on_event
     load_const null
     cmp_op ==
     pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var on_event
+    store_var _9
+    jump L6
+
+  L5:
     load_type #0
     make_closure .<lambda(Agent.new, 0)>, captures=0, ntypeargs=1
     store_var _9
 
-  L4:
+  L6:
     load_var2 1 2
     load_var2 3 5
     load_type #0
@@ -2416,28 +2478,40 @@ function ai.clients.Retry.new(inner: ai.Client, max_attempts: int, retry_if: ((a
 
   L2:
     load_var retry_if
-    store_var _8
-    load_var retry_if
     load_const null
     cmp_op ==
     pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var retry_if
+    store_var _8
+    jump L5
+
+  L4:
     load_const ai.clients.default_retry_judgment
     store_var _8
 
-  L3:
-    load_var backoff
-    store_var _10
+  L5:
     load_var backoff
     load_const null
     cmp_op ==
-    pop_jump_if_false L4
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var backoff
+    store_var _10
+    jump L8
+
+  L7:
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     call ai.clients.Backoff.new
     store_var _10
 
-  L4:
+  L8:
     load_var2 1 2
     load_var2 5 6
     init_instance ai.clients.Retry .inner, .max_attempts, .retry_if, .backoff
@@ -2698,90 +2772,29 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     throw
 
   L2:
-    load_var envelope
-    load_const "kind"
-    call baml.json.field
-    store_var _18
-    load_var _18
-    narrow_bind string, slot=9
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const "image"
-    store_var kind
-    jump L5
-
-  L4:
-    load_var _18
-    store_var kind
-
-  L5:
-    load_var kind
-    load_const "audio"
-    cmp_op ==
-    pop_jump_if_false L6
-    jump L11
-
-  L6:
-    load_var kind
-    load_const "video"
-    cmp_op ==
-    pop_jump_if_false L7
-    jump L10
-
-  L7:
-    load_var kind
-    load_const "pdf"
-    cmp_op ==
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_type baml.media.Image
+    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
     load_var envelope
     call baml.json.from_json
     store_var part
-    jump L12
-
-  L9:
-    load_type baml.media.Pdf
-    load_var envelope
-    call baml.json.from_json
-    store_var part
-    jump L12
-
-  L10:
-    load_type baml.media.Video
-    load_var envelope
-    call baml.json.from_json
-    store_var part
-    jump L12
-
-  L11:
-    load_type baml.media.Audio
-    load_var envelope
-    call baml.json.from_json
-    store_var part
-    jump L12
+    jump L3
     load_var e
     throw_if_panic
     load_type baml.json.JsonDecodeError
     load_var e
     call baml.String.from
-    store_var _39
+    store_var _22
     load_type string
-    load_var _39
+    load_var _22
     call baml.String.from
-    store_var _38
+    store_var _21
     load_const "media output could not be decoded: "
-    load_var _38
+    load_var _21
     bin_op +
     init_instance baml.errors.InvalidArgument .message
     throw
 
-  L12:
-    load_var2 10 2
+  L3:
+    load_var2 8 2
     load_var revised_prompt
     init_instance ai.content.Media .media, .provider_id, .revised_prompt
     return
@@ -2841,16 +2854,23 @@ function ai.errors._header(headers: map<string, string>, lower: string, canonica
     load_var2 1 2
     call baml.Map.get
     store_var _4
-    load_var2 4 4
+    load_var _4
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _4
+    jump L2
+
+  L1:
     load_type string
     load_type string
     load_var2 1 3
     call baml.Map.get
 
-  L0:
+  L2:
     return
 }
 
@@ -3946,56 +3966,71 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
   L4:
     load_const null
     store_var usage
-    jump L8
+    jump L12
 
   L5:
     load_var self
     load_field ._input_tokens
-    store_var _13
-    load_var _13
-    store_var _12
-    load_var _13
+    store_var_load_var _13
     load_const null
     cmp_op ==
     pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var _13
+    store_var _12
+    jump L8
+
+  L7:
     load_const 0
     store_var _12
 
-  L6:
+  L8:
     load_var self
     load_field ._output_tokens
-    store_var _16
-    load_var _16
-    store_var _15
-    load_var _16
+    store_var_load_var _16
     load_const null
     cmp_op ==
-    pop_jump_if_false L7
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _16
+    store_var _15
+    jump L11
+
+  L10:
     load_const 0
     store_var _15
 
-  L7:
+  L11:
     load_var2 4 6
     load_const null
     load_const null
     init_instance ai.events.Usage .input_tokens, .output_tokens, .cached_input_tokens, .reasoning_tokens
     store_var usage
 
-  L8:
+  L12:
     load_var self
     load_field ._stop_reason
-    store_var _22
-    load_var _22
-    store_var _21
-    load_var _22
+    store_var_load_var _22
     load_const null
     cmp_op ==
-    pop_jump_if_false L9
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var _22
+    store_var _21
+    jump L15
+
+  L14:
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
     store_var _21
 
-  L9:
+  L15:
     load_var self
     load_field ._text
     init_instance ai.content.Text .text
@@ -4658,69 +4693,84 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
     call reflect.signature
     store_var sig
     load_var name
-    store_var resolved_name
-    load_var name
     load_const null
     cmp_op ==
     pop_jump_if_false L3
-    load_var sig
-    load_field .name
-    store_var resolved_name
+    jump L4
 
   L3:
-    load_var resolved_name
-    store_var _11
-    load_var _11
-    narrow_bind string, slot=7
-    pop_jump_if_false L4
+    load_var name
     jump L5
 
   L4:
+    load_var sig
+    load_field .name
+
+  L5:
+    store_var _11
+    load_var _11
+    narrow_bind string, slot=6
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
     load_const "anonymous tool needs a name"
     init_instance baml.errors.InvalidArgument .message
     throw
 
-  L5:
+  L7:
     load_var _11
     store_var_load_var n
     load_const "__baml_return_output"
     cmp_op ==
-    pop_jump_if_false L6
-    jump L9
+    pop_jump_if_false L8
+    jump L15
 
-  L6:
-    load_var description
-    store_var _18
+  L8:
     load_var description
     load_const null
     cmp_op ==
-    pop_jump_if_false L7
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var description
+    store_var _18
+    jump L11
+
+  L10:
     load_var sig
     load_field .docstring
     store_var _18
 
-  L7:
-    load_var _18
-    store_var _17
+  L11:
     load_var _18
     load_const null
     cmp_op ==
-    pop_jump_if_false L8
+    pop_jump_if_false L12
+    jump L13
+
+  L12:
+    load_var _18
+    store_var _17
+    jump L14
+
+  L13:
     load_const ""
     store_var _17
 
-  L8:
+  L14:
     load_var handler
     call ai.internal._schema_for_signature
     store_var _21
-    load_var2 8 9
-    load_var2 11 1
+    load_var2 7 8
+    load_var2 10 1
     load_const null
     load_var on_error
     init_instance ai.tools.Tool .name, .description, .input_schema, .handler, .raw_handler, .on_error
     return
 
-  L9:
+  L15:
     load_const "the tool name __baml_return_output is reserved"
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -5135,14 +5185,14 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     load_var _6
     narrow_bind string, slot=6
     pop_jump_if_false L0
-    jump L15
+    jump L19
 
   L0:
     load_var inline
     load_const ""
     cmp_op !=
     pop_jump_if_false L1
-    jump L14
+    jump L18
 
   L1:
     load_var url
@@ -5171,7 +5221,7 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     load_var _19
     narrow_bind int, slot=11
     pop_jump_if_false L4
-    jump L13
+    jump L17
 
   L4:
     load_var fetch_url
@@ -5187,7 +5237,7 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
 
   L6:
     pop_jump_if_false L7
-    jump L12
+    jump L16
 
   L7:
     load_var media_url
@@ -5198,7 +5248,7 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     call baml.http.Response.ok
     unary_op !
     pop_jump_if_false L8
-    jump L11
+    jump L15
 
   L8:
     load_type string
@@ -5209,15 +5259,21 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     call baml.Map.get
     store_var _45
     load_var _45
-    store_var response_mime
-    load_var _45
     load_const null
     cmp_op ==
     pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _45
+    store_var response_mime
+    jump L11
+
+  L10:
     load_var mime
     store_var response_mime
 
-  L9:
+  L11:
     load_var response
     sys_op baml.http.Response.bytes
     call baml.Uint8Array.to_base64
@@ -5232,21 +5288,27 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     call baml.Array.at
     store_var _53
     load_var _53
-    store_var _52
-    load_var _53
     load_const null
     cmp_op ==
-    pop_jump_if_false L10
+    pop_jump_if_false L12
+    jump L13
+
+  L12:
+    load_var _53
+    store_var _52
+    jump L14
+
+  L13:
     load_var mime
     store_var _52
 
-  L10:
+  L14:
     load_const null
     load_var2 22 23
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L16
+    jump L20
 
-  L11:
+  L15:
     load_type string
     load_var media_url
     call baml.String.from
@@ -5268,14 +5330,14 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
     throw
 
-  L12:
+  L16:
     load_var media_url
     load_const null
     load_var mime
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L16
+    jump L20
 
-  L13:
+  L17:
     load_var _19
     store_var_load_var separator
     load_const 8
@@ -5296,15 +5358,15 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     load_const null
     load_var2 13 16
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L16
+    jump L20
 
-  L14:
+  L18:
     load_const null
     load_var2 3 4
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L16
+    jump L20
 
-  L15:
+  L19:
     load_var _6
     load_const "r"
     sys_op baml.fs.open
@@ -5320,7 +5382,7 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     load_var2 8 4
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
 
-  L16:
+  L20:
     return
 }
 
@@ -5454,7 +5516,7 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var _3
     narrow_bind baml.media.Image, slot=3
     pop_jump_if_false L0
-    jump L11
+    jump L23
 
   L0:
     load_var media
@@ -5462,7 +5524,7 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var _16
     narrow_bind baml.media.Audio, slot=12
     pop_jump_if_false L1
-    jump L8
+    jump L16
 
   L1:
     load_var media
@@ -5470,33 +5532,45 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var _29
     narrow_bind baml.media.Video, slot=21
     pop_jump_if_false L2
-    jump L5
+    jump L9
 
   L2:
     load_var media
     call baml.media.Pdf.file
     store_var _45
     load_var _45
-    store_var _44
-    load_var _45
     load_const null
     cmp_op ==
     pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _45
+    store_var _44
+    jump L5
+
+  L4:
     load_var media
     call baml.media.Pdf.url
     store_var _44
 
-  L3:
-    load_var _44
-    store_var source
+  L5:
     load_var _44
     load_const null
     cmp_op ==
-    pop_jump_if_false L4
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var _44
+    store_var source
+    jump L8
+
+  L7:
     load_const ""
     store_var source
 
-  L4:
+  L8:
     load_var media
     call baml.media.Pdf.url
     store_var _48
@@ -5516,35 +5590,47 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var2 35 36
     load_var fetch_url
     call ai.wire._resolve_media_content
-    jump L14
+    jump L30
 
-  L5:
+  L9:
     load_var _29
     store_var video
     load_var video
     call baml.media.Video.file
     store_var _33
     load_var _33
-    store_var _32
-    load_var _33
     load_const null
     cmp_op ==
-    pop_jump_if_false L6
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _33
+    store_var _32
+    jump L12
+
+  L11:
     load_var video
     call baml.media.Video.url
     store_var _32
 
-  L6:
-    load_var _32
-    store_var source
+  L12:
     load_var _32
     load_const null
     cmp_op ==
-    pop_jump_if_false L7
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var _32
+    store_var source
+    jump L15
+
+  L14:
     load_const ""
     store_var source
 
-  L7:
+  L15:
     load_var video
     call baml.media.Video.url
     store_var _36
@@ -5564,35 +5650,47 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var2 28 29
     load_var fetch_url
     call ai.wire._resolve_media_content
-    jump L14
+    jump L30
 
-  L8:
+  L16:
     load_var _16
     store_var audio
     load_var audio
     call baml.media.Audio.file
     store_var _20
     load_var _20
-    store_var _19
-    load_var _20
     load_const null
     cmp_op ==
-    pop_jump_if_false L9
+    pop_jump_if_false L17
+    jump L18
+
+  L17:
+    load_var _20
+    store_var _19
+    jump L19
+
+  L18:
     load_var audio
     call baml.media.Audio.url
     store_var _19
 
-  L9:
-    load_var _19
-    store_var source
+  L19:
     load_var _19
     load_const null
     cmp_op ==
-    pop_jump_if_false L10
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_var _19
+    store_var source
+    jump L22
+
+  L21:
     load_const ""
     store_var source
 
-  L10:
+  L22:
     load_var audio
     call baml.media.Audio.url
     store_var _23
@@ -5612,35 +5710,47 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var2 19 20
     load_var fetch_url
     call ai.wire._resolve_media_content
-    jump L14
+    jump L30
 
-  L11:
+  L23:
     load_var _3
     store_var image
     load_var image
     call baml.media.Image.file
     store_var _7
     load_var _7
-    store_var _6
-    load_var _7
     load_const null
     cmp_op ==
-    pop_jump_if_false L12
+    pop_jump_if_false L24
+    jump L25
+
+  L24:
+    load_var _7
+    store_var _6
+    jump L26
+
+  L25:
     load_var image
     call baml.media.Image.url
     store_var _6
 
-  L12:
-    load_var _6
-    store_var source
+  L26:
     load_var _6
     load_const null
     cmp_op ==
-    pop_jump_if_false L13
+    pop_jump_if_false L27
+    jump L28
+
+  L27:
+    load_var _6
+    store_var source
+    jump L29
+
+  L28:
     load_const ""
     store_var source
 
-  L13:
+  L29:
     load_var image
     call baml.media.Image.url
     store_var _10
@@ -5661,7 +5771,7 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var fetch_url
     call ai.wire._resolve_media_content
 
-  L14:
+  L30:
     return
 }
 

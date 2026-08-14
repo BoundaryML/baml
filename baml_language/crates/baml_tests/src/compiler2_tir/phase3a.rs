@@ -442,6 +442,79 @@ function build(option: string) -> map<string, string> {
     );
 }
 
+/// Shorthand-ness is the parser's fact, not key text: a WRITTEN
+/// `{ "key": key }` is an ordinary entry, so an unbound value reports the
+/// generic unresolved-name diagnostic, never the shorthand rewrite hint.
+#[test]
+fn quoted_key_matching_value_name_is_not_property_shorthand() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(v: string?) -> map<string, string> {
+  if let other: string = v { { "key": key } } else { {} }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("unresolved name: key"),
+        "a quoted entry with an unbound value is a plain unresolved name, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "a quoted key is not shorthand and must not draw the shorthand diagnostic:\n{tir}"
+    );
+}
+
+/// The shorthand value is an ordinary path expression, so it is in scope
+/// exactly when a plain use is - including under a pattern binder, which the
+/// body-scope-only binding list could not see.
+#[test]
+fn property_shorthand_resolves_pattern_binders() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(v: string?) -> map<string, string> {
+  if let key: string = v { { key } } else { {} }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("property shorthand"),
+        "an `if let` binder satisfies the shorthand, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("unresolved name"),
+        "an `if let` binder satisfies the shorthand, got:\n{tir}"
+    );
+}
+
+/// Near-match candidates come from the EXPRESSION's scope, so a pattern
+/// binder is offered as the explicit-mapping suggestion.
+#[test]
+fn property_shorthand_suggests_a_pattern_binder() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(v: string?) -> map<string, string> {
+  if let option: string = v { { options } } else { {} }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected the `if let` binder as a near match, got:\n{tir}"
+    );
+}
+
 #[test]
 fn class_property_shorthand_suggests_field_to_variable_mapping() {
     let mut db = make_db();

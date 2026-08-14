@@ -250,39 +250,41 @@ function llm_stream_contract.contract_decode(batch: string) -> (ai.stream.TextDe
     load_var _5
     is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L7
+    jump L9
 
   L1:
     load_var _5
     load_field .data
-    store_var _11
-    load_var _11
-    store_var _10
-    load_var _11
+    store_var_load_var _11
     load_const null
     cmp_op ==
     pop_jump_if_false L2
-    load_const ""
-    store_var _10
+    jump L3
 
   L2:
-    load_var _10
+    load_var _11
+    jump L4
+
+  L3:
+    load_const ""
+
+  L4:
     call baml.String.trim
     store_var data
     load_var data
     load_const ""
     cmp_op ==
-    pop_jump_if_false L3
+    pop_jump_if_false L5
     jump L0
 
-  L3:
+  L5:
     load_var data
     load_const "[DONE]"
     cmp_op ==
-    pop_jump_if_false L4
-    jump L6
+    pop_jump_if_false L6
+    jump L8
 
-  L4:
+  L6:
     load_type llm_stream_contract.ContractChunk
     load_var data
     call baml.json.from_string
@@ -291,20 +293,20 @@ function llm_stream_contract.contract_decode(batch: string) -> (ai.stream.TextDe
     load_field .delta
     store_var _24
     load_var _24
-    narrow_bind string, slot=9
-    pop_jump_if_false L5
+    narrow_bind string, slot=8
+    pop_jump_if_false L7
     load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
-    load_var2 2 9
+    load_var2 2 8
     init_instance ai.stream.TextDelta .text
     call baml.Array.push
     pop 1
 
-  L5:
+  L7:
     load_var chunk
     load_field .stop
     store_var _31
     load_var _31
-    narrow_bind string, slot=10
+    narrow_bind string, slot=9
     pop_jump_if_false L0
     load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var out
@@ -317,7 +319,7 @@ function llm_stream_contract.contract_decode(batch: string) -> (ai.stream.TextDe
     pop 1
     jump L0
 
-  L6:
+  L8:
     load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var out
     alloc_instance ai.stream.TurnDone
@@ -325,7 +327,7 @@ function llm_stream_contract.contract_decode(batch: string) -> (ai.stream.TextDe
     pop 1
     jump L0
 
-  L7:
+  L9:
     load_var out
     return
 }
@@ -419,7 +421,7 @@ function llm_stream_contract.contract_error_label(error: unknown) -> string {
     load_const "other:"
     load_var _22
     bin_op +
-    jump L5
+    jump L7
 
   L2:
     load_var _17
@@ -434,7 +436,7 @@ function llm_stream_contract.contract_error_label(error: unknown) -> string {
     load_const "other-failure:"
     load_var _19
     bin_op +
-    jump L5
+    jump L7
 
   L3:
     load_var _2
@@ -456,17 +458,22 @@ function llm_stream_contract.contract_error_label(error: unknown) -> string {
     store_var _9
     load_var network
     load_field .raw_body
-    store_var _13
-    load_var _13
-    store_var _12
-    load_var _13
+    store_var_load_var _13
     load_const null
     cmp_op ==
     pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _13
+    store_var _12
+    jump L6
+
+  L5:
     load_const ""
     store_var _12
 
-  L4:
+  L6:
     load_type string
     load_var _12
     call baml.String.from
@@ -483,7 +490,7 @@ function llm_stream_contract.contract_error_label(error: unknown) -> string {
     load_const "|"
     call baml.Array.join
 
-  L5:
+  L7:
     return
 }
 
@@ -525,15 +532,21 @@ function llm_stream_contract.contract_turn_label(turn: ai.ModelTurn) -> string {
     call ai.ModelTurn.terminal_text
     store_var _12
     load_var _12
-    store_var _11
-    load_var _12
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _12
+    store_var _11
+    jump L2
+
+  L1:
     load_const ""
     store_var _11
 
-  L0:
+  L2:
     load_type string
     load_var _11
     call baml.String.from
@@ -588,7 +601,7 @@ function llm_stream_contract.retry_label(error: unknown) -> string {
     load_const "other:"
     load_var _23
     bin_op +
-    jump L7
+    jump L9
 
   L3:
     load_type string
@@ -599,7 +612,7 @@ function llm_stream_contract.retry_label(error: unknown) -> string {
     load_const "InvalidRequest|"
     load_var _20
     bin_op +
-    jump L7
+    jump L9
 
   L4:
     load_type string
@@ -610,7 +623,7 @@ function llm_stream_contract.retry_label(error: unknown) -> string {
     load_const "NetworkFailure|"
     load_var _15
     bin_op +
-    jump L7
+    jump L9
 
   L5:
     load_var _2
@@ -620,18 +633,23 @@ function llm_stream_contract.retry_label(error: unknown) -> string {
     store_var _5
     load_var limited
     load_field .retry_after_ms
-    store_var _9
-    load_var _9
-    store_var _8
-    load_var _9
+    store_var_load_var _9
     load_const null
     cmp_op ==
     pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var _9
+    store_var _8
+    jump L8
+
+  L7:
     load_const 1
     unary_op -
     store_var _8
 
-  L6:
+  L8:
     load_type int
     load_var _8
     call baml.String.from
@@ -647,7 +665,7 @@ function llm_stream_contract.retry_label(error: unknown) -> string {
     load_const "|"
     call baml.Array.join
 
-  L7:
+  L9:
     return
 }
 
@@ -667,17 +685,22 @@ function llm_stream_contract.send_as_429(base_url: string) -> string {
     load_const "mockprovider"
     call ai.wire.send_as
     load_field .ok
-    store_var _10
-    load_var _10
-    store_var _9
-    load_var _10
+    store_var_load_var _10
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _10
+    store_var _9
+    jump L2
+
+  L1:
     load_const false
     store_var _9
 
-  L0:
+  L2:
     load_type bool
     load_var _9
     call baml.String.from

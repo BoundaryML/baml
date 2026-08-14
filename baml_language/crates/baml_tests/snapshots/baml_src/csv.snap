@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 149
 ---
 function csv.$init_test_ns_csv_csv(registry: testing.TestCollector) -> null {
     load_var registry
@@ -730,16 +729,22 @@ function csv.csv_bom_stripped_by_default() -> string {
     call baml.csv.CsvReader.headers
     store_var _6
     load_var _6
-    store_var h
-    load_var _6
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _6
+    store_var h
+    jump L2
+
+  L1:
     load_type string
     alloc_array 0
     store_var h
 
-  L0:
+  L2:
     load_var rows
     call user.csv.grid
     store_var _9
@@ -1021,7 +1026,7 @@ function csv.csv_decode_error_details() -> string {
     load_const <omitted>
     call baml.csv.decode
     pop 1
-    jump L3
+    jump L5
     load_var e
     is_type baml.csv.CsvError
     pop_jump_if_false L0
@@ -1048,17 +1053,22 @@ function csv.csv_decode_error_details() -> string {
     store_var _14
     load_var e
     load_field .column
-    store_var _17
-    load_var _17
-    store_var _16
-    load_var _17
+    store_var_load_var _17
     load_const null
     cmp_op ==
     pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _17
+    store_var _16
+    jump L4
+
+  L3:
     load_const "?"
     store_var _16
 
-  L2:
+  L4:
     load_var _10
     load_const " line="
     bin_op +
@@ -1072,12 +1082,12 @@ function csv.csv_decode_error_details() -> string {
     bin_op +
     load_var _16
     bin_op +
-    jump L4
+    jump L6
 
-  L3:
+  L5:
     load_const "no-throw"
 
-  L4:
+  L6:
     return
 }
 
@@ -1239,7 +1249,7 @@ function csv.csv_decode_missing_column_is_header_error() -> string {
     load_const <omitted>
     call baml.csv.decode
     pop 1
-    jump L3
+    jump L5
     load_var e
     is_type baml.csv.CsvError
     pop_jump_if_false L0
@@ -1256,28 +1266,33 @@ function csv.csv_decode_missing_column_is_header_error() -> string {
     store_var _6
     load_var e
     load_field .column
-    store_var _9
-    load_var _9
-    store_var _8
-    load_var _9
+    store_var_load_var _9
     load_const null
     cmp_op ==
     pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _9
+    store_var _8
+    jump L4
+
+  L3:
     load_const "?"
     store_var _8
 
-  L2:
+  L4:
     load_var _6
     load_const ":"
     bin_op +
     load_var _8
     bin_op +
-    jump L4
+    jump L6
 
-  L3:
+  L5:
     load_const "no-throw"
 
-  L4:
+  L6:
     return
 }
 
@@ -1656,7 +1671,7 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
     load_var _9
     is_type baml.iter.Done
     pop_jump_if_false L4
-    jump L5
+    jump L7
 
   L4:
     load_type string
@@ -1665,20 +1680,26 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
     call baml.csv.CsvRecord.get_at
     store_var _12
     load_var _12
-    store_var positional
-    load_var _12
     load_const null
     cmp_op ==
-    pop_jump_if_false L6
-    load_const "<null>"
-    store_var positional
+    pop_jump_if_false L5
     jump L6
 
   L5:
+    load_var _12
+    store_var positional
+    jump L8
+
+  L6:
+    load_const "<null>"
+    store_var positional
+    jump L8
+
+  L7:
     load_const "none"
     store_var positional
 
-  L6:
+  L8:
     load_var err
     load_const "/"
     bin_op +
@@ -1902,27 +1923,32 @@ function csv.csv_file_roundtrip() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    jump L3
 
   L0:
     load_var _17
     load_field .note
-    store_var _21
-    load_var _21
-    store_var first_note
-    load_var _21
+    store_var_load_var _21
     load_const null
     cmp_op ==
-    pop_jump_if_false L2
-    load_const "<null>"
-    store_var first_note
+    pop_jump_if_false L1
     jump L2
 
   L1:
+    load_var _21
+    store_var first_note
+    jump L4
+
+  L2:
+    load_const "<null>"
+    store_var first_note
+    jump L4
+
+  L3:
     load_const "missing"
     store_var first_note
 
-  L2:
+  L4:
     load_var path
     sys_op baml.fs.remove
     pop 1
@@ -2083,18 +2109,21 @@ function csv.csv_headers_variants() -> string {
     call baml.csv.CsvReader.headers
     store_var _3
     load_var _3
-    store_var _2
-    load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _3
+    jump L2
+
+  L1:
     load_const "<null>"
     load_type string
     alloc_array 1
-    store_var _2
 
-  L0:
-    load_var _2
+  L2:
     load_const "|"
     call user.csv.join
     store_var with_header
@@ -2124,21 +2153,21 @@ function csv.csv_headers_variants() -> string {
     load_var _7
     load_const null
     cmp_op ==
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_false L3
+    jump L4
 
-  L1:
+  L3:
     load_var _7
     load_const "|"
     call user.csv.join
     store_var no_header
-    jump L3
+    jump L5
 
-  L2:
+  L4:
     load_const "<null>"
     store_var no_header
 
-  L3:
+  L5:
     load_const ""
     load_const <omitted>
     call baml.csv.reader
@@ -2147,21 +2176,21 @@ function csv.csv_headers_variants() -> string {
     load_var _14
     load_const null
     cmp_op ==
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L6
+    jump L7
 
-  L4:
+  L6:
     load_var _14
     load_const "|"
     call user.csv.join
     store_var empty_input
-    jump L6
+    jump L8
 
-  L5:
+  L7:
     load_const "<null>"
     store_var empty_input
 
-  L6:
+  L8:
     load_var with_header
     load_const " / "
     bin_op +
@@ -2447,24 +2476,29 @@ function csv.csv_null_semantics_empty_unquoted() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L2
+    jump L4
 
   L0:
     load_var _3
     store_var p
     load_var p
     load_field .so
-    store_var _13
-    load_var _13
-    store_var _12
-    load_var _13
+    store_var_load_var _13
     load_const null
     cmp_op ==
     pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _13
+    store_var _12
+    jump L3
+
+  L2:
     load_const "<null>"
     store_var _12
 
-  L1:
+  L3:
     load_const "s="
     load_var p
     load_field .s
@@ -2483,12 +2517,12 @@ function csv.csv_null_semantics_empty_unquoted() -> string {
     store_var _15
     load_var2 4 7
     bin_op +
-    jump L3
+    jump L5
 
-  L2:
+  L4:
     load_const "missing"
 
-  L3:
+  L5:
     return
 }
 
@@ -2507,60 +2541,65 @@ function csv.csv_null_semantics_quoted_empty() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L2
+    jump L4
 
   L0:
     load_var _2
     load_field .so
-    store_var _9
-    load_var _9
-    store_var _8
-    load_var _9
+    store_var_load_var _9
     load_const null
     cmp_op ==
     pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _9
+    store_var _8
+    jump L3
+
+  L2:
     load_const "<null>"
     store_var _8
 
-  L1:
+  L3:
     load_const "so="
     load_var _8
     bin_op +
     store_var ok
-    jump L3
+    jump L5
 
-  L2:
+  L4:
     load_const "missing"
     store_var ok
 
-  L3:
+  L5:
     load_type csv.NullProbe
     load_const "a,s,so,io\nx,,,\"\"\n"
     load_const <omitted>
     call baml.csv.decode
     pop 1
-    jump L6
+    jump L8
     load_var e
     is_type baml.csv.CsvError
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L6
+    jump L7
 
-  L4:
+  L6:
     load_var e
     rethrow
 
-  L5:
+  L7:
     load_var e
     load_field .kind
     call user.csv.kind_name
     store_var err
-    jump L7
+    jump L9
 
-  L6:
+  L8:
     load_const "no-throw"
     store_var err
 
-  L7:
+  L9:
     load_var ok
     load_const "/"
     bin_op +
@@ -2606,24 +2645,29 @@ function csv.csv_null_values_option() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L2
+    jump L4
 
   L0:
     load_var _4
     store_var p
     load_var p
     load_field .so
-    store_var _14
-    load_var _14
-    store_var _13
-    load_var _14
+    store_var_load_var _14
     load_const null
     cmp_op ==
     pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _14
+    store_var _13
+    jump L3
+
+  L2:
     load_const "<null>"
     store_var _13
 
-  L1:
+  L3:
     load_const "so="
     load_var _13
     bin_op +
@@ -2638,40 +2682,40 @@ function csv.csv_null_values_option() -> string {
     load_var2 6 9
     bin_op +
     store_var ok
-    jump L3
+    jump L5
 
-  L2:
+  L4:
     load_const "missing"
     store_var ok
 
-  L3:
+  L5:
     load_type csv.NullProbe
     load_const "a,s,so,io\nx,N/A,,\n"
     load_var opts
     call baml.csv.decode
     pop 1
-    jump L6
+    jump L8
     load_var e
     is_type baml.csv.CsvError
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L6
+    jump L7
 
-  L4:
+  L6:
     load_var e
     rethrow
 
-  L5:
+  L7:
     load_var e
     load_field .kind
     call user.csv.kind_name
     store_var err
-    jump L7
+    jump L9
 
-  L6:
+  L8:
     load_const "no-throw"
     store_var err
 
-  L7:
+  L9:
     load_type csv.NullProbe
     load_const "a,s,so,io\nx,y,\"N/A\",\n"
     load_var opts
@@ -2685,28 +2729,33 @@ function csv.csv_null_values_option() -> string {
     load_var _26
     load_const null
     cmp_op ==
-    pop_jump_if_false L8
-    jump L9
+    pop_jump_if_false L10
+    jump L13
 
-  L8:
+  L10:
     load_var _26
     load_field .so
-    store_var _33
-    load_var _33
-    store_var quoted
-    load_var _33
+    store_var_load_var _33
     load_const null
     cmp_op ==
-    pop_jump_if_false L10
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
+    load_var _33
+    store_var quoted
+    jump L14
+
+  L12:
     load_const "<null>"
     store_var quoted
-    jump L10
+    jump L14
 
-  L9:
+  L13:
     load_const "missing"
     store_var quoted
 
-  L10:
+  L14:
     load_var ok
     load_const "/"
     bin_op +
@@ -3796,7 +3845,7 @@ function csv.csv_record_api() -> string {
     load_var _2
     is_type baml.iter.Done
     pop_jump_if_false L0
-    jump L4
+    jump L10
 
   L0:
     load_var _2
@@ -3827,15 +3876,21 @@ function csv.csv_record_api() -> string {
     call baml.csv.CsvRecord.get
     store_var _16
     load_var _16
-    store_var _15
-    load_var _16
     load_const null
     cmp_op ==
     pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _16
+    store_var _15
+    jump L3
+
+  L2:
     load_const "<null>"
     store_var _15
 
-  L1:
+  L3:
     load_type string
     load_var2 3 6
     call baml.Array.push
@@ -3857,15 +3912,21 @@ function csv.csv_record_api() -> string {
     call baml.csv.CsvRecord.get
     store_var _27
     load_var _27
-    store_var _26
-    load_var _27
     load_const null
     cmp_op ==
-    pop_jump_if_false L2
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _27
+    store_var _26
+    jump L6
+
+  L5:
     load_const "<absent-null>"
     store_var _26
 
-  L2:
+  L6:
     load_type string
     load_var2 3 9
     call baml.Array.push
@@ -3876,15 +3937,21 @@ function csv.csv_record_api() -> string {
     call baml.csv.CsvRecord.get_at
     store_var _33
     load_var _33
-    store_var _32
-    load_var _33
     load_const null
     cmp_op ==
-    pop_jump_if_false L3
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_var _33
+    store_var _32
+    jump L9
+
+  L8:
     load_const "<oob-null>"
     store_var _32
 
-  L3:
+  L9:
     load_type string
     load_var2 3 11
     call baml.Array.push
@@ -3901,12 +3968,12 @@ function csv.csv_record_api() -> string {
     load_var parts
     load_const " "
     call user.csv.join
-    jump L5
+    jump L11
 
-  L4:
+  L10:
     load_const "none"
 
-  L5:
+  L11:
     return
 }
 
@@ -3949,7 +4016,7 @@ function csv.csv_record_get_decode_error() -> string {
     load_var _3
     is_type baml.iter.Done
     pop_jump_if_false L0
-    jump L5
+    jump L7
 
   L0:
     load_type int
@@ -3957,7 +4024,7 @@ function csv.csv_record_get_decode_error() -> string {
     load_const "n"
     call baml.csv.CsvRecord.get
     pop 1
-    jump L4
+    jump L6
     load_var e
     is_type baml.csv.CsvError
     pop_jump_if_false L1
@@ -3974,32 +4041,37 @@ function csv.csv_record_get_decode_error() -> string {
     store_var _10
     load_var e
     load_field .column
-    store_var _13
-    load_var _13
-    store_var _12
-    load_var _13
+    store_var_load_var _13
     load_const null
     cmp_op ==
     pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _13
+    store_var _12
+    jump L5
+
+  L4:
     load_const "?"
     store_var _12
 
-  L3:
+  L5:
     load_var _10
     load_const ":"
     bin_op +
     load_var _12
     bin_op +
-    jump L6
-
-  L4:
-    load_const "no-throw"
-    jump L6
-
-  L5:
-    load_const "none"
+    jump L8
 
   L6:
+    load_const "no-throw"
+    jump L8
+
+  L7:
+    load_const "none"
+
+  L8:
     return
 }
 
@@ -4863,7 +4935,7 @@ function csv.csv_smoke_typed_returns_probe() -> string {
     load_var _3
     is_type baml.iter.Done
     pop_jump_if_false L0
-    jump L1
+    jump L3
 
   L0:
     load_type string
@@ -4872,20 +4944,26 @@ function csv.csv_smoke_typed_returns_probe() -> string {
     call baml.csv.CsvRecord.get
     store_var _6
     load_var _6
-    store_var rec_name
-    load_var _6
     load_const null
     cmp_op ==
-    pop_jump_if_false L2
-    load_const "<null>"
-    store_var rec_name
+    pop_jump_if_false L1
     jump L2
 
   L1:
+    load_var _6
+    store_var rec_name
+    jump L4
+
+  L2:
+    load_const "<null>"
+    store_var rec_name
+    jump L4
+
+  L3:
     load_const "none"
     store_var rec_name
 
-  L2:
+  L4:
     load_const 0
     store_var total
     load_type csv.CsvSmokeIntRow
@@ -4896,7 +4974,7 @@ function csv.csv_smoke_typed_returns_probe() -> string {
     virtual_call nargs=1 ntypeargs=0
     store_var _12
 
-  L3:
+  L5:
     load_var _12
     load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.CsvSmokeIntRow>
     load_const "next"
@@ -4904,17 +4982,17 @@ function csv.csv_smoke_typed_returns_probe() -> string {
     store_var _13
     load_var _13
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L6
+    jump L7
 
-  L4:
+  L6:
     load_var2 5 7
     load_field .n
     add_int
     store_var total
-    jump L3
+    jump L5
 
-  L5:
+  L7:
     load_var rec_name
     load_const ":"
     bin_op +
@@ -5182,17 +5260,20 @@ function csv.csv_trim_all() -> string {
     call baml.csv.CsvReader.headers
     store_var _4
     load_var _4
-    store_var headers
-    load_var _4
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    load_type string
-    alloc_array 0
-    store_var headers
+    jump L1
 
   L0:
-    load_var headers
+    load_var _4
+    jump L2
+
+  L1:
+    load_type string
+    alloc_array 0
+
+  L2:
     load_const "|"
     call user.csv.join
     store_var h
@@ -5203,22 +5284,22 @@ function csv.csv_trim_all() -> string {
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_false L3
+    jump L4
 
-  L1:
+  L3:
     load_var _9
     call baml.csv.CsvRecord.fields
     load_const "|"
     call user.csv.join
     store_var row
-    jump L3
+    jump L5
 
-  L2:
+  L4:
     load_const "none"
     store_var row
 
-  L3:
+  L5:
     load_var h
     load_const "/"
     bin_op +

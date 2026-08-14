@@ -47,8 +47,8 @@ class Media {
     // `audio` / `video` / `pdf` primitives, which are distinct static types
     // from the `baml.media.*` wrapper classes `MediaPart` is a union of, so
     // the value bridges through its BEP-038 `{kind, source, value, mime}`
-    // envelope. The envelope's `kind` selects the wrapper explicitly: a
-    // union-typed decode collapses every media kind onto the first member.
+    // envelope. The decode discriminates on the envelope's `kind`, so the
+    // union lands on the wrapper for the value's own media kind.
     function new(
         value: image | audio | video | pdf,
         provider_id: string? = null,
@@ -59,19 +59,7 @@ class Media {
                 throw baml.errors.InvalidArgument { message: `media output could not be encoded: ${e.to_string()}` }
             },
         };
-        let kind = match (baml.json.field(envelope, "kind")) {
-            let tag: string => tag,
-            _ => "image",
-        };
-        let part: root.MediaPart = if (kind == "audio") {
-            baml.json.from_json<baml.media.Audio>(envelope)
-        } else if (kind == "video") {
-            baml.json.from_json<baml.media.Video>(envelope)
-        } else if (kind == "pdf") {
-            baml.json.from_json<baml.media.Pdf>(envelope)
-        } else {
-            baml.json.from_json<baml.media.Image>(envelope)
-        } catch_all (e) {
+        let part: root.MediaPart = baml.json.from_json<root.MediaPart>(envelope) catch_all (e) {
             _ => {
                 throw baml.errors.InvalidArgument { message: `media output could not be decoded: ${e.to_string()}` }
             },

@@ -88,7 +88,7 @@ function null_handling.nh_combined_lhs_null(node: null_handling.NhNode | null, i
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L5
+    jump L7
 
   L0:
     load_var items
@@ -110,15 +110,21 @@ function null_handling.nh_combined_lhs_null(node: null_handling.NhNode | null, i
 
   L3:
     load_var _6
-    store_var _5
-    load_var _6
     load_const null
     cmp_op ==
     pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _6
+    store_var _5
+    jump L6
+
+  L5:
     load_const 1
     store_var _5
 
-  L4:
+  L6:
     load_var node
     copy 0
     load_field .0
@@ -126,22 +132,22 @@ function null_handling.nh_combined_lhs_null(node: null_handling.NhNode | null, i
     bin_op +
     store_field .0
 
-  L5:
+  L7:
     load_var node
     load_const null
     cmp_op ==
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_var node
-    load_field .0
-    jump L8
-
-  L7:
-    load_const null
+    pop_jump_if_false L8
+    jump L9
 
   L8:
+    load_var node
+    load_field .0
+    jump L10
+
+  L9:
+    load_const null
+
+  L10:
     return
 }
 
@@ -150,7 +156,7 @@ function null_handling.nh_combined_rhs_null(node: null_handling.NhNode | null, i
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L5
+    jump L7
 
   L0:
     load_var items
@@ -172,15 +178,21 @@ function null_handling.nh_combined_rhs_null(node: null_handling.NhNode | null, i
 
   L3:
     load_var _6
-    store_var _5
-    load_var _6
     load_const null
     cmp_op ==
     pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _6
+    store_var _5
+    jump L6
+
+  L5:
     load_const 1
     store_var _5
 
-  L4:
+  L6:
     load_var node
     copy 0
     load_field .0
@@ -188,22 +200,22 @@ function null_handling.nh_combined_rhs_null(node: null_handling.NhNode | null, i
     bin_op +
     store_field .0
 
-  L5:
+  L7:
     load_var node
     load_const null
     cmp_op ==
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_var node
-    load_field .0
-    jump L8
-
-  L7:
-    load_const null
+    pop_jump_if_false L8
+    jump L9
 
   L8:
+    load_var node
+    load_field .0
+    jump L10
+
+  L9:
+    load_const null
+
+  L10:
     return
 }
 
@@ -301,15 +313,22 @@ function null_handling.nh_null_coalesce_lazy_non_null(value: int | null) -> int 
     store_var ?2
     load_const 0
     store_deref ?2
-    load_var2 1 1
+    load_var value
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var value
+    jump L2
+
+  L1:
     load_var counter
     make_closure .<lambda(nh_null_coalesce_lazy_non_null, 0)>, 1
     call_indirect
 
-  L0:
+  L2:
     load_const 10
     mul_int
     load_deref ?2
@@ -323,15 +342,22 @@ function null_handling.nh_null_coalesce_null_lhs(value: int | null) -> int {
     store_var ?2
     load_const 0
     store_deref ?2
-    load_var2 1 1
+    load_var value
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var value
+    jump L2
+
+  L1:
     load_var counter
     make_closure .<lambda(nh_null_coalesce_null_lhs, 0)>, 1
     call_indirect
 
-  L0:
+  L2:
     load_const 10
     mul_int
     load_deref ?2

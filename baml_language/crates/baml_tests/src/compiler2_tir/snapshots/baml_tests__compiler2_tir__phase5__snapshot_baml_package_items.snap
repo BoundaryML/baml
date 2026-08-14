@@ -249,17 +249,10 @@ namespace baml.panics:
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
 namespace baml.prompt:
-  class AnthropicOptions { methods: [] }
-  class AzureOpenAiOptions { methods: [] }
-  class BedrockOptions { methods: [] }
   class Context { methods: [output_format_with] }
   class ContextClient { methods: [] }
-  class GoogleAiOptions { methods: [] }
-  class MediaUrlHandler { methods: [] }
   class OutputFormat { methods: [] }
-  class PrimitiveClientOptions { methods: [] }
   class Role { methods: [] }
-  class VertexAiOptions { methods: [] }
   function build_output_format
   function get_return_type
   function make_role

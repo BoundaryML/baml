@@ -2177,7 +2177,7 @@ fn handle_type_name(ns: &str, class: &str) -> syn::Ident {
 
 /// Generate the `RuntimeIo` trait, handle types, `RuntimeIoError`, and `NoopRuntimeIo`.
 ///
-/// This is included in `sys_types` so that both `sys_llm` and `sys_ops` can use it.
+/// This is included in `sys_types` so that `sys_ops` and `sys_auth` can use it.
 pub fn generate_runtime_io(
     io_builtins: &[NativeBuiltin],
     class_defs: &[NativeClassDef],

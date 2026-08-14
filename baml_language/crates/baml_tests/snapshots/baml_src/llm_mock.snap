@@ -287,14 +287,21 @@ function llm_mock.MockJsonServer.last_request(self: llm_mock.MockJsonServer) -> 
     sub_int
     call baml.Array.at
     store_var _2
-    load_var2 2 2
+    load_var _2
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _2
+    jump L2
+
+  L1:
     load_const "mock_json_serve: no request was captured"
     call baml.sys.panic
 
-  L0:
+  L2:
     return
 }
 
@@ -338,17 +345,20 @@ function llm_mock.MockRequest.path(self: llm_mock.MockRequest) -> string {
     call baml.Array.at
     store_var _2
     load_var _2
-    store_var _0
-    load_var _2
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    load_var self
-    load_field .url
-    store_var _0
+    jump L1
 
   L0:
-    load_var _0
+    load_var _2
+    jump L2
+
+  L1:
+    load_var self
+    load_field .url
+
+  L2:
     return
 }
 
@@ -465,14 +475,21 @@ function llm_mock.MockSseServer.last_request(self: llm_mock.MockSseServer) -> ll
     sub_int
     call baml.Array.at
     store_var _2
-    load_var2 2 2
+    load_var _2
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _2
+    jump L2
+
+  L1:
     load_const "mock_sse_serve: no request was captured"
     call baml.sys.panic
 
-  L0:
+  L2:
     return
 }
 
@@ -508,7 +525,7 @@ function llm_mock._merged_headers(content_type: string, extra: map<string, strin
     load_var _8
     is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L3
+    jump L5
 
   L1:
     load_var _8
@@ -519,15 +536,21 @@ function llm_mock._merged_headers(content_type: string, extra: map<string, strin
     call baml.Map.get
     store_var _15
     load_var _15
-    store_var _14
-    load_var _15
     load_const null
     cmp_op ==
     pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _15
+    store_var _14
+    jump L4
+
+  L3:
     load_const ""
     store_var _14
 
-  L2:
+  L4:
     load_type string
     load_type string
     load_var2 3 6
@@ -536,7 +559,7 @@ function llm_mock._merged_headers(content_type: string, extra: map<string, strin
     pop 1
     jump L0
 
-  L3:
+  L5:
     load_var out
     return
 }

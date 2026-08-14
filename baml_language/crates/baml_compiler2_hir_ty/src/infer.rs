@@ -1134,6 +1134,7 @@ fn infer_body_impl<'db>(
         }
         BodyOwnerId::Let(_) => None,
     };
+    ctx.body_owner_id = Some(owner);
     ctx.owner_file = Some(owner.file(db));
     ctx.defaults_owner = matches!(owner, BodyOwnerId::ParameterDefaults(_));
     if let BodyOwnerId::ParameterDefaults(function) = owner {
@@ -1354,6 +1355,15 @@ struct InferenceContext<'db> {
     /// function - the resolver for owner-scoped receivers (`default`
     /// inside an `implements` block, like `self`).
     body_owner: Option<baml_compiler2_hir::loc::FunctionLoc<'db>>,
+    /// The body owner this run walks, for the rare queries that need the
+    /// owner's `AstSourceMap` (property-shorthand identification). Set for
+    /// every owner kind, unlike `body_owner`.
+    body_owner_id: Option<BodyOwnerId<'db>>,
+    /// The value expressions AST lowering marked as property shorthand
+    /// (`{ key }`, never `{ "key": key }`). Materialized on demand - the
+    /// source map is a clone, and only the shorthand DIAGNOSTIC path
+    /// consults it.
+    shorthand_exprs: std::cell::OnceCell<rustc_hash::FxHashSet<ExprId>>,
     /// Whether this run infers a parameter-default arena: the semantic
     /// index keys those expressions under
     /// `ExprMetadataScope::ParameterDefault` (the builder's
@@ -1436,6 +1446,8 @@ impl<'db> InferenceContext<'db> {
             obligations: Vec::new(),
             obligation_anchor: None,
             body_owner: None,
+            body_owner_id: None,
+            shorthand_exprs: std::cell::OnceCell::new(),
             defaults_owner: false,
             chain_nullable: Vec::new(),
             suppressed_unresolved: rustc_hash::FxHashSet::default(),
@@ -2003,10 +2015,21 @@ impl<'db> InferenceContext<'db> {
             }
             Expr::Map { entries } => {
                 // Property shorthand in an UNTYPED object (`{ options }`):
-                // an entry whose key literal spells its own single-segment
-                // value path. When that name resolves nowhere, the
-                // specialized diagnostic (with in-scope near-matches)
-                // supersedes the generic unresolved-name one.
+                // when the elided name resolves nowhere, the specialized
+                // diagnostic (with in-scope near-matches) supersedes the
+                // generic unresolved-name one.
+                //
+                // Two invariants this walk must not re-derive:
+                //   * Shorthand-ness is the PARSER's fact, recorded in the
+                //     source map. Key text equal to the value's name is a
+                //     coincidence a written `{ "key": key }` shares, and
+                //     that entry is not shorthand.
+                //   * Scope is the semantic INDEX's fact. The value is an
+                //     ordinary path expression, so it is in scope exactly
+                //     when a plain use of it would be - through the same
+                //     `resolve_value_path` tiers, which see every binding
+                //     form (`if let`, match arms, `for`, `catch`,
+                //     destructures) and every nesting depth.
                 for (key, value) in entries {
                     let Expr::Literal(Literal::String(key_name)) = &body.exprs[*key] else {
                         continue;
@@ -2017,12 +2040,19 @@ impl<'db> InferenceContext<'db> {
                     if segments.len() != 1 || segments[0].as_str() != key_name.as_str() {
                         continue;
                     }
-                    let locals = self.local_binding_names();
-                    if self.lower.resolve_value(segments).is_some()
-                        || locals.iter().any(|name| name == &segments[0])
+                    if self.path_resolves_locally(*value)
+                        || self.template_param_root(&segments[0])
+                        || self.lower.resolve_value(segments).is_some()
                     {
                         continue;
                     }
+                    if !self.is_property_shorthand(*value) {
+                        // A written `{ "key": key }` with an unbound `key`:
+                        // the generic unresolved-name diagnostic is the
+                        // honest one - there is no shorthand to explain.
+                        continue;
+                    }
+                    let locals = self.local_binding_names(*value);
                     let suggestions =
                         crate::diagnostics::similar_name_suggestions(&segments[0], locals.iter());
                     self.suppressed_unresolved.insert(*value);
@@ -8342,15 +8372,36 @@ impl<'db> InferenceContext<'db> {
         None
     }
 
-    /// Every value name visible at the CURRENT scope (params and let
-    /// bindings through the ancestor chain) - the near-match candidate
-    /// pool for shorthand suggestions.
-    fn local_binding_names(&self) -> Vec<baml_type::Name> {
+    /// Whether AST lowering marked `expr` as the elided value of a
+    /// property shorthand (`{ key }`). The parser's marker is the only
+    /// authority: `{ "key": key }` lowers to the identical hir shape and
+    /// is NOT shorthand.
+    fn is_property_shorthand(&self, expr: ExprId) -> bool {
+        self.shorthand_exprs
+            .get_or_init(|| {
+                self.body_owner_id
+                    .and_then(|owner| baml_compiler2_ppir::body_source_map(self.db, owner))
+                    .map(|source_map| source_map.property_shorthand_exprs.iter().copied().collect())
+                    .unwrap_or_default()
+            })
+            .contains(&expr)
+    }
+
+    /// Every value name visible where `at` sits (params and bindings of
+    /// every form, through the ancestor chain of the expression's OWN
+    /// scope - not the body's, which would miss everything bound inside a
+    /// nested block) - the near-match candidate pool for shorthand
+    /// suggestions.
+    fn local_binding_names(&self, at: ExprId) -> Vec<baml_type::Name> {
         let mut names = Vec::new();
-        let Some(scope) = self.current_scope else {
+        let index = self.index;
+        let scope = self
+            .metadata_key(at)
+            .and_then(|key| index.expression_scope(key))
+            .or(self.current_scope);
+        let Some(scope) = scope else {
             return names;
         };
-        let index = self.index;
         for ancestor in index.ancestor_scopes(scope) {
             let bindings = &index.scope_bindings[ancestor.index() as usize];
             names.extend(bindings.bindings.iter().map(|b| b.name.clone()));

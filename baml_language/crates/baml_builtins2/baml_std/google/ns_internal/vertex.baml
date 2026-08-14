@@ -216,11 +216,8 @@ function vertex_url(c: root.VertexClient, stream: bool) -> string {
         `${_vertex_models_base(c)}/${c.model}${_vertex_method(c, stream)}`,
         c.query_params,
     );
-    // Binder deliberately not named `key`: a quoted map key whose text equals
-    // the value identifier trips a property-shorthand rewrite that cannot see
-    // `if let` binders (repro: _plan/sys_llm_native/compiler-bugs/shorthand-if-let/).
-    if let express_key: string = _vertex_express_key(c) {
-        let params: map<string, string> = { "key": express_key };
+    if let key: string = _vertex_express_key(c) {
+        let params: map<string, string> = { "key": key };
         root.internal._gm_apply_query(with_params, params)
     } else {
         with_params

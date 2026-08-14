@@ -93,130 +93,136 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
 
   L2:
     load_var _9
-    store_var _8
-    load_var _9
     load_const null
     cmp_op ==
     pop_jump_if_false L3
-    load_const 1
-    unary_op -
-    store_var _8
+    jump L4
 
   L3:
-    load_var _8
+    load_var _9
+    jump L5
+
+  L4:
+    load_const 1
+    unary_op -
+
+  L5:
     load_const 0
     cmp_int_op ==
     store_var empty_ok
     load_var metadata
     load_const null
     cmp_op ==
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L6
+    jump L7
 
-  L4:
+  L6:
     load_var metadata
     make_bound_method baml.Map.length
     call_indirect
     store_var _17
-    jump L6
+    jump L8
 
-  L5:
+  L7:
     load_const null
     store_var _17
 
-  L6:
-    load_var _17
-    store_var _16
+  L8:
     load_var _17
     load_const null
     cmp_op ==
-    pop_jump_if_false L7
-    load_const 0
-    store_var _16
+    pop_jump_if_false L9
+    jump L10
 
-  L7:
-    load_var _16
+  L9:
+    load_var _17
+    jump L11
+
+  L10:
+    load_const 0
+
+  L11:
     load_const 1
     cmp_int_op ==
     store_var map_ok
     load_var children
     load_const null
     cmp_op ==
-    pop_jump_if_false L8
-    jump L11
+    pop_jump_if_false L12
+    jump L15
 
-  L8:
+  L12:
     load_const 0
     load_var children
     make_bound_method baml.Array.at
     call_indirect
     load_const null
     cmp_op ==
-    pop_jump_if_false L9
-    jump L11
+    pop_jump_if_false L13
+    jump L15
 
-  L9:
+  L13:
     load_var children
     load_const null
     cmp_op ==
-    pop_jump_if_false L10
-    jump L11
+    pop_jump_if_false L14
+    jump L15
 
-  L10:
+  L14:
     load_const 0
     load_var children
     make_bound_method baml.Array.at
     call_indirect
     load_field .0
-    jump L12
+    jump L16
 
-  L11:
+  L15:
     load_const null
 
-  L12:
+  L16:
     load_const "first"
     call baml.ops.equals_equals
     store_var children_ok
     load_var statuses
     load_const null
     cmp_op ==
-    pop_jump_if_false L13
-    jump L14
+    pop_jump_if_false L17
+    jump L18
 
-  L13:
+  L17:
     load_const 0
     load_var statuses
     make_bound_method baml.Array.at
     call_indirect
     store_var _37
-    jump L15
+    jump L19
 
-  L14:
+  L18:
     load_const null
     store_var _37
 
-  L15:
+  L19:
     load_var _37
     load_const user.generic_union_returns.ParsedStatus.Ready
     alloc_variant user.generic_union_returns.ParsedStatus
     call baml.ops.equals_equals
     store_var statuses_ok
     load_var empty_ok
-    jump_if_false L16
+    jump_if_false L20
     pop 1
     load_var map_ok
 
-  L16:
-    jump_if_false L17
+  L20:
+    jump_if_false L21
     pop 1
     load_var children_ok
 
-  L17:
-    jump_if_false L18
+  L21:
+    jump_if_false L22
     pop 1
     load_var statuses_ok
 
-  L18:
+  L22:
     return
 }
 

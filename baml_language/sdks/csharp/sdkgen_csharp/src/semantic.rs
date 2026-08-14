@@ -238,14 +238,7 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | AI_STREAM_DONE
         | "baml.prompt.Role"
         | "baml.prompt.ContextClient"
-        | "baml.prompt.Context"
-        | "baml.prompt.MediaUrlHandler"
-        | "baml.prompt.PrimitiveClientOptions"
-        | "baml.prompt.AzureOpenAiOptions"
-        | "baml.prompt.AnthropicOptions"
-        | "baml.prompt.GoogleAiOptions"
-        | "baml.prompt.VertexAiOptions"
-        | "baml.prompt.BedrockOptions" => Some(BuiltinProjection::UnsupportedInternal),
+        | "baml.prompt.Context" => Some(BuiltinProjection::UnsupportedInternal),
         _ => None,
     }
 }

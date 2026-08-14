@@ -152,87 +152,105 @@ function errorcontext.ec_deferthrow_check() -> bool {
     call baml.String.index_of
     store_var _3
     load_var _3
-    store_var origin_at
-    load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _3
+    store_var origin_at
+    jump L2
+
+  L1:
     load_const 1
     unary_op -
     store_var origin_at
 
-  L0:
+  L2:
     load_var rendered
     load_const "wrap"
     call baml.String.index_of
     store_var _6
     load_var _6
-    store_var wrap_at
-    load_var _6
     load_const null
     cmp_op ==
-    pop_jump_if_false L1
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _6
+    store_var wrap_at
+    jump L5
+
+  L4:
     load_const 1
     unary_op -
     store_var wrap_at
 
-  L1:
+  L5:
     load_var rendered
     load_const "cleanup"
     call baml.String.index_of
     store_var _9
     load_var _9
-    store_var cleanup_at
-    load_var _9
     load_const null
     cmp_op ==
-    pop_jump_if_false L2
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var _9
+    store_var cleanup_at
+    jump L8
+
+  L7:
     load_const 1
     unary_op -
     store_var cleanup_at
 
-  L2:
+  L8:
     load_var origin_at
     load_const 0
     cmp_int_op >=
-    jump_if_false L3
+    jump_if_false L9
     pop 1
     load_var wrap_at
     load_const 0
     cmp_int_op >=
 
-  L3:
-    jump_if_false L4
+  L9:
+    jump_if_false L10
     pop 1
     load_var cleanup_at
     load_const 0
     cmp_int_op >=
 
-  L4:
+  L10:
     load_var2 2 4
     cmp_int_op <
-    jump_if_false L5
+    jump_if_false L11
     pop 1
     load_var2 4 6
     cmp_int_op <
 
-  L5:
+  L11:
     load_var rendered
     load_const "During handling of the above error, another error occurred"
     call baml.String.split
     container_len
     store_var pieces
-    jump_if_false L6
+    jump_if_false L12
     pop 1
 
-  L6:
-    jump_if_false L7
+  L12:
+    jump_if_false L13
     pop 1
     load_var pieces
     load_const 3
     cmp_int_op ==
 
-  L7:
+  L13:
     return
 }
 

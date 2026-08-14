@@ -3648,6 +3648,15 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         RealizedTy::Map { .. } => Some(baml_type::typetag::MAP),
         RealizedTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
         RealizedTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+        // The `type` metatype (a `reflect.type_of<T>()` value). It is a leaf
+        // with no argument positions to discriminate, so the coarse tag is
+        // exact — and it must be the *same* tag the MIR switch path assigns
+        // (`lower.rs`'s `type_tag_for_ty`), or a `match` would dispatch one way
+        // through its tag switch and another through its `is` chain. Without
+        // this arm the leaf fell into the tagless `_ => None` below and every
+        // `v is type` compiled to constant-FALSE, so in a `match` the `type`
+        // arm never fired and the last arm swallowed the value.
+        RealizedTy::Type { .. } => Some(baml_type::typetag::TYPE),
         RealizedTy::Literal(lit, _, _) => Some(match lit {
             baml_base::Literal::Int(_) => baml_type::typetag::INT,
             baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
@@ -3655,6 +3664,13 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
             baml_base::Literal::String(_) => baml_type::typetag::STRING,
             baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
         }),
+        // The remaining opaque leaves (`RustType`, `Resource`, `PromptAst`)
+        // stay tagless on purpose: their *values* are opaque native handles
+        // (`Object::RustData`), for which the VM reconstructs no BAML type at
+        // all (`value_concrete_ty` → `None`, `value_type_tag` → `UNKNOWN`), so
+        // every runtime test against them answers false however it is emitted.
+        // `Resource`/`PromptAst` additionally have no source spelling — TIR
+        // never produces them — so no user `is` can name one.
         _ => None,
     }
 }

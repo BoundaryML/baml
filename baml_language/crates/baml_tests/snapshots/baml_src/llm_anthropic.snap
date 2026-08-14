@@ -1724,7 +1724,7 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     load_var _9
     is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L9
+    jump L15
 
   L1:
     load_var _9
@@ -1734,7 +1734,7 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     load_var _13
     narrow_bind ai.stream.TextDelta, slot=7
     pop_jump_if_false L2
-    jump L8
+    jump L14
 
   L2:
     load_var ev
@@ -1757,53 +1757,68 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     store_var m
     load_var m
     load_field .stop_reason
-    store_var _31
-    load_var _31
-    store_var _30
-    load_var _31
+    store_var_load_var _31
     load_const null
     cmp_op ==
     pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var _31
+    store_var _30
+    jump L7
+
+  L6:
     load_const "-"
     store_var _30
 
-  L5:
+  L7:
     load_type string | ai.content.StopReason
     load_var _30
     call baml.String.from
     store_var _29
     load_var m
     load_field .input_tokens
-    store_var _36
-    load_var _36
-    store_var _35
-    load_var _36
+    store_var_load_var _36
     load_const null
     cmp_op ==
-    pop_jump_if_false L6
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_var _36
+    store_var _35
+    jump L10
+
+  L9:
     load_const 1
     unary_op -
     store_var _35
 
-  L6:
+  L10:
     load_type int
     load_var _35
     call baml.String.from
     store_var _34
     load_var m
     load_field .output_tokens
-    store_var _41
-    load_var _41
-    store_var _40
-    load_var _41
+    store_var_load_var _41
     load_const null
     cmp_op ==
-    pop_jump_if_false L7
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
+    load_var _41
+    store_var _40
+    jump L13
+
+  L12:
     load_const 1
     unary_op -
     store_var _40
 
-  L7:
+  L13:
     load_type int
     load_var _40
     call baml.String.from
@@ -1825,7 +1840,7 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     pop 1
     jump L0
 
-  L8:
+  L14:
     load_type string
     load_var _13
     load_field .text
@@ -1840,7 +1855,7 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     pop 1
     jump L0
 
-  L9:
+  L15:
     load_type string
     alloc_array 0
     store_var calls
@@ -1851,7 +1866,7 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     virtual_call nargs=1 ntypeargs=0
     store_var _49
 
-  L10:
+  L16:
     load_var _49
     load_type baml.iter.Iterator<Error = never, Item = ai.content.ToolUse>
     load_const "next"
@@ -1859,10 +1874,10 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     store_var _50
     load_var _50
     is_type baml.iter.Done
-    pop_jump_if_false L11
-    jump L12
+    pop_jump_if_false L17
+    jump L18
 
-  L11:
+  L17:
     load_var _50
     store_var u
     load_type string
@@ -1897,9 +1912,9 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     bin_op +
     call baml.Array.push
     pop 1
-    jump L10
+    jump L16
 
-  L12:
+  L18:
     load_type string
     load_var seen
     load_const ","
@@ -1930,88 +1945,113 @@ function llm_anthropic.anthropic_decode_tool_stream() -> string {
     store_var _87
     load_var state
     load_field .cache_read_input_tokens
-    store_var _94
-    load_var _94
-    store_var _93
-    load_var _94
+    store_var_load_var _94
     load_const null
     cmp_op ==
-    pop_jump_if_false L13
+    pop_jump_if_false L19
+    jump L20
+
+  L19:
+    load_var _94
+    store_var _93
+    jump L21
+
+  L20:
     load_const 1
     unary_op -
     store_var _93
 
-  L13:
+  L21:
     load_type int
     load_var _93
     call baml.String.from
     store_var _92
     load_var state
     load_field .cache_creation_input_tokens
-    store_var _100
-    load_var _100
-    store_var _99
-    load_var _100
+    store_var_load_var _100
     load_const null
     cmp_op ==
-    pop_jump_if_false L14
+    pop_jump_if_false L22
+    jump L23
+
+  L22:
+    load_var _100
+    store_var _99
+    jump L24
+
+  L23:
     load_const 1
     unary_op -
     store_var _99
 
-  L14:
+  L24:
     load_type int
     load_var _99
     call baml.String.from
     store_var _98
     load_var state
     load_field .reasoning_tokens
-    store_var _106
-    load_var _106
-    store_var _105
-    load_var _106
+    store_var_load_var _106
     load_const null
     cmp_op ==
-    pop_jump_if_false L15
+    pop_jump_if_false L25
+    jump L26
+
+  L25:
+    load_var _106
+    store_var _105
+    jump L27
+
+  L26:
     load_const 1
     unary_op -
     store_var _105
 
-  L15:
+  L27:
     load_type int
     load_var _105
     call baml.String.from
     store_var _104
     load_var state
     load_field .stop_reason_raw
-    store_var _112
-    load_var _112
-    store_var _111
-    load_var _112
+    store_var_load_var _112
     load_const null
     cmp_op ==
-    pop_jump_if_false L16
+    pop_jump_if_false L28
+    jump L29
+
+  L28:
+    load_var _112
+    store_var _111
+    jump L30
+
+  L29:
     load_const "-"
     store_var _111
 
-  L16:
+  L30:
     load_type string
     load_var _111
     call baml.String.from
     store_var _110
     load_var state
     load_field .model
-    store_var _118
-    load_var _118
-    store_var _117
-    load_var _118
+    store_var_load_var _118
     load_const null
     cmp_op ==
-    pop_jump_if_false L17
+    pop_jump_if_false L31
+    jump L32
+
+  L31:
+    load_var _118
+    store_var _117
+    jump L33
+
+  L32:
     load_const "-"
     store_var _117
 
-  L17:
+  L33:
     load_type string
     load_var _117
     call baml.String.from

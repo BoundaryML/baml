@@ -956,15 +956,6 @@ class AnthStreamState {
     }
 }
 
-// `next ?? previous`, as a function. Written out because `x = next ?? x` is
-// miscompiled today: the assignment target is written before the `??` right
-// operand is evaluated, so reading the target there yields null and the
-// previous value is lost. (Reported with the workstream; remove this helper
-// once the codegen bug is fixed.)
-function _anth_keep_int(next: int?, previous: int?) -> int? {
-    next ?? previous
-}
-
 function _anth_stream_call_at(state: AnthStreamState, index: int?) -> AnthStreamToolCall? {
     let wanted = index ?? -1;
     for (let call in state.tool_calls) {
@@ -1019,18 +1010,14 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
                     if let message: AnthStreamMessage = event.message {
                         state.model = message.model;
                         if let usage: AnthStreamUsage = message.usage {
-                            state.cache_read_input_tokens = _anth_keep_int(
-                                usage.cache_read_input_tokens,
-                                state.cache_read_input_tokens,
-                            );
-                            state.cache_creation_input_tokens = _anth_keep_int(
-                                usage.cache_creation_input_tokens,
-                                state.cache_creation_input_tokens,
-                            );
-                            state.reasoning_tokens = _anth_keep_int(
-                                usage.output_tokens_details?.thinking_tokens,
-                                state.reasoning_tokens,
-                            );
+                            state.cache_read_input_tokens =
+                                usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
+                            state.cache_creation_input_tokens =
+                                usage.cache_creation_input_tokens
+                                    ?? state.cache_creation_input_tokens;
+                            state.reasoning_tokens =
+                                usage.output_tokens_details?.thinking_tokens
+                                    ?? state.reasoning_tokens;
                         }
                         null
                     } else {
@@ -1108,18 +1095,14 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
                     null
                 } else if (t == "message_delta") {
                     if let usage: AnthStreamUsage = event.usage {
-                        state.cache_read_input_tokens = _anth_keep_int(
-                            usage.cache_read_input_tokens,
-                            state.cache_read_input_tokens,
-                        );
-                        state.cache_creation_input_tokens = _anth_keep_int(
-                            usage.cache_creation_input_tokens,
-                            state.cache_creation_input_tokens,
-                        );
-                        state.reasoning_tokens = _anth_keep_int(
-                            usage.output_tokens_details?.thinking_tokens,
-                            state.reasoning_tokens,
-                        );
+                        state.cache_read_input_tokens =
+                            usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
+                        state.cache_creation_input_tokens =
+                            usage.cache_creation_input_tokens
+                                ?? state.cache_creation_input_tokens;
+                        state.reasoning_tokens =
+                            usage.output_tokens_details?.thinking_tokens
+                                ?? state.reasoning_tokens;
                     }
                     let stop: ai.content.StopReason? = match (event.delta?.stop_reason) {
                         null => null,

@@ -953,16 +953,19 @@ function llm_openai_responses._oai_invoke_text(cl: openai.ResponsesClient, input
     call ai.ModelTurn.terminal_text
     store_var _3
     load_var _3
-    store_var _0
-    load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    load_const ""
-    store_var _0
+    jump L1
 
   L0:
-    load_var _0
+    load_var _3
+    jump L2
+
+  L1:
+    load_const ""
+
+  L2:
     return
 }
 
@@ -1006,16 +1009,19 @@ function llm_openai_responses._oai_open_stream(cl: openai.ResponsesClient, input
     call ai.ModelTurn.terminal_text
     store_var _5
     load_var _5
-    store_var _0
-    load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    load_const ""
-    store_var _0
+    jump L1
 
   L0:
-    load_var _0
+    load_var _5
+    jump L2
+
+  L1:
+    load_const ""
+
+  L2:
     return
 }
 
@@ -1101,15 +1107,21 @@ function llm_openai_responses._oai_stream_turn(cl: openai.ResponsesClient) -> st
     call ai.ModelTurn.terminal_text
     store_var _19
     load_var _19
-    store_var _18
-    load_var _19
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _19
+    store_var _18
+    jump L2
+
+  L1:
     load_const ""
     store_var _18
 
-  L0:
+  L2:
     load_type string
     load_var _18
     call baml.String.from
@@ -1651,15 +1663,21 @@ function llm_openai_responses.oai_stream_decoder_buffers() -> string {
     call baml.Map.get
     store_var _21
     load_var _21
-    store_var _20
-    load_var _21
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _21
+    store_var _20
+    jump L2
+
+  L1:
     load_const ""
     store_var _20
 
-  L0:
+  L2:
     load_var batch_one
     container_len
     store_var _27
@@ -1679,17 +1697,22 @@ function llm_openai_responses.oai_stream_decoder_buffers() -> string {
     store_var _32
     load_var state
     load_field .model
-    store_var _35
-    load_var _35
-    store_var _34
-    load_var _35
+    store_var_load_var _35
     load_const null
     cmp_op ==
-    pop_jump_if_false L1
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _35
+    store_var _34
+    jump L5
+
+  L4:
     load_const "unset"
     store_var _34
 
-  L1:
+  L5:
     load_type string
     load_var2 6 8
     load_var2 10 12

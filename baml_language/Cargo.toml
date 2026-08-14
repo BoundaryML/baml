@@ -106,7 +106,6 @@ bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_auth = { path = "crates/sys_auth" }
 sys_glob = { path = "crates/sys_glob" }
-sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
@@ -148,7 +147,6 @@ askama = { version = "0.14.0" }
 # call sites import them unchanged; the `package` is the `forked_*` crate.
 aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
 aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
-aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 bitflags = "2"
@@ -191,7 +189,6 @@ hyper = { version = "1", features = [ "server", "http1", "http2" ] }
 hyper-util = { version = "0.1", features = [ "server", "server-auto", "tokio" ] }
 indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
-infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
 similar = "2"
 jiff = { version = "0.2" }
@@ -274,7 +271,6 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 ] }
 unicode-normalization = "0.1.25"
 ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
-url = "2.5.2"
 uuid = { version = "1", features = [ "serde", "v4" ] }
 walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }

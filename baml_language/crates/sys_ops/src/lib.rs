@@ -44,7 +44,7 @@ pub mod io {
 // `baml_builtins2_codegen` to generate the `RuntimeIo` trait (in
 // `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to all
 // sys-ops -- no VM plumbing (BexHeap, SysOpContext, CallId) in its signatures.
-// Crates like `sys_llm` take `&dyn RuntimeIo` to call into the runtime IO
+// Crates like `sys_auth` take `&dyn RuntimeIo` to call into the runtime IO
 // layer (HTTP, env, filesystem, shell) without coupling to the VM.
 //
 // The generated `RuntimeIoAdapter` below bridges the trait to the underlying
@@ -86,7 +86,18 @@ mod io_adapter {
 pub use io_adapter::build_runtime_io;
 
 // ============================================================================
-// Blanket IO LLM implementation (delegates to sys_llm)
+// Prompt schema rendering + SAP parsing
+// ============================================================================
+// Relocated verbatim from the (now deleted) `sys_llm` crate, whose provider
+// stack was replaced by native BAML client implementations. `sys_ops` was the
+// only remaining caller of these two pieces.
+// ============================================================================
+
+pub mod output_format;
+pub mod sap;
+
+// ============================================================================
+// Blanket IO LLM implementation
 // ============================================================================
 
 /// Look up an LLM function by name via the canonical
@@ -157,7 +168,7 @@ impl<T> io::IoClassSapParseCache for T {
                     });
                 }
             };
-        let sap = ::sys_llm::SapParseCache::new(compiled);
+        let sap = crate::sap::SapParseCache::new(compiled);
         let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
         SysOpOutput::ok(io::owned::sap::ParseCache { _data: data })
     }
@@ -185,10 +196,10 @@ impl<T> io::IoClassPromptContext for T {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         // Render the prebuilt schema handle with the caller's options. The
-        // `Option → RenderOptions` mapping lives inside sys_llm (those option
-        // types are crate-internal there).
+        // `Option → RenderOptions` mapping lives inside `output_format` (those
+        // option types are module-internal there).
         let content = unwrap_output_format(&context._output_format);
-        SysOpOutput::ok(sys_llm::render_output_format_content(
+        SysOpOutput::ok(crate::output_format::render_output_format_content(
             &content,
             prefix,
             or_splitter,
@@ -712,7 +723,7 @@ impl<T> io::IoNamespacePrompt for T {
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
-        SysOpOutput::ok(sys_llm::render_output_format(&return_type, ctx))
+        SysOpOutput::ok(crate::output_format::render_output_format(&return_type, ctx))
     }
 
     fn build_output_format(
@@ -724,7 +735,7 @@ impl<T> io::IoNamespacePrompt for T {
     ) -> SysOpOutput<io::owned::prompt::OutputFormat> {
         // BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
         // carries; `output_format_with(...)` renders it with caller options.
-        let content = sys_llm::build_output_format_content(&return_type, ctx);
+        let content = crate::output_format::build_output_format_content(&return_type, ctx);
         SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
     }
 
@@ -756,13 +767,13 @@ impl<T> io::IoNamespaceSap for T {
         _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<::sys_llm::SapParseCache>() else {
+        let Ok(sap) = cache._data.downcast::<crate::sap::SapParseCache>() else {
             return SysOpOutput::err(VmBamlError::DevOther {
                 message: "Invalid ParseCache: expected SapParseCache".into(),
             });
         };
         SysOpOutput::Ready(
-            sys_llm::execute_sap_parse_final(&json, &sap, ctx).map_err(VmRustFnError::from),
+            crate::sap::execute_sap_parse_final(&json, &sap, ctx).map_err(VmRustFnError::from),
         )
     }
 
@@ -776,12 +787,12 @@ impl<T> io::IoNamespaceSap for T {
         _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<::sys_llm::SapParseCache>() else {
+        let Ok(sap) = cache._data.downcast::<crate::sap::SapParseCache>() else {
             return SysOpOutput::err(VmBamlError::DevOther {
                 message: "Invalid ParseCache: expected SapParseCache".into(),
             });
         };
-        let result = match sys_llm::execute_sap_parse_partial(&json, &sap, ctx) {
+        let result = match crate::sap::execute_sap_parse_partial(&json, &sap, ctx) {
             Ok(Some(value)) => Ok(value),
             Ok(None) => Ok(BexExternalValue::instance(
                 "baml.sap.NoYield",
@@ -795,7 +806,7 @@ impl<T> io::IoNamespaceSap for T {
 
 /// Wrap an `OutputFormatContent` into the generated `owned::prompt::OutputFormat` handle.
 fn wrap_output_format(
-    content: std::sync::Arc<sys_llm::OutputFormatContent>,
+    content: std::sync::Arc<crate::output_format::OutputFormatContent>,
 ) -> io::owned::prompt::OutputFormat {
     io::owned::prompt::OutputFormat {
         _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
@@ -806,11 +817,11 @@ fn wrap_output_format(
 #[allow(clippy::used_underscore_binding)]
 fn unwrap_output_format(
     owned: &io::owned::prompt::OutputFormat,
-) -> std::sync::Arc<sys_llm::OutputFormatContent> {
+) -> std::sync::Arc<crate::output_format::OutputFormatContent> {
     owned
         ._data
         .clone()
-        .downcast::<sys_llm::OutputFormatContent>()
+        .downcast::<crate::output_format::OutputFormatContent>()
         .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 

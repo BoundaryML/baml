@@ -201,29 +201,37 @@ any server at all.
    top-level `function`, keep the `test` block to `assert.*` on its return value.
    Same rule as `../ns_http_server/http_server.baml:3-5`.
 
-2. **The word `client` (or `prompt`) inside a string literal can turn your
-   function into an LLM function.** The parser decides "is this an LLM function"
-   with a raw token pre-scan of the body
-   (`crates/baml_compiler_parser/src/parser.rs:4060-4135`), and string contents
-   lex as ordinary tokens in that scan. A body whose first `client`/`prompt`
-   token is not followed by `=`, `,`, `)`, `.` or `(` classifies as an LLM
-   function, producing a cascade of
+2. **~~The word `client` (or `prompt`) inside a string literal can turn your
+   function into an LLM function.~~ FIXED — kept as history.** The parser
+   decides "is this an LLM function" with a raw token pre-scan of the body
+   (`looks_like_llm_function_body_from` in
+   `crates/baml_compiler_parser/src/parser.rs`), and the lexer emits no string
+   token, so string *contents* used to arrive in that scan as ordinary tokens
+   (`client` even lexes as `KW_CLIENT` inside quotes). A body whose first
+   `client`/`prompt` token was not followed by `=`, `,`, `)`, `.` or `(`
+   classified as an LLM function, producing a cascade of
    `Only 'client', 'tools' and 'prompt' allowed in LLM function`:
 
    ```baml
-   function f() -> string { "the client sent nothing" }   // ERROR
+   function f() -> string { "the client sent nothing" }   // used to ERROR
    ```
 
-   The scan short-circuits on the first `let` / `return` / `if` / `while` /
-   `for` / `throw` / `catch` token at the top level of the body, so either start
-   the body with a statement or reword the string:
+   The pre-scan is now string-aware: it steps over `"…"`, `` `…` `` (including
+   `${…}` interpolations and nested literals), `#"…"#` and `b"…"` spans via
+   `skip_string_literal_from`, so prose is never read as syntax and a literal
+   containing an unbalanced `{`/`}` no longer desynchronizes brace depth. Real
+   LLM bodies still classify on their `client:`/`prompt:` fields. The full
+   matrix is pinned in `../ns_llm_classifier_strings/` plus the parser unit
+   tests `string_contents_never_classify_a_body_as_llm` and
+   `real_llm_bodies_still_classify_with_string_aware_scan`.
+
+   The old workarounds still read fine and stay valid, but are no longer
+   required:
 
    ```baml
    function f() -> string { let msg = "the client sent nothing"; msg }   // ok
    function f() -> string { "no request was captured" }                  // ok
    ```
-
-   (Nested braces are exempt — strings inside a closure body are fine.)
 
 3. **`Array.push` and `Map.set` return a value**; consume it (`let _ = xs.push(x)`)
    or the statement is a type error.

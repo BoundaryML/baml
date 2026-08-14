@@ -870,6 +870,259 @@ impl RenderOptions {
     }
 }
 
+// ============================================================================
+// Clean (owned-type) entry points for trait-based dispatch
+// ============================================================================
+
+/// Render `return_type`'s schema with default options for
+/// `ctx.output_format`. Build the `OutputFormatContent`, then render with
+/// `RenderOptions::default()`. An empty or `None`
+/// render (e.g. a primitive return type with no schema) becomes the empty string.
+pub fn render_output_format(
+    return_type: &baml_type::RuntimeTy,
+    ctx: &::sys_types::SysOpContext,
+) -> String {
+    build_output_format_content(return_type, ctx)
+        .render(&self::RenderOptions::default())
+        .ok()
+        .flatten()
+        .unwrap_or_default()
+}
+
+/// Render a prebuilt [`OutputFormatContent`] with caller-supplied options.
+/// This backs the parameterized `ctx.output_format_with(...)` accessor. The content is
+/// carried as an opaque handle on `Context` (built once by
+/// [`build_output_format_content`]); this only re-renders. The option mapping
+/// (`RenderSetting`/`RenderOptions`) stays crate-internal: a value overrides
+/// that aspect (`Always`), `None` keeps the default (`Auto`).
+// Options arrive by value from the sys-op glue; most are moved into
+// `RenderOptions`, `map_style` is only read — taking it by ref too would just
+// shift the clone to the caller.
+#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+pub fn render_output_format_content(
+    content: &self::OutputFormatContent,
+    prefix: Option<String>,
+    or_splitter: Option<String>,
+    enum_value_prefix: Option<String>,
+    hoisted_class_prefix: Option<String>,
+    always_hoist_enums: Option<bool>,
+    quote_class_fields: Option<bool>,
+    hoist_classes: Option<Vec<String>>,
+    map_style: Option<String>,
+    render_null_as: Option<String>,
+) -> String {
+    use self::{HoistClasses, MapStyle, RenderOptions, RenderSetting};
+    fn setting<V>(o: Option<V>) -> RenderSetting<V> {
+        o.map_or(RenderSetting::Auto, RenderSetting::Always)
+    }
+    let options = RenderOptions {
+        prefix: setting(prefix),
+        or_splitter: setting(or_splitter),
+        enum_value_prefix: setting(enum_value_prefix),
+        hoisted_class_prefix: setting(hoisted_class_prefix),
+        always_hoist_enums: setting(always_hoist_enums),
+        quote_class_fields: setting(quote_class_fields),
+        hoist_classes: hoist_classes.map_or(HoistClasses::Auto, HoistClasses::Subset),
+        map_style: match map_style.as_deref() {
+            // `type_parameters` is the opt-in escape hatch (`map<K, V>`); every
+            // other value (including the default) renders the JSON object shape.
+            Some("type_parameters") => MapStyle::TypeParameters,
+            _ => MapStyle::ObjectLiteral,
+        },
+        render_null_as: setting(render_null_as),
+    };
+    content.render(&options).ok().flatten().unwrap_or_default()
+}
+
+/// Build an `OutputFormatContent` by walking a `RuntimeTy` and collecting all
+/// referenced class/enum/type-alias definitions from `SysOpContext`.
+pub fn build_output_format_content(
+    ty: &baml_type::RuntimeTy,
+    ctx: &::sys_types::SysOpContext,
+) -> self::OutputFormatContent {
+    use std::collections::HashSet;
+
+    let mut content = self::OutputFormatContent::new(ty.clone());
+    let mut visited = HashSet::new();
+    let mut ancestry = Vec::new();
+
+    walk_ty(ty, ctx, &mut content, &mut visited, &mut ancestry);
+
+    content
+}
+
+fn find_class_definition<'a>(
+    ctx: &'a ::sys_types::SysOpContext,
+    type_name: &baml_type::TypeName,
+) -> Option<&'a ::sys_types::ClassDefinition> {
+    ctx.class_definitions.get(type_name).or_else(|| {
+        let mut matches = ctx
+            .class_definitions
+            .iter()
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
+            .map(|(_, def)| def);
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
+    })
+}
+
+fn find_enum_definition<'a>(
+    ctx: &'a ::sys_types::SysOpContext,
+    type_name: &baml_type::TypeName,
+) -> Option<&'a ::sys_types::EnumDefinition> {
+    ctx.enum_definitions.get(type_name).or_else(|| {
+        let mut matches = ctx
+            .enum_definitions
+            .iter()
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
+            .map(|(_, def)| def);
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
+    })
+}
+
+fn find_type_alias_definition<'a>(
+    ctx: &'a ::sys_types::SysOpContext,
+    type_name: &baml_type::TypeName,
+) -> Option<&'a baml_type::RuntimeTy> {
+    ctx.type_alias_definitions.get(type_name).or_else(|| {
+        let mut matches = ctx
+            .type_alias_definitions
+            .iter()
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
+            .map(|(_, ty)| ty);
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
+    })
+}
+
+/// Recursive DFS walk of a type tree. `ancestry` tracks the class names
+/// currently on the call stack so mutual recursion (A → B → A) is detected.
+fn walk_ty(
+    ty: &baml_type::RuntimeTy,
+    ctx: &::sys_types::SysOpContext,
+    content: &mut self::OutputFormatContent,
+    visited: &mut std::collections::HashSet<baml_base::Name>,
+    ancestry: &mut Vec<baml_base::Name>,
+) {
+    use baml_type::RuntimeTy;
+
+    match ty {
+        RuntimeTy::Class(type_name, _, _) => {
+            let key = type_name.display_name();
+
+            // If this class is already on the ancestry stack, it's a recursive cycle.
+            // Only mark classes from the cycle start, not unrelated ancestors.
+            if let Some(start) = ancestry.iter().position(|name| name == &key) {
+                for name in &ancestry[start..] {
+                    content.recursive_classes.insert(name.to_string());
+                }
+                return;
+            }
+
+            if !visited.insert(key.clone()) {
+                return;
+            }
+
+            if let Some(class_def) = find_class_definition(ctx, type_name) {
+                let fields: Vec<self::ClassField> = class_def
+                    .fields
+                    .iter()
+                    .filter(|f| !f.skip)
+                    .map(|f| self::ClassField {
+                        name: f.name.clone(),
+                        alias: f.alias.clone(),
+                        field_type: f.field_type.clone(),
+                        description: f.description.clone(),
+                    })
+                    .collect();
+
+                content.classes.insert(
+                    type_name.display_name().to_string(),
+                    self::Class {
+                        name: type_name.display_name().to_string(),
+                        alias: class_def.alias.clone(),
+                        description: class_def.description.clone(),
+                        fields,
+                    },
+                );
+
+                // Push onto ancestry before recursing into fields
+                ancestry.push(key);
+                for field_def in &class_def.fields {
+                    if !field_def.skip {
+                        walk_ty(&field_def.field_type, ctx, content, visited, ancestry);
+                    }
+                }
+                ancestry.pop();
+            }
+        }
+        RuntimeTy::Enum(type_name, _) => {
+            let key = type_name.display_name();
+            if !visited.insert(key) {
+                return;
+            }
+            if let Some(enum_def) = find_enum_definition(ctx, type_name) {
+                // Skipped variants are already filtered out in bex_engine extraction.
+                let values: Vec<self::EnumValue> = enum_def
+                    .variants
+                    .iter()
+                    .map(|v| self::EnumValue {
+                        name: v.name.clone(),
+                        alias: v.alias.clone(),
+                        description: v.description.clone(),
+                    })
+                    .collect();
+
+                content.enums.insert(
+                    type_name.display_name().to_string(),
+                    self::Enum {
+                        name: type_name.display_name().to_string(),
+                        alias: enum_def.alias.clone(),
+                        description: enum_def.description.clone(),
+                        values,
+                    },
+                );
+            }
+        }
+        RuntimeTy::TypeAlias(type_name, _) => {
+            // The `baml.json.json` recursive alias is an opaque leaf for output-format
+            // rendering — it has no schema body to collect.  Record the sentinel visit so
+            // any later reference is de-duped, but do *not* insert it into
+            // `recursive_type_aliases` (which would trigger schema emission) and do *not*
+            // recurse into the alias body (which would diverge on the self-referential
+            // `json[]` / `map<string, json>` arms).
+            if type_name.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
+                visited.insert(type_name.display_name());
+                return;
+            }
+            let key = type_name.display_name();
+            if !visited.insert(key) {
+                return;
+            }
+            if let Some(target_ty) = find_type_alias_definition(ctx, type_name) {
+                content
+                    .recursive_type_aliases
+                    .insert(type_name.display_name().to_string(), target_ty.clone());
+                walk_ty(target_ty, ctx, content, visited, ancestry);
+            }
+        }
+        RuntimeTy::List(inner, _) => {
+            walk_ty(inner, ctx, content, visited, ancestry);
+        }
+        RuntimeTy::Map { key, value, .. } => {
+            walk_ty(key, ctx, content, visited, ancestry);
+            walk_ty(value, ctx, content, visited, ancestry);
+        }
+        RuntimeTy::Union(members, _) => {
+            for member in members {
+                walk_ty(member, ctx, content, visited, ancestry);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use baml_type::{Freshness, TyAttr, TypeName};

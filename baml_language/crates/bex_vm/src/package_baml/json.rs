@@ -1435,6 +1435,35 @@ fn deserialize_media(
             ));
         }
     };
+
+    // The envelope's `kind` tag is the discriminant, so it must agree with the
+    // target media kind. Without this check nothing in a media decode can
+    // reject a mismatched envelope, and the first-match-wins union arm in
+    // `ty_serde_to_value` collapses every media kind onto the union's first
+    // member (an audio envelope decoding as an `Image` through
+    // `image | audio`). `Generic` is the "any media" tag and discriminates
+    // nothing. An absent (or null) `kind` is accepted for any target —
+    // hand-built `{source, value, mime}` objects stay decodable — which also
+    // means such an envelope still selects a media union's first member.
+    match map.get("kind") {
+        None | Some(serde_json::Value::Null) => {}
+        Some(serde_json::Value::String(tag))
+            if kind == MediaKind::Generic
+                || tag == kind.tag_str()
+                || tag == MediaKind::Generic.tag_str() => {}
+        Some(serde_json::Value::String(tag)) => {
+            let expected = kind.tag_str();
+            return Err(raise_decode(
+                vm,
+                format!("media kind mismatch: envelope is `{tag}`, expected `{expected}`"),
+                path,
+            ));
+        }
+        Some(_) => {
+            return Err(raise_decode(vm, "media object `kind` must be a string", path));
+        }
+    }
+
     let source = map
         .get("source")
         .and_then(serde_json::Value::as_str)

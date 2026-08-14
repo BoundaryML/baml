@@ -1739,6 +1739,133 @@ impl<'a> Parser<'a> {
 
     // ============ String Parsing ============
 
+    /// Raw-token index just past the string literal that STARTS at `i`, or
+    /// `None` when `i` does not begin one.
+    ///
+    /// The lexer is context-free and emits no string token: `"a b"` arrives as
+    /// `Quote Word Whitespace Word Quote`, `#"a"#` as `Hash Quote … Quote Hash`,
+    /// and `` `a` `` as `Backtick … Backtick` (see [`TokenKind`] docs). Any
+    /// lookahead scan that walks raw tokens therefore sees string CONTENTS as
+    /// ordinary tokens — keywords included, since `client` inside quotes lexes
+    /// as `TokenKind::Client`. Such scans must use this helper to step over a
+    /// literal instead of reading prose as syntax.
+    ///
+    /// Close-detection mirrors the real parsers ([`Self::parse_string`],
+    /// [`Self::parse_raw_string_content`], [`Self::parse_backtick_content`]):
+    /// backslash escapes in quoted/backtick literals, hash-count matching for
+    /// raw strings, and the BEP-049 anchored close for backtick runs. An
+    /// unterminated literal yields the end of the token stream, so a scan can
+    /// never loop or resume inside one.
+    fn skip_string_literal_from(&self, i: usize) -> Option<usize> {
+        match self.tokens.get(i)?.kind {
+            // `#"…"#` — no escapes; closes on `"` followed by exactly as many
+            // `#` as opened it.
+            TokenKind::Hash => {
+                let mut j = i;
+                while self.tokens.get(j).map(|t| t.kind) == Some(TokenKind::Hash) {
+                    j += 1;
+                }
+                let opening_hashes = j - i;
+                if self.tokens.get(j).map(|t| t.kind) != Some(TokenKind::Quote) {
+                    // A bare `#` run (e.g. a `#!` shebang) is not a raw string.
+                    return None;
+                }
+                j += 1; // opening quote
+                while j < self.tokens.len() {
+                    if self.tokens[j].kind == TokenKind::Quote {
+                        let mut k = j + 1;
+                        while self.tokens.get(k).map(|t| t.kind) == Some(TokenKind::Hash) {
+                            k += 1;
+                        }
+                        if k - (j + 1) == opening_hashes {
+                            return Some(k);
+                        }
+                    }
+                    j += 1;
+                }
+                Some(self.tokens.len())
+            }
+            // `"…"` (and the `"` of a `b"…"` byte string, whose `b` prefix is a
+            // plain Word that needs no skipping).
+            TokenKind::Quote => {
+                let mut j = i + 1;
+                while j < self.tokens.len() {
+                    match self.tokens[j].kind {
+                        TokenKind::Backslash => j += 2,
+                        TokenKind::Quote => return Some(j + 1),
+                        _ => j += 1,
+                    }
+                }
+                Some(self.tokens.len())
+            }
+            // `` `…` `` — N-tick opener, anchored close on the first run of ≥ N.
+            TokenKind::Backtick => {
+                let mut j = i;
+                while self.tokens.get(j).map(|t| t.kind) == Some(TokenKind::Backtick) {
+                    j += 1;
+                }
+                let opening_ticks = j - i;
+                while j < self.tokens.len() {
+                    match self.tokens[j].kind {
+                        TokenKind::Backslash => j += 2,
+                        // `${…}` holds a host expression that may itself contain
+                        // string literals — skip it as a balanced brace span so
+                        // a nested backtick isn't mistaken for the close.
+                        TokenKind::Dollar
+                            if self.tokens.get(j + 1).map(|t| t.kind)
+                                == Some(TokenKind::LBrace) =>
+                        {
+                            j = self.skip_balanced_braces_from(j + 1);
+                        }
+                        TokenKind::Backtick => {
+                            let run_start = j;
+                            while self.tokens.get(j).map(|t| t.kind) == Some(TokenKind::Backtick) {
+                                j += 1;
+                            }
+                            if j - run_start >= opening_ticks {
+                                return Some(j);
+                            }
+                        }
+                        _ => j += 1,
+                    }
+                }
+                Some(self.tokens.len())
+            }
+            _ => None,
+        }
+    }
+
+    /// Raw-token index just past the `{ … }` span opening at `i`, skipping over
+    /// any string literals inside it. Used to step over a `${…}` interpolation.
+    fn skip_balanced_braces_from(&self, i: usize) -> usize {
+        if self.tokens.get(i).map(|t| t.kind) != Some(TokenKind::LBrace) {
+            return i;
+        }
+        let mut depth = 0usize;
+        let mut j = i;
+        while j < self.tokens.len() {
+            if let Some(after_string) = self.skip_string_literal_from(j) {
+                j = after_string;
+                continue;
+            }
+            match self.tokens[j].kind {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => {
+                    // `depth` is ≥ 1 here (the entry token is the opening
+                    // brace), but the parser must never panic on malformed
+                    // input — saturate rather than underflow.
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return j + 1;
+                    }
+                }
+                _ => {}
+            }
+            j += 1;
+        }
+        j
+    }
+
     /// Count consecutive Hash tokens starting at current position (skipping basic trivia only)
     /// Will skip *leading* trivia, but only basic trivia is allowed internally
     fn count_consecutive_hashes(&self) -> usize {
@@ -4065,6 +4192,18 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            // Invariant: this scan classifies a body from SYNTAX, so it must
+            // never read the inside of a string literal. The lexer emits no
+            // string token — `"the client sent nothing"` arrives as `Quote Word
+            // …`, and `client`/`prompt` inside quotes are indistinguishable
+            // from real field names (`client` even lexes as KW_CLIENT). Skipping
+            // the whole literal is also what keeps `brace_depth` honest when a
+            // literal contains an unbalanced `{`/`}`.
+            if let Some(after_string) = self.skip_string_literal_from(i) {
+                i = after_string;
+                continue;
+            }
+
             let token = &self.tokens[i];
             if self.is_basic_trivia(token.kind) {
                 i += 1;
@@ -4081,9 +4220,8 @@ impl<'a> Parser<'a> {
                         return false;
                     }
                     // `tools` is deliberately NOT a trigger: every LLM function
-                    // must also declare `client` and `prompt`, and raw string
-                    // contents lex as ordinary tokens in this scan, so a body
-                    // containing e.g. "tools/list" would misclassify.
+                    // must also declare `client` and `prompt`, so the pair
+                    // already classifies every real LLM body.
                     if text == "client" || text == "prompt" {
                         // An LLM field is `client <value>` / `prompt <template>`.
                         // A following `=`, `,`, `)`, or `.` means a named call
@@ -9715,6 +9853,70 @@ function Foo() -> {
         for input in inputs {
             // The assertion is simply that this call returns.
             let _ = parse_source(input);
+        }
+    }
+
+    /// The LLM-vs-expression classifier walks raw tokens, where string
+    /// CONTENTS lex as ordinary tokens (`client` even lexes as KW_CLIENT).
+    /// Prose that happens to mention `client`/`prompt`/`tools` must never
+    /// flip a plain function into an LLM body — that produced a cascade of
+    /// "Only 'client', 'tools' and 'prompt' allowed in LLM function" errors.
+    #[test]
+    fn string_contents_never_classify_a_body_as_llm() {
+        let bodies = [
+            // quoted
+            r#""the client sent nothing""#,
+            r#""the prompt was empty""#,
+            r#""tools/list""#,
+            r#""client""#,
+            r#""prompt""#,
+            // the shapes that were already safe, kept safe
+            r#""clients here""#,
+            r#""a client.""#,
+            r#""client = x""#,
+            // backtick, including an interpolation and a nested literal
+            "`the client sent nothing`",
+            "`prompt: ${\"client\"}`",
+            "``a `client` quote``",
+            // raw string
+            r##"#"the client sent nothing"#"##,
+            // escaped quote inside the literal must not end it early
+            r#""say \"client\" now""#,
+            // an unbalanced brace inside a literal must not confuse depth
+            r#""a { client""#,
+        ];
+        for body in bodies {
+            let source = format!("function f() -> string {{ {body} }}\n");
+            let (root, errors) = parse_source(&source);
+            assert!(
+                !root
+                    .descendants()
+                    .any(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY),
+                "body {body} must parse as an expression body, not an LLM body"
+            );
+            assert_no_errors(&errors);
+        }
+    }
+
+    /// The string-awareness fix must not stop real LLM bodies from
+    /// classifying — including ones whose prompt is a backtick block with
+    /// interpolation, braces, and the word `client` inside it.
+    #[test]
+    fn real_llm_bodies_still_classify_with_string_aware_scan() {
+        let sources = [
+            "function F(raw: string) -> string {\n  client: Fast\n  prompt: `hi ${raw}`\n}\n",
+            "function F(raw: string) -> string {\n  client Fast\n  prompt #\"hi\"#\n}\n",
+            // prompt first, and a prompt mentioning `client` / braces
+            "function F(raw: string) -> string {\n  prompt: `client {x} ${raw} ${ctx.output_format}`\n  client: Fast\n}\n",
+        ];
+        for source in sources {
+            let (root, errors) = parse_source(source);
+            assert!(
+                root.descendants()
+                    .any(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY),
+                "expected an LLM_FUNCTION_BODY for:\n{source}"
+            );
+            assert_no_errors(&errors);
         }
     }
 

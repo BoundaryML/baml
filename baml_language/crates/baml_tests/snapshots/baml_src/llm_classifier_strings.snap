@@ -1,0 +1,234 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function llm_classifier_strings.$init_test_ns_llm_classifier_strings_llm_classifier_strings(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.llm_classifier_strings"
+    load_const "clsstr_string_contents_do_not_make_an_llm_function"
+    make_closure .<lambda($init_test_ns_llm_classifier_strings_llm_classifier_strings, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_classifier_strings"
+    load_const "clsstr_previously_safe_shapes_stay_safe"
+    make_closure .<lambda($init_test_ns_llm_classifier_strings_llm_classifier_strings, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_classifier_strings"
+    load_const "clsstr_real_llm_function_still_classifies"
+    make_closure .<lambda($init_test_ns_llm_classifier_strings_llm_classifier_strings, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function llm_classifier_strings.ClsstrEcho(question: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var question
+    call user.llm_classifier_strings.ClsstrEcho$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_classifier_strings.ClsstrEcho$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_classifier_strings.ClsstrEcho$render_prompt(question: string) -> ai.Prompt {
+    load_var question
+    call user.llm_classifier_strings.ClsstrEcho$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_classifier_strings.ClsstrEcho$spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "ClsstrEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(ClsstrEcho$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_classifier_strings.ClsstrEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.llm_classifier_strings.ClsstrEcho$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function llm_classifier_strings.clsstr_assignment_text() -> string {
+    load_const "client = x"
+    return
+}
+
+function llm_classifier_strings.clsstr_backtick_client() -> string {
+    load_const "the client sent nothing"
+    return
+}
+
+function llm_classifier_strings.clsstr_backtick_interpolated() -> string {
+    load_type string
+    load_const "client"
+    call baml.String.from
+    store_var _2
+    load_const "prompt: "
+    load_var _2
+    bin_op +
+    load_const " and tools"
+    bin_op +
+    return
+}
+
+function llm_classifier_strings.clsstr_client_param(client: string) -> string {
+    load_var client
+    call baml.String.to_upper_case
+    return
+}
+
+function llm_classifier_strings.clsstr_escaped_quotes() -> string {
+    load_const "say \"client\" now"
+    return
+}
+
+function llm_classifier_strings.clsstr_let_bound() -> string {
+    load_type string
+    load_const "the client sent nothing"
+    call baml.String.from
+    store_var _4
+    load_type string
+    load_const "the prompt was empty"
+    call baml.String.from
+    store_var _7
+    load_var _4
+    load_const "/"
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}
+
+function llm_classifier_strings.clsstr_llm_spec_prompt() -> string {
+    load_const "hello"
+    call user.llm_classifier_strings.ClsstrEcho$render_prompt
+    call ai.Prompt.text
+    return
+}
+
+function llm_classifier_strings.clsstr_plural() -> string {
+    load_const "clients here"
+    return
+}
+
+function llm_classifier_strings.clsstr_quoted_bare_word() -> string {
+    load_const "client"
+    return
+}
+
+function llm_classifier_strings.clsstr_quoted_client() -> string {
+    load_const "the client sent nothing"
+    return
+}
+
+function llm_classifier_strings.clsstr_quoted_prompt() -> string {
+    load_const "the prompt was empty"
+    return
+}
+
+function llm_classifier_strings.clsstr_quoted_tools() -> string {
+    load_const "the tools list"
+    return
+}
+
+function llm_classifier_strings.clsstr_raw_string_client() -> string {
+    load_const "the client sent nothing"
+    return
+}
+
+function llm_classifier_strings.clsstr_trailing_dot() -> string {
+    load_const "a client."
+    return
+}
+
+function llm_classifier_strings.clsstr_unbalanced_brace() -> string {
+    load_const "a { client and a prompt"
+    return
+}

@@ -6538,15 +6538,16 @@ impl LoweringContext<'_> {
         rhs: AstExprId,
         dest: Place,
     ) {
-        // Evaluate LHS and store in dest
+        // INVARIANT: `dest` may alias a place the RHS reads (`a = n ?? a`,
+        // `s.a = n ?? s.a`), so it must be written on exactly one path, after
+        // that path's value is known — never eagerly before the branch. Same
+        // shape as `lower_if`: each arm writes `dest`, the join reads it.
         let lhs_op = self.lower_to_operand(lhs);
-        self.builder
-            .assign(dest.clone(), Rvalue::Use(lhs_op.clone()));
 
         // Test: lhs == null
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
-            left: lhs_op,
+            left: lhs_op.clone(),
             right: Operand::Constant(Constant::Null),
         };
         let test_local = self.builder.temp(RuntimeTy::Bool {
@@ -6555,17 +6556,22 @@ impl LoweringContext<'_> {
         self.builder.assign(Place::local(test_local), is_null);
 
         let bb_rhs = self.builder.create_block();
+        let bb_lhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
         // If null → evaluate RHS, otherwise keep LHS
         self.builder
-            .branch(Operand::Copy(Place::Local(test_local)), bb_rhs, bb_join);
+            .branch(Operand::Copy(Place::Local(test_local)), bb_rhs, bb_lhs);
 
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr(rhs, dest);
+        self.lower_expr(rhs, dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
+
+        self.builder.set_current_block(bb_lhs);
+        self.builder.assign(dest, Rvalue::Use(lhs_op));
+        self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
     }
