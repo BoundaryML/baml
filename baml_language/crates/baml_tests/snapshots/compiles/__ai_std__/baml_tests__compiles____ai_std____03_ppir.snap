@@ -100,6 +100,16 @@ function ai.clients.new(members: root.Client[]) -> ai.clients.RoundRobin  [expr]
 }
 
 --- <builtin>/ai/ns_content/content.baml ---
+class ai.content.Media {
+  media: root.MediaPart
+  provider_id: string?
+  revised_prompt: string?
+}
+class ai.content.Media$stream {
+  media: root.MediaPart$stream | null
+  provider_id: string | null
+  revised_prompt: string | null
+}
 class ai.content.Reasoning {
   summary: string
 }
@@ -123,8 +133,14 @@ class ai.content.ToolUse$stream {
   args: map<string, unknown>
 }
 enum ai.content.StopReason {Complete, ToolUse, MaxTokens, Refused}
-type ai.content.Block = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
-type ai.content.Block$stream = ai.content.Text$stream | ai.content.Reasoning$stream | ai.content.ToolUse$stream
+type ai.content.Block = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+type ai.content.Block$stream = ai.content.Text$stream | ai.content.Reasoning$stream | ai.content.ToolUse$stream | ai.content.Media$stream
+function ai.content.kind(self: ?) -> string  [expr] {
+  {  } match (self.media) { image: baml.media.Image => "image", audio: baml.media.Audio => "audio", video: baml.media.Video => "video", pdf: baml.media.Pdf => "pdf" }
+}
+function ai.content.new(value: image | audio | video | pdf, provider_id: string? = null, revised_prompt: string? = null) -> ai.content.Media  [expr] {
+  { let envelope = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }; let kind = match (baml.json.field(envelope, "kind")) { tag: string => tag, _ => "image" }; let part: root.MediaPart = if (kind Eq "audio") {  } baml.json.from_json(envelope) else if (kind Eq "video") {  } baml.json.from_json(envelope) else if (kind Eq "pdf") {  } baml.json.from_json(envelope) else {  } baml.json.from_json(envelope) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } } } ai.content.Media { media: part, provider_id: provider_id, revised_prompt: revised_prompt }
+}
 
 --- <builtin>/ai/ns_errors/errors.baml ---
 class ai.errors.InvalidRequest {
@@ -302,6 +318,13 @@ class ai.events.UserMessage$stream {
 }
 type ai.events.Event = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
 type ai.events.Event$stream = ai.events.RunStarted$stream | ai.events.UserMessage$stream | ai.events.AssistantMessage$stream | ai.events.ToolRequested$stream | ai.events.ToolCompleted$stream | ai.events.ToolFailed$stream | ai.events.Usage$stream | ai.events.FinalProduced$stream
+
+--- <builtin>/ai/ns_internal/auth.baml ---
+function ai.internal._aws_resolve_region(region: string?, profile: string?) -> string?  [builtin]
+function ai.internal._aws_sign_request(request: baml.http.Request, service: string, region: string?, profile: string?, access_key_id: string?, secret_access_key: string?, session_token: string?) -> baml.http.Request  [builtin]
+function ai.internal._gcp_access_token(credentials_json: string?, scope: string) -> string  [builtin]
+function ai.internal._gcp_project_id(credentials_json: string?) -> string?  [builtin]
+function ai.internal._gcp_quota_project_id(credentials_json: string?) -> string?  [builtin]
 
 --- <builtin>/ai/ns_internal/helpers.baml ---
 class ai.internal.SpecCtx {
@@ -510,8 +533,45 @@ function ai.tools.tool(handler: baml.AnyFunction, name: string? = null, descript
 lambda (t) in get: captures [name]
 
 --- <builtin>/ai/ns_wire/wire.baml ---
+class ai.wire.ResolvedMedia {
+  url: string?
+  base64: string?
+  mime_type: string
+}
+class ai.wire.ResolvedMedia$stream {
+  url: string | null
+  base64: string | null
+  mime_type: string | null
+}
+function ai.wire._flush_orphaned_calls(out: root.events.Event[], pending: string[]) -> null  [expr] {
+  { for id in pending { out.push(root.events.ToolFailed { id: id, message: "No result provided" }) } } pending.clear()
+}
+function ai.wire._media_mime_type(explicit: string?, source_value: string, kind: string) -> string  [expr] {
+  { if let supplied: string = explicit { return supplied }; let source = source_value.to_lower_case() } if (source.includes(".jpg") Or source.includes(".jpeg")) {  } "image/jpeg" else if (source.includes(".png")) {  } "image/png" else if (source.includes(".webp")) {  } "image/webp" else if (source.includes(".gif")) {  } "image/gif" else if (source.includes(".svg")) {  } "image/svg+xml" else if (source.includes(".wav")) {  } "audio/wav" else if (source.includes(".mp3")) {  } "audio/mpeg" else if (source.includes(".flac")) {  } "audio/flac" else if (source.includes(".ogg")) {  } "audio/ogg" else if (source.includes(".webm")) {  } if (kind Eq "audio") {  } "audio/webm" else {  } "video/webm" else if (source.includes(".mov")) {  } "video/quicktime" else if (source.includes(".mp4")) {  } "video/mp4" else if (source.includes(".avi")) {  } "video/x-msvideo" else if (source.includes(".mkv")) {  } "video/x-matroska" else if (source.includes(".pdf")) {  } "application/pdf" else if (kind Eq "audio") {  } "audio/mpeg" else if (kind Eq "video") {  } "video/mp4" else if (kind Eq "pdf") {  } "application/pdf" else {  } "image/png"
+}
+function ai.wire._merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.json  [expr] {
+  {  } match (patch) { patch_object: map<string, baml.json.json> => { let out: map<string, baml.json.json> = map {  }; match (base) { base_object: map<string, baml.json.json> => { for key in base_object.keys() { let _ = out.set(key, base_object.get(key)) } } null, _ => null }; for key in patch_object.keys() { let value = patch_object.get(key); match (value) { null => { let _ = out.delete(key) } null, _ => { let _ = out.set(key, _merge_json(out.get(key), value)) } null } } } out, _ => patch }
+}
+function ai.wire._resolve_media_content(url: string?, file: string?, inline: string, mime: string, fetch_url: bool) -> ai.wire.ResolvedMedia  [expr] {
+  { if let path: string = file { let handle = baml.fs.open(path, "r"); let data = handle.bytes().to_base64(); handle.close(); return ai.wire.ResolvedMedia { url: null, base64: data, mime_type: mime } }; if (inline Ne "") { return ai.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) {  } if let separator: int = media_url.index_of(";base64,") { return ai.wire.ResolvedMedia { url: null, base64: media_url.substring(separator Add 8, media_url.length()), mime_type: media_url.substring(5, separator) } }; if (Not fetch_url Or media_url.starts_with("gs://")) { return ai.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; let response = baml.http.fetch(media_url); if (Not response.ok()) { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } }; let response_mime = response.headers.get("content-type") NullCoalesce mime; return ai.wire.ResolvedMedia { url: null, base64: response.bytes().to_base64(), mime_type: response_mime.split(";").at(0) NullCoalesce mime } }; throw baml.errors.InvalidArgument { message: "media has no URL,..." } }
+}
+function ai.wire._resolve_pending_call(pending: string[], id: string) -> null  [expr] {
+  { if let index: int = pending.index_of(id) { let _ = pending.remove_at(index) } } null
+}
+function ai.wire._wire_blocks(content: root.content.Block[], keep_reasoning: bool) -> root.content.Block[]  [expr] {
+  { let out: root.content.Block[] = []; for block in content { match (block) { text: root.content.Text => { if (text.text.trim() Ne "") { out.push(text) } } null, reasoning: root.content.Reasoning => { if (keep_reasoning) { out.push(reasoning) } } null, use: root.content.ToolUse => { out.push(use) } null, media: root.content.Media => null } } } out
+}
+function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.json?) -> baml.json.json  [expr] {
+  {  } match (overrides) { null => base, _ => _merge_json(base, overrides) }
+}
 function ai.wire.render_output_format(t: type) -> string  [expr] {
   {  } baml.prompt.render_output_format(t)
+}
+function ai.wire.resolve_media(media: ai.MediaPart, fetch_url: bool) -> ai.wire.ResolvedMedia  [expr] {
+  {  } match (media) { image: baml.media.Image => { let source = image.file() NullCoalesce image.url() NullCoalesce "" } _resolve_media_content(image.url(), image.file(), image.base64(), _media_mime_type(image.mime_type(), source, "image"), fetch_url), audio: baml.media.Audio => { let source = audio.file() NullCoalesce audio.url() NullCoalesce "" } _resolve_media_content(audio.url(), audio.file(), audio.base64(), _media_mime_type(audio.mime_type(), source, "audio"), fetch_url), video: baml.media.Video => { let source = video.file() NullCoalesce video.url() NullCoalesce "" } _resolve_media_content(video.url(), video.file(), video.base64(), _media_mime_type(video.mime_type(), source, "video"), fetch_url), pdf: baml.media.Pdf => { let source = pdf.file() NullCoalesce pdf.url() NullCoalesce "" } _resolve_media_content(pdf.url(), pdf.file(), pdf.base64(), _media_mime_type(pdf.mime_type(), source, "pdf"), fetch_url) }
+}
+function ai.wire.sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal  [expr] {
+  { let out: root.events.Event[] = []; let pending: string[] = []; for event in j.entries() { match (event) { assistant: root.events.AssistantMessage => { let _ = _flush_orphaned_calls(out, pending); let blocks = _wire_blocks(assistant.content, assistant.client_id Eq client_id); if (blocks.length() Gt 0) { out.push(root.events.AssistantMessage { content: blocks, client_id: assistant.client_id }); for block in blocks {  } if let use: root.content.ToolUse = block { pending.push(use.id) } } null else {  } null } null, user: root.events.UserMessage => { let _ = _flush_orphaned_calls(out, pending); out.push(user) } null, completed: root.events.ToolCompleted => { let _ = _resolve_pending_call(pending, completed.id); out.push(completed) } null, failed: root.events.ToolFailed => { let _ = _resolve_pending_call(pending, failed.id); out.push(failed) } null, _ => { out.push(event) } null } }; let _ = _flush_orphaned_calls(out, pending) } root.Journal { log: out }
 }
 function ai.wire.send_as(req: baml.http.Request, provider: string) -> T  [expr] {
   { let resp = baml.http.send(req) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text) } } baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }
@@ -541,13 +601,40 @@ class ai.RunResult$stream {
   usage: root.events.Usage$stream | null
 }
 function ai._attempt_turn(self: ?, c: Client, spec: FunctionSpec<Out>, j: Journal, total: root.events.Usage, attempts_left: int) -> ModelTurn  [expr] {
-  { let turn = c.invoke(ModelTurnInput { prompt: spec.prompt_template, journal: j, toolbox: spec.tools(), output_type: spec.output_type() }); if let u: root.events.Usage = turn.usage { total.input_tokens Add= u.input_tokens; total.output_tokens Add= u.output_tokens; if let ci: int = u.cached_input_tokens { total.cached_input_tokens = total.cached_input_tokens NullCoalesce 0 Add ci } } if let rt: int = u.reasoning_tokens { total.reasoning_tokens = total.reasoning_tokens NullCoalesce 0 Add rt }; let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }]; for u in turn.tool_uses() { batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args }) }; if let u: root.events.Usage = turn.usage { batch.push(u) }; let candidate = turn.terminal_text() NullCoalesce ""; let accepted = turn.tool_uses().length() Gt 0 Or turn.stop_reason Eq root.content.StopReason.MaxTokens Or turn.stop_reason Eq root.content.StopReason.Refused Or self._parses(candidate) } if (accepted) { j.append_all(batch); match (turn.stop_reason) { root.content.StopReason.MaxTokens => { throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } }, root.content.StopReason.Refused => { throw root.errors.Refused { provider: c.id(), reason: "the model decline...", raw_body: null } }, _ => null } } turn else if (attempts_left Gt 1) { batch.push(root.events.UserMessage { content: "The reply did not..." }); j.append_all(batch) } self._attempt_turn(c, spec, j, total, attempts_left Sub 1) else { j.append_all(batch); throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } }
+  { let turn = c.invoke(ModelTurnInput { prompt: spec.prompt_template, journal: j, toolbox: spec.tools(), output_type: spec.output_type() }); if let u: root.events.Usage = turn.usage { total.input_tokens Add= u.input_tokens; total.output_tokens Add= u.output_tokens; if let ci: int = u.cached_input_tokens { total.cached_input_tokens = total.cached_input_tokens NullCoalesce 0 Add ci } } if let rt: int = u.reasoning_tokens { total.reasoning_tokens = total.reasoning_tokens NullCoalesce 0 Add rt }; let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }]; for u in turn.tool_uses() { batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args }) }; if let u: root.events.Usage = turn.usage { batch.push(u) }; let candidate = turn.terminal_text() NullCoalesce ""; let accepted = turn.tool_uses().length() Gt 0 Or turn.stop_reason Eq root.content.StopReason.MaxTokens Or turn.stop_reason Eq root.content.StopReason.Refused Or self._parses(turn, candidate) } if (accepted) { j.append_all(batch); match (turn.stop_reason) { root.content.StopReason.MaxTokens => { throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } }, root.content.StopReason.Refused => { throw root.errors.Refused { provider: c.id(), reason: "the model decline...", raw_body: null } }, _ => null } } turn else if (attempts_left Gt 1) { batch.push(root.events.UserMessage { content: "The reply did not..." }); j.append_all(batch) } self._attempt_turn(c, spec, j, total, attempts_left Sub 1) else { j.append_all(batch); throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } }
 }
 function ai._emit_from(self: ?, j: Journal, seen: int) -> int  [expr] {
   { let entries = j.entries(); let i = seen; while i Lt entries.length() { if let e: root.events.Event = entries.at(i) { let _ = self.on_event(e) }; i = i Add 1 } } entries.length()
 }
-function ai._parses(self: ?, candidate: string) -> bool  [expr] {
-  { let _ = baml.sap.parse(candidate) catch_all (e) { _ => { return false } } } true
+function ai._has_media_output(self: ?, turn: ModelTurn) -> bool  [expr] {
+  { let shape = _media_shape(reflect.type_of()); let form = shape.split(":").at(0) NullCoalesce ""; if (form Eq "") { return false }; if (form Eq "mixed" Or form Eq "mixedlist") { return _media_mixed_parts(turn).length() Gt 0 } } _media_of_kind(turn, shape.split(":").at(1) NullCoalesce "").length() Gt 0
+}
+function ai._media_all_text(items: baml.json.json[]) -> bool  [expr] {
+  { for i in items {  } if (Not i is string) { return false } } true
+}
+function ai._media_envelope(m: root.content.Media) -> baml.json.json  [expr] {
+  {  } baml.json.to_json(m.media) catch_all (e) { _ => { throw baml.errors.UnknownError { data: e, message: [e.to_string()] } } }
+}
+function ai._media_join_text(items: baml.json.json[]) -> baml.json.json  [expr] {
+  { let out = ""; for i in items {  } if let s: string = i { out Add= s } } out
+}
+function ai._media_mixed_parts(turn: ModelTurn) -> baml.json.json[]  [expr] {
+  { let items: baml.json.json[] = []; for b in turn.content { match (b) { t: root.content.Text => { if (t.text.trim() Ne "") { items.push(t.text) } } null, m: root.content.Media => { if (m.kind() Eq "image") { items.push(_media_envelope(m)) } } null, _ => null } } } items
+}
+function ai._media_of_kind(turn: ModelTurn, kind: string) -> baml.json.json[]  [expr] {
+  { let out: baml.json.json[] = []; for b in turn.content {  } if let m: root.content.Media = b {  } if (m.kind() Eq kind) { out.push(_media_envelope(m)) } } out
+}
+function ai._media_reject_mixed(turn: ModelTurn, kind: string, provider: string) -> null  [expr] {
+  { let unexpected = 0; for b in turn.content { match (b) { m: root.content.Media => { if (m.kind() Ne kind) { unexpected = unexpected Add 1 } } null, t: root.content.Text => { if (t.text.trim() Ne "") { unexpected = unexpected Add 1 } } null, _ => null } }; if (unexpected Gt 0) { throw root.errors.ParseFailed { provider: provider, raw_output: `...` } } } null
+}
+function ai._media_shape(t: type) -> string  [expr] {
+  { if (t Eq reflect.type_of()) { return "one:image" }; if (t Eq reflect.type_of()) { return "one:audio" }; if (t Eq reflect.type_of()) { return "one:video" }; if (t Eq reflect.type_of()) { return "one:pdf" }; if (t Eq reflect.type_of()) { return "opt:image" }; if (t Eq reflect.type_of()) { return "opt:audio" }; if (t Eq reflect.type_of()) { return "opt:video" }; if (t Eq reflect.type_of()) { return "opt:pdf" }; if (t Eq reflect.type_of() Or t Eq reflect.type_of()) { return "list:image" }; if (t Eq reflect.type_of() Or t Eq reflect.type_of()) { return "mixedlist:image" }; if (t Eq reflect.type_of() Or t Eq reflect.type_of()) { return "mixed:image" } } ""
+}
+function ai._media_value(self: ?, turn: ModelTurn, provider: string) -> Out  [expr] {
+  { let t = reflect.type_of(); let shape = _media_shape(t); let form = shape.split(":").at(0) NullCoalesce ""; let kind = shape.split(":").at(1) NullCoalesce ""; let payload = if (form Eq "mixedlist") { let items: baml.json.json = _media_mixed_parts(turn) } items else if (form Eq "mixed") { let items = _media_mixed_parts(turn) } if (items.length() Eq 1) { let only: baml.json.json = null; for i in items { only = i } } only else if (_media_all_text(items)) {  } _media_join_text(items) else { throw root.errors.ParseFailed { provider: provider, raw_output: `...` } } else if (form Eq "list") { let _ = _media_reject_mixed(turn, kind, provider); let items: baml.json.json = _media_of_kind(turn, kind) } items else { let parts = _media_of_kind(turn, kind); let _ = _media_reject_mixed(turn, kind, provider); if (parts.length() Ne 1) { throw root.errors.ParseFailed { provider: provider, raw_output: if (form Eq "one") {  } `...` else {  } `...` } }; let only: baml.json.json = null; for p in parts { only = p } } only } baml.json.from_json(payload) catch_all (e) { _ => { throw root.errors.ParseFailed { provider: provider, raw_output: `...` } } }
+}
+function ai._parses(self: ?, turn: ModelTurn, candidate: string) -> bool  [expr] {
+  { if (_media_shape(reflect.type_of()) Ne "") { return self._has_media_output(turn) }; let _ = baml.sap.parse(candidate) catch_all (e) { _ => { return false } } } true
 }
 function ai._run_one_tool(self: ?, tb: root.tools.Toolbox, call: root.content.ToolUse, j: Journal) -> null  [expr] {
   {  } match (tb.get(call.name)) { t: root.tools.Tool => { let outcome: string? = t.call(call.args) catch_all (e) { _ => { j.append_all([root.events.ToolFailed { id: call.id, message: e.to_string() }]) } if (t.on_error NullCoalesce self.tool_errors Eq root.tools.ErrorMode.Raise) { let classified = match (e) { f: root.errors.Failure => f, _ => null }; throw root.errors.ToolFailedError { id: call.id, name: call.name, message: e.to_string(), cause: classified } } else {  } null }; if let output: string = outcome { j.append_all([root.events.ToolCompleted { id: call.id, output: output }]) } } null, null => { j.append_all([root.events.ToolFailed { id: call.id, message: `...` }]) } null }
@@ -556,7 +643,7 @@ function ai.new(max_steps: int = 12, client: Client? = null, tool_errors: root.t
   {  } ai.Agent { max_steps: max_steps, client: client, tool_errors: tool_errors, on_event: on_event NullCoalesce (e: root.events.Event) -> { {  } null } }
 }
 function ai.run(self: ?, spec: FunctionSpec<Out>) -> ai.RunResult<Out>  [expr] {
-  { let selected = self.client NullCoalesce spec.default_client; let j = Journal.new(spec); let seen = self._emit_from(j, 0); let steps = 0; let total = root.events.Usage { input_tokens: 0, output_tokens: 0, cached_input_tokens: null, reasoning_tokens: null }; let fail_counts: map<string, int> = map {  }; while steps Lt self.max_steps { let turn = self._attempt_turn(selected, spec, j, total, 2); steps = steps Add 1; seen = self._emit_from(j, seen); let calls = turn.tool_uses() } if (calls.length() Gt 0) { let before = j.entries().length(); let futures = calls.map((call) -> { {  } spawn { () -> { {  } self._run_one_tool(spec.tools(), call, j) } } }); let _ = await baml.future.all(futures); seen = self._emit_from(j, seen); let entries = j.entries(); let i = before; while i Lt entries.length() { if let f: root.events.ToolFailed = entries.at(i) { let failed_call = calls.find((one: root.content.ToolUse) -> { {  } one.id Eq f.id }) } if let known: root.content.ToolUse = failed_call { let key = `...`; let n = fail_counts.get(key) NullCoalesce 0 Add 1; let _ = fail_counts.set(key, n) } if (n Ge 3) { throw root.errors.ToolFailedError { id: known.id, name: known.name, message: `...`, cause: null } }; i = i Add 1 } } else { let candidate = turn.terminal_text() NullCoalesce ""; let value = baml.sap.parse(candidate) catch_all (e) { _ => { throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate } } }; let value_json = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.UnknownError { data: e, message: [e.to_string()] } } }; j.append_all([root.events.FinalProduced { value_json: baml.json.stringify(value_json) }]); seen = self._emit_from(j, seen); return ai.RunResult { value: value, journal: j, usage: total } }; throw root.errors.StepBudgetExceeded { steps: steps } }
+  { let selected = self.client NullCoalesce spec.default_client; let j = Journal.new(spec); let seen = self._emit_from(j, 0); let steps = 0; let total = root.events.Usage { input_tokens: 0, output_tokens: 0, cached_input_tokens: null, reasoning_tokens: null }; let fail_counts: map<string, int> = map {  }; while steps Lt self.max_steps { let turn = self._attempt_turn(selected, spec, j, total, 2); steps = steps Add 1; seen = self._emit_from(j, seen); let calls = turn.tool_uses() } if (calls.length() Gt 0) { let before = j.entries().length(); let futures = calls.map((call) -> { {  } spawn { () -> { {  } self._run_one_tool(spec.tools(), call, j) } } }); let _ = await baml.future.all(futures); seen = self._emit_from(j, seen); let entries = j.entries(); let i = before; while i Lt entries.length() { if let f: root.events.ToolFailed = entries.at(i) { let failed_call = calls.find((one: root.content.ToolUse) -> { {  } one.id Eq f.id }) } if let known: root.content.ToolUse = failed_call { let key = `...`; let n = fail_counts.get(key) NullCoalesce 0 Add 1; let _ = fail_counts.set(key, n) } if (n Ge 3) { throw root.errors.ToolFailedError { id: known.id, name: known.name, message: `...`, cause: null } }; i = i Add 1 } } else { let candidate = turn.terminal_text() NullCoalesce ""; let value = if (self._has_media_output(turn)) {  } self._media_value(turn, selected.id()) else {  } baml.sap.parse(candidate) catch_all (e) { _ => { throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate } } }; let value_json = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.UnknownError { data: e, message: [e.to_string()] } } }; j.append_all([root.events.FinalProduced { value_json: baml.json.stringify(value_json) }]); seen = self._emit_from(j, seen); return ai.RunResult { value: value, journal: j, usage: total } }; throw root.errors.StepBudgetExceeded { steps: steps } }
 }
 
 --- captures ---
@@ -587,11 +674,19 @@ class ai.Prompt$stream {
 class ai.PromptMessage {
   role: string
   content: string
+  parts: ai.PromptPart[]
+  metadata: map<string, baml.json.json>
 }
 class ai.PromptMessage$stream {
   role: string | null
   content: string | null
+  parts: ai.PromptPart$stream[]
+  metadata: map<string, baml.json.json$stream>
 }
+type ai.MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+type ai.MediaPart$stream = baml.media.Image$stream | baml.media.Audio$stream | baml.media.Video$stream | baml.media.Pdf$stream
+type ai.PromptPart = string | ai.MediaPart
+type ai.PromptPart$stream = string | ai.MediaPart$stream
 function ai.arguments(self: ?) -> map<string, unknown>  [expr] {
   {  } self.args
 }
@@ -641,6 +736,9 @@ class ai.ModelTurnInput$stream {
   journal: Journal$stream | null
   toolbox: root.tools.Toolbox$stream | null
   output_type: unknown
+}
+function ai.media(self: ?) -> MediaPart[]  [expr] {
+  { let out: MediaPart[] = []; for b in self.content {  } if let m: root.content.Media = b { out.push(m.media) } } out
 }
 function ai.terminal_text(self: ?) -> string?  [expr] {
   { let out: string? = null; for b in self.content {  } if let t: root.content.Text = b { out = t.text } } out

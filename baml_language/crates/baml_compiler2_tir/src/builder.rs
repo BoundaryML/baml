@@ -9561,14 +9561,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_throw_facts_from_expr(arg.expr, body, out);
                 }
+                let analysis = BuilderThrowsAnalysis { builder: self };
+                // A `to_string`/`to_json`/`from_json` sugar fallback resolves to no
+                // real method, so `collect_callee_escaping_throws` would fall through
+                // to its unaccounted-callee default and charge a bogus `Ty::Unknown`
+                // fact. Charge what the rewritten stdlib call actually throws instead
+                // — same guard the inferred-`throws` walker applies
+                // (`throws_analysis::collect_from_expr`). Without it a catch binder
+                // over e.g. `f().to_string()` was typed `... | Unknown`, and that
+                // error-recovery sentinel ICE'd MIR's runtime-type lowering.
+                if let Some(sugar) = crate::throws_analysis::sugar_fallback_call_throws(
+                    &analysis, *callee, &arg_exprs, body,
+                ) {
+                    out.extend(sugar);
+                    return;
+                }
                 crate::throws_analysis::collect_callee_escaping_throws(
-                    &BuilderThrowsAnalysis { builder: self },
-                    expr_id,
-                    *callee,
-                    &arg_exprs,
-                    body,
-                    false,
-                    out,
+                    &analysis, expr_id, *callee, &arg_exprs, body, false, out,
                 );
             }
             Expr::If {

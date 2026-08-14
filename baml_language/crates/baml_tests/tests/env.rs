@@ -115,7 +115,7 @@ async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
                     output_type: reflect.type_of<string>(),
                 };
                 openai.internal.openai_render(
-                    openai.OpenAiClient.new(model = "gpt-4o"),
+                    openai.ResponsesClient.new(model = "gpt-4o"),
                     input,
                 ).headers
             }

@@ -6,7 +6,7 @@ function user.TypeBuilderFn(from_text: string, client: ai.Client | null = null) 
   ai.Agent.new<Resume>(client = client).run(TypeBuilderFn$spec(from_text)).value : user.Resume
 }
 function user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<user.Resume> throws never {
-  ai.FunctionSpec { spec_name: "TypeBuilderFn", args: map { "from_text": from_text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<user.Resume>
+  ai.FunctionSpec { spec_name: "TypeBuilderFn", args: map { "from_text": from_text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<user.Resume>
 }
 lambda user.TypeBuilderFn$spec {
 }

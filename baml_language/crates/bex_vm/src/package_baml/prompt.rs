@@ -222,17 +222,59 @@ impl BamlClassPrompt for PackageAiImpl {
             let data = instance.load_field(0);
             vm.as_rust_data::<PromptAst>(&data)
                 .expect("ai.Prompt._data must contain baml_builtins2::PromptAst")
-                .to_messages()
+                .to_structured_messages()
         };
         let message_class = vm.resolve_class("ai.PromptMessage");
         messages
             .into_iter()
-            .map(|(role, content)| {
+            .map(|(role, content, metadata)| {
                 let role = Value::object(vm.alloc_string(role));
-                let content = Value::object(vm.alloc_string(content));
-                Value::object(vm.alloc_instance(message_class, vec![role, content]))
+                let readable = Value::object(vm.alloc_string(content.to_text()));
+                let parts = prompt_content_values(vm, content.as_ref());
+                let parts = Value::object(vm.alloc_array(baml_type::RealizedTy::unknown(), parts));
+                let metadata = prompt_metadata_value(vm, metadata);
+                Value::object(vm.alloc_instance(
+                    message_class,
+                    vec![role, readable, parts, metadata],
+                ))
             })
             .collect()
+    }
+}
+
+/// A message's per-message metadata as the `map<string, json>` the stdlib
+/// declares. A node that carried none holds `Value::Null` in the AST, so
+/// anything that is not a JSON object materializes as an empty map rather than
+/// breaking the declared field type.
+fn prompt_metadata_value(vm: &mut BexVm, metadata: serde_json::Value) -> Value {
+    let metadata = match metadata {
+        serde_json::Value::Object(_) => metadata,
+        _ => serde_json::Value::Object(serde_json::Map::new()),
+    };
+    super::json::serde_to_value(vm, &metadata)
+}
+
+fn prompt_content_values(vm: &mut BexVm, content: &PromptAstSimple) -> Vec<Value> {
+    match content {
+        PromptAstSimple::String(text) => vec![Value::object(vm.alloc_string(text.clone()))],
+        PromptAstSimple::Media(media) => {
+            let class_name = match media.kind {
+                baml_type::MediaKind::Image => "baml.media.Image",
+                baml_type::MediaKind::Audio => "baml.media.Audio",
+                baml_type::MediaKind::Video => "baml.media.Video",
+                baml_type::MediaKind::Pdf => "baml.media.Pdf",
+                baml_type::MediaKind::Generic => {
+                    panic!("generic media cannot inhabit a concrete prompt part")
+                }
+            };
+            let class = vm.resolve_class(class_name);
+            let data = Value::object(vm.alloc_rust_data(media.clone()));
+            vec![Value::object(vm.alloc_instance(class, vec![data]))]
+        }
+        PromptAstSimple::Multiple(parts) => parts
+            .iter()
+            .flat_map(|part| prompt_content_values(vm, part.as_ref()))
+            .collect(),
     }
 }
 

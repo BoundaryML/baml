@@ -1,6 +1,6 @@
 // Test case for comments in type positions
 
-client TestClient = openai.OpenAiClient.new();
+client TestClient = openai.ResponsesClient.new();
 
 // This function has comments around the return type
 function FunctionWithComments(

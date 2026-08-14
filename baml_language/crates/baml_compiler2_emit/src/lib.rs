@@ -1063,6 +1063,8 @@ fn is_builtin_function_name(name: &str) -> bool {
                 | "openai"
                 | "anthropic"
                 | "google"
+                | "aws"
+                | "vercel"
                 | "claude_code"
         )
     )

@@ -337,7 +337,7 @@ fn let_binding_global_slot_and_init_function() {
     db.add_file(
         "test.baml",
         r#"
-        client MyClient = openai.OpenAiClient.new(model = "gpt-4");
+        client MyClient = openai.ResponsesClient.new(model = "gpt-4");
         function f() -> string { return "x"; }
         "#,
     );
@@ -451,8 +451,8 @@ fn multiple_let_bindings_with_valid_dependencies() {
     db.add_file(
         "test.baml",
         r#"
-        client ClientA = openai.OpenAiClient.new(model = "gpt-4");
-        client ClientB = openai.OpenAiClient.new(model = "gpt-3.5-turbo");
+        client ClientA = openai.ResponsesClient.new(model = "gpt-4");
+        client ClientB = openai.ResponsesClient.new(model = "gpt-3.5-turbo");
         function f() -> string { return "x"; }
         "#,
     );

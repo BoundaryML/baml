@@ -146,7 +146,7 @@ async fn test_render_prompt_offline_without_api_key_env() {
     let source = r##"
 class C { x: string }
 
-client Fast = openai.OpenAiClient.new(model = "gpt-4o-mini");
+client Fast = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 function Extract(raw: string) -> C {
     client Fast

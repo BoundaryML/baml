@@ -153,14 +153,14 @@ test Test1 {
 // These are LLM clients you can use in your functions. Clients are constructed
 // values now; reliability composes with ai.Retry / ai.Fallback / ai.RoundRobin.
 
-client GPT4 = openai.OpenAiClient.new(
+client GPT4 = openai.ResponsesClient.new(
   model = "gpt-4",
   api_key = env.OPENAI_API_KEY,
 );
 
 // A client wrapped with a retry policy.
 client GPT4o = ai.clients.Retry.new(
-  inner = openai.OpenAiClient.new(model = "gpt-4o", api_key = env.OPENAI_API_KEY),
+  inner = openai.ResponsesClient.new(model = "gpt-4o", api_key = env.OPENAI_API_KEY),
   max_attempts = 3,
 );
 
@@ -489,22 +489,22 @@ test OllamaTest1 {
 // Note that you should run ollama using `OLLAMA_ORIGINS='*' ollama serve`
 // and you'll also need to `ollama pull llama3` to use these clients.
 
-client Llama3 = openai.OpenAiClient.new(
+client Llama3 = openai.ResponsesClient.new(
   model = "llama3",
   base_url = "http://localhost:11434/v1",
 );
 
-client Mistral = openai.OpenAiClient.new(
+client Mistral = openai.ResponsesClient.new(
   model = "mistral",
   base_url = "http://localhost:11434/v1",
 );
 
-client Gemma2 = openai.OpenAiClient.new(
+client Gemma2 = openai.ResponsesClient.new(
   model = "gemma2",
   base_url = "http://localhost:11434/v1",
 );
 
-client Phi3 = openai.OpenAiClient.new(
+client Phi3 = openai.ResponsesClient.new(
   model = "phi3",
   base_url = "http://localhost:11434/v1",
 );

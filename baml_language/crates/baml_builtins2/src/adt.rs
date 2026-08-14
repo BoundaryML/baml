@@ -19,6 +19,11 @@ pub enum PromptAst {
     Vec(Vec<std::sync::Arc<PromptAst>>),
 }
 
+/// One flattened chat message: role, structural content, and the per-message
+/// metadata the `${role(...)}` marker carried (`serde_json::Value::Null` when
+/// the node had none). Produced by [`PromptAst::to_structured_messages`].
+pub type StructuredMessage = (String, Arc<PromptAstSimple>, serde_json::Value);
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum PromptAstSimple {
     String(String),
@@ -82,28 +87,48 @@ impl PromptAst {
         }
     }
 
-    /// Flatten this prompt into an ordered list of `(role, content)` chat
-    /// messages. A `Message` node contributes its role; a role-less `Simple`
-    /// node contributes an empty role; nested `Vec` nodes are flattened in
-    /// document order. Backs the stdlib `PromptAst.messages()` accessor.
-    pub fn to_messages(&self) -> Vec<(String, String)> {
+    /// Flatten this prompt into an ordered list of structural chat messages.
+    /// A `Message` node contributes its role and its per-message metadata; a
+    /// role-less `Simple` node contributes an empty role and null metadata;
+    /// nested `Vec` nodes are flattened in document order. The content stays
+    /// structural so stdlib clients can lower media to their provider-specific
+    /// wire representation, and the metadata stays attached so they can lower
+    /// per-message directives (Anthropic `cache_control`, for example).
+    pub fn to_structured_messages(&self) -> Vec<StructuredMessage> {
         let mut out = Vec::new();
-        self.collect_messages(&mut out);
+        self.collect_structured_messages(&mut out);
         out
     }
 
-    fn collect_messages(&self, out: &mut Vec<(String, String)>) {
+    fn collect_structured_messages(&self, out: &mut Vec<StructuredMessage>) {
         match self {
-            PromptAst::Simple(content) => out.push((String::new(), content.to_text())),
-            PromptAst::Message { role, content, .. } => {
-                out.push((role.clone(), content.to_text()));
+            PromptAst::Simple(content) => out.push((
+                String::new(),
+                content.clone(),
+                serde_json::Value::Null,
+            )),
+            PromptAst::Message {
+                role,
+                content,
+                metadata,
+            } => {
+                out.push((role.clone(), content.clone(), metadata.clone()));
             }
             PromptAst::Vec(items) => {
                 for item in items {
-                    item.collect_messages(out);
+                    item.collect_structured_messages(out);
                 }
             }
         }
+    }
+
+    /// Readable projection of [`Self::to_structured_messages`]. Media becomes
+    /// a placeholder here, but remains structural in the underlying prompt.
+    pub fn to_messages(&self) -> Vec<(String, String)> {
+        self.to_structured_messages()
+            .into_iter()
+            .map(|(role, content, _)| (role, content.to_text()))
+            .collect()
     }
 
     /// Render this prompt as readable plain text: each chat message as a
@@ -314,6 +339,34 @@ mod tests {
             vec![
                 ("system".to_string(), "You are helpful.".to_string()),
                 ("user".to_string(), "Hi World!".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn to_structured_messages_keeps_per_message_metadata() {
+        let ast = PromptAst::Vec(vec![
+            Arc::new(PromptAst::Message {
+                role: "user".to_string(),
+                content: Arc::new(PromptAstSimple::String("Hi World!".to_string())),
+                metadata: serde_json::json!({ "cache_control": { "type": "ephemeral" } }),
+            }),
+            Arc::new(PromptAst::Simple(Arc::new(PromptAstSimple::String(
+                "trailing".to_string(),
+            )))),
+        ]);
+        let messages = ast.to_structured_messages();
+        assert_eq!(
+            messages
+                .iter()
+                .map(|(role, _, metadata)| (role.as_str(), metadata.clone()))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    "user",
+                    serde_json::json!({ "cache_control": { "type": "ephemeral" } })
+                ),
+                ("", serde_json::Value::Null),
             ]
         );
     }

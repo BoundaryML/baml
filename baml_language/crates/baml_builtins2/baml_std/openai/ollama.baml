@@ -1,0 +1,120 @@
+// openai.OllamaClient — a local Ollama server through its OpenAI-compatible
+// chat-completions endpoint.
+//
+// The whole client is four deviations from `openai.GenericClient`:
+//   * the base URL defaults to `http://localhost:11434/v1`. The `/v1` is
+//     load-bearing — Ollama serves the OpenAI-compatible API only under that
+//     prefix, and sys_llm's `:11434` default 404s on every call (PLAN §5).
+//   * no credential is required (and none is sent unless one is configured).
+//   * the `system` role is allowed, like every other client here: Ollama passes
+//     it straight through to the model's template.
+//   * image URLs are fetched and inlined as base64. Ollama's OpenAI-compat
+//     docs are explicit — "Base64 encoded image ✓ / Image URL ✗" — so an
+//     `Image.from_url` prompt would otherwise reach a server that cannot read
+//     it (`inline_image_urls`).
+
+class OllamaClient {
+    model: string,
+    base_url: string?,
+    api_key: string?,
+    api_key_env: string?,
+    base_url_env: string?,
+
+    request_body: baml.json.json?,
+    headers: map<string, string>?,
+    query_params: map<string, string>?,
+
+    temperature: float?,
+    max_tokens: int?,
+    top_p: float?,
+    stop: string[]?,
+    seed: int?,
+
+    function new(
+        model: string,
+        base_url: string? = null,
+        api_key: string? = null,
+        api_key_env: string? = null,
+        base_url_env: string? = null,
+        request_body: baml.json.json? = null,
+        headers: map<string, string>? = null,
+        query_params: map<string, string>? = null,
+        temperature: float? = null,
+        max_tokens: int? = null,
+        top_p: float? = null,
+        stop: string[]? = null,
+        seed: int? = null,
+    ) -> OllamaClient {
+        OllamaClient {
+            model: model,
+            base_url: base_url,
+            api_key: api_key,
+            api_key_env: api_key_env,
+            base_url_env: base_url_env,
+            request_body: request_body,
+            headers: headers,
+            query_params: query_params,
+            temperature: temperature,
+            max_tokens: max_tokens,
+            top_p: top_p,
+            stop: stop,
+            seed: seed,
+        }
+    }
+
+    function resolved_api_key(self) -> string? {
+        root.internal.chat_resolve_api_key(self.api_key, self.api_key_env, null)
+    }
+
+    function resolved_base_url(self) -> string {
+        root.internal.chat_resolve_base_url(
+            self.base_url,
+            self.base_url_env,
+            "http://localhost:11434/v1",
+        )
+    }
+
+    function compat(self) -> root.internal.ChatCompat {
+        root.internal.ChatCompat.new(
+            provider = "ollama",
+            base_url = self.resolved_base_url(),
+            collapse_text_content = true,
+            inline_image_urls = true,
+        )
+    }
+
+    function params(self) -> root.internal.ChatParams {
+        root.internal.ChatParams.new(
+            model = self.model,
+            api_key = self.resolved_api_key(),
+            temperature = self.temperature,
+            max_tokens = self.max_tokens,
+            top_p = self.top_p,
+            stop = self.stop,
+            seed = self.seed,
+            headers = self.headers,
+            query_params = self.query_params,
+            request_body = self.request_body,
+        )
+    }
+
+    implements ai.Client {
+        function id(self) -> string {
+            `ollama/${self.model}`
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            root.internal.chat_invoke(self.compat(), self.params(), input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+    }
+
+    implements ai.stream.StreamingClient {
+        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+            root.internal.chat_invoke_stream(self.compat(), self.params(), input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+    }
+}

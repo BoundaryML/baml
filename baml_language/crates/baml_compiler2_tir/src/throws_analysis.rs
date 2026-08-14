@@ -222,6 +222,46 @@ pub(crate) fn collect_callee_escaping_throws<C: ThrowsAnalysisContext>(
     }
 }
 
+/// The throws a `to_string`/`to_json`/`from_json` *sugar fallback* call charges,
+/// or `None` when the call is not one.
+///
+/// These three call shapes never resolve to a real method — the type checker
+/// leaves their callee `Unknown`, and MIR rewrites them into a concrete stdlib
+/// call (`string.from` / `baml.json.from` / `baml.json.to`). Routing them through
+/// [`collect_callee_escaping_throws`] would therefore hit its unaccounted-callee
+/// default and charge a bogus `Ty::Unknown`, so every throw-fact walker must
+/// consult this first and, on `Some`, charge exactly what it returns instead of
+/// the callee's escaping throws. (The receiver/argument expressions' own throws
+/// are collected by the caller's recursion, independently of this.)
+///
+/// Shared by both walkers so they cannot drift: `collect_from_expr` (a function's
+/// inferred `throws` set) and `Builder::collect_throw_facts_from_expr` (a
+/// `catch`/`catch_all` binder's type). A missing guard on the latter made
+/// `f().to_string() catch_all (e) { ... }` type `e` as `... | Unknown`, which then
+/// ICE'd in MIR runtime-type lowering.
+pub(crate) fn sugar_fallback_call_throws<C: ThrowsAnalysisContext>(
+    context: &C,
+    callee: ExprId,
+    arg_exprs: &[ExprId],
+    body: &ExprBody,
+) -> Option<BTreeSet<Ty>> {
+    // `recv.to_string()` lowers to `string.from(recv)`, which is `throws never`.
+    if arg_exprs.is_empty() && is_to_string_fallback_callee(context, callee, body) {
+        return Some(BTreeSet::new());
+    }
+    // `recv.to_json()` lowers to `baml.json.from(recv)`, which throws
+    // `JsonSerializationError`.
+    if arg_exprs.is_empty() && is_to_json_fallback_callee(context, callee, body) {
+        return Some(context.to_json_fallback_throws().unwrap_or_default());
+    }
+    // `Type.from_json(j)` lowers to `baml.json.to<Type>(j)`, which throws
+    // `JsonDecodeError`.
+    if arg_exprs.len() == 1 && is_from_json_fallback_callee(context, callee, body) {
+        return Some(context.from_json_fallback_throws().unwrap_or_default());
+    }
+    None
+}
+
 fn collect_from_stmt<C: ThrowsAnalysisContext>(
     context: &C,
     stmt_id: StmtId,
@@ -333,29 +373,12 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             for arg in args {
                 collect_from_expr(context, arg.expr, body, out);
             }
-            // A `recv.to_string()` sugar fallback lowers to `string.from(recv)`,
-            // which is `throws never`. Its callee is left untyped (no real method),
-            // so charging it as `unknown` throws (the unaccounted-callee default in
-            // `collect_callee_escaping_throws`) would infect the enclosing
-            // function's inferred throws. Skip it — the receiver's own throws were
-            // already collected by the `*callee` recursion above.
-            if arg_exprs.is_empty() && is_to_string_fallback_callee(context, *callee, body) {
-                return;
-            }
-            // A `recv.to_json()` sugar fallback lowers to `baml.json.from(recv)`,
-            // which throws `JsonSerializationError`. Charge that precise type (not
-            // the unaccounted-callee `unknown` default) and stop — the receiver's
-            // own throws were already collected by the `*callee` recursion above.
-            if arg_exprs.is_empty() && is_to_json_fallback_callee(context, *callee, body) {
-                out.extend(context.to_json_fallback_throws().unwrap_or_default());
-                return;
-            }
-            // A `Type.from_json(j)` sugar fallback lowers to `baml.json.to<Type>(j)`,
-            // which throws `JsonDecodeError`. Charge that precise type (not the
-            // unaccounted-callee `unknown` default) and stop; the arg's own throws
-            // were already collected by the loop above.
-            if arg_exprs.len() == 1 && is_from_json_fallback_callee(context, *callee, body) {
-                out.extend(context.from_json_fallback_throws().unwrap_or_default());
+            // A `to_string`/`to_json`/`from_json` sugar fallback charges the
+            // throws of the stdlib call it rewrites into, not the callee's
+            // (unaccounted -> `unknown`) escaping throws. The receiver/args were
+            // already walked above.
+            if let Some(sugar) = sugar_fallback_call_throws(context, *callee, &arg_exprs, body) {
+                out.extend(sugar);
                 return;
             }
             // When the callee is an `OptionalMemberAccess` (`obj?.method`), the

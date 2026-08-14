@@ -744,9 +744,17 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
     let (prefix, _model) = client.split_once('/')?;
     match prefix {
-        "openai" => Some(("openai", "OpenAiClient")),
+        "openai" => Some(("openai", "ResponsesClient")),
+        "openai-chat" => Some(("openai", "ChatClient")),
+        "openai-images" => Some(("openai", "ImageClient")),
+        "azure" => Some(("openai", "AzureClient")),
+        "ollama" => Some(("openai", "OllamaClient")),
+        "openrouter" => Some(("openai", "OpenRouterClient")),
         "anthropic" => Some(("anthropic", "AnthropicClient")),
         "google" => Some(("google", "GoogleClient")),
+        "vertex" => Some(("google", "VertexClient")),
+        "bedrock" => Some(("aws", "BedrockClient")),
+        "ai-gateway-images" => Some(("vercel", "AiGatewayImageClient")),
         "claude-code" => Some(("claude_code", "ClaudeCodeClient")),
         _ => None,
     }
@@ -797,7 +805,7 @@ fn resolve_llm_client(
                     reason: format!(
                         "no builtin provider for prefix \"{prefix}\"; construct a client \
                          value instead (OpenAI-compatible endpoints: \
-                         openai.OpenAiClient.new(base_url = ..., model = \"{model}\"))"
+                         openai.GenericClient.new(base_url = ..., model = \"{model}\"))"
                     ),
                     span,
                 });

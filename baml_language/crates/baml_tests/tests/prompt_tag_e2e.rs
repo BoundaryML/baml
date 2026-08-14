@@ -22,7 +22,7 @@ use wiremock::{
 fn client_decl(base_url: &str) -> String {
     format!(
         r#"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
             model = "gpt-4o",
             api_key = "test-key",
             base_url = "{base_url}",

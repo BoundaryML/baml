@@ -7290,6 +7290,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sys_auth"
+version = "0.0.0-beta"
+dependencies = [
+ "async-trait",
+ "forked_aws_config",
+ "forked_aws_sigv4",
+ "forked_google_cloud_auth",
+ "indexmap",
+ "num-bigint",
+ "serde_json",
+ "sys_types",
+ "tokio",
+ "web-time",
+]
+
+[[package]]
 name = "sys_glob"
 version = "0.0.0-beta"
 dependencies = [
@@ -7355,6 +7371,7 @@ dependencies = [
  "rustls",
  "rustls-pemfile",
  "serde_json",
+ "sys_auth",
  "sys_glob",
  "sys_ops",
  "sys_types",

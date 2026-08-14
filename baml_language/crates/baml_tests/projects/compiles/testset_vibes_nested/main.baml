@@ -1,4 +1,4 @@
-client GPT4o = openai.OpenAiClient.new(
+client GPT4o = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "test-key",
     base_url = "http://localhost:1234",

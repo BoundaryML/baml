@@ -404,11 +404,21 @@ pub fn package_dependencies<'db>(
         ],
         // Provider client packages implement the `ai.Client` interface; the
         // claude_code harness client also logs its own event stream.
-        "openai" | "anthropic" | "google" | "claude_code" => vec![
+        "openai" | "anthropic" | "aws" | "vercel" | "claude_code" => vec![
             PackageId::new(db, Name::new("baml")),
             PackageId::new(db, Name::new("reflect")),
             PackageId::new(db, Name::new("log")),
             PackageId::new(db, Name::new("ai")),
+        ],
+        // google additionally sees anthropic: Claude on Vertex is served via
+        // `publishers/anthropic` `:rawPredict`, whose body is the Anthropic
+        // Messages format (built by `anthropic.internal.anthropic_messages_body`).
+        "google" => vec![
+            PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("reflect")),
+            PackageId::new(db, Name::new("log")),
+            PackageId::new(db, Name::new("ai")),
+            PackageId::new(db, Name::new("anthropic")),
         ],
         // User packages depend on public builtin packages.
         _ => vec![
@@ -422,6 +432,8 @@ pub fn package_dependencies<'db>(
             PackageId::new(db, Name::new("openai")),
             PackageId::new(db, Name::new("anthropic")),
             PackageId::new(db, Name::new("google")),
+            PackageId::new(db, Name::new("aws")),
+            PackageId::new(db, Name::new("vercel")),
             PackageId::new(db, Name::new("claude_code")),
         ],
     }

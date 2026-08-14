@@ -56,28 +56,59 @@ impl CodegenPaths {
 // ============================================================================
 
 struct IoNamespaceNode<'a> {
+    /// Stdlib package the builtins came from (`"baml"`, `"ai"`, …).
+    package: String,
+    /// Namespace segment inside that package (`"fs"`, `"internal"`, …).
+    namespace: String,
     free_fns: Vec<&'a NativeBuiltin>,
     classes: BTreeMap<String, Vec<&'a NativeBuiltin>>,
 }
 
 impl IoNamespaceNode<'_> {
-    fn new() -> Self {
+    fn new(package: &str, namespace: &str) -> Self {
         Self {
+            package: package.to_string(),
+            namespace: namespace.to_string(),
             free_fns: Vec::new(),
             classes: BTreeMap::new(),
         }
     }
 }
 
-/// Extract the namespace name from an IO builtin path.
-///
-/// All IO builtins start with "baml." and have a namespace as the second segment:
+/// Extract the package name from an IO builtin path (the first segment):
+/// - `"baml.fs.open"` → `"baml"`
+/// - `"ai.internal._gcp_access_token"` → `"ai"`
+fn io_package_name(builtin: &NativeBuiltin) -> &str {
+    builtin.path.split('.').next().unwrap_or("")
+}
+
+/// Extract the namespace name from an IO builtin path (the second segment):
 /// - "baml.fs.open" → "fs"
 /// - "baml.fs.File.read" → "fs"
-/// - `"baml.prompt.get_client"` → `"llm"`
+/// - `"ai.internal._gcp_access_token"` → `"internal"`
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
-    let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
-    after_baml.split('.').next().unwrap_or("")
+    let after_package = builtin
+        .path
+        .split_once('.')
+        .map_or(builtin.path.as_str(), |(_, rest)| rest);
+    after_package.split('.').next().unwrap_or("")
+}
+
+/// Key a namespace node (and every identifier derived from it) by package +
+/// namespace.
+///
+/// The `baml` package keeps the bare namespace as its key, so all pre-existing
+/// generated names (`IoNamespaceFs`, `__dispatch_fs`, `IoClassFsFile`, …) and
+/// the `class_ns_map`-keyed lookups into the tree are unchanged. Any other
+/// package is package-qualified (`ai` + `internal` → `ai_internal` →
+/// `IoNamespaceAiInternal`), so two packages' `ns_internal` folders can never
+/// collide.
+fn io_ns_key(package: &str, namespace: &str) -> String {
+    if package == "baml" {
+        namespace.to_string()
+    } else {
+        format!("{package}_{namespace}")
+    }
 }
 
 /// Extract the method name (last segment) from an IO builtin path.
@@ -109,8 +140,11 @@ fn build_io_namespace_tree<'a>(
     let mut tree: BTreeMap<String, IoNamespaceNode<'a>> = BTreeMap::new();
 
     for builtin in io_builtins {
-        let ns = io_namespace_name(builtin).to_string();
-        let node = tree.entry(ns).or_insert_with(IoNamespaceNode::new);
+        let package = io_package_name(builtin);
+        let namespace = io_namespace_name(builtin);
+        let node = tree
+            .entry(io_ns_key(package, namespace))
+            .or_insert_with(|| IoNamespaceNode::new(package, namespace));
 
         if let Some(ref receiver) = builtin.receiver {
             node.classes
@@ -718,12 +752,19 @@ fn capitalize_first(s: &str) -> String {
     }
 }
 
-fn ns_trait_ident(ns: &str) -> syn::Ident {
-    format_ident!("IoNamespace{}", capitalize_first(ns))
+/// `PascalCase` a namespace key (`"fs"` → `"Fs"`, `"ai_internal"` → `"AiInternal"`).
+/// No `baml` namespace contains an underscore, so this is identity-preserving
+/// for every pre-existing generated name.
+fn pascal_case_key(key: &str) -> String {
+    key.split('_').map(capitalize_first).collect()
 }
 
-fn class_trait_ident(ns: &str, class: &str) -> syn::Ident {
-    format_ident!("IoClass{}{}", capitalize_first(ns), class)
+fn ns_trait_ident(ns_key: &str) -> syn::Ident {
+    format_ident!("IoNamespace{}", pascal_case_key(ns_key))
+}
+
+fn class_trait_ident(ns_key: &str, class: &str) -> syn::Ident {
+    format_ident!("IoClass{}{}", pascal_case_key(ns_key), class)
 }
 
 /// Whether the clean trait method and glue thread an *extracted* receiver value
@@ -1286,9 +1327,16 @@ fn emit_class_traits(
 ) -> TokenStream {
     let traits: Vec<TokenStream> = tree
         .iter()
-        .flat_map(|(ns, node)| {
+        .flat_map(|(ns_key, node)| {
             node.classes.iter().map(move |(class_name, methods)| {
-                emit_one_class_trait(ns, class_name, methods, class_ns_map, paths)
+                emit_one_class_trait(
+                    ns_key,
+                    &node.namespace,
+                    class_name,
+                    methods,
+                    class_ns_map,
+                    paths,
+                )
             })
         })
         .collect();
@@ -1320,14 +1368,15 @@ fn fn_only_generic_count(builtin: &NativeBuiltin) -> usize {
 }
 
 fn emit_one_class_trait(
+    ns_key: &str,
     ns: &str,
     class_name: &str,
     methods: &[&NativeBuiltin],
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    let trait_ident = class_trait_ident(ns, class_name);
-    let dispatch_fn_ident = format_ident!("__dispatch_{}_{}", ns, class_name.to_lowercase());
+    let trait_ident = class_trait_ident(ns_key, class_name);
+    let dispatch_fn_ident = format_ident!("__dispatch_{}_{}", ns_key, class_name.to_lowercase());
 
     let source_comment = methods
         .first()
@@ -1615,26 +1664,26 @@ fn emit_namespace_traits(
 ) -> TokenStream {
     let traits: Vec<TokenStream> = tree
         .iter()
-        .map(|(ns, node)| emit_one_namespace_trait(ns, node, class_ns_map, paths))
+        .map(|(ns_key, node)| emit_one_namespace_trait(ns_key, node, class_ns_map, paths))
         .collect();
 
     quote! { #(#traits)* }
 }
 
 fn emit_one_namespace_trait(
-    ns: &str,
+    ns_key: &str,
     node: &IoNamespaceNode,
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    let trait_ident = ns_trait_ident(ns);
-    let dispatch_fn_ident = format_ident!("__dispatch_{}", ns);
+    let trait_ident = ns_trait_ident(ns_key);
+    let dispatch_fn_ident = format_ident!("__dispatch_{}", ns_key);
 
     // Supertraits: class traits in this namespace
     let class_trait_idents: Vec<syn::Ident> = node
         .classes
         .keys()
-        .map(|cn| class_trait_ident(ns, cn))
+        .map(|cn| class_trait_ident(ns_key, cn))
         .collect();
 
     let supertrait_bound = if class_trait_idents.is_empty() {
@@ -1718,7 +1767,7 @@ fn emit_one_namespace_trait(
             .keys()
             .map(|cn| {
                 let cn_str = cn.as_str();
-                let dispatch = format_ident!("__dispatch_{}_{}", ns, cn.to_lowercase());
+                let dispatch = format_ident!("__dispatch_{}_{}", ns_key, cn.to_lowercase());
                 quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
             })
             .collect();
@@ -1967,16 +2016,42 @@ fn emit_free_fn_glue(
 // Root trait
 // ============================================================================
 
+/// Emit the root trait composing every namespace trait, with a
+/// package-then-namespace router.
+///
+/// The trait keeps the name `IoPackageBaml` (it is implemented by every host
+/// sys-op provider) even though it now also carries sys-ops declared in other
+/// stdlib packages — `ai.internal.*` today.
 fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
     let ns_trait_idents: Vec<syn::Ident> = tree.keys().map(|ns| ns_trait_ident(ns)).collect();
 
-    let dispatch_arms: Vec<TokenStream> = tree
-        .keys()
-        .map(|ns| {
-            let ns_str = ns.as_str();
-            let dispatch_fn_ident = format_ident!("__dispatch_{}", ns);
+    // Group namespaces by package so the router matches `{package}.{ns}.{rest}`.
+    let mut by_package: BTreeMap<&str, Vec<(&str, syn::Ident)>> = BTreeMap::new();
+    for (ns_key, node) in tree {
+        by_package.entry(node.package.as_str()).or_default().push((
+            node.namespace.as_str(),
+            format_ident!("__dispatch_{}", ns_key),
+        ));
+    }
+
+    let package_arms: Vec<TokenStream> = by_package
+        .iter()
+        .map(|(package, namespaces)| {
+            let ns_arms: Vec<TokenStream> = namespaces
+                .iter()
+                .map(|(ns_str, dispatch_fn_ident)| {
+                    quote! {
+                        Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, permit, args, ctx, call_id)
+                    }
+                })
+                .collect();
             quote! {
-                Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, permit, args, ctx, call_id)
+                Some((#package, rest)) => {
+                    match rest.split_once('.') {
+                        #(#ns_arms,)*
+                        _ => None,
+                    }
+                }
             }
         })
         .collect();
@@ -1993,12 +2068,7 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
                 call_id: CallId,
             ) -> Option<SysOpResult> {
                 match path.split_once('.') {
-                    Some(("baml", rest)) => {
-                        match rest.split_once('.') {
-                            #(#dispatch_arms,)*
-                            _ => None,
-                        }
-                    }
+                    #(#package_arms,)*
                     _ => None,
                 }
             }
@@ -2091,6 +2161,10 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
 ///
 /// - Free functions: `{ns}_{method}` (e.g. `"baml.http.send"` -> `"http_send"`)
 /// - Class methods: `{ns}_{class}_{method}` lowercase (e.g. `"baml.http.Response.text"` -> `"http_response_text"`)
+///
+/// Only the `baml` package prefix is stripped, so a sys-op from another stdlib
+/// package keeps it (`"ai.internal._gcp_access_token"` ->
+/// `"ai_internal__gcp_access_token"`) and can never collide with a `baml` one.
 fn runtime_io_method_name(builtin: &NativeBuiltin) -> String {
     let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
     after_baml.replace('.', "_").to_lowercase()
@@ -2433,7 +2507,12 @@ fn emit_adapter_impl(
                 // Fieldless marker receiver: the SysOpFn glue still consumes a
                 // leading `self` slot, so synthesize an empty instance for it.
                 // The `RuntimeIo` method itself takes no receiver param.
-                let class_fqn = format!("baml.{}.{}", ns, receiver.class_name);
+                let class_fqn = format!(
+                    "{}.{}.{}",
+                    io_package_name(builtin),
+                    ns,
+                    receiver.class_name
+                );
                 ext_bindings.push(quote! {
                     let __recv_raw =
                         BexExternalValue::instance(#class_fqn, indexmap::IndexMap::new());

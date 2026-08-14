@@ -14,7 +14,7 @@ function CombineOutputs(email: string, x: string, linkedin: string) -> string {
     prompt `Combine all outputs`
 }
 
-client GPT4 = openai.OpenAiClient.new(
+client GPT4 = openai.ResponsesClient.new(
     model = "gpt-4",
     api_key = env.OPENAI_API_KEY,
 );

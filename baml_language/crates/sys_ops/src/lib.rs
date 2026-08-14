@@ -1797,6 +1797,72 @@ impl io::IoClassRandomSystemRandom for DefaultIoOps {
 
 impl io::IoNamespaceRandom for DefaultIoOps {}
 
+impl io::IoNamespaceAiInternal for DefaultIoOps {
+    fn _gcp_access_token(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _scope: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _gcp_project_id(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _gcp_quota_project_id(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _aws_sign_request(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _request: BexExternalValue,
+        _service: String,
+        _region: Option<String>,
+        _profile: Option<String>,
+        _access_key_id: Option<String>,
+        _secret_access_key: Option<String>,
+        _session_token: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _aws_resolve_region(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _region: Option<String>,
+        _profile: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
 impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.

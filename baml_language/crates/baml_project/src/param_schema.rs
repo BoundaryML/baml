@@ -811,7 +811,7 @@ mod tests {
     }
 
     const LLM_FIXTURE: &str = r##"
-client GPT4 = openai.OpenAiClient.new(model = "gpt-4o");
+client GPT4 = openai.ResponsesClient.new(model = "gpt-4o");
 
 function Extract(text: string) -> string {
   client GPT4

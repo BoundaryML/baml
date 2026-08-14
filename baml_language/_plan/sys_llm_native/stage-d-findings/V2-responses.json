@@ -1,0 +1,96 @@
+{
+  "findings": [
+    {
+      "severity": "critical",
+      "file": "crates/baml_builtins2/baml_std/ai/ns_stream/stream.baml",
+      "line": 49,
+      "claim": "An SSE stream that dies mid-turn (connection closed before response.completed/response.incomplete) is reported as SUCCESS with the truncated partial text as the final value \u2014 data loss presented as a good result.",
+      "evidence": "CONFIRMED by probe p2 (/tmp/oai_probe/probe.baml): mock_sse_serve sends one delta {\"delta\":\"par\"} then closes with no terminal event; ai.stream.from_spec(...).final() returns \"par\" with no error. Root cause: TurnDone is documented optional \u2014 stream.baml:48-51 \"a stream that simply ends (SSE close) also completes the turn\" and final_turn (stream.baml:214-238) defaults stop_reason to Complete. The openai decoder (openai/ns_internal/responses.baml:884-897) knows whether a terminal event arrived but has no hook to signal EOF-without-terminal; PLAN \u00a76 defers streaming tool-call deltas only, not truncation detection. OpenAI's stream contract always ends a successful stream with response.completed/incomplete/failed (openai-openapi ResponseStreamEvent, openapi.yaml:59681-59740), so a close without one is definitively truncation for this provider.",
+      "suggested_fix": "Give TurnStream a per-provider 'requires terminal event' mode (or an on_eof callback in from_sse): the openai decoder sets a saw_terminal flag in OaStreamState, and EOF without it throws ai.errors.NetworkFailure (outcome unobserved). Stdlib change + one flag in the openai decoder."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/openai/ns_internal/responses.baml",
+      "line": 616,
+      "claim": "_openai_prune_nulls runs over the WHOLE serialized request including user-supplied tool JSON schemas, silently deleting legitimate null-valued object members (e.g. \"default\": null, \"const\": null) from tools[].parameters \u2014 the wire schema is not the schema the user declared.",
+      "evidence": "CONFIRMED by probe p1: a raw_tool schema {\"city\":{\"type\":\"string\",\"default\":null}} renders on the wire as \"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}} \u2014 the \"default\":null entry is gone. Prune is applied at responses.baml:615-618 over baml.json.to_json(request), which includes the open-ended parameters json inserted at :498. The prune's own comment (:200-204) says it exists only to drop the typed request classes' unset optionals; user JSON is collateral. sys_llm never altered user schemas (serde skip_serializing_if on its own fields only). Docs: FunctionTool.parameters is an arbitrary JSON schema map (openai-openapi openapi.yaml:68003-68010).",
+      "suggested_fix": "Prune only the typed layers: either serialize tools[].parameters (and any request_body content) AFTER pruning, or make _openai_prune_nulls stop recursing into the parameters subtree (e.g. prune the request with parameters temporarily replaced by placeholders, or add an exempt-keys parameter)."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/ai/ns_stream/stream.baml",
+      "line": 277,
+      "claim": "A streamed refusal (or max-tokens truncation) is invisible to the typed stream: the terminal stop_reason the openai decoder correctly computes is folded into TurnStream state but ai.stream.Stream.final()/next() never consult it, so a refusal-only stream returns an empty-string SUCCESS while the non-streaming path throws ai.errors.Refused.",
+      "evidence": "CONFIRMED by probe p10: mock SSE sends only response.completed whose message content is [{\"type\":\"refusal\",\"refusal\":\"I cannot help with that.\"}]; ai.stream.from_spec(...).final() returns \"\" (no error). The openai decoder does its half right \u2014 openai_parse sets StopReason.Refused (openai/ns_internal/responses.baml:703-706, 745-746) and emits it in TurnMeta (:886-895) \u2014 but from_spec's Stream pulls only text deltas (stream.baml:339-348) and final() SAP-parses accumulated text (:277-291) without checking TurnStream._stop_reason. Non-streaming Agent.run throws Refused on the same turn (ai/runner.baml:383-393). Also drops refusal deltas mid-stream (no response.refusal.delta arm), but the terminal-enforcement gap is the substantive defect. Not in PLAN \u00a76 (which defers tool-call deltas only).",
+      "suggested_fix": "After the TurnStream reports Done, from_spec's _next_text (or Stream.final) should inspect turns' folded stop_reason and throw ai.errors.Refused / surface MaxTokens exactly like runner.baml does before SAP-parsing the final text."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/openai/ns_internal/responses.baml",
+      "line": 653,
+      "claim": "A transient provider failure reported in-body \u2014 response.failed / error SSE event with code \"server_error\" (the docs' own canonical example) \u2014 is classified as ai.errors.InvalidRequest, which ai.Retry's default judgment never retries; the non-streaming 5xx path classifies the same condition as retryable NetworkFailure.",
+      "evidence": "_openai_error_failure (:645-661) maps only rate_limit/insufficient_quota \u2192 RateLimited and content_filter/moderation/refusal \u2192 Refused; everything else, including \"server_error\", falls to InvalidRequest (:653-660). default_retry_judgment returns false for InvalidRequest (ai/ns_clients/clients.baml:6-13). The docs' response.failed example is precisely {\"code\":\"server_error\",\"message\":\"The model failed to generate a response.\"} (openai-openapi openapi.yaml:57887-57900), a transient condition; the engine raised a retryable LLMErrorResponse for it (research \u00a73). Asymmetry: an HTTP 500 goes through classify_http \u2192 NetworkFailure (probe p7 passed, \"network:http 500\"), but the same failure delivered as a 200/SSE body error becomes permanent. Existing test oai_stream_failed_event even pins the InvalidRequest classification.",
+      "suggested_fix": "In _openai_error_failure, map code \"server_error\" (and timeout-ish codes) to ai.errors.NetworkFailure so mid-stream/in-body transient failures stay retryable; update the oai_stream_failed_event expectation."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/openai/ns_internal/responses.baml",
+      "line": 293,
+      "claim": "Per-message metadata (ai.PromptMessage.metadata, PLAN \u00a75's accepted 'engine placement on content part' row and research G5) is completely dropped by the openai Responses client \u2014 sys_llm flattened @@meta onto the message and the engine merged it onto content parts; native sends nothing.",
+      "evidence": "CONFIRMED by probe p11: a prompt using ${baml.prompt.Role { name: \"user\", metadata: { \"cache_hint\": \"yes\" } }} yields meta_present_on_message=true on the rendered PromptMessage but on_wire=false in openai_render's body. grep shows zero references to `metadata` in openai/ns_internal/responses.baml or openai/responses.baml, while the anthropic client consumes the same field (anthropic/ns_internal/messages.baml:311 cache_control). PLAN \u00a75 row 'Message metadata placement (openai): engine (content part)' is an accepted DECISION about placement, implying implementation; it is absent from PLAN \u00a76 and from EXECUTION-STATUS's deferred-triage list (which defers only the role() helper's metadata *setter*, not client-side consumption).",
+      "suggested_fix": "In _openai_prompt_content, merge message.metadata keys onto each emitted content part (engine placement per PLAN \u00a75), or record an explicit deferral in PLAN \u00a76 if openai metadata is being dropped knowingly."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/openai/ns_internal/responses.baml",
+      "line": 690,
+      "claim": "A function_call output item whose `arguments` string is not valid JSON escapes as a raw baml UnknownError(JsonParseError) instead of ai.errors.ParseFailed \u2014 provider-malformed output is not classified.",
+      "evidence": "CONFIRMED by probe p12: mock returns {\"type\":\"function_call\",...,\"arguments\":\"not json\"}; cl.invoke throws `UnknownError { data: JsonParseError ... }` (via invoke's catch_all + ai.errors.normalize passthrough of UnknownError), not ParseFailed. openai_parse calls baml.json.from_string<map<string, unknown>>(s) at :690 with no catch, unlike send_as's body decode which wraps in ParseFailed (ai/ns_wire/wire.baml:29-31).",
+      "suggested_fix": "Wrap the arguments decode in catch_all \u2192 throw ai.errors.ParseFailed { provider: \"openai\", raw_output: s } (or fall back to an empty args map, matching lenient providers)."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/openai/ns_internal/responses.baml",
+      "line": 818,
+      "claim": "The streaming text dedup key ignores content_index: response.output_text.delta/done are keyed by item_id (or output_index) only, so for a message item with multiple text content parts, a done-only delivery of a second part is wrongly suppressed after any delta on the first part.",
+      "evidence": "_openai_event_key (:818-826) uses event.item_id/output_index; text_started.set/get at :852, :859-864 share one key per item. The API's ResponseTextDeltaEvent/ResponseTextDoneEvent both carry a required content_index distinguishing parts within one item (openai-openapi openapi.yaml:59770-59825, 59826-59881). Theoretical-only today (servers stream deltas for every part), no probe constructed; UNVERIFIED against live behavior.",
+      "suggested_fix": "Key text_started by `${item_id}:${content_index}` (OaStreamEvent needs a content_index field)."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/openai/responses.baml",
+      "line": 17,
+      "claim": "Research matrix row G10 (finish_reason_allow_list / deny_list enforcement, sys_llm lib.rs:560-570) is neither implemented nor listed in PLAN \u00a76 / EXECUTION-STATUS deferrals \u2014 the row is unaccounted for.",
+      "evidence": "ResponsesClient's option surface (responses.baml:17-54) has no finish-reason policy fields and openai_parse enforces none; PLAN \u00a76's dropped-knowingly list names legacy /completions, client_response_type, o1 special-casing, IRSA/AssumeRole but not finish_reason lists. Likely an intentional drop (typed StopReason + Refused/MaxTokens handling supersedes it), but the audit trichotomy requires it be recorded somewhere.",
+      "suggested_fix": "Add finish_reason allow/deny lists to the PLAN \u00a76 dropped-knowingly list (or implement as a wrapper-client policy)."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/openai/responses.baml",
+      "line": 35,
+      "claim": "Stale doc comment: reasoning_effort is documented as \"minimal\" | \"low\" | \"medium\" | \"high\", but the current API accepts none/minimal/low/medium/high/xhigh/max.",
+      "evidence": "openai-openapi ReasoningEffort enum: none, minimal, low, medium, high, xhigh, max (openapi.yaml:56790-56800). Behavior is unaffected \u2014 the field is an unvalidated passthrough string \u2014 but the comment under-documents the accepted values (same for reasoning.mode/context, which are reachable only via request_body).",
+      "suggested_fix": "Update the comment (and optionally mention that other Reasoning subfields ride through request_body)."
+    }
+  ],
+  "checked": [
+    "Docs: openai-openapi@master openapi.yaml (raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml, fetched 2026-08-13; platform.openai.com/docs/api-reference/responses returns 403 to fetchers) \u2014 schemas diffed field-by-field: CreateResponse (:35906), Reasoning (:56699) + ReasoningEffort, ResponseTextParam/Verbosity (:59882), ResponseUsage incl. input_tokens_details.cached_tokens/cache_write_tokens + output_tokens_details.reasoning_tokens (:59894), Response.status enum + incomplete_details.reason enum max_output_tokens|content_filter + error (:56886-56970), InputAudio nested {input_audio:{data,format}} mp3|wav (:41891), InputImageContent image_url/file_id/detail high|low|auto|original (:67391), InputFileContent file_id/filename/file_data/file_url/detail (:67466), FunctionTool flat name/description/parameters/strict (:67985), ImageGenTool config (:41591), ImageGenToolCall {type,id,status,result} (:41718), ToolChoiceOptions/ToolChoiceTypes incl. image_generation (:63038-63110), ResponseStreamEvent full union (:59681), ResponseErrorEvent {code,message,param} + ResponseFailedEvent w/ server_error example (:57810-57915), ResponseTextDeltaEvent/DoneEvent w/ required content_index (:59770-59881), ResponseFunctionCallArgumentsDelta/DoneEvent (:58168)",
+    "Existing suite: target/debug/baml-cli test -i llm_openai_responses \u2014 15/15 PASS (request shape, passthrough null-delete, tools+journal+sanitizer, media input incl. nested input_audio, media-role rejection, image_generation tool injection + parse, usage details, sparse usage, 429/400 taxonomy, stream text, done-only text, failed-event throw, error-event classify, SSE 401 classified, decoder buffering)",
+    "LIVE: OPENAI_LIVE_IMAGE=1 infisical run -- baml-cli test --profile live -i ::live::openai_responses \u2014 3/3 PASS including the -> image end-to-end canary against the real API (ai._media_shape cross-package call, image_generation tool, ai.content.Media construction, runner returning a real image value)",
+    "LIVE probe: gpt-5-mini manual tool loop (invoke \u2192 ToolUse \u2192 journal replay of function_call + function_call_output WITHOUT reasoning items \u2192 invoke) \u2014 SUCCEEDS on the current API; research G13's 400-risk does not reproduce (/tmp/oai_probe/live_probe.baml)",
+    "Hostile probes (/tmp/oai_probe/probe.baml, mock servers from ns_llm_mock): p1 tool-schema null corruption (FAIL\u2192finding), p2 truncated SSE silent success (FAIL\u2192finding), p3 absent usage (pass, 0/0), p4 unicode in query params + prompt + SSE deltas incl. UTF-8 percent-encoding %C3%A9/%F0%9F%8C%8D (pass), p5 output-less completed response (returns empty-string value, no crash), p6 malformed SSE event skipped (pass), p7 HTTP 500 \u2192 network:http 500 retryable (pass), p8 request_body nested null merge (documented delete semantics), p9 assistant-first prompt \u2192 output_text parts (pass), p10 streamed refusal \u2192 empty success (finding), p11 PromptMessage.metadata dropped on wire (finding), p12 malformed function_call arguments \u2192 UnknownError not ParseFailed (finding)",
+    "Code audit: openai/responses.baml + openai/ns_internal/responses.baml (full read) against sys_llm build_request/parse_response/openai/responses.rs semantics via research report; ai/ns_wire/wire.baml send_as/classify path; ai/ns_errors/errors.baml classify_http + retry_safety; ai/ns_clients/clients.baml default_retry_judgment; ai/ns_stream/stream.baml TurnStream/Stream/from_spec; ai/runner.baml _media_shape + Refused/MaxTokens enforcement; sys_native/src/io_impls.rs:2703 fetch_sse status-message coupling (string matches _openai_sse_failure's parser)"
+  ],
+  "accepted_deferrals": [
+    "G15 SAP-only structured output: text.format deliberately never set (PLAN research G15; responses.baml:14-16) \u2014 verified unset on the wire",
+    "Streaming tool-call delivery: StreamEvent cannot carry tool calls; ai.stream.from_spec rejects non-empty toolboxes up front (stream.baml:306-310) and the decoder buffers function_call_arguments deltas unused \u2014 PLAN \u00a76 bullet 1",
+    "Stream usage completeness: TurnMeta lacks model/cached/reasoning-token fields so final_turn's usage drops cached_input_tokens/reasoning_tokens \u2014 EXECUTION-STATUS deferred list ('TurnMeta model/cache fields', 'Usage.total_tokens/cache_creation_input_tokens'); also the new input_tokens_details.cache_write_tokens falls under the same deferral",
+    "fetch_sse structured status: _openai_sse_failure string-parses 'SSE request failed with status N:' from the Io message (verified to match sys_native/src/io_impls.rs:2703; probe + test confirm 401/4xx classify correctly today) \u2014 EXECUTION-STATUS deferred 'fetch_sse structured status'",
+    "Reasoning-item replay / include reasoning.encrypted_content (research G13): openai_lower_journal drops ai.Reasoning (ns_internal/responses.baml:441-445) \u2014 EXECUTION-STATUS defers Reasoning.signature+redacted; live gpt-5-mini tool-loop probe confirms the current API accepts function_call replay without reasoning items, so no present breakage",
+    "store: false default (diverges from the API's store:true) \u2014 deliberate, documented in the class doc (responses.baml:42-44), deletable via request_body {\"store\": null} (tested)",
+    "First-class params limited to temperature/top_p/max_output_tokens/reasoning/verbosity/parallel_tool_calls/store; include, instructions, metadata, previous_response_id, truncation, service_tier, background, prompt_cache_key, safety_identifier, top_logprobs, max_tool_calls, conversation, stream_options, moderation, context_management, reasoning.mode/context ride request_body \u2014 PLAN P0.3 accepted convention",
+    "response.created/in_progress model id remembered but not emitted (no TurnMeta.model field) \u2014 same TurnMeta deferral; unknown/hosted-tool output items (web_search_call, mcp_call, \u2026) skipped in parse exactly like the engine",
+    "BOUNDARY_PROXY_URL / WASM playground proxy rewrite absent \u2014 PLAN \u00a76 bullet 5",
+    "Bare-string `input` form (engine allowed it) not used \u2014 native always sends the items array, which the API equally accepts; no behavioral gap"
+  ]
+}

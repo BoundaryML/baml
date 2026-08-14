@@ -10,7 +10,7 @@ client Brain = anthropic.AnthropicClient.new(
     max_tokens = 4096,
 );
 
-client BrainOpenAI = openai.OpenAiClient.new(
+client BrainOpenAI = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = env.OPENAI_API_KEY,
 );
@@ -43,8 +43,8 @@ client BrainOpenAI = openai.OpenAiClient.new(
 // ns_agent_clients.baml:13:20 (operator) len=1 "="
 // ns_agent_clients.baml:13:22 (namespace) [defaultLibrary] len=6 "openai"
 // ns_agent_clients.baml:13:28 (namespace) [defaultLibrary] len=1 "."
-// ns_agent_clients.baml:13:29 (class) [defaultLibrary] len=12 "OpenAiClient"
-// ns_agent_clients.baml:13:42 (method) len=3 "new"
+// ns_agent_clients.baml:13:29 (class) [defaultLibrary] len=15 "ResponsesClient"
+// ns_agent_clients.baml:13:45 (method) len=3 "new"
 // ns_agent_clients.baml:14:5 (parameter) len=5 "model"
 // ns_agent_clients.baml:14:11 (operator) len=1 "="
 // ns_agent_clients.baml:14:13 (string) len=8 "\"gpt-4o\""

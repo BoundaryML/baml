@@ -1,0 +1,756 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function llm_stream_contract.$init_test_ns_llm_stream_contract_classify_http_headers(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "classify_http_retry_after_seconds"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_classify_http_headers, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "classify_http_retry_after_ms_wins"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_classify_http_headers, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "classify_http_retry_after_canonical_case"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_classify_http_headers, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "classify_http_retry_after_http_date_is_null"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_classify_http_headers, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "classify_http_no_headers_argument"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_classify_http_headers, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "classify_http_non_429_unchanged"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_classify_http_headers, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "classify_http_send_as_plumbs_headers"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_classify_http_headers, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function llm_stream_contract.$init_test_ns_llm_stream_contract_stream_contract(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "stream_contract_truncated_strict_throws"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_stream_contract, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "stream_contract_truncated_lenient_completes"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_stream_contract, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "stream_contract_complete_strict_returns_turn"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_stream_contract, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "stream_contract_truncated_strict_next_throws"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_stream_contract, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "stream_contract_complete_strict_yields_deltas"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_stream_contract, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_stream_contract"
+    load_const "stream_contract_from_chunks_unchanged"
+    make_closure .<lambda($init_test_ns_llm_stream_contract_stream_contract, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function llm_stream_contract.classify_429(headers: map<string, string>) -> string {
+    load_const "mockprovider"
+    load_const 429
+    load_const "{}"
+    load_var headers
+    call ai.errors.classify_http
+    call user.llm_stream_contract.retry_label
+    return
+}
+
+function llm_stream_contract.classify_http_no_headers_argument() -> string {
+    load_const "mockprovider"
+    load_const 429
+    load_const "{}"
+    load_const <omitted>
+    call ai.errors.classify_http
+    call user.llm_stream_contract.retry_label
+    return
+}
+
+function llm_stream_contract.classify_http_non_429_unchanged() -> string {
+    load_const "3"
+    load_const "retry-after"
+    load_type string
+    load_type string
+    alloc_map 1
+    store_var headers
+    load_const "mockprovider"
+    load_const 503
+    load_const "boom"
+    load_var headers
+    call ai.errors.classify_http
+    call user.llm_stream_contract.retry_label
+    store_var _3
+    load_const "mockprovider"
+    load_const 400
+    load_const "bad"
+    load_var headers
+    call ai.errors.classify_http
+    call user.llm_stream_contract.retry_label
+    store_var _6
+    load_type string
+    load_var2 2 3
+    load_type string
+    alloc_array 2
+    load_const " / "
+    call baml.Array.join
+    return
+}
+
+function llm_stream_contract.classify_http_retry_after_canonical_case() -> string {
+    load_const "2"
+    load_const "Retry-After"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.llm_stream_contract.classify_429
+    return
+}
+
+function llm_stream_contract.classify_http_retry_after_http_date_is_null() -> string {
+    load_const "Wed, 21 Oct 2026 07:28:00 GMT"
+    load_const "retry-after"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.llm_stream_contract.classify_429
+    return
+}
+
+function llm_stream_contract.classify_http_retry_after_ms_wins() -> string {
+    load_const "3"
+    load_const "1500"
+    load_const "retry-after"
+    load_const "retry-after-ms"
+    load_type string
+    load_type string
+    alloc_map 2
+    call user.llm_stream_contract.classify_429
+    return
+}
+
+function llm_stream_contract.classify_http_retry_after_seconds() -> string {
+    load_const "3"
+    load_const "retry-after"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.llm_stream_contract.classify_429
+    return
+}
+
+function llm_stream_contract.classify_http_send_as_plumbs_headers() -> string {
+    load_const 429
+    load_const "{\"error\":\"slow down\"}"
+    load_const "application/json"
+    load_const "5"
+    load_const "content-type"
+    load_const "retry-after"
+    load_type string
+    load_type string
+    alloc_map 2
+    call user.llm_mock.MockResponse.with_headers
+    store_var _2
+    load_type string
+    load_type never
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(classify_http_send_as_plumbs_headers, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_stream_contract.contract_complete_events() -> string[] {
+    load_const "{\"delta\":\"all\"}"
+    call user.llm_mock.sse_data
+    load_const "{\"delta\":\" good\"}"
+    call user.llm_mock.sse_data
+    load_const "{\"stop\":\"complete\"}"
+    call user.llm_mock.sse_data
+    load_const "[DONE]"
+    call user.llm_mock.sse_data
+    load_type string
+    alloc_array 4
+    return
+}
+
+function llm_stream_contract.contract_decode(batch: string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] {
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
+    alloc_array 0
+    store_var out
+    load_var batch
+    call ai.stream.decode_sse_batch
+    load_type baml.iter.Iterable<Error = never, Item = ai.stream.SseEvent>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = ai.stream.SseEvent>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var _5
+    load_field .data
+    store_var _11
+    load_var _11
+    store_var _10
+    load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const ""
+    store_var _10
+
+  L2:
+    load_var _10
+    call baml.String.trim
+    store_var data
+    load_var data
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L0
+
+  L3:
+    load_var data
+    load_const "[DONE]"
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L6
+
+  L4:
+    load_type llm_stream_contract.ContractChunk
+    load_var data
+    call baml.json.from_string
+    store_var chunk
+    load_var chunk
+    load_field .delta
+    store_var _23
+    load_var _23
+    narrow_bind string, slot=9
+    pop_jump_if_false L5
+    load_var2 2 9
+    init_instance ai.stream.TextDelta .text
+    call baml.Array.push
+    pop 1
+
+  L5:
+    load_var chunk
+    load_field .stop
+    store_var _29
+    load_var _29
+    narrow_bind string, slot=10
+    pop_jump_if_false L0
+    load_var out
+    load_const ai.content.StopReason.Complete
+    alloc_variant ai.content.StopReason
+    load_const 7
+    load_const 3
+    init_instance ai.stream.TurnMeta .stop_reason, .input_tokens, .output_tokens
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L6:
+    load_var out
+    alloc_instance ai.stream.TurnDone
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L7:
+    load_var out
+    return
+}
+
+function llm_stream_contract.contract_deltas_then_outcome(base_url: string) -> string {
+    load_var base_url
+    call user.llm_stream_contract.contract_open
+    load_const user.llm_stream_contract.contract_decode
+    load_const "mockprovider"
+    call ai.stream.TurnStream.from_sse
+    store_var stream
+    load_type string
+    alloc_array 0
+    store_var chunks
+
+  L0:
+    load_const true
+    pop_jump_if_false L2
+    load_var stream
+    call ai.stream.TurnStream.next
+    store_var _5
+    load_var _5
+    store_var _6
+    load_var _6
+    narrow_bind ai.stream.Done, slot=5
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 3 4
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_type string
+    load_var chunks
+    load_const ","
+    call baml.Array.join
+    return
+}
+
+function llm_stream_contract.contract_drain_lenient(base_url: string) -> string {
+    load_var base_url
+    call user.llm_stream_contract.contract_open
+    load_const user.llm_stream_contract.contract_decode
+    load_const <omitted>
+    call ai.stream.TurnStream.from_sse
+    call ai.stream.TurnStream.final_turn
+    call user.llm_stream_contract.contract_turn_label
+    return
+}
+
+function llm_stream_contract.contract_drain_strict(base_url: string) -> string {
+    load_var base_url
+    call user.llm_stream_contract.contract_open
+    load_const user.llm_stream_contract.contract_decode
+    load_const "mockprovider"
+    call ai.stream.TurnStream.from_sse
+    call ai.stream.TurnStream.final_turn
+    call user.llm_stream_contract.contract_turn_label
+    return
+}
+
+function llm_stream_contract.contract_error_label(error: unknown) -> string {
+    load_var error
+    store_var _2
+    load_var _2
+    narrow_bind ai.errors.NetworkFailure, slot=2
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var error
+    store_var _17
+    load_var _17
+    narrow_bind ai.errors.Failure, slot=11
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type unknown
+    load_var error
+    call baml.String.from
+    store_var _23
+    load_type string
+    load_var _23
+    call baml.String.from
+    store_var _22
+    load_const "other:"
+    load_var _22
+    bin_op +
+    jump L5
+
+  L2:
+    load_var _17
+    load_type ai.errors.Failure
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _20
+    load_type string
+    load_var _20
+    call baml.String.from
+    store_var _19
+    load_const "other-failure:"
+    load_var _19
+    bin_op +
+    jump L5
+
+  L3:
+    load_var _2
+    store_var network
+    load_var network
+    load_type ai.errors.Failure
+    load_const "retry_safety"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_type ai.errors.RetrySafety
+    load_var _6
+    call baml.String.from
+    store_var _5
+    load_var network
+    load_field .provider
+    store_var _8
+    load_var network
+    load_field .detail
+    store_var _9
+    load_var network
+    load_field .raw_body
+    store_var _13
+    load_var _13
+    store_var _12
+    load_var _13
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const ""
+    store_var _12
+
+  L4:
+    load_type string
+    load_var _12
+    call baml.String.from
+    store_var _11
+    load_type string
+    load_const "NetworkFailure"
+    load_var2 4 6
+    load_var _9
+    load_const "raw="
+    load_var _11
+    bin_op +
+    load_type string
+    alloc_array 5
+    load_const "|"
+    call baml.Array.join
+
+  L5:
+    return
+}
+
+function llm_stream_contract.contract_open(base_url: string) -> baml.http.SseStream {
+    load_const "GET"
+    load_var base_url
+    load_const "/v1/stream"
+    bin_op +
+    load_type string
+    load_type string
+    alloc_map 0
+    load_const ""
+    init_instance baml.http.Request .method, .url, .headers, .body
+    sys_op baml.http.fetch_sse
+    return
+}
+
+function llm_stream_contract.contract_truncated_events() -> string[] {
+    load_const "{\"delta\":\"par\"}"
+    call user.llm_mock.sse_data
+    load_const "{\"delta\":\"tial\"}"
+    call user.llm_mock.sse_data
+    load_type string
+    alloc_array 2
+    return
+}
+
+function llm_stream_contract.contract_turn_label(turn: ai.ModelTurn) -> string {
+    load_type ai.content.StopReason
+    load_var turn
+    load_field .stop_reason
+    call baml.String.from
+    store_var _5
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_var turn
+    call ai.ModelTurn.terminal_text
+    store_var _12
+    load_var _12
+    store_var _11
+    load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _11
+
+  L0:
+    load_type string
+    load_var _11
+    call baml.String.from
+    store_var _10
+    load_type string
+    load_const "stop="
+    load_var _4
+    bin_op +
+    load_const "text="
+    load_var _10
+    bin_op +
+    load_type string
+    alloc_array 2
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_stream_contract.retry_label(error: unknown) -> string {
+    load_var error
+    store_var _2
+    load_var _2
+    narrow_bind ai.errors.RateLimited, slot=2
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var error
+    store_var _13
+    load_var _13
+    narrow_bind ai.errors.NetworkFailure, slot=8
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var error
+    store_var _18
+    load_var _18
+    narrow_bind ai.errors.InvalidRequest, slot=10
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_type unknown
+    load_var error
+    call baml.String.from
+    store_var _24
+    load_type string
+    load_var _24
+    call baml.String.from
+    store_var _23
+    load_const "other:"
+    load_var _23
+    bin_op +
+    jump L7
+
+  L3:
+    load_type string
+    load_var _18
+    load_field .detail
+    call baml.String.from
+    store_var _20
+    load_const "InvalidRequest|"
+    load_var _20
+    bin_op +
+    jump L7
+
+  L4:
+    load_type string
+    load_var _13
+    load_field .detail
+    call baml.String.from
+    store_var _15
+    load_const "NetworkFailure|"
+    load_var _15
+    bin_op +
+    jump L7
+
+  L5:
+    load_var _2
+    store_var limited
+    load_var limited
+    load_field .provider
+    store_var _5
+    load_var limited
+    load_field .retry_after_ms
+    store_var _9
+    load_var _9
+    store_var _8
+    load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    load_const 1
+    unary_op -
+    store_var _8
+
+  L6:
+    load_type int
+    load_var _8
+    call baml.String.from
+    store_var _7
+    load_type string
+    load_const "RateLimited"
+    load_var _5
+    load_const "retry_after_ms="
+    load_var _7
+    bin_op +
+    load_type string
+    alloc_array 3
+    load_const "|"
+    call baml.Array.join
+
+  L7:
+    return
+}
+
+function llm_stream_contract.send_as_429(base_url: string) -> string {
+    load_type llm_stream_contract.RetryEcho
+    load_const "POST"
+    load_var base_url
+    load_const "/v1/messages"
+    bin_op +
+    load_const "application/json"
+    load_const "content-type"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "{}"
+    init_instance baml.http.Request .method, .url, .headers, .body
+    load_const "mockprovider"
+    call ai.wire.send_as
+    load_field .ok
+    store_var _10
+    load_var _10
+    store_var _9
+    load_var _10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const false
+    store_var _9
+
+  L0:
+    load_type bool
+    load_var _9
+    call baml.String.from
+    store_var _8
+    load_const "unexpected-success:"
+    load_var _8
+    bin_op +
+    return
+}
+
+function llm_stream_contract.stream_contract_complete_strict_returns_turn() -> string {
+    call user.llm_stream_contract.contract_complete_events
+    store_var _1
+    load_type string
+    load_type never
+    load_var _1
+    make_closure .<lambda(stream_contract_complete_strict_returns_turn, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_stream_contract.stream_contract_complete_strict_yields_deltas() -> string {
+    call user.llm_stream_contract.contract_complete_events
+    store_var _1
+    load_type string
+    load_type never
+    load_var _1
+    make_closure .<lambda(stream_contract_complete_strict_yields_deltas, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_stream_contract.stream_contract_from_chunks_unchanged() -> string {
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    call ai.stream.TurnStream.from_chunks
+    call ai.stream.TurnStream.final_turn
+    call user.llm_stream_contract.contract_turn_label
+    return
+}
+
+function llm_stream_contract.stream_contract_truncated_lenient_completes() -> string {
+    call user.llm_stream_contract.contract_truncated_events
+    store_var _1
+    load_type string
+    load_type never
+    load_var _1
+    make_closure .<lambda(stream_contract_truncated_lenient_completes, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_stream_contract.stream_contract_truncated_strict_next_throws() -> string {
+    call user.llm_stream_contract.contract_truncated_events
+    store_var _1
+    load_type string
+    load_type never
+    load_var _1
+    make_closure .<lambda(stream_contract_truncated_strict_next_throws, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_stream_contract.stream_contract_truncated_strict_throws() -> string {
+    call user.llm_stream_contract.contract_truncated_events
+    store_var _1
+    load_type string
+    load_type never
+    load_var _1
+    make_closure .<lambda(stream_contract_truncated_strict_throws, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}

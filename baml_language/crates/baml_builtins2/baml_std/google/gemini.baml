@@ -1,16 +1,136 @@
+/// One Gemini safety filter setting, in the API's own spelling — pass a list
+/// of these as a client's `safety_settings`:
+///
+///     google.GoogleClient.new(
+///         model = "gemini-2.5-flash",
+///         safety_settings = [
+///             google.SafetySetting.new("HARM_CATEGORY_DANGEROUS_CONTENT", "BLOCK_ONLY_HIGH"),
+///         ],
+///     )
+///
+/// Categories are `HARM_CATEGORY_HARASSMENT`, `HARM_CATEGORY_HATE_SPEECH`,
+/// `HARM_CATEGORY_SEXUALLY_EXPLICIT`, `HARM_CATEGORY_DANGEROUS_CONTENT` and
+/// `HARM_CATEGORY_CIVIC_INTEGRITY`; thresholds are `BLOCK_NONE`,
+/// `BLOCK_ONLY_HIGH`, `BLOCK_MEDIUM_AND_ABOVE`, `BLOCK_LOW_AND_ABOVE` and
+/// `OFF`. The strings go on the wire verbatim, so a category this build has
+/// never heard of still works.
+class SafetySetting {
+    category: string,
+    threshold: string,
+
+    function new(category: string, threshold: string) -> SafetySetting {
+        SafetySetting { category: category, threshold: threshold }
+    }
+}
+
+/// The Gemini Developer API client (`generativelanguage.googleapis.com`).
+///
+/// This client always talks to the Developer API. There is no environment
+/// switch that re-points it at Vertex AI — the `GOOGLE_GENAI_USE_ENTERPRISE` /
+/// `GOOGLE_GENAI_USE_VERTEXAI` flags of the google-genai SDK are deliberately
+/// NOT honored here, because a credential-bearing client that changes endpoint,
+/// auth scheme and billing account behind an ambient env var is a footgun. Use
+/// the enterprise backend by naming it: `google.VertexClient.new(...)`, or the
+/// `"vertex/<model>"` client shorthand.
 class GoogleClient {
     model: string,
-    // null resolves from the environment at request time; construction
-    // never touches env, so declaring/constructing a client is always safe.
+    // null resolves GOOGLE_API_KEY at request time; construction never
+    // touches env, so declaring/constructing a client is always safe.
     api_key: string?,
     base_url: string?,
+    // Names of environment variables to read INSTEAD, at request time.
+    // A `client Name = ...` declaration is evaluated during `$init`, which
+    // cannot run io sysops — so a declaration can never read env itself.
+    // Naming the variable keeps the declaration pure while still letting a
+    // deployment (or a replay harness) point the client somewhere else.
+    api_key_env: string?,
+    base_url_env: string?,
+
+    // ── passthrough (PLAN P0.3) ──────────────────────────────────────────
+    // Deep-merged into the serialized request as the LAST step, so it can
+    // reach anything the typed fields below do not model (thinkingConfig,
+    // responseSchema, cachedContent, …). A null value DELETES that key.
+    request_body: baml.json.json?,
+    // Extra request headers, applied over the provider defaults and BEFORE
+    // the credential header, which always wins.
+    headers: map<string, string>?,
+    // Extra URL query parameters, appended after `alt=sse` on the streaming
+    // endpoint.
+    query_params: map<string, string>?,
+
+    // ── typed generationConfig ───────────────────────────────────────────
+    // Each is sent only when non-null; `generationConfig` itself is omitted
+    // when they all are.
+    temperature: float?,
+    max_output_tokens: int?,
+    top_p: float?,
+    top_k: int?,
+    stop_sequences: string[]?,
+    // e.g. ["TEXT", "IMAGE"] for the image-out models.
+    response_modalities: string[]?,
+
+    // Sent as `safetySettings`.
+    safety_settings: SafetySetting[]?,
 
     function new(
         model: string = "gemini-2.5-flash",
         api_key: string? = null,
         base_url: string? = null,
+        api_key_env: string? = null,
+        base_url_env: string? = null,
+        request_body: baml.json.json? = null,
+        headers: map<string, string>? = null,
+        query_params: map<string, string>? = null,
+        temperature: float? = null,
+        max_output_tokens: int? = null,
+        top_p: float? = null,
+        top_k: int? = null,
+        stop_sequences: string[]? = null,
+        response_modalities: string[]? = null,
+        safety_settings: SafetySetting[]? = null,
     ) -> GoogleClient {
-        GoogleClient { model: model, api_key: api_key, base_url: base_url }
+        GoogleClient {
+            model: model,
+            api_key: api_key,
+            base_url: base_url,
+            api_key_env: api_key_env,
+            base_url_env: base_url_env,
+            request_body: request_body,
+            headers: headers,
+            query_params: query_params,
+            temperature: temperature,
+            max_output_tokens: max_output_tokens,
+            top_p: top_p,
+            top_k: top_k,
+            stop_sequences: stop_sequences,
+            response_modalities: response_modalities,
+            safety_settings: safety_settings,
+        }
+    }
+
+    // The request-time credential: an explicit value, else the named env
+    // var, else the provider's canonical one.
+    function resolved_api_key(self) -> string {
+        if let k: string = self.api_key {
+            return k;
+        }
+        if let name: string = self.api_key_env {
+            if let v: string = baml.env.get(name) {
+                return v;
+            }
+        }
+        baml.env.get_or_panic("GOOGLE_API_KEY")
+    }
+
+    // The request-time base URL, or null for the provider default.
+    function resolved_base_url(self) -> string? {
+        if let u: string = self.base_url {
+            return u;
+        }
+        if let name: string = self.base_url_env {
+            return baml.env.get(name);
+        }
+        null
     }
 
     implements ai.Client {
@@ -19,7 +139,7 @@ class GoogleClient {
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.invoke(self, input) catch_all (e) {
+            root.internal.gemini_invoke(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }
@@ -27,7 +147,7 @@ class GoogleClient {
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.invoke_stream(self, input)
+            root.internal.gemini_invoke_stream(self, input)
         }
     }
 }

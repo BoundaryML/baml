@@ -19,7 +19,7 @@ function user.PlainChat(q: string, client: ai.Client | null = null) -> string th
   ai.Agent.new<string>(client = client).run(PlainChat$spec(q)).value : string
 }
 function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "PlainChat", args: map { "q": q }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "PlainChat", args: map { "q": q }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<string>
 }
 lambda user.PlainChat$spec {
 }
@@ -33,7 +33,7 @@ function user.SpecAgent(q: string, client: ai.Client | null = null) -> user.Answ
   ai.Agent.new<Answer>(client = client).run(SpecAgent$spec(q)).value : user.Answer
 }
 function user.SpecAgent$spec(q: string) -> ai.FunctionSpec<user.Answer> throws never {
-  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([ai.tools.tool(double_it)]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<user.Answer>
+  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([ai.tools.tool(double_it)]), default_client: openai.ResponsesClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<user.Answer>
 }
 lambda user.SpecAgent$spec {
 }

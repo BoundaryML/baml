@@ -215,7 +215,50 @@ class ai.content.ToolUse {
   name: string
   args: map<string, unknown>
 }
-type ai.content.Block = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
+class ai.content.Media {
+  media: ai.MediaPart
+  provider_id: string | null
+  revised_prompt: string | null
+}
+function ai.content.Media.kind(self: ai.content.Media) -> string throws never {
+  { : "image" | "audio" | "video" | "pdf"
+    match (self.media : ai.MediaPart) : "image" | "audio" | "video" | "pdf"
+      image: baml.media.Image =>
+        "image" : "image"
+      audio: baml.media.Audio =>
+        "audio" : "audio"
+      video: baml.media.Video =>
+        "video" : "video"
+      pdf: baml.media.Pdf =>
+        "pdf" : "pdf"
+  }
+}
+function ai.content.Media.new(value: image | audio | video | pdf, provider_id: string | null = null, revised_prompt: string | null = null) -> ai.content.Media throws never {
+  { : ai.content.Media
+    let envelope = : baml.json.json
+      catch (baml.json.to_json<T>(value) : baml.json.json) : baml.json.json
+        catch_all (e)
+          _ =>
+            { : never
+              throw baml.errors.InvalidArgument { message: `...` } : baml.errors.InvalidArgument
+            }
+    let kind = : string | "image" -> string
+      match (baml.json.field(envelope, "kind") : baml.json.json) : string | "image"
+        tag: string =>
+          tag : string
+        _ =>
+          "image" : "image"
+    let part: root.MediaPart = : baml.media.Audio | baml.media.Video | baml.media.Pdf | baml.media.Image -> baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+      catch (if (kind == "audio") { 0 stmts + tail } else if (kind == "video") { 0 stmts + tail } else if (kind == "pdf") { 0 stmts + tail } else { 0 stmts + tail } : baml.media.Audio | baml.media.Video | baml.media.Pdf | baml.media.Image) : baml.media.Audio | baml.media.Video | baml.media.Pdf | baml.media.Image
+        catch_all (e)
+          _ =>
+            { : never
+              throw baml.errors.InvalidArgument { message: `...` } : baml.errors.InvalidArgument
+            }
+    Media { media: part, provider_id: provider_id, revised_prompt: revised_prompt } : ai.content.Media
+  }
+}
+type ai.content.Block = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
 enum ai.content.StopReason
 class ai.content.Text$stream {
   text: string | null
@@ -228,7 +271,12 @@ class ai.content.ToolUse$stream {
   name: string | null
   args: map<string, unknown>
 }
-type ai.content.Block$stream = ai.content.Text$stream | ai.content.Reasoning$stream | ai.content.ToolUse$stream
+class ai.content.Media$stream {
+  media: ai.MediaPart$stream | null
+  provider_id: string | null
+  revised_prompt: string | null
+}
+type ai.content.Block$stream = ai.content.Text$stream | ai.content.Reasoning$stream | ai.content.ToolUse$stream | ai.content.Media$stream
 
 --- <builtin>/ai/ns_errors/errors.baml ---
 enum ai.errors.RetrySafety
@@ -444,6 +492,8 @@ class ai.events.FinalProduced$stream {
   value_json: string | null
 }
 type ai.events.Event$stream = ai.events.RunStarted$stream | ai.events.UserMessage$stream | ai.events.AssistantMessage$stream | ai.events.ToolRequested$stream | ai.events.ToolCompleted$stream | ai.events.ToolFailed$stream | ai.events.Usage$stream | ai.events.FinalProduced$stream
+
+--- <builtin>/ai/ns_internal/auth.baml ---
 
 --- <builtin>/ai/ns_internal/helpers.baml ---
 function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> throws never {
@@ -997,12 +1047,464 @@ function ai.wire.render_output_format(t: type) -> string throws never {
     baml.prompt.render_output_format(t) : string
   }
 }
+class ai.wire.ResolvedMedia {
+  url: string | null
+  base64: string | null
+  mime_type: string
+}
+function ai.wire._media_mime_type(explicit: string | null, source_value: string, kind: string) -> string throws never {
+  { : "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf"
+    if let <pat> = explicit { 1 stmts } : void
+    let source = source_value.to_lower_case() : string
+    if (source.includes(".jpg") || source.includes(".jpeg") : bool) : "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf"
+      { : "image/jpeg"
+        "image/jpeg" : "image/jpeg"
+      }
+    else
+      if (source.includes(".png") : bool) : "image/png" | "image/webp" | "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf"
+        { : "image/png"
+          "image/png" : "image/png"
+        }
+      else
+        if (source.includes(".webp") : bool) : "image/webp" | "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+          { : "image/webp"
+            "image/webp" : "image/webp"
+          }
+        else
+          if (source.includes(".gif") : bool) : "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+            { : "image/gif"
+              "image/gif" : "image/gif"
+            }
+          else
+            if (source.includes(".svg") : bool) : "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+              { : "image/svg+xml"
+                "image/svg+xml" : "image/svg+xml"
+              }
+            else
+              if (source.includes(".wav") : bool) : "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+                { : "audio/wav"
+                  "audio/wav" : "audio/wav"
+                }
+              else
+                if (source.includes(".mp3") : bool) : "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+                  { : "audio/mpeg"
+                    "audio/mpeg" : "audio/mpeg"
+                  }
+                else
+                  if (source.includes(".flac") : bool) : "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                    { : "audio/flac"
+                      "audio/flac" : "audio/flac"
+                    }
+                  else
+                    if (source.includes(".ogg") : bool) : "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                      { : "audio/ogg"
+                        "audio/ogg" : "audio/ogg"
+                      }
+                    else
+                      if (source.includes(".webm") : bool) : "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                        { : "audio/webm" | "video/webm"
+                          if (kind == "audio" : bool) : "audio/webm" | "video/webm"
+                            { : "audio/webm"
+                              "audio/webm" : "audio/webm"
+                            }
+                          else
+                            { : "video/webm"
+                              "video/webm" : "video/webm"
+                            }
+                        }
+                      else
+                        if (source.includes(".mov") : bool) : "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                          { : "video/quicktime"
+                            "video/quicktime" : "video/quicktime"
+                          }
+                        else
+                          if (source.includes(".mp4") : bool) : "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                            { : "video/mp4"
+                              "video/mp4" : "video/mp4"
+                            }
+                          else
+                            if (source.includes(".avi") : bool) : "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "video/mp4" | "image/png"
+                              { : "video/x-msvideo"
+                                "video/x-msvideo" : "video/x-msvideo"
+                              }
+                            else
+                              if (source.includes(".mkv") : bool) : "video/x-matroska" | "application/pdf" | "audio/mpeg" | "video/mp4" | "image/png"
+                                { : "video/x-matroska"
+                                  "video/x-matroska" : "video/x-matroska"
+                                }
+                              else
+                                if (source.includes(".pdf") : bool) : "application/pdf" | "audio/mpeg" | "video/mp4" | "image/png"
+                                  { : "application/pdf"
+                                    "application/pdf" : "application/pdf"
+                                  }
+                                else
+                                  if (kind == "audio" : bool) : "audio/mpeg" | "video/mp4" | "application/pdf" | "image/png"
+                                    { : "audio/mpeg"
+                                      "audio/mpeg" : "audio/mpeg"
+                                    }
+                                  else
+                                    if (kind == "video" : bool) : "video/mp4" | "application/pdf" | "image/png"
+                                      { : "video/mp4"
+                                        "video/mp4" : "video/mp4"
+                                      }
+                                    else
+                                      if (kind == "pdf" : bool) : "application/pdf" | "image/png"
+                                        { : "application/pdf"
+                                          "application/pdf" : "application/pdf"
+                                        }
+                                      else
+                                        { : "image/png"
+                                          "image/png" : "image/png"
+                                        }
+  }
+}
+function ai.wire._resolve_media_content(url: string | null, file: string | null, inline: string, mime: string, fetch_url: bool) -> ai.wire.ResolvedMedia throws never {
+  { : never
+    if let <pat> = file { 4 stmts } : void
+    if (inline != "" : bool) : void
+      { : never
+        return ResolvedMedia { url: null, base64: inline, mime_type: mime } : ai.wire.ResolvedMedia
+      }
+    if let <pat> = url { 6 stmts } : void
+    throw baml.errors.InvalidArgument { message: "media has no URL,..." } : baml.errors.InvalidArgument
+  }
+}
+function ai.wire.resolve_media(media: ai.MediaPart, fetch_url: bool) -> ai.wire.ResolvedMedia throws never {
+  { : ai.wire.ResolvedMedia
+    match (media : ai.MediaPart) : ai.wire.ResolvedMedia
+      image: baml.media.Image =>
+        { : ai.wire.ResolvedMedia
+          let source = image.file() ?? image.url() ?? "" : string
+          _resolve_media_content(image.url(), image.file(), image.base64(), _media_mime_type(image.mime_type(), source, "image"), fetch_url) : ai.wire.ResolvedMedia
+        }
+      audio: baml.media.Audio =>
+        { : ai.wire.ResolvedMedia
+          let source = audio.file() ?? audio.url() ?? "" : string
+          _resolve_media_content(audio.url(), audio.file(), audio.base64(), _media_mime_type(audio.mime_type(), source, "audio"), fetch_url) : ai.wire.ResolvedMedia
+        }
+      video: baml.media.Video =>
+        { : ai.wire.ResolvedMedia
+          let source = video.file() ?? video.url() ?? "" : string
+          _resolve_media_content(video.url(), video.file(), video.base64(), _media_mime_type(video.mime_type(), source, "video"), fetch_url) : ai.wire.ResolvedMedia
+        }
+      pdf: baml.media.Pdf =>
+        { : ai.wire.ResolvedMedia
+          let source = pdf.file() ?? pdf.url() ?? "" : string
+          _resolve_media_content(pdf.url(), pdf.file(), pdf.base64(), _media_mime_type(pdf.mime_type(), source, "pdf"), fetch_url) : ai.wire.ResolvedMedia
+        }
+  }
+}
+function ai.wire._merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.json throws never {
+  { : map<string, baml.json.json> | baml.json.json
+    match (patch : baml.json.json) : map<string, baml.json.json> | baml.json.json
+      patch_object: map<string, baml.json.json> =>
+        { : map<string, baml.json.json>
+          let out: map<string, baml.json.json> = map {  } : map<string, baml.json.json>
+          match (base : baml.json.json) : null
+            base_object: map<string, baml.json.json> =>
+              { : null
+                for key in base_object.keys()
+                  { : void
+                    let _ = out.set(key, base_object.get(key)) : baml.json.json | null
+                  }
+                null : null
+              }
+            _ =>
+              null : null
+          for key in patch_object.keys()
+            { : void
+              let value = patch_object.get(key) : baml.json.json | null
+              match (value : baml.json.json | null) : null
+                null =>
+                  { : null
+                    let _ = out.delete(key) : baml.json.json | null
+                    null : null
+                  }
+                _ =>
+                  { : null
+                    let _ = out.set(key, _merge_json(out.get(key), value)) : baml.json.json | null
+                    null : null
+                  }
+            }
+          out : map<string, baml.json.json>
+        }
+      _ =>
+        patch : baml.json.json
+  }
+}
+function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.json | null) -> baml.json.json throws never {
+  { : baml.json.json
+    match (overrides : baml.json.json | null) : baml.json.json
+      null =>
+        base : baml.json.json
+      _ =>
+        _merge_json(base, overrides) : baml.json.json
+  }
+}
+function ai.wire._wire_blocks(content: ai.content.Block[], keep_reasoning: bool) -> ai.content.Block[] throws never {
+  { : ai.content.Block[]
+    let out: root.content.Block[] = [] : ai.content.Block[]
+    for block in content
+      { : void
+        match (block : ai.content.Block) : null
+          text: root.content.Text =>
+            { : null
+              if (text.text.trim() != "" : bool) : void
+                { : void
+                  out.push(text) : int
+                }
+              null : null
+            }
+          reasoning: root.content.Reasoning =>
+            { : null
+              if (keep_reasoning : bool) : void
+                { : void
+                  out.push(reasoning) : int
+                }
+              null : null
+            }
+          use: root.content.ToolUse =>
+            { : null
+              out.push(use) : int
+              null : null
+            }
+          media: root.content.Media =>
+            null : null
+      }
+    out : ai.content.Block[]
+  }
+}
+function ai.wire._flush_orphaned_calls(out: ai.events.Event[], pending: string[]) -> null throws never {
+  { : null
+    for id in pending
+      { : void
+        out.push(root.events.ToolFailed { id: id, message: "No result provided" }) : int
+      }
+    pending.clear() : null
+  }
+}
+function ai.wire._resolve_pending_call(pending: string[], id: string) -> null throws never {
+  { : null
+    if let <pat> = pending.index_of(id) { 1 stmts } : void
+    null : null
+  }
+}
+function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal throws never {
+  { : ai.Journal
+    let out: root.events.Event[] = [] : ai.events.Event[]
+    let pending: string[] = [] : string[]
+    for event in j.entries()
+      { : void
+        match (event : ai.events.Event) : null
+          assistant: root.events.AssistantMessage =>
+            { : null
+              let _ = _flush_orphaned_calls(out, pending) : null
+              let blocks = _wire_blocks(assistant.content, assistant.client_id == client_id) : ai.content.Block[]
+              if (blocks.length() > 0 : bool) : null
+                { : null
+                  out.push(root.events.AssistantMessage { content: blocks, client_id: assistant.client_id }) : int
+                  for block in blocks
+                    { : void
+                      if let <pat> = block { 1 stmts } : void
+                    }
+                  null : null
+                }
+              else
+                { : null
+                  null : null
+                }
+              null : null
+            }
+          user: root.events.UserMessage =>
+            { : null
+              let _ = _flush_orphaned_calls(out, pending) : null
+              out.push(user) : int
+              null : null
+            }
+          completed: root.events.ToolCompleted =>
+            { : null
+              let _ = _resolve_pending_call(pending, completed.id) : null
+              out.push(completed) : int
+              null : null
+            }
+          failed: root.events.ToolFailed =>
+            { : null
+              let _ = _resolve_pending_call(pending, failed.id) : null
+              out.push(failed) : int
+              null : null
+            }
+          _ =>
+            { : null
+              out.push(event) : int
+              null : null
+            }
+      }
+    let _ = _flush_orphaned_calls(out, pending) : null
+    root.Journal { log: out } : ai.Journal
+  }
+}
+class ai.wire.ResolvedMedia$stream {
+  url: string | null
+  base64: string | null
+  mime_type: string | null
+}
 
 --- <builtin>/ai/runner.baml ---
 class ai.RunResult {
   value: Out
   journal: ai.Journal
   usage: ai.events.Usage
+}
+function ai._media_shape(t: type) -> string throws never {
+  { : ""
+    if (t == reflect.type_of<image>() : bool) : void
+      { : never
+        return "one:image" : "one:image"
+      }
+    if (t == reflect.type_of<audio>() : bool) : void
+      { : never
+        return "one:audio" : "one:audio"
+      }
+    if (t == reflect.type_of<video>() : bool) : void
+      { : never
+        return "one:video" : "one:video"
+      }
+    if (t == reflect.type_of<pdf>() : bool) : void
+      { : never
+        return "one:pdf" : "one:pdf"
+      }
+    if (t == reflect.type_of<image?>() : bool) : void
+      { : never
+        return "opt:image" : "opt:image"
+      }
+    if (t == reflect.type_of<audio?>() : bool) : void
+      { : never
+        return "opt:audio" : "opt:audio"
+      }
+    if (t == reflect.type_of<video?>() : bool) : void
+      { : never
+        return "opt:video" : "opt:video"
+      }
+    if (t == reflect.type_of<pdf?>() : bool) : void
+      { : never
+        return "opt:pdf" : "opt:pdf"
+      }
+    if (t == reflect.type_of<image[]>() || t == reflect.type_of<image[]?>() : bool) : void
+      { : never
+        return "list:image" : "list:image"
+      }
+    if (t == reflect.type_of<(string | image)[]>() || t == reflect.type_of<(string | image)[]?>() : bool) : void
+      { : never
+        return "mixedlist:image" : "mixedlist:image"
+      }
+    if (t == reflect.type_of<string | image>() || t == reflect.type_of<(string | image)?>() : bool) : void
+      { : never
+        return "mixed:image" : "mixed:image"
+      }
+    "" : ""
+  }
+}
+function ai._media_envelope(m: ai.content.Media) -> baml.json.json throws never {
+  { : baml.json.json
+    catch (baml.json.to_json<T>(m.media) : baml.json.json) : baml.json.json
+      catch_all (e)
+        _ =>
+          { : never
+            throw baml.errors.UnknownError { data: e, message: [e.to_string()] } : baml.errors.UnknownError
+          }
+  }
+}
+function ai._media_of_kind(turn: ai.ModelTurn, kind: string) -> baml.json.json[] throws never {
+  { : baml.json.json[]
+    let out: baml.json.json[] = [] : baml.json.json[]
+    for b in turn.content
+      { : void
+        if let <pat> = b { 0 stmts + tail } : void
+      }
+    out : baml.json.json[]
+  }
+}
+function ai._media_mixed_parts(turn: ai.ModelTurn) -> baml.json.json[] throws never {
+  { : baml.json.json[]
+    let items: baml.json.json[] = [] : baml.json.json[]
+    for b in turn.content
+      { : void
+        match (b : ai.content.Block) : null
+          t: root.content.Text =>
+            { : null
+              if (t.text.trim() != "" : bool) : void
+                { : void
+                  items.push(t.text) : int
+                }
+              null : null
+            }
+          m: root.content.Media =>
+            { : null
+              if (m.kind() == "image" : bool) : void
+                { : void
+                  items.push(_media_envelope(m)) : int
+                }
+              null : null
+            }
+          _ =>
+            null : null
+      }
+    items : baml.json.json[]
+  }
+}
+function ai._media_all_text(items: baml.json.json[]) -> bool throws never {
+  { : true
+    for i in items
+      { : void
+        if (Not i is string : bool) : void
+          { : never
+            return false : false
+          }
+      }
+    true : true
+  }
+}
+function ai._media_join_text(items: baml.json.json[]) -> baml.json.json throws never {
+  { : string
+    let out = "" : "" -> string
+    for i in items
+      { : void
+        if let <pat> = i { 1 stmts } : void
+      }
+    out : string
+  }
+}
+function ai._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: string) -> null throws never {
+  { : null
+    let unexpected = 0 : 0 -> int
+    for b in turn.content
+      { : void
+        match (b : ai.content.Block) : null
+          m: root.content.Media =>
+            { : null
+              if (m.kind() != kind : bool) : void
+                { : void
+                  unexpected = unexpected + 1 : int
+                }
+              null : null
+            }
+          t: root.content.Text =>
+            { : null
+              if (t.text.trim() != "" : bool) : void
+                { : void
+                  unexpected = unexpected + 1 : int
+                }
+              null : null
+            }
+          _ =>
+            null : null
+      }
+    if (unexpected > 0 : bool) : void
+      { : never
+        throw root.errors.ParseFailed { provider: provider, raw_output: `...` } : ai.errors.ParseFailed
+      }
+    null : null
+  }
 }
 class ai.Agent {
   max_steps: int
@@ -1053,8 +1555,92 @@ function ai.Agent._run_one_tool(self: ai.Agent<Out>, tb: ai.tools.Toolbox, call:
         }
   }
 }
-function ai.Agent._parses(self: ai.Agent<Out>, candidate: string) -> bool throws never {
+function ai.Agent._has_media_output(self: ai.Agent<Out>, turn: ai.ModelTurn) -> bool throws never {
+  { : bool
+    let shape = _media_shape(reflect.type_of<Out>()) : string
+    let form = shape.split(":").at(0) ?? "" : string
+    if (form == "" : bool) : void
+      { : never
+        return false : false
+      }
+    if (form == "mixed" || form == "mixedlist" : bool) : void
+      { : never
+        return _media_mixed_parts(turn).length() > 0 : bool
+      }
+    _media_of_kind(turn, shape.split(":").at(1) ?? "").length() > 0 : bool
+  }
+}
+function ai.Agent._media_value(self: ai.Agent<Out>, turn: ai.ModelTurn, provider: string) -> Out throws never {
+  { : Out
+    let t = reflect.type_of() : type
+    let shape = _media_shape(t) : string
+    let form = shape.split(":").at(0) ?? "" : string
+    let kind = shape.split(":").at(1) ?? "" : string
+    let payload = : int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> | baml.json.json
+      if (form == "mixedlist" : bool) : int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> | baml.json.json
+        { : int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+          let items: baml.json.json = _media_mixed_parts(turn) : baml.json.json[] -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+          items : int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+        }
+      else
+        if (form == "mixed" : bool) : baml.json.json | int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+          { : baml.json.json
+            let items = _media_mixed_parts(turn) : baml.json.json[]
+            if (items.length() == 1 : bool) : baml.json.json
+              { : baml.json.json
+                let only: baml.json.json = null : null -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+                for i in items
+                  { : void
+                    only = i : baml.json.json
+                  }
+                only : baml.json.json
+              }
+            else
+              if (_media_all_text(items) : bool) : baml.json.json
+                { : baml.json.json
+                  _media_join_text(items) : baml.json.json
+                }
+              else
+                { : never
+                  throw root.errors.ParseFailed { provider: provider, raw_output: `...` } : ai.errors.ParseFailed
+                }
+          }
+        else
+          if (form == "list" : bool) : int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> | baml.json.json
+            { : int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+              let _ = _media_reject_mixed(turn, kind, provider) : null
+              let items: baml.json.json = _media_of_kind(turn, kind) : baml.json.json[] -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+              items : int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+            }
+          else
+            { : baml.json.json
+              let parts = _media_of_kind(turn, kind) : baml.json.json[]
+              let _ = _media_reject_mixed(turn, kind, provider) : null
+              if (parts.length() != 1 : bool) : void
+                { : never
+                  throw root.errors.ParseFailed { provider: provider, raw_output: if (form == "one") { 0 stmts + tail } else { 0 stmts + tail } } : ai.errors.ParseFailed
+                }
+              let only: baml.json.json = null : null -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+              for p in parts
+                { : void
+                  only = p : baml.json.json
+                }
+              only : baml.json.json
+            }
+    catch (baml.json.from_json<T>(payload) : Out) : Out
+      catch_all (e)
+        _ =>
+          { : never
+            throw root.errors.ParseFailed { provider: provider, raw_output: `...` } : ai.errors.ParseFailed
+          }
+  }
+}
+function ai.Agent._parses(self: ai.Agent<Out>, turn: ai.ModelTurn, candidate: string) -> bool throws never {
   { : true
+    if (_media_shape(reflect.type_of<Out>()) != "" : bool) : void
+      { : never
+        return self._has_media_output(turn) : bool
+      }
     let _ = : Out
       catch (baml.sap.parse<T>(candidate) : Out) : Out
         catch_all (e)
@@ -1076,7 +1662,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<Out>, c: ai.Client, spec: ai.Func
       }
     if let <pat> = turn.usage { 1 stmts } : void
     let candidate = turn.terminal_text() ?? "" : string
-    let accepted = turn.tool_uses().length() > 0 || turn.stop_reason == root.content.StopReason.MaxTokens || turn.stop_reason == root.content.StopReason.Refused || self._parses(candidate) : bool
+    let accepted = turn.tool_uses().length() > 0 || turn.stop_reason == root.content.StopReason.MaxTokens || turn.stop_reason == root.content.StopReason.Refused || self._parses(turn, candidate) : bool
     if (accepted : bool) : ai.ModelTurn
       { : ai.ModelTurn
         j.append_all(batch) : void
@@ -1151,12 +1737,19 @@ function ai.Agent.run(self: ai.Agent<Out>, spec: ai.FunctionSpec<Out>) -> ai.Run
           { : never
             let candidate = turn.terminal_text() ?? "" : string
             let value = : Out
-              catch (baml.sap.parse<T>(candidate) : Out) : Out
-                catch_all (e)
-                  _ =>
-                    { : never
-                      throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate } : ai.errors.ParseFailed
-                    }
+              if (self._has_media_output(turn) : bool) : Out
+                { : Out
+                  self._media_value<Out>(turn, selected.id()) : Out
+                }
+              else
+                { : Out
+                  catch (baml.sap.parse<T>(candidate) : Out) : Out
+                    catch_all (e)
+                      _ =>
+                        { : never
+                          throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate } : ai.errors.ParseFailed
+                        }
+                }
             let value_json = : baml.json.json
               catch (baml.json.to_json<T>(value) : baml.json.json) : baml.json.json
                 catch_all (e)
@@ -1191,9 +1784,13 @@ class ai.Agent$stream {
 }
 
 --- <builtin>/ai/spec.baml ---
+type ai.MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+type ai.PromptPart = string | ai.MediaPart
 class ai.PromptMessage {
   role: string
   content: string
+  parts: ai.PromptPart[]
+  metadata: map<string, baml.json.json>
 }
 class ai.Prompt {
   _data: $rust_type
@@ -1248,9 +1845,13 @@ function ai.FunctionSpec.tools(self: ai.FunctionSpec<Out>) -> ai.tools.Toolbox t
     self.toolbox : ai.tools.Toolbox
   }
 }
+type ai.MediaPart$stream = baml.media.Image$stream | baml.media.Audio$stream | baml.media.Video$stream | baml.media.Pdf$stream
+type ai.PromptPart$stream = string | ai.MediaPart$stream
 class ai.PromptMessage$stream {
   role: string | null
   content: string | null
+  parts: ai.PromptPart$stream[]
+  metadata: map<string, baml.json.json$stream>
 }
 class ai.Prompt$stream {
   _data: $rust_type
@@ -1283,6 +1884,16 @@ function ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null throws 
         if let <pat> = b { 1 stmts } : void
       }
     out : string
+  }
+}
+function ai.ModelTurn.media(self: ai.ModelTurn) -> ai.MediaPart[] throws never {
+  { : ai.MediaPart[]
+    let out: MediaPart[] = [] : ai.MediaPart[]
+    for b in self.content
+      { : void
+        if let <pat> = b { 1 stmts } : void
+      }
+    out : ai.MediaPart[]
   }
 }
 function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] throws never {

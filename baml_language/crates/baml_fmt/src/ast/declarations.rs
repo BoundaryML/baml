@@ -896,7 +896,7 @@ impl Printable for ClientField {
 pub enum ClientName {
     Path(PathExpr),
     String(t::QuotedString),
-    /// An arbitrary ai.Client expression (`client openai.OpenAiClient.new(...)`).
+    /// An arbitrary ai.Client expression (`client openai.ResponsesClient.new(...)`).
     Expr(Box<Expression>),
 }
 

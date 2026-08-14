@@ -1,0 +1,1314 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function llm_google.$init_test_ns_llm_google_google_client(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_request_shape"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_request_omits_unset_fields"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_request_body_passthrough"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_tool_declarations"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_parse_thoughts_and_usage"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_parse_function_call"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_parse_inline_media"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_parse_stop_reasons"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_stream_decode"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "vertex_url_regional"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "vertex_url_global"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "vertex_url_streaming_express"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "vertex_url_base_url_override"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "vertex_request_shape"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "vertex_claude_raw_predict"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "vertex_stream_decode"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.llm_google"
+    load_const "google_error_taxonomy"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    call testing.Sequential
+    store_var _38
+    load_var registry
+    load_const "root.llm_google"
+    load_const "live"
+    make_closure .<lambda($init_test_ns_llm_google_google_client, 17)>, 0
+    load_var _38
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    load_const null
+    return
+}
+
+function llm_google.GoogleEcho(question: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var question
+    call user.llm_google.GoogleEcho$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_google.GoogleEcho$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_google.GoogleEcho$render_prompt(question: string) -> ai.Prompt {
+    load_var question
+    call user.llm_google.GoogleEcho$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_google.GoogleEcho$spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gemini-2.5-flash"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    store_var _6
+    load_const "GoogleEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(GoogleEcho$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_google.GoogleEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.llm_google.GoogleEcho$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function llm_google.GoogleToolEcho(question: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var question
+    call user.llm_google.GoogleToolEcho$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_google.GoogleToolEcho$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_google.GoogleToolEcho$render_prompt(question: string) -> ai.Prompt {
+    load_var question
+    call user.llm_google.GoogleToolEcho$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_google.GoogleToolEcho$spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const user.llm_google.weather_lookup
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call ai.tools.tool
+    load_type ai.tools.Tool
+    alloc_array 1
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gemini-2.5-flash"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    store_var _7
+    load_const "GoogleToolEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(GoogleToolEcho$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_google.LiveGeminiEcho(question: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var question
+    call user.llm_google.LiveGeminiEcho$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function llm_google.LiveGeminiEcho$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function llm_google.LiveGeminiEcho$render_prompt(question: string) -> ai.Prompt {
+    load_var question
+    call user.llm_google.LiveGeminiEcho$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function llm_google.LiveGeminiEcho$spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gemini-2.5-flash"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    store_var _6
+    load_const "LiveGeminiEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(LiveGeminiEcho$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function llm_google.LiveGeminiEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.llm_google.LiveGeminiEcho$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function llm_google._canned_turn() -> string {
+    load_const "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"pong\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":1,\"totalTokenCount\":4},\"modelVersion\":\"gemini-2.5-flash\"}"
+    return
+}
+
+function llm_google._stop_reason_of(raw: string) -> string {
+    load_type google.internal.GmResponse
+    load_var raw
+    call baml.json.from_string
+    load_const 0
+    call google.internal.google_parse
+    store_var _5
+    load_type ai.content.StopReason
+    load_var _5
+    load_field .stop_reason
+    call baml.String.from
+    return
+}
+
+function llm_google.google_error_taxonomy() -> string {
+    load_type string
+    alloc_array 0
+    store_var outcomes
+    load_const 400
+    load_const 429
+    load_const 503
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _5
+    store_var status
+    load_type int
+    load_var status
+    call baml.String.from
+    store_var _15
+    load_var status
+    load_const "{\"error\":{\"code\":"
+    load_var _15
+    bin_op +
+    load_const ",\"message\":\"nope\"}}"
+    bin_op +
+    call user.llm_mock.MockResponse.error
+    store_var _11
+    load_type string
+    load_type never
+    load_var _11
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(google_error_taxonomy, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    store_var label
+    load_var2 1 5
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_type string
+    load_var outcomes
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_google.google_parse_function_call() -> string {
+    load_type google.internal.GmResponse
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"weather_lookup\",\"args\":{\"city\":\"NYC\"}}}]},\"finishReason\":\"STOP\"}]}"
+    call baml.json.from_string
+    load_const 7
+    call google.internal.google_parse
+    store_var turn
+    load_type ai.content.StopReason
+    load_var turn
+    load_field .stop_reason
+    call baml.String.from
+    store_var _7
+    load_var turn
+    call ai.ModelTurn.tool_uses
+    store_var _13
+    load_type ai.content.ToolUse
+    load_var _13
+    load_const 0
+    call baml.Array.at
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var turn
+    call ai.ModelTurn.tool_uses
+    store_var _17
+    load_type ai.content.ToolUse
+    load_var _17
+    load_const 0
+    call baml.Array.at
+    load_field .0
+    store_var _11
+    jump L2
+
+  L1:
+    load_const null
+    store_var _11
+
+  L2:
+    load_var _11
+    store_var _10
+    load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const ""
+    store_var _10
+
+  L3:
+    load_var turn
+    call ai.ModelTurn.tool_uses
+    store_var _23
+    load_type ai.content.ToolUse
+    load_var _23
+    load_const 0
+    call baml.Array.at
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var turn
+    call ai.ModelTurn.tool_uses
+    store_var _27
+    load_type ai.content.ToolUse
+    load_var _27
+    load_const 0
+    call baml.Array.at
+    load_field .1
+    store_var _21
+    jump L6
+
+  L5:
+    load_const null
+    store_var _21
+
+  L6:
+    load_var _21
+    store_var _20
+    load_var _21
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const ""
+    store_var _20
+
+  L7:
+    load_type string
+    load_var2 2 3
+    load_var _20
+    load_type string
+    alloc_array 3
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_google.google_parse_inline_media() -> string {
+    load_type google.internal.GmResponse
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"aGk=\"}},{\"text\":\"here you go\"}]},\"finishReason\":\"STOP\"}]}"
+    call baml.json.from_string
+    load_const 0
+    call google.internal.google_parse
+    store_var turn
+    load_type string
+    alloc_array 0
+    store_var kinds
+    load_var turn
+    call ai.ModelTurn.media
+    load_type baml.iter.Iterable<Error = never, Item = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+
+  L0:
+    load_var _8
+    load_type baml.iter.Iterator<Error = never, Item = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_var _9
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var _9
+    store_var _13
+    load_var _13
+    narrow_bind baml.media.Image, slot=5
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var kinds
+    load_const "other"
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L3:
+    load_var _13
+    call baml.media.Image.mime_type
+    store_var _19
+    load_var _19
+    store_var _18
+    load_var _19
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const ""
+    store_var _18
+
+  L4:
+    load_type string
+    load_var _18
+    call baml.String.from
+    store_var _17
+    load_var kinds
+    load_const "image:"
+    load_var _17
+    bin_op +
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L5:
+    load_var turn
+    call ai.ModelTurn.terminal_text
+    store_var _25
+    load_var _25
+    store_var _24
+    load_var _25
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    load_const ""
+    store_var _24
+
+  L6:
+    load_var turn
+    load_field .content
+    container_len
+    store_var _28
+    load_type int
+    load_var _28
+    call baml.String.from
+    store_var _27
+    load_type string
+    load_var kinds
+    load_const ","
+    call baml.Array.join
+    store_var _31
+    load_type string
+    load_var2 9 11
+    load_var _31
+    load_type string
+    alloc_array 3
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_google.google_parse_stop_reasons() -> string {
+    load_const "{\"promptFeedback\":{\"blockReason\":\"SAFETY\"}}"
+    call user.llm_google._stop_reason_of
+    store_var _6
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\"}]},\"finishReason\":\"SAFETY\"}]}"
+    call user.llm_google._stop_reason_of
+    store_var _8
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"half\"}]},\"finishReason\":\"MAX_TOKENS\"}]}"
+    call user.llm_google._stop_reason_of
+    store_var _10
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"ok\"}]},\"finishReason\":\"SOMETHING_NEW\"}]}"
+    call user.llm_google._stop_reason_of
+    store_var _12
+    load_type string
+    load_var2 1 2
+    load_var2 3 4
+    load_type string
+    alloc_array 4
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_google.google_parse_thoughts_and_usage() -> string {
+    load_type google.internal.GmResponse
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"weighing it up\",\"thought\":true},{\"text\":\"answer\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":4,\"cachedContentTokenCount\":6,\"thoughtsTokenCount\":7,\"totalTokenCount\":27}}"
+    call baml.json.from_string
+    load_const 0
+    call google.internal.google_parse
+    store_var turn
+    load_var turn
+    call ai.ModelTurn.terminal_text
+    store_var _8
+    load_var _8
+    store_var _7
+    load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _7
+
+  L0:
+    load_var turn
+    load_field .content
+    container_len
+    store_var _11
+    load_type int
+    load_var _11
+    call baml.String.from
+    store_var _10
+    load_type ai.content.StopReason
+    load_var turn
+    load_field .stop_reason
+    call baml.String.from
+    store_var _14
+    load_var turn
+    load_field .usage
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var turn
+    load_field .usage
+    load_field .0
+    store_var _19
+    jump L3
+
+  L2:
+    load_const null
+    store_var _19
+
+  L3:
+    load_var _19
+    store_var _18
+    load_var _19
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 1
+    unary_op -
+    store_var _18
+
+  L4:
+    load_type int
+    load_var _18
+    call baml.String.from
+    store_var _17
+    load_var turn
+    load_field .usage
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var turn
+    load_field .usage
+    load_field .1
+    store_var _27
+    jump L7
+
+  L6:
+    load_const null
+    store_var _27
+
+  L7:
+    load_var _27
+    store_var _26
+    load_var _27
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L8
+    load_const 1
+    unary_op -
+    store_var _26
+
+  L8:
+    load_type int
+    load_var _26
+    call baml.String.from
+    store_var _25
+    load_var turn
+    load_field .usage
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var turn
+    load_field .usage
+    load_field .2
+    store_var _35
+    jump L11
+
+  L10:
+    load_const null
+    store_var _35
+
+  L11:
+    load_var _35
+    store_var _34
+    load_var _35
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_const 1
+    unary_op -
+    store_var _34
+
+  L12:
+    load_type int
+    load_var _34
+    call baml.String.from
+    store_var _33
+    load_var turn
+    load_field .usage
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var turn
+    load_field .usage
+    load_field .3
+    store_var _43
+    jump L15
+
+  L14:
+    load_const null
+    store_var _43
+
+  L15:
+    load_var _43
+    store_var _42
+    load_var _43
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L16
+    load_const 1
+    unary_op -
+    store_var _42
+
+  L16:
+    load_type int
+    load_var _42
+    call baml.String.from
+    store_var _41
+    load_type string
+    load_var2 2 4
+    load_var2 6 7
+    load_var2 10 13
+    load_var _41
+    load_type string
+    alloc_array 7
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_google.google_request_body_passthrough() -> string {
+    call user.llm_google._canned_turn
+    call user.llm_mock.MockResponse.ok
+    store_var _2
+    load_type string
+    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(google_request_body_passthrough, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_google.google_request_omits_unset_fields() -> string {
+    call user.llm_google._canned_turn
+    call user.llm_mock.MockResponse.ok
+    store_var _2
+    load_type string
+    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(google_request_omits_unset_fields, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_google.google_request_shape() -> string {
+    call user.llm_google._canned_turn
+    call user.llm_mock.MockResponse.ok
+    store_var _2
+    load_type string
+    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(google_request_shape, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_google.google_stream_decode() -> string {
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"po\"}]}}]}"
+    call user.llm_mock.sse_data
+    store_var _2
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"(thinking)\",\"thought\":true}]}}]}"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_const "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"ng\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":1}}"
+    call user.llm_mock.sse_data
+    store_var _4
+    load_type string
+    load_type never
+    load_var2 1 2
+    load_var _4
+    load_type string
+    alloc_array 3
+    make_closure .<lambda(google_stream_decode, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_google.google_tool_declarations() -> string {
+    call user.llm_google._canned_turn
+    call user.llm_mock.MockResponse.ok
+    store_var _2
+    load_type string
+    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(google_tool_declarations, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_google.live_gemini_answers() -> bool {
+    load_const "Say pong."
+    load_const <omitted>
+    call user.llm_google.LiveGeminiEcho
+    call baml.String.trim
+    call baml.String.length
+    load_const 0
+    cmp_int_op >
+    return
+}
+
+function llm_google.live_vertex_answers() -> bool {
+    load_const "INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"
+    sys_op baml.env.get
+    store_var _2
+    load_const "GOOGLE_CLOUD_LOCATION"
+    sys_op baml.env.get
+    store_var _4
+    load_var _4
+    store_var _3
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "us-central1"
+    store_var _3
+
+  L0:
+    load_const "gemini-2.5-flash"
+    load_const <omitted>
+    load_var2 3 2
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    store_var cl
+    load_type string
+    load_const <omitted>
+    load_var cl
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _7
+    load_const "Say pong."
+    call user.llm_google.LiveGeminiEcho$spec
+    store_var _10
+    load_var2 6 7
+    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var result
+    load_var result
+    load_field .value
+    call baml.String.trim
+    call baml.String.length
+    load_const 0
+    cmp_int_op >
+    return
+}
+
+function llm_google.vertex_claude_raw_predict() -> string {
+    load_const "Say pong."
+    call user.llm_google.GoogleEcho$spec
+    load_field .prompt_template
+    store_var _3
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _6
+    load_const "claude-sonnet-4-5"
+    load_const "my-project"
+    load_const "us-east5"
+    load_const <omitted>
+    load_const <omitted>
+    load_const "express-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    store_var cl
+    load_var2 3 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    init_instance ai.Journal .log
+    load_var _6
+    load_type string
+    init_instance ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type
+    call google.internal.vertex_render
+    store_var req
+    load_var req
+    load_field .body
+    call baml.json.parse
+    store_var body
+    load_var req
+    load_field .url
+    store_var _16
+    load_type string
+    load_var body
+    load_const ".anthropic_version"
+    call baml.json.path
+    store_var _17
+    load_type string
+    load_var body
+    load_const ".model"
+    call baml.json.path
+    store_var _20
+    load_type int
+    load_var body
+    load_const ".max_tokens"
+    call baml.json.path
+    store_var _24
+    load_type int
+    load_var _24
+    call baml.String.from
+    store_var _23
+    load_type string
+    load_var body
+    load_const ".messages[0].role"
+    call baml.json.path
+    store_var _28
+    load_type string
+    load_var2 6 7
+    load_var2 8 9
+    load_var _28
+    load_type string
+    alloc_array 5
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function llm_google.vertex_request_shape() -> string {
+    call user.llm_google._canned_turn
+    call user.llm_mock.MockResponse.ok
+    store_var _2
+    load_type string
+    load_type ai.errors.ParseFailed | ai.errors.Refused | ai.errors.StepBudgetExceeded | ai.errors.ToolFailedError | baml.errors.InvalidArgument | baml.errors.UnknownError | baml.json.JsonParseError | baml.json.JsonPathError | ai.errors.Failure
+    load_var _2
+    load_type llm_mock.MockResponse
+    alloc_array 1
+    make_closure .<lambda(vertex_request_shape, 0)>, 0
+    call user.llm_mock.mock_json_serve
+    return
+}
+
+function llm_google.vertex_stream_decode() -> string {
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"po\"}]}}]}"
+    call user.llm_mock.sse_data
+    store_var _2
+    load_const "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"ng\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":1}}"
+    call user.llm_mock.sse_data
+    store_var _3
+    load_type string
+    load_type never
+    load_var2 1 2
+    load_type string
+    alloc_array 2
+    make_closure .<lambda(vertex_stream_decode, 0)>, 0
+    load_const <omitted>
+    call user.llm_mock.mock_sse_serve
+    return
+}
+
+function llm_google.vertex_url_base_url_override() -> string {
+    load_const "gemini-2.5-flash"
+    load_const "ignored"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const "https://example.test/v1/projects/p/locations/l/publishers/google/models"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    load_const false
+    call google.internal.vertex_url
+    return
+}
+
+function llm_google.vertex_url_global() -> string {
+    load_const "gemini-2.5-flash"
+    load_const "my-project"
+    load_const "global"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    load_const false
+    call google.internal.vertex_url
+    return
+}
+
+function llm_google.vertex_url_regional() -> string {
+    load_const "gemini-2.5-flash"
+    load_const "my-project"
+    load_const "europe-west4"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    load_const false
+    call google.internal.vertex_url
+    return
+}
+
+function llm_google.vertex_url_streaming_express() -> string {
+    load_const "gemini-2.5-flash"
+    load_const "my-project"
+    load_const "us-central1"
+    load_const <omitted>
+    load_const <omitted>
+    load_const "express-key"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const "abc"
+    load_const "trace"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    load_const true
+    call google.internal.vertex_url
+    return
+}
+
+function llm_google.weather_lookup(city: string) -> string {
+    load_type string
+    load_var city
+    call baml.String.from
+    store_var _3
+    load_const "sunny in "
+    load_var _3
+    bin_op +
+    return
+}

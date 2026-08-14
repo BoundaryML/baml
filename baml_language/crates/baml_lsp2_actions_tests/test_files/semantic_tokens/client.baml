@@ -1,4 +1,4 @@
-client MyClient = openai.OpenAiClient.new(
+client MyClient = openai.ResponsesClient.new(
   model = "gpt-4",
 );
 
@@ -17,8 +17,8 @@ client RetryClient = ai.clients.Retry.new(
 // client.baml:1:17 (operator) len=1 "="
 // client.baml:1:19 (namespace) [defaultLibrary] len=6 "openai"
 // client.baml:1:25 (namespace) [defaultLibrary] len=1 "."
-// client.baml:1:26 (class) [defaultLibrary] len=12 "OpenAiClient"
-// client.baml:1:39 (method) len=3 "new"
+// client.baml:1:26 (class) [defaultLibrary] len=15 "ResponsesClient"
+// client.baml:1:42 (method) len=3 "new"
 // client.baml:2:3 (parameter) len=5 "model"
 // client.baml:2:9 (operator) len=1 "="
 // client.baml:2:11 (string) len=7 "\"gpt-4\""

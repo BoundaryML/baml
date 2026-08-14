@@ -1,4 +1,4 @@
-client GPT4o = openai.OpenAiClient.new(
+client GPT4o = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = env.OPENAI_API_KEY,
 );
@@ -74,8 +74,8 @@ function ClassifySentiment2(text: string) -> string {
 // testset_vibes_nested.baml:1:14 (operator) len=1 "="
 // testset_vibes_nested.baml:1:16 (namespace) [defaultLibrary] len=6 "openai"
 // testset_vibes_nested.baml:1:22 (namespace) [defaultLibrary] len=1 "."
-// testset_vibes_nested.baml:1:23 (class) [defaultLibrary] len=12 "OpenAiClient"
-// testset_vibes_nested.baml:1:36 (method) len=3 "new"
+// testset_vibes_nested.baml:1:23 (class) [defaultLibrary] len=15 "ResponsesClient"
+// testset_vibes_nested.baml:1:39 (method) len=3 "new"
 // testset_vibes_nested.baml:2:5 (parameter) len=5 "model"
 // testset_vibes_nested.baml:2:11 (operator) len=1 "="
 // testset_vibes_nested.baml:2:13 (string) len=8 "\"gpt-4o\""

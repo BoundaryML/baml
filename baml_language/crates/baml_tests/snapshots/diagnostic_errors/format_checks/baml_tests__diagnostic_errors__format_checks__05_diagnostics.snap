@@ -256,7 +256,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client BasicClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client BasicClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[config_decls.baml:5:1]
   5 │ ╭─▶ client<llm> BasicClient {
@@ -270,7 +270,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client FullClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client FullClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[config_decls.baml:13:1]
  13 │ ╭─▶ client<llm> FullClient {
@@ -288,7 +288,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client StringProviderClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client StringProviderClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:25:1]
  25 │ ╭─▶ client<llm> StringProviderClient {
@@ -303,8 +303,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client NestedConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client NestedConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:34:1]
  34 │ ╭─▶ client<llm> NestedConfigClient {
  35 │ │       provider openai
@@ -321,8 +321,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:46:1]
  46 │ ╭─▶ client<llm> ArrayConfigClient {
  47 │ │       provider openai
@@ -336,7 +336,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LongOptionClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongOptionClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[config_decls.baml:55:1]
  55 │ ╭─▶ client<llm> LongOptionClient {
@@ -351,8 +351,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TypedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TypedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:64:1]
  64 │ ╭─▶ client<llm> TypedValuesClient {
  65 │ │       provider openai
@@ -368,7 +368,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client EnvClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client EnvClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[config_decls.baml:75:1]
  75 │ ╭─▶ client<llm> EnvClient {
@@ -383,7 +383,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayOfObjectsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayOfObjectsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:84:1]
   84 │ ╭─▶ client<llm> ArrayOfObjectsClient {
@@ -408,7 +408,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client RawStringConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client RawStringConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:103:1]
  103 │ ╭─▶ client<llm> RawStringConfigClient {
@@ -426,8 +426,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client MixedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client MixedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:115:1]
  115 │ ╭─▶ client<llm> MixedValuesClient {
  116 │ │       provider openai
@@ -446,7 +446,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
      ╭─[config_decls.baml:130:1]
  130 │ ╭─▶ client // 2 client keyword trailing
@@ -481,8 +481,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:162:1]
  162 │ ╭─▶ client /* 2 client keyword trailing */
  163 │ │   /* 3 type angle leading */
@@ -517,7 +517,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0010
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns =
-  │ openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+  │ openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:193:1]
  193 │ ╭─▶ client<llm> ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns {
  194 │ │       provider openai
@@ -530,8 +530,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client DeeplyNestedClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client DeeplyNestedClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:201:1]
  201 │ ╭─▶ client<llm> DeeplyNestedClient {
  202 │ │       provider openai
@@ -556,7 +556,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LongNestedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongNestedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:221:1]
  221 │ ╭─▶ client<llm> LongNestedValuesClient {
@@ -575,8 +575,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client ManyOptionsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ManyOptionsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:234:1]
  234 │ ╭─▶ client<llm> ManyOptionsClient {
  235 │ │       provider openai
@@ -598,7 +598,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
      ╭─[config_decls.baml:251:1]
  251 │ ╭─▶ client<llm> LongArrayClient {
@@ -613,7 +613,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayOfObjectsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayOfObjectsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:260:1]
  260 │ ╭─▶ client<llm> LongArrayOfObjectsClient {
@@ -639,7 +639,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:281:1]
  281 │ ╭─▶ client // 2 client trailing
@@ -685,7 +685,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:324:1]
  324 │ ╭─▶ client /* 2 client trailing */
@@ -733,7 +733,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:368:1]
  368 │ ╭─▶ client<llm> TriviaLongValueClient {
@@ -754,7 +754,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:383:1]
  383 │ ╭─▶ client<llm> TriviaLongValueClientBlock {
@@ -854,7 +854,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:658:1]
  658 │ ╭─▶ client<llm> C {
  659 │ │       provider openai
@@ -877,7 +877,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:670:1]
  670 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
@@ -901,7 +901,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
      ╭─[config_decls.baml:682:1]
  682 │ ╭─▶ client<llm> CommaClient {
@@ -916,7 +916,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
      ╭─[config_decls.baml:691:1]
  691 │ ╭─▶ client<llm> SameLineClient {

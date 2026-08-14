@@ -30,7 +30,7 @@ function user.GetUser(id: int, client: ai.Client | null = null) -> user.User thr
   ai.Agent.new<User>(client = client).run(GetUser$spec(id)).value : user.User
 }
 function user.GetUser$spec(id: int) -> ai.FunctionSpec<user.User> throws never {
-  ai.FunctionSpec { spec_name: "GetUser", args: map { "id": id }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o") } : ai.FunctionSpec<user.User>
+  ai.FunctionSpec { spec_name: "GetUser", args: map { "id": id }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4o") } : ai.FunctionSpec<user.User>
 }
 lambda user.GetUser$spec {
 }

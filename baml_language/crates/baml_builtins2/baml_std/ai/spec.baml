@@ -3,6 +3,12 @@
 // No journal, no conversation, no wire state.
 // Mirrors _planv2/pages/02_guides/02_specs_and_runners/01_specs.md.
 
+/// Provider-neutral media retained inside a rendered prompt.
+type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf;
+
+/// One structural part of a rendered prompt message.
+type PromptPart = string | MediaPart;
+
 /// A single chat message in a rendered prompt.
 class PromptMessage {
     /// The chat role, e.g. "system", "user", or "assistant". Empty for
@@ -10,6 +16,14 @@ class PromptMessage {
     role: string,
     /// The message's rendered text. Media parts use a readable placeholder.
     content: string,
+    /// Ordered structural content. Provider clients use this instead of the
+    /// readable `content` projection so media survives prompt rendering.
+    parts: PromptPart[],
+    /// Per-message provider directives, carried verbatim from the
+    /// `baml.prompt.Role.metadata` of the `${role(...)}` marker that opened
+    /// this message — Anthropic `cache_control`, for example. Empty when the
+    /// message carried none.
+    metadata: map<string, baml.json.json>,
 }
 
 /// The rendered, provider-neutral prompt passed to clients. Roles split the

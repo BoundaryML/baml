@@ -1,13 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function $init() -> null {
-    call $init_let_0
-    store_global user.OpenAIImageResponses
-    load_const null
-    return
-}
-
 function user.GenerateImage(prompt: string, client: ai.Client | null) -> image {
     load_var client
     load_const <omitted>
@@ -65,6 +58,26 @@ function user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_const "gpt-image-1"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ImageClient.new
+    store_var _6
     load_const "GenerateImage"
     load_deref ?1
     load_const "prompt"
@@ -73,8 +86,7 @@ function user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     alloc_map 1
     load_var prompt
     make_closure .<lambda(GenerateImage$spec, 0)>, 1
-    load_var _4
-    load_global user.OpenAIImageResponses
+    load_var2 2 3
     load_type image
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -156,6 +168,26 @@ function user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> 
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_const "gpt-image-1"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ImageClient.new
+    store_var _6
     load_const "GenerateImageSet"
     load_deref ?1
     load_const "prompt"
@@ -164,8 +196,7 @@ function user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> 
     alloc_map 1
     load_var prompt
     make_closure .<lambda(GenerateImageSet$spec, 0)>, 1
-    load_var _4
-    load_global user.OpenAIImageResponses
+    load_var2 2 3
     load_type image[]
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -247,6 +278,24 @@ function user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpe
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_const "gpt-4.1"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
     load_const "GenerateMixedImageNarrative"
     load_deref ?1
     load_const "prompt"
@@ -255,8 +304,7 @@ function user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpe
     alloc_map 1
     load_var prompt
     make_closure .<lambda(GenerateMixedImageNarrative$spec, 0)>, 1
-    load_var _4
-    load_global user.OpenAIImageResponses
+    load_var2 2 3
     load_type (image | string)[]
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

@@ -1,4 +1,4 @@
-client GPT4 = openai.OpenAiClient.new(model = "gpt-4");
+client GPT4 = openai.ResponsesClient.new(model = "gpt-4");
 
 function Chat() -> string {
     client GPT4

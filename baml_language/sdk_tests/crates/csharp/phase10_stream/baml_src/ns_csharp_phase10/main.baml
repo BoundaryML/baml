@@ -3,7 +3,7 @@
 // provider resolves them at request time. The harness parent process sets
 // BAML_CSHARP_REPLAY_* before spawning the native child, so the child's
 // requests land on the in-process replay server.
-client DeterministicReplayClient = openai.OpenAiClient.new(
+client DeterministicReplayClient = openai.ResponsesClient.new(
   model = "gpt-5.4-nano",
   api_key_env = "BAML_CSHARP_REPLAY_API_KEY",
   base_url_env = "BAML_CSHARP_REPLAY_BASE_URL",

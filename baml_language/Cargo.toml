@@ -104,6 +104,7 @@ baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
+sys_auth = { path = "crates/sys_auth" }
 sys_glob = { path = "crates/sys_glob" }
 sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }

@@ -7229,11 +7229,29 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
+                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // not lowerable — `ty_to_template` ICEs on it rather than
+                // degrading — so erase the whole type to `unknown`, its only
+                // sound static erasure. A `catch`/`catch_all` binder reaches here
+                // that way: its type is the union of the base expression's throw
+                // facts, and an unaccounted callee contributes an `Unknown` fact
+                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // Erase rather than drop to ntypeargs=0 — these generic shims
+                // bind `T` in a frame slot their own bodies read, so a
+                // zero-type-arg call traps in the VM.
+                let erased;
+                let t = if baml_compiler2_tir::generics::contains_error_recovery(t) {
+                    erased = Tir2Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    };
+                    &erased
+                } else {
+                    t
+                };
                 self.emit_frame_type_arg_ops(std::slice::from_ref(t))
             }
             _ => Vec::new(),
@@ -7364,11 +7382,29 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
+                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // not lowerable — `ty_to_template` ICEs on it rather than
+                // degrading — so erase the whole type to `unknown`, its only
+                // sound static erasure. A `catch`/`catch_all` binder reaches here
+                // that way: its type is the union of the base expression's throw
+                // facts, and an unaccounted callee contributes an `Unknown` fact
+                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // Erase rather than drop to ntypeargs=0 — these generic shims
+                // bind `T` in a frame slot their own bodies read, so a
+                // zero-type-arg call traps in the VM.
+                let erased;
+                let t = if baml_compiler2_tir::generics::contains_error_recovery(t) {
+                    erased = Tir2Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    };
+                    &erased
+                } else {
+                    t
+                };
                 self.emit_frame_type_arg_ops(std::slice::from_ref(t))
             }
             _ => Vec::new(),
@@ -7470,11 +7506,29 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
+                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // not lowerable — `ty_to_template` ICEs on it rather than
+                // degrading — so erase the whole type to `unknown`, its only
+                // sound static erasure. A `catch`/`catch_all` binder reaches here
+                // that way: its type is the union of the base expression's throw
+                // facts, and an unaccounted callee contributes an `Unknown` fact
+                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // Erase rather than drop to ntypeargs=0 — these generic shims
+                // bind `T` in a frame slot their own bodies read, so a
+                // zero-type-arg call traps in the VM.
+                let erased;
+                let t = if baml_compiler2_tir::generics::contains_error_recovery(t) {
+                    erased = Tir2Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    };
+                    &erased
+                } else {
+                    t
+                };
                 self.emit_frame_type_arg_ops(std::slice::from_ref(t))
             }
             _ => Vec::new(),

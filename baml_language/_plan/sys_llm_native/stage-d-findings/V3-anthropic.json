@@ -1,0 +1,87 @@
+{
+  "findings": [
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/anthropic/ns_internal/messages.baml",
+      "line": 279,
+      "claim": "The client emits an invented `{\"type\":\"input_audio\"}` content block for audio prompt parts, but the current Anthropic Messages API has NO audio input content block of any kind, so every audio-bearing request is a guaranteed provider 400 instead of a clear client-side error.",
+      "evidence": "Docs (https://platform.claude.com/docs/en/api/messages) enumerate all 17 input content block types and state verbatim: \"There is NO audio input content block type in the Messages API. Audio is not supported as an input modality.\" Empirical probe (scratch project, `anthropic.internal.anthropic_render` with `baml.media.Audio.from_base64(\"QUJD\",\"audio/mp3\")`) captured the wire body: `type1=input_audio|src=base64|mime=audio/mp3`. Code path: `_anthropic_prompt_blocks` audio arm at ns_internal/messages.baml:279-286 calls `_anthropic_media_block(audio, \"input_audio\")`. This was the workstream's own listed uncertainty; the video arm (messages.baml:297-301) shows the correct pattern.",
+      "suggested_fix": "Replace the audio arm with `throw baml.errors.InvalidArgument { message: \"Anthropic does not support audio prompt input\" }`, mirroring the video arm, and delete the input_audio lowering (sys_llm's input_audio tag was itself never doc-valid)."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/anthropic/messages.baml",
+      "line": 154,
+      "claim": "A missing API key crashes the whole run with an UNCATCHABLE panic (`baml.env.get_or_panic(\"ANTHROPIC_API_KEY\")`) that escapes even `catch_all`, so it bypasses the client's own `invoke` normalize wrapper (messages.baml:173-177) and defeats ai.clients.Fallback/Retry composition \u2014 the one misconfiguration every deployment hits first produces a process-level failure instead of a typed ai.errors.Failure.",
+      "evidence": "Empirical probe: with ANTHROPIC_API_KEY unset, `render_body(...) catch_all (e) { _ => return ... }` did NOT catch \u2014 the test failed with `=> env var not found: ANTHROPIC_API_KEY` propagating past catch_all (probe run: `env -u ANTHROPIC_API_KEY baml-cli test -i probe_missing_key` in /private/tmp/...scratchpad/anthprobe). Since catch_all cannot intercept it, neither can `AnthropicClient.invoke`'s `catch_all -> ai.errors.normalize` nor a Fallback client wrapping this one. The research report flagged the panic as a divergence (research/anthropic.md \u00a73 row 'Missing key behavior'); it is in neither PLAN \u00a75 nor \u00a76 acceptance lists, and the proof that it is uncatchable raises it above the report's 'low'.",
+      "suggested_fix": "In `resolved_api_key`, replace get_or_panic with `baml.env.get(...)` and throw `ai.errors.InvalidRequest { provider: \"anthropic\", detail: \"no API key: set ANTHROPIC_API_KEY or pass api_key/api_key_env\", ... }` when absent."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/anthropic/ns_internal/messages.baml",
+      "line": 1066,
+      "claim": "A stream whose connection ends before `message_stop` (mid-answer disconnect / server drop) is reported as a SUCCESSFUL Complete turn containing the truncated text \u2014 silent data corruption presented as success, with nothing for Retry to act on.",
+      "evidence": "Empirical probe: mock SSE serving only `message_start` + one `text_delta` (`\"par\"`) then closing the connection; `ai.stream.from_spec(...).final()` returned `value=par` with no error (probe_truncated_stream, PASS with logged `TRUNC: value=par`). Mechanism: `TurnStream.next` maps `sse.next() == null` to Done unconditionally (ai/ns_stream/stream.baml:174-178) and `final_turn` defaults `stop_reason` to Complete (stream.baml:235); the Anthropic decoder tracks per-turn state (`AnthStreamState`) and the protocol has an explicit terminal `message_stop` (streaming doc: https://platform.claude.com/docs/en/build-with-claude/streaming, which even documents partial-response 'Error recovery' flows), but the decoder has no end-of-stream hook to detect that message_stop never arrived (ns_internal/messages.baml:1066-1071). PLAN \u00a76 defers StreamEvent tool/reasoning variants and timeouts, but truncation detection is in neither deferral list.",
+      "suggested_fix": "Track `message_stop`/terminal `message_delta` seen in AnthStreamState and give TurnStream an end-of-stream finalize hook (or have from_sse call decode with a sentinel) so an EOF without message_stop throws ai.errors.NetworkFailure (retry-safe: nothing committed)."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/anthropic/ns_internal/messages.baml",
+      "line": 762,
+      "claim": "Extended-thinking token usage is silently dropped: the current API reports `usage.output_tokens_details.thinking_tokens`, but `AnthropicUsage` does not decode it and `anthropic_parse` hardcodes `reasoning_tokens: null` \u2014 even though `ai.events.Usage.reasoning_tokens` exists and thinking is a first-class option (`ThinkingConfig`) of this same client.",
+      "evidence": "Docs (https://platform.claude.com/docs/en/api/messages) quote: usage contains `output_tokens_details: OutputTokensDetails or null` with `thinking_tokens: number` \u2014 \"Number of output tokens the model generated as internal reasoning\u2026\". Code: envelope `AnthropicUsage` (ns_internal/messages.baml:124-133) has only input/output/cache fields; `anthropic_parse` sets `reasoning_tokens: null` at :762 while `ai.events.Usage.reasoning_tokens` exists (ai/ns_events/events.baml:40) and the sibling OpenAI Responses client populates it (EXECUTION-STATUS B2). Not in PLAN \u00a76 nor the Stage B deferral list (which defers total_tokens/cache_creation slots, not reasoning tokens).",
+      "suggested_fix": "Add `output_tokens_details: class { thinking_tokens: int? }?` to AnthropicUsage and map it to `reasoning_tokens` in anthropic_parse (and fold into AnthStreamState for the streaming path alongside the cache counters)."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/anthropic/ns_internal/messages.baml",
+      "line": 159,
+      "claim": "`_anth_drop_nulls` recurses into replayed `tool_use.input`, deleting null-valued argument keys and altering conversation history on replay \u2014 and this fires for EVERY optional tool parameter the model answers with null, since the generated schema types optionals as `[\"string\",\"null\"]` and marks them required.",
+      "evidence": "Empirical probe: journal `ToolUse { args: {\"city\":\"SF\",\"unit\":null} }` rendered to wire body `input={\"city\":\"SF\"}` (probe_null_tool_arg, logged `NULLARG: input={\"city\":\"SF\"}`); the same probe captured the generated schema for `probe_tool_opt(city: string, unit: string?)`: `{\"properties\":{...,\"unit\":{\"type\":[\"string\",\"null\"]}},\"required\":[\"city\",\"unit\"]}` \u2014 so a null answer for `unit` is the schema-conformant call and its replay now omits a required key. The in-file comment (ns_internal/messages.baml:150-158) acknowledges the input_schema case but not the tool_use.input case. Anthropic does not validate replayed history against the schema today, so impact is history fidelity, not a 400 \u2014 hence minor.",
+      "suggested_fix": "Skip the `input` (and `input_schema`) subtrees in `_anth_drop_nulls` \u2014 e.g. drop nulls on the typed request before embedding the passthrough-JSON fields, or mark those two fields as verbatim subtrees."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/anthropic/ns_internal/messages.baml",
+      "line": 755,
+      "claim": "Under prompt caching, `Usage.input_tokens` under-reports actual prompt size cross-provider: Anthropic's `input_tokens` counts only tokens AFTER the last cache breakpoint (cache_read/cache_creation excluded), while the shared `ai.events.Usage` semantics elsewhere (OpenAI) treat cached tokens as a subset of input_tokens \u2014 so a 100k-token cached prompt reports input_tokens\u224850.",
+      "evidence": "Prompt-caching doc (https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching): \"input_tokens: Tokens after the last cache breakpoint (not eligible for caching)\" and \"total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens\". Code maps `input_tokens: u.input_tokens ?? 0` verbatim (ns_internal/messages.baml:755) with cache_creation decoded but unmappable (no Usage slot \u2014 that slot IS in the accepted Stage B deferral list, but the input_tokens semantic mismatch is not). sys_llm did the same, so this is parity-with-A, flagged for the cost-accounting consumer PLAN \u00a78 names.",
+      "suggested_fix": "Decide and document one Usage.input_tokens semantic (raw provider number vs normalized total); if normalized, map input_tokens = input + cache_read (+ cache_creation once its slot lands) for Anthropic."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/ai/ns_wire/wire.baml",
+      "line": 61,
+      "claim": "`_media_mime_type` can emit image media types the Messages API rejects \u2014 `.svg` maps to `image/svg+xml` and any unknown image extension defaults to `image/png` \u2014 and Anthropic validates that base64 `media_type` matches the actual bytes (allowed set is only JPEG/PNG/GIF/WebP), so an SVG or mislabeled file becomes a provider 400 instead of a client-side InvalidArgument.",
+      "evidence": "Docs (https://platform.claude.com/docs/en/api/messages): \"ImageBlockParam \u2014 Base64 or URL-based images (JPEG, PNG, GIF, WebP)\". Code: wire.baml:61-62 emits `image/svg+xml`, :93-94 defaults unknown to `image/png`; the Anthropic client forwards it verbatim into `AnthSource.media_type` (ns_internal/messages.baml:243-255) with no allowed-set check. Shared helper, so listed once here; impact is an opaque provider error rather than wrong data.",
+      "suggested_fix": "In `_anthropic_media_block`, validate image mime against {jpeg,png,gif,webp} and throw baml.errors.InvalidArgument naming the offending type (per-provider check, since the allowed set is provider-specific)."
+    }
+  ],
+  "checked": [
+    "DOC https://platform.claude.com/docs/en/api/messages \u2014 full request-field diff (model/max_tokens/messages/system/temperature/top_p/top_k/stop_sequences/stream/tools/tool_choice/thinking/metadata/cache_control/output_config/service_tier/inference_geo/container): all typed or reachable via request_body passthrough (P0.3); all 17 input content-block types (NO audio block exists); tool_choice.type auto/any/tool/none all constructible; thinking enabled/disabled typed ('adaptive' + 'display' reachable only via request_body \u2014 accepted escape hatch); all 7 stop_reason values mapped (end_turn/stop_sequence\u2192Complete, tool_use\u2192ToolUse, refusal\u2192Refused, max_tokens/pause_turn/model_context_window_exceeded/unknown\u2192MaxTokens); usage fields incl. output_tokens_details.thinking_tokens (finding 4) and cache_creation breakdown (deferred)",
+    "DOC https://platform.claude.com/docs/en/build-with-claude/streaming \u2014 full SSE event inventory (message_start/content_block_start/content_block_delta[text_delta,input_json_delta,thinking_delta,signature_delta]/content_block_stop/message_delta/message_stop/ping/error): all decoded or deliberately folded; error-event wire shape matches _anth_stream_failure; message_delta usage confirmed cumulative and can carry input+cache fields (handled via _anth_keep_int); 'handle unknown event types gracefully' versioning rule satisfied by the final else",
+    "DOC https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching \u2014 cache_control {type:ephemeral, ttl} shape, placement on system/message/tool content blocks, usage cache_read/cache_creation fields; implementation's last-block placement matches the engine rule; input_tokens-after-breakpoint semantics (finding 6)",
+    "DOC https://platform.claude.com/docs/en/docs/build-with-claude/pdf-support \u2014 document source types: url and base64 (media_type application/pdf) both confirmed valid on the direct API, matching _anthropic_media_block's document lowering (workstream uncertainty resolved: PDF url source IS accepted)",
+    "RAN full offline suite: target/debug/baml-cli test -i llm_anthropic from crates/baml_tests/baml_src \u2014 25/25 PASS (request shape, params+passthrough+null-delete, cache_control placement, assistant-first rescue, reasoning-only drop, orphaned tool close, tool round trip w/ grouped results, 6 stop reasons, 3 HTTP-error classes, stream text, 3 mid-stream error events, 3 streaming HTTP-error classes, tool-stream decode incl. _anth_keep_int cache retention proving the x=expr??x workaround, garbage skip)",
+    "PROBE probe_audio_block (scratch project /private/tmp/...scratchpad/anthprobe): audio media part \u2192 captured body contains type=input_audio (finding 1)",
+    "PROBE probe_null_tool_arg + probe_tool_schema: replayed ToolUse args {city:SF, unit:null} \u2192 wire input={city:SF}; generated schema marks nullable optionals required (finding 5)",
+    "PROBE probe_truncated_stream: SSE closed after message_start+one text_delta \u2192 stream.final() returned 'par' as success (finding 3)",
+    "PROBE probe_missing_key (env -u ANTHROPIC_API_KEY): get_or_panic error escaped catch_all \u2014 uncatchable (finding 2)",
+    "PROBE probe_user_cache_control: inline user Role metadata cache_control with text+image parts \u2192 landed on LAST block (image) only, end-to-end via render (workstream uncertainty resolved: metadata path works, engine placement)",
+    "PROBE probe_empty_content: 200 with content:[] \u2192 graceful empty-string result for -> string, no crash (parity with sys_llm's non-error choice)",
+    "PROBE probe_unicode: CJK/emoji/escapes round-trip the wire body exactly",
+    "CODE ns_internal/messages.baml full read (1135 L) + messages.baml (187 L) + ai/ns_wire/wire.baml + ai/ns_errors/errors.baml + ai/ns_stream/stream.baml + ai/ns_events/events.baml + sys_native io_impls.rs:2696-2705 (fetch_sse status message format matches _anthropic_sse_failure's parse prefix); null-vs-absent verified via anthropic_request_shape's has_null=false assertion; anthropic-version 2023-06-01 current; x-api-key applied after user headers; empty-prompt \u2192 typed InvalidRequest at ns_internal/messages.baml:579-586"
+  ],
+  "accepted_deferrals": [
+    "max_tokens default 8192 (PLAN \u00a75 accepted; note the code comment's claim that every addressable model supports 8192 is false for claude-3-haiku-20240307 max 4096 \u2014 the accepted decision stands, per-model ceilings are the PLAN \u00a78 catalog follow-up)",
+    "Streaming tool-call/thinking deltas buffered into AnthStreamState instead of reaching StreamEvent/final_turn (PLAN \u00a76: StreamEvent extension is a stdlib BEP); streaming final_turn emits a single Text block",
+    "Streaming cached-token counts cannot reach the final Usage (TurnMeta model/cache fields \u2014 Stage B deferral list); decoder already folds them into AnthStreamState",
+    "Reasoning.signature / redacted_thinking replay (Stage B deferral list) \u2014 thinking blocks without signatures are correctly dropped from replay",
+    "StopReason raw-string preservation / Other variant, Usage.total_tokens + cache_creation_input_tokens slots (Stage B deferral list; cache_creation IS decoded into the envelope so the number is not lost)",
+    "Request/fetch_sse timeouts (PLAN \u00a76); fetch_sse structured status (Stage B deferral \u2014 the string-prefix parse in _anthropic_sse_failure is the interim, verified against io_impls.rs:2703)",
+    "WASM playground proxy rewrite (PLAN \u00a76; anthropic-dangerous-direct-browser-access IS reachable via the headers option)",
+    "query_params sent without percent-encoding (percent-encoder helper \u2014 Stage B deferral list, documented at ns_internal/messages.baml:644-646)",
+    "make_role()/role() cannot set metadata \u2014 inline baml.prompt.Role literal is the documented cache_control authoring path (Stage B deferral list)",
+    "code_execution_tool_result media outputs and server-tool blocks dropped in parse (blocked on ai.content extensions; server tools only reachable via request_body anyway)"
+  ]
+}

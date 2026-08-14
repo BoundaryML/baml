@@ -53,7 +53,7 @@ client<llm> ClientC {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client SelfReferentialClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client SelfReferentialClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
 //   │ ai.Fallback / ai.RoundRobin)
 //    ╭─[client_infinite_fallback_cycle.baml:1:1]
 //  1 │ ╭─▶ client<llm> SelfReferentialClient {
@@ -66,7 +66,7 @@ client<llm> ClientC {
 //    ╰────
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client ClientA = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client ClientA = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //     ╭─[client_infinite_fallback_cycle.baml:8:1]
 //   8 │ ╭─▶ client<llm> ClientA {
@@ -79,7 +79,7 @@ client<llm> ClientC {
 //     ╰────
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client ClientB = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client ClientB = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //     ╭─[client_infinite_fallback_cycle.baml:15:1]
 //  15 │ ╭─▶ client<llm> ClientB {
@@ -92,7 +92,7 @@ client<llm> ClientC {
 //     ╰────
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client ClientC = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client ClientC = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //     ╭─[client_infinite_fallback_cycle.baml:22:1]
 //  22 │ ╭─▶ client<llm> ClientC {

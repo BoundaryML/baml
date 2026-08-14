@@ -438,7 +438,7 @@ class Box<T> {
     value T
 }
 
-client Dummy = openai.OpenAiClient.new(model = "gpt-4");
+client Dummy = openai.ResponsesClient.new(model = "gpt-4");
 
 function GetBoxedInt() -> Box<int> {
     client Dummy

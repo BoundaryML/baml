@@ -1,0 +1,100 @@
+{
+  "findings": [
+    {
+      "severity": "critical",
+      "file": "crates/baml_builtins2/baml_std/google/ns_internal/gemini.baml",
+      "line": 505,
+      "claim": "Multi-turn tool use is hard-broken (HTTP 400) on every Gemini 3.x model: the journal replay rebuilds functionCall parts without the thoughtSignature Gemini issued, which Gemini 3 validates as required.",
+      "evidence": "LIVE PROBE (GOOGLE_API_KEY via infisical): a 2-turn tool loop `client \"google/gemini-3.5-flash\"` + `tools [weather_probe]` fails on the second request with 400: \"Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly... Please refer to https://ai.google.dev/gemini-api/docs/thought-signatures\". The identical loop on gemini-2.5-flash succeeds (\"The weather in NYC is sunny.\"). Root cause chain: response side, `GmRespPart.thoughtSignature` is declared (ns_internal/gemini.baml:177) but `google_parse` (:693-743) never reads it and `ai.content.ToolUse` has no field to carry it; request side, `GmFunctionCall` (:33-36) and `GmPart` (:45-101) have no thoughtSignature field, so `google_lower_journal` (:505-511) replays `functionCall` bare. Not covered by PLAN \u00a76 (which defers only streaming tool-call *deltas*) \u2014 this kills non-streaming tool use on all current-generation Gemini models (only the legacy 2.x default still works).",
+      "suggested_fix": "Carry the signature: add `thoughtSignature: string?` to GmPart/GmFunctionCall-part construction, surface it from google_parse (e.g. a metadata slot on ai.content.ToolUse or a google-private side map keyed by the synthesized call id inside the journal's AssistantMessage), and re-attach it in google_lower_journal when the replaying client_id matches. Also capture thoughtSignature from streamed fragments when streaming tool calls land."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/google/ns_internal/gemini.baml",
+      "line": 369,
+      "claim": "Both Google backends fetch and base64-inline every http(s) media URL (`resolve_media(media, true)`), losing Vertex's URL-passthrough (`fileData.fileUri`) semantics \u2014 a regression vs sys_llm's Vertex defaults and a break for YouTube-URL video input on both backends.",
+      "evidence": "PROBE probe_media_url_vertex: an image `from_url(http://...)` lowered through `google.internal.vertex_render` produces `inlineData` (inline=true|file=false), never `fileData`. PROBE probe_media_youtube: `baml.media.Video.from_url(\"https://www.youtube.com/watch?v=dQw4w9WgXcQ\")` is live-FETCHED and the watch-page HTML is inlined as base64 `inlineData` (inline=true|file=false) with a guessed video mime \u2014 garbage on the wire, though YouTube URLs are a documented Gemini `fileData.fileUri` input (https://ai.google.dev/api/generate-content FileData). Ground truth: sys_llm Vertex defaults were `send_url_add_mime_type`/`send_url` (crates/sys_llm/src/baml_std.rs:331-338 \u2014 URLs pass through), and resolve_media.rs:175-177 shows only SendBase64* strategies fetch; the native `_gm_media_part` (ns_internal/gemini.baml:368-377) hardcodes fetch_url=true for both GoogleClient and VertexClient (vertex.baml:249-266 reuses gemini_build_body). Also subjects Vertex media to the inline request-size cap where a URL would have streamed server-side.",
+      "suggested_fix": "Pass fetch_url=false (URL passthrough) for the Vertex backend per sys_llm defaults, and special-case YouTube URLs (and Files-API URIs) as fileData on the Developer API backend rather than fetching them."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/google/ns_internal/gemini.baml",
+      "line": 697,
+      "claim": "A response with no candidates/content (e.g. `{}` from a broken proxy or quota edge) parses as a successful Complete turn with empty content, so a `-> string` function silently returns \"\" instead of erroring \u2014 sys_llm and the engine both raised an error here.",
+      "evidence": "PROBE probe_empty_parse: google_parse over `{}` yields `0|Complete|<null>`. PROBE probe_empty_e2e: a mock returning body `{}` makes `ai.Agent<string>.run(...).value` return the empty string as a normal success (`value=[]`) \u2014 no ParseFailed, no NoContent. Ground truth: sys_llm requires exactly one candidate else `NoContent` (crates/sys_llm/src/parse_response/google.rs:80-88) and errors on missing `content` (:92-97); engine google/vertex response_handlers do the same (research \u00a75.1). This divergence is in the research matrix but is NOT in PLAN \u00a75's accepted-divergence table or \u00a76 deferrals. `google_parse` takes `resp.candidates?.at(0)` (ns_internal/gemini.baml:697) and tolerates absence everywhere.",
+      "suggested_fix": "In google_parse (and the stream decoder's end-state), throw ai.errors.ParseFailed (or Refused when promptFeedback.blockReason is set) when the response has neither candidates content, a blockReason, nor an error object."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/google/ns_internal/gemini.baml",
+      "line": 799,
+      "claim": "Malformed/truncated SSE payloads are silently swallowed (catch_all \u2192 null) and a stream that ends without any finishReason finalizes as a successful Complete turn \u2014 so a connection cut mid-answer yields a silently truncated partial answer presented as success.",
+      "evidence": "PROBE probe_sse_malformed: SSE events [valid fragment \"po\", truncated JSON fragment `{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"ng`] make `stream.final()` return `final=[po]` \u2014 no error, no MaxTokens/incomplete signal; TurnStream.final_turn defaults stop_reason to Complete (ai/ns_stream:235 `self._stop_reason ?? Complete`). Code: `_gm_decode_batch` drops undecodable `data:` payloads via `catch_all (e) { _ => null }` (ns_internal/gemini.baml:799-801) and only emits a stop reason when `finishReason != \"\"` (:825-833). Gemini's SSE has no terminal sentinel (comment :793-794), so decoder-level leniency plus the Complete default means truncation is undetectable by the caller. Contrast: the 4xx/5xx and mid-stream `{\"error\":...}` paths are handled correctly (probes: 400\u2192InvalidRequest, 429\u2192RateLimited, 503\u2192NetworkFailure; mid-stream error payload \u2192 RateLimited).",
+      "suggested_fix": "Track whether a finishReason was ever seen in the decode state; on stream end without one (or on an undecodable fragment), raise a classified failure (NetworkFailure with detail \"stream ended before finishReason\") instead of finalizing Complete."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/google/gemini.baml",
+      "line": 26,
+      "claim": "The sys_llm `enterprise` backend switch (`enterprise` option / `GOOGLE_GENAI_USE_ENTERPRISE` / `GOOGLE_GENAI_USE_VERTEXAI` flipping a google client to the Vertex backend, google-genai SDK parity) is absent from the native google package, while the shipped keyword docs still document it.",
+      "evidence": "grep over crates/baml_builtins2/baml_std/google/ finds no `enterprise` or `GOOGLE_GENAI_USE` handling; `GoogleClient` (google/gemini.baml:26-144) has no such option and `google_render`/`_google_request` never consult those env vars. Ground truth: sys_llm rewrites GoogleAi\u2192VertexAi on the option or either env var (crates/sys_llm/src/build_request/mod.rs:41-57,78-83); research \u00a76.16 lists the switch as blocking for parity; google-genai README documents `GOOGLE_GENAI_USE_ENTERPRISE` (fetched). Not listed in PLAN \u00a75 or \u00a76. Additionally crates/baml_builtins2/keyword_docs/baml_keywords.yaml:221-241 still tells users `options.enterprise = true` / `GOOGLE_GENAI_USE_ENTERPRISE=true` works \u2014 stale either way. Likely an intentional design simplification (explicit VertexClient), but it is an undocumented drop: needs either implementation or an explicit deferral entry + keyword-docs update.",
+      "suggested_fix": "Decide explicitly: either honor GOOGLE_GENAI_USE_ENTERPRISE/GOOGLE_GENAI_USE_VERTEXAI at request time in GoogleClient (delegating to a VertexClient built from the same options), or add the drop to PLAN \u00a76 and rewrite the google-ai/vertex-ai keyword_docs entries for the native client surface."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/google/ns_internal/vertex.baml",
+      "line": 214,
+      "claim": "Claude-on-Vertex rawPredict body includes `model`, which current docs explicitly say is not passed in the request body (it lives in the URL).",
+      "evidence": "platform.claude.com/docs/en/api/claude-on-vertex-ai: \"On Agent Platform, `model` is not passed in the request body. Instead, it is specified in the Google Cloud endpoint URL.\" `_vertex_anthropic_body` (ns_internal/vertex.baml:214-235) passes `model: c.model` into anthropic.internal.AnthropicBodyParams, and anthropic_messages_request always serializes it (anthropic/ns_internal/messages.baml:604-624); test vertex_claude_raw_predict asserts `.model == claude-sonnet-4-5` in the body. The code comment declares this deliberate (\"matching both prior Rust implementations\"), and sys_llm (build_request/anthropic.rs:119-126) plus the engine did ship it live for years, so it is evidently tolerated today \u2014 but it contradicts current docs and is unverifiable live here (no Vertex Claude entitlement on the test project). anthropic_version=vertex-2023-10-16, :rawPredict/:streamRawPredict verbs, body `stream: true` for streaming, and the global-location default all match the docs.",
+      "suggested_fix": "Strip `model` from the serialized body in the Vertex branch (AnthropicBodyParams could grow an omit_model flag, or the Vertex caller can delete the key via its merge step) to match the documented contract."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/google/ns_internal/vertex.baml",
+      "line": 157,
+      "claim": "Multi-region endpoints (`location: \"us\"` / `\"eu\"`) build a nonexistent host `us-aiplatform.googleapis.com` instead of the documented `aiplatform.us.rep.googleapis.com`.",
+      "evidence": "PROBE probe_vertex_us_multiregion: VertexClient(location=\"us\") \u2192 `https://us-aiplatform.googleapis.com/v1/projects/p/locations/us/...:rawPredict`. Docs (platform.claude.com/docs/en/api/claude-on-vertex-ai, 'Using multi-region endpoints'): `https://aiplatform.${LOCATION}.rep.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/...` for LOCATION in {us, eu}. `_vertex_models_base` (ns_internal/vertex.baml:157-161) knows only the `global` and `{location}-aiplatform` host shapes. sys_llm/engine had the same gap (parity), and base_url override is an escape hatch, so minor \u2014 but data-residency users following current docs will get a DNS-level NetworkFailure.",
+      "suggested_fix": "Special-case locations \"us\" and \"eu\" to the `aiplatform.{location}.rep.googleapis.com` host in _vertex_models_base."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/google/ns_internal/vertex.baml",
+      "line": 121,
+      "claim": "An express-mode (API key) VertexClient silently switches from the documented project-less endpoint to a project-scoped URL when an ambient GOOGLE_CLOUD_PROJECT/GCLOUD_PROJECT env var is present, because the env chain is consulted before the express short-circuit.",
+      "evidence": "vertex_project_id (ns_internal/vertex.baml:117-135) checks GOOGLE_CLOUD_PROJECT/GCLOUD_PROJECT before `if (_vertex_is_express(c)) { return null; }`, and _vertex_models_base (:162-168) only falls back to `https://aiplatform.googleapis.com/v1/publishers/{publisher}/models` when no project resolved. Express-mode keys are issued for the project-less express endpoint; on GCP runtimes (Cloud Run/GCE set GOOGLE_CLOUD_PROJECT ambiently) the same client instead emits `/v1/projects/{env-project}/locations/{loc}/...?key=...`, which an express key is not authorized for \u2014 contradicting the class doc (vertex.baml:16-18 'the request goes to the project-less global endpoint unless a project is configured'; ambient env is not configuration of this client). Could not verify the API's actual rejection behavior live (no express key in Infisical); flagged UNVERIFIED on the wire outcome, but the URL divergence is deterministic from code.",
+      "suggested_fix": "Move the `_vertex_is_express` null-return above the env-var lookups in vertex_project_id (explicit `project_id` option still wins), so only deliberate configuration selects the project-scoped express URL."
+    }
+  ],
+  "checked": [
+    "Docs: https://ai.google.dev/api/generate-content \u2014 request fields (contents/tools/toolConfig/safetySettings/systemInstruction camelCase/generationConfig/cachedContent/serviceTier/store), response fields (candidates/promptFeedback/usageMetadata incl. cachedContentTokenCount+thoughtsTokenCount/modelVersion/responseId), streamGenerateContent alt=sse \u2014 typed classes in google/ns_internal/gemini.baml match field-for-field; serviceTier/store reachable via request_body passthrough",
+    "Docs: https://platform.claude.com/docs/en/api/claude-on-vertex-ai \u2014 anthropic_version=vertex-2023-10-16 in body (matches), model NOT in body (finding: native sends it), rawPredict/streamRawPredict verbs (match), stream:true in streaming body (matches via anthropic_messages_request), global endpoint recommended + regional {loc}-aiplatform hosts (match), multi-region aiplatform.{us|eu}.rep.googleapis.com hosts (finding: unsupported)",
+    "Docs: https://raw.githubusercontent.com/googleapis/python-genai/main/README.md \u2014 GOOGLE_CLOUD_PROJECT + GOOGLE_CLOUD_LOCATION env conventions and 'global' default location: native vertex_location/vertex_project_id chains match; GOOGLE_GENAI_USE_ENTERPRISE switch exists in SDK+sys_llm but not in native (finding)",
+    "Docs attempted (content truncated/navigation-only, express-mode URL cross-checked against sys_llm auth_request/vertex.rs instead): docs.cloud.google.com vertex-ai express-mode overview + api-quickstart, docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations, docs.cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude",
+    "Static diff vs ground truth: crates/sys_llm/src/{build_request/google.rs,build_request/mod.rs,parse_response/google.rs,auth_request/vertex.rs,resolve_media.rs,baml_std.rs}, engine vertex_client.rs:370-403, forks/google-cloud-auth \u2014 URL construction, publisher split, express short-circuit, x-goog-user-project, media strategies, claude body",
+    "Offline suite: target/debug/baml-cli test -i llm_google \u2014 17/17 PASS (request shape incl. null-absence, passthrough deep-merge + null-delete, tool declarations parametersJsonSchema, thoughts/usage parse incl. cached+reasoning tokens, functionCall id synthesis, stop reasons incl. blockReason, stream decode, vertex URLs regional/global/express/base_url, claude rawPredict shape, error taxonomy 400/429/503)",
+    "Probe (scratch project vs real stdlib): probe_empty_parse + probe_empty_e2e \u2014 `{}` body \u2192 silent empty-string success (finding)",
+    "Probe: probe_sse_statuses \u2014 SSE open on 400/429/503 \u2192 InvalidRequest/RateLimited/NetworkFailure via _gm_sse_failure string-parse of sys_native io_impls.rs:2703 format (verified correct; 4xx never retry-safe)",
+    "Probe: probe_sse_malformed \u2014 truncated mid-stream JSON silently dropped, partial text finalized Complete (finding)",
+    "Probe: probe_sse_error_payload \u2014 mid-stream {error:{code:429}} \u2192 RateLimited thrown (correct)",
+    "Probe: probe_assistant_first \u2014 assistant-first lowers to model-first contents; LIVE probe confirmed real Gemini accepts model-first contents (no finding)",
+    "Probe: live_empty_user \u2014 empty user text part accepted by live API (no finding)",
+    "Probe: probe_unicode \u2014 unicode round-trips request+response intact",
+    "Probe: probe_opaque_nulls \u2014 null inside functionCall args survives _gm_strip_nulls (opaque keys) while wire-field nulls are stripped; journal tool-result merge + name correlation verified",
+    "Probe: probe_media_url_vertex / probe_media_gs / probe_media_youtube \u2014 https URLs fetched+inlined on both backends, gs:// stays fileData, YouTube watch URL fetched as HTML and inlined (finding)",
+    "Probe: probe_vertex_us_multiregion \u2014 location 'us' builds us-aiplatform.googleapis.com (finding)",
+    "Probe: probe_huge_tool_args \u2014 300KB prompt + escaped-unicode tool args through full mock tool loop, 2 requests, correct final",
+    "LIVE: baml-cli test --profile live -i llm_google via infisical \u2014 live::gemini PASS (GOOGLE_API_KEY, x-goog-api-key auth) and live::vertex PASS (credentials_json OAuth via ai.internal._gcp_access_token, project from credential document, us-central1)",
+    "LIVE: live_vertex_global \u2014 VertexClient location='global' against real Vertex \u2192 ok:true ('global' default location valid for generateContent)",
+    "LIVE: live_g3_tool_loop (gemini-3.5-flash) \u2192 400 'Function call is missing a thought_signature in functionCall parts' vs live_g25_tool_loop (gemini-2.5-flash) \u2192 success (critical finding, with contrast)",
+    "Cross-package uncertainty: from_string<google.internal.GmResponse> and ai.content.Media.new paths exercised from user package by ns_llm_google google_parse_* tests (all pass)"
+  ],
+  "accepted_deferrals": [
+    "Streaming tool-call deltas / any tool-call surfacing through ai.stream.StreamEvent (PLAN \u00a76): _gm_decode_batch ignores functionCall fragments; TurnStream.final_turn cannot carry tool calls for any provider \u2014 not reported",
+    "Claude-on-Vertex publisher trigger by model prefix `claude*` (PLAN \u00a75 accepted: model prefix)",
+    "Multiple system messages merged into one systemInstruction for google (PLAN \u00a75 accepted: google merges)",
+    "TurnMeta/streaming Usage missing cached_input/reasoning token fields, Usage.total_tokens, StopReason raw preservation, fetch_sse structured status, shared percent-encoder helper (EXECUTION-STATUS Stage-B shared-file deferral list)",
+    "Reasoning replay without signatures for text thinking blocks \u2014 ai.content.Reasoning has no signature field (EXECUTION-STATUS deferral; note: the Gemini-3 functionCall thoughtSignature 400 reported above is a distinct hard failure, not this deferral)",
+    "fetch_sse/request timeouts, WASM BOUNDARY_PROXY_URL rewrite (PLAN \u00a76)",
+    "google-ai gs:// fileData passthrough on the Developer API (unsupported there but exact sys_llm parity via SendBase64UnlessGoogleUrl gs:// skip \u2014 resolve_media.rs:177)"
+  ]
+}

@@ -99,7 +99,7 @@ fn user.Fn$spec() -> ai.FunctionSpec<string> {
     let _2: (string) -> ai.Prompt throws never
     let _3: ai.tools.Toolbox
     let _4: ai.tools.Tool[]
-    let _5: openai.OpenAiClient
+    let _5: openai.ResponsesClient
 
     bb0: {
         _1 = {  }: map<string, unknown>;
@@ -109,7 +109,7 @@ fn user.Fn$spec() -> ai.FunctionSpec<string> {
     }
 
     bb1: {
-        _5 = call const fn openai.OpenAiClient.new(const "gpt-4o", const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _5 = call const fn openai.ResponsesClient.new(const "gpt-4o", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {

@@ -2,7 +2,7 @@
 // The rendered prompt must contain "Respond with valid JSON." when
 // the template includes `${ctx.output_format}`.
 
-client TestClient = openai.OpenAiClient.new(
+client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
 );

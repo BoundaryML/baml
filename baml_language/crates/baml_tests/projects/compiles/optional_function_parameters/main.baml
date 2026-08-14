@@ -1,7 +1,7 @@
 type Searcher = (query: string, max_results?: int) -> int throws never
 type NarrowSearcher = (query: string, filter?: string?) -> string[] throws never
 
-client TestClient = openai.OpenAiClient.new();
+client TestClient = openai.ResponsesClient.new();
 
 function DefaultFilter() -> string {
   "none"

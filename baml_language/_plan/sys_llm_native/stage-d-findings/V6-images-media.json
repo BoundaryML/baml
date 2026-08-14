@@ -1,0 +1,111 @@
+{
+  "findings": [
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/openai/ns_internal/images.baml",
+      "line": 326,
+      "claim": "A dall-e url-mode response hands user code an image whose base64() is \"\" silently: `_oai_images_block` wraps the URL via `Image.from_url(location, mime)` and the runner delivers it as the `-> image` value with empty bytes and a URL that OpenAI documents as expiring in 60 minutes.",
+      "evidence": "CONFIRMED by probe P1 (scratch project, mock returning {\"data\":[{\"url\":\"https://oaidalle.example.net/img-1.png\"}]}, client response_format=\"url\"): result was `b64=[]|url=[https://oaidalle.example.net/img-1.png]|mime=[image/png]` \u2014 no error, empty bytes. openai-openapi Image schema: \"the URL of the generated image ... URLs are only valid for 60 minutes\". Only reachable when the user explicitly sets response_format=\"url\" (or via request_body), since _oai_images_response_format defaults dall-e to b64_json (ns_internal/images.baml:190-198) \u2014 but the client accepts \"url\" without warning and then silently degrades.",
+      "suggested_fix": "In `_oai_images_block`, fetch-and-inline url datums (ai.wire.resolve_media with fetch_url=true already implements exactly this), or throw ai.errors.InvalidRequest at render time when response_format=\"url\" is configured for a media-shaped output."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/ai/runner.baml",
+      "line": 66,
+      "claim": "The runner's mixed shape (`-> string | image`) produces a value user code cannot consume through the type system: for a union value holding an image, `v is image` and `v is string` are BOTH false, and a match silently falls through to the string arm, stringifying the image as \"Image { _data: <rust_data> }\" \u2014 silent data corruption in ordinary user code.",
+      "evidence": "CONFIRMED by probe P9: `match (v) { let i: image => ..., let s: string => ... }` on a turn holding one image printed `string-arm text=[Image { _data: <rust_data> }]|is_image=false|is_string=false`. This is the compiler-level primitive-media-union narrowing bug already filed in EXECUTION-STATUS.md:59 item (1); it is NOT in PLAN \u00a76. The workaround documented at crates/baml_tests/baml_src/ns_llm_images/images.baml:260-269 (read the value through baml.json.to_json envelope) HOLDS \u2014 probes P2/P13 show correct {kind,source,value,mime} envelopes for both `image | string` (reversed order also recognized) and `(string | image)[]`. Runner-side construction is correct; the shape is unusable idiomatically until the compiler bug is fixed.",
+      "suggested_fix": "Fix the VM/compiler union narrowing for primitive media unions (tracked bug), or until then have _media_shape refuse mixed:image with a clear error pointing at the envelope workaround, so users don't silently ship the string-arm fall-through."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/vercel/ns_internal/images.baml",
+      "line": 39,
+      "claim": "The gateway client drops the response's `usage` object entirely: GwImagesResponse models only {images, providerMetadata}, and gateway_images_parse hardcodes `usage: null` (line 316), though the current AI Gateway image-model v4 protocol returns `usage: {inputTokens, outputTokens, totalTokens}` and ai.events.Usage can carry input/output tokens today.",
+      "evidence": "vercel/ai packages/gateway/src/gateway-image-model.ts (fetched from main): `gatewayImageResponseSchema = z.object({ images, warnings: ..., providerMetadata: ..., usage: gatewayImageUsageSchema.optional() })` with `gatewayImageUsageSchema = z.object({ inputTokens, outputTokens, totalTokens })`. Native class at vercel/ns_internal/images.baml:39-42 has no usage field; parse at :313-317 sets usage: null. sys_llm also dropped it (parse_response/openai/images.rs:49-56, TokenUsage::default) so this is not a regression, but it is a documented capability missing from no deferral list \u2014 Usage.total_tokens is in EXECUTION-STATUS's deferred list, but inputTokens/outputTokens fit ai.events.Usage as-is.",
+      "suggested_fix": "Add `usage: GwImagesUsage?` ({inputTokens, outputTokens} camelCase) to GwImagesResponse and map it into ai.events.Usage in gateway_images_parse."
+    },
+    {
+      "severity": "major",
+      "file": "crates/baml_builtins2/baml_std/vercel/ns_internal/images.baml",
+      "line": 107,
+      "claim": "The gateway client hard-rejects every media input with \"Images API only supports text prompts; found image input\", but the current gateway image-model v4 protocol supports image editing via `files` and `mask` request fields \u2014 the client's own docstring claim \"the endpoint has no image-to-image mode\" (vercel/images.baml:13-14) is false against current docs.",
+      "evidence": "vercel.com/docs/ai-gateway/image-generation: \"You can generate new images from text prompts, edit existing images, and create variations\". gateway-image-model.ts doGenerate body: `...(files && { files: files.map(maybeEncodeImageFile) }), ...(mask && { mask: maybeEncodeImageFile(mask) })`. Native _gw_images_prompt_text throws on any media part (vercel/ns_internal/images.baml:107-118). Caveat: this matches the sys_llm ground truth the research report scoped the port to (openai-responses-images.md \u00a72.1: \"image-to-image / editing is not supported today\"), so it may be accepted scope \u2014 but it is not in PLAN \u00a76 or the report's explicit deferral list, and the doc comment overclaims.",
+      "suggested_fix": "Either lower image prompt parts into `files` (base64 via ai.wire.resolve_media) per the v4 spec, or keep the rejection but fix the docstring to say editing is a not-yet-ported capability of this endpoint."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/vercel/ns_internal/images.baml",
+      "line": 39,
+      "claim": "Gateway response `warnings[]` (typed unsupported/compatibility/deprecated/other warnings in the v4 protocol) are silently discarded \u2014 a request whose options the underlying provider ignored looks identical to one fully honored.",
+      "evidence": "gateway-image-model.ts `gatewayImageWarningSchema` (discriminated union of {type:\"unsupported\",feature,...}, etc.) is part of gatewayImageResponseSchema; GwImagesResponse (vercel/ns_internal/images.baml:39-42) has no warnings field and nothing logs them.",
+      "suggested_fix": "Decode warnings and emit them via log.warn in gateway_images_parse."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/openai/images.baml",
+      "line": 116,
+      "claim": "A missing API key surfaces as an uncatchable panic (\"env var not found: OPENAI_API_KEY\") rather than an ai.errors.Failure: baml.env.get_or_panic escapes both the client's `catch_all -> ai.errors.normalize` wrapper and the caller's catch_all, so user fallback logic cannot rescue the most common misconfiguration.",
+      "evidence": "CONFIRMED by probe P14: with OPENAI_API_KEY unset and api_key_env pointing at a nonexistent var, the test aborted with `AGGREGATE FAIL ... => env var not found: OPENAI_API_KEY` despite two nested catch_all handlers (openai/images.baml:136-139 normalize wrapper and the probe's own). Same pattern in vercel/images.baml:88. This is the shared cross-client pattern, so it may be a deliberate stdlib-wide decision \u2014 flagged because the images clients' error taxonomy is otherwise fully catchable (P7/P10).",
+      "suggested_fix": "Throw ai.errors.InvalidRequest (or a dedicated AccessError) from resolved_api_key when no credential resolves, instead of get_or_panic."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/vercel/ns_internal/images.baml",
+      "line": 277,
+      "claim": "A gateway `data:` URL without a `;base64,` marker (e.g. `data:image/png,rawpixels`) is silently stored wholesale as the image's base64 payload \u2014 user gets an image whose \"bytes\" are the literal data-URL string.",
+      "evidence": "CONFIRMED by probe P11: mock returning {\"images\":[\"data:image/png,rawpixels\"]} produced `b64=[data:image/png,rawpixels]|mime=[image/png]` with no error. _gw_images_value only special-cases the `;base64,` form and otherwise falls through to from_base64(encoded, fallback_mime).",
+      "suggested_fix": "When encoded.starts_with(\"data:\") but has no \";base64,\" marker, throw ai.errors.ParseFailed instead of falling through."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/ai/runner.baml",
+      "line": 290,
+      "claim": "The mixed-shape error message hardcodes the type name \"string | image\" instead of rendering the declared output type, a small byte-level divergence from sys_llm which rendered `{target}` (lib.rs:856) \u2014 visible when the user declared `image | string` or `(string | image)?`.",
+      "evidence": "Probe P4 output: `Expected one text or image output for string | image, got 2 parts. Use (image | string)[] to preserve mixed outputs.` \u2014 identical to sys_llm for the canonical spelling; the other ported messages verified byte-exact (P3 exactly-one via existing test; P3 zero-or-one renders `image | null` via t.to_string(), same union rendering sys_llm's Display used). Cosmetic only; all messages otherwise match sys_llm lib.rs:596-870 verbatim.",
+      "suggested_fix": "Use `${t.to_string()}` (or the stripped-null form) in the mixed arm's message like the opt arm already does."
+    },
+    {
+      "severity": "minor",
+      "file": "crates/baml_builtins2/baml_std/openai/images.baml",
+      "line": 29,
+      "claim": "The first-class-parameter doc comment is stale against current OpenAI docs: the model catalog now includes gpt-image-1-mini, gpt-image-1.5 and gpt-image-2 (arbitrary WIDTHxHEIGHT sizes divisible by 16, up to 3840x2160), which the comment's fixed size/quality tables don't mention.",
+      "evidence": "openai-openapi@master CreateImageRequest: model enum [gpt-image-1.5, dall-e-2, dall-e-3, gpt-image-1, gpt-image-1-mini]; size description: \"For gpt-image-2 ... arbitrary resolutions are supported as WIDTHxHEIGHT strings\". No wire impact \u2014 the client passes strings through and `starts_with(\"gpt-image\")` (ns_internal/images.baml:194) correctly covers all new GPT image models' response_format omission (verified reasoning, not probed live).",
+      "suggested_fix": "Refresh the comment block; no code change needed."
+    }
+  ],
+  "checked": [
+    "DOC: https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml \u2014 CreateImageRequest (all 14 params), Image, ImagesResponse, ImageGenUsage, ImageGenInputUsageDetails, ImageGenOutputTokensDetails; field-by-field diff vs OaImagesRequest/OaImageDatum/OaImagesResponse/OaImagesUsage (all request params first-class except stream/partial_images = documented streaming deferral; response_format omission policy matches 'isn't supported for the GPT image models' doc text)",
+    "DOC: https://platform.openai.com/docs/api-reference/images/create (403 \u2014 used the official openai-openapi spec instead)",
+    "DOC: https://raw.githubusercontent.com/vercel/ai/main/packages/gateway/src/gateway-image-model.ts \u2014 ImageModelV4 ground truth: url /image-model, headers ai-image-model-specification-version:4 + ai-model-id (matches), request body prompt/n/size/aspectRatio/seed/providerOptions/files/mask, response schema images/warnings/providerMetadata/usage",
+    "DOC: https://vercel.com/docs/ai-gateway/image-generation \u2014 gateway supports generation AND editing",
+    "GROUND TRUTH: crates/sys_llm/src/build_request/openai/images.rs, parse_response/openai/images.rs, lib.rs:560-903 (coercion contract), baml_std.rs provider table rows for AiGatewayImages (headers/base_url/n-default/NoContent string all verified ported verbatim; png-mime hardcode fixed as documented divergence)",
+    "CODE: baml_std/openai/{images.baml, ns_internal/images.baml}, baml_std/vercel/{images.baml, ns_internal/images.baml}, ai/runner.baml (_media_* helpers vs lib.rs:585-903 \u2014 shape coverage parity: one/opt all 4 kinds, list+mixed image-only, matches sys_llm), ai/ns_wire/wire.baml (send_as, merge_request_body, sanitize_for_client, resolve_media), ai/ns_errors/errors.baml (classify_http), ns_llm_images/images.baml (18 tests read), compiles/llm_image_outputs fixture, PLAN.md \u00a75/\u00a76, EXECUTION-STATUS.md",
+    "PROBE P1: dall-e url-mode response -> image with empty base64 (finding 1)",
+    "PROBE P2: `-> image | string` reversed union order recognized; envelope correct",
+    "PROBE P3/P3b: `-> image?` two images -> exact sys_llm error with 'image | null' rendering; one image -> correct value",
+    "PROBE P4: `-> string | image` two images -> ported error string (hardcoded type name, finding 8)",
+    "PROBE P5: 200 + malformed JSON -> ParseFailed with raw body, no crash",
+    "PROBE P6: gateway missing images key -> ParseFailed 'response contained no images in images[]'",
+    "PROBE P7: 500 -> NetworkFailure (retry-safe), 400 -> InvalidRequest 400 (4xx never retry-safe; 401/429 pinned by existing ns_llm_images tests)",
+    "PROBE P8: unset optionals ABSENT (no literal null in body), unicode prompt intact on wire",
+    "PROBE P9: string|image match/is narrowing broken; string-arm fall-through stringifies image (finding 2)",
+    "PROBE P10: whitespace-only prompt -> InvalidRequest 'Images API request requires a text prompt', 0 requests sent",
+    "PROBE P11: gateway non-base64 data: URL -> silent garbage bytes (finding 7)",
+    "PROBE P12: absent usage object -> runner totals 0/0, no crash",
+    "PROBE P13: (string|image)[] mixedlist -> ordered envelopes correct",
+    "PROBE P14: no API key -> uncatchable panic through both catch_alls (finding 6)",
+    "PROBE P15: all 12 first-class OpenAI params land under exact documented JSON keys incl. output_compression=0 and user",
+    "PROBE P16: gateway seed=0 + aspectRatio survive to wire (native beats the AI SDK's own `seed &&` falsy drop)",
+    "EXISTING SUITE: baml-cli test -i images from crates/baml_tests/baml_src \u2014 18/18 ns_llm_images tests pass with the fresh binary"
+  ],
+  "accepted_deferrals": [
+    "OpenAI Images stream/partial_images (partial-image previews): ai.stream.StreamEvent cannot carry them \u2014 PLAN \u00a76 StreamEvent extension; both clients omit StreamingClient and tests pin StreamingUnsupported",
+    "ai.events.Usage.total_tokens + input_tokens_details (text/image tokens) not mapped: EXECUTION-STATUS Stage-B deferral list ('Usage.total_tokens/cache_creation_input_tokens')",
+    "Per-image provider metadata (sys_llm's {provider, providerMetadata} attachment): 'ai.content.Media.metadata slot' in EXECUTION-STATUS deferral list",
+    "Query-string percent-encoder gaps (e.g. '+' not escaped): 'percent-encoder helper' in EXECUTION-STATUS deferral list",
+    "SAP coercing media inside structured outputs (class fields of type image): PLAN \u00a76",
+    "audio[]/pdf[] list and non-image mixed unions fall through to text parse: sys_llm parity (lib.rs only special-cases image lists/unions), documented in runner.baml:27-29",
+    "Gateway AI_GATEWAY_API_KEY env default (sys_llm had none): deliberate improvement recommended by the research report \u00a72.1",
+    "Auth headers applied AFTER user headers (sys_llm let user headers override authorization): deliberate, documented in-file (openai/ns_internal/images.baml:241-243, vercel/ns_internal/images.baml:181-183)"
+  ]
+}

@@ -60,7 +60,18 @@ function user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<Resume> {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call openai.OpenAiClient.new
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
     store_var _6
     load_const "TypeBuilderFn"
     load_var from_text

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16667
 ---
 // Regression test for B-625.
 //
@@ -20,7 +19,7 @@ assertion_line: 16667
 // types `baml.sap.parse` with a parse-flavored throw, this project should
 // return to ZERO diagnostics.
 
-client GPT4o = openai.OpenAiClient.new(
+client GPT4o = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "test-key",
     base_url = "http://localhost:1234",

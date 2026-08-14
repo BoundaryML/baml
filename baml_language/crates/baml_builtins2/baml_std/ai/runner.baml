@@ -16,6 +16,156 @@ class RunResult<Out> {
     usage: root.events.Usage,
 }
 
+// ---------------------------------------------------------------------------
+// Media-shaped outputs.
+//
+// A declared output type made of media is produced from the turn's content
+// blocks, never from SAP-parsing the terminal text (SAP refuses media). This
+// is a port of sys_llm's `parse_llm_output_for_target`
+// (crates/sys_llm/src/lib.rs), error messages included: they are the
+// documented UX for "you asked for an image and the model also talked".
+// Like that port, only `image` has list and text-union forms — `audio[]` and
+// friends were never supported and still fall through to the text parse.
+
+// Classify a declared output type as `"<form>:<kind>"`, or `""` when it holds
+// no media and the ordinary SAP path applies. `type` values only compare
+// structurally (there is no reflection into a type's shape), so the supported
+// shapes are enumerated. The nullable list/union forms behave exactly like
+// their non-null counterparts once decoded, so they share a form.
+function _media_shape(t: type) -> string {
+    if (t == reflect.type_of<image>()) {
+        return "one:image";
+    }
+    if (t == reflect.type_of<audio>()) {
+        return "one:audio";
+    }
+    if (t == reflect.type_of<video>()) {
+        return "one:video";
+    }
+    if (t == reflect.type_of<pdf>()) {
+        return "one:pdf";
+    }
+    if (t == reflect.type_of<image?>()) {
+        return "opt:image";
+    }
+    if (t == reflect.type_of<audio?>()) {
+        return "opt:audio";
+    }
+    if (t == reflect.type_of<video?>()) {
+        return "opt:video";
+    }
+    if (t == reflect.type_of<pdf?>()) {
+        return "opt:pdf";
+    }
+    if (t == reflect.type_of<image[]>() || t == reflect.type_of<image[]?>()) {
+        return "list:image";
+    }
+    if (t == reflect.type_of<(string | image)[]>() || t == reflect.type_of<(string | image)[]?>()) {
+        return "mixedlist:image";
+    }
+    if (t == reflect.type_of<string | image>() || t == reflect.type_of<(string | image)?>()) {
+        return "mixed:image";
+    }
+    ""
+}
+
+// A media block's payload as its BEP-038 `{kind, source, value, mime}`
+// envelope — the form `baml.json.from_json<Out>` decodes media back from.
+function _media_envelope(m: root.content.Media) -> baml.json.json {
+    baml.json.to_json(m.media) catch_all (e) {
+        _ => {
+            throw baml.errors.UnknownError { data: e, message: [e.to_string()] }
+        },
+    }
+}
+
+// The turn's media payloads of `kind`, in order (sys_llm's `media_parts`).
+function _media_of_kind(turn: ModelTurn, kind: string) -> baml.json.json[] {
+    let out: baml.json.json[] = [];
+    for (let b in turn.content) {
+        if let m: root.content.Media = b {
+            if (m.kind() == kind) {
+                out.push(_media_envelope(m));
+            }
+        }
+    }
+    out
+}
+
+// The turn's non-blank text and image payloads, in document order
+// (sys_llm's `mixed_text_image_parts`). Blank text is dropped, as are
+// reasoning and tool-use blocks, which were never output parts.
+function _media_mixed_parts(turn: ModelTurn) -> baml.json.json[] {
+    let items: baml.json.json[] = [];
+    for (let b in turn.content) {
+        match (b) {
+            let t: root.content.Text => {
+                if (t.text.trim() != "") {
+                    items.push(t.text);
+                }
+                null
+            },
+            let m: root.content.Media => {
+                if (m.kind() == "image") {
+                    items.push(_media_envelope(m));
+                }
+                null
+            },
+            _ => null,
+        };
+    }
+    items
+}
+
+function _media_all_text(items: baml.json.json[]) -> bool {
+    for (let i in items) {
+        if (!(i is string)) {
+            return false;
+        }
+    }
+    true
+}
+
+function _media_join_text(items: baml.json.json[]) -> baml.json.json {
+    let out = "";
+    for (let i in items) {
+        if let s: string = i {
+            out += s;
+        }
+    }
+    out
+}
+
+// sys_llm's `reject_mixed_media_only_output`: a media-only output type refuses
+// to silently drop whatever else the model said.
+function _media_reject_mixed(turn: ModelTurn, kind: string, provider: string) -> null {
+    let unexpected = 0;
+    for (let b in turn.content) {
+        match (b) {
+            let m: root.content.Media => {
+                if (m.kind() != kind) {
+                    unexpected = unexpected + 1;
+                }
+                null
+            },
+            let t: root.content.Text => {
+                if (t.text.trim() != "") {
+                    unexpected = unexpected + 1;
+                }
+                null
+            },
+            _ => null,
+        };
+    }
+    if (unexpected > 0) {
+        throw root.errors.ParseFailed {
+            provider: provider,
+            raw_output: `Expected only ${kind} output parts, got ${unexpected} non-${kind} part(s). Use a text/image union return type to preserve mixed outputs.`,
+        }
+    }
+    null
+}
+
 // The default runner. A spec-mode LLM function's direct call runs
 // `Agent<Out>.new(client = client).run(Fn@spec(...)).value`; construct it
 // yourself to set the other fields (`$` call-site parameters are a future
@@ -96,7 +246,89 @@ class Agent<Out> {
         }
     }
 
-    function _parses(self, candidate: string) -> bool {
+    // Does this turn carry content a media-shaped `Out` can be built from?
+    // Mirrors the `Ok(None)` condition of sys_llm's
+    // `parse_llm_output_for_target`: nothing to build from means fall back to
+    // the ordinary text parse. Always false when `Out` holds no media.
+    function _has_media_output(self, turn: ModelTurn) -> bool {
+        let shape = _media_shape(reflect.type_of<Out>());
+        let form = shape.split(":").at(0) ?? "";
+        if (form == "") {
+            return false;
+        }
+        if (form == "mixed" || form == "mixedlist") {
+            return _media_mixed_parts(turn).length() > 0;
+        }
+        _media_of_kind(turn, shape.split(":").at(1) ?? "").length() > 0
+    }
+
+    // Build a media-shaped `Out` from the turn's content blocks. Only called
+    // when `_has_media_output` holds; the shape-specific errors below are the
+    // ported sys_llm messages, thrown after the turn is already on the record.
+    function _media_value(self, turn: ModelTurn, provider: string) -> Out {
+        let t = reflect.type_of<Out>();
+        let shape = _media_shape(t);
+        let form = shape.split(":").at(0) ?? "";
+        let kind = shape.split(":").at(1) ?? "";
+        let payload = if (form == "mixedlist") {
+            let items: baml.json.json = _media_mixed_parts(turn);
+            items
+        } else if (form == "mixed") {
+            let items = _media_mixed_parts(turn);
+            if (items.length() == 1) {
+                let only: baml.json.json = null;
+                for (let i in items) {
+                    only = i;
+                }
+                only
+            } else if (_media_all_text(items)) {
+                // several plain text parts collapse into one string
+                _media_join_text(items)
+            } else {
+                throw root.errors.ParseFailed {
+                    provider: provider,
+                    raw_output: `Expected one text or image output for ${t.to_string()}, got ${items.length()} parts. Use (image | string)[] to preserve mixed outputs.`,
+                }
+            }
+        } else if (form == "list") {
+            let _ = _media_reject_mixed(turn, kind, provider);
+            let items: baml.json.json = _media_of_kind(turn, kind);
+            items
+        } else {
+            let parts = _media_of_kind(turn, kind);
+            let _ = _media_reject_mixed(turn, kind, provider);
+            if (parts.length() != 1) {
+                throw root.errors.ParseFailed {
+                    provider: provider,
+                    raw_output: if (form == "one") {
+                        `Expected exactly one ${kind} output, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
+                    } else {
+                        `Expected zero or one ${kind} output for ${t.to_string()}, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
+                    },
+                }
+            }
+            let only: baml.json.json = null;
+            for (let p in parts) {
+                only = p;
+            }
+            only
+        };
+        baml.json.from_json<Out>(payload) catch_all (e) {
+            _ => {
+                throw root.errors.ParseFailed {
+                    provider: provider,
+                    raw_output: `the ${kind} output did not fit ${t.to_string()}: ${e.to_string()}`,
+                }
+            },
+        }
+    }
+
+    function _parses(self, turn: ModelTurn, candidate: string) -> bool {
+        // a media-shaped output is satisfied by the turn's blocks; SAP never
+        // coerces media, so re-asking on the text would be pure waste
+        if (_media_shape(reflect.type_of<Out>()) != "") {
+            return self._has_media_output(turn);
+        }
         let _ = baml.sap.parse<Out>(candidate) catch_all (e) {
             _ => {
                 return false;
@@ -149,7 +381,7 @@ class Agent<Out> {
         let accepted = turn.tool_uses().length() > 0
             || turn.stop_reason == root.content.StopReason.MaxTokens
             || turn.stop_reason == root.content.StopReason.Refused
-            || self._parses(candidate);
+            || self._parses(turn, candidate);
         if (accepted) {
             j.append_all(batch);
             // terminal wire outcomes are thrown here, with the turn on the record
@@ -249,10 +481,17 @@ class Agent<Out> {
                     }
                 } else {
                     let candidate = turn.terminal_text() ?? "";
-                    let value = baml.sap.parse<Out>(candidate) catch_all (e) {
-                        _ => {
-                            throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
-                        },
+                    // a media-shaped Out comes from the turn's media blocks;
+                    // everything else, including a media Out the turn produced
+                    // no media for, goes through the ordinary text parse
+                    let value = if (self._has_media_output(turn)) {
+                        self._media_value(turn, selected.id())
+                    } else {
+                        baml.sap.parse<Out>(candidate) catch_all (e) {
+                            _ => {
+                                throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
+                            },
+                        }
                     };
                     let value_json = baml.json.to_json(value) catch_all (e) {
                         _ => {

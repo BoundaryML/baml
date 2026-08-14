@@ -10,7 +10,7 @@
 // test-block local-boxing VM bug (locals holding `type` values misbehave
 // when compared inside a test block).
 
-client TestClient = openai.OpenAiClient.new(
+client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",

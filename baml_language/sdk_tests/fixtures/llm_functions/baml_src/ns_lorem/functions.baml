@@ -1,7 +1,7 @@
 // Client must be in-namespace; ns_lorem can't reach root-level clients.
 // Provider construction is pure: api_key resolves from OPENAI_API_KEY at
 // request time, so declaring the client never touches env.
-client Stub = openai.OpenAiClient.new(model = "gpt-4o-mini");
+client Stub = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 // The streaming client. A `client Name = ...` declaration is evaluated during
 // `$init`, which cannot run io sysops — so it names the env vars instead of
@@ -9,7 +9,7 @@ client Stub = openai.OpenAiClient.new(model = "gpt-4o-mini");
 // therefore serves the keyless replay harness (the vars point at the
 // in-process replay server) and the key-gated live e2e (real endpoint + key)
 // — see customizable/conftest.py.
-client StreamStub = openai.OpenAiClient.new(
+client StreamStub = openai.ResponsesClient.new(
     model = "gpt-5.4-nano",
     api_key_env = "BAML_REPLAY_API_KEY",
     base_url_env = "BAML_REPLAY_BASE_URL",

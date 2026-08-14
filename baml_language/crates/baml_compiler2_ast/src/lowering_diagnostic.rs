@@ -562,7 +562,7 @@ impl LoweringDiagnostic {
                 Severity::Error,
                 format!(
                     "`client<llm>` config blocks are removed; declare a client value instead: \
-                     `client {name} = openai.OpenAiClient.new(model = \"...\");` \
+                     `client {name} = openai.ResponsesClient.new(model = \"...\");` \
                      (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)"
                 ),
                 *span,

@@ -69,7 +69,7 @@ fn throw_of_non_literal_expression_compiles() {
 fn generic_llm_function_with_generic_return_compiles() {
     let db = db_with(
         "class Box<T> { value T }\n\
-         client Dummy = openai.OpenAiClient.new(model = \"gpt-4\")\n\
+         client Dummy = openai.ResponsesClient.new(model = \"gpt-4\")\n\
          function Extract<T>(text: string) -> Box<T> { client Dummy\nprompt `x` }\n",
     );
     baml_project::testing::assert_no_diagnostic_errors(&db);

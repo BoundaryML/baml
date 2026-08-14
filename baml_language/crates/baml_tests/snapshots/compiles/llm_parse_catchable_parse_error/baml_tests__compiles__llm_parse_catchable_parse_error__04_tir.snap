@@ -28,7 +28,7 @@ function user.TryExtract(json: string) -> user.Invoice | null throws never {
         baml.errors.ParseError { message: message } =>
           null : null
   }
-  ?? 1607..1611: unreachable arm
+  ?? 1610..1614: unreachable arm
 }
 class user.Invoice$stream {
   currency: user.Currency | null

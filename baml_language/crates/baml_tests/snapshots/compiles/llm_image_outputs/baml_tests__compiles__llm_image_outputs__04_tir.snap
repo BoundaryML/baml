@@ -6,7 +6,7 @@ function user.GenerateImage(prompt: string, client: ai.Client | null = null) -> 
   ai.Agent.new<image>(client = client).run(GenerateImage$spec(prompt)).value : image
 }
 function user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> throws never {
-  ai.FunctionSpec { spec_name: "GenerateImage", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: OpenAIImageResponses } : ai.FunctionSpec<image>
+  ai.FunctionSpec { spec_name: "GenerateImage", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ImageClient.new(model = "gpt-image-1") } : ai.FunctionSpec<image>
 }
 lambda user.GenerateImage$spec {
 }
@@ -20,7 +20,7 @@ function user.GenerateImageSet(prompt: string, client: ai.Client | null = null) 
   ai.Agent.new<image[]>(client = client).run(GenerateImageSet$spec(prompt)).value : image[]
 }
 function user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> throws never {
-  ai.FunctionSpec { spec_name: "GenerateImageSet", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: OpenAIImageResponses } : ai.FunctionSpec<image[]>
+  ai.FunctionSpec { spec_name: "GenerateImageSet", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ImageClient.new(model = "gpt-image-1") } : ai.FunctionSpec<image[]>
 }
 lambda user.GenerateImageSet$spec {
 }
@@ -34,7 +34,7 @@ function user.GenerateMixedImageNarrative(prompt: string, client: ai.Client | nu
   ai.Agent.new<(image | string)[]>(client = client).run(GenerateMixedImageNarrative$spec(prompt)).value : (image | string)[]
 }
 function user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(image | string)[]> throws never {
-  ai.FunctionSpec { spec_name: "GenerateMixedImag...", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: OpenAIImageResponses } : ai.FunctionSpec<(image | string)[]>
+  ai.FunctionSpec { spec_name: "GenerateMixedImag...", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4.1") } : ai.FunctionSpec<(image | string)[]>
 }
 lambda user.GenerateMixedImageNarrative$spec {
 }

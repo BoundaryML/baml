@@ -1,7 +1,7 @@
 // Call-shape pin for the generic ai.stream constructor. The expected return
 // type must infer both TStream and TFinal without explicit type arguments.
 
-client TestClient = openai.OpenAiClient.new(
+client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -27,8 +27,8 @@ function call_stream_inferred() -> ai.stream.Stream<string | null, string> {
 // stream_llm_inferred_typeargs.baml:4:19 (operator) len=1 "="
 // stream_llm_inferred_typeargs.baml:4:21 (namespace) [defaultLibrary] len=6 "openai"
 // stream_llm_inferred_typeargs.baml:4:27 (namespace) [defaultLibrary] len=1 "."
-// stream_llm_inferred_typeargs.baml:4:28 (class) [defaultLibrary] len=12 "OpenAiClient"
-// stream_llm_inferred_typeargs.baml:4:41 (method) len=3 "new"
+// stream_llm_inferred_typeargs.baml:4:28 (class) [defaultLibrary] len=15 "ResponsesClient"
+// stream_llm_inferred_typeargs.baml:4:44 (method) len=3 "new"
 // stream_llm_inferred_typeargs.baml:5:5 (parameter) len=5 "model"
 // stream_llm_inferred_typeargs.baml:5:11 (operator) len=1 "="
 // stream_llm_inferred_typeargs.baml:5:13 (string) len=13 "\"gpt-4o-mini\""

@@ -168,7 +168,7 @@ fn backtick_llm_function_compiles_to_agent_loop() {
     let file = db.add_file(
         "test.baml",
         r#"
-client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "k");
+client MyClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "k");
 
 function Greet(name: string) -> string {
   client MyClient
@@ -257,7 +257,7 @@ fn new_mode_failures_have_good_diagnostics() {
     for (label, client, body, expect_substr) in cases {
         let mut db = make_db();
         let src = format!(
-            "client C = openai.OpenAiClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
+            "client C = openai.ResponsesClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
         );
         let file = db.add_file("test.baml", &src);
         let tir = render_tir(&db, file);
@@ -621,8 +621,8 @@ fn llm_client_override_argument_is_callable_on_function() {
     let file = db.add_file(
         "test.baml",
         r##"
-client DefaultClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "default-key");
-client OverrideClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "override-key");
+client DefaultClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "default-key");
+client OverrideClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "override-key");
 
 function Ask(input: string) -> string {
   client DefaultClient

@@ -290,7 +290,7 @@ pub(crate) fn lower_client_initializer(
 ///         ai.internal.assemble_prompt(tagged.parts, tagged.values)
 ///     },
 ///     toolbox: ai.Toolbox.new([ai.tool(a), ...]),
-///     default_client: openai.OpenAiClient.new(model = "gpt-4o-mini"),
+///     default_client: openai.ResponsesClient.new(model = "gpt-4o-mini"),
 /// }
 /// ```
 ///
