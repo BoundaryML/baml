@@ -132,7 +132,8 @@ jobs:
 
   size-gate-macos:
     name: "measure-baml-size (macos)"
-    runs-on: blacksmith-6vcpu-macos-latest
+    # Keep every macos-cargo cache consumer on the same image as cargo-test-macos.
+    runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 20
     continue-on-error: true
     steps:
