@@ -39,6 +39,16 @@ namespace baml:
   function _to_string_shim<T>
   function _trunc_to_int
   function deep_copy<T>
+namespace baml.crypto:
+  type Aead
+  class Aes128GcmSiv { methods: [new, encrypt, decrypt, random_key] }
+  class Aes256GcmSiv { methods: [new, encrypt, decrypt, random_key] }
+  class ChaCha20Poly1305 { methods: [new, encrypt, decrypt, random_key] }
+  class DecryptionFailure { methods: [] }
+  type GenerateKey
+  type Hasher
+  class Sha256 { methods: [new, update, finish] }
+  class XChaCha20Poly1305 { methods: [new, encrypt, decrypt, random_key] }
 namespace baml.csv:
   class CsvError { methods: [] }
   enum CsvErrorKind

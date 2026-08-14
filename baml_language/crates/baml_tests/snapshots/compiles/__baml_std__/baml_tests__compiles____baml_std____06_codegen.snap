@@ -1040,6 +1040,95 @@ function baml._to_string_shim(value: #0) -> string {
 function baml._trunc_to_int(value: float) -> int {
 }
 
+function baml.crypto.Aes128GcmSiv.Aead.decrypt(self: baml.crypto.Aes128GcmSiv, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.Aes128GcmSiv.Aead.encrypt(self: baml.crypto.Aes128GcmSiv, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    load_var rng
+    load_const 16
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.crypto.Aes128GcmSiv.new(key: uint8array) -> baml.crypto.Aes128GcmSiv {
+}
+
+function baml.crypto.Aes256GcmSiv.Aead.decrypt(self: baml.crypto.Aes256GcmSiv, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.Aes256GcmSiv.Aead.encrypt(self: baml.crypto.Aes256GcmSiv, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    load_var rng
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.crypto.Aes256GcmSiv.new(key: uint8array) -> baml.crypto.Aes256GcmSiv {
+}
+
+function baml.crypto.ChaCha20Poly1305.Aead.decrypt(self: baml.crypto.ChaCha20Poly1305, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.ChaCha20Poly1305.Aead.encrypt(self: baml.crypto.ChaCha20Poly1305, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.ChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    load_var rng
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.crypto.ChaCha20Poly1305.new(key: uint8array) -> baml.crypto.ChaCha20Poly1305 {
+}
+
+function baml.crypto.Sha256.Hasher.finish(self: baml.crypto.Sha256) -> uint8array {
+}
+
+function baml.crypto.Sha256.Hasher.update(self: baml.crypto.Sha256, data: uint8array) -> void {
+}
+
+function baml.crypto.Sha256.new() -> baml.crypto.Sha256 {
+}
+
+function baml.crypto.XChaCha20Poly1305.Aead.decrypt(self: baml.crypto.XChaCha20Poly1305, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.XChaCha20Poly1305.Aead.encrypt(self: baml.crypto.XChaCha20Poly1305, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+}
+
+function baml.crypto.XChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+    load_var rng
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.crypto.XChaCha20Poly1305.new(key: uint8array) -> baml.crypto.XChaCha20Poly1305 {
+}
+
 function baml.csv.CsvReader._feed(self: baml.csv.CsvReader, chunk: uint8array) -> null {
 }
 
