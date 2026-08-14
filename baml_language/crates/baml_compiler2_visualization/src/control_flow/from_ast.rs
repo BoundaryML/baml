@@ -957,8 +957,8 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
         ast::Expr::Object {
             fields, spreads, ..
         } => {
-            for (_, field_expr) in fields {
-                collect_callee_names_expr(body, *field_expr, names);
+            for field in fields {
+                collect_callee_names_expr(body, field.value, names);
             }
             for spread in spreads {
                 collect_callee_names_expr(body, spread.expr, names);
@@ -970,9 +970,9 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::Map { entries } => {
-            for (key, value) in entries {
-                collect_callee_names_expr(body, *key, names);
-                collect_callee_names_expr(body, *value, names);
+            for entry in entries {
+                collect_callee_names_expr(body, entry.key, names);
+                collect_callee_names_expr(body, entry.value, names);
             }
         }
         ast::Expr::Block { stmts, tail_expr } => {
@@ -1871,7 +1871,7 @@ mod tests {
             let obj = exprs.alloc(ast::Expr::Object {
                 type_name: TypePath::bare("MyResponse".into()),
                 type_args: vec![],
-                fields: vec![("ok".into(), field_val)],
+                fields: vec![ast::ObjectExprField::explicit("ok".into(), field_val)],
                 spreads: vec![],
             });
             let ret = stmts.alloc(ast::Stmt::Return(Some(obj)));
@@ -2050,7 +2050,7 @@ mod tests {
             let obj_false = exprs.alloc(ast::Expr::Object {
                 type_name: TypePath::bare("Result".into()),
                 type_args: vec![],
-                fields: vec![("err".into(), err_val)],
+                fields: vec![ast::ObjectExprField::explicit("err".into(), err_val)],
                 spreads: vec![],
             });
             let ret_false = stmts.alloc(ast::Stmt::Return(Some(obj_false)));
@@ -2090,7 +2090,7 @@ mod tests {
         let obj = exprs.alloc(ast::Expr::Object {
             type_name: TypePath::bare("Resp".into()),
             type_args: vec![],
-            fields: vec![("ok".into(), field_val)],
+            fields: vec![ast::ObjectExprField::explicit("ok".into(), field_val)],
             spreads: vec![],
         });
 

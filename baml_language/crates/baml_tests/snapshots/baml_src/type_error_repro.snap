@@ -1022,18 +1022,15 @@ function type_error_repro.map_with_repeated_string_alias_union_key_body() -> int
     load_var counts
     load_const "x"
     call baml.Map.get
-    store_var _5
-    load_var _5
-    store_var _0
-    load_var _5
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 0
-    store_var _0
+    store_var _5
 
   L0:
-    load_var _0
+    load_var _5
     return
 }
 
@@ -1054,18 +1051,15 @@ function type_error_repro.map_with_string_alias_key_body() -> int {
     load_var counts
     load_const "x"
     call baml.Map.get
-    store_var _5
-    load_var _5
-    store_var _0
-    load_var _5
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 0
-    store_var _0
+    store_var _5
 
   L0:
-    load_var _0
+    load_var _5
     return
 }
 

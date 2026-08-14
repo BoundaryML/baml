@@ -1093,6 +1093,37 @@ impl io::IoNamespaceFs for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+
+    // `chmod` and `symlink` declare `throws root.errors.Io`, so — unlike their
+    // siblings above — they report an absent platform facility as `Io` rather
+    // than `Unsupported`. An `Unsupported` here would be off-contract: nothing
+    // in the declared throw set can hold it, so it would escape every typed
+    // `catch` arm the caller can write.
+    fn chmod(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _mode: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Io {
+            message: "File permissions are not supported on this platform".to_string(),
+        })
+    }
+
+    fn symlink(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _target: String,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Io {
+            message: "Symbolic links are not supported on this platform".to_string(),
+        })
+    }
 }
 
 impl io::IoClassHttpResponse for DefaultIoOps {
@@ -1697,6 +1728,17 @@ impl io::IoNamespaceSys for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+
+    // `baml.sys.pid` declares `throws never`, so a platform without process
+    // IDs cannot report `Unsupported` as a catchable error — it panics with
+    // `baml.panics.HostUnavailable`, exactly as `SystemRandom` does when no
+    // entropy source is reachable.
+    fn pid(&self, _h: &Arc<BexHeap>, _c: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 impl io::IoClassGlobGlob for DefaultIoOps {
@@ -2022,9 +2064,21 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_fs_mkdir = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_fs_mkdir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_chmod = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_chmod(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_symlink = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_symlink(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -2312,6 +2366,12 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_sys_sleep(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_pid = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_pid(heap, permit, args, ctx, call_id)
             })
         };
         self

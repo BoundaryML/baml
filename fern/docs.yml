@@ -821,9 +821,9 @@ navigation:
           - page: "Hugging Face (openai-generic)"
             slug: huggingface
             path: 03-reference/baml/clients/providers/huggingface.mdx
-          - page: "Keywords AI (openai-generic)"
-            slug: keywordsai
-            path: 03-reference/baml/clients/providers/keywordsai.mdx
+          - page: "Respan (openai-generic)"
+            slug: respan
+            path: 03-reference/baml/clients/providers/respan.mdx
           - page: "Llama API (openai-generic)"
             slug: llama-api
             path: 03-reference/baml/clients/providers/llama-api.mdx
@@ -1123,7 +1123,7 @@ redirects:
   - source: "/docs/snippets/clients/providers/lmstudio"
     destination: "/ref/llm-client-providers/openai-generic-lm-studio"
   - source: "/docs/snippets/clients/providers/keywordsai"
-    destination: "/ref/llm-client-providers/openai-generic-keywords-ai"
+    destination: "/ref/llm-client-providers/respan"
   - source: "/docs/snippets/clients/fallback"
     destination: "/ref/llm-client-strategies/fallback"
   - source: "/docs/snippets/clients/round-robin"
@@ -1209,7 +1209,9 @@ redirects:
   - source: "/ref/llm-client-providers/openai-generic-hugging-face"
     destination: "/ref/llm-client-providers/huggingface"
   - source: "/ref/llm-client-providers/openai-generic-keywords-ai"
-    destination: "/ref/llm-client-providers/keywordsai"
+    destination: "/ref/llm-client-providers/respan"
+  - source: "/ref/llm-client-providers/keywordsai"
+    destination: "/ref/llm-client-providers/respan"
   - source: "/ref/llm-client-providers/openai-generic-litellm"
     destination: "/ref/llm-client-providers/litellm"
   - source: "/ref/llm-client-providers/openai-generic-lm-studio"

@@ -709,8 +709,8 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Object {
                 fields, spreads, ..
             } => {
-                for (_, field_expr) in fields {
-                    self.walk_expr(*field_expr, body, source_map, true);
+                for field in fields {
+                    self.walk_expr(field.value, body, source_map, true);
                 }
                 for spread in spreads {
                     self.walk_expr(spread.expr, body, source_map, true);
@@ -722,9 +722,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Map { entries } => {
-                for &(key, value) in entries {
-                    self.walk_expr(key, body, source_map, true);
-                    self.walk_expr(value, body, source_map, true);
+                for entry in entries {
+                    self.walk_expr(entry.key, body, source_map, true);
+                    self.walk_expr(entry.value, body, source_map, true);
                 }
             }
             ast::Expr::MemberAccess { base, .. }

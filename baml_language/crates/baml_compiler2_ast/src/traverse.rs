@@ -140,16 +140,16 @@ impl ExprBody {
             Expr::Object {
                 fields, spreads, ..
             } => {
-                out.extend(fields.iter().map(|(_, expr)| BodyNode::Expr(*expr)));
+                out.extend(fields.iter().map(|field| BodyNode::Expr(field.value)));
                 out.extend(spreads.iter().map(|s| BodyNode::Expr(s.expr)));
             }
             Expr::Array { elements } => {
                 out.extend(elements.iter().copied().map(BodyNode::Expr));
             }
             Expr::Map { entries } => {
-                for (key, value) in entries {
-                    out.push(BodyNode::Expr(*key));
-                    out.push(BodyNode::Expr(*value));
+                for entry in entries {
+                    out.push(BodyNode::Expr(entry.key));
+                    out.push(BodyNode::Expr(entry.value));
                 }
             }
             Expr::Block { stmts, tail_expr } => {

@@ -401,6 +401,27 @@ async fn shell_with_options() {
     }
 }
 
+// === pid() tests ===
+
+/// `baml.sys.pid` reports the ID of the process running the VM, not of any
+/// child it spawns. The test harness runs the engine in-process, so the only
+/// correct answer is this test binary's own PID.
+#[tokio::test]
+async fn pid_is_the_host_process() {
+    let output = baml_test!(
+        r#"
+            function main() -> int {
+                baml.sys.pid()
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Int(i64::from(std::process::id())))
+    );
+}
+
 // === stdout / stderr as uint8array field tests ===
 
 #[tokio::test]

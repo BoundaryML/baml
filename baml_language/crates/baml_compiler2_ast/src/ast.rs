@@ -654,12 +654,6 @@ pub struct AstSourceMap {
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
     pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
-    /// Value expressions synthesized from property shorthand. For example,
-    /// `{ options }` lowers to the same key/value shape as
-    /// `{ options: options }`, while this set preserves that the user wrote the
-    /// shorthand so diagnostics can explain its exact-name requirement.
-    pub property_shorthand_exprs: HashSet<ExprId>,
-
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
     /// and the concat accumulator that backtick interpolation lowers to). Their
@@ -687,7 +681,6 @@ impl AstSourceMap {
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
             object_field_name_spans: HashMap::new(),
-            property_shorthand_exprs: HashSet::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
             synthetic_patterns: HashSet::new(),
@@ -702,12 +695,6 @@ impl AstSourceMap {
     /// Whether `id` names a compiler-synthesized statement (see `synthetic_stmts`).
     pub fn is_synthetic_stmt(&self, id: StmtId) -> bool {
         self.synthetic_stmts.contains(&id)
-    }
-
-    /// Whether `id` is the value expression synthesized for a shorthand
-    /// property such as the `options` value in `{ options }`.
-    pub fn is_property_shorthand_expr(&self, id: ExprId) -> bool {
-        self.property_shorthand_exprs.contains(&id)
     }
 
     /// Look up a span in an arena that is index-parallel to the arena `id`
@@ -793,6 +780,66 @@ impl AstSourceMap {
 impl Default for AstSourceMap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// How a property value was written in source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PropertySyntax {
+    /// An explicit key/value pair such as `{ "name": value }` or
+    /// `Config { name: value }`.
+    Explicit,
+    /// A shorthand property such as `{ name }` or `Config { name }`.
+    Shorthand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectExprField {
+    pub name: Name,
+    pub value: ExprId,
+    pub syntax: PropertySyntax,
+}
+
+impl ObjectExprField {
+    pub fn explicit(name: Name, value: ExprId) -> Self {
+        Self {
+            name,
+            value,
+            syntax: PropertySyntax::Explicit,
+        }
+    }
+
+    pub fn shorthand(name: Name, value: ExprId) -> Self {
+        Self {
+            name,
+            value,
+            syntax: PropertySyntax::Shorthand,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapExprEntry {
+    pub key: ExprId,
+    pub value: ExprId,
+    pub syntax: PropertySyntax,
+}
+
+impl MapExprEntry {
+    pub fn explicit(key: ExprId, value: ExprId) -> Self {
+        Self {
+            key,
+            value,
+            syntax: PropertySyntax::Explicit,
+        }
+    }
+
+    pub fn shorthand(key: ExprId, value: ExprId) -> Self {
+        Self {
+            key,
+            value,
+            syntax: PropertySyntax::Shorthand,
+        }
     }
 }
 
@@ -909,14 +956,14 @@ pub enum Expr {
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,
-        fields: Vec<(Name, ExprId)>,
+        fields: Vec<ObjectExprField>,
         spreads: Vec<SpreadField>,
     },
     Array {
         elements: Vec<ExprId>,
     },
     Map {
-        entries: Vec<(ExprId, ExprId)>,
+        entries: Vec<MapExprEntry>,
     },
     Block {
         stmts: Vec<StmtId>,

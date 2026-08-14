@@ -148,3 +148,46 @@ function remove_dir(path: string) -> null throws root.errors.Io {
 function remove_dir_all(path: string) -> null throws root.errors.Io {
     $rust_io_function
 }
+
+/// Changes the permissions of the file at `path` to `mode`.
+///
+/// `mode` is the POSIX (unix) mode octal permissions value:
+/// a numeric bitmask typically using three octal digits `0oUGO` (permissions for user/group/other)
+/// Where each octal digit represents bit flags:
+/// - `0o4` = read
+/// - `0o2` = write
+/// - `0o1` = execute
+///
+/// An optional fourth leading digit carries the setuid (`0o4000`), setgid
+/// (`0o2000`), and sticky (`0o1000`) bits on platforms where these are supported.
+/// `mode` must therefore be in `0 ..= 0o7777`; anything outside that range throws
+/// `InvalidArgument` rather than being silently masked down to it.
+///
+/// On Windows there is no mode as a file is either writable or read-only.
+/// Only the owner-write bit (`0o200`) has any effect: setting it clears the
+/// read-only attribute and clearing it sets it. Every other bit, including the
+/// group and other digits, is accepted and ignored. `path` must exist on
+/// Windows even when the resulting attribute is unchanged.
+function chmod(
+    path: string,
+    mode: int,
+) -> void throws root.errors.Io | root.errors.InvalidArgument {
+    $rust_io_function
+}
+
+/// Creates a symbolic link at `path` that points to `target`.
+///
+/// `target` is stored verbatim and need not exist: a dangling link is created
+/// if it does not. A relative `target` is resolved by the operating system
+/// against the directory containing `path`, not against the working directory.
+///
+/// Throws `Io` if `path` already exists.
+///
+/// On Windows the link is created as a directory link when `target` resolves to
+/// an existing directory and as a file link otherwise (a dangling link is
+/// always a file link), and creating one requires Developer Mode or
+/// `SeCreateSymbolicLinkPrivilege`; without it the OS refuses and this throws
+/// `Io`.
+function symlink(target: string, path: string) -> void throws root.errors.Io {
+    $rust_io_function
+}

@@ -443,6 +443,96 @@ function build(option: string) -> map<string, string> {
 }
 
 #[test]
+fn property_shorthand_in_parameter_default_uses_structural_syntax() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(option: string, config: map<string, string> = { options }) -> map<string, string> {
+  config
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected a shorthand diagnostic in the parameter-default arena, got:\n{tir}"
+    );
+}
+
+#[test]
+fn property_shorthand_uses_the_value_expression_scope() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(input: string?) -> map<string, string> {
+  if let option: string = input {
+    { options }
+  } else {
+    {}
+  }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected the if-let binding in shorthand suggestions, got:\n{tir}"
+    );
+}
+
+#[test]
+fn explicit_quoted_map_key_is_not_property_shorthand() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build() -> map<string, string> {
+  { "options": options }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("unresolved name: options"),
+        "expected the ordinary unresolved-name diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "an explicit quoted key must not use shorthand diagnostics:\n{tir}"
+    );
+}
+
+#[test]
+fn if_let_binding_resolves_in_property_shorthand() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(input: string?) -> map<string, string> {
+  if let options: string = input {
+    { options }
+  } else {
+    {}
+  }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("property shorthand") && !tir.contains("unresolved name"),
+        "the ordinary resolver should see the if-let binding:\n{tir}"
+    );
+}
+
+#[test]
 fn class_property_shorthand_suggests_field_to_variable_mapping() {
     let mut db = make_db();
     let file = db.add_file(
@@ -488,6 +578,29 @@ function build() -> Config {
     assert!(
         !tir.contains("property shorthand"),
         "explicit properties should use the general unknown-field diagnostic:\n{tir}"
+    );
+}
+
+#[test]
+fn explicit_same_name_unknown_class_field_is_not_shorthand() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build(badField: int) -> Config {
+  Config { badField: badField }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected an unknown-field diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "an explicit same-name field must not use shorthand diagnostics:\n{tir}"
     );
 }
 

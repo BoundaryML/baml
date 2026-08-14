@@ -3477,6 +3477,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
             | TyTemplate::Future(..)
+            | TyTemplate::Media(..)
             | TyTemplate::TypeArgRef(_)
             | TyTemplate::Interface(..)
             | TyTemplate::AssociatedTypeProjection { .. }
@@ -3501,54 +3502,62 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // exhaustive final `let v: unknown` arm has its test elided.)
             TyTemplate::BuiltinUnknown { .. } => emit_true(self),
 
-            // Everything else keeps its existing coarse check.
-            other => {
-                // A fully-realized leaf (primitive, enum, alias, literal, …):
+            // Fully realized leaves keep their exact identity/tag fast path,
+            // then use structural matching when no exact fast path exists.
+            // This list is exhaustive on purpose: a new template variant must
+            // choose its type-test strategy here.
+            other @ (TyTemplate::Int { .. }
+            | TyTemplate::Bigint { .. }
+            | TyTemplate::Float { .. }
+            | TyTemplate::String { .. }
+            | TyTemplate::Bool { .. }
+            | TyTemplate::Null { .. }
+            | TyTemplate::Uint8Array { .. }
+            | TyTemplate::Literal(..)
+            | TyTemplate::Enum(..)
+            | TyTemplate::EnumVariant(..)
+            | TyTemplate::RustType { .. }
+            | TyTemplate::Type { .. }
+            | TyTemplate::Resource { .. }
+            | TyTemplate::PromptAst { .. }
+            | TyTemplate::Void { .. }
+            | TyTemplate::TypeAlias(..)
+            | TyTemplate::Never { .. }) => {
+                // A fully-realized leaf (primitive, enum, alias, literal, ...):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
-                // tag. Every non-realized template kind has its own arm above,
-                // so the narrowing below succeeds for everything that reaches
-                // here; the `emit_false` fallbacks guard absent objects and
-                // tagless leaves, not template residue.
-                if let Ok(realized) = <&RealizedTy>::try_from(other) {
-                    if let RealizedTy::TypeAlias(tn, _) = realized {
-                        if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
-                            let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(
-                                class_obj_idx,
-                            )));
-                            let inst = self.emit(Instruction::IsType(c));
-                            self.set_operand(
-                                inst,
-                                OperandMeta::Const(tn.display_name().to_string()),
-                            );
-                        } else {
-                            emit_false(self);
-                        }
-                    } else if let RealizedTy::Enum(tn, _) = realized {
-                        // Enum-pointer identity: `is Color` tests the value's enum
-                        // object, so it discriminates `Color` from `Status` — the
-                        // shared `ENUM` type tag cannot. Falls back to constant-false
-                        // if the enum object is absent (e.g. an unreferenced enum).
-                        if let Some(enum_obj_idx) = self.enum_object_index_for_type_name(tn) {
-                            let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(
-                                enum_obj_idx,
-                            )));
-                            let inst = self.emit(Instruction::IsType(c));
-                            self.set_operand(
-                                inst,
-                                OperandMeta::Const(tn.display_name().to_string()),
-                            );
-                        } else {
-                            emit_false(self);
-                        }
-                    } else if let Some(tag) = realized_type_tag(realized) {
-                        let c = self.add_constant(ConstValue::Int(tag));
+                // tag when one exactly represents the test. Tagless leaves use
+                // the canonical structural matcher instead of silently
+                // compiling to false.
+                let realized = <&RealizedTy>::try_from(other)
+                    .expect("exhaustive realized-leaf template classification");
+                if let RealizedTy::TypeAlias(tn, _) = realized {
+                    if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
+                        let c = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
                         let inst = self.emit(Instruction::IsType(c));
-                        self.set_operand(inst, OperandMeta::Const(realized.to_string()));
+                        self.set_operand(inst, OperandMeta::Const(tn.display_name().to_string()));
                     } else {
                         emit_false(self);
                     }
+                } else if let RealizedTy::Enum(tn, _) = realized {
+                    // Enum-pointer identity: `is Color` tests the value's enum
+                    // object, so it discriminates `Color` from `Status` - the
+                    // shared `ENUM` type tag cannot. Falls back to constant-false
+                    // if the enum object is absent (e.g. an unreferenced enum).
+                    if let Some(enum_obj_idx) = self.enum_object_index_for_type_name(tn) {
+                        let c = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(enum_obj_idx)));
+                        let inst = self.emit(Instruction::IsType(c));
+                        self.set_operand(inst, OperandMeta::Const(tn.display_name().to_string()));
+                    } else {
+                        emit_false(self);
+                    }
+                } else if let Some(tag) = realized_type_tag(realized) {
+                    let c = self.add_constant(ConstValue::Int(tag));
+                    let inst = self.emit(Instruction::IsType(c));
+                    self.set_operand(inst, OperandMeta::Const(realized.to_string()));
                 } else {
-                    emit_false(self);
+                    emit_structural(self, other);
                 }
             }
         }
@@ -3710,7 +3719,19 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
             baml_base::Literal::String(_) => baml_type::typetag::STRING,
             baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
         }),
-        _ => None,
+        RealizedTy::Media(..)
+        | RealizedTy::Class(..)
+        | RealizedTy::Interface(..)
+        | RealizedTy::Union(..)
+        | RealizedTy::Future(..)
+        | RealizedTy::RustType { .. }
+        | RealizedTy::Resource { .. }
+        | RealizedTy::PromptAst { .. }
+        | RealizedTy::Void { .. }
+        | RealizedTy::TypeAlias(..)
+        | RealizedTy::BuiltinUnknown { .. }
+        | RealizedTy::Never { .. }
+        | RealizedTy::EnumVariant(..) => None,
     }
 }
 

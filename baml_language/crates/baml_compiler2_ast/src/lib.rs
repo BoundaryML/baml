@@ -2463,6 +2463,58 @@ function Demo(name: string) -> string {
             Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
         ));
     }
+
+    #[test]
+    fn property_syntax_is_structural_ast_data() {
+        let items = parse_and_lower(
+            r#"
+class Config { name string }
+function build(name: string) -> unknown {
+  let shorthand_map = { name };
+  let explicit_map = { "name": name };
+  let shorthand_object = Config { name };
+  let explicit_object = Config { name: name };
+  [shorthand_map, explicit_map, shorthand_object, explicit_object]
+}
+"#,
+        );
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+
+        let map_syntax: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(_, expr)| match expr {
+                Expr::Map { entries } => entries.first().map(|entry| entry.syntax),
+                _ => None,
+            })
+            .collect();
+        let object_syntax: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(_, expr)| match expr {
+                Expr::Object { fields, .. } => fields.first().map(|field| field.syntax),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            map_syntax,
+            vec![
+                crate::ast::PropertySyntax::Shorthand,
+                crate::ast::PropertySyntax::Explicit,
+            ]
+        );
+        assert_eq!(
+            object_syntax,
+            vec![
+                crate::ast::PropertySyntax::Shorthand,
+                crate::ast::PropertySyntax::Explicit,
+            ]
+        );
+    }
 }
 
 #[cfg(test)]

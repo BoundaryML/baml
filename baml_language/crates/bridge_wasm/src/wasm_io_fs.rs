@@ -619,4 +619,35 @@ impl io::IoNamespaceFs for WasmIoFs {
             }
         }
     }
+
+    // The JS VFS contract exposes neither permissions nor links, and both are
+    // reported as `Io` rather than `Unsupported` because that is the only
+    // category these two sysops declare — an `Unsupported` would escape every
+    // typed `catch` arm the caller can write. Growing the VFS with `chmod` /
+    // `symlink` methods is what would make these real here.
+    fn chmod(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _mode: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Io {
+            message: "File permissions are not supported by the JavaScript filesystem".to_string(),
+        })
+    }
+
+    fn symlink(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _target: String,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Io {
+            message: "Symbolic links are not supported by the JavaScript filesystem".to_string(),
+        })
+    }
 }
