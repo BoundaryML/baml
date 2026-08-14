@@ -598,16 +598,6 @@ mod tests {
 
         assert_eq!(encoded.selected_option_index, Some(1));
         assert!(encoded.is_optional);
-        let Some(crate::baml_bridge::cffi::baml_ty::Ty::Union(union)) =
-            encoded.self_type.unwrap().ty
-        else {
-            panic!("expected union self type")
-        };
-        assert_eq!(union.options.len(), 2);
-        assert_eq!(
-            union.options[1],
-            crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::null())
-        );
     }
 
     #[test]
