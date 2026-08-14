@@ -9023,6 +9023,7 @@ interface Response {
     #[test]
     fn header_comments_are_diagnosed_outside_expression_blocks() {
         let source = r#"
+//# top-level declaration
 interface Response {
   //# interface members
   function text(self) -> string
@@ -9070,7 +9071,7 @@ function executable() -> int {
 
         assert_eq!(
             errors.len(),
-            9,
+            10,
             "every non-expression header should produce one diagnostic: {errors:#?}"
         );
         assert!(errors.iter().all(|error| {
@@ -9096,7 +9097,7 @@ function executable() -> int {
                     )
                 })
                 .count(),
-            9,
+            10,
             "non-expression headers should be ordinary line-comment trivia"
         );
     }
