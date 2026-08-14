@@ -490,7 +490,7 @@ fn resolve_constructor_field_at(
             // Check if cursor token matches any field key name
             let _matching_field = fields
                 .iter()
-                .find(|(name, _)| name.as_str() == token_text)?;
+                .find(|field| field.name.as_str() == token_text)?;
 
             // Get the Object's type
             let obj_ty = inference.type_of_expr.get(&expr_id)?.to_plain();

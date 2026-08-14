@@ -264,7 +264,7 @@ pub(crate) mod support {
                 let tn = type_name.to_string();
                 let field_strs: Vec<String> = fields
                     .iter()
-                    .map(|(name, val)| format!("{name}: {}", expr_desc(*val, body)))
+                    .map(|field| format!("{}: {}", field.name, expr_desc(field.value, body)))
                     .collect();
                 format!("{tn} {{ {} }}", field_strs.join(", "))
             }
@@ -275,7 +275,13 @@ pub(crate) mod support {
             Expr::Map { entries } => {
                 let entry_strs: Vec<String> = entries
                     .iter()
-                    .map(|(k, v)| format!("{}: {}", expr_desc(*k, body), expr_desc(*v, body)))
+                    .map(|entry| {
+                        format!(
+                            "{}: {}",
+                            expr_desc(entry.key, body),
+                            expr_desc(entry.value, body)
+                        )
+                    })
                     .collect();
                 format!("map {{ {} }}", entry_strs.join(", "))
             }
@@ -1853,10 +1859,11 @@ pub(crate) mod support {
                     let tn = qualify_type_name(type_name, prefix, local_type_names);
                     let field_strs: Vec<String> = fields
                         .iter()
-                        .map(|(name, val)| {
+                        .map(|field| {
                             format!(
-                                "{name}: {}",
-                                expr_desc_hir(*val, body, prefix, local_type_names)
+                                "{}: {}",
+                                field.name,
+                                expr_desc_hir(field.value, body, prefix, local_type_names)
                             )
                         })
                         .collect();
@@ -1872,11 +1879,11 @@ pub(crate) mod support {
                 Expr::Map { entries } => {
                     let entry_strs: Vec<String> = entries
                         .iter()
-                        .map(|(k, v)| {
+                        .map(|entry| {
                             format!(
                                 "{}: {}",
-                                expr_desc_hir(*k, body, prefix, local_type_names),
-                                expr_desc_hir(*v, body, prefix, local_type_names)
+                                expr_desc_hir(entry.key, body, prefix, local_type_names),
+                                expr_desc_hir(entry.value, body, prefix, local_type_names)
                             )
                         })
                         .collect();

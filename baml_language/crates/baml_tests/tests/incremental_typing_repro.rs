@@ -140,3 +140,57 @@ fn incremental_incomplete_log_repro_stays_alive() {
 fn incremental_incomplete_log_repro_child() {
     run_incomplete_log_repro_sequence();
 }
+
+#[test]
+fn incremental_property_syntax_change_invalidates_inference() {
+    let mut db = ProjectDatabase::new();
+    let root = Path::new("/property-syntax");
+    let file = Path::new("/property-syntax/main.baml");
+    db.set_project_root(root);
+
+    db.add_or_update_file(
+        file,
+        r#"
+function build() -> map<string, string> {
+  { key }
+}
+"#,
+    );
+    let shorthand_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        shorthand_messages
+            .iter()
+            .any(|message| message.contains("property shorthand `key`")),
+        "expected shorthand diagnostic, got: {shorthand_messages:#?}"
+    );
+
+    // These forms have identical key/value expressions after desugaring, so
+    // property syntax must participate in the structural body equality.
+    db.add_or_update_file(
+        file,
+        r#"
+function build() -> map<string, string> {
+  { "key": key }
+}
+"#,
+    );
+    let explicit_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        explicit_messages
+            .iter()
+            .any(|message| message.contains("unresolved name: `key`")),
+        "expected ordinary unresolved-name diagnostic, got: {explicit_messages:#?}"
+    );
+    assert!(
+        explicit_messages
+            .iter()
+            .all(|message| !message.contains("property shorthand")),
+        "explicit syntax reused stale shorthand inference: {explicit_messages:#?}"
+    );
+}

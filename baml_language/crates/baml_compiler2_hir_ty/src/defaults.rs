@@ -218,8 +218,14 @@ fn collect_default_expr_forward_references(
         Expr::Object {
             fields, spreads, ..
         } => {
-            for (_, expr) in fields {
-                collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
+            for field in fields {
+                collect_default_expr_forward_references(
+                    field.value,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
             }
             for spread in spreads {
                 collect_default_expr_forward_references(
@@ -237,9 +243,21 @@ fn collect_default_expr_forward_references(
             }
         }
         Expr::Map { entries } => {
-            for (key, value) in entries {
-                collect_default_expr_forward_references(*key, body, later_params, shadowed, refs);
-                collect_default_expr_forward_references(*value, body, later_params, shadowed, refs);
+            for entry in entries {
+                collect_default_expr_forward_references(
+                    entry.key,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                collect_default_expr_forward_references(
+                    entry.value,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
             }
         }
         Expr::Block { stmts, tail_expr } => {
