@@ -33,8 +33,8 @@ use the `spawn` start method instead.
 </Warning>
 
 Connection pooling is not available for
-[fallback](/reference/baml/clients/strategy/fallback) or
-[round-robin](/reference/baml/clients/strategy/round-robin) clients. Set it on
+[fallback](/ref/llm-client-strategies/fallback) or
+[round-robin](/ref/llm-client-strategies/round-robin) clients. Set it on
 their leaf clients instead. It is also not available for
-[AWS Bedrock](/reference/baml/clients/providers/aws-bedrock) clients, whose HTTP
+[AWS Bedrock](/ref/llm-client-providers/aws-bedrock) clients, whose HTTP
 transport is managed by the AWS SDK.
