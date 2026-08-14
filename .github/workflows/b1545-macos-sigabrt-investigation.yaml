@@ -36,9 +36,9 @@ env:
   RUST_BACKTRACE: full
 
 jobs:
-  no-sccache:
-    name: "B-1545 investigation (non-required) / no sccache ${{ matrix.trial }}"
-    runs-on: blacksmith-6vcpu-macos-latest
+  macos-15:
+    name: "B-1545 investigation (non-required) / macOS 15 ${{ matrix.trial }}"
+    runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -75,13 +75,6 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
-
-      - name: "Disable sccache for controlled experiment"
-        run: |
-          # The baseline restored 813 of 814 cacheable Rust compilations from
-          # the shared remote cache. Force rustc to rebuild every crate while
-          # leaving the remaining production setup unchanged.
-          printf 'RUSTC_WRAPPER=\n' >> "$GITHUB_ENV"
 
       - name: "Record runner and toolchain diagnostics"
         run: |
@@ -144,7 +137,7 @@ jobs:
           cargo metadata --format-version 1 > "$RUNNER_TEMP/b1545-diagnostics/cargo-metadata.json"
         working-directory: baml_language
 
-      - name: "Run tests with nextest (production invocation, no sccache)"
+      - name: "Run tests with nextest (production invocation, macOS 15)"
         run: |
           set -euo pipefail
 
@@ -219,7 +212,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: "b1545-macos-no-sccache-${{ matrix.trial }}-${{ github.run_attempt }}"
+          name: "b1545-macos-15-${{ matrix.trial }}-${{ github.run_attempt }}"
           path: ${{ runner.temp }}/b1545-diagnostics/
           if-no-files-found: error
           retention-days: 14
@@ -236,7 +229,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: "sccache-stats-test-macos-no-sccache-${{ matrix.trial }}-${{ github.run_attempt }}"
+          name: "sccache-stats-test-macos-15-${{ matrix.trial }}-${{ github.run_attempt }}"
           path: sccache-stats-test-macos.json
           if-no-files-found: ignore
 
@@ -249,6 +242,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: "cargo-timings-test-macos-no-sccache-${{ matrix.trial }}-${{ github.run_attempt }}"
+          name: "cargo-timings-test-macos-15-${{ matrix.trial }}-${{ github.run_attempt }}"
           path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
           if-no-files-found: ignore
