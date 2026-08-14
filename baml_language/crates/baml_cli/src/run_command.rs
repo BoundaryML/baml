@@ -997,36 +997,38 @@ impl RunArgs {
             engine.call_function("baml_run_expr_main__", vec![], call_context, true),
             logs.as_ref(),
         );
-        let result: std::result::Result<(), bex_engine::EngineError> = self.block_on_with_logs(
-            &rt,
-            async {
-                let value = call_result?;
-                if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
-                    if let Err(e) = baml_exec::write_output_with_context(
-                        &engine,
-                        value,
-                        &return_type,
-                        output_format,
-                        &capture,
-                        || self.print_logs(logs.as_ref()),
-                    )
-                    .await
-                    {
-                        crate::reporter::print_error(format_args!(
-                            "failed to serialize output: {e}"
-                        ));
+        let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = self
+            .block_on_with_logs(
+                &rt,
+                async {
+                    let value = call_result?;
+                    if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
+                        if let Err(e) = baml_exec::write_output_with_context(
+                            &engine,
+                            value,
+                            &return_type,
+                            output_format,
+                            &capture,
+                            || self.print_logs(logs.as_ref()),
+                        )
+                        .await
+                        {
+                            crate::reporter::print_error(format_args!(
+                                "failed to serialize output: {e}"
+                            ));
+                            return Ok(false);
+                        }
                     }
-                }
-                Ok(())
-            },
-            logs.as_ref(),
-        );
+                    Ok(true)
+                },
+                logs.as_ref(),
+            );
         self.block_on_with_logs(&rt, engine.shutdown(), logs.as_ref());
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
-        match result {
-            Ok(()) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
-            Ok(()) => Ok(crate::ExitCode::TargetError),
+        match output_succeeded {
+            Ok(true) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
+            Ok(_) => Ok(crate::ExitCode::TargetError),
             Err(bex_engine::EngineError::Exit { code }) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }

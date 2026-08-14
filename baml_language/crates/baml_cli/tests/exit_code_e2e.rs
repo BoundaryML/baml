@@ -638,6 +638,49 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
     );
 }
 
+#[test]
+fn run_expression_serialization_failure_returns_target_error() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+class BrokenConversion {
+    value int
+
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            throw baml.json.JsonSerializationError {
+                message: "serialize-boom",
+                path: ""
+            }
+        }
+    }
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "run",
+            "--from",
+            ".",
+            "--output-format",
+            "json",
+            "-e",
+            "BrokenConversion { value: 1 }",
+        ],
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("failed to serialize output"), "{stderr}");
+    assert!(stderr.contains("serialize-boom"), "{stderr}");
+}
+
 /// The formatter advisory is the allowed `baml run` stderr exception.
 #[test]
 fn run_unformatted_project_keeps_format_warning() {
