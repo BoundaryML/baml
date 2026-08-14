@@ -45,9 +45,9 @@ that code exists.
 | [ ] | B-20 | 3 | Expression inference uses the same shadow-preserving `baml.reflect/type/json` fallback as type lowering. |
 | [ ] | B-21 | 5 | An `unreflect` pattern checks its operand as `type`, preserves the scrutinee type, has unique possible-but-non-covering usefulness identity, and binds nothing. |
 | [ ] | B-22 | 2, 5 | Inference and throw analysis share canonical hidden-child traversal for runtime operands and type-binding values. |
-| [ ] | N-01 | 1 | Static Mint identity hashes canonical plain `NormalTy` with fixed FNV-1a-64 and architecture-stable numeric encoding, never an intern handle. |
-| [ ] | N-02 | 1 | The sealed builtin reflection-kind classes have outer category `type`. |
-| [ ] | N-03 | 1 | Exactly the sealed builtin reflection-kind classes subtype primitive `type`; user classes cannot opt in. |
+| [x] | N-01 | 1 | Static Mint identity hashes canonical plain `NormalTy` with fixed FNV-1a-64 and architecture-stable numeric encoding, never an intern handle. |
+| [x] | N-02 | 1 | The sealed builtin reflection-kind classes have outer category `type`. |
+| [x] | N-03 | 1 | Exactly the sealed builtin reflection-kind classes subtype primitive `type`; user classes cannot opt in. |
 
 ## Runtime type-slot contract
 

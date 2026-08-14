@@ -89,6 +89,26 @@ pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
     )
 }
 
+/// E0001 — sealed reflection-kind values come only from an existing `type`.
+pub fn cannot_construct_reflection_kind(class_name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::TypeMismatch,
+        format!(
+            "reflection kind `{class_name}` cannot be constructed; obtain it from a type value"
+        ),
+    )
+}
+
+/// E0158 — the mounted callable has no location-free bytecode link contract.
+pub fn mounted_package_call_unsupported(path: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::MountedPackageCallUnsupported,
+        format!(
+            "cannot call mounted callable `{path}`: this callable kind has no loc-free bytecode link contract"
+        ),
+    )
+}
+
 /// E0012 — a runtime type contains the same member more than once.
 pub fn duplicate_member(kind: DuplicateMemberKind, container: &str, member: &str) -> Diagnostic {
     Diagnostic::error(
@@ -142,6 +162,16 @@ mod tests {
                 "duplicate field `Collision.wire`",
             ),
             (
+                cannot_construct_reflection_kind("baml.reflect.class.Type"),
+                "E0001",
+                "reflection kind `baml.reflect.class.Type` cannot be constructed; obtain it from a type value",
+            ),
+            (
+                mounted_package_call_unsupported("dep.tool"),
+                "E0158",
+                "cannot call mounted callable `dep.tool`: this callable kind has no loc-free bytecode link contract",
+            ),
+            (
                 duplicate_serialized_key("wire", SerializedKeyContainer::Class),
                 "E0149",
                 "duplicate serialized key `wire` in class",
@@ -155,6 +185,16 @@ mod tests {
                 invalid_identifier(InvalidIdentifierKind::EnumVariant, "Choice.function"),
                 "E0010",
                 "invalid enum variant name `Choice.function`",
+            ),
+            (
+                runtime_empty_union(),
+                "E0160",
+                "a runtime union must contain at least one member",
+            ),
+            (
+                open_interface_at_render("payload", "user.Open"),
+                "E0161",
+                "field `payload` has open interface type `user.Open`, which cannot be rendered as an LLM output schema",
             ),
         ];
 
