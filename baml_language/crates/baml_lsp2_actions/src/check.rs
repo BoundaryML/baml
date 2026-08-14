@@ -1020,6 +1020,16 @@ fn new_tir_diagnostic(
     span: Span,
     warning: bool,
 ) -> Diagnostic {
+    if let TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } = error {
+        return runtime_type::computed_generic_argument_requires_unreflect(name.as_str())
+            .with_primary_span(span)
+            .with_phase(DiagnosticPhase::Type);
+    }
+    if let TirTypeError::CannotConstructReflectionKind { class_name } = error {
+        return runtime_type::cannot_construct_reflection_kind(&class_name.render_user_facing())
+            .with_primary_span(span)
+            .with_phase(DiagnosticPhase::Type);
+    }
     if matches!(error, TirTypeError::TypeMismatch { .. }) {
         let base = runtime_type::mismatched_types();
         let diagnostic = if warning {
@@ -1262,6 +1272,10 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
             DiagnosticId::UnknownVariable
         }
+        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
+            runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
+        }
+        TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
@@ -1317,6 +1331,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericFunctionValueNotSpecialized { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
+        TirTypeError::RuntimeTypeArgumentOnStreamingCall { .. } => DiagnosticId::InvalidSyntax,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,

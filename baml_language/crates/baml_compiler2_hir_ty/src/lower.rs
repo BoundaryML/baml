@@ -92,6 +92,11 @@ pub enum LoweringDiagKind {
 pub enum TypePosition {
     Existential,
     ConstraintHead,
+    /// The outer function contract supplied to the exact
+    /// `baml.reflect.Package.get_function<F>` method. It is otherwise an
+    /// existential; only an omitted OUTER `throws` differs, becoming the
+    /// runtime wildcard instead of E0151 + `never` recovery.
+    ExtractionContract,
 }
 
 pub struct LowerCtx<'db> {
@@ -269,6 +274,12 @@ impl<'db> LowerCtx<'db> {
         position: TypePosition,
     ) -> Ty {
         let attr = TyAttr::default;
+        let extraction_contract = position == TypePosition::ExtractionContract;
+        let position = if extraction_contract {
+            TypePosition::Existential
+        } else {
+            position
+        };
         match &store[id].kind {
             TypeRefKind::Int => Ty::int(),
             TypeRefKind::Bigint => Ty::intern(TyKind::Bigint { attr: attr() }),
@@ -323,6 +334,9 @@ impl<'db> LowerCtx<'db> {
                 throws: throws
                     .map(|throws| self.lower_type_ref(store, throws))
                     .unwrap_or_else(|| {
+                        if extraction_contract {
+                            return Ty::intern(TyKind::Unknown { attr: attr() });
+                        }
                         if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get())
                         {
                             diags.borrow_mut().push(LoweringDiag {

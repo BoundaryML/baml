@@ -480,9 +480,43 @@ pub struct CallPlan {
     /// recording on `!explicit_args_used`), and a plan entry would
     /// double-emit the operands.
     pub explicit: bool,
+    /// Every WRITTEN type-argument slot, in source order. Unlike
+    /// `type_args`, this preserves whether the value was a static type or a
+    /// runtime `unreflect(expr)` carrier.
+    pub slots: Vec<CallTypeArgPlan>,
+    /// Checks whose declared shape mentions at least one runtime slot. They
+    /// are intentionally not discharged by the static solver; MIR emits the
+    /// equivalent runtime gate from this ledger.
+    pub deferred_checks: Vec<RuntimeCheck>,
     /// The trailing `$id = ...` side-channel argument (TIR's
     /// `CallSideChannels`, flattened until a second channel exists).
     pub runtime_id: Option<ExprId>,
+    /// Stable source-location-free identity for a mounted callable. Source
+    /// functions keep their existing location-backed `MemberResolution` and
+    /// leave this empty.
+    pub target: Option<crate::callable::ExternalCallTarget>,
+}
+
+/// One written generic slot after its sole lowering pass.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CallTypeArgPlan {
+    Static {
+        ty: Ty,
+    },
+    Runtime {
+        operand: ExprId,
+        occurrence_ty: Ty,
+        parameter: baml_type::ParamTy,
+    },
+}
+
+/// A static check deferred precisely because its declared shape depends on a
+/// runtime generic slot. Types remain symbolic over those runtime parameters;
+/// all other call parameters have already been substituted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeCheck {
+    Argument { arg: ExprId, expected: Ty },
+    Bound { argument: Ty, bound: InterfaceRef },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -634,6 +668,18 @@ enum PendingDiag<'db> {
         callee: baml_type::Name,
         expected: usize,
         got: usize,
+    },
+    ComputedGenericArgumentRequiresUnreflect {
+        expr: ExprId,
+        name: baml_type::Name,
+    },
+    RuntimeTypeArgumentOnStreamingCall {
+        expr: ExprId,
+        callee: baml_type::Name,
+    },
+    CannotConstructReflectionKind {
+        expr: ExprId,
+        class_name: baml_type::QualifiedTypeName,
     },
     NotCallable {
         expr: ExprId,
@@ -1394,6 +1440,11 @@ struct InferenceContext<'db> {
     /// per inference on first use (TIR's `normalized_overlap_aliases`).
     overlap_aliases:
         std::cell::OnceCell<std::collections::HashMap<baml_type::QualifiedTypeName, baml_type::Ty>>,
+    /// Original parameter templates for argument checks that mention a
+    /// runtime generic. This is inference-only staging: `check_call_args`
+    /// consumes it into durable `CallPlan::deferred_checks`, so defaults and
+    /// sibling bodies cannot observe it.
+    runtime_dependent_call_params: FxHashMap<ExprId, FxHashMap<usize, Ty>>,
     result: InferenceResult<'db>,
 }
 
@@ -1447,6 +1498,7 @@ impl<'db> InferenceContext<'db> {
             owner_file: None,
             overlap_aliases: std::cell::OnceCell::new(),
             wf_scope_env: std::cell::OnceCell::new(),
+            runtime_dependent_call_params: FxHashMap::default(),
             result: InferenceResult::default(),
         }
     }
@@ -3924,8 +3976,227 @@ impl<'db> InferenceContext<'db> {
         callee: ExprId,
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
+        self.validate_runtime_type_arg_operands(body, call);
         let (callee_fn_ty, bound_receiver) = self.infer_callee(body, call, callee);
-        self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args)
+        self.report_runtime_streaming_call(body, call, callee);
+        self.seed_implicit_llm_schema(body, call, callee, args);
+        let ret = self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args);
+        self.default_uncontracted_session_eval(body, call, callee);
+        ret
+    }
+
+    fn validate_runtime_type_arg_operands(&mut self, body: &ExprBody, call: ExprId) {
+        let slots = self
+            .type_refs
+            .expr_type_args
+            .get(&call)
+            .cloned()
+            .unwrap_or_default();
+        for slot in &*slots {
+            let BodyTypeArgRef::Runtime { operand } = slot else {
+                continue;
+            };
+            let got = self.infer_expr(body, *operand, &Expectation::None);
+            let pending_type = matches!(got.kind(), TyKind::Class(name, _, _)
+                if name.package().as_str() == "baml"
+                    && name.namespace().iter().map(baml_type::Name::as_str)
+                        .eq(["reflect", "class"])
+                    && name.name().as_str() == "PendingType");
+            if pending_type
+                || got.has_error()
+                || got.has_infer()
+                || matches!(got.kind(), TyKind::Unknown { .. })
+            {
+                continue;
+            }
+            let expected = Ty::intern(TyKind::Type {
+                attr: TyAttr::default(),
+            });
+            let saved_anchor = self.obligation_anchor.replace(*operand);
+            let fits = self.sub(&got, &expected);
+            self.obligation_anchor = saved_anchor;
+            if !fits {
+                self.result
+                    .type_mismatches
+                    .insert(*operand, (expected, got));
+            }
+        }
+    }
+
+    fn report_runtime_streaming_call(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) {
+        let has_runtime = self
+            .type_refs
+            .expr_type_args
+            .get(&call)
+            .is_some_and(|slots| {
+                slots
+                    .iter()
+                    .any(|slot| matches!(slot, BodyTypeArgRef::Runtime { .. }))
+            });
+        if !has_runtime {
+            return;
+        }
+        let name = match &body.exprs[callee] {
+            Expr::Path(segments) => segments.last(),
+            Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. } => {
+                Some(member)
+            }
+            _ => None,
+        };
+        if let Some(name) = name
+            && (name.as_str().ends_with("$stream") || name.as_str() == "__make_stream")
+        {
+            self.pending_diags
+                .push(PendingDiag::RuntimeTypeArgumentOnStreamingCall {
+                    expr: call,
+                    callee: name.clone(),
+                });
+        }
+    }
+
+    /// Seed the otherwise-unconstrained schema parameter of the three legacy
+    /// `baml.llm` helper functions from their named, non-generic LLM target.
+    fn seed_implicit_llm_schema(
+        &mut self,
+        body: &ExprBody,
+        call: ExprId,
+        callee: ExprId,
+        args: &[baml_compiler2_ast::CallArg],
+    ) {
+        if self.type_refs.expr_type_args.contains_key(&call) {
+            return;
+        }
+        let Some(MemberResolution::Free { func }) =
+            self.result.member_resolutions.get(&callee).cloned()
+        else {
+            return;
+        };
+        let package = baml_compiler2_hir::file_package::file_package(self.db, func.file(self.db));
+        let data = baml_compiler2_ppir::item_data::function_data(self.db, func);
+        if package.package.as_str() != "baml"
+            || !package
+                .namespace_path
+                .iter()
+                .map(baml_type::Name::as_str)
+                .eq(["llm"])
+            || !matches!(
+                data.name.as_str(),
+                "render_prompt" | "build_request" | "build_request_stream"
+            )
+        {
+            return;
+        }
+        let signature = function_signature(self.db, func);
+        let writable: Vec<_> = signature
+            .generic_params
+            .iter()
+            .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
+            .collect();
+        let [schema_param] = writable.as_slice() else {
+            return;
+        };
+        let Some(function_name_arg) = args
+            .iter()
+            .find(|arg| {
+                arg.label
+                    .as_ref()
+                    .is_some_and(|label| label.as_str() == "function_name")
+            })
+            .or_else(|| args.get(1))
+        else {
+            return;
+        };
+        let Expr::Literal(Literal::String(function_name)) = &body.exprs[function_name_arg.expr]
+        else {
+            return;
+        };
+        let path: Vec<baml_type::Name> =
+            function_name.split('.').map(baml_type::Name::new).collect();
+        let Some(baml_compiler2_hir::contributions::Definition::Function(target)) =
+            self.lower.resolve_value(&path)
+        else {
+            return;
+        };
+        if baml_compiler2_ppir::item_data::function_llm_meta(self.db, target).is_none()
+            || !baml_compiler2_ppir::item_data::function_data(self.db, target)
+                .generic_params
+                .is_empty()
+        {
+            return;
+        }
+        let target_ret = function_signature(self.db, target).ret.clone();
+        if target_ret.has_error() || matches!(target_ret.kind(), TyKind::Unknown { .. }) {
+            return;
+        }
+        let Some(schema_arg) = self
+            .result
+            .call_plans
+            .get(&call)
+            .and_then(|plan| plan.type_args.get(schema_param.index() as usize))
+            .cloned()
+        else {
+            return;
+        };
+        let _ = self.table.unify(&schema_arg, &target_ret);
+    }
+
+    fn default_uncontracted_session_eval(
+        &mut self,
+        _body: &ExprBody,
+        call: ExprId,
+        callee: ExprId,
+    ) {
+        if self.type_refs.expr_type_args.contains_key(&call) {
+            return;
+        }
+        let Some(MemberResolution::BoundMethod { class, func }) =
+            self.result.member_resolutions.get(&callee).cloned()
+        else {
+            return;
+        };
+        let qtn = crate::lower::class_qualified_name(self.db, class);
+        if qtn.package().as_str() != "baml"
+            || !qtn
+                .namespace()
+                .iter()
+                .map(baml_type::Name::as_str)
+                .eq(["reflect"])
+            || qtn.name().as_str() != "Session"
+            || baml_compiler2_ppir::item_data::function_data(self.db, func)
+                .name
+                .as_str()
+                != "eval"
+        {
+            return;
+        }
+        let signature = function_signature(self.db, func);
+        let owner_count = crate::lower::class_generic_frame(self.db, class).len();
+        let Some((index, _)) = signature
+            .generic_params
+            .iter()
+            .enumerate()
+            .skip(owner_count)
+            .find(|(_, param)| !baml_type::is_synthetic_effect_param(param.name()))
+        else {
+            return;
+        };
+        let Some(arg) = self
+            .result
+            .call_plans
+            .get(&call)
+            .and_then(|plan| plan.type_args.get(index))
+            .cloned()
+        else {
+            return;
+        };
+        if arg.has_infer() {
+            let _ = self.table.unify(
+                &arg,
+                &Ty::intern(TyKind::Unknown {
+                    attr: TyAttr::default(),
+                }),
+            );
+        }
     }
 
     /// The argument/return half of a call, shared by ordinary calls and
@@ -4007,6 +4278,10 @@ impl<'db> InferenceContext<'db> {
             .skip(usize::from(bound_receiver))
             .cloned()
             .collect();
+        let runtime_dependent = self
+            .runtime_dependent_call_params
+            .remove(&call)
+            .unwrap_or_default();
         let ret = ret.clone();
         // The matching is decided ONCE, checked below and recorded as the
         // call plan's bindings: a LABELED argument selects its parameter
@@ -4050,9 +4325,24 @@ impl<'db> InferenceContext<'db> {
                 if (pass == 0) == is_lambda_arg(arg) {
                     continue;
                 }
-                match matched[index].map(|param_index| params[param_index].ty.clone()) {
-                    Some(param_ty) => {
-                        self.check_expr(body, arg.expr, &param_ty);
+                match matched[index] {
+                    Some(param_index) if runtime_dependent.contains_key(&param_index) => {
+                        // The value still participates in ordinary inference;
+                        // only its runtime-dependent expectation is deferred.
+                        self.infer_expr(body, arg.expr, &Expectation::None);
+                        let expected = runtime_dependent[&param_index].clone();
+                        self.result
+                            .call_plans
+                            .entry(call)
+                            .or_default()
+                            .deferred_checks
+                            .push(RuntimeCheck::Argument {
+                                arg: arg.expr,
+                                expected,
+                            });
+                    }
+                    Some(param_index) => {
+                        self.check_expr(body, arg.expr, &params[param_index].ty);
                     }
                     None => {
                         // Extra argument: the arity diagnostic is S17's.
@@ -4302,10 +4592,17 @@ impl<'db> InferenceContext<'db> {
                 let callee_name = baml_compiler2_ppir::item_data::function_data(self.db, function)
                     .name
                     .clone();
-                let instantiation =
-                    self.instantiation_args(call, &signature.generic_params, Some(&callee_name));
+                let bounds = crate::lower::function_generic_bounds(self.db, function);
+                let instantiation = self.instantiation_args_with_bounds(
+                    call,
+                    &signature.generic_params,
+                    Some(&callee_name),
+                    &bounds,
+                    crate::lower::TypePosition::Existential,
+                );
+                let instantiation = self.write_call_type_args(call, &instantiation, 0);
                 self.register_call_bounds(function, &instantiation, call);
-                self.write_call_type_args(call, &instantiation, 0);
+                self.record_runtime_dependent_arguments(call, signature, false);
                 let fn_ty = function_value_ty(signature, &instantiation);
                 self.result.type_of_expr.insert(callee, fn_ty.clone());
                 self.write_member_resolution(callee, MemberResolution::Free { func: function });
@@ -4670,14 +4967,27 @@ impl<'db> InferenceContext<'db> {
             .name
             .clone();
         let mut instantiation = candidate.class_args;
-        instantiation.extend(self.instantiation_args(call, &own_params, Some(&method_name)));
+        let bounds = crate::lower::function_generic_bounds(self.db, candidate.method);
+        let position = if self.is_reflect_package_get_function(candidate.class, candidate.method) {
+            crate::lower::TypePosition::ExtractionContract
+        } else {
+            crate::lower::TypePosition::Existential
+        };
+        instantiation.extend(self.instantiation_args_with_bounds(
+            call,
+            &own_params,
+            Some(&method_name),
+            &bounds,
+            position,
+        ));
+        let instantiation = self.write_call_type_args(call, &instantiation, class_count);
         self.register_call_bounds(candidate.method, &instantiation, call);
-        self.write_call_type_args(call, &instantiation, class_count);
         let fn_ty = function_value_ty(signature, &instantiation);
         let bound = signature
             .params
             .first()
             .is_some_and(|param| param.name.as_str() == "self");
+        self.record_runtime_dependent_arguments(call, signature, bound);
         let resolution = if bound {
             MemberResolution::BoundMethod {
                 class: candidate.class,
@@ -4791,9 +5101,17 @@ impl<'db> InferenceContext<'db> {
                     .name
                     .clone();
             let mut instantiation = pending.prefix;
-            instantiation.extend(self.instantiation_args(call, &own_params, Some(&method_name)));
+            let bounds = crate::lower::function_generic_bounds(self.db, pending.method);
+            instantiation.extend(self.instantiation_args_with_bounds(
+                call,
+                &own_params,
+                Some(&method_name),
+                &bounds,
+                crate::lower::TypePosition::Existential,
+            ));
+            let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
             self.register_call_bounds(pending.method, &instantiation, call);
-            self.write_call_type_args(call, &instantiation, own_offset);
+            self.record_runtime_dependent_arguments(call, signature, interface_member.is_method);
             let fn_ty = function_value_ty(signature, &instantiation);
             return (fn_ty, interface_member.is_method);
         }
@@ -5010,9 +5328,18 @@ impl<'db> InferenceContext<'db> {
         Ty::error()
     }
 
-    fn own_instantiation(&mut self, own: OwnArgs, params: &[baml_type::ParamTy]) -> Vec<Ty> {
+    fn own_instantiation_with_bounds(
+        &mut self,
+        own: OwnArgs,
+        params: &[baml_type::ParamTy],
+        callee: &baml_type::Name,
+        bounds: &FxHashMap<baml_type::ParamTy, Vec<InterfaceRef>>,
+        position: crate::lower::TypePosition,
+    ) -> Vec<Ty> {
         match own {
-            OwnArgs::Call(call) => self.instantiation_args(call, params, None),
+            OwnArgs::Call(call) => {
+                self.instantiation_args_with_bounds(call, params, Some(callee), bounds, position)
+            }
             OwnArgs::Fresh => params
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
@@ -5032,11 +5359,30 @@ impl<'db> InferenceContext<'db> {
     ) -> Option<Ty> {
         let (interface, method) = self.interface_static_method(prefix, member)?;
         let signature = function_signature(self.db, method);
-        let instantiation = self.own_instantiation(own, &signature.generic_params);
-        self.register_call_bounds(method, &instantiation, anchor);
+        let bounds = crate::lower::function_generic_bounds(self.db, method);
+        let instantiation = self.own_instantiation_with_bounds(
+            own,
+            &signature.generic_params,
+            member,
+            &bounds,
+            crate::lower::TypePosition::Existential,
+        );
         if let OwnArgs::Call(call) = own {
-            self.write_call_type_args(call, &instantiation, 0);
+            let instantiation = self.write_call_type_args(call, &instantiation, 0);
+            self.register_call_bounds(method, &instantiation, anchor);
+            self.record_runtime_dependent_arguments(call, signature, false);
+            if let Some(record_at) = record_at {
+                self.write_member_resolution(
+                    record_at,
+                    MemberResolution::InterfaceVirtualMethod {
+                        interface,
+                        method: member.clone(),
+                    },
+                );
+            }
+            return Some(function_value_ty(signature, &instantiation));
         }
+        self.register_call_bounds(method, &instantiation, anchor);
         if let Some(record_at) = record_at {
             // The slot is what's statically known - interface plus member,
             // recorded uniformly for default and required methods (TIR's
@@ -5078,19 +5424,52 @@ impl<'db> InferenceContext<'db> {
             })?;
         let signature = function_signature(self.db, method);
         let frame = crate::lower::class_generic_frame(self.db, class);
-        let mut instantiation: Vec<Ty> = match pinned {
-            Some(args) => args,
-            None => frame
-                .iter()
-                .map(|param| self.fresh_generic_arg(param))
-                .collect(),
+        let bounds = crate::lower::function_generic_bounds(self.db, method);
+        let position = if self.is_reflect_package_get_function(class, method) {
+            crate::lower::TypePosition::ExtractionContract
+        } else {
+            crate::lower::TypePosition::Existential
         };
-        let own_params = signature.generic_params[frame.len()..].to_vec();
-        instantiation.extend(self.own_instantiation(own, &own_params));
-        self.register_call_bounds(method, &instantiation, anchor);
+        // An unbound/static class method supplies the whole declared frame at
+        // the call site: owner params first, then function params (TIR's
+        // `UnboundMethod` rule). An alias-qualified class already pins the
+        // owner prefix, so only the method suffix remains writable.
+        let (instantiation, own_offset) = match pinned {
+            Some(owner_args) => {
+                let own_params = &signature.generic_params[frame.len()..];
+                let mut instantiation = owner_args;
+                instantiation.extend(
+                    self.own_instantiation_with_bounds(own, own_params, member, &bounds, position),
+                );
+                (instantiation, frame.len())
+            }
+            None => (
+                self.own_instantiation_with_bounds(
+                    own,
+                    &signature.generic_params,
+                    member,
+                    &bounds,
+                    position,
+                ),
+                0,
+            ),
+        };
         if let OwnArgs::Call(call) = own {
-            self.write_call_type_args(call, &instantiation, 0);
+            let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
+            self.register_call_bounds(method, &instantiation, anchor);
+            self.record_runtime_dependent_arguments(call, signature, false);
+            if let Some(record_at) = record_at {
+                self.write_member_resolution(
+                    record_at,
+                    MemberResolution::UnboundMethod {
+                        class,
+                        func: method,
+                    },
+                );
+            }
+            return Some(function_value_ty(signature, &instantiation));
         }
+        self.register_call_bounds(method, &instantiation, anchor);
         if let Some(record_at) = record_at {
             self.write_member_resolution(
                 record_at,
@@ -5145,6 +5524,19 @@ impl<'db> InferenceContext<'db> {
         own: OwnArgs,
         record_base: Option<ExprId>,
     ) -> Option<Ty> {
+        if let OwnArgs::Call(call) = own
+            && self
+                .type_refs
+                .expr_type_args
+                .get(&call)
+                .is_some_and(|slots| {
+                    slots
+                        .iter()
+                        .any(|slot| matches!(slot, BodyTypeArgRef::Runtime { .. }))
+                })
+        {
+            return None;
+        }
         let written = self.lower.lower_type_path(prefix);
         let target = if !written.has_error() {
             written
@@ -5496,6 +5888,7 @@ impl<'db> InferenceContext<'db> {
         at: ExprId,
     ) {
         let bounds = crate::lower::function_generic_bounds(self.db, function);
+        let runtime_params = self.runtime_call_params(at);
         // The concreteness rule covers the function's OWN declared params
         // (turbofish or inferred - the user's type arguments). The frame
         // PREFIX is the receiver's business: `Self` legitimately binds an
@@ -5513,6 +5906,25 @@ impl<'db> InferenceContext<'db> {
                 continue;
             };
             for bound in param_bounds {
+                if runtime_params
+                    .iter()
+                    .any(|runtime| runtime == &param || interface_mentions_param(&bound, runtime))
+                {
+                    let argument = substitute_static_call_params(
+                        &Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())),
+                        instantiation,
+                        &runtime_params,
+                    );
+                    let bound =
+                        substitute_static_interface_params(&bound, instantiation, &runtime_params);
+                    self.result
+                        .call_plans
+                        .entry(at)
+                        .or_default()
+                        .deferred_checks
+                        .push(RuntimeCheck::Bound { argument, bound });
+                    continue;
+                }
                 let interface = baml_type::interned::InterfaceRef::new(
                     bound.name.clone(),
                     bound
@@ -5585,56 +5997,239 @@ impl<'db> InferenceContext<'db> {
         generic_params: &[baml_type::ParamTy],
         callee: Option<&baml_type::Name>,
     ) -> Vec<Ty> {
-        let explicit: Vec<Ty> = self
+        self.instantiation_args_with_bounds(
+            site,
+            generic_params,
+            callee,
+            &FxHashMap::default(),
+            crate::lower::TypePosition::Existential,
+        )
+    }
+
+    /// The call-site instantiation road with the callee's declared bounds and
+    /// the one context-sensitive type position supplied explicitly. Written
+    /// slots align only with user-writable params; synthetic effect params
+    /// always receive fresh effect variables.
+    fn instantiation_args_with_bounds(
+        &mut self,
+        site: ExprId,
+        generic_params: &[baml_type::ParamTy],
+        callee: Option<&baml_type::Name>,
+        bounds: &FxHashMap<baml_type::ParamTy, Vec<InterfaceRef>>,
+        position: crate::lower::TypePosition,
+    ) -> Vec<Ty> {
+        let written = self
             .type_refs
             .expr_type_args
             .get(&site)
             .cloned()
-            .unwrap_or_default()
-            .iter()
-            .map(|slot| match slot {
-                BodyTypeArgRef::Static(type_ref) => {
-                    let lowered = self.lower.lower_type_ref(&self.type_refs.store, *type_ref);
-                    self.reject_expr_position_holes(&lowered, site)
-                }
-                // Slice 2 preserves the runtime operand's HIR identity. Slice 4
-                // replaces this inert static occurrence with the parameter's
-                // first bound (or unknown), checks the operand, and records the
-                // deferred runtime gate in CallPlan. It is deliberately not an
-                // inference variable in the meantime.
-                BodyTypeArgRef::Runtime { .. } => Ty::intern(TyKind::Unknown {
-                    attr: TyAttr::default(),
-                }),
-            })
-            .collect();
+            .unwrap_or_default();
         // Explicit turbofish counts against the WRITABLE params (synthetic
         // effect params are elaboration's, never spelled).
         if let Some(callee) = callee
-            && !explicit.is_empty()
+            && !written.is_empty()
         {
             let expected = generic_params
                 .iter()
                 .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
                 .count();
-            if explicit.len() != expected {
+            if written.len() != expected {
                 self.pending_diags.push(PendingDiag::WrongTypeArgArity {
                     expr: site,
                     callee: callee.clone(),
                     expected,
-                    got: explicit.len(),
+                    got: written.len(),
                 });
             }
         }
-        generic_params
-            .iter()
-            .enumerate()
-            .map(|(index, param)| {
-                explicit
-                    .get(index)
-                    .cloned()
-                    .unwrap_or_else(|| self.fresh_generic_arg(param))
+        let mut written = written.iter();
+        let mut slots = Vec::new();
+        let mut instantiation = Vec::with_capacity(generic_params.len());
+        for param in generic_params {
+            if baml_type::is_synthetic_effect_param(param.name()) {
+                instantiation.push(self.fresh_generic_arg(param));
+                continue;
+            }
+            let Some(slot) = written.next() else {
+                instantiation.push(self.fresh_generic_arg(param));
+                continue;
+            };
+            match slot {
+                BodyTypeArgRef::Static(type_ref) => {
+                    let computed = self.computed_generic_argument_name(*type_ref);
+                    let lowered =
+                        self.lower
+                            .lower_type_ref_at(&self.type_refs.store, *type_ref, position);
+                    if let Some(name) = computed {
+                        self.specialize_computed_generic_diagnostic(*type_ref, site, &name);
+                    }
+                    let ty = self.reject_expr_position_holes(&lowered, site);
+                    slots.push(CallTypeArgPlan::Static { ty: ty.clone() });
+                    instantiation.push(ty);
+                }
+                BodyTypeArgRef::Runtime { operand } => {
+                    let occurrence_ty = bounds
+                        .get(param)
+                        .and_then(|bounds| bounds.first())
+                        .map(interface_occurrence_ty)
+                        .unwrap_or_else(|| {
+                            Ty::intern(TyKind::Unknown {
+                                attr: TyAttr::default(),
+                            })
+                        });
+                    slots.push(CallTypeArgPlan::Runtime {
+                        operand: *operand,
+                        occurrence_ty: occurrence_ty.clone(),
+                        parameter: param.clone(),
+                    });
+                    instantiation.push(occurrence_ty);
+                }
+            }
+        }
+        if !slots.is_empty() {
+            self.result.call_plans.entry(site).or_default().slots = slots;
+        }
+        instantiation
+    }
+
+    fn runtime_call_params(&self, call: ExprId) -> Vec<baml_type::ParamTy> {
+        self.result
+            .call_plans
+            .get(&call)
+            .into_iter()
+            .flat_map(|plan| &plan.slots)
+            .filter_map(|slot| match slot {
+                CallTypeArgPlan::Runtime { parameter, .. } => Some(parameter.clone()),
+                CallTypeArgPlan::Static { .. } => None,
             })
             .collect()
+    }
+
+    fn record_runtime_dependent_arguments(
+        &mut self,
+        call: ExprId,
+        signature: &crate::lower::FunctionSignature,
+        bound_receiver: bool,
+    ) {
+        let runtime_params = self.runtime_call_params(call);
+        if runtime_params.is_empty() {
+            return;
+        }
+        let Some(instantiation) = self
+            .result
+            .call_plans
+            .get(&call)
+            .map(|plan| plan.type_args.clone())
+        else {
+            return;
+        };
+        let mut dependent = FxHashMap::default();
+        for (param_index, param) in signature
+            .params
+            .iter()
+            .skip(usize::from(bound_receiver))
+            .enumerate()
+        {
+            if runtime_params
+                .iter()
+                .any(|runtime| ty_mentions_param(&param.ty, runtime))
+            {
+                dependent.insert(
+                    param_index,
+                    substitute_static_call_params(&param.ty, &instantiation, &runtime_params),
+                );
+            }
+        }
+        if !dependent.is_empty() {
+            self.runtime_dependent_call_params.insert(call, dependent);
+        }
+    }
+
+    fn is_reflect_package_get_function(
+        &self,
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    ) -> bool {
+        let qtn = crate::lower::class_qualified_name(self.db, class);
+        qtn.package().as_str() == "baml"
+            && qtn
+                .namespace()
+                .iter()
+                .map(baml_type::Name::as_str)
+                .eq(["reflect"])
+            && qtn.name().as_str() == "Package"
+            && baml_compiler2_ppir::item_data::function_data(self.db, function)
+                .name
+                .as_str()
+                == "get_function"
+    }
+
+    fn computed_generic_argument_name(
+        &self,
+        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+    ) -> Option<baml_type::Name> {
+        use baml_compiler2_hir::type_ref::TypeRefKind;
+        let written = &self.type_refs.store[type_ref];
+        let TypeRefKind::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+        } = &written.kind
+        else {
+            return None;
+        };
+        if !written.attrs.is_empty()
+            || segments.len() != 1
+            || !generic_args.is_empty()
+            || !associated_type_bindings.is_empty()
+        {
+            return None;
+        }
+        let name = &segments[0];
+        let is_value = self.local_binding_names().contains(name)
+            || self.lower.resolve_value(segments).is_some();
+        let is_type = self.lower.resolve_type_definition(segments).is_some()
+            || self
+                .lower
+                .generic_params()
+                .iter()
+                .any(|param| param.name() == name);
+        (is_value && !is_type).then(|| name.clone())
+    }
+
+    /// Replace the lowering sink's generic unresolved-type finding for a
+    /// value-shaped slot with M-1's targeted whole-slot diagnostic. Any other
+    /// lowering findings already queued retain their original anchors.
+    fn specialize_computed_generic_diagnostic(
+        &mut self,
+        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        site: ExprId,
+        name: &baml_type::Name,
+    ) {
+        let mut replaced = false;
+        for lowering in self.lower.take_diagnostics() {
+            if lowering.type_ref == type_ref
+                && matches!(
+                    &lowering.kind,
+                    crate::lower::LoweringDiagKind::Unresolved { name: unresolved, .. }
+                        if unresolved == name
+                )
+            {
+                replaced = true;
+            } else {
+                self.pending_diags.push(PendingDiag::BodyAnnot {
+                    type_ref: lowering.type_ref,
+                    kind: lowering.kind,
+                });
+            }
+        }
+        if replaced {
+            self.pending_diags
+                .push(PendingDiag::ComputedGenericArgumentRequiresUnreflect {
+                    expr: site,
+                    name: name.clone(),
+                });
+        }
     }
 
     /// A fresh variable for one generic param at a use site: synthetic
@@ -5692,6 +6287,21 @@ impl<'db> InferenceContext<'db> {
             return Ty::error();
         };
         let db = self.db;
+        let class_name = crate::lower::class_qualified_name(db, class);
+        if baml_type::type_kind::is_type_kind_class(&class_name) {
+            for (_, value) in fields {
+                self.infer_expr(body, *value, &Expectation::None);
+            }
+            for spread in spreads {
+                self.infer_expr(body, spread.expr, &Expectation::None);
+            }
+            self.pending_diags
+                .push(PendingDiag::CannotConstructReflectionKind {
+                    expr: object,
+                    class_name,
+                });
+            return Ty::error();
+        }
         let generic_count = baml_compiler2_ppir::item_data::class_data(db, class)
             .generic_params
             .len();
@@ -6805,12 +7415,56 @@ impl<'db> InferenceContext<'db> {
     /// instantiation site, bindings in `check_call_args` - the r-a shape
     /// of separate tables written where each decision is made, co-located
     /// in one struct.
-    fn write_call_type_args(&mut self, call: ExprId, type_args: &[Ty], own_offset: usize) {
+    fn write_call_type_args(
+        &mut self,
+        call: ExprId,
+        type_args: &[Ty],
+        own_offset: usize,
+    ) -> Vec<Ty> {
         let explicit = self.type_refs.expr_type_args.contains_key(&call);
+        let runtime_params = self.runtime_call_params(call);
+        let mut type_args = type_args.to_vec();
+        let runtime_occurrences: Vec<(baml_type::ParamTy, Ty)> = self
+            .result
+            .call_plans
+            .get(&call)
+            .into_iter()
+            .flat_map(|plan| &plan.slots)
+            .filter_map(|slot| match slot {
+                CallTypeArgPlan::Runtime {
+                    occurrence_ty,
+                    parameter,
+                    ..
+                } => Some((
+                    parameter.clone(),
+                    substitute_static_call_params(occurrence_ty, &type_args, &runtime_params),
+                )),
+                CallTypeArgPlan::Static { .. } => None,
+            })
+            .collect();
+        for (parameter, occurrence_ty) in &runtime_occurrences {
+            if let Some(slot) = type_args.get_mut(parameter.index() as usize) {
+                *slot = occurrence_ty.clone();
+            }
+        }
         let plan = self.result.call_plans.entry(call).or_default();
-        plan.type_args = type_args.to_vec();
+        for slot in &mut plan.slots {
+            if let CallTypeArgPlan::Runtime {
+                occurrence_ty,
+                parameter,
+                ..
+            } = slot
+                && let Some((_, specialized)) = runtime_occurrences
+                    .iter()
+                    .find(|(candidate, _)| candidate == parameter)
+            {
+                *occurrence_ty = specialized.clone();
+            }
+        }
+        plan.type_args.clone_from(&type_args);
         plan.own_offset = own_offset;
         plan.explicit = explicit;
+        type_args
     }
 
     /// Walks the MEMBER segments of a value-rooted path (everything after
@@ -7348,6 +8002,20 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::ComputedGenericArgumentRequiresUnreflect { expr, name } => (
+                        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name },
+                        expr,
+                    ),
+                    PendingDiag::RuntimeTypeArgumentOnStreamingCall { expr, callee } => (
+                        TirTypeError::RuntimeTypeArgumentOnStreamingCall {
+                            callee_name: callee,
+                        },
+                        expr,
+                    ),
+                    PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
+                        TirTypeError::CannotConstructReflectionKind { class_name },
+                        expr,
+                    ),
                     PendingDiag::NotCallable { expr, ty } => (
                         TirTypeError::NotCallable {
                             ty: self.finalize_ty(&ty).to_plain(),
@@ -7837,6 +8505,37 @@ impl<'db> InferenceContext<'db> {
         for plan in result.call_plans.values_mut() {
             for ty in &mut plan.type_args {
                 *ty = self.finalize_ty(ty);
+            }
+            for slot in &mut plan.slots {
+                match slot {
+                    CallTypeArgPlan::Static { ty } => *ty = self.finalize_ty(ty),
+                    CallTypeArgPlan::Runtime { occurrence_ty, .. } => {
+                        *occurrence_ty = self.finalize_ty(occurrence_ty);
+                    }
+                }
+            }
+            for check in &mut plan.deferred_checks {
+                match check {
+                    RuntimeCheck::Argument { expected, .. } => {
+                        *expected = self.finalize_ty(expected);
+                    }
+                    RuntimeCheck::Bound { argument, bound } => {
+                        *argument = self.finalize_ty(argument);
+                        *bound = InterfaceRef::new(
+                            bound.name.clone(),
+                            bound
+                                .generics
+                                .iter()
+                                .map(|ty| self.finalize_ty(ty))
+                                .collect(),
+                            bound
+                                .associated_types
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), self.finalize_ty(ty)))
+                                .collect(),
+                        );
+                    }
+                }
             }
         }
         for adjustments in result.expr_adjustments.values_mut() {
@@ -8638,6 +9337,73 @@ fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
     let mut found = false;
     walk(ty, param, &mut found);
     found
+}
+
+fn interface_mentions_param(interface: &InterfaceRef, param: &baml_type::ParamTy) -> bool {
+    interface
+        .generics
+        .iter()
+        .chain(interface.associated_types.iter().map(|(_, ty)| ty))
+        .any(|ty| ty_mentions_param(ty, param))
+}
+
+fn interface_occurrence_ty(interface: &InterfaceRef) -> Ty {
+    Ty::intern(TyKind::Interface(
+        interface.name.clone(),
+        interface.generics.clone(),
+        interface.associated_types.clone(),
+        TyAttr::default(),
+    ))
+}
+
+/// Substitute every solved/static call parameter while deliberately retaining
+/// runtime parameters as rigid variables. The resulting template is what the
+/// VM specializes after loading runtime type values.
+fn substitute_static_call_params(
+    ty: &Ty,
+    args: &[Ty],
+    runtime_params: &[baml_type::ParamTy],
+) -> Ty {
+    if let TyKind::TypeVar(param, _) = ty.kind() {
+        if runtime_params.contains(param) {
+            return ty.clone();
+        }
+        if let Some(replacement) = args.get(param.index() as usize) {
+            return replacement.clone();
+        }
+    }
+    if !ty.has_typevar() {
+        return ty.clone();
+    }
+    Ty::intern(
+        ty.kind()
+            .map_children(|child| substitute_static_call_params(child, args, runtime_params)),
+    )
+}
+
+fn substitute_static_interface_params(
+    interface: &InterfaceRef,
+    args: &[Ty],
+    runtime_params: &[baml_type::ParamTy],
+) -> InterfaceRef {
+    InterfaceRef::new(
+        interface.name.clone(),
+        interface
+            .generics
+            .iter()
+            .map(|ty| substitute_static_call_params(ty, args, runtime_params))
+            .collect(),
+        interface
+            .associated_types
+            .iter()
+            .map(|(name, ty)| {
+                (
+                    name.clone(),
+                    substitute_static_call_params(ty, args, runtime_params),
+                )
+            })
+            .collect(),
+    )
 }
 
 fn bind_receiver(fn_ty: Ty) -> Ty {

@@ -4,7 +4,7 @@
 //! corpus-scale check is the differential MIR gate; these pin the
 //! per-road recording semantics the gate builds on.
 
-use baml_compiler2_hir_ty::infer::{MemberResolution, infer_body};
+use baml_compiler2_hir_ty::infer::{CallTypeArgPlan, MemberResolution, RuntimeCheck, infer_body};
 
 /// Every recorded member resolution in `source`, as sorted
 /// `(snippet, kind)` pairs - the snippet is the recorded expression's
@@ -298,6 +298,239 @@ function cp_use() -> int throws never {
         ],
         "call plans record solved instantiations and param-ordered bindings"
     );
+}
+
+#[test]
+fn static_method_call_uses_owner_then_function_generic_frame() {
+    use baml_compiler2_hir_ty::diagnostics::TirTypeError;
+
+    let source = r#"
+class RtBox<T> {
+    value: T,
+    function new(value: T) -> RtBox<T> throws never {
+        RtBox<T> { value: value }
+    }
+}
+function rt_owner_use() -> RtBox<int> throws never {
+    RtBox<int>.new(1)
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut seen = false;
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|diag| matches!(diag.error, TirTypeError::WrongTypeArgArity { .. })),
+            "the receiver's written owner argument is part of the unbound frame: {:?}",
+            result.diagnostics
+        );
+        for (&call, plan) in &result.call_plans {
+            if &source[source_map.expr_span(call)] != "RtBox<int>.new(1)" {
+                continue;
+            }
+            seen = true;
+            assert_eq!(plan.own_offset, 0);
+            assert!(matches!(
+                plan.slots.as_slice(),
+                [CallTypeArgPlan::Static { ty }]
+                    if ty.to_plain().render_canonical() == "int"
+            ));
+            assert_eq!(
+                plan.type_args
+                    .iter()
+                    .map(|ty| ty.to_plain().render_canonical())
+                    .collect::<Vec<_>>(),
+                vec!["int"]
+            );
+        }
+    }
+    assert!(seen, "static owner-generic call plan was not recorded");
+}
+
+#[test]
+fn runtime_call_plan_preserves_mixed_slots_and_precise_deferrals() {
+    let source = r#"
+interface RtAnchor {}
+interface RtStatic {}
+class RtGood { implements RtStatic {} }
+function rt_mix<A extends RtAnchor, B extends RtStatic>(a: A, b: B, plain: int) -> A throws never {
+    a
+}
+function rt_use(runtime_t: type, good: RtGood) -> RtAnchor throws never {
+    rt_mix<unreflect(runtime_t), RtGood>(42, good, 7)
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut seen = false;
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        assert!(
+            result
+                .type_of_expr
+                .values()
+                .chain(result.call_plans.values().flat_map(|plan| &plan.type_args))
+                .all(|ty| !ty.has_infer()),
+            "final inference tables must be ground"
+        );
+        for (&call, plan) in &result.call_plans {
+            if &source[source_map.expr_span(call)]
+                != "rt_mix<unreflect(runtime_t), RtGood>(42, good, 7)"
+            {
+                continue;
+            }
+            seen = true;
+            assert_eq!(plan.slots.len(), 2);
+            assert!(matches!(
+                &plan.slots[0],
+                CallTypeArgPlan::Runtime { occurrence_ty, parameter, .. }
+                    if occurrence_ty.to_plain().render_canonical() == "user.RtAnchor"
+                        && parameter.name().as_str() == "A"
+            ));
+            assert!(matches!(
+                &plan.slots[1],
+                CallTypeArgPlan::Static { ty }
+                    if ty.to_plain().render_canonical() == "user.RtGood"
+            ));
+            assert_eq!(
+                plan.type_args
+                    .iter()
+                    .map(|ty| ty.to_plain().render_canonical())
+                    .collect::<Vec<_>>(),
+                vec!["user.RtAnchor", "user.RtGood"]
+            );
+            assert_eq!(
+                plan.deferred_checks
+                    .iter()
+                    .filter(|check| matches!(check, RuntimeCheck::Argument { .. }))
+                    .count(),
+                1,
+                "only argument `a: A` depends on the runtime slot"
+            );
+            assert_eq!(
+                plan.deferred_checks
+                    .iter()
+                    .filter(|check| matches!(check, RuntimeCheck::Bound { .. }))
+                    .count(),
+                1,
+                "only A's bound is runtime-deferred; B's bound stays static"
+            );
+            assert_eq!(plan.bindings.len(), 3, "binding enrichment kept type slots");
+        }
+    }
+    assert!(seen, "runtime call plan was not recorded");
+}
+
+#[test]
+fn runtime_call_special_contracts_are_narrow_and_diagnostic() {
+    use baml_compiler2_hir_ty::diagnostics::TirTypeError;
+
+    let source = r#"
+function sc_id<T>(value: T) -> T throws never { value }
+function sc_contract<F>() -> null throws never { null }
+function __make_stream<T>(value: T) -> T throws never { value }
+
+function sc_bare() -> int throws never {
+    let runtime_t = type.of<int>();
+    sc_id<runtime_t>(1)
+}
+function sc_bad_operand() -> int throws never {
+    sc_id<unreflect(42)>(42)
+}
+function sc_stream(runtime_t: type) -> int throws never {
+    __make_stream<unreflect(runtime_t)>(1)
+}
+function sc_ordinary_contract() -> null throws never {
+    sc_contract<(string) -> string>()
+}
+function sc_extract(pkg: reflect.Package) -> null throws unknown {
+    let extracted = pkg.get_function<(string) -> string>("root.Target");
+    null
+}
+function sc_session(session: reflect.Session) -> null throws unknown {
+    let value = session.eval("1");
+    null
+}
+function sc_sealed() -> baml.reflect.class.Type throws never {
+    baml.reflect.class.Type {}
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut errors = Vec::new();
+    let mut extraction_throws = None;
+    let mut session_args = None;
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let source_map = baml_compiler2_ppir::body_source_map(&db, owner);
+        let result = infer_body(&db, owner);
+        errors.extend(result.diagnostics.iter().map(|diag| diag.error.clone()));
+        let Some(source_map) = source_map else {
+            continue;
+        };
+        for (&call, plan) in &result.call_plans {
+            let snippet = &source[source_map.expr_span(call)];
+            if snippet.starts_with("pkg.get_function") {
+                extraction_throws = plan.slots.first().and_then(|slot| match slot {
+                    CallTypeArgPlan::Static { ty } => match ty.kind() {
+                        baml_type::interned::TyKind::Function { throws, .. } => {
+                            Some(throws.to_plain().render_canonical())
+                        }
+                        _ => None,
+                    },
+                    CallTypeArgPlan::Runtime { .. } => None,
+                });
+            }
+            if snippet.starts_with("session.eval") {
+                session_args = Some(
+                    plan.type_args
+                        .iter()
+                        .map(|ty| ty.to_plain().render_canonical())
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
+    }
+
+    assert_eq!(
+        errors
+            .iter()
+            .filter(|error| matches!(error, TirTypeError::FunctionTypeMissingThrows))
+            .count(),
+        1,
+        "only the ordinary function type reports missing throws: {errors:?}"
+    );
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name }
+            if name.as_str() == "runtime_t"
+    )));
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        TirTypeError::RuntimeTypeArgumentOnStreamingCall { callee_name }
+            if callee_name.as_str() == "__make_stream"
+    )));
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        TirTypeError::CannotConstructReflectionKind { class_name }
+            if class_name.render_user_facing() == "baml.reflect.class.Type"
+    )));
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        TirTypeError::TypeMismatch { expected, got }
+            if expected.render_canonical() == "type" && got.render_canonical() == "42"
+    )));
+    assert_eq!(extraction_throws.as_deref(), Some("unknown"));
+    assert_eq!(session_args, Some(vec!["unknown".to_string()]));
 }
 
 #[test]
