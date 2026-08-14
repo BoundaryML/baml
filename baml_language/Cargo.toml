@@ -138,6 +138,7 @@ baml_workspace = { path = "crates/baml_workspace" }
 #  External dependencies
 anyhow = { version = "1" }
 async-trait = "0.1"
+datafusion = { version = "=54.1.0", default-features = false, features = [ "sql" ] }
 askama = { version = "0.14.0" }
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
 # crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse,
@@ -256,6 +257,7 @@ tar = "0.4"
 zip = { version = "2", default-features = false, features = [ "deflate" ] }
 taplo = { version = "0.13" }
 tempfile = { version = "3" }
+rusqlite = { version = "=0.31.0", features = [ "bundled" ] }
 time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
 text-size = { version = "1.1", features = [ "serde" ] }
 thiserror = { version = "2.0.0" }
