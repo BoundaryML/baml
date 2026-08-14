@@ -1,18 +1,35 @@
 {
-  "slug": "word-break",
-  "id": 139,
-  "title": "Word Break",
-  "difficulty": "Medium",
   "category": "Dynamic Programming",
-  "statement": "Given a string `s` and a dictionary of strings `wordDict`, return `true` if `s` can be segmented into a space-separated sequence of one or more dictionary words.\n\nThe same dictionary word may be reused multiple times.\n\n**Example**\n\n```\ns = \"leetcode\", wordDict = [\"leet\", \"code\"]  => true\ns = \"catsandog\", wordDict = [\"cats\",\"dog\",\"sand\",\"and\",\"cat\"]  => false\n```",
+  "difficulty": "Medium",
+  "id": 139,
   "signature": "function WordBreak(s: string, wordDict: string[]) -> bool",
-  "starter": "function WordBreak(s: string, wordDict: string[]) -> bool {\n  // Return true if s splits into dictionary words (reuse allowed).\n  return false;\n}",
+  "slug": "word-break",
   "solution": "function WordBreak(s: string, wordDict: string[]) -> bool {\n  let n = s.length();\n  let dp: bool[] = [];\n  let i = 0;\n  while (i <= n) {\n    dp.push(false);\n    i += 1;\n  }\n  dp[0] = true;\n  let end = 1;\n  while (end <= n) {\n    let start = 0;\n    while (start < end) {\n      if (dp[start]) {\n        let word = s.slice(start, end);\n        if (wordDict.includes(word)) {\n          dp[end] = true;\n        }\n      }\n      start += 1;\n    }\n    end += 1;\n  }\n  return dp[n];\n}",
+  "starter": "function WordBreak(s: string, wordDict: string[]) -> bool {\n  // Return true if s splits into dictionary words (reuse allowed).\n  return false;\n}",
+  "statement": "Given a string `s` and a dictionary of strings `wordDict`, return `true` if `s` can be segmented into a space-separated sequence of one or more dictionary words.\n\nThe same dictionary word may be reused multiple times.\n\n**Example**\n\n```\ns = \"leetcode\", wordDict = [\"leet\", \"code\"]  => true\ns = \"catsandog\", wordDict = [\"cats\",\"dog\",\"sand\",\"and\",\"cat\"]  => false\n```",
   "tests": [
-    { "call": "WordBreak(\"leetcode\", [\"leet\", \"code\"])", "expected": "true" },
-    { "call": "WordBreak(\"applepenapple\", [\"apple\", \"pen\"])", "expected": "true" },
-    { "call": "WordBreak(\"catsandog\", [\"cats\", \"dog\", \"sand\", \"and\", \"cat\"])", "expected": "false" },
-    { "call": "WordBreak(\"a\", [\"b\"])", "expected": "false", "hidden": true },
-    { "call": "WordBreak(\"cars\", [\"car\", \"ca\", \"rs\"])", "expected": "true", "hidden": true }
-  ]
+    {
+      "call": "WordBreak(\"leetcode\", [\"leet\", \"code\"])",
+      "expected": "true"
+    },
+    {
+      "call": "WordBreak(\"applepenapple\", [\"apple\", \"pen\"])",
+      "expected": "true"
+    },
+    {
+      "call": "WordBreak(\"catsandog\", [\"cats\", \"dog\", \"sand\", \"and\", \"cat\"])",
+      "expected": "false"
+    },
+    {
+      "call": "WordBreak(\"a\", [\"b\"])",
+      "expected": "false",
+      "hidden": true
+    },
+    {
+      "call": "WordBreak(\"cars\", [\"car\", \"ca\", \"rs\"])",
+      "expected": "true",
+      "hidden": true
+    }
+  ],
+  "title": "Word Break"
 }
