@@ -6,6 +6,16 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 Comparison range: [`baml-language-0.16.0`](https://github.com/BoundaryML/baml/releases/tag/baml-language-0.16.0) at [`2e021b3429db8769656e9b8646657c1863789169`](https://github.com/BoundaryML/baml/commit/2e021b3429db8769656e9b8646657c1863789169) through the verified release target [`baml-language-source-a1ac4ae68e06213fb9050b53842dd4c3ebfc4dea`](https://github.com/BoundaryML/baml/tree/baml-language-source-a1ac4ae68e06213fb9050b53842dd4c3ebfc4dea) at [`a1ac4ae68e06213fb9050b53842dd4c3ebfc4dea`](https://github.com/BoundaryML/baml/commit/a1ac4ae68e06213fb9050b53842dd4c3ebfc4dea). The target was also the head of `origin/canary` when these notes were prepared.
 
+### Pending for 0.17.0
+
+These items are planned for 0.17.0 but are not included in the verified comparison range above. Move each item into the appropriate released section and update the comparison target only after its implementation has merged.
+
+- [ ] Add `baml.sys.pid()`, `baml.fs.chmod()`, and `baml.fs.symlink()`. The filesystem operations validate their inputs and report unsupported or blocked operations; `chmod` can only set or clear read-only on Windows, and these system operations are unavailable in browser environments. ([#4427](https://github.com/BoundaryML/baml/pull/4427)) - 2kai2kai2
+- [ ] Improve the string API: rename `String.char_at` to `String.at`, support negative indices, and return `null` instead of panicking out of range; make `String.code_point_at` return `null` instead of panicking out of range; rename `String.matches` to `String.includes`; rename `String.substring` to `String.slice` with an exclusive `end`; add an optional `position = 0` search start to `String.index_of`; and add `String.last_index_of` with `position = int.max_value()`.
+- [ ] Reject plain quoted LLM prompts with an actionable diagnostic directing users to backticks, prevent callable bytecode functions from being lowered without valid bodies, and reject empty bytecode before VM dispatch so invalid input cannot segfault. ([B-1533](https://linear.app/boundaryml2/issue/B-1533/fix-segfaults-from-avery-aug-12-users)) - Kai Orita
+- [ ] Make `Array.join` stringify non-string elements through the same `to_string()` coercion used by interpolation instead of silently replacing them with empty strings. ([B-850](https://linear.app/boundaryml2/issue/B-850/arrayjoin-silently-drops-non-string-elements-to-empty-strings-instead)) - Kai Orita
+- [ ] Add `baml.crypto.*` APIs; public API details are still pending. ([B-1540](https://linear.app/boundaryml2/issue/B-1540/bamlcrypto)) - Kai Orita
+
 ### User-facing features
 
 - Added `baml toolchain pin <canary|nightly|version|path>` to select a project-local toolchain in the nearest `baml.toml`, with atomic edits that preserve comments and formatting; version-skew diagnostics now recommend the executable pin command and identify the relevant SDK package ecosystem. ([#4386](https://github.com/BoundaryML/baml/pull/4386)) - Sam Lijin
