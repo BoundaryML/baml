@@ -24,10 +24,7 @@ use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::{SyntaxToken, TokenAtOffset};
 use baml_compiler2_ast::{TypeExpr, TypeExprKind};
 use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
-use baml_compiler2_tir::{
-    ty::{QualifiedTypeName, Ty, TyRenderStrategy},
-    user_facing::humanize_type_string,
-};
+use baml_type::{QualifiedTypeName, Ty, TyRenderStrategy, user_facing::humanize_type_string};
 use text_size::{TextRange, TextSize};
 
 use crate::Db;
@@ -113,7 +110,7 @@ pub fn definition_span<'db>(
 /// current package + namespace so qualified names collapse to the shortest
 /// unambiguous form (bare when in scope, `root.path` when not, the dependency
 /// package prefix for cross-package types). Implements [`TyRenderStrategy`] so
-/// the structural walk lives once in `baml_compiler2_tir`.
+/// the structural walk lives once in `baml_type`.
 struct TyDisplayContext<'db> {
     current_package: Name,
     current_namespace: Vec<Name>,
@@ -170,7 +167,7 @@ impl TyDisplayContext<'_> {
     }
 
     /// Render `ty` in this file's context — the LSP hover/completion form.
-    /// The structural walk lives once in `baml_compiler2_tir`; this context
+    /// The structural walk lives once in `baml_type`; this context
     /// only supplies the name/policy decisions via [`TyRenderStrategy`].
     fn display_ty(&self, ty: &Ty) -> String {
         ty.render_with(self)
@@ -183,7 +180,7 @@ impl TyRenderStrategy for TyDisplayContext<'_> {
     }
 
     fn type_var(&self, name: &Name) -> String {
-        if baml_compiler2_tir::ty::is_synthetic_effect_param(name) {
+        if baml_type::is_synthetic_effect_param(name) {
             "callback".to_string()
         } else {
             name.to_string()
@@ -208,7 +205,7 @@ impl TyRenderStrategy for PlainTyRender {
     }
 
     fn type_var(&self, name: &Name) -> String {
-        if baml_compiler2_tir::ty::is_synthetic_effect_param(name) {
+        if baml_type::is_synthetic_effect_param(name) {
             "callback".to_string()
         } else {
             name.to_string()

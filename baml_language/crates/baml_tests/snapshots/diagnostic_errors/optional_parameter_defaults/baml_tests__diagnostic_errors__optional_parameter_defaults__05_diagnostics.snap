@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40002
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0005
@@ -37,9 +38,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0005
 
   × unknown named argument `q`
-    ╭─[call_binding.baml:34:14]
+    ╭─[call_binding.baml:34:3]
  34 │   Search(q = "cats")
-    ·              ──────
+    ·   ──────────────────
     ╰────
 
   [type] E0001
@@ -66,6 +67,15 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                           ────
     ╰────
 
+  [type] E0001
+
+  × mismatched types
+    ╭─[unsupported_contexts.baml:11:27]
+ 11 │   function Current(self = null) -> int {
+    ·                           ──┬─
+    ·                             ╰── expected `Counter`, found `null`
+    ╰────
+
   [hir] E0010
 
   × parameter defaults are not supported in lambda parameters
@@ -73,6 +83,14 @@ source: crates/baml_tests/src/generated_tests.rs
  17 │   let f = (x: int = 1) -> int { x }
     ·                     ┬
     ·                     ╰── default value is not allowed here
+    ╰────
+
+  [type] E0005
+
+  × defaulted parameter `x` must be passed by name
+    ╭─[unsupported_contexts.baml:18:5]
+ 18 │   f(2)
+    ·     ─
     ╰────
 
   [type] E0001

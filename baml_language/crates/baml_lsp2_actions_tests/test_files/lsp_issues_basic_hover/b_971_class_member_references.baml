@@ -22,5 +22,5 @@ function ReadPerson(person: Person<string>) -> string {
 // ```
 // hover at b_971_class_member_references.baml:11:21
 // ```baml
-// greeting: () -> string throws never
+// greeting: (self: Person<string>) -> string throws never
 // ```

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7047
 ---
 === MIR2 ===
 fn user.Formatter.format(self: Formatter, text: string) -> string {
@@ -294,8 +295,10 @@ fn user.test_strategy() -> int[] {
     let _4: (int, int) -> int throws never // do_mul
     let _5: int
     let _6: (int, int) -> int throws never
-    let _7: int
-    let _8: (int, int) -> int throws never
+    let _7: type
+    let _8: int
+    let _9: (int, int) -> int throws never
+    let _10: type
 
     bb0: {
         _1 = user.Calculator { const "add" };
@@ -303,16 +306,18 @@ fn user.test_strategy() -> int[] {
         _3 = make_bound_method user.Calculator.compute(copy _1);
         _4 = make_bound_method user.Calculator.compute(copy _2);
         _6 = copy _3;
-        _5 = call const fn user.apply(copy _6, const 3_i64, const 4_i64) -> [bb1];
+        _7 = load_type(never);
+        _5 = call const fn user.apply<copy _7>(copy _6, const 3_i64, const 4_i64) -> [bb1];
     }
 
     bb1: {
-        _8 = copy _4;
-        _7 = call const fn user.apply(copy _8, const 3_i64, const 4_i64) -> [bb2];
+        _9 = copy _4;
+        _10 = load_type(never);
+        _8 = call const fn user.apply<copy _10>(copy _9, const 3_i64, const 4_i64) -> [bb2];
     }
 
     bb2: {
-        _0 = [copy _5, copy _7]: int[];
+        _0 = [copy _5, copy _8]: int[];
         goto -> bb3;
     }
 
@@ -348,12 +353,14 @@ fn user.test_unbound_higher_order() -> string[] {
     let _1: Employee[] // employees
     let _2: Employee
     let _3: Employee[]
+    let _4: type
 
     bb0: {
         _2 = user.Employee { const "Alice", const "Smith" };
         _1 = [copy _2]: Employee[];
         _3 = copy _1;
-        _0 = call const fn user.apply_to_each(copy _3, const fn user.Employee.full_name) -> [bb1];
+        _4 = load_type(never);
+        _0 = call const fn user.apply_to_each<copy _4>(copy _3, const fn user.Employee.full_name) -> [bb1];
     }
 
     bb1: {

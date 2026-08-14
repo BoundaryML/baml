@@ -865,9 +865,11 @@ function calls(value: int) -> int throws never {
         "neither the definer nor its caller may violate `throws never`, got:\n{output}"
     );
     // The effect is not lost, just attributed to the right place: the lambda's
-    // own inferred type carries it.
+    // own inferred type carries it. FLIPPED to literal grain: the spec's
+    // callback_effect_param_flows_through fixture pins inferred surfaces
+    // keeping the thrown literal's type (TIR widened here).
     assert!(
-        output.contains("(n: int) -> int throws string"),
+        output.contains("(n: int) -> int throws \"boom\""),
         "the throw must land on the lambda's inferred type, got:\n{output}"
     );
 }
@@ -1018,11 +1020,14 @@ function f() -> int {
 
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
-    // Only the trailing wildcard `_ => 3` should be unreachable (int is fully
-    // handled by the literal + typed arms). The `int` arm must stay reachable.
-    assert!(
-        unreachable_count <= 1,
-        "typed int arm after literal 42 arm should NOT be unreachable, got:\n{output}"
+    // hir_ty keeps LITERAL grain on cross-function throw surfaces (the
+    // ratified S13 rule; TIR widened facts at the call boundary), so the
+    // one fact here is `42`: the literal arm handles it completely and
+    // BOTH later arms are provably unreachable.
+    assert_eq!(
+        unreachable_count, 2,
+        "under literal-grain facts the typed and wildcard arms are dead, got:
+{output}"
     );
 }
 

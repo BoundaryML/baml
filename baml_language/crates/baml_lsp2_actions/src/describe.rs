@@ -534,7 +534,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         FileScopeId::new(u32::try_from(scope_idx).expect("scope id overflow"));
                     let owner_scope = body_owner_scope(index, binding_scope);
                     let scope_id = index.scope_ids[owner_scope.index() as usize];
-                    let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
+                    let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, scope_id);
 
                     // Parameters are already handled by the sig.params pass above;
                     // skip them here to avoid duplicate results.
@@ -548,8 +548,13 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     let type_str = match def_site {
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
                             pattern_from_owner_body(db, func_loc, stmt_id)
-                                .and_then(|pattern| inference.binding_type(pattern))
-                                .map(crate::utils::display_ty)
+                                .and_then(|pattern| {
+                                    inference?
+                                        .type_of_pat
+                                        .get(&pattern)
+                                        .map(baml_type::interned::Ty::to_plain)
+                                })
+                                .map(|ty| crate::utils::display_ty(&ty))
                                 .unwrap_or_else(|| "unknown".to_string())
                         }
                         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(
@@ -558,8 +563,13 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(
                             pat_id,
                         ) => inference
-                            .binding_type(pat_id)
-                            .map(crate::utils::display_ty)
+                            .and_then(|inference| {
+                                inference
+                                    .type_of_pat
+                                    .get(&pat_id)
+                                    .map(baml_type::interned::Ty::to_plain)
+                            })
+                            .map(|ty| crate::utils::display_ty(&ty))
                             .unwrap_or_else(|| "unknown".to_string()),
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
                             unreachable!("Parameters are skipped above")
@@ -775,9 +785,9 @@ fn resolve_definition<'db>(
     sym: &SymbolInfo,
 ) -> Option<Definition<'db>> {
     let name = baml_base::Name::new(&sym.name);
-    match baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name) {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => Some(def),
+    match baml_compiler2_ppir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name) {
+        baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+        | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => Some(def),
         _ => None,
     }
 }
@@ -816,7 +826,7 @@ fn collect_class_methods_impl(
     db: &dyn Db,
     class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
 ) -> Vec<CollectedMethod> {
-    use baml_compiler2_tir::package_interface::ExportedType;
+    use baml_compiler2_hir_ty::package_interface::ExportedType;
 
     let file = class_loc.file(db);
     let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
@@ -826,7 +836,7 @@ fn collect_class_methods_impl(
     // auto-derived entries), so positional indices line up.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
     let exported = iface
         .lookup_type(&pkg_info.namespace_path, &class_data.name)
         .and_then(|t| match t {
@@ -874,7 +884,7 @@ fn render_method_signature(
     db: &dyn Db,
     file: SourceFile,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
-    exported: Option<&baml_compiler2_tir::package_interface::ExportedFunction>,
+    exported: Option<&baml_compiler2_hir_ty::package_interface::ExportedFunction>,
 ) -> String {
     let m = baml_compiler2_ppir::item_data::function_data(db, func_loc);
     let params: Vec<String> = m
@@ -915,7 +925,7 @@ fn render_method_signature(
     // Show `throws T` only for a real throw contract — `never` (the method does
     // not throw) is omitted. Mirrors the function-signature convention.
     let throws = match exported {
-        Some(ef) if !matches!(ef.callable_throws, baml_compiler2_tir::ty::Ty::Never { .. }) => {
+        Some(ef) if !matches!(ef.callable_throws, baml_type::Ty::Never { .. }) => {
             format!(
                 " throws {}",
                 crate::utils::display_ty_canonical_for_file(db, file, &ef.callable_throws)
@@ -991,7 +1001,7 @@ fn describe_class_method(
     class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
     member_name: &str,
 ) -> Option<SymbolDescription> {
-    use baml_compiler2_tir::package_interface::ExportedType;
+    use baml_compiler2_hir_ty::package_interface::ExportedType;
 
     let file = class_loc.file(db);
     let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
@@ -1006,7 +1016,7 @@ fn describe_class_method(
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
     let ef = iface
         .lookup_type(&pkg_info.namespace_path, &class_data.name)
         .and_then(|t| match t {
@@ -1094,10 +1104,10 @@ fn function_def_name_span(
 /// against a future reordering silently mispairing signatures, in which case
 /// callers fall back to the unresolved source types.
 fn exported_method<'a>(
-    methods: &'a [baml_compiler2_tir::package_interface::ExportedFunction],
+    methods: &'a [baml_compiler2_hir_ty::package_interface::ExportedFunction],
     idx: usize,
     name: &baml_base::Name,
-) -> Option<&'a baml_compiler2_tir::package_interface::ExportedFunction> {
+) -> Option<&'a baml_compiler2_hir_ty::package_interface::ExportedFunction> {
     methods
         .get(idx)
         .filter(|ef| ef.name.as_str() == name.as_str())
@@ -1115,14 +1125,14 @@ fn collect_method_signature_deps(
     deps: &mut Vec<DepRef>,
     seen: &mut std::collections::HashSet<String>,
 ) {
-    use baml_compiler2_tir::package_interface::ExportedType;
+    use baml_compiler2_hir_ty::package_interface::ExportedType;
 
     let file = class_loc.file(db);
     let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
     let Some(methods) = iface
         .lookup_type(&pkg_info.namespace_path, &class.name)
         .and_then(|t| match t {
@@ -1165,7 +1175,7 @@ fn class_methods_and_fqn(
     };
 
     let name = baml_base::Name::new(&sym.name);
-    let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &name);
+    let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &name);
     let fqn = crate::utils::canonical_fqn_string(&qtn);
     let canonical_fqn = (fqn != sym.name).then_some(fqn);
 
@@ -1187,15 +1197,15 @@ fn class_methods_and_fqn(
 fn resolve_member_type(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Option<String> {
     let container_name = sym.container_name.as_ref()?;
     let container_baml_name = baml_base::Name::new(container_name);
-    let resolved = baml_compiler2_tir::resolve::resolve_name_at(
+    let resolved = baml_compiler2_ppir::resolve::resolve_name_at(
         db,
         file,
         sym.name_span.start(),
         &container_baml_name,
     );
 
-    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
-    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    let (baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def)) = resolved
     else {
         return None;
     };
@@ -1205,10 +1215,8 @@ fn resolve_member_type(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Optio
             DefinitionKind::Field,
             baml_compiler2_hir::contributions::Definition::Class(class_loc),
         ) => {
-            let resolved_fields =
-                baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
+            let resolved_fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
             resolved_fields
-                .fields
                 .iter()
                 .find(|(field_name, _, _)| field_name.as_str() == sym.name)
                 .map(|(_, ty, _)| crate::utils::display_ty_for_file(db, file, ty))
@@ -1314,8 +1322,8 @@ fn find_dependencies(
             }
         }
         baml_compiler2_hir::contributions::Definition::Class(class_loc) => {
-            let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
-            for (_field_name, ty, _attrs) in &resolved.fields {
+            let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
+            for (_field_name, ty, _attrs) in resolved {
                 collect_ty_deps(db, files, ty, &mut deps, &mut seen);
             }
             // Types referenced in method signatures (params/return/throws) are
@@ -1518,7 +1526,7 @@ fn collect_type_ref_deps(
 fn collect_qtn_dep(
     db: &dyn Db,
     files: &[SourceFile],
-    qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+    qtn: &baml_type::QualifiedTypeName,
     deps: &mut Vec<DepRef>,
     seen: &mut std::collections::HashSet<String>,
 ) {
@@ -1536,11 +1544,11 @@ fn collect_qtn_dep(
 fn collect_ty_deps(
     db: &dyn Db,
     files: &[SourceFile],
-    ty: &baml_compiler2_tir::ty::Ty,
+    ty: &baml_type::Ty,
     deps: &mut Vec<DepRef>,
     seen: &mut std::collections::HashSet<String>,
 ) {
-    use baml_compiler2_tir::ty::Ty;
+    use baml_type::Ty;
     match ty {
         Ty::Class(qtn, generics, _) => {
             collect_qtn_dep(db, files, qtn, deps, seen);
@@ -1606,15 +1614,15 @@ fn resolve_dep_from_outline(db: &dyn Db, files: &[SourceFile], name: &str) -> Op
 fn resolve_dep(db: &dyn Db, context_file: SourceFile, name: &str) -> Option<DepRef> {
     let baml_name = baml_base::Name::new(name);
     // Use offset 0 — we just need scope-level resolution for the file.
-    let resolved = baml_compiler2_tir::resolve::resolve_name_at(
+    let resolved = baml_compiler2_ppir::resolve::resolve_name_at(
         db,
         context_file,
         text_size::TextSize::from(0),
         &baml_name,
     );
 
-    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
-    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    let (baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def)) = resolved
     else {
         return None;
     };

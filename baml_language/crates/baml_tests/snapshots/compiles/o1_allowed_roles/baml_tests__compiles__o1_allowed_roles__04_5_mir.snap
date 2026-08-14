@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18703
 ---
 === MIR2 ===
 fn user.AskO1(question: string, client: null | ai.Client) -> string {
@@ -33,7 +34,7 @@ fn user.AskO1(question: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -139,7 +140,7 @@ fn .<lambda(AskO1$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _13: type
     let _14: int
     let _15: string[]
-    let _16: string
+    let _16: ""
     let _17: type
     let _18: string[]
     let _19: unknown[]
@@ -255,7 +256,7 @@ fn user.AskGpt4o(question: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -361,7 +362,7 @@ fn .<lambda(AskGpt4o$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _13: type
     let _14: int
     let _15: string[]
-    let _16: string
+    let _16: ""
     let _17: type
     let _18: string[]
     let _19: unknown[]

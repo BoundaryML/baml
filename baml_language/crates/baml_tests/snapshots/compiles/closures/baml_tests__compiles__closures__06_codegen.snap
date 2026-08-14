@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7713
 ---
 function user.Box.unwrap(self: Box<#0>) -> #0 {
     load_var self
@@ -211,6 +212,7 @@ function user.test_repeated_bound_calls() -> int {
 }
 
 function user.test_strategy() -> int[] {
+    load_type never
     load_const "add"
     init_instance user.Calculator .op
     make_bound_method user.Calculator.compute
@@ -218,13 +220,14 @@ function user.test_strategy() -> int[] {
     load_const 4
     call user.apply
     store_var _5
+    load_type never
     load_const "mul"
     init_instance user.Calculator .op
     make_bound_method user.Calculator.compute
     load_const 3
     load_const 4
     call user.apply
-    store_var _7
+    store_var _8
     load_var2 1 2
     load_type int
     alloc_array 2
@@ -232,6 +235,7 @@ function user.test_strategy() -> int[] {
 }
 
 function user.test_unbound_higher_order() -> string[] {
+    load_type never
     load_const "Alice"
     load_const "Smith"
     init_instance user.Employee .first, .last

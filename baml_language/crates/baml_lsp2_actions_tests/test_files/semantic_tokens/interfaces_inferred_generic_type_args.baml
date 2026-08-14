@@ -535,7 +535,118 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//     ╭─[interfaces_inferred_generic_type_args.baml:64:49]
+//  64 │ ╭─▶         function head(self) -> T throws unknown {
+//  65 │ │               return self.arr[0];
+//  66 │ ╰─▶         }
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//     ╭─[interfaces_inferred_generic_type_args.baml:74:49]
+//  74 │ ╭─▶         function head(self) -> T throws unknown {
+//  75 │ │               return self.value;
+//  76 │ ╰─▶         }
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:154:50]
+//  154 │ ╭─▶         function first(self) -> T throws unknown {
+//  155 │ │               return self.arr[0];
+//  156 │ ╰─▶         }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:164:50]
+//  164 │ ╭─▶         function first(self) -> T throws unknown {
+//  165 │ │               return self.only;
+//  166 │ ╰─▶         }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:195:50]
+//  195 │ ╭─▶         function first(self) -> T throws unknown {
+//  196 │ │               return self.arr[0];
+//  197 │ ╰─▶         }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:204:50]
+//  204 │ ╭─▶         function first(self) -> T throws unknown {
+//  205 │ │               return self.only;
+//  206 │ ╰─▶         }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:212:65]
+//  212 │ ╭─▶ function default_method_typevar_name() -> string throws unknown {
+//  213 │ │       let s: Named<int> = ArrNamed<int> { arr: [5, 6, 7], idx: 0 };
+//  214 │ │       s.tname()
+//  215 │ ╰─▶ }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:233:52]
+//  233 │ ╭─▶     function boxed(self) -> Wrap<T> throws unknown {
+//  234 │ │           return Boxed<T> { val: self.arr[0] };
+//  235 │ ╰─▶     }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:238:50]
+//  238 │ ╭─▶         function first(self) -> T throws unknown {
+//  239 │ │               return self.arr[0];
+//  240 │ ╰─▶         }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:247:50]
+//  247 │ ╭─▶         function first(self) -> T throws unknown {
+//  248 │ │               return self.val;
+//  249 │ ╰─▶         }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:372:66]
+//  372 │ ╭─▶ function inferred_ctor_instance_is_typed() -> int throws unknown {
+//  373 │ │       let s: Bag<int> = ArrBag.make([5, 6, 7]);
+//  374 │ │       match (s) {
+//  375 │ │           let a: ArrBag<int> => 1,
+//  376 │ │           let o: OneBag<int> => 2,
+//  377 │ │           _ => 9,
+//  378 │ │       }
+//  379 │ ╰─▶ }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:445:62]
+//  445 │ ╭─▶ function inferred_ctor_collect_count() -> int throws unknown {
+//  446 │ │       let it: NextIter<int, never> = ArrIter.of([1, 2, 3]);
+//  447 │ │       it.collect2().length()
+//  448 │ ╰─▶ }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_inferred_generic_type_args.baml:491:66]
+//  491 │ ╭─▶ function nested_self_inferred_binding() -> string throws unknown {
+//  492 │ │       let e: SelfEcho = EchoA { n: 1 };
+//  493 │ │       e.nested_self_type()
+//  494 │ ╰─▶ }
+//      ╰────
 //
 //- semantic_tokens
 // interfaces_inferred_generic_type_args.baml:1:1 (comment) len=58 "// End-to-end tests for the generic-type-arg dispatch fix."
@@ -1159,7 +1270,6 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:281:27 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:281:36 (type) [defaultLibrary] len=6 "string"
 // interfaces_inferred_generic_type_args.baml:282:13 (keyword) len=6 "return"
-// interfaces_inferred_generic_type_args.baml:282:28 (method) len=12 "element_type"
 // interfaces_inferred_generic_type_args.baml:287:1 (keyword) len=5 "class"
 // interfaces_inferred_generic_type_args.baml:287:7 (class) [declaration] len=10 "StrCounter"
 // interfaces_inferred_generic_type_args.baml:287:17 (operator) len=1 "<"

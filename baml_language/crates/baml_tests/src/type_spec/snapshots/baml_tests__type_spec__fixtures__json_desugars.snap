@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+424..427 'ser': throws baml.json.JsonSerializationError
+486..545 '{\n   ...  j\n}': baml.json.json
+492..497 'let j': baml.json.json
+500..509 'p.to_json': (value: user.Point) -> baml.json.json throws baml.json.JsonSerializationError
+500..511 'p.to_json()': baml.json.json
+542..543 'j': baml.json.json
+556..564 'ser_prim': throws baml.json.JsonSerializationError
+624..643 '{\n   ...n()\n}': baml.json.json
+630..639 's.to_json': (value: string) -> baml.json.json throws baml.json.JsonSerializationError
+630..641 's.to_json()': baml.json.json
+654..656 'de': throws baml.json.JsonDecodeError
+708..770 '{\n   ...  p\n}': user.Point
+714..719 'let p': user.Point
+722..737 'Point.from_json': (j: baml.json.json) -> user.Point throws baml.json.JsonDecodeError
+722..740 'Point....son(j)': user.Point
+738..739 'j': baml.json.json
+767..768 'p': user.Point
+781..791 'de_generic': throws baml.json.JsonDecodeError
+842..891 '{\n   ...  t\n}': T
+848..853 'let t': T
+856..867 'T.from_json': (j: baml.json.json) -> T throws baml.json.JsonDecodeError
+856..870 'T.from_json(j)': T
+868..869 'j': baml.json.json
+888..889 't': T
+902..913 'ser_generic': throws baml.json.JsonSerializationError
+971..990 '{\n   ...n()\n}': baml.json.json
+977..986 'v.to_json': (value: T) -> baml.json.json throws baml.json.JsonSerializationError
+977..988 'v.to_json()': baml.json.json

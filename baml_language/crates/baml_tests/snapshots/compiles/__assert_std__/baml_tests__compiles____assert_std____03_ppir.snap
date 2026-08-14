@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4244
 ---
 === PPIR ===
 
@@ -8,19 +7,22 @@ assertion_line: 4244
 
 --- <builtin>/assert/assert.baml ---
 function assert.approx_equal(actual: float, expected: float, eps: float) -> null  [expr] {
-  {  } if (eps Lt 0.0 Or eps.is_nan()) {  } baml.sys.panic("assertion failed:...") else { let delta = actual Sub expected.abs() } if (delta.is_nan() Or delta Gt eps) {  } baml.sys.panic("assertion failed:..." Add format_operand(delta) Add ", eps = " Add format_operand(eps) Add ", left = " Add format_operand(actual) Add ", right = " Add format_operand(expected)) else {  } null
+  {  } if (eps Lt 0.0 Or eps.is_nan()) {  } baml.sys.panic("assertion failed:...") else { let delta = actual Sub expected.abs() } if (delta.is_nan() Or delta Gt eps) {  } baml.sys.panic(`...`) else {  } null
 }
 function assert.contains(haystack: string, needle: string) -> null  [expr] {
   {  } if (Not haystack.includes(needle)) {  } baml.sys.panic("assertion failed:...") else {  } null
 }
 function assert.equal(actual: unknown, expected: unknown) -> null  [expr] {
-  {  } if (actual Ne expected) {  } baml.sys.panic("assertion failed:..." Add format_operand(actual) Add ", right = " Add format_operand(expected)) else {  } null
+  {  } if (actual Ne expected) {  } baml.sys.panic(`...`) else {  } null
 }
 function assert.format_operand(value: unknown) -> string  [expr] {
-  {  } string.from(value)
+  {  } match (value) { text: string => `...`, _ => string.from(value) }
 }
 function assert.is_true(condition: bool) -> null  [expr] {
   {  } if (Not condition) {  } baml.sys.panic("assertion failed:...") else {  } null
+}
+function assert.is_type(actual: unknown) -> T  [expr] {
+  {  } match (actual) { T => actual, _ => { let t: type = reflect.type_of() } baml.sys.panic(`...`) }
 }
 function assert.not_null(value: unknown?) -> null  [expr] {
   {  } if (value Eq null) {  } baml.sys.panic("assertion failed:...") else {  } null

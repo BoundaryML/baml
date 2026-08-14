@@ -54,18 +54,27 @@ source: crates/baml_tests/src/generated_tests.rs
  253 │ ╰─▶     }
      ╰────
 
+  [type] E0062
+
+  × non-exhaustive match on type true; missing: true
+     ╭─[match_exhaustiveness.baml:296:5]
+ 296 │ ╭─▶     match (t) {
+ 297 │ │           false => "wrong!"
+ 298 │ ╰─▶     }
+     ╰────
+
   [type] E0001
 
   × mismatched types
      ╭─[match_exhaustiveness.baml:297:9]
  297 │         false => "wrong!"
      ·         ──┬──
-     ·           ╰── expected `AlwaysTrue`, found `false`
+     ·           ╰── expected `true`, found `false`
      ╰────
 
   [type] E0062
 
-  × non-exhaustive match on type CustomBool; missing: false
+  × non-exhaustive match on type bool; missing: false
      ╭─[match_exhaustiveness.baml:303:5]
  303 │ ╭─▶     match (b) {
  304 │ │           true => "yes"
@@ -74,7 +83,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Role; missing: "system"
+  × non-exhaustive match on type "assistant" | "system" | "user"; missing: "system"
      ╭─[match_exhaustiveness.baml:356:5]
  356 │ ╭─▶     match (role) {
  357 │ │           "user" => "User",
@@ -84,7 +93,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type SuccessCode; missing: 204
+  × non-exhaustive match on type 200 | 201 | 204; missing: 204
      ╭─[match_exhaustiveness.baml:397:5]
  397 │ ╭─▶     match (code) {
  398 │ │           200 => "OK",
@@ -145,7 +154,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type MaybeOk; missing: null
+  × non-exhaustive match on type 200 | null; missing: null
      ╭─[match_exhaustiveness.baml:530:5]
  530 │ ╭─▶     match (code) {
  531 │ │           200 => "OK"
@@ -154,7 +163,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type MaybeOk; missing: 200
+  × non-exhaustive match on type 200 | null; missing: 200
      ╭─[match_exhaustiveness.baml:537:5]
  537 │ ╭─▶     match (code) {
  538 │ │           null => "no code"
@@ -163,7 +172,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type MixedLiterals; missing: true
+  × non-exhaustive match on type 200 | "success" | true; missing: true
      ╭─[match_exhaustiveness.baml:560:5]
  560 │ ╭─▶     match (x) {
  561 │ │           200 => "http ok",
@@ -173,7 +182,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type OkOrCreated; missing: 201
+  × non-exhaustive match on type 200 | 201; missing: 201
      ╭─[match_exhaustiveness.baml:584:5]
  584 │ ╭─▶     match (code) {
  585 │ │           200 => "ok"
@@ -182,7 +191,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type DoubleMaybe; missing: null
+  × non-exhaustive match on type Failure | Success | null; missing: null
      ╭─[match_exhaustiveness.baml:613:5]
  613 │ ╭─▶     match (dm) {
  614 │ │           let s: Success => s.data,
@@ -192,7 +201,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Outer; missing: string
+  × non-exhaustive match on type int | string; missing: string
      ╭─[match_exhaustiveness.baml:638:5]
  638 │ ╭─▶     match (o) {
  639 │ │           let i: int => "int"
@@ -201,7 +210,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Result; missing: Failure { reason: _ }
+  × non-exhaustive match on type Failure | Success; missing: Failure { reason: _ }
      ╭─[match_exhaustiveness.baml:650:5]
  650 │ ╭─▶     match (r) {
  651 │ │           let s: Success => s.data
@@ -210,7 +219,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+  × non-exhaustive match on type Failure | Pending | Success; missing: Pending { eta: _ }
      ╭─[match_exhaustiveness.baml:657:5]
  657 │ ╭─▶     match (r) {
  658 │ │           let s: Success => s.data,
@@ -250,7 +259,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type SuccessOr200; missing: 200
+  × non-exhaustive match on type 200 | Success; missing: 200
      ╭─[match_exhaustiveness.baml:734:5]
  734 │ ╭─▶     match (x) {
  735 │ │           let s: Success => s.data
@@ -259,7 +268,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
+  × non-exhaustive match on type 200 | Success; missing: Success { data: _ }
      ╭─[match_exhaustiveness.baml:741:5]
  741 │ ╭─▶     match (x) {
  742 │ │           200 => "http ok"
@@ -274,6 +283,15 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                          ─────────────
      ╰────
 
+  [type] E0062
+
+  × non-exhaustive match on type bool; missing: true, false
+     ╭─[match_exhaustiveness.baml:774:5]
+ 774 │ ╭─▶     match (b) {
+ 775 │ │           42 => "wrong type"
+ 776 │ ╰─▶     }
+     ╰────
+
   [type] E0001
 
   × mismatched types
@@ -281,6 +299,15 @@ source: crates/baml_tests/src/generated_tests.rs
  775 │         42 => "wrong type"
      ·         ─┬
      ·          ╰── expected `bool`, found `42`
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type int; missing: _
+     ╭─[match_exhaustiveness.baml:781:5]
+ 781 │ ╭─▶     match (x) {
+ 782 │ │           "hello" => "wrong type"
+ 783 │ ╰─▶     }
      ╰────
 
   [type] E0001
@@ -294,7 +321,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+  × non-exhaustive match on type Failure | Pending | Success; missing: Pending { eta: _ }
      ╭─[match_exhaustiveness.baml:793:5]
  793 │ ╭─▶     match (r) {
  794 │ │           let x: Success | Failure => "not pending"

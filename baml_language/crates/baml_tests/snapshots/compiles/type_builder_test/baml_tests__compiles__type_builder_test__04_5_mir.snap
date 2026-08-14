@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 27843
 ---
 === MIR2 ===
 fn user.Fn(client: null | ai.Client) -> string {
@@ -32,7 +33,7 @@ fn user.Fn(client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
+        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
     }
 
     bb5: {

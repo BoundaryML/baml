@@ -114,6 +114,27 @@ filter = 'package(=baml_bridge)'
 platform = { host = 'cfg(windows)' }
 setup = 'rust_bridge_engine_win'
 
+# `pack_e2e` needs the `baml-pack-host` executable from another Cargo package.
+# Build it once before nextest fans the individual cases out into separate
+# processes. The setup scripts mark matching tests through NEXTEST_ENV, so the
+# test helper validates the prebuilt sibling instead of recursively invoking
+# Cargo once per case. Plain `cargo test` retains its one-process fallback.
+[scripts.setup.baml_pack_host_unix]
+command = './crates/baml_cli/tests/build-pack-host.sh'
+
+[scripts.setup.baml_pack_host_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './crates/baml_cli/tests/build-pack-host.ps1']
+
+[[profile.default.scripts]]
+filter = 'binary(=pack_e2e)'
+platform = { host = 'cfg(unix)' }
+setup = 'baml_pack_host_unix'
+
+[[profile.default.scripts]]
+filter = 'binary(=pack_e2e)'
+platform = { host = 'cfg(windows)' }
+setup = 'baml_pack_host_win'
+
 # java tests need the shared Gradle home staged (and, once the Java
 # bridge lands, the native bridge library built + per-fixture Gradle
 # dependency resolution warmed). fire only when a java sdk-test is

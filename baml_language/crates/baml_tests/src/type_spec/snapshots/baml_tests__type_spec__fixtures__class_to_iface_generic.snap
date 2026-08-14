@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+466..470 'next': throws never
+502..530 '{\n   ...     }': null
+516..520 'null': null
+551..555 'iter': throws never
+595..615 '{\n   ...n    }': user.CgArr<T>
+605..609 'self': user.CgArr<T>
+628..634 'use_it': throws never
+685..753 '{\n   ... it\n}': user.CgIter<int, never>
+691..697 'let it': user.CgIter<int, never>
+700..706 'a.iter': (self: user.CgArr<int>) -> user.CgIter<int, never> throws never
+700..708 'a.iter()': user.CgIter<int, never>
+749..751 'it': user.CgIter<int, never>

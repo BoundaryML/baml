@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23260
 ---
 function user.SplitCount(s: string) -> string {
     load_var s

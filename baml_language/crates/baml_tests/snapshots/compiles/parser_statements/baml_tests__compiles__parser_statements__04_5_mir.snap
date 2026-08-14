@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 20109
 ---
 === MIR2 ===
 fn user.simple_assign() -> int {
@@ -73,19 +74,9 @@ fn user.mul_assign() -> int {
 fn user.multi_assign() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // a
-    let _2: int // b
-    let _3: int
-    let _4: int
 
     bb0: {
-        _1 = const 1_i64;
-        _2 = const 2_i64;
-        _1 = const 10_i64;
-        _2 = const 20_i64;
-        _3 = copy _1;
-        _4 = copy _2;
-        _0 = copy _3 + copy _4;
+        _0 = const 30_i64;
         goto -> bb1;
     }
 

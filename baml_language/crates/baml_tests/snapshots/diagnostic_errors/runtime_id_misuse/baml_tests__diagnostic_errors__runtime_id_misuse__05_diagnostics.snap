@@ -56,9 +56,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0096
 
   × declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
-    ╭─[runtime_id.baml:48:51]
- 48 │ function setter_never(s: string) -> string throws never {
-    ·                                                   ─────
+    ╭─[runtime_id.baml:49:5]
+ 49 │     $id = s;
+    ·     ───
     ╰────
 
   [type] E0001

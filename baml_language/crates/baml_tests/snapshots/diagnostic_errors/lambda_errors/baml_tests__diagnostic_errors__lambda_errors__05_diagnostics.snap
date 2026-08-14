@@ -1,31 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 35998
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
   × mismatched types
-   ╭─[lambda_errors.baml:3:36]
+   ╭─[lambda_errors.baml:3:34]
  3 │     let bad = (x: int) -> string { x * 2 }
-   ·                                    ──┬──
+   ·                                  ────┬────
    ·                                      ╰── expected `string`, found `int`
    ╰────
-
-  [type] E0002
-
-  × cannot infer type of lambda parameter `x` — add a type annotation or provide context
-   ╭─[lambda_errors.baml:9:15]
- 9 │     let bad = (x) -> { x * 2 }
-   ·               ────────────────
-   ╰────
-
-  [type] E0005
-
-  × expected 1 argument(s), got 2
-    ╭─[lambda_errors.baml:16:15]
- 16 │     items.map((x, y) -> { x })
-    ·               ───────────────
-    ╰────
 
   [type] E0001
 
@@ -33,7 +18,16 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[lambda_errors.baml:22:15]
  22 │     items.map((x: string) -> { x })
     ·               ──────────┬─────────
-    ·                         ╰── expected `(int) -> int throws never`, found `(x: string) -> string throws never`
+    ·                         ╰── expected `(int) -> int throws never`, found `(x: string) -> int throws never`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[lambda_errors.baml:22:30]
+ 22 │     items.map((x: string) -> { x })
+    ·                              ──┬──
+    ·                                ╰── expected `int`, found `string`
     ╰────
 
   [type] E0002

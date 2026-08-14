@@ -27,11 +27,8 @@ use baml_compiler_diagnostics::{
     ParseError, ToDiagnostic,
 };
 use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
-use baml_compiler2_tir::{
-    infer_context::{DiagnosticLocation, TirTypeError},
-    inference::render_scope_diagnostics,
-    ty::{ParamTy, Ty, TyAttr},
-};
+use baml_compiler2_hir_ty::diagnostics::TirTypeError;
+use baml_type::Ty;
 use text_size::TextRange;
 
 use crate::Db;
@@ -103,70 +100,151 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // relies on when it resolves a `FileScopeId` in the expanded arena — and we
     // iterate only that prefix, so synthetic `*$stream` scopes are never
     // visited and diagnostics are unchanged.
-    let ppir_index = baml_compiler2_ppir::file_semantic_index(db, file);
-    for (file_scope_idx, scope_id) in ppir_index
-        .scope_ids
-        .iter()
-        .take(index.scopes.len())
-        .enumerate()
+    // Body-owner granularity (hir_ty infers whole bodies, lambdas in the
+    // owner's arena): an owner is suppressed when ITS scope or any
+    // descendant scope is parse-tainted - the same cascades the per-scope
+    // walk suppressed.
+    //
     {
-        if tainted.contains(&file_scope_idx) {
-            continue;
+        use baml_compiler2_hir::body::BodyOwnerId;
+        let mut owners: Vec<BodyOwnerId> = Vec::new();
+        for owner in baml_compiler2_ppir::file_body_owners(db, file) {
+            owners.push(owner);
+            if let BodyOwnerId::Function(function) = owner {
+                owners.push(BodyOwnerId::ParameterDefaults(function));
+            }
         }
-        let rendered = render_scope_diagnostics(db, *scope_id);
-        for r in rendered {
-            diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, r));
+        for owner in owners {
+            // A scopeless owner (a builtin declaration's parameter
+            // defaults) has no parse-taint surface; it still infers.
+            let owner_tainted = match baml_compiler2_ppir::body_scope(db, owner) {
+                Some(scope) => {
+                    let idx = scope.file_scope_id(db).index() as usize;
+                    idx < index.scopes.len() && {
+                        let descendants = &index.scopes[idx].descendants;
+                        tainted.contains(&idx)
+                            || (descendants.start.index()..descendants.end.index())
+                                .any(|i| tainted.contains(&(i as usize)))
+                    }
+                }
+                None if matches!(owner, BodyOwnerId::ParameterDefaults(_)) => false,
+                None => continue,
+            };
+            let result = baml_compiler2_hir_ty::infer::infer_body(db, owner);
+            if result.diagnostics.is_empty() {
+                continue;
+            }
+            let source_map = baml_compiler2_ppir::body_source_map(db, owner);
+            let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
+            for diagnostic in &result.diagnostics {
+                let rendered = diagnostic.render_with_type_refs(
+                    db,
+                    file,
+                    source_map.as_ref(),
+                    type_ref_spans.as_ref(),
+                );
+                // Inside a parse-tainted scope's span, inference findings
+                // are cascades of the syntax error and stay suppressed -
+                // but an UNRESOLVED TYPE still surfaces (a broken lambda's
+                // mis-parsed annotation names its unknown type rather than
+                // vanishing with the whole body). Unresolved NAMES stay
+                // suppressed with the rest: recovery routinely rereads
+                // stray tokens as value paths, and reporting those reads
+                // as missing names is noise, not signal.
+                if owner_tainted
+                    && !matches!(
+                        rendered.error,
+                        baml_compiler2_hir_ty::diagnostics::TirTypeError::UnresolvedType { .. }
+                    )
+                {
+                    continue;
+                }
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
+        // SIGNATURE-side diagnostics: unresolved references (E0002) and
+        // non-interface bounds (E0145), re-lowered with the sink - plus the
+        // declaration-structural parameter-default rules (required-after-
+        // default ordering, `self` defaults, forward references).
+        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+            for (range, error) in
+                baml_compiler2_hir_ty::defaults::parameter_default_diagnostics(db, func_loc)
+                    .into_iter()
+                    .chain(
+                        baml_compiler2_hir_ty::lower::signature_lowering_diagnostics(db, func_loc),
+                    )
+            {
+                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                    message: error.to_string(),
+                    error,
+                    range,
+                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    related: Vec::new(),
+                };
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
+        // CLASS generic-bound diagnostics.
+        for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
+            for (range, error) in
+                baml_compiler2_hir_ty::lower::class_lowering_diagnostics(db, class_loc)
+            {
+                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                    message: error.to_string(),
+                    error,
+                    range,
+                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    related: Vec::new(),
+                };
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
+        // INTERFACE requires-clause diagnostics.
+        for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, file) {
+            for (range, error) in
+                baml_compiler2_hir_ty::lower::interface_lowering_diagnostics(db, iface_loc)
+            {
+                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                    message: error.to_string(),
+                    error,
+                    range,
+                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    related: Vec::new(),
+                };
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
         }
     }
 
-    // ── 4. TIR2 structural diagnostics ───────────────────────────────────────
+    // ── 4. Declaration structural diagnostics ────────────────────────────────
     //
-    // Type errors in class field annotations and type alias bodies. These are
-    // produced by `resolve_class_fields` and `resolve_type_alias` (both Salsa-
-    // cached per item), which already store `TextRange` in their diagnostics —
-    // no source map lookup needed here.
+    // Type-alias bodies re-lowered with the sink (class field annotations
+    // ride the layer-3 class walk).
     for (_name, contrib) in &index.symbol_contributions.types {
         use baml_compiler2_hir::contributions::Definition;
-        match contrib.definition {
-            Definition::Class(class_loc) => {
-                let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
-                for (error, span) in &resolved.diagnostics {
-                    diagnostics.push(new_tir_diagnostic(
-                        error,
-                        rich_source_aware_tir_type_error_message(db, file, error),
-                        Span {
-                            file_id,
-                            range: *span,
-                        },
-                        false,
-                    ));
-                }
-            }
-            Definition::TypeAlias(alias_loc) => {
-                let resolved = baml_compiler2_tir::inference::resolve_type_alias(db, alias_loc);
-                for (error, span) in &resolved.diagnostics {
-                    diagnostics.push(new_tir_diagnostic(
-                        error,
-                        rich_source_aware_tir_type_error_message(db, file, error),
-                        Span {
-                            file_id,
-                            range: *span,
-                        },
-                        false,
-                    ));
-                }
-            }
-            _ => {}
+        let Definition::TypeAlias(alias_loc) = contrib.definition else {
+            continue;
+        };
+        for (range, error) in
+            baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(db, alias_loc)
+        {
+            let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                message: error.to_string(),
+                error,
+                range,
+                severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                related: Vec::new(),
+            };
+            diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
         }
     }
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
+    let res_ctx = baml_compiler2_hir_ty::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
     // Salsa-cached per package — previously rebuilt (and cloned per function
     // below) on every file check.
-    let aliases = baml_compiler2_tir::inference::package_resolved_aliases(db, pkg_id);
     // Reuse the memoized CST → AST lowering instead of re-lowering here.
     let ast_items = &baml_compiler2_hir::file_ast(db, file).items;
     diagnostics.extend(validate_associated_type_bindings_in_items(
@@ -178,266 +256,6 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     ));
 
     // Backtick templates are parsed and type-checked by the compiler.
-
-    // ── 6. Function signature diagnostics ────────────────────────────────────
-    //
-    // FIXME(lsp-validation-antipattern): this re-implements TIR signature
-    // checking off the item-data firewall. Validation logic belongs in TIR/HIR
-    // with check.rs only surfacing diagnostics; it stays here because the
-    // default-signature diagnostics it emits have no TIR home yet.
-    //
-    // Build a method → enclosing class list so we can merge class generic params.
-    let mut method_to_class = Vec::new();
-    for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-        for &method_loc in &class_data.methods {
-            method_to_class.push((method_loc, class_loc));
-        }
-    }
-    // Out-of-body `implement Interface for Type` methods: their `Self` resolves
-    // to the `for` target and the block's generic params are in scope. Bodied
-    // (`$rust_function`/builtin) impl methods skip the scope-inference path, so
-    // without this their signatures would leave `Self` unresolved here.
-    let mut method_to_impl = Vec::new();
-    for &impl_loc in baml_compiler2_ppir::item_data::file_free_impls(db, file) {
-        let block = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-        for &method_loc in &block.methods {
-            method_to_impl.push((method_loc, impl_loc));
-        }
-    }
-
-    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
-        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
-        // Expression-body functions already have their signatures checked during
-        // scope inference (step 3); only check non-expr bodies here. `function_body`
-        // is tracked (its `Arc` is cached per revision), so this body-kind test is
-        // O(1) on repeat rather than re-cloning the `ExprBody` arena each call.
-        if matches!(
-            baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
-            baml_compiler2_hir::body::FunctionBody::Expr(..)
-        ) {
-            continue;
-        }
-
-        let func_source_map = baml_compiler2_ppir::item_data::function_source_map(db, func_loc);
-        let mut type_errors = Vec::new();
-        let mut param_types = Vec::new();
-
-        let generic_params = baml_compiler2_tir::function_generic_params(db, func_loc);
-        let enclosing_class = method_to_class
-            .iter()
-            .find(|(mid, _)| *mid == func_loc)
-            .map(|(_, class_loc)| *class_loc);
-        // BEP-044: inside an out-of-body `implement Interface for Type` block,
-        // `Self` is the `for` target and the block's generic params are in scope.
-        let enclosing_impl = method_to_impl
-            .iter()
-            .find(|(mid, _)| *mid == func_loc)
-            .map(|(_, imp)| *imp);
-        let enclosing_impl_data =
-            enclosing_impl.map(|imp| baml_compiler2_ppir::item_data::impl_block_data(db, imp));
-        // Pre-resolve `Self` to the enclosing impl's `for` target before lowering
-        // signature types, mirroring the body path in `tir::inference`. The
-        // for-target lives in the impl block's own type-ref arena.
-        let self_replacement: Option<(
-            &baml_compiler2_hir::type_ref::TypeRefStore,
-            baml_compiler2_hir::type_ref::TypeRefId,
-        )> = enclosing_impl_data.and_then(|block| match &block.subject {
-            baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
-                Some((&block.type_refs, *for_target))
-            }
-            baml_compiler2_ppir::item_data::ImplSubjectData::InClass { .. } => None,
-        });
-        // BEP-044: `Self` in an out-of-body impl method's signature is the impl's
-        // `for` target. The lowering context carries it as `self_ty`, so `Self`
-        // resolves during lowering (no textual substitution).
-        let self_ty: Option<Ty> = self_replacement.map(|(store, id)| {
-            baml_compiler2_tir::lower_type_expr::lower_type_ref(
-                store,
-                id,
-                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: pkg_items,
-                    ns_context: &pkg_info.namespace_path,
-                    generic_params: &generic_params,
-                    bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(),
-                    self_ty: None,
-                },
-                &mut Vec::new(),
-            )
-        });
-        let lower_sig_ref = |id: baml_compiler2_hir::type_ref::TypeRefId,
-                             generic_params: &[ParamTy],
-                             diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
-         -> Ty {
-            baml_compiler2_tir::lower_type_expr::lower_type_ref(
-                &func_data.type_refs,
-                id,
-                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: pkg_items,
-                    ns_context: &pkg_info.namespace_path,
-                    generic_params,
-                    bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(),
-                    self_ty: self_ty.clone(),
-                },
-                diags,
-            )
-        };
-
-        // Check return type — anchor diagnostics at the return type's source span.
-        if let Some(ret_id) = func_data.return_type {
-            lower_sig_ref(ret_id, &generic_params, &mut type_errors);
-            if !type_errors.is_empty() {
-                let range = func_source_map.type_refs.span(ret_id);
-                for error in type_errors.drain(..) {
-                    diagnostics.push(
-                        Diagnostic::error(
-                            tir_type_error_to_diagnostic_id(&error),
-                            error.to_string(),
-                        )
-                        .with_primary_span(Span { file_id, range })
-                        .with_phase(DiagnosticPhase::Type),
-                    );
-                }
-            }
-        }
-
-        // Check parameter types — anchor diagnostics at each annotation's span.
-        for param in &func_data.params {
-            type_errors.clear();
-            let param_ty = if param.name.as_str() == "self" && param.type_ref.is_none() {
-                // `self`'s type is the enclosing receiver: the class for an in-body
-                // method, or the impl's `for` target for an out-of-body
-                // `implement I for C` method (mirroring the body path in
-                // `tir::inference`). Falling back to `Unknown` would otherwise
-                // leave `self` untyped in the latter case.
-                if let Some(class_loc) = enclosing_class {
-                    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-                    pkg_items
-                        .lookup_type(&pkg_info.namespace_path, &class_data.name)
-                        .map(|def| {
-                            // Carry the class's generic params as TypeVars so `self`
-                            // is `Class<T..>`, not bare `Class` — mirrors the body
-                            // path in `tir::inference`. A bare `self` leaks an
-                            // unparameterized receiver into generic-class method
-                            // bodies (e.g. the auto-derived `to_json`'s
-                            // `to_string<Self>(self)`).
-                            let class_args: Vec<Ty> =
-                                baml_compiler2_tir::class_generic_params(db, class_loc)
-                                    .into_iter()
-                                    .map(|param| Ty::TypeVar(param, TyAttr::default()))
-                                    .collect();
-                            Ty::Class(
-                                baml_compiler2_tir::lower_type_expr::qualify_def(
-                                    db,
-                                    def,
-                                    &class_data.name,
-                                ),
-                                class_args,
-                                TyAttr::default(),
-                            )
-                        })
-                        .unwrap_or(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        })
-                } else if let Some((store, id)) = self_replacement {
-                    baml_compiler2_tir::lower_type_expr::lower_type_ref(
-                        store,
-                        id,
-                        &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                            db,
-                            package_items: pkg_items,
-                            ns_context: &pkg_info.namespace_path,
-                            generic_params: &generic_params,
-                            bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(
-                            ),
-                            self_ty: None,
-                        },
-                        &mut type_errors,
-                    )
-                } else {
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }
-            } else if let Some(param_id) = param.type_ref {
-                lower_sig_ref(param_id, &generic_params, &mut type_errors)
-            } else {
-                // A missing annotation lowered to the `Unknown` sentinel, which
-                // yields `Ty::Unknown` with no diagnostic.
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            };
-            if !type_errors.is_empty() {
-                if let Some(type_id) = param.type_ref {
-                    let range = func_source_map.type_refs.span(type_id);
-                    for error in type_errors.drain(..) {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                tir_type_error_to_diagnostic_id(&error),
-                                error.to_string(),
-                            )
-                            .with_primary_span(Span { file_id, range })
-                            .with_phase(DiagnosticPhase::Type),
-                        );
-                    }
-                }
-            }
-            param_types.push((param.name.clone(), param_ty));
-        }
-
-        if let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, func_loc) {
-            let context = baml_compiler2_tir::infer_context::InferContext::new(db, scope_id);
-            let mut builder = baml_compiler2_tir::builder::TypeInferenceBuilder::new(
-                context, res_ctx, pkg_id, scope_id, aliases,
-            );
-            builder.set_generic_params(generic_params);
-            for (name, ty) in &param_types {
-                builder.add_local(name.clone(), ty.clone());
-                builder.param_types.push((name.clone(), ty.clone()));
-            }
-            let parameter_defaults =
-                baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
-            builder.check_function_parameter_defaults(
-                &baml_compiler2_ppir::item_data::function_data(db, func_loc).params,
-                &baml_compiler2_ppir::item_data::function_source_map(db, func_loc).param_spans,
-                &parameter_defaults,
-                &param_types,
-            );
-
-            let (
-                _expressions,
-                _pattern_types,
-                _resolutions,
-                _catch_residual_throws,
-                _exhaustive_matches,
-                type_check_diagnostics,
-                _path_root_types,
-                _path_segment_types,
-                _path_member_resolutions,
-                _param_types,
-                _call_plans,
-                _call_type_instantiations,
-                _function_coercions,
-                _call_throws,
-                _template_body_params,
-                _default_parameter_inference,
-                _nested_lambda_inference,
-            ) = builder.finish();
-            for tir_diag in type_check_diagnostics.diagnostics {
-                if !is_function_default_signature_diagnostic(&tir_diag) {
-                    continue;
-                }
-                diagnostics.push(tir_rendered_to_diagnostic_for_file(
-                    db,
-                    file,
-                    tir_diag.render(db, file, None),
-                ));
-            }
-        }
-    }
 
     // ── 7. Interface impl + coherence diagnostics (BEP-044) ──────────────────
     //
@@ -519,7 +337,7 @@ fn parse_error_tainted_scopes(
 ///    associated-binding-bound violations. Nothing else in the workspace calls
 ///    this query, so it must be surfaced here.
 fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagnostic> {
-    use baml_compiler2_tir::interfaces::ImplDataError;
+    use baml_compiler2_hir_ty::interfaces::ImplDataError;
 
     let mut diagnostics = Vec::new();
 
@@ -531,7 +349,7 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
     // another file or a dependency).
     let package = baml_compiler2_hir::file_package::file_package(db, file).package;
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, package);
-    for violation in baml_compiler2_tir::interfaces::package_coherence_diagnostics(db, pkg_id) {
+    for violation in baml_compiler2_hir_ty::interfaces::package_coherence_diagnostics(db, pkg_id) {
         // Anchor the error on whichever conflicting impl lives in *this* file, pointing
         // at its partner. A cross-file pair is reported once per file (each anchored on
         // its own impl), so neither offending file is left unmarked — checking only the
@@ -568,18 +386,18 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
     // `(TirTypeError, ImplDiagnosticLocation)` pairs anchored via the same source
     // map; a `Method` / field-link / binding location may mark several sites.
     for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
-        let sm = baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc);
+        let sm = baml_compiler2_hir_ty::interfaces::impl_data_source_map(db, impl_loc);
         // `impl_data` owns an impl's structural diagnostics whether or not it
         // fully resolves: an unresolved interface target still carries the
         // diagnostics it lowered (the bad target, the for-target, the bounds). A
         // cyclic header carries none — `validate_impl_signatures` re-detects and
         // surfaces `CyclicImplHeader` for it.
-        let structural = match baml_compiler2_tir::interfaces::impl_data(db, impl_loc).as_ref() {
+        let structural = match baml_compiler2_hir_ty::interfaces::impl_data(db, impl_loc).as_ref() {
             Ok(data) => Some(&data.diagnostics),
             Err(ImplDataError::InterfaceUnresolved { diagnostics }) => Some(diagnostics),
             Err(ImplDataError::CyclicHeader | ImplDataError::Malformed) => None,
         };
-        let signatures = baml_compiler2_tir::interfaces::validate_impl_signatures(db, impl_loc);
+        let signatures = baml_compiler2_hir_ty::interfaces::validate_impl_signatures(db, impl_loc);
         for (error, loc) in structural.into_iter().flatten().chain(signatures) {
             for span in impl_diagnostic_spans(loc, sm) {
                 diagnostics.push(
@@ -599,10 +417,10 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
 /// field links, associated bindings) can mark several same-named sites; an empty
 /// or missing entry falls back to the whole-block span.
 fn impl_diagnostic_spans(
-    loc: &baml_compiler2_tir::interfaces::ImplDiagnosticLocation,
-    sm: &baml_compiler2_tir::interfaces::ImplDataSourceMap,
+    loc: &baml_compiler2_hir_ty::interfaces::ImplDiagnosticLocation,
+    sm: &baml_compiler2_hir_ty::interfaces::ImplDataSourceMap,
 ) -> Vec<Span> {
-    use baml_compiler2_tir::interfaces::ImplDiagnosticLocation;
+    use baml_compiler2_hir_ty::interfaces::ImplDiagnosticLocation;
 
     let named = |spans: Option<&Vec<Span>>| -> Vec<Span> {
         spans
@@ -636,10 +454,10 @@ fn impl_diagnostic_spans(
 fn resolve_interface_path<'db>(
     db: &'db dyn Db,
     target: &baml_compiler2_ast::TypeExpr,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
 ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
-    baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
+    baml_compiler2_hir_ty::interfaces::resolve_path_to_interface_identity(
         db,
         target,
         pkg_items,
@@ -933,12 +751,12 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                         resolve_interface_path(db, bound, pkg_items, namespace_path)
                     });
                     let sources: Vec<String> =
-                        baml_compiler2_tir::interfaces::interfaces_declaring_associated_type(
+                        baml_compiler2_hir_ty::interfaces::interfaces_declaring_associated_type(
                             db, roots, member,
                         )
                         .into_iter()
                         .filter_map(|loc| {
-                            baml_compiler2_tir::interfaces::interface_loc_qtn(db, loc)
+                            baml_compiler2_hir_ty::interfaces::interface_loc_qtn(db, loc)
                                 .map(|qtn| qtn.render_user_facing())
                         })
                         .collect();
@@ -1127,19 +945,6 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
     }
 }
 
-fn is_function_default_signature_diagnostic(
-    diag: &baml_compiler2_tir::infer_context::TirDiagnostic<'_>,
-) -> bool {
-    matches!(&diag.primary, DiagnosticLocation::Span(_))
-        && matches!(
-            &diag.error,
-            TirTypeError::RequiredParamAfterDefault { .. }
-                | TirTypeError::SelfParamDefault
-                | TirTypeError::DefaultParamForwardReference { .. }
-                | TirTypeError::TypeMismatch { .. }
-        )
-}
-
 /// Convert a `RenderedTirDiagnostic` to the shared `Diagnostic` type.
 ///
 /// `RenderedTirDiagnostic` has already resolved arena IDs to `TextRange`.
@@ -1147,7 +952,7 @@ fn is_function_default_signature_diagnostic(
 ///
 #[cfg(test)]
 fn tir_rendered_to_diagnostic(
-    rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+    rendered: baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic,
     file_id: FileId,
 ) -> Diagnostic {
     let message = DiagnosticText::from(rendered.message.clone());
@@ -1155,7 +960,7 @@ fn tir_rendered_to_diagnostic(
 }
 
 fn tir_rendered_to_diagnostic_with_message(
-    rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+    rendered: baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic,
     file_id: FileId,
     message: DiagnosticText,
 ) -> Diagnostic {
@@ -1172,7 +977,7 @@ fn tir_rendered_to_diagnostic_with_message(
     };
     let warning = matches!(
         rendered.severity,
-        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning
+        baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning
     );
     let mut diag = new_tir_diagnostic(&rendered.error, message, span, warning);
     let diag = if let Some(member) = &unknown_member_access_member {
@@ -1202,7 +1007,7 @@ fn tir_rendered_to_diagnostic_with_message(
 fn tir_rendered_to_diagnostic_for_file(
     db: &dyn Db,
     file: SourceFile,
-    rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+    rendered: baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic,
 ) -> Diagnostic {
     let message = rich_source_aware_tir_type_error_message(db, file, &rendered.error);
     tir_rendered_to_diagnostic_with_message(rendered, file.file_id(db), message)
@@ -1432,9 +1237,9 @@ fn source_aware_tir_type_error_message(
 /// This is used when we have access to the typed `TirTypeError` (for class field
 /// and type alias diagnostics) rather than just the rendered string.
 fn tir_type_error_to_diagnostic_id(
-    error: &baml_compiler2_tir::infer_context::TirTypeError,
+    error: &baml_compiler2_hir_ty::diagnostics::TirTypeError,
 ) -> DiagnosticId {
-    use baml_compiler2_tir::infer_context::TirTypeError;
+    use baml_compiler2_hir_ty::diagnostics::TirTypeError;
     match error {
         TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
@@ -1609,7 +1414,7 @@ fn tir_type_error_to_diagnostic_id(
 #[cfg(test)]
 mod tests {
     use baml_compiler_diagnostics::Severity;
-    use baml_compiler2_tir::infer_context::{DiagnosticSeverity, RenderedTirDiagnostic};
+    use baml_compiler2_hir_ty::diagnostics::{DiagnosticSeverity, RenderedTirDiagnostic};
     use text_size::{TextRange, TextSize};
 
     use super::*;
@@ -1622,12 +1427,12 @@ mod tests {
 
     fn dummy_rendered(severity: DiagnosticSeverity) -> RenderedTirDiagnostic {
         RenderedTirDiagnostic {
-            error: baml_compiler2_tir::infer_context::TirTypeError::TypeMismatch {
-                expected: baml_compiler2_tir::ty::Ty::Never {
-                    attr: baml_compiler2_tir::ty::TyAttr::default(),
+            error: baml_compiler2_hir_ty::diagnostics::TirTypeError::TypeMismatch {
+                expected: baml_type::Ty::Never {
+                    attr: baml_type::TyAttr::default(),
                 },
-                got: baml_compiler2_tir::ty::Ty::Never {
-                    attr: baml_compiler2_tir::ty::TyAttr::default(),
+                got: baml_type::Ty::Never {
+                    attr: baml_type::TyAttr::default(),
                 },
             },
             message: "test message".to_string(),

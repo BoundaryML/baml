@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+301..305 'pair': throws never
+328..342 '{\n   ... b]\n}': T[]
+334..340 '[a, b]': T[]
+335..336 'a': T
+338..339 'b': T
+353..354 'f': throws never
+366..415 '{\n   ...  p\n}': int[]
+372..377 'let p': int[]
+380..384 'pair': (a: int, b: int) -> int[] throws never
+380..390 'pair(1, 2)': int[]
+385..386 '1': 1
+388..389 '2': 2
+412..413 'p': int[]

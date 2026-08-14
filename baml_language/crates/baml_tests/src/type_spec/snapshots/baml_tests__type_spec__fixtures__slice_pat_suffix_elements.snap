@@ -1,0 +1,36 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+114..124 'srp_suffix': throws never
+165..308 '{\n   ...  r\n}': int
+171..176 'let r': int
+179..300 'match ...n    }': int
+186..187 'p': user.SrpWrap | int[]
+213..251 'SrpWra..., _] }': user.SrpWrap
+213..273 'SrpWra...t, ..]': user.SrpWrap | int[]
+230..249 '[.., l...nt, _]': int[]
+235..245 'let v: int': int
+242..245 'int': int
+247..248 '_': int
+254..273 '[_, le...t, ..]': int[]
+255..256 '_': int
+258..268 'let v: int': int
+265..268 'int': int
+277..278 'v': int
+288..289 '_': user.SrpWrap | int[]
+293..294 '0': 0
+305..306 'r': int
+318..328 'srp_nested': throws never
+361..464 '{\n   ...  r\n}': int
+367..372 'let r': int
+375..456 'match ...n    }': int
+382..383 'v': int[][]
+409..429 '[.., [..., ..]]': int[][]
+414..428 '[_, let x, ..]': int[]
+415..416 '_': int
+418..423 'let x': int
+433..434 'x': int
+444..445 '_': int[][]
+449..450 '0': 0
+461..462 'r': int

@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+204..205 'f': throws never
+225..353 '{\n   ...ull\n}': int | null
+231..236 'let n': int
+239..246 'xs.push': (self: int[], item: int) -> int throws never
+239..249 'xs.push(4)': int
+247..248 '4': 4
+269..274 'let m': int[]
+277..283 'xs.map': (self: int[], f: (int) -> int throws never) -> int[] throws never
+277..297 'xs.map...{ x })': int[]
+284..296 '(x) -> { x }': (x: int) -> int throws never
+291..296 '{ x }': int
+293..294 'x': int
+319..324 'xs.at': (self: int[], index: int) -> int | null throws never
+319..327 'xs.at(0)': int | null
+325..326 '0': 0

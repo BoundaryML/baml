@@ -85,7 +85,7 @@ async fn escaped_instance_rejects_wrong_type_args() {
             b
         }
         function main() -> int {
-            let b = mk(5);
+            let b: unknown = mk(5);
             if (b is Box<string>) { 1 } else { 0 }
         }
     "#;

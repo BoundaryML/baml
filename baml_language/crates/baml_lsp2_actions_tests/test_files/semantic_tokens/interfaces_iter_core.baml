@@ -434,7 +434,14 @@ class Chain<T, E> {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[interfaces_iter_core.baml:212:42]
+//  212 │ ╭─▶   function get(self) -> T throws unknown {
+//  213 │ │       self.value
+//  214 │ ╰─▶   }
+//      ╰────
 //
 //- semantic_tokens
 // interfaces_iter_core.baml:1:1 (comment) len=77 "// Iterator protocol and concrete sources for the native BAML iterator tests."

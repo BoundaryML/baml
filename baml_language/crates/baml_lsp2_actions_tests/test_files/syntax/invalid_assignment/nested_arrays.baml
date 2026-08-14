@@ -71,10 +71,18 @@ function NestedArrayAssignments() -> int {
 // E0001
 //
 //   × mismatched types
-//     ╭─[invalid_assignment_nested_arrays.baml:32:6]
+//     ╭─[invalid_assignment_nested_arrays.baml:32:7]
 //  32 │     e = [[4, 5], [6, 7]];
-//     ·         ────────┬───────
-//     ·                 ╰── expected `int[]`, found `int[][]`
+//     ·          ───┬──
+//     ·             ╰── expected `int`, found `int[]`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nested_arrays.baml:32:15]
+//  32 │     e = [[4, 5], [6, 7]];
+//     ·                  ───┬──
+//     ·                     ╰── expected `int`, found `int[]`
 //     ╰────
 // E0001
 //

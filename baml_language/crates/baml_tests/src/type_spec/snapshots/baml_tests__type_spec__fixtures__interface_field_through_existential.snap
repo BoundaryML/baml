@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+108..109 'f': throws never
+130..162 '{\n   ...ing\n}': string
+136..142 'n.name': string

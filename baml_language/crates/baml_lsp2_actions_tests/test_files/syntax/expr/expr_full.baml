@@ -70,17 +70,17 @@ test TestMakePoem() {
 //- diagnostics
 // E0003
 //
-//   × unresolved name: `poem`
-//     ╭─[expr_expr_full.baml:41:16]
-//  41 │   CombinePoems(poem, another)
-//     ·                ────
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:45:3]
+//  45 │   functions [Pipeline]
+//     ·   ─────────
 //     ╰────
-// E0003
+// E0002
 //
-//   × unresolved name: `another`
-//     ╭─[expr_expr_full.baml:41:22]
-//  41 │   CombinePoems(poem, another)
-//     ·                      ───────
+//   × unresolved type: args
+//     ╭─[expr_expr_full.baml:46:3]
+//  46 │   args { }
+//     ·   ────────
 //     ╰────
 // E0003
 //
@@ -92,15 +92,15 @@ test TestMakePoem() {
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:45:3]
-//  45 │   functions [Pipeline]
+//     ╭─[expr_expr_full.baml:50:3]
+//  50 │   functions [Pyramid]
 //     ·   ─────────
 //     ╰────
 // E0002
 //
 //   × unresolved type: args
-//     ╭─[expr_expr_full.baml:46:3]
-//  46 │   args { }
+//     ╭─[expr_expr_full.baml:51:3]
+//  51 │   args { }
 //     ·   ────────
 //     ╰────
 // E0003
@@ -113,20 +113,6 @@ test TestMakePoem() {
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:50:3]
-//  50 │   functions [Pyramid]
-//     ·   ─────────
-//     ╰────
-// E0002
-//
-//   × unresolved type: args
-//     ╭─[expr_expr_full.baml:51:3]
-//  51 │   args { }
-//     ·   ────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
 //     ╭─[expr_expr_full.baml:55:3]
 //  55 │   functions [OuterPyramid]
 //     ·   ─────────
@@ -137,6 +123,27 @@ test TestMakePoem() {
 //     ╭─[expr_expr_full.baml:56:3]
 //  56 │   args { }
 //     ·   ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:65:5]
+//  65 │     functions [MakePoem]
+//     ·     ─────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `args`
+//     ╭─[expr_expr_full.baml:66:5]
+//  66 │     args { length 4 }
+//     ·     ────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `length`
+//     ╭─[expr_expr_full.baml:66:12]
+//  66 │     args { length 4 }
+//     ·            ──────
 //     ╰────
 // E0003
 //
@@ -147,85 +154,15 @@ test TestMakePoem() {
 //     ╰────
 // E0003
 //
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:65:5]
-//  65 │     functions [MakePoem]
-//     ·     ─────────
+//   × unresolved name: `poem`
+//     ╭─[expr_expr_full.baml:41:16]
+//  41 │   CombinePoems(poem, another)
+//     ·                ────
 //     ╰────
 // E0003
 //
-//   × unresolved name: `args`
-//     ╭─[expr_expr_full.baml:66:5]
-//  66 │     args { length 4 }
-//     ·     ────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `length`
-//     ╭─[expr_expr_full.baml:66:12]
-//  66 │     args { length 4 }
-//     ·            ──────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:45:3]
-//  45 │   functions [Pipeline]
-//     ·   ─────────
-//     ╰────
-// E0002
-//
-//   × unresolved type: args
-//     ╭─[expr_expr_full.baml:46:3]
-//  46 │   args { }
-//     ·   ────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:50:3]
-//  50 │   functions [Pyramid]
-//     ·   ─────────
-//     ╰────
-// E0002
-//
-//   × unresolved type: args
-//     ╭─[expr_expr_full.baml:51:3]
-//  51 │   args { }
-//     ·   ────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:55:3]
-//  55 │   functions [OuterPyramid]
-//     ·   ─────────
-//     ╰────
-// E0002
-//
-//   × unresolved type: args
-//     ╭─[expr_expr_full.baml:56:3]
-//  56 │   args { }
-//     ·   ────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:65:5]
-//  65 │     functions [MakePoem]
-//     ·     ─────────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `args`
-//     ╭─[expr_expr_full.baml:66:5]
-//  66 │     args { length 4 }
-//     ·     ────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `length`
-//     ╭─[expr_expr_full.baml:66:12]
-//  66 │     args { length 4 }
-//     ·            ──────
+//   × unresolved name: `another`
+//     ╭─[expr_expr_full.baml:41:22]
+//  41 │   CombinePoems(poem, another)
+//     ·                      ───────
 //     ╰────

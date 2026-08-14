@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/type_spec/pattern_corpus.rs
+expression: "corpus_verdicts(\"projects/diagnostic_errors/generic_rigid_coverage/main.baml\")"
+---
+rigid_only_arm_is_not_exhaustive: hir_ty=1
+wildcard_after_reflexive_arm_is_unreachable: hir_ty=0
+concrete_only_arm_over_rigid_is_not_exhaustive: hir_ty=1

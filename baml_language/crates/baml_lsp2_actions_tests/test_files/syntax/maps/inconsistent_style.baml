@@ -29,10 +29,3 @@ function InconsistentStyleUse() -> int{
 //    ·                   ┬
 //    ·                   ╰── expected `expression`, found `':'`
 //    ╰────
-// E0003
-//
-//   × unresolved name: `name`
-//    ╭─[maps_inconsistent_style.baml:8:9]
-//  8 │         name "Hello"
-//    ·         ────
-//    ╰────

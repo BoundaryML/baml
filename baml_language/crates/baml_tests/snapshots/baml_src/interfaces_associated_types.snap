@@ -191,7 +191,7 @@ function interfaces_associated_types.BcpTextSource.BcpSource.get(self: interface
     return
 }
 
-function interfaces_associated_types.BcpWrapperView$for$BcpWrapped<S>.output(self: interfaces_associated_types.BcpWrapped<#0>) -> string {
+function interfaces_associated_types.BcpWrapperView$for$BcpWrapped<S>.output(self: interfaces_associated_types.BcpWrapped<#0>) -> (interfaces_associated_types.BcpWrapped<#0> as interfaces_associated_types.BcpWrapperView<Output = (#0 as interfaces_associated_types.BcpSource<Item = string>).Item>).Output {
     load_var self
     load_field .inner
     load_type interfaces_associated_types.BcpSource<Item = string>
@@ -202,7 +202,7 @@ function interfaces_associated_types.BcpWrapperView$for$BcpWrapped<S>.output(sel
     return
 }
 
-function interfaces_associated_types.BspRenderable$for$BspWrapped<T>.render(self: interfaces_associated_types.BspWrapped<#0>) -> string {
+function interfaces_associated_types.BspRenderable$for$BspWrapped<T>.render(self: interfaces_associated_types.BspWrapped<#0>) -> (interfaces_associated_types.BspWrapped<#0> as interfaces_associated_types.BspRenderable<Output = (#0 as interfaces_associated_types.BspSource<Item = string>).Item>).Output {
     load_var self
     load_field .inner
     load_type interfaces_associated_types.BspSource<Item = string>
@@ -310,7 +310,7 @@ function interfaces_associated_types.Ticket.Describable.value(self: interfaces_a
     return
 }
 
-function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> string {
+function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> (interfaces_associated_types.UpcEntityBox<#0> as interfaces_associated_types.UpcSummarizes<Key = string>).Key {
     load_var self
     load_field .value
     load_type interfaces_associated_types.UpcHasKey<Key = string>
@@ -519,7 +519,7 @@ function interfaces_associated_types.bsp_main() -> string {
     return
 }
 
-function interfaces_associated_types.bsp_take_source(source: #0) -> string {
+function interfaces_associated_types.bsp_take_source(source: #0) -> (#0 as interfaces_associated_types.BspSource<Item = string>).Item {
     load_var source
     load_type interfaces_associated_types.BspSource<Item = string>
     load_const "get"

@@ -443,6 +443,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
   L5:
     load_var _39
     store_var u
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 21 26
     load_field .id
     load_var u
@@ -457,10 +458,11 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
   L6:
     load_var turn
     load_field .usage
-    store_var _49
-    load_var _49
+    store_var _50
+    load_var _50
     narrow_bind ai.events.Usage, slot=27
     pop_jump_if_false L7
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 21 27
     call baml.Array.push
     pop 1
@@ -468,10 +470,10 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
   L7:
     load_var turn
     call ai.ModelTurn.terminal_text
-    store_var _54
-    load_var _54
+    store_var _56
+    load_var _56
     store_var candidate
-    load_var _54
+    load_var _56
     load_const null
     cmp_op ==
     pop_jump_if_false L8
@@ -482,8 +484,8 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_var turn
     call ai.ModelTurn.tool_uses
     container_len
-    store_var _60
-    load_var _60
+    store_var _62
+    load_var _62
     load_const 0
     cmp_int_op >
     jump_if_false L9
@@ -538,12 +540,13 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _86
+    store_var _89
     load_var2 33 28
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
   L17:
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var batch
     load_const "The reply did not match the required schema. Answer again with only the corrected value."
     init_instance ai.events.UserMessage .content
@@ -593,8 +596,8 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _75
-    load_var _75
+    store_var _77
+    load_var _77
     load_const "the model declined to answer"
     load_const null
     init_instance ai.errors.Refused .provider, .reason, .raw_body
@@ -605,7 +608,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _72
+    store_var _74
     load_var2 31 28
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
@@ -640,37 +643,37 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
     call baml.Array.at
     store_var _12
     load_var _12
-    narrow_bind ai.events.AssistantMessage, slot=8
+    narrow_bind ai.events.RunStarted, slot=8
     pop_jump_if_false L3
     jump L10
 
   L3:
     load_var _12
-    narrow_bind ai.events.FinalProduced, slot=8
+    narrow_bind ai.events.UserMessage, slot=8
     pop_jump_if_false L4
     jump L10
 
   L4:
     load_var _12
-    narrow_bind ai.events.RunStarted, slot=8
+    narrow_bind ai.events.AssistantMessage, slot=8
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var _12
-    narrow_bind ai.events.ToolCompleted, slot=8
+    narrow_bind ai.events.ToolRequested, slot=8
     pop_jump_if_false L6
     jump L10
 
   L6:
     load_var _12
-    narrow_bind ai.events.ToolFailed, slot=8
+    narrow_bind ai.events.ToolCompleted, slot=8
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var _12
-    narrow_bind ai.events.ToolRequested, slot=8
+    narrow_bind ai.events.ToolFailed, slot=8
     pop_jump_if_false L8
     jump L10
 
@@ -682,7 +685,7 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
 
   L9:
     load_var _12
-    narrow_bind ai.events.UserMessage, slot=8
+    narrow_bind ai.events.FinalProduced, slot=8
     pop_jump_if_false L11
 
   L10:
@@ -761,7 +764,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_var call
     load_field .id
     store_var _15
-    load_type baml.errors.InvalidArgument | baml.json.JsonSerializationError | unknown
+    load_type unknown
     load_var e
     call baml.String.from
     store_var _16
@@ -822,7 +825,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_var call
     load_field .name
     store_var _27
-    load_type baml.errors.InvalidArgument | baml.json.JsonSerializationError | unknown
+    load_type unknown
     load_var e
     call baml.String.from
     store_var _28
@@ -945,14 +948,14 @@ function ai.FunctionSpec.tools(self: ai.FunctionSpec<#0>) -> ai.tools.Toolbox {
 
 function ai.Journal.append_all(self: ai.Journal, events: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[]) -> void {
     load_var events
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -1003,14 +1006,14 @@ function ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null {
     store_var out
     load_var self
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1041,14 +1044,14 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
     store_var out
     load_var self
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1063,6 +1066,7 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
     load_var _9
     narrow_bind ai.content.ToolUse, slot=5
     pop_jump_if_false L0
+    load_type ai.content.ToolUse
     load_var2 2 5
     call baml.Array.push
     pop 1
@@ -1807,6 +1811,7 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
     load_var _13
     call baml.Map.set
     pop 1
+    load_type string
     load_var2 4 7
     load_field .name
     call baml.Array.push
@@ -2079,14 +2084,14 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     load_type baml.json.json
     alloc_array 0
     call baml.json.path_or
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _12
 
   L0:
     load_var _12
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
@@ -2112,6 +2117,7 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     load_const ""
     call baml.json.path_or
     store_var _22
+    load_type string
     load_var2 5 9
     call baml.Array.push
     pop 1
@@ -2139,17 +2145,17 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     load_type string
     load_var name
     call baml.String.from
-    store_var _34
+    store_var _35
     load_type string
     load_var joined
     call baml.String.from
-    store_var _36
+    store_var _37
     load_const "mcp tool "
-    load_var _34
+    load_var _35
     bin_op +
     load_const " failed: "
     bin_op +
-    load_var _36
+    load_var _37
     bin_op +
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -2213,8 +2219,8 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     load_var conn
     load_const "initialize"
     load_const "2025-06-18"
-    load_type never
-    load_type never
+    load_type string
+    load_type unknown
     alloc_map 0
     load_const "baml-mcp"
     load_const "0.1"
@@ -2260,14 +2266,14 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
     load_type baml.json.json
     alloc_array 0
     call baml.json.path_or
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
 
   L0:
     load_var _9
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _10
@@ -2322,6 +2328,7 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
     load_const <omitted>
     call ai.tools.raw_tool
     store_var _26
+    load_type ai.tools.Tool
     load_var2 3 11
     call baml.Array.push
     pop 1
@@ -2758,7 +2765,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_field ._decode
     store_var _40
     load_var _40
-    narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta)[] throws unknown, slot=17
+    narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws unknown, slot=17
     pop_jump_if_false L0
     load_var2 16 17
     call_indirect
@@ -3176,6 +3183,7 @@ function ai.tools.Toolbox.new(tools: ai.tools.Tool[]) -> ai.tools.Toolbox {
     jump L3
 
   L2:
+    load_type string
     load_var2 2 5
     load_field .name
     call baml.Array.push
@@ -3474,14 +3482,14 @@ function anthropic.internal._anthropic_assistant_blocks(content: (ai.content.Tex
     alloc_array 0
     store_var out
     load_var content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -3502,8 +3510,8 @@ function anthropic.internal._anthropic_assistant_blocks(content: (ai.content.Tex
 
   L2:
     load_var b
-    store_var _20
-    load_var _20
+    store_var _21
+    load_var _21
     narrow_bind ai.content.Reasoning, slot=9
     pop_jump_if_false L3
     jump L0
@@ -3546,6 +3554,7 @@ function anthropic.internal._anthropic_assistant_blocks(content: (ai.content.Tex
     load_field .args
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 11
     call baml.Array.push
     pop 1
@@ -3573,6 +3582,7 @@ function anthropic.internal._anthropic_assistant_blocks(content: (ai.content.Tex
     load_field .text
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 8
     call baml.Array.push
     pop 1
@@ -3677,6 +3687,7 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
     load_const "message_stop"
     cmp_op ==
     pop_jump_if_false L0
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var out
     alloc_instance ai.stream.TurnDone
     call baml.Array.push
@@ -3695,22 +3706,22 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
     load_var event
     load_field .delta
     load_field .2
-    store_var _65
+    store_var _67
     jump L11
 
   L10:
     load_const null
-    store_var _65
+    store_var _67
 
   L11:
-    load_var _65
+    load_var _67
     load_const null
     cmp_op ==
     pop_jump_if_false L12
     jump L13
 
   L12:
-    load_var _65
+    load_var _67
     call anthropic.internal._anthropic_stop_reason
     store_var stop
     jump L14
@@ -3721,7 +3732,7 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
 
   L14:
     load_var stop
-    store_var _74
+    store_var _76
     load_var event
     load_field .usage
     load_const null
@@ -3733,12 +3744,12 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
     load_var event
     load_field .usage
     load_field .0
-    store_var _75
+    store_var _77
     jump L17
 
   L16:
     load_const null
-    store_var _75
+    store_var _77
 
   L17:
     load_var event
@@ -3752,14 +3763,15 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
     load_var event
     load_field .usage
     load_field .1
-    store_var _79
+    store_var _81
     jump L20
 
   L19:
     load_const null
-    store_var _79
+    store_var _81
 
   L20:
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var2 2 22
     load_var2 23 24
     init_instance ai.stream.TurnMeta .stop_reason, .input_tokens, .output_tokens
@@ -3797,12 +3809,12 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
     load_field .message
     load_field .0
     load_field .0
-    store_var _42
+    store_var _43
     jump L26
 
   L25:
     load_const null
-    store_var _42
+    store_var _43
 
   L26:
     load_var event
@@ -3834,14 +3846,15 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
     load_field .message
     load_field .0
     load_field .1
-    store_var _52
+    store_var _53
     jump L31
 
   L30:
     load_const null
-    store_var _52
+    store_var _53
 
   L31:
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var out
     load_const null
     load_var2 18 19
@@ -3882,6 +3895,7 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
     load_var _33
     narrow_bind string, slot=17
     pop_jump_if_false L0
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var2 2 17
     init_instance ai.stream.TextDelta .text
     call baml.Array.push
@@ -3899,14 +3913,14 @@ function anthropic.internal._anthropic_lower_journal(j: ai.Journal) -> anthropic
     store_var msgs
     load_var j
     call ai.Journal.entries
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -3927,27 +3941,27 @@ function anthropic.internal._anthropic_lower_journal(j: ai.Journal) -> anthropic
 
   L2:
     load_var e
-    store_var _24
-    load_var _24
+    store_var _25
+    load_var _25
     narrow_bind ai.events.AssistantMessage, slot=9
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var e
-    store_var _30
-    load_var _30
+    store_var _32
+    load_var _32
     narrow_bind ai.events.ToolCompleted, slot=11
     pop_jump_if_false L4
     jump L5
 
   L4:
     load_var e
-    store_var _35
-    load_var _35
+    store_var _37
+    load_var _37
     narrow_bind ai.events.ToolFailed, slot=13
     pop_jump_if_false L0
-    load_var _35
+    load_var _37
     store_var f
     load_var2 2 14
     load_field .id
@@ -3959,7 +3973,7 @@ function anthropic.internal._anthropic_lower_journal(j: ai.Journal) -> anthropic
     jump L0
 
   L5:
-    load_var _30
+    load_var _32
     store_var c
     load_var2 2 12
     load_field .id
@@ -3971,14 +3985,15 @@ function anthropic.internal._anthropic_lower_journal(j: ai.Journal) -> anthropic
     jump L0
 
   L6:
-    load_var _24
+    load_var _25
     load_field .content
     call anthropic.internal._anthropic_assistant_blocks
-    store_var _28
+    store_var _29
+    load_type anthropic.internal.AnthropicMessage
     load_var msgs
     load_const "assistant"
     load_const false
-    load_var _28
+    load_var _29
     init_instance anthropic.internal.AnthropicMessage .role, .tool_results, .blocks
     call baml.Array.push
     pop 1
@@ -4006,6 +4021,7 @@ function anthropic.internal._anthropic_lower_journal(j: ai.Journal) -> anthropic
     load_field .content
     call baml.Map.set
     pop 1
+    load_type anthropic.internal.AnthropicMessage
     load_var msgs
     load_const "user"
     load_const false
@@ -4094,6 +4110,7 @@ function anthropic.internal._anthropic_lower_prompt(prompt: ai.Prompt) -> anthro
     store_var role
 
   L5:
+    load_type anthropic.internal.AnthropicMessage
     load_var2 3 8
     load_const false
     load_var block
@@ -4105,6 +4122,7 @@ function anthropic.internal._anthropic_lower_prompt(prompt: ai.Prompt) -> anthro
     jump L0
 
   L6:
+    load_type map<string, unknown>
     load_var2 2 7
     call baml.Array.push
     pop 1
@@ -4164,6 +4182,7 @@ function anthropic.internal._anthropic_push_tool_result(msgs: anthropic.internal
     jump L1
 
   L0:
+    load_type anthropic.internal.AnthropicMessage
     load_var msgs
     load_const "user"
     load_const true
@@ -4184,6 +4203,7 @@ function anthropic.internal._anthropic_push_tool_result(msgs: anthropic.internal
     jump L3
 
   L2:
+    load_type anthropic.internal.AnthropicMessage
     load_var msgs
     load_const "user"
     load_const true
@@ -4253,6 +4273,7 @@ function anthropic.internal._anthropic_render_messages(msgs: anthropic.internal.
     load_field .blocks
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 6
     call baml.Array.push
     pop 1
@@ -4300,6 +4321,7 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
     jump L2
 
   L1:
+    load_type anthropic.internal.AnthropicMessage
     load_var2 7 9
     call baml.Array.push
     pop 1
@@ -4341,17 +4363,17 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
     load_const 0
     call baml.Array.at
     load_field .0
-    store_var _31
+    store_var _32
     jump L5
 
   L4:
     load_const null
-    store_var _31
+    store_var _32
 
   L5:
-    load_var _31
+    load_var _32
     store_var first_role
-    load_var _31
+    load_var _32
     load_const null
     cmp_op ==
     pop_jump_if_false L6
@@ -4366,8 +4388,8 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
     pop 1
     load_var system
     container_len
-    store_var _41
-    load_var _41
+    store_var _42
+    load_var _42
     load_const 0
     cmp_int_op >
 
@@ -4378,8 +4400,8 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
   L8:
     load_var system
     container_len
-    store_var _54
-    load_var _54
+    store_var _55
+    load_var _55
     load_const 0
     cmp_int_op >
     pop_jump_if_false L9
@@ -4394,12 +4416,12 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
   L9:
     load_var lowered
     call anthropic.internal._anthropic_render_messages
-    store_var _60
+    store_var _61
     load_type string
     load_type unknown
     load_var body
     load_const "messages"
-    load_var _60
+    load_var _61
     call baml.Map.set
     pop 1
     jump L11
@@ -4415,12 +4437,12 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
     load_var lowered
     call baml.Array.concat
     call anthropic.internal._anthropic_render_messages
-    store_var _45
+    store_var _46
     load_type string
     load_type unknown
     load_var body
     load_const "messages"
-    load_var _45
+    load_var _46
     call baml.Map.set
     pop 1
 
@@ -4439,21 +4461,21 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
     load_type baml.iter.Iterable<Error = never, Item = ai.tools.Tool>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _70
+    store_var _71
 
   L12:
-    load_var _70
+    load_var _71
     load_type baml.iter.Iterator<Error = never, Item = ai.tools.Tool>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _71
-    load_var _71
+    store_var _72
+    load_var _72
     is_type baml.iter.Done
     pop_jump_if_false L13
     jump L14
 
   L13:
-    load_var _71
+    load_var _72
     store_var t
     load_type string
     load_type unknown
@@ -4483,6 +4505,7 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
     load_field .input_schema
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 17 21
     call baml.Array.push
     pop 1
@@ -4529,10 +4552,10 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
   L16:
     load_var c
     load_field .base_url
-    store_var _106
-    load_var _106
+    store_var _108
+    load_var _108
     store_var base
-    load_var _106
+    load_var _108
     load_const null
     cmp_op ==
     pop_jump_if_false L17
@@ -4543,10 +4566,10 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
     load_type string
     load_var base
     call baml.String.from
-    store_var _109
+    store_var _111
     load_var c
     load_field .api_key
-    store_var _114
+    store_var _116
     load_var2 27 27
     load_const null
     cmp_op ==
@@ -4563,14 +4586,14 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
     load_type string
     load_type string
     alloc_map 3
-    store_var _112
+    store_var _114
     load_type map<string, unknown>
     load_var body
     call baml.json.to_json
     call baml.json.stringify
-    store_var _116
+    store_var _118
     load_const "POST"
-    load_var _109
+    load_var _111
     load_const "/v1/messages"
     bin_op +
     load_var2 26 28
@@ -4678,45 +4701,46 @@ function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.Model
     pop_jump_if_false L0
     load_var b
     load_field .id
-    store_var _34
-    load_var _34
-    store_var _33
-    load_var _34
+    store_var _36
+    load_var _36
+    store_var _35
+    load_var _36
     load_const null
     cmp_op ==
     pop_jump_if_false L4
     load_const ""
-    store_var _33
+    store_var _35
 
   L4:
     load_var b
     load_field .name
-    store_var _37
-    load_var _37
-    store_var _36
-    load_var _37
+    store_var _39
+    load_var _39
+    store_var _38
+    load_var _39
     load_const null
     cmp_op ==
     pop_jump_if_false L5
     load_const ""
-    store_var _36
+    store_var _38
 
   L5:
     load_var b
     load_field .input
-    store_var _40
-    load_var _40
-    store_var _39
-    load_var _40
+    store_var _42
+    load_var _42
+    store_var _41
+    load_var _42
     load_const null
     cmp_op ==
     pop_jump_if_false L6
     load_type string
     load_type unknown
     alloc_map 0
-    store_var _39
+    store_var _41
 
   L6:
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 5 13
     load_var2 15 17
     init_instance ai.content.ToolUse .id, .name, .args
@@ -4727,17 +4751,18 @@ function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.Model
   L7:
     load_var b
     load_field .thinking
+    store_var _27
+    load_var _27
     store_var _26
-    load_var _26
-    store_var _25
-    load_var _26
+    load_var _27
     load_const null
     cmp_op ==
     pop_jump_if_false L8
     load_const ""
-    store_var _25
+    store_var _26
 
   L8:
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 5 11
     init_instance ai.content.Reasoning .summary
     call baml.Array.push
@@ -4758,6 +4783,7 @@ function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.Model
     store_var _18
 
   L10:
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 5 9
     init_instance ai.content.Text .text
     call baml.Array.push
@@ -4767,14 +4793,14 @@ function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.Model
   L11:
     load_var resp
     load_field .stop_reason
-    store_var_load_var _43
+    store_var_load_var _46
     load_const null
     cmp_op ==
     pop_jump_if_false L12
     jump L13
 
   L12:
-    load_var _43
+    load_var _46
     call anthropic.internal._anthropic_stop_reason
     store_var stop
     jump L14
@@ -4787,8 +4813,8 @@ function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.Model
   L14:
     load_var resp
     load_field .usage
-    store_var _49
-    load_var _49
+    store_var _52
+    load_var _52
     narrow_bind anthropic.internal.AnthropicUsage, slot=22
     pop_jump_if_false L15
     jump L16
@@ -4799,7 +4825,7 @@ function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.Model
     jump L17
 
   L16:
-    load_var _49
+    load_var _52
     store_var_load_var u
     load_field .input_tokens
     load_var u
@@ -4886,32 +4912,38 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> null
     jump L8
 
   L6:
+    load_type float
     load_var delta
-    call assert.format_operand
-    store_var _18
+    call baml.String.from
+    store_var _19
+    load_type float
     load_var eps
-    call assert.format_operand
-    store_var _20
-    load_var actual
-    call assert.format_operand
-    store_var _21
-    load_var expected
-    call assert.format_operand
+    call baml.String.from
     store_var _22
-    load_const "assertion failed: |left - right| = "
-    load_var _18
+    load_type float
+    load_var actual
+    call baml.String.from
+    store_var _24
+    load_type float
+    load_var expected
+    call baml.String.from
+    store_var _26
+    load_const "assertion failed: |left - right| = \""
+    load_var _19
     bin_op +
-    load_const ", eps = "
-    bin_op +
-    load_var _20
-    bin_op +
-    load_const ", left = "
-    bin_op +
-    load_var _21
-    bin_op +
-    load_const ", right = "
+    load_const "\", eps = \""
     bin_op +
     load_var _22
+    bin_op +
+    load_const "\", left = \""
+    bin_op +
+    load_var _24
+    bin_op +
+    load_const "\", right = \""
+    bin_op +
+    load_var _26
+    bin_op +
+    load_const "\""
     bin_op +
     call baml.sys.panic
     jump L8
@@ -4957,16 +4989,24 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
   L1:
     load_var actual
     call assert.format_operand
+    store_var _9
+    load_type string
+    load_var _9
+    call baml.String.from
     store_var _8
     load_var expected
     call assert.format_operand
-    store_var _9
+    store_var _12
+    load_type string
+    load_var _12
+    call baml.String.from
+    store_var _11
     load_const "assertion failed: left = "
     load_var _8
     bin_op +
     load_const ", right = "
     bin_op +
-    load_var _9
+    load_var _11
     bin_op +
     call baml.sys.panic
 
@@ -4975,9 +5015,31 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
 }
 
 function assert.format_operand(value: unknown) -> string {
+    load_var value
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
     load_type unknown
     load_var value
     call baml.String.from
+    jump L2
+
+  L1:
+    load_type string
+    load_var _2
+    call baml.String.from
+    store_var _5
+    load_const "\""
+    load_var _5
+    bin_op +
+    load_const "\""
+    bin_op +
+
+  L2:
     return
 }
 
@@ -4994,6 +5056,40 @@ function assert.is_true(condition: bool) -> null {
   L1:
     load_const "assertion failed: expected true"
     call baml.sys.panic
+
+  L2:
+    return
+}
+
+function assert.is_type(actual: unknown) -> #0 {
+    load_var actual
+    is_type #0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type type
+    load_type #0
+    call baml.String.from
+    store_var _8
+    load_type unknown
+    load_var actual
+    call baml.String.from
+    store_var _11
+    load_const "assertion failed: expected type \""
+    load_var _8
+    bin_op +
+    load_const "\", got \""
+    bin_op +
+    load_var _11
+    bin_op +
+    load_const "\""
+    bin_op +
+    call baml.sys.panic
+    jump L2
+
+  L1:
+    load_var actual
 
   L2:
     return
@@ -5172,11 +5268,11 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
     load_type string
     load_var kind
     call baml.String.from
-    store_var _83
+    store_var _88
     load_const "$baml_log"
     load_const "info"
     load_const "cc event: "
-    load_var _83
+    load_var _88
     bin_op +
     load_const "level"
     load_const "data"
@@ -5197,14 +5293,14 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
     load_type baml.json.json
     alloc_array 0
     call baml.json.path_or
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _35
 
   L6:
     load_var _35
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _36
@@ -5250,12 +5346,14 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
     jump L12
 
   L11:
+    load_type string
     load_var2 9 13
     call baml.Array.push
     pop 1
     jump L6
 
   L12:
+    load_type string
     load_var parts
     load_const "tool_result"
     call baml.Array.push
@@ -5268,14 +5366,15 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
     load_const ".name"
     load_const "?"
     call baml.json.path_or
-    store_var _63
+    store_var _65
     load_type string
-    load_var _63
+    load_var _65
     call baml.String.from
-    store_var _62
+    store_var _64
+    load_type string
     load_var parts
     load_const "tool_use: "
-    load_var _62
+    load_var _64
     bin_op +
     call baml.Array.push
     pop 1
@@ -5288,14 +5387,15 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
     load_const ""
     call baml.json.path_or
     call claude_code.internal._preview
+    store_var _56
+    load_type string
+    load_var _56
+    call baml.String.from
     store_var _55
     load_type string
-    load_var _55
-    call baml.String.from
-    store_var _54
     load_var parts
     load_const "thinking: "
-    load_var _54
+    load_var _55
     bin_op +
     call baml.Array.push
     pop 1
@@ -5313,6 +5413,7 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
     load_var _47
     call baml.String.from
     store_var _46
+    load_type string
     load_var parts
     load_const "text: "
     load_var _46
@@ -5325,24 +5426,24 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
     load_type string
     load_var kind
     call baml.String.from
-    store_var _73
+    store_var _78
     load_type string
     load_var parts
     load_const " | "
     call baml.Array.join
-    store_var _77
+    store_var _82
     load_type string
-    load_var _77
+    load_var _82
     call baml.String.from
-    store_var _76
+    store_var _81
     load_const "$baml_log"
     load_const "info"
     load_const "cc event: "
-    load_var _73
+    load_var _78
     bin_op +
     load_const " ["
     bin_op +
-    load_var _76
+    load_var _81
     bin_op +
     load_const "]"
     bin_op +
@@ -5930,42 +6031,52 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_type string
     alloc_array 0
     store_var args
+    load_type string
     load_var args
     load_const "-p"
     call baml.Array.push
     pop 1
+    load_type string
     load_var args
     load_const "--output-format"
     call baml.Array.push
     pop 1
+    load_type string
     load_var args
     load_const "stream-json"
     call baml.Array.push
     pop 1
+    load_type string
     load_var args
     load_const "--verbose"
     call baml.Array.push
     pop 1
+    load_type string
     load_var args
     load_const "--model"
     call baml.Array.push
     pop 1
+    load_type string
     load_var2 22 1
     load_field .model
     call baml.Array.push
     pop 1
+    load_type string
     load_var args
     load_const "--permission-mode"
     call baml.Array.push
     pop 1
+    load_type string
     load_var2 22 1
     load_field .permission_mode
     call baml.Array.push
     pop 1
+    load_type string
     load_var args
     load_const "--no-session-persistence"
     call baml.Array.push
     pop 1
+    load_type string
     load_var args
     load_const "--tools"
     call baml.Array.push
@@ -5975,54 +6086,62 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_field .harness_tools
     load_const ","
     call baml.Array.join
-    store_var _66
+    store_var _76
+    load_type string
     load_var2 22 23
     call baml.Array.push
     pop 1
     load_var c
     call claude_code.internal.mcp_config_json
-    store_var _70
-    load_var _70
+    store_var _81
+    load_var _81
     narrow_bind string, slot=24
     pop_jump_if_false L6
-    load_var _70
+    load_var _81
     store_var mcp
+    load_type string
     load_var args
     load_const "--mcp-config"
     call baml.Array.push
     pop 1
+    load_type string
     load_var2 22 25
     call baml.Array.push
     pop 1
+    load_type string
     load_var args
     load_const "--strict-mcp-config"
     call baml.Array.push
     pop 1
     load_var c
     call claude_code.internal.allowed_mcp_tools
-    store_var _79
+    store_var _93
     load_type string
-    load_var _79
+    load_var _93
     call baml.String.from
-    store_var _78
+    store_var _92
+    load_type string
     load_var args
     load_const "--allowedTools="
-    load_var _78
+    load_var _92
     bin_op +
     call baml.Array.push
     pop 1
 
   L6:
+    load_type string
     load_var args
     load_const "--json-schema"
     call baml.Array.push
     pop 1
     load_var schema
     call baml.json.stringify
-    store_var _83
+    store_var _99
+    load_type string
     load_var2 22 28
     call baml.Array.push
     pop 1
+    load_type string
     load_var2 22 8
     call baml.Array.push
     pop 1
@@ -6044,14 +6163,14 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_type baml.errors.Io
     load_var e
     call baml.String.from
-    store_var _97
+    store_var _115
     load_type string
-    load_var _97
+    load_var _115
     call baml.String.from
-    store_var _96
+    store_var _114
     load_const "claude-code"
     load_const "the Claude Code CLI could not start: "
-    load_var _96
+    load_var _114
     bin_op +
     load_const null
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
@@ -6078,14 +6197,14 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_type baml.errors.Io | baml.errors.Timeout
     load_var e
     call baml.String.from
-    store_var _111
+    store_var _129
     load_type string
-    load_var _111
+    load_var _129
     call baml.String.from
-    store_var _110
+    store_var _128
     load_const "claude-code"
     load_const "the Claude Code CLI did not terminate cleanly: "
-    load_var _110
+    load_var _128
     bin_op +
     load_const null
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
@@ -6113,43 +6232,43 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_const ".subtype"
     load_const "?"
     call baml.json.path_or
-    store_var _136
+    store_var _154
     load_type string
-    load_var _136
+    load_var _154
     call baml.String.from
-    store_var _135
+    store_var _153
     load_type float
     load_var result
     load_const ".total_cost_usd"
     load_const 0.0
     call baml.json.path_or
-    store_var _141
+    store_var _159
     load_type float
-    load_var _141
+    load_var _159
     call baml.String.from
-    store_var _140
+    store_var _158
     load_type string
     load_var result
     load_const ".session_id"
     load_const "?"
     call baml.json.path_or
-    store_var _146
+    store_var _164
     load_type string
-    load_var _146
+    load_var _164
     call baml.String.from
-    store_var _145
+    store_var _163
     load_const "$baml_log"
     load_const "info"
     load_const "claude-code result: subtype="
-    load_var _135
+    load_var _153
     bin_op +
     load_const " cost_usd="
     bin_op +
-    load_var _140
+    load_var _158
     bin_op +
     load_const " session="
     bin_op +
-    load_var _145
+    load_var _163
     bin_op +
     load_const "level"
     load_const "data"
@@ -6178,9 +6297,9 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     throw_if_panic
     load_var result
     call baml.json.stringify
-    store_var _159
+    store_var _177
     load_const "claude-code"
-    load_var _159
+    load_var _177
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
@@ -6190,19 +6309,19 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_const ".usage.input_tokens"
     load_const 0
     call baml.json.path_or
-    store_var _162
+    store_var _180
     load_type int
     load_var result
     load_const ".usage.output_tokens"
     load_const 0
     call baml.json.path_or
-    store_var _165
+    store_var _183
     load_type int | null
     load_var result
     load_const ".usage.cache_read_input_tokens"
     load_const null
     call baml.json.path_or
-    store_var _168
+    store_var _186
     load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     alloc_array 0
     store_var content
@@ -6216,7 +6335,8 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
   L13:
     load_var structured
     call baml.json.stringify
-    store_var _227
+    store_var _247
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 57 74
     init_instance ai.content.Text .text
     call baml.Array.push
@@ -6235,8 +6355,8 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_const ".calls"
     load_const null
     call baml.json.path_or
-    store_var _181
-    load_var _181
+    store_var _199
+    load_var _199
     narrow_bind baml.json.json[], slot=60
     pop_jump_if_false L15
     jump L16
@@ -6244,7 +6364,8 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
   L15:
     load_var outcome
     call baml.json.stringify
-    store_var _223
+    store_var _242
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 57 73
     init_instance ai.content.Text .text
     call baml.Array.push
@@ -6254,48 +6375,48 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
   L16:
     load_const 0
     store_var i
-    load_var _181
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_var _199
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _185
+    store_var _203
 
   L17:
-    load_var _185
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_var _203
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _186
-    load_var _186
+    store_var _204
+    load_var _204
     is_type baml.iter.Done
     pop_jump_if_false L18
     jump L20
 
   L18:
-    load_var _186
+    load_var _204
     store_var raw_call
     load_var input
     load_field .journal
     call ai.Journal.entries
     container_len
-    store_var _196
+    store_var _214
     load_type int
-    load_var _196
+    load_var _214
     call baml.String.from
-    store_var _195
+    store_var _213
     load_type int
     load_var i
     call baml.String.from
-    store_var _200
+    store_var _218
     load_type string
     load_var raw_call
     load_const ".id"
     load_const "cc_call_"
-    load_var _195
+    load_var _213
     bin_op +
     load_const "_"
     bin_op +
-    load_var _200
+    load_var _218
     bin_op +
     call baml.json.path_or
     store_var id
@@ -6312,9 +6433,9 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_type baml.json.json
     alloc_map 0
     call baml.json.path_or
-    store_var _209
+    store_var _227
     load_type map<string, unknown>
-    load_var _209
+    load_var _227
     call baml.json.from_json
     store_var call_args
     jump L19
@@ -6326,6 +6447,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     store_var call_args
 
   L19:
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 57 65
     load_var2 69 70
     init_instance ai.content.ToolUse .id, .name, .args
@@ -6345,7 +6467,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
   L21:
     load_var2 57 58
     load_var2 54 55
-    load_var _168
+    load_var _186
     load_const null
     init_instance ai.events.Usage .input_tokens, .output_tokens, .cached_input_tokens, .reasoning_tokens
     init_instance ai.ModelTurn .content, .stop_reason, .usage
@@ -6362,10 +6484,10 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_const ".subtype"
     load_const "error"
     call baml.json.path_or
-    store_var _125
+    store_var _143
     load_var result
     call baml.json.stringify
-    store_var _128
+    store_var _146
     load_const "claude-code"
     load_var2 42 43
     init_instance ai.errors.Refused .provider, .reason, .raw_body
@@ -6376,19 +6498,19 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
     load_var exit
     load_field .exit_code
     call baml.String.from
-    store_var _118
+    store_var _136
     jump L24
     load_var p
     sys_op baml.sys.Process.close
     pop 1
-    load_var _100
+    load_var _118
     rethrow
 
   L24:
     load_const "claude-code"
     load_const null
     load_const "the Claude Code CLI exited with code "
-    load_var _118
+    load_var _136
     bin_op +
     load_const null
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
@@ -6477,6 +6599,7 @@ function claude_code.internal.tool_protocol(tb: ai.tools.Toolbox) -> string {
     load_var _23
     call baml.String.from
     store_var _22
+    load_type string
     load_var catalog
     load_const "{\"name\": \""
     load_var _16
@@ -6500,13 +6623,13 @@ function claude_code.internal.tool_protocol(tb: ai.tools.Toolbox) -> string {
     load_var catalog
     load_const ", "
     call baml.Array.join
-    store_var _30
+    store_var _31
     load_type string
-    load_var _30
+    load_var _31
     call baml.String.from
-    store_var _29
+    store_var _30
     load_const "\n\nThe output contract is one object with an outcome field. Set outcome\nto either the final result or a tool request. The tools in the catalog\nbelow are NOT installed in your environment — never attempt to invoke\nthem directly; any such attempt fails. The ONLY way to run one is to\nfinish your reply with outcome set to\n{\"calls\": [{\"id\": \"<unique id>\", \"name\": \"<exact tool name>\", \"args\": {...}}]};\nthe caller executes the calls and re-invokes you with their results in\nthe conversation. If the Conversation so far section shows no tool\nresults yet, your outcome MUST be a calls request — never invent data a\ntool can provide. After tool results appear in the conversation, use\nthem; the Conversation so far section is authoritative. A tool result\nwith is_error=false means that call already ran — never repeat the same\nsuccessful tool call. Request only tools that are still necessary, or\nreturn the final result.\n\nApplication tool catalog (request via outcome.calls only):\n["
-    load_var _29
+    load_var _30
     bin_op +
     load_const "]"
     bin_op +
@@ -6519,14 +6642,14 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
     store_var lines
     load_var j
     call ai.Journal.entries
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -6547,143 +6670,146 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
 
   L2:
     load_var e
-    store_var _16
-    load_var _16
+    store_var _17
+    load_var _17
     narrow_bind ai.events.AssistantMessage, slot=8
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var e
-    store_var _52
-    load_var _52
+    store_var _55
+    load_var _55
     narrow_bind ai.events.ToolCompleted, slot=20
     pop_jump_if_false L4
     jump L5
 
   L4:
     load_var e
-    store_var _64
-    load_var _64
+    store_var _68
+    load_var _68
     narrow_bind ai.events.ToolFailed, slot=24
     pop_jump_if_false L0
-    load_var _64
+    load_var _68
     store_var failed
     load_type string
     load_var failed
     load_field .id
     call baml.String.from
-    store_var _70
+    store_var _74
     load_type string
     load_var failed
     load_field .message
     call baml.String.from
-    store_var _73
+    store_var _77
+    load_type string
     load_var lines
     load_const "tool result id="
-    load_var _70
+    load_var _74
     bin_op +
     load_const " is_error=true: "
     bin_op +
-    load_var _73
+    load_var _77
     bin_op +
     call baml.Array.push
     pop 1
     jump L0
 
   L5:
-    load_var _52
+    load_var _55
     store_var done
     load_type string
     load_var done
     load_field .id
     call baml.String.from
-    store_var _58
+    store_var _61
     load_type string
     load_var done
     load_field .output
     call baml.String.from
-    store_var _61
+    store_var _64
+    load_type string
     load_var lines
     load_const "tool result id="
-    load_var _58
+    load_var _61
     bin_op +
     load_const " is_error=false: "
     bin_op +
-    load_var _61
+    load_var _64
     bin_op +
     call baml.Array.push
     pop 1
     jump L0
 
   L6:
-    load_var _16
+    load_var _17
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
+    store_var _20
 
   L7:
-    load_var _19
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_var _20
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _20
-    load_var _20
+    store_var _21
+    load_var _21
     is_type baml.iter.Done
     pop_jump_if_false L8
     jump L0
 
   L8:
-    load_var _20
+    load_var _21
     store_var b
     load_var b
-    store_var _24
-    load_var _24
+    store_var _25
+    load_var _25
     narrow_bind ai.content.Text, slot=12
     pop_jump_if_false L9
     jump L10
 
   L9:
     load_var b
-    store_var _31
-    load_var _31
+    store_var _33
+    load_var _33
     narrow_bind ai.content.ToolUse, slot=14
     pop_jump_if_false L7
-    load_var _31
+    load_var _33
     store_var c
     load_type string
     load_var c
     load_field .id
     call baml.String.from
-    store_var _40
+    store_var _42
     load_type string
     load_var c
     load_field .name
     call baml.String.from
-    store_var _43
+    store_var _45
     load_type map<string, unknown>
     load_var c
     load_field .args
     call baml.json.to_json
     call baml.json.stringify
-    store_var _47
+    store_var _49
     load_type string
-    load_var _47
+    load_var _49
     call baml.String.from
-    store_var _46
+    store_var _48
+    load_type string
     load_var lines
     load_const "assistant tool_call: {\"id\": \""
-    load_var _40
+    load_var _42
     bin_op +
     load_const "\", \"name\": \""
     bin_op +
-    load_var _43
+    load_var _45
     bin_op +
     load_const "\", \"args\": "
     bin_op +
-    load_var _46
+    load_var _48
     bin_op +
     load_const "}"
     bin_op +
@@ -6693,13 +6819,14 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
 
   L10:
     load_type string
-    load_var _24
+    load_var _25
     load_field .text
     call baml.String.from
-    store_var _28
+    store_var _29
+    load_type string
     load_var lines
     load_const "assistant: "
-    load_var _28
+    load_var _29
     bin_op +
     call baml.Array.push
     pop 1
@@ -6711,6 +6838,7 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
     load_field .content
     call baml.String.from
     store_var _13
+    load_type string
     load_var lines
     load_const "user: "
     load_var _13
@@ -6722,8 +6850,8 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
   L12:
     load_var lines
     container_len
-    store_var _77
-    load_var _77
+    store_var _82
+    load_var _82
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L13
@@ -6734,13 +6862,13 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
     load_var lines
     load_const "\n"
     call baml.Array.join
-    store_var _79
+    store_var _84
     load_type string
-    load_var _79
+    load_var _84
     call baml.String.from
-    store_var _78
+    store_var _83
     load_const "\n\nConversation so far:\n"
-    load_var _78
+    load_var _83
     bin_op +
     jump L15
 
@@ -6892,14 +7020,14 @@ function google.internal._gm_tool_name_for(j: ai.Journal, id: string) -> string 
     store_var name
     load_var j
     call ai.Journal.entries
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
 
   L0:
     load_var _5
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
@@ -6916,14 +7044,14 @@ function google.internal._gm_tool_name_for(j: ai.Journal, id: string) -> string 
     pop_jump_if_false L0
     load_var _10
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
 
   L2:
     load_var _13
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _14
@@ -7107,6 +7235,7 @@ function google.internal._google_decode_batch(batch: string) -> (ai.stream.TextD
     jump L12
 
   L15:
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var2 2 16
     init_instance ai.stream.TextDelta .text
     call baml.Array.push
@@ -7123,17 +7252,17 @@ function google.internal._google_decode_batch(batch: string) -> (ai.stream.TextD
   L17:
     load_var cand
     load_field .1
-    store_var _51
+    store_var _52
     jump L19
 
   L18:
     load_const null
-    store_var _51
+    store_var _52
 
   L19:
-    load_var _51
+    load_var _52
     store_var finish
-    load_var _51
+    load_var _52
     load_const null
     cmp_op ==
     pop_jump_if_false L20
@@ -7160,7 +7289,7 @@ function google.internal._google_decode_batch(batch: string) -> (ai.stream.TextD
   L23:
     load_const null
     call baml.ops.equals_equals
-    store_var _61
+    store_var _62
     load_var finish
     load_const "MAX_TOKENS"
     cmp_op ==
@@ -7168,7 +7297,7 @@ function google.internal._google_decode_batch(batch: string) -> (ai.stream.TextD
     jump L35
 
   L24:
-    load_var _61
+    load_var _62
     unary_op !
     jump_if_false L25
     jump L26
@@ -7253,7 +7382,7 @@ function google.internal._google_decode_batch(batch: string) -> (ai.stream.TextD
   L38:
     pop_jump_if_false L0
     load_var stop
-    store_var _83
+    store_var _84
     load_var usage
     load_const null
     cmp_op ==
@@ -7263,12 +7392,12 @@ function google.internal._google_decode_batch(batch: string) -> (ai.stream.TextD
   L39:
     load_var usage
     load_field .0
-    store_var _84
+    store_var _85
     jump L41
 
   L40:
     load_const null
-    store_var _84
+    store_var _85
 
   L41:
     load_var usage
@@ -7280,14 +7409,15 @@ function google.internal._google_decode_batch(batch: string) -> (ai.stream.TextD
   L42:
     load_var usage
     load_field .1
-    store_var _88
+    store_var _89
     jump L44
 
   L43:
     load_const null
-    store_var _88
+    store_var _89
 
   L44:
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var2 2 24
     load_var2 25 26
     init_instance ai.stream.TurnMeta .stop_reason, .input_tokens, .output_tokens
@@ -7334,6 +7464,7 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
     jump L2
 
   L1:
+    load_type map<string, unknown>
     load_var2 6 8
     call baml.Array.push
     pop 1
@@ -7353,8 +7484,8 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
     load_var prompt_parts
     load_field .system_parts
     container_len
-    store_var _25
-    load_var _25
+    store_var _26
+    load_var _26
     load_const 0
     cmp_int_op >
 
@@ -7366,8 +7497,8 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
     load_var prompt_parts
     load_field .system_parts
     container_len
-    store_var _33
-    load_var _33
+    store_var _34
+    load_var _34
     load_const 0
     cmp_int_op >
     pop_jump_if_false L6
@@ -7397,9 +7528,9 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
     load_var prompt_parts
     load_field .system_parts
     call google.internal._gm_content
-    store_var _28
+    store_var _29
     load_type map<string, unknown>
-    load_var _28
+    load_var _29
     load_type map<string, unknown>
     alloc_array 1
     load_var contents
@@ -7428,21 +7559,21 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
     load_type baml.iter.Iterable<Error = never, Item = ai.tools.Tool>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _54
+    store_var _55
 
   L7:
-    load_var _54
+    load_var _55
     load_type baml.iter.Iterator<Error = never, Item = ai.tools.Tool>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _55
-    load_var _55
+    store_var _56
+    load_var _56
     is_type baml.iter.Done
     pop_jump_if_false L8
     jump L9
 
   L8:
-    load_var _55
+    load_var _56
     store_var t
     load_type string
     load_type unknown
@@ -7472,6 +7603,7 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
     load_field .input_schema
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 14 18
     call baml.Array.push
     pop 1
@@ -7545,33 +7677,33 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
   L13:
     load_var c
     load_field .base_url
-    store_var _103
-    load_var _103
-    store_var _102
-    load_var _103
+    store_var _105
+    load_var _105
+    store_var _104
+    load_var _105
     load_const null
     cmp_op ==
     pop_jump_if_false L14
     load_const "https://generativelanguage.googleapis.com/v1beta"
-    store_var _102
+    store_var _104
 
   L14:
     load_type string
-    load_var _102
+    load_var _104
     call baml.String.from
-    store_var _101
+    store_var _103
     load_type string
     load_var c
     load_field .model
     call baml.String.from
-    store_var _106
+    store_var _108
     load_type string
     load_var method
     call baml.String.from
-    store_var _109
+    store_var _111
     load_var c
     load_field .api_key
-    store_var _114
+    store_var _116
     load_var2 29 29
     load_const null
     cmp_op ==
@@ -7586,19 +7718,19 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
     load_type string
     load_type string
     alloc_map 2
-    store_var _112
+    store_var _114
     load_type map<string, unknown>
     load_var body
     call baml.json.to_json
     call baml.json.stringify
-    store_var _116
+    store_var _118
     load_const "POST"
-    load_var _101
+    load_var _103
     load_const "/models/"
     bin_op +
-    load_var _106
+    load_var _108
     bin_op +
-    load_var _109
+    load_var _111
     bin_op +
     load_var2 28 30
     init_instance baml.http.Request .method, .url, .headers, .body
@@ -7614,14 +7746,14 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
     store_var pending
     load_var j
     call ai.Journal.entries
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
 
   L0:
     load_var _5
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
@@ -7642,27 +7774,27 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   L2:
     load_var e
-    store_var _22
-    load_var _22
+    store_var _24
+    load_var _24
     narrow_bind ai.events.AssistantMessage, slot=13
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var e
-    store_var _64
-    load_var _64
+    store_var _70
+    load_var _70
     narrow_bind ai.events.ToolCompleted, slot=29
     pop_jump_if_false L4
     jump L5
 
   L4:
     load_var e
-    store_var _76
-    load_var _76
+    store_var _83
+    load_var _83
     narrow_bind ai.events.ToolFailed, slot=33
     pop_jump_if_false L0
-    load_var _76
+    load_var _83
     store_var f
     load_type string
     load_type unknown
@@ -7681,14 +7813,15 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
     call google.internal._gm_tool_name_for
     load_var response
     call google.internal._gm_function_response
-    store_var _84
+    store_var _91
+    load_type map<string, unknown>
     load_var2 3 36
     call baml.Array.push
     pop 1
     jump L0
 
   L5:
-    load_var _64
+    load_var _70
     store_var c
     load_type string
     load_type unknown
@@ -7707,26 +7840,28 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
     call google.internal._gm_tool_name_for
     load_var response
     call google.internal._gm_function_response
-    store_var _72
+    store_var _78
+    load_type map<string, unknown>
     load_var2 3 32
     call baml.Array.push
     pop 1
     jump L0
 
   L6:
-    load_var _22
+    load_var _24
     store_var a
     load_var pending
     container_len
-    store_var _25
-    load_var _25
+    store_var _27
+    load_var _27
     load_const 0
     cmp_int_op >
     pop_jump_if_false L7
     load_const "user"
     load_var pending
     call google.internal._gm_content
-    store_var _27
+    store_var _29
+    load_type map<string, unknown>
     load_var2 2 16
     call baml.Array.push
     pop 1
@@ -7740,39 +7875,39 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
     store_var parts
     load_var a
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _31
+    store_var _34
 
   L8:
-    load_var _31
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_var _34
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _32
-    load_var _32
+    store_var _35
+    load_var _35
     is_type baml.iter.Done
     pop_jump_if_false L9
     jump L12
 
   L9:
-    load_var _32
+    load_var _35
     store_var b
     load_var b
-    store_var _36
-    load_var _36
+    store_var _39
+    load_var _39
     narrow_bind ai.content.Text, slot=21
     pop_jump_if_false L10
     jump L11
 
   L10:
     load_var b
-    store_var _41
-    load_var _41
+    store_var _45
+    load_var _45
     narrow_bind ai.content.ToolUse, slot=23
     pop_jump_if_false L8
-    load_var _41
+    load_var _45
     store_var use
     load_type string
     load_type unknown
@@ -7805,16 +7940,18 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
     load_var fc
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 17 26
     call baml.Array.push
     pop 1
     jump L8
 
   L11:
-    load_var _36
+    load_var _39
     load_field .text
     call google.internal._gm_text_part
-    store_var _39
+    store_var _42
+    load_type map<string, unknown>
     load_var2 17 22
     call baml.Array.push
     pop 1
@@ -7823,15 +7960,16 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
   L12:
     load_var parts
     container_len
-    store_var _60
-    load_var _60
+    store_var _65
+    load_var _65
     load_const 0
     cmp_int_op >
     pop_jump_if_false L0
     load_const "model"
     load_var parts
     call google.internal._gm_content
-    store_var _62
+    store_var _67
+    load_type map<string, unknown>
     load_var2 2 28
     call baml.Array.push
     pop 1
@@ -7851,6 +7989,7 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
     load_var pending
     call google.internal._gm_content
     store_var _15
+    load_type map<string, unknown>
     load_var2 2 10
     call baml.Array.push
     pop 1
@@ -7862,13 +8001,14 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
     load_var u
     load_field .content
     call google.internal._gm_text_part
-    store_var _20
+    store_var _21
     load_const "user"
-    load_var _20
+    load_var _21
     load_type map<string, unknown>
     alloc_array 1
     call google.internal._gm_content
-    store_var _18
+    store_var _19
+    load_type map<string, unknown>
     load_var2 2 11
     call baml.Array.push
     pop 1
@@ -7877,15 +8017,16 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
   L15:
     load_var pending
     container_len
-    store_var _89
-    load_var _89
+    store_var _97
+    load_var _97
     load_const 0
     cmp_int_op >
     pop_jump_if_false L16
     load_const "user"
     load_var pending
     call google.internal._gm_content
-    store_var _91
+    store_var _99
+    load_type map<string, unknown>
     load_var2 2 38
     call baml.Array.push
     pop 1
@@ -7965,13 +8106,15 @@ function google.internal.google_lower_prompt(prompt: ai.Prompt) -> google.intern
     load_type map<string, unknown>
     alloc_array 1
     call google.internal._gm_content
-    store_var _23
+    store_var _24
+    load_type map<string, unknown>
     load_var2 3 10
     call baml.Array.push
     pop 1
     jump L0
 
   L7:
+    load_type map<string, unknown>
     load_var2 2 8
     call baml.Array.push
     pop 1
@@ -8114,30 +8257,31 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
   L15:
     load_var p
     load_field .text
-    store_var _55
-    load_var _55
+    store_var _56
+    load_var _56
     narrow_bind string, slot=20
     pop_jump_if_false L13
-    load_var _55
+    load_var _56
     store_var t
     load_var p
     load_field .thought
+    store_var _59
+    load_var _59
     store_var _58
-    load_var _58
-    store_var _57
-    load_var _58
+    load_var _59
     load_const null
     cmp_op ==
     pop_jump_if_false L16
     load_const false
-    store_var _57
+    store_var _58
 
   L16:
-    load_var _57
+    load_var _58
     pop_jump_if_false L17
     jump L18
 
   L17:
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 3 21
     init_instance ai.content.Text .text
     call baml.Array.push
@@ -8145,6 +8289,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
     jump L13
 
   L18:
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 3 21
     init_instance ai.content.Reasoning .summary
     call baml.Array.push
@@ -8176,6 +8321,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
     load_var call_index
     call baml.String.from
     store_var _49
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var content
     load_const "call_"
     load_var _47
@@ -8218,7 +8364,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
   L24:
     load_const null
     call baml.ops.equals_equals
-    store_var _71
+    store_var _74
     load_var has_call
     pop_jump_if_false L25
     jump L36
@@ -8231,7 +8377,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
     jump L35
 
   L26:
-    load_var _71
+    load_var _74
     unary_op !
     jump_if_false L27
     jump L28
@@ -8292,8 +8438,8 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
   L37:
     load_var resp
     load_field .usageMetadata
-    store_var _85
-    load_var _85
+    store_var _88
+    load_var _88
     narrow_bind google.internal.GmUsageMetadata, slot=27
     pop_jump_if_false L38
     jump L39
@@ -8304,32 +8450,32 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
     jump L42
 
   L39:
-    load_var _85
+    load_var _88
     store_var um
     load_var um
     load_field .promptTokenCount
-    store_var _88
-    load_var _88
-    store_var _87
-    load_var _88
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L40
-    load_const 0
-    store_var _87
-
-  L40:
-    load_var um
-    load_field .candidatesTokenCount
     store_var _91
     load_var _91
     store_var _90
     load_var _91
     load_const null
     cmp_op ==
-    pop_jump_if_false L41
+    pop_jump_if_false L40
     load_const 0
     store_var _90
+
+  L40:
+    load_var um
+    load_field .candidatesTokenCount
+    store_var _94
+    load_var _94
+    store_var _93
+    load_var _94
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L41
+    load_const 0
+    store_var _93
 
   L41:
     load_var2 29 31
@@ -8656,16 +8802,16 @@ function openai.internal._openai_decode_batch(batch: string) -> (ai.stream.TextD
     pop_jump_if_false L0
     load_var event
     load_field .response
-    store_var _38
-    load_var _38
+    store_var _39
+    load_var _39
     narrow_bind openai.internal.OaResponse, slot=14
     pop_jump_if_false L16
-    load_var _38
+    load_var _39
     call openai.internal.openai_parse
     store_var turn
     load_var turn
     load_field .stop_reason
-    store_var _44
+    store_var _45
     load_var turn
     load_field .usage
     load_const null
@@ -8677,12 +8823,12 @@ function openai.internal._openai_decode_batch(batch: string) -> (ai.stream.TextD
     load_var turn
     load_field .usage
     load_field .0
-    store_var _45
+    store_var _46
     jump L12
 
   L11:
     load_const null
-    store_var _45
+    store_var _46
 
   L12:
     load_var turn
@@ -8696,14 +8842,15 @@ function openai.internal._openai_decode_batch(batch: string) -> (ai.stream.TextD
     load_var turn
     load_field .usage
     load_field .1
-    store_var _49
+    store_var _50
     jump L15
 
   L14:
     load_const null
-    store_var _49
+    store_var _50
 
   L15:
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var2 2 16
     load_var2 17 18
     init_instance ai.stream.TurnMeta .stop_reason, .input_tokens, .output_tokens
@@ -8711,6 +8858,7 @@ function openai.internal._openai_decode_batch(batch: string) -> (ai.stream.TextD
     pop 1
 
   L16:
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var out
     alloc_instance ai.stream.TurnDone
     call baml.Array.push
@@ -8724,6 +8872,7 @@ function openai.internal._openai_decode_batch(batch: string) -> (ai.stream.TextD
     load_var _26
     narrow_bind string, slot=13
     pop_jump_if_false L0
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var2 2 13
     init_instance ai.stream.TextDelta .text
     call baml.Array.push
@@ -8766,6 +8915,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
     jump L2
 
   L1:
+    load_type map<string, unknown>
     load_var2 5 7
     call baml.Array.push
     pop 1
@@ -8812,21 +8962,21 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
     load_type baml.iter.Iterable<Error = never, Item = ai.tools.Tool>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _37
+    store_var _38
 
   L3:
-    load_var _37
+    load_var _38
     load_type baml.iter.Iterator<Error = never, Item = ai.tools.Tool>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _38
-    load_var _38
+    store_var _39
+    load_var _39
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L5
 
   L4:
-    load_var _38
+    load_var _39
     store_var t
     load_type string
     load_type unknown
@@ -8870,6 +9020,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
     load_const false
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 9 13
     call baml.Array.push
     pop 1
@@ -8905,39 +9056,39 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
   L7:
     load_var c
     call openai.OpenAiClient.resolved_base_url
-    store_var _76
-    load_var _76
-    store_var _75
-    load_var _76
+    store_var _78
+    load_var _78
+    store_var _77
+    load_var _78
     load_const null
     cmp_op ==
     pop_jump_if_false L8
     load_const "https://api.openai.com/v1"
-    store_var _75
+    store_var _77
 
   L8:
     load_type string
-    load_var _75
+    load_var _77
     call baml.String.from
-    store_var _74
+    store_var _76
     load_var c
     call openai.OpenAiClient.resolved_api_key
-    store_var _82
+    store_var _84
     load_type string
-    load_var _82
+    load_var _84
     call baml.String.from
-    store_var _81
+    store_var _83
     load_type map<string, unknown>
     load_var body
     call baml.json.to_json
     call baml.json.stringify
-    store_var _84
+    store_var _86
     load_const "POST"
-    load_var _74
+    load_var _76
     load_const "/responses"
     bin_op +
     load_const "Bearer "
-    load_var _81
+    load_var _83
     bin_op +
     load_const "application/json"
     load_const "authorization"
@@ -8945,7 +9096,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
     load_type string
     load_type string
     alloc_map 2
-    load_var _84
+    load_var _86
     init_instance baml.http.Request .method, .url, .headers, .body
     return
 }
@@ -8998,14 +9149,14 @@ function openai.internal.openai_lower_journal(j: ai.Journal) -> map<string, unkn
     store_var items
     load_var j
     call ai.Journal.entries
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -9026,27 +9177,27 @@ function openai.internal.openai_lower_journal(j: ai.Journal) -> map<string, unkn
 
   L2:
     load_var e
-    store_var _21
-    load_var _21
+    store_var _22
+    load_var _22
     narrow_bind ai.events.AssistantMessage, slot=9
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var e
-    store_var _64
-    load_var _64
+    store_var _67
+    load_var _67
     narrow_bind ai.events.ToolCompleted, slot=20
     pop_jump_if_false L4
     jump L5
 
   L4:
     load_var e
-    store_var _80
-    load_var _80
+    store_var _84
+    load_var _84
     narrow_bind ai.events.ToolFailed, slot=23
     pop_jump_if_false L0
-    load_var _80
+    load_var _84
     store_var f
     load_type string
     load_type unknown
@@ -9083,21 +9234,22 @@ function openai.internal.openai_lower_journal(j: ai.Journal) -> map<string, unkn
     load_var err
     call baml.json.to_json
     call baml.json.stringify
-    store_var _96
+    store_var _100
     load_type string
     load_type unknown
     load_var m
     load_const "output"
-    load_var _96
+    load_var _100
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 26
     call baml.Array.push
     pop 1
     jump L0
 
   L5:
-    load_var _64
+    load_var _67
     store_var c
     load_type string
     load_type unknown
@@ -9126,47 +9278,48 @@ function openai.internal.openai_lower_journal(j: ai.Journal) -> map<string, unkn
     load_field .output
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 22
     call baml.Array.push
     pop 1
     jump L0
 
   L6:
-    load_var _21
+    load_var _22
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _24
+    store_var _25
 
   L7:
-    load_var _24
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_var _25
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _25
-    load_var _25
+    store_var _26
+    load_var _26
     is_type baml.iter.Done
     pop_jump_if_false L8
     jump L0
 
   L8:
-    load_var _25
+    load_var _26
     store_var b
     load_var b
-    store_var _29
-    load_var _29
+    store_var _30
+    load_var _30
     narrow_bind ai.content.Text, slot=13
     pop_jump_if_false L9
     jump L10
 
   L9:
     load_var b
-    store_var _41
-    load_var _41
+    store_var _43
+    load_var _43
     narrow_bind ai.content.ToolUse, slot=16
     pop_jump_if_false L7
-    load_var _41
+    load_var _43
     store_var use
     load_type string
     load_type unknown
@@ -9200,21 +9353,22 @@ function openai.internal.openai_lower_journal(j: ai.Journal) -> map<string, unkn
     load_field .args
     call baml.json.to_json
     call baml.json.stringify
-    store_var _56
+    store_var _58
     load_type string
     load_type unknown
     load_var m
     load_const "arguments"
-    load_var _56
+    load_var _58
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 18
     call baml.Array.push
     pop 1
     jump L7
 
   L10:
-    load_var _29
+    load_var _30
     store_var t
     load_type string
     load_type unknown
@@ -9235,6 +9389,7 @@ function openai.internal.openai_lower_journal(j: ai.Journal) -> map<string, unkn
     load_field .text
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 15
     call baml.Array.push
     pop 1
@@ -9262,6 +9417,7 @@ function openai.internal.openai_lower_journal(j: ai.Journal) -> map<string, unkn
     load_field .content
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 8
     call baml.Array.push
     pop 1
@@ -9346,6 +9502,7 @@ function openai.internal.openai_lower_prompt(prompt: ai.Prompt) -> map<string, u
     load_field .content
     call baml.Map.set
     pop 1
+    load_type map<string, unknown>
     load_var2 2 7
     call baml.Array.push
     pop 1
@@ -9405,10 +9562,10 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
     pop_jump_if_false L0
     load_var item
     load_field .summary
-    store_var _50
-    load_var _50
+    store_var _52
+    load_var _52
     store_var parts
-    load_var _50
+    load_var _52
     load_const null
     cmp_op ==
     pop_jump_if_false L4
@@ -9421,26 +9578,27 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
     load_type baml.iter.Iterable<Error = never, Item = openai.internal.OaContentPart>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _53
+    store_var _55
 
   L5:
-    load_var _53
+    load_var _55
     load_type baml.iter.Iterator<Error = never, Item = openai.internal.OaContentPart>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _54
-    load_var _54
+    store_var _56
+    load_var _56
     is_type baml.iter.Done
     pop_jump_if_false L6
     jump L0
 
   L6:
-    load_var _54
+    load_var _56
     load_field .text
-    store_var _59
-    load_var _59
+    store_var _61
+    load_var _61
     narrow_bind string, slot=26
     pop_jump_if_false L5
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 2 26
     init_instance ai.content.Reasoning .summary
     call baml.Array.push
@@ -9450,10 +9608,10 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
   L7:
     load_var item
     load_field .content
-    store_var _30
-    load_var _30
+    store_var _31
+    load_var _31
     store_var parts
-    load_var _30
+    load_var _31
     load_const null
     cmp_op ==
     pop_jump_if_false L8
@@ -9466,52 +9624,53 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
     load_type baml.iter.Iterable<Error = never, Item = openai.internal.OaContentPart>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _33
+    store_var _34
 
   L9:
-    load_var _33
+    load_var _34
     load_type baml.iter.Iterator<Error = never, Item = openai.internal.OaContentPart>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _34
-    load_var _34
+    store_var _35
+    load_var _35
     is_type baml.iter.Done
     pop_jump_if_false L10
     jump L0
 
   L10:
-    load_var _34
+    load_var _35
     store_var part
     load_var part
     load_field .type
+    store_var _41
+    load_var _41
     store_var _40
-    load_var _40
-    store_var _39
-    load_var _40
+    load_var _41
     load_const null
     cmp_op ==
     pop_jump_if_false L11
     load_const ""
-    store_var _39
+    store_var _40
 
   L11:
-    load_var _39
+    load_var _40
     load_const "output_text"
     cmp_op ==
     pop_jump_if_false L9
     load_var part
     load_field .text
+    store_var _46
+    load_var _46
     store_var _45
-    load_var _45
-    store_var _44
-    load_var _45
+    load_var _46
     load_const null
     cmp_op ==
     pop_jump_if_false L12
     load_const ""
-    store_var _44
+    store_var _45
 
   L12:
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 2 20
     init_instance ai.content.Text .text
     call baml.Array.push
@@ -9563,6 +9722,7 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
     store_var _23
 
   L16:
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
     load_var2 2 9
     load_var2 11 7
     init_instance ai.content.ToolUse .id, .name, .args
@@ -9578,18 +9738,18 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
   L18:
     load_var resp
     load_field .status
-    store_var _68
-    load_var _68
-    store_var _67
-    load_var _68
+    store_var _71
+    load_var _71
+    store_var _70
+    load_var _71
     load_const null
     cmp_op ==
     pop_jump_if_false L19
     load_const ""
-    store_var _67
+    store_var _70
 
   L19:
-    load_var _67
+    load_var _70
     load_const "incomplete"
     cmp_op ==
     pop_jump_if_false L20
@@ -9615,8 +9775,8 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
   L23:
     load_var resp
     load_field .usage
-    store_var _72
-    load_var _72
+    store_var _75
+    load_var _75
     narrow_bind openai.internal.OaUsage, slot=31
     pop_jump_if_false L24
     jump L25
@@ -9627,7 +9787,7 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
     jump L26
 
   L25:
-    load_var _72
+    load_var _75
     store_var_load_var u
     load_field .input_tokens
     load_var u
@@ -10563,6 +10723,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     jump L2
 
   L1:
+    load_type testing.SerializedTest | testing.SerializedTestSet
     load_var items
     load_const "test"
     load_var _5
@@ -10579,21 +10740,21 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _13
+    store_var _14
 
   L3:
-    load_var _13
+    load_var _14
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _14
-    load_var _14
+    store_var _15
+    load_var _15
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L7
 
   L4:
-    load_var _14
+    load_var _15
     store_var ts
     load_type string
     load_type testing.TestRegistry
@@ -10602,13 +10763,14 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     load_var ts
     load_field .name
     call baml.Map.get
-    store_var _24
-    load_var _24
+    store_var _25
+    load_var _25
     narrow_bind testing.TestRegistry, slot=8
     pop_jump_if_false L5
     jump L6
 
   L5:
+    load_type testing.SerializedTest | testing.SerializedTestSet
     load_var items
     load_const "lazyTestSet"
     load_var ts
@@ -10619,14 +10781,15 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     jump L3
 
   L6:
-    load_var _24
+    load_var _25
     store_var sub
     load_var ts
     load_field .name
-    store_var _27
+    store_var _28
     load_var sub
     call testing.TestRegistry.serialize
-    store_var _28
+    store_var _29
+    load_type testing.SerializedTest | testing.SerializedTestSet
     load_var2 2 10
     load_var2 11 9
     load_field .loading_time_ms
@@ -10760,16 +10923,18 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     load_var named_result
     load_field .report
     store_var result
+    load_type testing.TestReport | testing.TestSetReport
     load_var2 6 11
     call baml.Array.push
     pop 1
+    load_type string
     load_var2 7 10
     load_field .name
     call baml.Array.push
     pop 1
     load_var result
-    store_var _19
-    load_var _19
+    store_var _21
+    load_var _21
     narrow_bind testing.TestReport, slot=13
     pop_jump_if_false L2
     jump L3
@@ -10781,7 +10946,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     jump L4
 
   L3:
-    load_var _19
+    load_var _21
     load_field .outcome
     store_var outcome
 
@@ -10798,8 +10963,8 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     add_int
     store_var failed
     load_var result
-    store_var _25
-    load_var _25
+    store_var _27
+    load_var _27
     narrow_bind testing.TestReport, slot=14
     pop_jump_if_false L6
     jump L9
@@ -10809,8 +10974,8 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     store_var_load_var report
     load_field .failed_names
     container_len
-    store_var _29
-    load_var _29
+    store_var _31
+    load_var _31
     load_const 0
     cmp_int_op >
     pop_jump_if_false L7
@@ -10838,20 +11003,21 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _33
+    store_var _35
 
   L11:
-    load_var _33
+    load_var _35
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _34
-    load_var _34
+    store_var _36
+    load_var _36
     is_type baml.iter.Done
     pop_jump_if_false L12
     jump L13
 
   L12:
+    load_type string
     load_var2 5 18
     call baml.Array.push
     pop 1
@@ -10897,14 +11063,14 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     load_const "error"
 
   L20:
-    store_var _46
+    store_var _49
     load_var passed
-    store_var _47
+    store_var _50
     load_var failed
-    store_var _48
+    store_var _51
     load_var results
     container_len
-    store_var _49
+    store_var _52
     load_var2 19 20
     load_var2 21 22
     load_var2 5 6
@@ -11043,6 +11209,7 @@ function testing.collect_all_failed_names(report: testing.TestSetReport, out: st
     call testing.name_in
     unary_op !
     pop_jump_if_false L0
+    load_type string
     load_var2 2 5
     call baml.Array.push
     pop 1
@@ -11054,21 +11221,21 @@ function testing.collect_all_failed_names(report: testing.TestSetReport, out: st
     load_type baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _15
+    store_var _16
 
   L3:
-    load_var _15
+    load_var _16
     load_type baml.iter.Iterator<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _16
-    load_var _16
+    store_var _17
+    load_var _17
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L6
 
   L4:
-    load_var _16
+    load_var _17
     store_var_load_var child
     is_type testing.TestReport
     pop_jump_if_false L5
@@ -11375,6 +11542,7 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
     load_var _20
     narrow_bind string, slot=10
     pop_jump_if_false L4
+    load_type string
     load_var2 2 10
     call baml.Array.push
     pop 1
@@ -11409,6 +11577,7 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
     jump L2
 
   L1:
+    load_type string
     load_var2 2 4
     load_field .name
     call baml.Array.push
@@ -11422,15 +11591,15 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _12
+    store_var _13
 
   L3:
-    load_var _12
+    load_var _13
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _13
-    load_var _13
+    store_var _14
+    load_var _14
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L7
@@ -11441,20 +11610,21 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
+    store_var _20
 
   L5:
-    load_var _19
+    load_var _20
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _20
-    load_var _20
+    store_var _21
+    load_var _21
     is_type baml.iter.Done
     pop_jump_if_false L6
     jump L3
 
   L6:
+    load_type string
     load_var2 2 8
     call baml.Array.push
     pop 1
@@ -12466,6 +12636,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
     load_type never
     spawn
     store_var _11
+    load_type future<testing.NamedChildReport, never>
     load_var2 2 6
     call baml.Array.push
     pop 1
@@ -12508,6 +12679,7 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
     load_field .run
     call_indirect
     store_var report
+    load_type testing.NamedChildReport
     load_var2 3 6
     load_field .name
     load_var report
@@ -12515,8 +12687,8 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
     call baml.Array.push
     pop 1
     load_var report
-    store_var _16
-    load_var _16
+    store_var _17
+    load_var _17
     narrow_bind testing.TestReport, slot=9
     pop_jump_if_false L2
     jump L3
@@ -12528,7 +12700,7 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
     jump L4
 
   L3:
-    load_var _16
+    load_var _17
     load_field .outcome
     store_var outcome
 
@@ -12644,6 +12816,7 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     load_var2 4 5
     call testing.leaf_selected_layered
     pop_jump_if_false L0
+    load_type string
     load_var2 6 9
     load_field .name
     call baml.Array.push
@@ -12657,21 +12830,21 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _18
+    store_var _19
 
   L3:
-    load_var _18
+    load_var _19
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
-    load_var _19
+    store_var _20
+    load_var _20
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L8
 
   L4:
-    load_var _19
+    load_var _20
     store_var_load_var ts
     load_field .name
     load_var2 2 3
@@ -12692,20 +12865,21 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _30
+    store_var _31
 
   L6:
-    load_var _30
+    load_var _31
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _31
-    load_var _31
+    store_var _32
+    load_var _32
     is_type baml.iter.Done
     pop_jump_if_false L7
     jump L3
 
   L7:
+    load_type string
     load_var2 6 14
     call baml.Array.push
     pop 1
@@ -12920,6 +13094,7 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
     load_field .runner
     call testing.test_child
     store_var _10
+    load_type testing.TestSetChild
     load_var2 2 6
     call baml.Array.push
     pop 1
@@ -12932,15 +13107,15 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _15
+    store_var _16
 
   L3:
-    load_var _15
+    load_var _16
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _16
-    load_var _16
+    store_var _17
+    load_var _17
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L5
@@ -12948,7 +13123,8 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
   L4:
     load_var2 1 8
     call testing.testset_child
-    store_var _21
+    store_var _22
+    load_type testing.TestSetChild
     load_var2 2 9
     call baml.Array.push
     pop 1
@@ -12997,6 +13173,7 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_field .runner
     call testing.test_child
     store_var _13
+    load_type testing.TestSetChild
     load_var2 3 7
     call baml.Array.push
     pop 1
@@ -13009,21 +13186,21 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _18
+    store_var _19
 
   L3:
-    load_var _18
+    load_var _19
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
-    load_var _19
+    store_var _20
+    load_var _20
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L5
 
   L4:
-    load_var _19
+    load_var _20
     store_var_load_var ts
     load_field .name
     load_var names
@@ -13032,7 +13209,8 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_var2 1 10
     load_var names
     call testing.testset_child_selected
-    store_var _26
+    store_var _27
+    load_type testing.TestSetChild
     load_var2 3 11
     call baml.Array.push
     pop 1

@@ -1,0 +1,80 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+164..172 'peekable': throws never
+212..297 '{\n   ...n    }': user.IvPeekable<T, E>
+222..291 'IvPeek...alse }': user.IvPeekable<T, E>
+247..251 'self': Self
+261..270 'IvDone {}': user.IvDone
+284..289 'false': false
+410..414 'peek': throws E
+444..621 '{\n   ...n    }': user.IvDone | T
+454..517 'if (se...     }': void
+458..473 'self.has_buffer': bool
+475..517 '{\n   ...     }': never
+496..507 'self.buffer': user.IvDone | T
+526..531 'let v': user.IvDone | T
+534..548 'self.iter.next': (self: user.IvIterator<T, E>) -> user.IvDone | T throws E
+534..550 'self.i...next()': user.IvDone | T
+559..570 'self.buffer': user.IvDone | T
+573..574 'v': user.IvDone | T
+583..598 'self.has_buffer': bool
+601..605 'true': true
+614..615 'v': user.IvDone | T
+674..678 'next': throws E
+708..938 '{\n   ...     }': user.IvDone | T
+722..899 'if (se...     }': void
+726..741 'self.has_buffer': bool
+743..899 '{\n   ...     }': never
+761..766 'let v': user.IvDone | T
+769..780 'self.buffer': user.IvDone | T
+797..808 'self.buffer': user.IvDone | T
+811..820 'IvDone {}': user.IvDone
+837..852 'self.has_buffer': bool
+855..860 'false': false
+884..885 'v': user.IvDone | T
+912..926 'self.iter.next': (self: user.IvIterator<T, E>) -> user.IvDone | T throws E
+912..928 'self.i...next()': user.IvDone | T
+1014..1017 'new': throws never
+1063..1118 '{\n   ...n    }': user.IvArrayIterator<T>
+1073..1112 'IvArra...x: 0 }': user.IvArrayIterator<T>
+1099..1102 'arr': T[]
+1109..1110 '0': 0
+1175..1179 'next': throws never
+1213..1405 '{\n   ...     }': T
+1227..1310 'if (se...     }': void
+1231..1239 'self.idx': int
+1231..1260 'self.i...ngth()': bool
+1243..1258 'self.arr.length': (self: T[]) -> int throws never
+1243..1260 'self.a...ngth()': int
+1262..1310 '{\n   ...     }': never
+1287..1296 'IvDone {}': user.IvDone
+1323..1331 'let item': T
+1334..1342 'self.arr': T[]
+1334..1352 'self.a...f.idx]': T
+1343..1351 'self.idx': int
+1365..1373 'self.idx': int
+1377..1378 '1': 1
+1391..1395 'item': T
+1423..1430 'iv_main': throws never
+1453..1613 '{\n   ...  }\n}': int
+1459..1464 'let p': user.IvPeekable<int, never>
+1467..1486 'IvArra...or.new': (arr: int[]) -> user.IvArrayIterator<int> throws never
+1467..1494 'IvArra...4, 5])': user.IvArrayIterator<int>
+1467..1503 'IvArra...ekable': (self: user.IvArrayIterator<int>) -> user.IvPeekable<int, never> throws never
+1467..1505 'IvArra...able()': user.IvPeekable<int, never>
+1487..1493 '[4, 5]': int[]
+1488..1489 '4': 4
+1491..1492 '5': 5
+1510..1611 'if let...n    }': int
+1513..1523 'let x: int': int
+1520..1523 'int': int
+1526..1532 'p.peek': (self: user.IvPeekable<int, never>) -> int | user.IvDone throws never
+1526..1534 'p.peek()': int | user.IvDone
+1535..1588 '{\n   ...n    }': int
+1545..1550 'let r': int
+1553..1554 'x': int
+1581..1582 'r': int
+1594..1611 '{\n   ...n    }': 0
+1604..1605 '0': 0

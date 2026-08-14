@@ -7,5 +7,6 @@ rust-version.workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_type_macros = { workspace = true }
+bitflags = { workspace = true }
 borsh = { workspace = true }
 rustc-hash = { workspace = true }

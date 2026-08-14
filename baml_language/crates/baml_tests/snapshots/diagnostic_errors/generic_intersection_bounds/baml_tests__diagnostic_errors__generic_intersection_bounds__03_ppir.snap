@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 36119
 ---
 === PPIR ===
 class user.Holder {
@@ -31,9 +32,11 @@ function user.blanket_impl_needs_every_conjunct() -> string  [expr] {
 function user.describe(item: T) -> string  [expr] {
   {  } item.name
 }
+function user.display(self: ?) -> string  [missing]
 function user.display(self: ?) -> string  [expr] {
   {  } self.name
 }
+function user.extra(self: ?) -> int  [missing]
 function user.missing_conjunct_in_class_type_arg() -> string  [expr] {
   { let h = user.Holder { item: user.OnlyNamed { name: "n" } } } h.item.name
 }
@@ -49,9 +52,12 @@ function user.missing_trailing_conjunct() -> string  [expr] {
 function user.overlap_through_requires(item: T) -> string  [expr] {
   {  } item.name
 }
+function user.read(self: ?, value: T) -> string  [missing]
 function user.read(self: ?, value: T) -> string  [expr] {
   {  } value.name
 }
+function user.size(self: ?) -> int  [missing]
 function user.size(self: ?) -> int  [expr] {
   {  } 1
 }
+function user.size(self: ?) -> int  [missing]

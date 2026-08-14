@@ -1367,9 +1367,6 @@ pub(crate) fn maybe_wrap_union(
                 0 => Ok(value),
                 1 => maybe_wrap_union(value, &non_null[0]),
                 _ => {
-                    // Keep `null` in the recorded union type so the value stays
-                    // marked optional (preserving the nullable FFI wire shape);
-                    // select the matching non-null arm.
                     let selected = find_matching_member(&value, &non_null)?;
                     let metadata = UnionMetadata::new(
                         RuntimeTy::Union(members.clone(), attr.clone()),

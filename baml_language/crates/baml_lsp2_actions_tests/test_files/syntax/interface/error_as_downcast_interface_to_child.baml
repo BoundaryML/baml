@@ -24,9 +24,8 @@ function bad(n: Named) -> string {
 //- diagnostics
 // E0001
 //
-//   × mismatched types
+//   × type `Named` does not implement interface `Person`
 //     ╭─[interface_error_as_downcast_interface_to_child.baml:20:10]
 //  20 │   return n.as<Person>.occupation
-//     ·          ──────┬─────
-//     ·                ╰── expected `Person`, found `Named`
+//     ·          ────────────
 //     ╰────

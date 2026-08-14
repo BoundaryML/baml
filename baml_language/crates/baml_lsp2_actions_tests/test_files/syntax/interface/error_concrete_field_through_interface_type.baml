@@ -24,12 +24,7 @@ function bad(a: Animal) -> string {
 // E0007
 //
 //   × type `Animal` has no member `breed`
-//     ╭─[interface_error_concrete_field_through_interface_type.baml:19:12]
+//     ╭─[interface_error_concrete_field_through_interface_type.baml:19:10]
 //  19 │   return a.breed
-//     ·            ─────
+//     ·          ───────
 //     ╰────
-//   ╰─▶   ☞ interface defined here
-//          ╭─[interface_error_concrete_field_through_interface_type.baml:4:11]
-//        4 │ interface Animal {
-//          ·           ──────
-//          ╰────

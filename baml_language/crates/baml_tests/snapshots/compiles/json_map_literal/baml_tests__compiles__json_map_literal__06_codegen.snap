@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11860
 ---
 function user.NestedMapLiteral() -> baml.json.json {
     load_const 1

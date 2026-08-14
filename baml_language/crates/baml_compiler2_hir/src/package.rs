@@ -395,10 +395,10 @@ pub fn package_dependencies<'db>(
             PackageId::new(db, Name::new("log")),
             PackageId::new(db, Name::new("reflect")),
         ],
-        // The "testing" and "assert" packages depend on "baml" only.
-        "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
+        // The "testing" packages depends on "baml".
+        "testing" => vec![PackageId::new(db, Name::new("baml"))],
         // The "ai" package uses baml primitives and reflection.
-        "ai" => vec![
+        "ai" | "assert" => vec![
             PackageId::new(db, Name::new("baml")),
             PackageId::new(db, Name::new("reflect")),
         ],

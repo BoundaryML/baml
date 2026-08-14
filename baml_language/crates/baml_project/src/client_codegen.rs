@@ -10,13 +10,8 @@ use std::collections::HashMap;
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::{self as ast, FunctionOrigin};
 use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, package::PackageId};
-use baml_compiler2_tir::{
-    lower_type_expr,
-    normalize::find_recursive_aliases,
-    ty::{QualifiedTypeName, Ty as TirTy},
-};
 use baml_db::Name;
-use baml_type::{Freshness, ParamTy, TyAttr};
+use baml_type::{Freshness, ParamTy, QualifiedTypeName, Ty as TirTy, TyAttr};
 
 use crate::ProjectDatabase;
 
@@ -115,9 +110,19 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
         let (alias_map, recursive_aliases) = alias_caches.entry(pkg.clone()).or_insert_with(|| {
-            let aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-            let recursive = find_recursive_aliases(&aliases);
-            (aliases, recursive)
+            let mut aliases = HashMap::new();
+            for ns in pkg_items.namespaces.values() {
+                for (name, def) in &ns.types {
+                    if let baml_compiler2_hir::contributions::Definition::TypeAlias(loc) = def {
+                        aliases.insert(
+                            baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
+                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain(),
+                        );
+                    }
+                }
+            }
+            let resolved = baml_type::ResolvedAliases::from_aliases(aliases);
+            (resolved.aliases, resolved.recursive)
         });
         let alias_map: &HashMap<QualifiedTypeName, TirTy> = alias_map;
         let recursive_aliases: &std::collections::HashSet<QualifiedTypeName> = recursive_aliases;
@@ -137,8 +142,10 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             }
         }
         for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, source_file) {
-            for &m in &baml_compiler2_ppir::item_data::interface_data(db, iface_loc).default_methods
-            {
+            // ALL interface methods: default (with a body) and required
+            // (bodyless items under the unified method model) alike - a
+            // required signature is an interface slot, not a callable.
+            for &m in &baml_compiler2_ppir::item_data::interface_data(db, iface_loc).methods {
                 non_free_function_locs.insert(m);
             }
         }
@@ -152,16 +159,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, source_file) {
             let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), class.name.clone());
-            let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
-            let class_self_ty = TirTy::Class(
-                QualifiedTypeName::new(pkg.clone(), ns_path.clone(), class.name.clone()),
-                class_generic_params
-                    .iter()
-                    .cloned()
-                    .map(|param| TirTy::TypeVar(param, TyAttr::default()))
-                    .collect(),
-                TyAttr::default(),
-            );
+            let class_generic_params =
+                baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
             let properties = class
                 .fields
                 .iter()
@@ -170,8 +169,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         db,
                         &class.type_refs,
                         Some(field.type_ref),
-                        pkg_items,
-                        &pkg_info.namespace_path,
+                        source_file,
                         &class_generic_params,
                         alias_map,
                         recursive_aliases,
@@ -255,23 +253,17 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // Generics in scope inside the method body: the class's TypeVars
                 // first, then the method's own user + synthetic effect params.
                 let method_scope_generics =
-                    baml_compiler2_tir::function_generic_params(db, method_loc);
+                    baml_compiler2_hir_ty::lower::function_generic_frame(db, method_loc);
                 // Empty bounds match the prior raw-AST lowering (see the
                 // free-function path).
-                let method_bounds = lower_type_expr::TypeVarBoundsMap::default();
-                let ctx = lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: pkg_items,
-                    ns_context: &pkg_info.namespace_path,
-                    generic_params: &method_scope_generics,
-                    bounds: &method_bounds,
-                    self_ty: Some(class_self_ty.clone()),
-                };
+                let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, source_file)
+                    .with_frame(method_scope_generics.clone())
+                    .with_self_ty(Some(baml_compiler2_hir_ty::lower::class_self_ty(
+                        db, class_loc,
+                    )));
                 let type_refs = &sig.type_refs;
                 let lower = |id| {
-                    let mut diagnostics = Vec::new();
-                    let tir_ty =
-                        lower_type_expr::lower_type_ref(type_refs, id, &ctx, &mut diagnostics);
+                    let tir_ty = ctx.lower_type_ref(type_refs, id).to_plain();
                     convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
                 };
                 let method_defaults =
@@ -388,8 +380,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 db,
                 &alias.type_refs,
                 alias.value,
-                pkg_items,
-                &pkg_info.namespace_path,
+                source_file,
                 &[],
                 alias_map,
                 recursive_aliases,
@@ -485,24 +476,16 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // consumer that needs the throws type recovers it from the callback
             // parameter (the Rust SDK, via each callback's associated error
             // type).
-            let scope_generics = baml_compiler2_tir::function_generic_params(db, func_loc);
+            let scope_generics = baml_compiler2_hir_ty::lower::function_generic_frame(db, func_loc);
             let func_generic_params: Vec<Name> = sig.user_generic_params.clone();
             // Empty bounds match the prior raw-AST lowering: this path resolves
             // only in-scope typevars (incl. the effect params), not associated
             // projections that would need interface bounds.
-            let func_bounds = lower_type_expr::TypeVarBoundsMap::default();
-            let ctx = lower_type_expr::ScopeCtx {
-                db,
-                package_items: pkg_items,
-                ns_context: &pkg_info.namespace_path,
-                generic_params: &scope_generics,
-                bounds: &func_bounds,
-                self_ty: None,
-            };
+            let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, source_file)
+                .with_frame(scope_generics.clone());
             let type_refs = &sig.type_refs;
             let lower = |id| {
-                let mut diagnostics = Vec::new();
-                let tir_ty = lower_type_expr::lower_type_ref(type_refs, id, &ctx, &mut diagnostics);
+                let tir_ty = ctx.lower_type_ref(type_refs, id).to_plain();
                 convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
             };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
@@ -599,32 +582,19 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 /// arena) to a codegen `Ty`.
 ///
 /// Returns `None` if `id` is `None` (the annotation was omitted).
-#[expect(clippy::too_many_arguments)]
 fn resolve_type_ref(
     db: &ProjectDatabase,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
     id: Option<baml_compiler2_hir::type_ref::TypeRefId>,
-    package_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    ns_context: &[Name],
+    file: baml_base::SourceFile,
     generic_params: &[ParamTy],
     alias_map: &HashMap<QualifiedTypeName, TirTy>,
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {
     let id = id?;
-    let mut diagnostics = Vec::new();
-    let tir_ty = lower_type_expr::lower_type_ref(
-        store,
-        id,
-        &lower_type_expr::ScopeCtx {
-            db,
-            package_items,
-            ns_context,
-            generic_params,
-            bounds: &lower_type_expr::TypeVarBoundsMap::default(),
-            self_ty: None,
-        },
-        &mut diagnostics,
-    );
+    let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
+        .with_frame(generic_params.to_vec());
+    let tir_ty = ctx.lower_type_ref(store, id).to_plain();
     Some(convert_tir_to_codegen_ty(
         &tir_ty,
         alias_map,
@@ -646,7 +616,7 @@ fn resolve_throws<'db>(
     alias_map: &HashMap<QualifiedTypeName, TirTy>,
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {
-    match baml_compiler2_tir::callable::callable_throws(db, func_loc) {
+    match &baml_compiler2_hir_ty::callable::callable_throws(db, func_loc).0 {
         TirTy::Never { .. } | TirTy::Unknown { .. } => None,
         ty => Some(convert_tir_to_codegen_ty(ty, alias_map, recursive_aliases)),
     }

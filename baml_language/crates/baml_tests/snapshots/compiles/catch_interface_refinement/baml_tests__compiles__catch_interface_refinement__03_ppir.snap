@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6749
 ---
 === PPIR ===
 class user.QuotaExceeded {
@@ -17,6 +18,7 @@ class user.Throttled$stream {
 function user.app(mode: int) -> string  [expr] {
   {  } provider_call(mode) catch (e) { q: user.QuotaExceeded => "quota: " Add q.quota_name, f: Failure => if (f.is_transient()) {  } "retry" else {  } "fail", u: baml.errors.UnknownError => "unknown" }
 }
+function user.is_transient(self: ?) -> bool  [missing]
 function user.is_transient(self: ?) -> bool  [expr] {
   {  } false
 }

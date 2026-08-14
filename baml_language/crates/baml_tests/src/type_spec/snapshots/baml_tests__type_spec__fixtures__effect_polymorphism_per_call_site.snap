@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+453..458 'apply': throws __effect_param_0
+494..506 '{\n    f(v)\n}': int
+500..501 'f': (x: int) -> int throws __effect_param_0
+500..504 'f(v)': int
+502..503 'v': int
+517..521 'safe': throws never
+537..598 '{\n   ... v)\n}': int
+570..575 'apply': (f: (x: int) -> int throws never, v: int) -> int throws never
+570..596 'apply(... }, v)': int
+576..592 '(x) ->... + 1 }': (x: int) -> int throws never
+583..592 '{ x + 1 }': int
+585..586 'x': int
+585..590 'x + 1': int
+589..590 '1': 1
+594..595 'v': int
+609..614 'risky': throws "neg"
+630..716 '{\n   ... v)\n}': int
+664..669 'apply': (f: (x: int) -> int throws "neg", v: int) -> int throws "neg"
+664..714 'apply(... }, v)': int
+670..710 '(x) ->... } x }': (x: int) -> int throws "neg"
+677..710 '{ if (... } x }': int
+679..706 'if (x ...eg"; }': void
+683..684 'x': int
+683..688 'x < 0': bool
+687..688 '0': 0
+690..706 '{ thro...eg"; }': never
+698..703 '"neg"': "neg"
+707..708 'x': int
+712..713 'v': int

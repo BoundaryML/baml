@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 26006
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -7,7 +8,7 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: (testing.TestCollector) -> void throws unknown
+    let _3: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _3 = make_closure lambda[0]();
@@ -38,9 +39,9 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> void {
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws unknown
+    let _11: (testing.TestCollector) -> void throws baml.errors.Io | baml.errors.LlmClient | baml.errors.Timeout | testing.InvalidTestName
     let _12: void
-    let _13: (testing.TestCollector) -> void throws unknown
+    let _13: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
@@ -100,7 +101,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
     let _13: string // ex
     let _14: void
     let _15: string
-    let _16: () -> void throws unknown
+    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
 
     bb0: {
         _4 = copy capture[0];
@@ -191,7 +192,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) ->
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws unknown
+    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | testing.InvalidTestName | ai.errors.Failure
 
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
@@ -242,7 +243,7 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.Test
     let _9: string // ex
     let _10: void
     let _11: string
-    let _12: () -> void throws unknown
+    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
 
     bb0: {
         _3 = copy capture[0];
@@ -340,7 +341,7 @@ fn user.ClassifySentiment(text: string, client: null | ai.Client) -> Sentiment {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Sentiment, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<Sentiment>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Sentiment, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Sentiment>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -447,7 +448,7 @@ fn .<lambda(ClassifySentiment$spec, 0)>( __spec_output_format: string) -> ai.Pro
     let _14: type
     let _15: int
     let _16: string[]
-    let _17: string
+    let _17: ""
     let _18: type
     let _19: string[]
     let _20: unknown[]
@@ -566,7 +567,7 @@ fn user.GenerateTests(count: int, topic: string, client: null | ai.Client) -> st
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string[], Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -673,25 +674,24 @@ fn .<lambda(GenerateTests$spec, 0)>( __spec_output_format: string) -> ai.Prompt 
     let _12: unknown[]
     let _13: int
     let _14: type
-    let _15: string
-    let _16: int
-    let _17: string[]
-    let _18: string
-    let _19: type
-    let _20: int
-    let _21: unknown[]
-    let _22: string
-    let _23: type
-    let _24: int
-    let _25: string[]
-    let _26: string
-    let _27: type
-    let _28: string[]
-    let _29: unknown[]
-    let _30: string[]
-    let _31: baml.TaggedString
-    let _32: unknown[]
-    let _33: baml.TaggedString
+    let _15: int
+    let _16: string[]
+    let _17: " tests about "
+    let _18: type
+    let _19: int
+    let _20: unknown[]
+    let _21: string
+    let _22: type
+    let _23: int
+    let _24: string[]
+    let _25: ""
+    let _26: type
+    let _27: string[]
+    let _28: unknown[]
+    let _29: string[]
+    let _30: baml.TaggedString
+    let _31: unknown[]
+    let _32: baml.TaggedString
 
     bb0: {
         _3 = []: string[];
@@ -714,38 +714,37 @@ fn .<lambda(GenerateTests$spec, 0)>( __spec_output_format: string) -> ai.Prompt 
     }
 
     bb2: {
-        _15 = copy _5;
-        _5 = copy _15 + const " tests about ";
-        _17 = copy _3;
-        _18 = copy _5;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
+        _5 = const " tests about ";
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
     }
 
     bb3: {
         _5 = const "";
-        _21 = copy _4;
-        _22 = copy capture[1];
-        _23 = load_type(unknown);
-        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4];
+        _20 = copy _4;
+        _21 = copy capture[1];
+        _22 = load_type(unknown);
+        _19 = call const fn baml.Array.push<copy _22>(copy _20, copy _21) -> [bb4];
     }
 
     bb4: {
-        _25 = copy _3;
-        _26 = copy _5;
-        _27 = load_type(string);
-        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5];
+        _24 = copy _3;
+        _25 = copy _5;
+        _26 = load_type(string);
+        _23 = call const fn baml.Array.push<copy _26>(copy _24, copy _25) -> [bb5];
     }
 
     bb5: {
-        _28 = copy _3;
-        _29 = copy _4;
-        _2 = baml.TaggedString { copy _28, copy _29 };
-        _31 = copy _2;
-        _30 = copy _31.0;
-        _33 = copy _2;
-        _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
+        _27 = copy _3;
+        _28 = copy _4;
+        _2 = baml.TaggedString { copy _27, copy _28 };
+        _30 = copy _2;
+        _29 = copy _30.0;
+        _32 = copy _2;
+        _31 = copy _32.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _29, copy _31) -> [bb6];
     }
 
     bb6: {
@@ -866,7 +865,7 @@ fn user.ClassifySentiment2(text: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -973,7 +972,7 @@ fn .<lambda(ClassifySentiment2$spec, 0)>( __spec_output_format: string) -> ai.Pr
     let _14: type
     let _15: int
     let _16: string[]
-    let _17: string
+    let _17: ""
     let _18: type
     let _19: string[]
     let _20: unknown[]

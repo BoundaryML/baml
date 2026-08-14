@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25961
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -7,7 +8,7 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: (testing.TestCollector) -> void throws unknown
+    let _3: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _3 = make_closure lambda[0]();
@@ -30,9 +31,9 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> void {
     let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: void
-    let _3: (testing.TestCollector) -> void throws unknown
+    let _3: (testing.TestCollector) -> void throws testing.InvalidTestName
     let _4: void
-    let _5: (testing.TestCollector) -> void throws unknown
+    let _5: (testing.TestCollector) -> void throws testing.InvalidTestName
 
     bb0: {
         _3 = make_closure lambda[0]();
@@ -60,7 +61,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
     let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: void
-    let _3: () -> void throws unknown
+    let _3: () -> void throws never
 
     bb0: {
         _3 = make_closure lambda[0]();
@@ -97,7 +98,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) ->
     let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: void
-    let _3: () -> void throws unknown
+    let _3: () -> void throws never
 
     bb0: {
         _3 = make_closure lambda[0]();

@@ -2,9 +2,33 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] E0001
+  [type] E0007
 
-  × did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null
+  × type `Profile | null` has no member `name`: its members implement no common interface that declares `name`
+    ╭─[null_handling.baml:50:14]
+ 50 │     let a4 = user?.profile.name;
+    ·              ──────────────────
+    ╰────
+
+  [type] E0007
+
+  × type `Profile | null` has no member `address`: its members implement no common interface that declares `address`
+    ╭─[null_handling.baml:53:14]
+ 53 │     let a5 = user?.profile.address.street;
+    ·              ─────────────────────
+    ╰────
+
+  [type] E0007
+
+  × type `Address | null` has no member `street`: its members implement no common interface that declares `street`
+    ╭─[null_handling.baml:57:14]
+ 57 │     let a6 = user?.profile?.address.street;
+    ·              ─────────────────────────────
+    ╰────
+
+  [type] E0007
+
+  × type `Profile | null` has no member `name`: its members implement no common interface that declares `name`
     ╭─[null_handling.baml:60:14]
  60 │     let a7 = (user?.profile).name;
     ·              ────────────────────
@@ -18,12 +42,12 @@ source: crates/baml_tests/src/generated_tests.rs
     ·               ───────────────
     ╰────
 
-  [type] E0146
+  [type] E0007
 
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-    ╭─[null_handling.baml:86:5]
- 86 │     let a11 = (user?.profile?.name = "new_name");
-    ·     ─────────────────────────────────────────────
+  × type `Profile | null` has no member `name`: its members implement no common interface that declares `name`
+    ╭─[null_handling.baml:80:5]
+ 80 │     user?.profile.name = "updated2";
+    ·     ──────────────────
     ╰────
 
   [hir] E0010
@@ -34,22 +58,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                ────────────────┬───────────────
     ·                                ╰── assignment not allowed here
     ╰────
-
-  [type] E0004
-
-  × did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
-     ╭─[null_handling.baml:130:15]
- 130 │     let b12 = nonNullItems?.[0];
-     ·               ─────────────────
-     ╰────
-
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[null_handling.baml:151:5]
- 151 │     let b13 = (items?.[0] = 77);
-     ·     ────────────────────────────
-     ╰────
 
   [hir] E0010
 
@@ -76,9 +84,17 @@ source: crates/baml_tests/src/generated_tests.rs
      ·              ──────────────
      ╰────
 
-  [type] E0001
+  [type] E0007
 
-  × did you mean `callback?.(42)?.length`? `callback?.(42).length` does not handle the case when `callback?.(42)` is null
+  × type `string | null` has no member `length`: its members implement no common interface that declares `length`
+     ╭─[null_handling.baml:167:14]
+ 167 │     let c2 = callback?.(42).length;
+     ·              ─────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string | null` has no member `length`: its members implement no common interface that declares `length`
      ╭─[null_handling.baml:173:14]
  173 │     let c3 = (callback?.(42)).length;
      ·              ───────────────────────
@@ -97,7 +113,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × `string` is not a function and cannot be called
      ╭─[null_handling.baml:176:14]
  176 │     let c4 = name?.(42);
-     ·              ──────────
+     ·              ────
      ╰────
 
   [type] E0004
@@ -108,46 +124,30 @@ source: crates/baml_tests/src/generated_tests.rs
      ·              ───────────────
      ╰────
 
-  [type] E0004
+  [type] E0001
 
-  × did you mean `count`? `count ?? 0` is unnecessary, because `count` cannot be null
-     ╭─[null_handling.baml:233:14]
- 233 │     let d8 = count ?? 0;
-     ·              ──────────
-     ╰────
-
-  [type] E0004
-
-  ⚠ did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
-     ╭─[null_handling.baml:236:14]
- 236 │     let d9 = user?.profile?.name ?? null;
-     ·              ───────────────────────────
-     ╰────
-
-  [type] E0004
-
-  ⚠ did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
+  × mismatched types
      ╭─[null_handling.baml:239:15]
  239 │     let d10 = user?.profile?.name || "Anonymous";
-     ·               ──────────────────────────────────
+     ·               ─────────┬─────────
+     ·                        ╰── expected `bool`, found `string | null`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[null_handling.baml:239:38]
+ 239 │     let d10 = user?.profile?.name || "Anonymous";
+     ·                                      ─────┬─────
+     ·                                           ╰── expected `bool`, found `"Anonymous"`
      ╰────
 
   [type] E0004
 
-  × did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because
-  │ `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
-     ╭─[null_handling.baml:256:14]
- 256 │ ╭─▶     let e3 = user?.profile?.name
- 257 │ │           ?? node?.labels?.["name"]?.value.to_string()
- 258 │ ╰─▶         ?? "fallback";
-     ╰────
-
-  [type] E0146
-
-  ⚠ unreachable code: 6 statement(s) after diverging statement
-     ╭─[null_handling.baml:267:5]
- 267 │     let e4 = (node?.next?.value = 42);
-     ·     ──────────────────────────────────
+  × did you mean `node?.labels?.["name"].value`? `node?.labels?.["name"]?.value` is unnecessary, because `node?.labels?.["name"]` cannot be null
+     ╭─[null_handling.baml:257:12]
+ 257 │         ?? node?.labels?.["name"]?.value.to_string()
+     ·            ─────────────────────────────
      ╰────
 
   [hir] E0010
@@ -157,4 +157,20 @@ source: crates/baml_tests/src/generated_tests.rs
  267 │     let e4 = (node?.next?.value = 42);
      ·               ───────────┬──────────
      ·                          ╰── assignment not allowed here
+     ╰────
+
+  [type] E0004
+
+  × did you mean `node?.labels?.["first"].children`? `node?.labels?.["first"]?.children` is unnecessary, because `node?.labels?.["first"]` cannot be null
+     ╭─[null_handling.baml:273:14]
+ 273 │     let e6 = node?.labels?.["first"]?.children?.[0].value;
+     ·              ─────────────────────────────────
+     ╰────
+
+  [type] E0004
+
+  × did you mean `node?.children?.[node?.value ?? 0].next`? `node?.children?.[node?.value ?? 0]?.next` is unnecessary, because `node?.children?.[node?.value ?? 0]` cannot be null
+     ╭─[null_handling.baml:285:5]
+ 285 │     node?.children?.[node?.value ?? 0]?.next?.value = node?.value ?? 0;
+     ·     ────────────────────────────────────────
      ╰────

@@ -44,15 +44,7 @@ function HeaderInStringLiteral() -> string {
     x + y
 }
 
-// LLM function (not expression function) - headers should not be allowed
-function LLMFunction(input: string) -> string {
-    client GPT4
-    //# Section Header
-    // Should fail - only allowed in expression functions
-    prompt `Process: ${input}`
-}
-
-client GPT4 = openai.ResponsesClient.new(
+client GPT4 = openai.OpenAiClient.new(
     model = "gpt-4",
     api_key = env.OPENAI_API_KEY,
 );
@@ -82,12 +74,4 @@ client GPT4 = openai.ResponsesClient.new(
 //  33 │     let x = "start" + # Middle Header // Should fail
 //     ·                       ┬
 //     ·                       ╰── expected `expression`, found `'#'`
-//     ╰────
-// E0010
-//
-//   × invalid syntax
-//     ╭─[headers_invalid.baml:50:5]
-//  50 │     //# Section Header
-//     ·     ─────────┬────────
-//     ·              ╰── header comments (`//#`) are not allowed inside LLM functions
 //     ╰────

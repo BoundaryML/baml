@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 152
 ---
 function $init() -> null {
     call $init_let_0
@@ -13,36 +14,6 @@ function $init() -> null {
 }
 
 function $init_test(registry: unknown) -> null {
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
-    load_var ?1
-    call ?
-    pop 1
     load_var ?1
     call ?
     pop 1

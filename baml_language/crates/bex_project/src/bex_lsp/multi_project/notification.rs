@@ -6,10 +6,10 @@
 //! authoritative over disk; `didClose` re-applies disk content and drops the
 //! version in the same batch.
 
-use super::{BexMulitProject, LspError, OverlayDocument, ProjectRefreshMode};
+use super::{BexMultiProject, LspError, OverlayDocument, ProjectRefreshMode};
 use crate::bex_lsp::notification::BexLspNotification;
 
-impl BexLspNotification for BexMulitProject {
+impl BexLspNotification for BexMultiProject {
     fn notification_sender(
         &self,
     ) -> Box<dyn Fn(lsp_server::Notification) -> Result<(), LspError> + '_> {
@@ -41,7 +41,8 @@ impl BexLspNotification for BexMulitProject {
         &self,
         _params: lsp_notification_params!("textDocument/willSave"),
     ) -> Result<(), LspError> {
-        // Advertised in capabilities; nothing to prepare before a save.
+        // Accept quietly if a client sends this despite it not being advertised;
+        // there is no pre-save work to perform.
         Ok(())
     }
 

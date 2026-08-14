@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match_subtype(registry: testing.TestCollector) -> null {
     load_var registry
@@ -110,16 +111,8 @@ function generic_match_subtype.concrete_switch_string_fn() -> string {
 }
 
 function generic_match_subtype.generic_match_falls_through_on_non_fn() -> int {
+    load_type generic_match_subtype.Shape
     alloc_instance user.generic_match_subtype.Non
-    store_var o
-    load_type generic_match_subtype.Shape | generic_match_subtype.Sq
-    load_var o
-    load_const 7
-    init_instance user.generic_match_subtype.Sq .s
-    call user.generic_match_subtype.unwrap_or
-    pop 1
-    load_type generic_match_subtype.Shape | generic_match_subtype.Sq
-    load_var o
     load_const 7
     init_instance user.generic_match_subtype.Sq .s
     call user.generic_match_subtype.unwrap_or
@@ -137,13 +130,7 @@ function generic_match_subtype.generic_match_subtype_narrow_default_fn() -> int 
     init_instance user.generic_match_subtype.Sq .s
     call user.generic_match_subtype.mk
     store_var o
-    load_type generic_match_subtype.Shape | generic_match_subtype.Sq
-    load_var o
-    load_const 0
-    init_instance user.generic_match_subtype.Sq .s
-    call user.generic_match_subtype.unwrap_or
-    pop 1
-    load_type generic_match_subtype.Shape | generic_match_subtype.Sq
+    load_type generic_match_subtype.Shape
     load_var o
     load_const 0
     init_instance user.generic_match_subtype.Sq .s

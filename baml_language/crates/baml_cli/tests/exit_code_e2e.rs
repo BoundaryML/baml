@@ -484,6 +484,26 @@ fn run_unformatted_project_keeps_format_warning() {
 // Tests for `baml test` exit codes
 // ============================================================================
 
+/// The no-project diagnostic must recommend the public source-path option.
+#[test]
+fn test_no_project_error_recommends_project() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["test"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success(), "unexpected success: {stderr}");
+    assert!(
+        stderr.contains("--project <DIR>"),
+        "unexpected error: {stderr}"
+    );
+    assert!(
+        !stderr.contains("--file <PATH>"),
+        "unexpected error: {stderr}"
+    );
+}
+
 /// Compilation errors must result in a non-zero exit code for `baml test`.
 #[test]
 fn test_compilation_error_returns_nonzero_exit_code() {
@@ -528,6 +548,42 @@ fn test_no_tests_returns_specific_exit_code() {
         Some(5),
         "Expected exit code 5 for no tests found, got: {:?}\nstderr: {}",
         output.status.code(),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// The `--project <DIR>` invocation recommended by project discovery accepts
+/// an explicit source directory outside a marked project.
+#[test]
+fn test_accepts_explicit_source_directory_as_project() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    let source_dir = tmp.path().join("sources");
+    std::fs::create_dir(&source_dir).unwrap();
+    std::fs::write(
+        source_dir.join("standalone.baml"),
+        r#"
+function add(a: int, b: int) -> int { a + b }
+
+test "adds" {
+  assert.equal(add(2, 3), 5)
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project", "sources"]);
+
+    assert!(
+        output.status.success(),
+        "Expected explicit source directory to succeed, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("1 passed, 0 failed, 1 total"),
+        "Expected passing test report, got stderr: {}",
         String::from_utf8_lossy(&output.stderr),
     );
 }
@@ -1793,6 +1849,39 @@ fn run_expr_without_baml_toml_picks_up_baml_src_context() {
     assert!(
         stdout.contains("42"),
         "Expected the result `42`, got:\n{stdout}"
+    );
+}
+
+/// B-359: an expression that only needs the standard library must not compile
+/// or diagnose the surrounding project. Unrelated project errors should not
+/// block `-e` from being used as an interactive probe.
+#[test]
+fn run_expr_ignores_unrelated_project_compile_errors() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function broken() -> int {\n  Int.parse(\"1\")\n}\n",
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "-e", "int.parse(\"42\")", "--from", "."],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected an independent expression to ignore unrelated project errors, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("unresolved name: Int"),
+        "Unrelated project diagnostic leaked into expression evaluation:\n{stderr}"
     );
 }
 
