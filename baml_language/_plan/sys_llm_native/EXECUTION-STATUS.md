@@ -69,3 +69,22 @@ Shared-file requests triage: shorthands/diagnostic ALREADY DONE pre-B; structure
 - `ai.content.Reasoning` lacks a signature field (Anthropic thinking replay w/ tools) — B3 will report; deferred per PLAN §6 unless trivial.
 - `ai.internal._*` appears in `baml describe` (no privacy mechanism).
 - AWS no-creds error surfaces as Io not AccessError (IMDS probe).
+
+## FINAL (2026-08-14)
+
+Migration COMPLETE through all phases. Commits on canary: 0dd1cff77 (phase 1),
+c50bf98f4 (origin/canary merge, -X theirs), 8b09b2855 (post-merge + Stage D
+fixes), 340ba4e2b (phase 2 deletion + phase 3 compiler fixes).
+
+- sys_llm (20,453 L) + forks/aws-bedrock DELETED; output_format+sap live in sys_ops.
+- 5 compiler bugs fixed at root (?? self-assign, E0010 string prescan, media
+  json kind, `is type` tag, shorthand pattern binders); 3 fixed upstream by
+  hir_ty; both workarounds removed. POST-MERGE-STATUS.md is the ledger.
+- Final green: corpus 2950/0, LSP 468/0, full crate matrix (one known
+  load-sensitive perf test passes isolated), 32 snapshots regenerated.
+- Live: 12/20 pass (anthropic incl. tools+stream, gemini, vertex OAuth,
+  openrouter). BLOCKED ON USER: OpenAI org spend limit (7 tests), AWS SSO
+  login for bedrock (1 test).
+- Leftovers (cosmetic): architecture.svg regen needs graphviz; ~75 provenance
+  comments citing deleted sys_llm paths kept deliberately; ARCHITECTURE.md
+  pre-existing drift; `.agents/` untracked (not ours).
