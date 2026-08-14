@@ -30,6 +30,14 @@ test-group = 'rust-sdk-fixture'
 filter = 'package(=sdk_test_csharp)'
 test-group = 'csharp-sdk-fixture'
 
+# Each backtick test compiles and executes a complete BAML program. Account for
+# that footprint globally on macOS, where running one per CPU can exhaust the
+# runner and abort an otherwise healthy test process.
+[[profile.default.overrides]]
+filter = 'binary(=backtick_strings)'
+platform = { host = 'cfg(target_os = "macos")' }
+threads-required = 3
+
 # Node TypeScript tests build only the native bridge and Node fixture packages.
 [scripts.setup.typescript_pnpm_unix]
 command = './sdk_tests/crates/typescript/setup.sh'
