@@ -9,7 +9,18 @@ fn compile_display_functions(source: &str, opt: OptLevel) -> Vec<(String, Functi
     let mut functions: Vec<(String, Function)> = program
         .function_indices
         .iter()
-        .filter(|(name, _)| !name.starts_with("baml."))
+        // This suite snapshots the display formats of the FIXTURE's bytecode;
+        // stdlib functions are not its subject. Filter by the builtin package
+        // list (like tests/baml_src.rs) so growth in any stdlib package (ai,
+        // openai, anthropic, ...) never floods these snapshots.
+        .filter(|(name, _)| {
+            !baml_builtins2::stdlib_package_names().iter().any(|pkg| {
+                let pkg: &str = pkg;
+                name.len() > pkg.len()
+                    && name.as_bytes()[pkg.len()] == b'.'
+                    && name.starts_with(pkg)
+            })
+        })
         .filter_map(|(name, idx)| match program.objects.get(*idx) {
             Some(Object::Function(f)) => Some((name.clone(), (**f).clone())),
             _ => None,
