@@ -178,7 +178,26 @@ def _set_inbound_value(
     if isinstance(value, enum.Enum):
         ev = inbound_value.enum_value
         ev.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
-        ev.value = value.name
+        # Codegen escapes an enum MEMBER whose BAML name is a Python keyword
+        # (`None` -> member `None_`, or the collision-bumped `None__` when a
+        # sibling `None_` is also present) and records the raw BAML identity in a
+        # generated `__baml_wire_values__` marker dict on the enum class,
+        # {member name -> raw wire name}, emitted ONLY for enums that carry an
+        # escaped member. Consume that marker as the sole provenance signal:
+        # a marked member wires its raw BAML name (`None_` -> `None`), and a member
+        # with no marker entry wires its member NAME, which is the pre-PR behavior.
+        # An ordinary hand-written or custom enum carries no marker and so takes
+        # this fallback; the lookup is a plain `getattr` by member name, so an enum
+        # that deliberately declares a well-formed marker, or inherits one through
+        # the MRO, is honored on the same path. The `.value` is never forwarded, so
+        # a member whose value is a non-str object cannot reach the string wire
+        # field. Decode is by value (`_decode_enum`: `cls(enum_value.value)`); a
+        # generated escaped member keeps `value == raw name`, so decode still
+        # round-trips.
+        marker = getattr(type(value), "__baml_wire_values__", None)
+        if not isinstance(marker, dict):
+            marker = {}
+        ev.value = marker.get(value.name, value.name)
         return
 
     # bool must precede int — bool is an int subclass in Python.
@@ -318,9 +337,30 @@ def _set_inbound_value(
         # then see them as `Map` instead of `Instance`, so a
         # `Box<Box<int>>` round-trip collapses into bare dicts at the
         # second level.
+        # Codegen escapes a field whose BAML name is a Python keyword
+        # (`None` -> `None_: T = pydantic.Field(alias="None")`, or the collision-
+        # bumped `None__` when a sibling `None_` is also present) and records the
+        # raw BAML identity in a generated `__baml_wire_names__` marker dict (a
+        # plain unannotated class-body assignment) on the model class, {python attr
+        # -> raw wire name}, emitted ONLY for classes that carry an escaped field.
+        # Consume that marker as the sole
+        # provenance signal: a marked attribute wires its raw BAML name
+        # (`None_` -> `None`), and an attribute with no marker entry wires its
+        # attribute NAME, which is the pre-PR behavior (so an ordinary user field
+        # aliased `wire_label`, and a user field named `None_` aliased `None`, both
+        # send the attribute name). The marker is a plain unannotated class-body
+        # dunder assignment, so it is not a
+        # pydantic field and never appears in `model_json_schema()`, and it is
+        # inherited through the MRO, so a user subclass of a generated model keeps
+        # correct wire identity for free. Decode is by wire name plus
+        # `populate_by_name`, unchanged.
+        wire_names = getattr(type(value), "__baml_wire_names__", None)
+        if not isinstance(wire_names, dict):
+            wire_names = {}
         for k, v in dict(value).items():
+            wire_key = wire_names.get(k, k)
             _set_inbound_map_entry(
-                cv.fields.add(), k, v, kwarg_name=kwarg_name, registered=registered
+                cv.fields.add(), wire_key, v, kwarg_name=kwarg_name, registered=registered
             )
         # Private attrs aren't iterated by `dict(value)`. Codegen emits
         # `$rust_type` fields as private attrs (single-underscore names);
@@ -357,7 +397,14 @@ def _set_inbound_map_entry(
         # before the `str`/`int` arms would swallow it as a plain scalar key.
         ek = entry.enum_key
         ek.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(key)))
-        ek.value = key.name
+        # Map-key twin of the scalar-enum marker consumption above: a member listed
+        # in the enum class's generated `__baml_wire_values__` marker wires its raw
+        # BAML name; a member with no marker entry wires its member NAME (the pre-PR
+        # behavior). The `.value` is never forwarded.
+        marker = getattr(type(key), "__baml_wire_values__", None)
+        if not isinstance(marker, dict):
+            marker = {}
+        ek.value = marker.get(key.name, key.name)
     elif isinstance(key, str):
         entry.string_key = key
     elif isinstance(key, int):

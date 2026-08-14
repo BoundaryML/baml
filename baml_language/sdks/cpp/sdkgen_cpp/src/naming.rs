@@ -352,25 +352,47 @@ fn reserved_in(scope_kind: CppNameKind, token: &str) -> bool {
 // Projection (clean-name normalization)
 // ---------------------------------------------------------------------------
 
+/// Every token C++ refuses to accept as an identifier: the 81 keywords of
+/// [lex.key], plus the 11 alternative tokens of [lex.digraph], which
+/// [lex.digraph]/2 makes equally unspellable ("each alternative token behaves
+/// the same [...] as its primary token, except for its spelling"). Sorted and
+/// duplicate-free so it can be checked against the standard by eye; both
+/// properties are asserted by `test_cpp_keywords_match_the_standard_table`.
 const CPP_KEYWORDS: &[&str] = &[
     "alignas",
     "alignof",
+    "and",
+    "and_eq",
     "asm",
     "auto",
+    "bitand",
+    "bitor",
     "bool",
     "break",
     "case",
     "catch",
     "char",
+    "char16_t",
+    "char32_t",
+    "char8_t",
     "class",
+    "co_await",
+    "co_return",
+    "co_yield",
+    "compl",
     "concept",
     "const",
+    "const_cast",
+    "consteval",
     "constexpr",
+    "constinit",
     "continue",
+    "decltype",
     "default",
     "delete",
     "do",
     "double",
+    "dynamic_cast",
     "else",
     "enum",
     "explicit",
@@ -389,22 +411,30 @@ const CPP_KEYWORDS: &[&str] = &[
     "namespace",
     "new",
     "noexcept",
+    "not",
+    "not_eq",
     "nullptr",
     "operator",
+    "or",
+    "or_eq",
     "private",
     "protected",
     "public",
     "register",
+    "reinterpret_cast",
     "requires",
     "return",
     "short",
     "signed",
     "sizeof",
     "static",
+    "static_assert",
+    "static_cast",
     "struct",
     "switch",
     "template",
     "this",
+    "thread_local",
     "throw",
     "true",
     "try",
@@ -417,7 +447,10 @@ const CPP_KEYWORDS: &[&str] = &[
     "virtual",
     "void",
     "volatile",
+    "wchar_t",
     "while",
+    "xor",
+    "xor_eq",
 ];
 
 /// Projects a BAML token to its preferred C++ identifier: keywords take a
@@ -685,6 +718,53 @@ mod tests {
         assert_eq!(project("void"), "void_");
         assert_eq!(project("value"), "value");
         assert_eq!(project("9lives"), "_9lives");
+    }
+
+    #[test]
+    fn test_alternative_operator_tokens_are_escaped() {
+        // [lex.digraph]/2: an alternative token behaves as its primary token in
+        // all respects, so it is not spellable as an identifier. Without these
+        // an `and` / `not` / `or` enum variant emits `and = 0x...ULL,` and the
+        // generated header does not parse.
+        for token in [
+            "and", "and_eq", "bitand", "bitor", "compl", "not", "not_eq", "or", "or_eq", "xor",
+            "xor_eq",
+        ] {
+            assert_eq!(project(token), format!("{token}_"));
+        }
+        // Matching is ordinal, so the capitalized spellings stay untouched.
+        assert_eq!(project("True"), "True");
+        assert_eq!(project("False"), "False");
+    }
+
+    #[test]
+    fn test_cpp_keywords_match_the_standard_table() {
+        assert!(
+            CPP_KEYWORDS.windows(2).all(|pair| pair[0] < pair[1]),
+            "CPP_KEYWORDS must stay sorted and duplicate-free"
+        );
+        // 81 keywords ([lex.key]) + 11 alternative tokens ([lex.digraph]).
+        assert_eq!(CPP_KEYWORDS.len(), 92);
+        for token in [
+            "char8_t",
+            "char16_t",
+            "char32_t",
+            "wchar_t",
+            "const_cast",
+            "dynamic_cast",
+            "reinterpret_cast",
+            "static_cast",
+            "consteval",
+            "constinit",
+            "decltype",
+            "static_assert",
+            "thread_local",
+            "co_await",
+            "co_return",
+            "co_yield",
+        ] {
+            assert_eq!(project(token), format!("{token}_"));
+        }
     }
 
     #[test]

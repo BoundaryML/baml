@@ -3,7 +3,7 @@
 //! straight walk — no ordering logic at render time.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fmt::Write as _,
 };
 
@@ -13,13 +13,15 @@ use indexmap::IndexMap;
 
 use crate::{
     emit::{
-        EmittedSymbol, SortKey, bare_callable_name,
+        EmittedSymbol, SortKey, TypeVarMap, bare_callable_name, escape_python_keyword,
         function::{PyFunction, SyncAsync},
         method::{MethodKind, PyMethodBinding},
     },
     py_string,
     routing::{LeafPath, route_class_ref},
-    translate_ty::{SelfRef, TranslateCtx, translate_ty},
+    translate_ty::{
+        CallbackProtocolKey, SelfRef, TranslateCtx, callback_protocol_key, translate_ty,
+    },
 };
 
 /// All symbols that land in one leaf's body, in final render order.
@@ -170,55 +172,109 @@ impl LeafBody {
     }
 
     /// The optional-argument `Ty::Function`s reachable from this leaf's
-    /// function/method/field signatures, in deterministic first-seen order,
-    /// each paired with the `_<owner>__<param>` prefix for its Protocol name
+    /// function/method/field signatures, in deterministic first-seen order, each
+    /// carrying the `_<owner>__<param>` prefix for its Protocol name
     /// (`render_leaf_body_pyi` appends a per-prefix counter, giving e.g.
-    /// `_call_optional_int_callback_supplied__callback1`). Each is rendered as a
-    /// named `typing.Protocol` in the `.pyi` (see `render_callback_protocol`),
-    /// because a `typing.Callable[[…], R]` type can't express per-parameter
-    /// optionality.
+    /// `_call_optional_int_callback_supplied__callback1`) AND the OWNER scope's
+    /// `TypeVar` map. Each is rendered as a named `typing.Protocol` in the
+    /// `.pyi` (see `render_callback_protocol`), because a `typing.Callable[[…],
+    /// R]` type can't express per-parameter optionality.
+    ///
+    /// The owner map is carried so the Protocol body renders a bumped keyword
+    /// `TypeVar` with the owner's declared spelling (`None`→`None__`), not the
+    /// stateless escape (`None_`). De-duplication is deferred to the caller and
+    /// keyed on the RENDERED identity (structural `Ty` + owner-map projection),
+    /// so two owners whose maps produce the SAME spelling still share one Protocol
+    /// (keyword-free schemas always do → byte-identical) while owners that spell
+    /// the callback's `TypeVars` differently get distinct Protocols. `seen` is kept
+    /// per-owner (not leaf-wide) precisely so a shared structural `Ty` under two
+    /// incompatible owners is not collapsed before that keyed dedup runs.
     ///
     /// Type aliases are skipped: they render via the shared `.py`/`.pyi`
     /// `render_type_alias` (which has no Protocol map), so a callable alias
     /// falls back to `typing.Callable[..., R]` rather than referencing a
     /// Protocol — collecting one here would emit an unused class.
-    pub(crate) fn callback_protocols(&self) -> Vec<(Ty, String)> {
-        let mut seen: std::collections::HashSet<Ty> = std::collections::HashSet::new();
-        let mut out: Vec<(Ty, String)> = Vec::new();
+    pub(crate) fn callback_protocols(&self) -> Vec<CallbackProtocol> {
+        let mut out: Vec<CallbackProtocol> = Vec::new();
         for (sym, _) in &self.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
+                    let class_map = scope_type_var_map(&c.type_var_map);
+                    // Class fields share one `seen`: the owner is the class.
+                    let mut field_seen: HashSet<Ty> = HashSet::new();
                     for prop in &c.properties {
                         let base = format!("_{}__{}", c.py_name, prop.name);
-                        collect_optional_callables(&prop.ty, &base, &mut seen, &mut out);
+                        collect_optional_callables(
+                            &prop.ty,
+                            &base,
+                            class_map.as_ref(),
+                            &mut field_seen,
+                            &mut out,
+                        );
                     }
                     for m in c.static_methods.iter().chain(&c.instance_methods) {
                         // `bare_callable_name` applies the companion `$` rule
                         // (`$stream` → `_stream`, `$<other>` → `__<other>`) so the
-                        // Protocol identifier stays a valid Python name.
+                        // Protocol identifier stays a valid Python name. Each
+                        // method is its own owner scope: its annotation map
+                        // is the class map merged with the method's own params.
+                        let owner_map = method_scope_type_var_map(m, class_map.as_ref());
                         let owner = bare_callable_name(fqn_leaf(&m.baml_fqn));
+                        let mut method_seen: HashSet<Ty> = HashSet::new();
                         for arg in &m.required_args {
                             let base = format!("_{owner}__{}", arg.name);
-                            collect_optional_callables(&arg.ty, &base, &mut seen, &mut out);
+                            collect_optional_callables(
+                                &arg.ty,
+                                &base,
+                                owner_map.as_ref(),
+                                &mut method_seen,
+                                &mut out,
+                            );
                         }
                         for arg in &m.optional_args {
                             let base = format!("_{owner}__{}", arg.name);
-                            collect_optional_callables(&arg.ty, &base, &mut seen, &mut out);
+                            collect_optional_callables(
+                                &arg.ty,
+                                &base,
+                                owner_map.as_ref(),
+                                &mut method_seen,
+                                &mut out,
+                            );
                         }
                         let base = format!("_{owner}__ret");
-                        collect_optional_callables(&m.return_ty, &base, &mut seen, &mut out);
+                        collect_optional_callables(
+                            &m.return_ty,
+                            &base,
+                            owner_map.as_ref(),
+                            &mut method_seen,
+                            &mut out,
+                        );
                     }
                 }
                 EmittedSymbol::Function(f) => {
                     // See the method case: normalize the companion `$` suffix so
                     // the Protocol identifier is a valid Python name.
+                    let owner_map = scope_type_var_map(&f.type_var_map);
                     let owner = bare_callable_name(fqn_leaf(&f.baml_fqn));
+                    let mut fn_seen: HashSet<Ty> = HashSet::new();
                     for (name, ty) in f.param_names.iter().zip(f.arg_tys.iter()) {
                         let base = format!("_{owner}__{name}");
-                        collect_optional_callables(ty, &base, &mut seen, &mut out);
+                        collect_optional_callables(
+                            ty,
+                            &base,
+                            owner_map.as_ref(),
+                            &mut fn_seen,
+                            &mut out,
+                        );
                     }
                     let base = format!("_{owner}__ret");
-                    collect_optional_callables(&f.return_ty, &base, &mut seen, &mut out);
+                    collect_optional_callables(
+                        &f.return_ty,
+                        &base,
+                        owner_map.as_ref(),
+                        &mut fn_seen,
+                        &mut out,
+                    );
                 }
                 EmittedSymbol::TypeAlias(_) | EmittedSymbol::Enum(_) => {}
             }
@@ -514,44 +570,60 @@ fn fqn_leaf(fqn: &str) -> &str {
     fqn.rsplit('.').next().unwrap_or(fqn)
 }
 
+/// One optional-argument callback `Ty::Function` collected for `.pyi` Protocol
+/// rendering, with everything needed to name, dedup, and render it:
+/// the structural callback type, the `_<owner>__<param>` name prefix, and the
+/// OWNER scope's `TypeVar` map (so the Protocol body renders bumped keyword
+/// `TypeVars` with the owner's declared spelling).
+pub(crate) struct CallbackProtocol {
+    pub(crate) ty: Ty,
+    pub(crate) base: String,
+    pub(crate) owner_map: Option<std::rc::Rc<TypeVarMap>>,
+}
+
 /// Recursively collect every optional-argument `Ty::Function` reachable from
-/// `ty`, in first-seen order, skipping duplicates (`seen`). Each is paired with
-/// `base` — the `_<owner>__<param>` prefix for its Protocol name (the final
-/// name appends a per-base counter in `LeafBody::callback_protocols`). Children
-/// are visited before the enclosing callable so nested callbacks get earlier
-/// names.
+/// `ty`, in first-seen order, skipping duplicates within this owner (`seen`).
+/// Each carries `base` — the `_<owner>__<param>` prefix for its Protocol name
+/// (the final name appends a per-base counter in `render_leaf_body_pyi`) — and
+/// `owner_map`, the enclosing scope's raw→emitted `TypeVar` map. Children are
+/// visited before the enclosing callable so nested callbacks get earlier names.
 fn collect_optional_callables(
     ty: &Ty,
     base: &str,
-    seen: &mut std::collections::HashSet<Ty>,
-    out: &mut Vec<(Ty, String)>,
+    owner_map: Option<&std::rc::Rc<TypeVarMap>>,
+    seen: &mut HashSet<Ty>,
+    out: &mut Vec<CallbackProtocol>,
 ) {
     match ty {
-        Ty::List(inner, _) => collect_optional_callables(inner, base, seen, out),
+        Ty::List(inner, _) => collect_optional_callables(inner, base, owner_map, seen, out),
         Ty::Map { key, value, .. } => {
-            collect_optional_callables(key, base, seen, out);
-            collect_optional_callables(value, base, seen, out);
+            collect_optional_callables(key, base, owner_map, seen, out);
+            collect_optional_callables(value, base, owner_map, seen, out);
         }
         Ty::Union(items, _) => {
             for item in items {
-                collect_optional_callables(item, base, seen, out);
+                collect_optional_callables(item, base, owner_map, seen, out);
             }
         }
         Ty::Class(_, args, _) => {
             for a in args {
-                collect_optional_callables(a, base, seen, out);
+                collect_optional_callables(a, base, owner_map, seen, out);
             }
         }
         Ty::Function { params, ret, .. } => {
             for p in params {
-                collect_optional_callables(&p.ty, base, seen, out);
+                collect_optional_callables(&p.ty, base, owner_map, seen, out);
             }
-            collect_optional_callables(ret, base, seen, out);
+            collect_optional_callables(ret, base, owner_map, seen, out);
             let has_optional = params
                 .iter()
                 .any(|p| p.mode == baml_codegen_types::CodegenFunctionParamMode::Optional);
             if has_optional && seen.insert(ty.clone()) {
-                out.push((ty.clone(), base.to_string()));
+                out.push(CallbackProtocol {
+                    ty: ty.clone(),
+                    base: base.to_string(),
+                    owner_map: owner_map.cloned(),
+                });
             }
         }
         _ => {}
@@ -648,16 +720,23 @@ fn record_name_routing(
         return;
     }
     if routed.segments.is_empty() {
-        // Root-routed type referenced from a non-root leaf — translator
-        // emits the bare name (`Foo`), so we pull it in via
-        // `from <dots> import Foo`. The root leaf itself never reaches
-        // here (current is also empty there, so `routed == *current`).
+        // Root-routed type referenced from a non-root leaf — the translator
+        // emits the keyword-escaped bare name (`None_`, via
+        // `translate_ty::render_name_ref`), so the import anchor and the
+        // recorded root name must carry the SAME escaped spelling or the
+        // `from <dots> import None_` line and the root's `class None_`
+        // definition would diverge (`from .. import None` is a SyntaxError and
+        // leaves `None_` unbound). The root leaf itself never reaches here
+        // (current is also empty there, so `routed == *current`). The non-root
+        // branch below routes by module-path segment, which the routing
+        // sanitizer handles separately (upstream TODO, left to a follow-up change).
         if !current.segments.is_empty() {
-            out.root_names.insert(name.bare_name().to_string());
+            let bare = escape_python_keyword(name.bare_name().to_string());
+            out.root_names.insert(bare.clone());
             out.rel.insert(RelImport {
                 depth: current.segments.len() + 1,
                 from_path: String::new(),
-                anchor: name.bare_name().to_string(),
+                anchor: bare,
             });
         }
     } else {
@@ -845,6 +924,231 @@ fn collect_alias_dependencies(
     }
 }
 
+/// Allocate every generic scope's `TypeVar` names ONCE per leaf against
+/// a leaf-global reservation set, replacing the old per-`<…>`-list allocation.
+///
+/// Runs after `group_and_sort`, when every symbol that lands in a leaf is known.
+/// At entry each scope's `generic_params` still hold the RAW binder names and
+/// `type_var_map` is empty (see `emit::build_emitted`); this pass rewrites both.
+/// `children` is the directory→immediate-child-name map (built in `lib.rs` before
+/// this call) so the reservation set can cover module-level bindings that live
+/// outside `body.symbols`.
+///
+/// Guarantees:
+/// - **Non-keyword raw names map to themselves, unconditionally** — even if the
+///   name collides with a leaf class named `T` (that ordinary class-vs-TypeVar
+///   module collision is pre-existing on canary and explicitly NOT fixed this
+///   round). This preserves STRICT byte-identity for keyword-free schemas.
+/// - **Keyword raw names bump** (`None`→`None_`→`None__`…) past a reservation set
+///   made of every module-level binding a bumped name could shadow:
+///   (a) every leaf emitted symbol name (class/enum/alias/function `py_name`);
+///   (b) every module import anchor brought in through the SDK root;
+///   (c) `__all__`; (d) every raw `TypeVar` name in the leaf;
+///   (e) every already-allocated emitted `TypeVar` name;
+///   (f) every immediate child-package/submodule name of this leaf's directory
+///   (`from . import <child>` / `_LAZY_CHILDREN`), and every keyword-escaped
+///   callable-child import anchor aggregated into the parent stub. (f) is
+///   supplied by `compute_module_binding_reservations` — those bindings are
+///   cross-body / render-time facts the per-body walk cannot see, and omitting
+///   them would let a keyword `TypeVar` overwrite a real child module or rebind
+///   an imported child class.
+/// - **Deliberately NOT reserved, unreachable by construction:** stdlib module
+///   imports (`typing`/`pydantic`/`enum`/…) and every `_`-leading helper
+///   (`_{name}_namespace`, `_BamlCallableNamespace_…`, runtime aliases). Bumping
+///   only appends trailing `_` to a hard keyword, so an emitted `TypeVar` name
+///   can never be underscore-leading and never equals a stdlib module name — no
+///   reservation entry can ever be consulted for them.
+/// - The map is keyed by **raw name**, so distinct raw NAMES/SPELLINGS never
+///   collapse to one emitted name; identical raw spellings (the same `T` reused
+///   across scopes, or two independently-generic functions each declaring `T`)
+///   deliberately share ONE module-level `TypeVar`, which is sound because each
+///   scope is independently generic on it — closing the emitted-name and runtime
+///   `_types`-key collapse.
+pub(crate) fn allocate_leaf_type_vars(
+    bodies: &mut BTreeMap<LeafPath, LeafBody>,
+    children: &BTreeMap<Vec<String>, BTreeSet<String>>,
+) {
+    // Read-only pre-pass FIRST: collect each leaf's module-binding reservation
+    // supplement while `bodies` is only shared-borrowed, so the mutation loop
+    // below can hold the exclusive `values_mut()` borrow without conflict
+    // (the anchor set is a pure function of the already-built bodies).
+    let supplement = compute_module_binding_reservations(bodies, children);
+    for (leaf, body) in bodies.iter_mut() {
+        allocate_leaf_body_type_vars(body, supplement.get(leaf));
+    }
+}
+
+/// Per-leaf reservation supplement (category (f) in `allocate_leaf_type_vars`):
+/// module-level bindings that occupy a leaf's namespace but are NOT in
+/// `body.symbols` or `body.root_imports_py()`, so the per-body reservation walk
+/// misses them. Computed here in a read-only pre-pass over `bodies`:
+///
+/// - **(a) immediate child-package/submodule names.** `children` maps each
+///   directory to the emitted attribute names of its immediate children
+///   (`from . import None_`, `_LAZY_CHILDREN {"None_"}`, PEP-562 `__getattr__`).
+///   A keyword `TypeVar` bumping onto a child name — e.g. generic raw `None`
+///   escaping to `None_` onto a child module `None_` — would overwrite the child
+///   binding at import time. Names are the emitted segments already
+///   (routing sanitized them), so reserving them verbatim is exact.
+/// - **(b) keyword-escaped callable-child import anchors.** `render_leaf_body_pyi`
+///   aggregates a callable child's argument/return imports into the parent stub
+///   (`callable_child_parent_rel_imports`), gated to keyword-escaped classes.
+///   A bumped keyword `TypeVar` colliding with such a
+///   `from ... import None_` would rebind the imported class to the `TypeVar`.
+///   Only keyword-
+///   escaped anchors survive the gate, and those are exactly the collision
+///   candidates, so reserving just them suffices. Name-only: depth is irrelevant
+///   for a reservation set.
+fn compute_module_binding_reservations(
+    bodies: &BTreeMap<LeafPath, LeafBody>,
+    children: &BTreeMap<Vec<String>, BTreeSet<String>>,
+) -> BTreeMap<LeafPath, BTreeSet<String>> {
+    let mut out: BTreeMap<LeafPath, BTreeSet<String>> = BTreeMap::new();
+    for (leaf, body) in bodies {
+        let mut names: BTreeSet<String> = BTreeSet::new();
+        let kids = children.get(&leaf.segments).cloned().unwrap_or_default();
+        // (a) immediate child-package/submodule names.
+        names.extend(kids.iter().cloned());
+        // (b) keyword-escaped, aggregated callable-child import anchors. Mirror
+        //     the render path's aggregation but keep only the anchor NAMES.
+        let callable_child_names = body.callable_child_names(&kids);
+        let callable_child_bodies =
+            crate::callable_child_bodies(&leaf.segments, &callable_child_names, bodies);
+        for anchor in callable_child_parent_rel_imports(leaf, &callable_child_bodies) {
+            names.insert(anchor.anchor);
+        }
+        if !names.is_empty() {
+            out.insert(leaf.clone(), names);
+        }
+    }
+    out
+}
+
+fn collect_raw_type_vars(names: &[String], order: &mut Vec<String>, seen: &mut HashSet<String>) {
+    for n in names {
+        if seen.insert(n.clone()) {
+            order.push(n.clone());
+        }
+    }
+}
+
+/// Rewrite one scope: `generic_params` (still RAW at entry) becomes the emitted
+/// names in declaration order, and `type_var_map` becomes the restriction of the
+/// leaf map to this scope's raw names.
+fn project_scope_type_vars(
+    generic_params: &mut Vec<String>,
+    type_var_map: &mut TypeVarMap,
+    leaf_map: &TypeVarMap,
+) {
+    let raws = std::mem::take(generic_params);
+    let mut map = TypeVarMap::new();
+    let mut emitted = Vec::with_capacity(raws.len());
+    for raw in raws {
+        let e = leaf_map.get(&raw).cloned().unwrap_or_else(|| raw.clone());
+        map.insert(raw, e.clone());
+        emitted.push(e);
+    }
+    *generic_params = emitted;
+    *type_var_map = map;
+}
+
+fn allocate_leaf_body_type_vars(body: &mut LeafBody, extra_reserved: Option<&BTreeSet<String>>) {
+    // 1. Distinct RAW TypeVar names across every scope, first-appearance order
+    //    (class params, then its methods' params, then free functions).
+    let mut raw_order: Vec<String> = Vec::new();
+    let mut raw_set: HashSet<String> = HashSet::new();
+    for (sym, _) in &body.symbols {
+        match sym {
+            EmittedSymbol::Class(c) => {
+                collect_raw_type_vars(&c.generic_params, &mut raw_order, &mut raw_set);
+                for m in c.static_methods.iter().chain(&c.instance_methods) {
+                    collect_raw_type_vars(&m.generic_params, &mut raw_order, &mut raw_set);
+                }
+            }
+            EmittedSymbol::Function(f) => {
+                collect_raw_type_vars(&f.generic_params, &mut raw_order, &mut raw_set);
+            }
+            EmittedSymbol::Enum(_) | EmittedSymbol::TypeAlias(_) => {}
+        }
+    }
+    if raw_order.is_empty() {
+        return; // no generics in this leaf — nothing to allocate
+    }
+
+    // 2. Reservation set for keyword bumps.
+    let mut reserved: HashSet<String> = HashSet::new();
+    // (a) every leaf-level emitted symbol name (class/enum/alias/function).
+    for (sym, _) in &body.symbols {
+        reserved.insert(sym.py_name().to_string());
+    }
+    // (b) module import anchors brought in through the SDK root.
+    let imports = body.root_imports_py();
+    reserved.extend(imports.segments);
+    reserved.extend(imports.root_names);
+    // (c) the `__all__` module binding. The `_{name}_namespace` callable-child
+    //     helpers are unreachable by keyword bumping (bumping only appends `_`,
+    //     which can never produce a `_`-leading name), so they need no entry.
+    reserved.insert("__all__".to_string());
+    // (d) every raw TypeVar name in the leaf, any scope.
+    reserved.extend(raw_set.iter().cloned());
+    // (f) module-level bindings this leaf emits that are NOT symbols or import
+    //     anchors: immediate child-package/submodule names and keyword-escaped
+    //     callable-child import anchors. Threaded in from the read-only
+    //     pre-pass (`compute_module_binding_reservations`) because they are
+    //     cross-body / render-time facts the per-body walk above cannot see —
+    //     omitting them would let a keyword TypeVar overwrite a real child module
+    //     or rebind an imported child class.
+    if let Some(extra) = extra_reserved {
+        reserved.extend(extra.iter().cloned());
+    }
+
+    // 3. Allocate the ONE leaf map (raw -> emitted).
+    let mut leaf_map: TypeVarMap = TypeVarMap::new();
+    for raw in &raw_order {
+        if !crate::emit::is_python_hard_keyword(raw) {
+            leaf_map.insert(raw.clone(), raw.clone());
+        } else {
+            let mut candidate = format!("{raw}_");
+            while crate::emit::is_python_hard_keyword(&candidate) || reserved.contains(&candidate) {
+                candidate.push('_');
+            }
+            reserved.insert(candidate.clone()); // (e) already-allocated emitted names
+            leaf_map.insert(raw.clone(), candidate);
+        }
+    }
+
+    // 4. Project the leaf map onto each scope.
+    for (sym, _) in &mut body.symbols {
+        match sym {
+            EmittedSymbol::Class(c) => {
+                project_scope_type_vars(&mut c.generic_params, &mut c.type_var_map, &leaf_map);
+                for m in c
+                    .static_methods
+                    .iter_mut()
+                    .chain(c.instance_methods.iter_mut())
+                {
+                    project_scope_type_vars(&mut m.generic_params, &mut m.type_var_map, &leaf_map);
+                }
+            }
+            EmittedSymbol::Function(f) => {
+                project_scope_type_vars(&mut f.generic_params, &mut f.type_var_map, &leaf_map);
+            }
+            EmittedSymbol::Enum(_) | EmittedSymbol::TypeAlias(_) => {}
+        }
+    }
+}
+
+/// Render-boundary guard mirroring the Go generator's `GoIdent::new`
+/// assertion (PR #4067): no identifier reaching the emitter may still be a
+/// Python hard keyword. A miss here is a codegen bug (an unescaped emit site),
+/// so it panics loudly in debug builds with the offending name. Off in release.
+fn debug_assert_identifier(name: &str) {
+    debug_assert!(
+        !crate::emit::is_python_hard_keyword(name),
+        "Python keyword escaped too late: {name}"
+    );
+}
+
 /// Non-generic: `pydantic.BaseModel`.
 /// Generic: `pydantic.BaseModel, typing.Generic[T, …]`.
 fn render_class_bases(generic_params: &[String]) -> String {
@@ -899,9 +1203,12 @@ fn is_media_reexport(s: &EmittedSymbol) -> bool {
 {%- if let Some(doc) = docstring %}
     {{ doc }}
 {%- endif %}
-    model_config = pydantic.ConfigDict(extra="forbid")
+    model_config = pydantic.ConfigDict(extra="forbid"{% if populate_by_name %}, populate_by_name=True{% endif %})
+{%- if let Some(marker) = wire_names_marker %}
+    {{ marker }}
+{%- endif %}
 {%- for prop in properties %}
-    {{ prop.name }}: {{ prop.ty_py }}
+    {{ prop.name }}: {{ prop.ty_py }}{{ prop.field_expr }}
 {%- endfor %}
 {%- if !static_methods.is_empty() %}
 
@@ -934,6 +1241,23 @@ struct ClassBodyPy {
     /// inline `# …` comment — the `Attributes:` section is the sole
     /// channel.
     docstring: Option<String>,
+    /// True when ≥1 field was keyword-escaped and therefore carries a
+    /// `pydantic.Field(alias=…)`. Adds `populate_by_name=True` to the
+    /// `ConfigDict` so the model validates from both the escaped Python
+    /// attribute name and the raw BAML/JSON key. Classes with no escaped
+    /// field leave this `false` and render byte-identically to today.
+    populate_by_name: bool,
+    /// `Some("__baml_wire_names__ = {…}")` when
+    /// ≥1 field was keyword-escaped: an explicit map of escaped Python attribute
+    /// name → raw BAML/wire name, consumed by the bridge encode path
+    /// (`proto.py`) as the sole provenance signal. A dunder name keeps it out of
+    /// pydantic's field set / `model_json_schema()` (mirrors the enum
+    /// `__baml_wire_values__` marker), and avoids a runtime `typing.get_type_hints`
+    /// hazard from bare-builtin subscripts shadowed by a user `type dict = …`.
+    /// `None` (no escaped field) emits nothing, so
+    /// keyword-free classes stay byte-identical. `.py`-only — the `.pyi` stub
+    /// carries no runtime detail, mirroring `Field(alias=…)`.
+    wire_names_marker: Option<String>,
     properties: Vec<ClassPropertyView>,
     static_methods: Vec<MethodLineView>,
     instance_methods: Vec<MethodLineView>,
@@ -942,6 +1266,11 @@ struct ClassBodyPy {
 struct ClassPropertyView {
     name: String,
     ty_py: String,
+    /// Trailing field expression appended after the annotation. Empty for a
+    /// plain field; ` = pydantic.Field(alias="<raw>")` for a keyword-escaped
+    /// field so the raw BAML name stays the wire/JSON key. Only consumed by
+    /// the `.py` template — the `.pyi` stub renders the escaped name alone.
+    field_expr: String,
 }
 
 struct MethodLineView {
@@ -963,6 +1292,9 @@ struct MethodLineView {
 {%- for v in variants %}
     {{ v.ident }} = {{ v.value }}
 {%- endfor %}
+{%- endif %}
+{%- if let Some(marker) = wire_values_marker %}
+    {{ marker }}
 {%- endif %}"#,
     ext = "py.j2",
     escape = "none"
@@ -975,6 +1307,14 @@ struct EnumBodyPy {
     /// a `///`.
     docstring: Option<String>,
     variants: Vec<EnumVariantView>,
+    /// `Some("__baml_wire_values__ = {…}")` when ≥1 member was keyword-escaped: a
+    /// plain dunder dict mapping escaped Python member name → raw BAML/wire name.
+    /// A dunder is excluded from `enum.Enum` membership by
+    /// `EnumMeta`, so it never becomes a variant. Consumed by the bridge encode
+    /// path as the sole provenance signal. `None` (no escaped member)
+    /// emits nothing, so keyword-free enums stay byte-identical. `.py`-only,
+    /// mirroring the class marker and `Field(alias=…)`.
+    wire_values_marker: Option<String>,
 }
 
 struct EnumVariantView {
@@ -1033,6 +1373,85 @@ fn build_method_line_views(
     out
 }
 
+/// Wrap a scope's raw→emitted `TypeVar` map into the `Option<Rc<…>>` a
+/// `TranslateCtx` carries. `None` (the common case) when the scope declares no
+/// generics, so every non-generic body builds a byte-identical ctx.
+fn scope_type_var_map(map: &TypeVarMap) -> Option<std::rc::Rc<TypeVarMap>> {
+    if map.is_empty() {
+        None
+    } else {
+        Some(std::rc::Rc::new(map.clone()))
+    }
+}
+
+/// The map a method's `.pyi` signature is translated under: the method's own
+/// `<…>` params always bind, and the enclosing class's params bind too.
+/// BAML statics legitimately reference the enclosing class's `TypeVars` in their
+/// signatures (stdlib `Array.filled`/`generate`), so the class map is threaded
+/// for ANNOTATION resolution regardless of `MethodKind`. Only the RUNTIME
+/// `_types=` receiver binding still differs by kind (`render_method_binding`):
+/// an instance method recovers the class `TypeVars` from `self`; a static does not.
+fn method_scope_type_var_map(
+    m: &PyMethodBinding,
+    class_map: Option<&std::rc::Rc<TypeVarMap>>,
+) -> Option<std::rc::Rc<TypeVarMap>> {
+    match (class_map, m.type_var_map.is_empty()) {
+        (None, true) => None,
+        (Some(cm), true) => Some(cm.clone()),
+        (None, false) => Some(std::rc::Rc::new(m.type_var_map.clone())),
+        (Some(cm), false) => {
+            // Method params shadow class params on a name clash.
+            let mut merged: TypeVarMap = (**cm).clone();
+            merged.extend(m.type_var_map.iter().map(|(k, v)| (k.clone(), v.clone())));
+            Some(std::rc::Rc::new(merged))
+        }
+    }
+}
+
+/// Build the `__baml_wire_names__` class marker: a plain dunder dict mapping each
+/// keyword-escaped Python attribute name to its raw BAML/wire name, in declaration
+/// order. `None` when no field was escaped, so keyword-free classes emit nothing
+/// and stay byte-identical. A dunder name is excluded from pydantic's field set,
+/// so the assignment carries no annotation (mirrors the enum `__baml_wire_values__`
+/// marker) and cannot trip `typing.get_type_hints`. `.py`-only (see `ClassBodyPy`).
+fn build_wire_names_marker(properties: &[crate::emit::class::PyClassProperty]) -> Option<String> {
+    let entries: Vec<String> = properties
+        .iter()
+        .filter_map(|p| {
+            p.alias
+                .as_deref()
+                .map(|raw| format!("{}: {}", py_string(&p.name), py_string(raw)))
+        })
+        .collect();
+    if entries.is_empty() {
+        None
+    } else {
+        Some(format!("__baml_wire_names__ = {{{}}}", entries.join(", ")))
+    }
+}
+
+/// Build the `__baml_wire_values__` enum marker: a plain dunder dict
+/// mapping each keyword-escaped Python member name to its raw BAML/wire variant
+/// name, in declaration order. `None` when no member was escaped, so keyword-free
+/// enums emit nothing and stay byte-identical. A dunder name is excluded from
+/// `enum.Enum` membership by `EnumMeta`, so the assignment never becomes a
+/// variant. `.py`-only (see `EnumBodyPy`).
+fn build_wire_values_marker(variants: &[crate::emit::enum_::PyEnumVariant]) -> Option<String> {
+    let entries: Vec<String> = variants
+        .iter()
+        .filter_map(|v| {
+            v.wire_name
+                .as_deref()
+                .map(|raw| format!("{}: {}", py_string(&v.ident), py_string(raw)))
+        })
+        .collect();
+    if entries.is_empty() {
+        None
+    } else {
+        Some(format!("__baml_wire_values__ = {{{}}}", entries.join(", ")))
+    }
+}
+
 /// Render one symbol into its `.py` source block, including trailing `\n`.
 fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     use askama::Template;
@@ -1043,6 +1462,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         // Runtime `.py`: callback Protocols are stub-only, so optional-arg
         // callables widen to `typing.Callable[..., R]` here.
         callback_protocols: None,
+        // Set per-symbol below; only the class body translates field types.
+        type_var_map: None,
     };
 
     match s {
@@ -1057,14 +1478,37 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                     py_name = c.py_name,
                 );
             }
+            debug_assert_identifier(&c.py_name);
+            // Field annotations resolve TypeVars through this class's scope map.
+            let ctx = TranslateCtx {
+                type_var_map: scope_type_var_map(&c.type_var_map),
+                ..ctx
+            };
             let properties = c
                 .properties
                 .iter()
-                .map(|prop| ClassPropertyView {
-                    name: prop.name.clone(),
-                    ty_py: translate_ty(&prop.ty, &ctx),
+                .map(|prop| {
+                    debug_assert_identifier(&prop.name);
+                    ClassPropertyView {
+                        name: prop.name.clone(),
+                        ty_py: translate_ty(&prop.ty, &ctx),
+                        field_expr: match &prop.alias {
+                            Some(raw) => {
+                                format!(" = pydantic.Field(alias={})", py_string(raw))
+                            }
+                            None => String::new(),
+                        },
+                    }
                 })
                 .collect();
+            let populate_by_name = c.properties.iter().any(|p| p.alias.is_some());
+            // Emit `__baml_wire_names__` ONLY when ≥1 field is
+            // keyword-escaped (carries `alias`). Maps the escaped Python attr
+            // name to its raw BAML/wire name so the bridge encoder can recover
+            // the wire key without shape-guessing. Keyword-free classes
+            // have no escaped field, so the marker is absent and their output is
+            // byte-identical to today.
+            let wire_names_marker = build_wire_names_marker(&c.properties);
             let attrs: Vec<(String, Option<String>)> = c
                 .properties
                 .iter()
@@ -1080,6 +1524,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 py_name: c.py_name.clone(),
                 bases: render_class_bases(&c.generic_params),
                 docstring,
+                populate_by_name,
+                wire_names_marker,
                 properties,
                 static_methods: build_method_line_views(&c.static_methods, &c.generic_params),
                 instance_methods: build_method_line_views(&c.instance_methods, &c.generic_params),
@@ -1090,12 +1536,16 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out
         }
         EmittedSymbol::Enum(e) => {
+            debug_assert_identifier(&e.py_name);
             let variants = e
                 .variants
                 .iter()
-                .map(|v| EnumVariantView {
-                    ident: v.ident.clone(),
-                    value: py_string(&v.value),
+                .map(|v| {
+                    debug_assert_identifier(&v.ident);
+                    EnumVariantView {
+                        ident: v.ident.clone(),
+                        value: py_string(&v.value),
+                    }
                 })
                 .collect();
             let members: Vec<(String, Option<String>)> = e
@@ -1109,10 +1559,15 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 "Members",
                 "    ",
             );
+            // Emit `__baml_wire_values__` ONLY when ≥1 member is
+            // keyword-escaped. Keyword-free enums have no escaped member, so the
+            // marker is absent and their output is byte-identical to today.
+            let wire_values_marker = build_wire_values_marker(&e.variants);
             let mut out = EnumBodyPy {
                 py_name: e.py_name.clone(),
                 docstring,
                 variants,
+                wire_values_marker,
             }
             .render()
             .expect("enum_body template should always render");
@@ -1160,6 +1615,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) -> String {
     use askama::Template;
 
+    debug_assert_identifier(&a.py_name);
+
     // Special-case the stdlib `baml.json.json` alias.  Its expanded form is
     // a recursive JSON-shaped union (`bool | int | float | str | List[json]
     // | Dict[str, json] | None`), and pyright reports the inner forward-refs
@@ -1203,6 +1660,9 @@ fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) 
         // with optional params widens to `typing.Callable[..., R]` rather than
         // referencing a stub-only Protocol.
         callback_protocols: None,
+        // Type aliases declare no generic scope; any `TypeVar` in the RHS is
+        // free and falls back to the stateless escape.
+        type_var_map: None,
     };
     let rhs = translate_ty(&a.resolves_to, &ctx);
     if a.recursive {
@@ -1501,6 +1961,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     if !typevars.is_empty() {
         out.push_str("\n\n");
         for tv in &typevars {
+            debug_assert_identifier(tv);
             writeln!(out, "{tv} = typing.TypeVar(\"{tv}\")").unwrap();
         }
     }
@@ -1672,10 +2133,13 @@ fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     }
 }
 
-/// `.pyi` counterpart of `build_method_line_views`.
+/// `.pyi` counterpart of `build_method_line_views`. `class_map` is the enclosing
+/// class's `TypeVar` scope map, merged per method (instance only) so a signature
+/// resolves every in-scope `TypeVar` to its declared spelling.
 fn build_method_block_views(
     methods: &[PyMethodBinding],
-    ctx: &TranslateCtx,
+    base_ctx: &TranslateCtx,
+    class_map: Option<&std::rc::Rc<TypeVarMap>>,
 ) -> Vec<MethodBlockView> {
     let mut out = Vec::with_capacity(methods.len());
     let mut prev_root: Option<&str> = None;
@@ -1685,8 +2149,12 @@ fn build_method_block_views(
             None => true,
             Some(p) => p == root,
         };
+        let ctx = TranslateCtx {
+            type_var_map: method_scope_type_var_map(m, class_map),
+            ..base_ctx.clone()
+        };
         out.push(MethodBlockView {
-            block: render_method_block_pyi(m, ctx),
+            block: render_method_block_pyi(m, &ctx),
             tight_to_prev,
         });
         prev_root = Some(root);
@@ -1702,7 +2170,7 @@ fn build_method_block_views(
 fn render_symbol_pyi(
     s: &EmittedSymbol,
     leaf: &LeafPath,
-    callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
+    callback_protocols: Option<&std::rc::Rc<IndexMap<CallbackProtocolKey, String>>>,
 ) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
@@ -1710,6 +2178,8 @@ fn render_symbol_pyi(
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        // Set per-symbol below (class fields, method and function signatures).
+        type_var_map: None,
     };
 
     match s {
@@ -1720,20 +2190,37 @@ fn render_symbol_pyi(
                     py_name = c.py_name,
                 );
             }
+            let class_map = scope_type_var_map(&c.type_var_map);
+            // Field annotations resolve TypeVars through the class scope.
+            let field_ctx = TranslateCtx {
+                type_var_map: class_map.clone(),
+                ..ctx.clone()
+            };
             let properties = c
                 .properties
                 .iter()
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
-                    ty_py: translate_ty(&prop.ty, &ctx),
+                    ty_py: translate_ty(&prop.ty, &field_ctx),
+                    // The `.pyi` stub renders the escaped attribute name only;
+                    // the `Field(alias=…)` runtime detail lives in the `.py`.
+                    field_expr: String::new(),
                 })
                 .collect();
             let mut out = ClassBodyPyi {
                 py_name: c.py_name.clone(),
                 bases: render_class_bases(&c.generic_params),
                 properties,
-                static_methods: build_method_block_views(&c.static_methods, &ctx),
-                instance_methods: build_method_block_views(&c.instance_methods, &ctx),
+                static_methods: build_method_block_views(
+                    &c.static_methods,
+                    &ctx,
+                    class_map.as_ref(),
+                ),
+                instance_methods: build_method_block_views(
+                    &c.instance_methods,
+                    &ctx,
+                    class_map.as_ref(),
+                ),
             }
             .render()
             .expect("class_body.pyi template should always render");
@@ -1744,7 +2231,10 @@ fn render_symbol_pyi(
             // Enum body is identical between `.py` and `.pyi` —
             // reuse the `.py` template directly. The `.pyi` form
             // omits the body docstring; `__doc__` resolves against
-            // the `.py` definition.
+            // the `.py` definition. The `__baml_wire_values__` marker is a
+            // runtime-only provenance detail (consumed by the bridge encoder),
+            // so the stub carries `None` — mirroring how the `.pyi` drops the
+            // class `Field(alias=…)` runtime detail.
             let variants = e
                 .variants
                 .iter()
@@ -1757,6 +2247,7 @@ fn render_symbol_pyi(
                 py_name: e.py_name.clone(),
                 docstring: None,
                 variants,
+                wire_values_marker: None,
             }
             .render()
             .expect("enum_body template should always render");
@@ -1770,6 +2261,11 @@ fn render_symbol_pyi(
             out
         }
         EmittedSymbol::Function(f) => {
+            // The signature resolves TypeVars through this function's scope.
+            let ctx = TranslateCtx {
+                type_var_map: scope_type_var_map(&f.type_var_map),
+                ..ctx
+            };
             let mut out = render_function_signature_pyi(f, &ctx);
             out.push('\n');
             out
@@ -1883,19 +2379,22 @@ fn render_callable_child_protocol_pyi(
     parent_fn: &PyFunction,
     child_body: &LeafBody,
     parent_leaf: &LeafPath,
-    callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
+    callback_protocols: Option<&std::rc::Rc<IndexMap<CallbackProtocolKey, String>>>,
 ) -> String {
     let parent_ctx = TranslateCtx {
         current_leaf: parent_leaf.clone(),
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        type_var_map: scope_type_var_map(&parent_fn.type_var_map),
     };
-    let child_ctx = TranslateCtx {
+    let child_base_ctx = TranslateCtx {
         current_leaf: child_body.leaf.clone(),
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        // Set per-child function below.
+        type_var_map: None,
     };
     let protocol_name = callable_child_protocol_name(name);
     let mut out = format!("class {protocol_name}(typing.Protocol):\n");
@@ -1906,6 +2405,10 @@ fn render_callable_child_protocol_pyi(
     ));
     for (sym, _) in &child_body.symbols {
         if let EmittedSymbol::Function(f) = sym {
+            let child_ctx = TranslateCtx {
+                type_var_map: scope_type_var_map(&f.type_var_map),
+                ..child_base_ctx.clone()
+            };
             out.push_str(&render_protocol_function_method_pyi(
                 &f.py_name, f, &child_ctx,
             ));
@@ -2059,9 +2562,117 @@ fn render_literal_default(lit: &Literal) -> String {
     }
 }
 
-/// Mirrors `render_leaf_body` with these differences: no
-/// `baml_bridge` factory imports; `typing` is needed whenever a
-/// signature is present (`needs_typing_pyi`); `enum` and `pydantic`
+/// KEYWORD-GATED: rel-imports needed by the callable-child
+/// function signatures that `render_callable_child_protocol_pyi` renders into the
+/// PARENT stub, computed relative to the PARENT leaf so depths/anchors match the
+/// parent stub (the child's own `all_rel_imports_py` would use child-leaf depths —
+/// one level too deep). Only child *functions* are rendered into the parent, so
+/// only their arg/return types are walked.
+///
+/// The walk is gated to keyword-ESCAPED class/enum/alias anchors only
+/// (`collect_keyword_escaped_root_imports`): a keyword-free callable child (one
+/// returning an ordinary root class `Widget`) contributes NOTHING, so keyword-free
+/// parent stubs stay strictly byte-identical, while keyword-escaped anchors —
+/// the only names that can collide with a bumped keyword `TypeVar` — are
+/// still aggregated and bound. The general keyword-free unbound-stub case an
+/// unconditional walk would also fix is pre-existing on canary and is left as a
+/// disclosed follow-up. Provenance is unambiguous at codegen (the arg/return `Ty`
+/// carries the class's raw BAML name), unlike the bridge's runtime shape ambiguity.
+/// Isolated to this one fn + its two callers (the render site and the reservation
+/// pre-pass) so the whole aggregation can be dropped
+/// deterministically if the keyword-free fixtures move.
+fn callable_child_parent_rel_imports(
+    parent_leaf: &LeafPath,
+    callable_child_bodies: &BTreeMap<String, &LeafBody>,
+) -> Vec<RelImport> {
+    let mut acc = RootImportSets::default();
+    for child_body in callable_child_bodies.values() {
+        for (sym, _) in &child_body.symbols {
+            if let EmittedSymbol::Function(f) = sym {
+                for ty in &f.arg_tys {
+                    collect_keyword_escaped_root_imports(ty, parent_leaf, &mut acc);
+                }
+                collect_keyword_escaped_root_imports(&f.return_ty, parent_leaf, &mut acc);
+            }
+        }
+    }
+    acc.into_rel()
+}
+
+/// Structural mirror of `collect_root_imports` restricted to root-routed
+/// references whose RAW BAML name is a Python hard keyword — i.e. the anchor the
+/// translator emits is a generated keyword-escape (`None`→`None_`). Every other
+/// reference (keyword-free classes, module-segment routes, `Ty::Media`,
+/// primitives) is intentionally skipped so the aggregation is a no-op for
+/// keyword-free schemas. Recurses through the same container/callable shapes as
+/// `collect_root_imports` so a keyword class nested in `List[..]`/`Union[..]`/a
+/// callback signature is still found.
+fn collect_keyword_escaped_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
+    match ty {
+        Ty::Class(name, args, _) => {
+            record_keyword_escaped_name_routing(name, current, out);
+            for a in args {
+                collect_keyword_escaped_root_imports(a, current, out);
+            }
+        }
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) | Ty::TypeAlias(name, _) => {
+            record_keyword_escaped_name_routing(name, current, out);
+        }
+        Ty::List(inner, _) => collect_keyword_escaped_root_imports(inner, current, out),
+        Ty::Map { key, value, .. } => {
+            collect_keyword_escaped_root_imports(key, current, out);
+            collect_keyword_escaped_root_imports(value, current, out);
+        }
+        Ty::Union(items, _) => {
+            for item in items {
+                collect_keyword_escaped_root_imports(item, current, out);
+            }
+        }
+        Ty::Function { params, ret, .. } => {
+            for p in params {
+                collect_keyword_escaped_root_imports(&p.ty, current, out);
+            }
+            collect_keyword_escaped_root_imports(ret, current, out);
+        }
+        // Everything else can never be a keyword-escaped root-class anchor:
+        // `Ty::Media` anchors on module segment `baml` (not keyword-escaped),
+        // module-segment routing for keyword namespaces is a disclosed follow-up
+        // (`sanitize_python_module_segment`), and primitives/`TypeVar`/`RustType`
+        // route nothing.
+        _ => {}
+    }
+}
+
+/// `record_name_routing` restricted to root-routed references whose RAW BAML name
+/// is a Python hard keyword. Only the root-routed branch can produce a keyword-
+/// escaped bare anchor (`None`→`None_`); a non-empty `routed.segments` is a
+/// module-segment route (never keyword-escaped today, disclosed follow-up) and is
+/// skipped. Mirrors the escaped-spelling contract of `record_name_routing`'s
+/// root branch so the reserved anchor and the emitted `from ... import None_`
+/// stay identical.
+fn record_keyword_escaped_name_routing(
+    name: &baml_codegen_types::Name,
+    current: &LeafPath,
+    out: &mut RootImportSets,
+) {
+    let routed = route_class_ref(name);
+    if routed == *current {
+        return;
+    }
+    if routed.segments.is_empty()
+        && !current.segments.is_empty()
+        && crate::emit::is_python_hard_keyword(name.bare_name())
+    {
+        let bare = escape_python_keyword(name.bare_name().to_string());
+        out.root_names.insert(bare.clone());
+        out.rel.insert(RelImport {
+            depth: current.segments.len() + 1,
+            from_path: String::new(),
+            anchor: bare,
+        });
+    }
+}
+
 /// follow the `.py` rule.
 pub(crate) fn render_leaf_body_pyi(
     body: &LeafBody,
@@ -2082,6 +2693,21 @@ pub(crate) fn render_leaf_body_pyi(
     // the stub doesn't run at runtime, so the guard is a no-op for
     // type checkers and keeps the stub minimal.
     let mut rel_imports = body.all_rel_imports_py();
+    // A callable child's function signatures are
+    // rendered into THIS parent stub (see `render_callable_child_protocol_pyi`),
+    // but their cross-leaf dependencies were never aggregated into the parent's
+    // guarded imports — a pre-existing gap the keyword escaping made visible. This
+    // block + the `callable_child_parent_rel_imports` fn are the entire fix, kept
+    // isolated so they can be reverted as one unit. Reverting is clean:
+    // `all_rel_imports_py()` already returns a sorted, deduped vec.
+    {
+        rel_imports.extend(callable_child_parent_rel_imports(
+            &body.leaf,
+            callable_child_bodies,
+        ));
+        rel_imports.sort();
+        rel_imports.dedup();
+    }
     if body.has_defaulted_call_params() && body.leaf.segments != ["baml"] {
         // Optional arguments annotate as `typing.Union[..., UNSET]` and
         // default to `UNSET`. The sentinel must be a bare name in the type
@@ -2148,44 +2774,66 @@ pub(crate) fn render_leaf_body_pyi(
     if !typevars.is_empty() {
         out.push_str("\n\n");
         for tv in &typevars {
+            debug_assert_identifier(tv);
             writeln!(out, "{tv} = typing.TypeVar(\"{tv}\")").unwrap();
         }
     }
 
     // Callback Protocols: each optional-argument callable in the leaf gets a
     // `typing.Protocol` with a `__call__` carrying its precise signature, named
-    // `_BamlCallback{n}`. Signatures below reference these by name. Emitted
+    // `_<owner>__<param><n>`. Signatures below reference these by name. Emitted
     // before the symbols that use them; the shared map lets nested callbacks
     // resolve to each other's Protocol names.
-    let protocol_tys = body.callback_protocols();
-    let callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>> = if protocol_tys.is_empty() {
-        None
-    } else {
-        // Final name = `<base><n>`, where `n` is a per-base 1-based counter
-        // (usually 1; >1 only when one parameter's type nests multiple
-        // optional-arg callables under the same `_<owner>__<param>` prefix).
-        // `IndexMap` keeps deterministic (insertion-order) iteration so the
-        // emitted Protocols are stable across runs.
-        let mut base_counts: IndexMap<String, usize> = IndexMap::new();
-        let mut map: IndexMap<Ty, String> = IndexMap::new();
-        for (ty, base) in &protocol_tys {
-            let n = base_counts.entry(base.clone()).or_insert(0);
-            *n += 1;
-            map.insert(ty.clone(), format!("{base}{n}"));
+    //
+    // Distinct Protocols are keyed on the RENDERED identity — the structural
+    // callback `Ty` plus the owner-map projection over the TypeVars it names — so
+    // two owners whose maps produce different spellings (a bumped `{None, None_}`
+    // twin) get distinct Protocols, while identical renderings (every keyword-free
+    // schema) still share ONE Protocol keyed the same way, keeping output
+    // byte-identical. `translate_ty` re-derives this key from `ctx.type_var_map`
+    // at each reference, so the shared map needs no per-owner threading.
+    let protocol_entries = body.callback_protocols();
+    // `render_list` holds one distinct Protocol each: (name, callback Ty, owner
+    // map to render its body under), in first-seen order.
+    let mut render_list: Vec<(String, Ty, Option<std::rc::Rc<TypeVarMap>>)> = Vec::new();
+    let mut base_counts: IndexMap<String, usize> = IndexMap::new();
+    let mut name_by_key: IndexMap<CallbackProtocolKey, String> = IndexMap::new();
+    for cp in &protocol_entries {
+        let key = callback_protocol_key(&cp.ty, cp.owner_map.as_deref());
+        if name_by_key.contains_key(&key) {
+            continue;
         }
-        Some(std::rc::Rc::new(map))
-    };
-    if let Some(map) = &callback_protocols {
-        let proto_ctx = TranslateCtx {
-            current_leaf: body.leaf.clone(),
-            self_ref: None,
-            defer_name_refs: false,
-            callback_protocols: Some(map.clone()),
+        // `n` is a per-base 1-based counter (usually 1; >1 only when one
+        // parameter's type nests multiple optional-arg callables under the same
+        // `_<owner>__<param>` prefix).
+        let n = base_counts.entry(cp.base.clone()).or_insert(0);
+        *n += 1;
+        let name = format!("{}{}", cp.base, n);
+        name_by_key.insert(key, name.clone());
+        render_list.push((name, cp.ty.clone(), cp.owner_map.clone()));
+    }
+    let callback_protocols: Option<std::rc::Rc<IndexMap<CallbackProtocolKey, String>>> =
+        if name_by_key.is_empty() {
+            None
+        } else {
+            Some(std::rc::Rc::new(name_by_key))
         };
-        for (ty, _base) in &protocol_tys {
+    if let Some(map) = &callback_protocols {
+        for (name, ty, owner_map) in &render_list {
             if let Ty::Function { params, ret, .. } = ty {
+                let proto_ctx = TranslateCtx {
+                    current_leaf: body.leaf.clone(),
+                    self_ref: None,
+                    defer_name_refs: false,
+                    callback_protocols: Some(map.clone()),
+                    // Render the Protocol body under the OWNER scope's map so a
+                    // bumped keyword TypeVar (`None`→`None__`) matches the owner's
+                    // declared spelling; a non-generic owner carries `None`, which
+                    // falls back to the stateless escape (byte-identical).
+                    type_var_map: owner_map.clone(),
+                };
                 out.push_str("\n\n");
-                out.push_str(&render_callback_protocol(&map[ty], params, ret, &proto_ctx));
+                out.push_str(&render_callback_protocol(name, params, ret, &proto_ctx));
             }
         }
     }

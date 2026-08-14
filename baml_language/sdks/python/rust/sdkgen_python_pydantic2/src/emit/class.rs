@@ -7,7 +7,7 @@
 
 use baml_codegen_types::{Name, Ty};
 
-use crate::emit::method::PyMethodBinding;
+use crate::emit::{TypeVarMap, method::PyMethodBinding};
 
 /// Python class definition. G4 populates `properties`; 12b populates
 /// `static_methods` and `instance_methods`; §7 handle-backed
@@ -24,6 +24,10 @@ pub(crate) struct PyClass {
     /// `typing.Generic[T, …]` second base and the leaf-level `TypeVar`
     /// declarations include each name.
     pub(crate) generic_params: Vec<String>,
+    /// Raw→emitted map for `generic_params`, threaded into the field-body
+    /// `TranslateCtx` so a `TypeVar` reference resolves to the same spelling the
+    /// declaration allocated. Empty for non-generic classes.
+    pub(crate) type_var_map: TypeVarMap,
     /// Joined `///` doc-comment lines from the BAML class declaration.
     /// Combined with `PyClassProperty.docstring` from each entry in
     /// `properties` to produce the `"""…"""` Python class docstring;
@@ -43,8 +47,15 @@ pub(crate) struct PyClass {
 }
 
 pub(crate) struct PyClassProperty {
+    /// Python identifier for the field. Equal to the raw BAML field name
+    /// except when that name is a Python hard keyword, in which case it is
+    /// escaped (`pass` → `pass_`) and `alias` carries the raw name.
     pub(crate) name: String,
     pub(crate) ty: Ty,
+    /// `Some(raw)` when `name` was escaped off a keyword — the raw BAML field
+    /// name, which stays the JSON/wire key via `pydantic.Field(alias=raw)`.
+    /// `None` for the common case (field renders byte-identically to today).
+    pub(crate) alias: Option<String>,
     /// Joined `///` doc-comment lines preceding the field. Folded into
     /// the parent `PyClass`'s `"""…"""` docstring under an
     /// `Attributes:` section — never rendered as an inline `# …`

@@ -10,6 +10,7 @@ use baml_codegen_types::{Name, Ty};
 use indexmap::IndexMap;
 
 use crate::{
+    emit::{TypeVarMap, escape_python_keyword},
     py_string,
     routing::{LeafPath, route_class_ref},
 };
@@ -29,21 +30,97 @@ pub(crate) struct TranslateCtx {
     /// quoted form defers resolution until pydantic walks the alias
     /// later.
     pub(crate) defer_name_refs: bool,
-    /// `.pyi`-only: maps each optional-argument `Ty::Function` in the leaf to
-    /// the name of the `typing.Protocol` emitted for it. A function *type*
-    /// (`typing.Callable[[…], R]`) cannot express per-parameter optionality,
-    /// so a callback with optional params is rendered as a named Protocol
-    /// whose `__call__` carries the precise signature; the type expression for
-    /// such a callable is just that Protocol's name. Absent (`None`) in the
-    /// runtime `.py` path, where callable types fall back to
-    /// `typing.Callable[..., R]` (Protocol classes are stub-only).
-    pub(crate) callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
+    /// `.pyi`-only: maps each distinct callback Protocol in the leaf — keyed on
+    /// its RENDERED identity ([`CallbackProtocolKey`]: structural `Ty` + the
+    /// owner-map projection over the `TypeVars` it names) — to the Protocol's
+    /// emitted name. A function *type* (`typing.Callable[[…], R]`) cannot express
+    /// per-parameter optionality, so a callback with optional params is rendered
+    /// as a named Protocol whose `__call__` carries the precise signature; the
+    /// type expression for such a callable is just that Protocol's name. The key
+    /// is re-derived here from `type_var_map` (the owner scope's map), so two
+    /// owners that spell the callback's `TypeVars` differently resolve to distinct
+    /// Protocols. Absent (`None`) in the runtime `.py` path, where callable
+    /// types fall back to `typing.Callable[..., R]` (Protocol classes are
+    /// stub-only).
+    pub(crate) callback_protocols: Option<std::rc::Rc<IndexMap<CallbackProtocolKey, String>>>,
+    /// Raw→emitted `TypeVar` name map for the generic scope whose body is being
+    /// translated (one class, free function, method, or the callback Protocol of
+    /// a generic owner). `Ty::TypeVar` resolves through it so a `{None, None_}`
+    /// twin's references match the distinct `{None__, None_}` declarations. `None`
+    /// when no generic scope is active — resolution then falls back to the
+    /// stateless [`escape_python_keyword`], which is exact for a non-generic
+    /// scope (it has no keyword `TypeVar` twin to disambiguate).
+    pub(crate) type_var_map: Option<std::rc::Rc<TypeVarMap>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SelfRef {
     pub(crate) routed_leaf: LeafPath,
     pub(crate) bare_name: String,
+}
+
+/// De-duplication / lookup key for a callback `typing.Protocol`: the
+/// structural callback `Ty` paired with the owner scope's emitted spelling of
+/// every `TypeVar` that appears in it, in sorted-by-raw-name order. Two owners
+/// whose maps spell the callback's `TypeVars` identically share one Protocol
+/// (keyword-free schemas always do → byte-identical output); owners that spell
+/// them differently (a bumped `{None, None_}` twin) get distinct Protocols. A
+/// callback that names no `TypeVar` has an empty projection, so its identity is
+/// purely structural, exactly as before this change.
+pub(crate) type CallbackProtocolKey = (Ty, Vec<(String, String)>);
+
+/// Build the [`CallbackProtocolKey`] for `ty` under an owner scope's `owner_map`
+/// (or the stateless escape when the owner is non-generic). The projection folds
+/// in only the `TypeVars` that actually appear in `ty`, so an owner's unrelated
+/// generics never fragment otherwise-identical Protocols.
+pub(crate) fn callback_protocol_key(
+    ty: &Ty,
+    owner_map: Option<&TypeVarMap>,
+) -> CallbackProtocolKey {
+    let mut vars: Vec<String> = Vec::new();
+    collect_type_var_names(ty, &mut vars);
+    vars.sort();
+    vars.dedup();
+    let projection = vars
+        .into_iter()
+        .map(|raw| {
+            let emitted = owner_map
+                .and_then(|m| m.get(&raw).cloned())
+                .unwrap_or_else(|| escape_python_keyword(raw.clone()));
+            (raw, emitted)
+        })
+        .collect();
+    (ty.clone(), projection)
+}
+
+/// Collect every `TypeVar` raw name reachable inside `ty` (order irrelevant —
+/// the caller sorts + dedups).
+fn collect_type_var_names(ty: &Ty, out: &mut Vec<String>) {
+    match ty {
+        Ty::TypeVar(name, _) => out.push(name.as_str().to_string()),
+        Ty::List(inner, _) => collect_type_var_names(inner, out),
+        Ty::Map { key, value, .. } => {
+            collect_type_var_names(key, out);
+            collect_type_var_names(value, out);
+        }
+        Ty::Union(items, _) => {
+            for t in items {
+                collect_type_var_names(t, out);
+            }
+        }
+        Ty::Class(_, args, _) => {
+            for a in args {
+                collect_type_var_names(a, out);
+            }
+        }
+        Ty::Function { params, ret, .. } => {
+            for p in params {
+                collect_type_var_names(&p.ty, out);
+            }
+            collect_type_var_names(ret, out);
+        }
+        _ => {}
+    }
 }
 
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
@@ -82,7 +159,20 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 head
             }
         }
-        Ty::TypeVar(name, _) => name.as_str().to_string(),
+        Ty::TypeVar(name, _) => {
+            // Map wins so a `{None, None_}` twin resolves to the exact spelling
+            // the declaration allocated. The stateless escape is the fallback
+            // only for scopes with no map in `ctx` — non-generic bodies and alias
+            // RHS — which bind no TypeVars and so cannot carry a twin. Callback
+            // Protocol bodies now DO carry the owner scope's map, so a
+            // callback that references a bumped keyword TypeVar resolves through
+            // it here rather than re-escaping statelessly.
+            let raw = name.as_str();
+            ctx.type_var_map
+                .as_ref()
+                .and_then(|m| m.get(raw).cloned())
+                .unwrap_or_else(|| escape_python_keyword(raw.to_string()))
+        }
         Ty::List(inner, _) => format!("typing.List[{}]", translate_ty(inner, ctx)),
         Ty::Map { key, value, .. } => {
             format!(
@@ -125,9 +215,15 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
             if has_optional {
                 // A callback with optional params is emitted as a named
                 // `typing.Protocol` (see `TranslateCtx::callback_protocols`):
-                // the type expression here is just that Protocol's name.
-                if let Some(name) = ctx.callback_protocols.as_ref().and_then(|map| map.get(ty)) {
-                    return name.clone();
+                // the type expression here is just that Protocol's name. The
+                // lookup key folds in the owner scope's spelling of the callback's
+                // TypeVars (`ctx.type_var_map`), so a generic owner resolves to
+                // the Protocol rendered under its own map.
+                if let Some(map) = ctx.callback_protocols.as_ref() {
+                    let key = callback_protocol_key(ty, ctx.type_var_map.as_deref());
+                    if let Some(name) = map.get(&key) {
+                        return name.clone();
+                    }
                 }
                 // Runtime `.py` path (no Protocol map): `typing.Callable` can't
                 // express per-param optionality, so widen the arg list.
@@ -206,12 +302,19 @@ fn media_ref(bare: &str, ctx: &TranslateCtx) -> String {
     render_name_ref(&name, ctx)
 }
 
+/// Render a reference to a class / enum / type-alias name. The bare name is
+/// keyword-escaped with the same stateless [`escape_python_keyword`] used at
+/// the definition site (`emit/mod.rs`), so a class declared `None_` is
+/// referenced as `None_` (or `lorem.None_` cross-leaf) — never the raw `None`,
+/// which would `NameError`. Module-path segments are handled separately by the
+/// routing sanitizer and are not escaped here.
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
     let routed_leaf = route_class_ref(name);
+    let bare = escape_python_keyword(name.bare_name().to_string());
     if routed_leaf == ctx.current_leaf || routed_leaf.segments.is_empty() {
-        name.bare_name().to_string()
+        bare
     } else {
-        format!("{}.{}", routed_leaf.segments.join("."), name.bare_name())
+        format!("{}.{}", routed_leaf.segments.join("."), bare)
     }
 }
 
@@ -241,6 +344,7 @@ mod tests {
             self_ref: None,
             defer_name_refs: false,
             callback_protocols: None,
+            type_var_map: None,
         }
     }
 
@@ -253,6 +357,7 @@ mod tests {
             current_leaf: leaf(current_segments),
             defer_name_refs: false,
             callback_protocols: None,
+            type_var_map: None,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),
@@ -272,6 +377,7 @@ mod tests {
             current_leaf: leaf(current_segments),
             defer_name_refs: true,
             callback_protocols: None,
+            type_var_map: None,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),

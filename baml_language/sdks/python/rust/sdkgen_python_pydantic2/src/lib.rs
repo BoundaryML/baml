@@ -25,7 +25,9 @@ pub use baml_codegen_types::{NamingConvention, OutputType};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
-    leaf::{LeafBody, group_and_sort, render_leaf_body, render_leaf_body_pyi},
+    leaf::{
+        LeafBody, allocate_leaf_type_vars, group_and_sort, render_leaf_body, render_leaf_body_pyi,
+    },
     routing::{LeafPath, route},
 };
 
@@ -207,7 +209,12 @@ fn to_source_code_internal(
     // at least one routed symbol ends up with a `LeafBody` here; all
     // others render with G1-identical content.
     let triples = build_emitted(pool);
-    let bodies: BTreeMap<LeafPath, LeafBody> = group_and_sort(triples);
+    let mut bodies: BTreeMap<LeafPath, LeafBody> = group_and_sort(triples);
+    // Allocate every generic scope's TypeVar names ONCE per leaf, against
+    // a leaf-global reservation set, now that every symbol in each leaf is known.
+    // `children` is threaded in so the reservation set also covers child-package
+    // names and keyword-escaped callable-child import anchors.
+    allocate_leaf_type_vars(&mut bodies, &children);
 
     // Emit every directory's `__init__.py` and a sibling `__init__.pyi`.
     for dir in &all_dirs {
@@ -426,7 +433,7 @@ fn render_root_init_pyi(
     out
 }
 
-fn callable_child_bodies<'a>(
+pub(crate) fn callable_child_bodies<'a>(
     dir: &[String],
     callable_child_names: &BTreeSet<String>,
     bodies: &'a BTreeMap<LeafPath, LeafBody>,
@@ -574,8 +581,8 @@ fn symbol_name(sym: &Symbol) -> Option<&Name> {
 mod tests {
     use baml_base::Name as BaseName;
     use baml_codegen_types::{
-        Class, ClassProperty, DefaultLiteral, Enum, EnumVariant, Function, FunctionArgument,
-        FunctionArgumentDefault, Origin, Ty, TypeAlias,
+        CallableParam, Class, ClassProperty, CodegenFunctionParamMode, DefaultLiteral, Enum,
+        EnumVariant, Function, FunctionArgument, FunctionArgumentDefault, Origin, Ty, TypeAlias,
     };
     use pretty_assertions::{assert_eq, assert_ne};
 
@@ -3109,6 +3116,85 @@ mod tests {
         assert!(pyi.contains("    inner: Foo\n"));
     }
 
+    /// A root-level class named with a Python keyword, referenced from a
+    /// non-root (`ns_*`) leaf, escapes at the definition site (`class None_`)
+    /// AND at the reference (`inner: None_`). The import anchor MUST carry the
+    /// same escaped spelling — `from .. import None_`, never the raw
+    /// `from .. import None` (a `SyntaxError` that also leaves `None_` unbound).
+    /// Covers a soft-name keyword (`None`) and a hard statement keyword
+    /// (`pass`) in one non-root leaf.
+    #[test]
+    fn root_routed_keyword_class_import_anchor_is_escaped() {
+        let mut pool: SymbolPool = HashMap::new();
+        let none_cls = cg_name("user", &[], "None");
+        let pass_cls = cg_name("user", &[], "pass");
+        pool.insert(none_cls.clone(), class(none_cls.clone()));
+        pool.insert(pass_cls.clone(), class(pass_cls.clone()));
+        let envelope = cg_name("user", &["ipsum"], "Envelope");
+        pool.insert(
+            envelope.clone(),
+            class_with_props(
+                envelope,
+                vec![
+                    ("n", class_ty(none_cls, vec![])),
+                    ("p", class_ty(pass_cls, vec![])),
+                ],
+                "ipsum.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+
+        // Root leaf defines the escaped classes.
+        let root_py = &out[&PathBuf::from("__init__.py")];
+        assert!(
+            root_py.contains("class None_(pydantic.BaseModel):"),
+            "root missing escaped None_ def:\n{root_py}"
+        );
+        assert!(
+            root_py.contains("class pass_(pydantic.BaseModel):"),
+            "root missing escaped pass_ def:\n{root_py}"
+        );
+
+        // Non-root consumer: import anchor and annotation both escaped; the raw
+        // keyword import must never appear.
+        let ipsum_py = &out[&PathBuf::from("ipsum/__init__.py")];
+        assert!(
+            ipsum_py.contains("\nfrom .. import None_\n"),
+            "consumer missing escaped None_ import:\n{ipsum_py}"
+        );
+        assert!(
+            ipsum_py.contains("\nfrom .. import pass_\n"),
+            "consumer missing escaped pass_ import:\n{ipsum_py}"
+        );
+        assert!(
+            !ipsum_py.contains("from .. import None\n")
+                && !ipsum_py.contains("from .. import pass\n"),
+            "consumer emitted a raw keyword import:\n{ipsum_py}"
+        );
+        assert!(
+            ipsum_py.contains("    n: None_\n"),
+            "n annotation:\n{ipsum_py}"
+        );
+        assert!(
+            ipsum_py.contains("    p: pass_\n"),
+            "p annotation:\n{ipsum_py}"
+        );
+
+        // The `.pyi` guards the same escaped anchors under TYPE_CHECKING.
+        let ipsum_pyi = &out[&PathBuf::from("ipsum/__init__.pyi")];
+        assert!(
+            ipsum_pyi.contains("from .. import None_\n")
+                && ipsum_pyi.contains("from .. import pass_\n"),
+            "pyi missing escaped anchors:\n{ipsum_pyi}"
+        );
+        assert!(
+            !ipsum_pyi.contains("from .. import None\n")
+                && !ipsum_pyi.contains("from .. import pass\n"),
+            "pyi emitted a raw keyword import:\n{ipsum_pyi}"
+        );
+    }
+
     #[test]
     fn root_leaf_does_not_self_import_root_types() {
         // Same `Foo` referenced from a same-leaf class on the root
@@ -3646,6 +3732,1366 @@ mod tests {
         assert!(
             !root.contains("sdk_root="),
             "root still passes sdk_root: {root}"
+        );
+    }
+
+    // ── #4059: Python reserved-keyword escaping ─────────────────────────────
+
+    /// The 35 `CPython` hard keywords (`keyword.kwlist`, 3.9–3.13). Unit tests
+    /// build the `SymbolPool` directly, so all 35 are exercisable even though
+    /// only 24 are reachable through BAML source syntax (the other 11 are BAML
+    /// keywords too). Kept in-test as the ground truth the emitter's private
+    /// `PYTHON_HARD_KEYWORDS` const and the Python bridge test both anchor to.
+    const HARD_KEYWORDS: [&str; 35] = [
+        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+        "try", "while", "with", "yield",
+    ];
+
+    fn int_ty() -> Ty {
+        Ty::Int {
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
+
+    fn enum_with_variants(name: Name, variants: &[(&str, &str)]) -> Symbol {
+        Symbol::Enum(Enum {
+            name,
+            docstring: None,
+            variants: variants
+                .iter()
+                .map(|(ident, value)| EnumVariant {
+                    name: BaseName::new(ident),
+                    docstring: None,
+                    value: value.to_string(),
+                })
+                .collect(),
+            origin: origin("x.baml", 0),
+        })
+    }
+
+    fn class_with_fields(name: Name, fields: &[(&str, Ty)]) -> Symbol {
+        Symbol::Class(Class {
+            generic_params: Vec::new(),
+            name,
+            docstring: None,
+            properties: fields
+                .iter()
+                .map(|(n, ty)| ClassProperty {
+                    name: BaseName::new(n),
+                    docstring: None,
+                    ty: ty.clone(),
+                })
+                .collect(),
+            static_methods: vec![],
+            instance_methods: vec![],
+            origin: origin("x.baml", 0),
+        })
+    }
+
+    #[test]
+    fn every_hard_keyword_enum_member_escapes_and_keeps_wire_value() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "AllKw");
+        let variants: Vec<(&str, &str)> = HARD_KEYWORDS.iter().map(|kw| (*kw, *kw)).collect();
+        pool.insert(n.clone(), enum_with_variants(n, &variants));
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        for kw in HARD_KEYWORDS {
+            // `<kw>_ = "<kw>"`: LHS escaped, RHS wire value verbatim.
+            assert!(
+                leaf.contains(&format!("    {kw}_ = \"{kw}\"\n")),
+                "enum member {kw} not escaped as {kw}_ = \"{kw}\":\n{leaf}"
+            );
+            // The bare `<kw> =` keyword-LHS spelling must never appear.
+            assert!(
+                !leaf.contains(&format!("    {kw} = ")),
+                "bare keyword member {kw} = present:\n{leaf}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_hard_keyword_class_field_escapes_with_alias_and_populate_by_name() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "AllKw");
+        let fields: Vec<(&str, Ty)> = HARD_KEYWORDS.iter().map(|kw| (*kw, int_ty())).collect();
+        pool.insert(n.clone(), class_with_fields(n, &fields));
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "model_config = pydantic.ConfigDict(extra=\"forbid\", populate_by_name=True)\n"
+            ),
+            "populate_by_name not added to ConfigDict:\n{leaf}"
+        );
+        for kw in HARD_KEYWORDS {
+            assert!(
+                leaf.contains(&format!(
+                    "    {kw}_: int = pydantic.Field(alias=\"{kw}\")\n"
+                )),
+                "field {kw} not escaped/aliased:\n{leaf}"
+            );
+            // The bare keyword annotation target must be absent — this is the
+            // `lambda` silent-corruption assertion (a bare `lambda: int` parses
+            // as a lambda expression, dropping the field).
+            assert!(
+                !leaf.contains(&format!("    {kw}: int")),
+                "bare keyword field {kw}: present:\n{leaf}"
+            );
+        }
+    }
+
+    #[test]
+    fn keyword_class_name_escapes_at_def_ref_and_keeps_raw_typemap_fqn() {
+        let mut pool: SymbolPool = HashMap::new();
+        // Class named `None` (an uppercase-initial hard keyword). BAML admits 24
+        // of the 35 Python hard keywords as class/enum/alias names — including
+        // lowercase ones like `pass`/`import` — all through the same escape path;
+        // `None` is used here as one representative NAME-position case.
+        let none = cg_name("user", &["lorem"], "None");
+        pool.insert(
+            none.clone(),
+            class_with_fields(none, &[("value", int_ty())]),
+        );
+        // Same-leaf class referencing `None`.
+        let same = cg_name("user", &["lorem"], "SameRef");
+        pool.insert(
+            same.clone(),
+            class_with_fields(
+                same,
+                &[(
+                    "child",
+                    class_ty(cg_name("user", &["lorem"], "None"), vec![]),
+                )],
+            ),
+        );
+        // Cross-leaf class referencing `None`.
+        let cross = cg_name("user", &["ipsum"], "CrossRef");
+        pool.insert(
+            cross.clone(),
+            class_with_fields(
+                cross,
+                &[(
+                    "child",
+                    class_ty(cg_name("user", &["lorem"], "None"), vec![]),
+                )],
+            ),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let lorem = &out[&PathBuf::from("lorem/__init__.py")];
+        let lorem_pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        let ipsum = &out[&PathBuf::from("ipsum/__init__.py")];
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+
+        // Definition escaped in both `.py` and `.pyi`.
+        assert!(
+            lorem.contains("class None_(pydantic.BaseModel):\n"),
+            "def:\n{lorem}"
+        );
+        assert!(
+            lorem_pyi.contains("class None_(pydantic.BaseModel):\n"),
+            "pyi:\n{lorem_pyi}"
+        );
+        // `__all__` uses the escaped name.
+        assert!(lorem.contains("\"None_\","), "__all__:\n{lorem}");
+        // Same-leaf reference → bare `None_`; cross-leaf → `lorem.None_`.
+        assert!(
+            lorem.contains("    child: None_\n"),
+            "same-leaf ref:\n{lorem}"
+        );
+        assert!(ipsum.contains("lorem.None_"), "cross-leaf ref:\n{ipsum}");
+        // Typemap key stays the RAW BAML FQN; only the attr is escaped.
+        assert!(
+            typemap.contains("\"user.lorem.None\""),
+            "typemap lost raw FQN key:\n{typemap}"
+        );
+        assert!(
+            !typemap.contains("\"user.lorem.None_\""),
+            "typemap FQN key wrongly escaped:\n{typemap}"
+        );
+        assert!(
+            typemap.contains("\"None_\""),
+            "typemap attr not escaped:\n{typemap}"
+        );
+    }
+
+    #[test]
+    fn keyword_typevar_escapes_at_declaration_and_reference() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Box");
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None")],
+                name: n,
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("item"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("None")),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains("None_ = typing.TypeVar(\"None_\")\n"),
+            "typevar decl not escaped:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("class Box(pydantic.BaseModel, typing.Generic[None_]):\n"),
+            "generic base not escaped:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("    item: None_\n"),
+            "typevar ref not escaped:\n{leaf}"
+        );
+    }
+
+    /// Class scope: a class declaring both `None` and `None_` as
+    /// `TypeVar`s must allocate DISTINCT emitted names (`None__` for the raw
+    /// keyword, `None_` for the raw `None_`), and every field reference must
+    /// resolve to the same spelling the declaration allocated. Stateless
+    /// escaping would collapse both onto `None_` (a duplicate generic param).
+    #[test]
+    fn typevar_collision_none_and_none_underscore_diverge_class_scope() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Box");
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None"), BaseName::new("None_")],
+                name: n,
+                docstring: None,
+                properties: vec![
+                    ClassProperty {
+                        name: BaseName::new("a"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("None")),
+                    },
+                    ClassProperty {
+                        name: BaseName::new("b"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("None_")),
+                    },
+                ],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        for path in ["lorem/__init__.py", "lorem/__init__.pyi"] {
+            let leaf = &out[&PathBuf::from(path)];
+            // Two distinct TypeVar declarations, one of each, never one shared.
+            assert!(
+                leaf.contains("None__ = typing.TypeVar(\"None__\")\n"),
+                "{path}: bumped decl missing:\n{leaf}"
+            );
+            assert!(
+                leaf.contains("None_ = typing.TypeVar(\"None_\")\n"),
+                "{path}: natural decl missing:\n{leaf}"
+            );
+            // The `Generic[…]` base lists both distinct params.
+            assert!(
+                leaf.contains("class Box(pydantic.BaseModel, typing.Generic[None__, None_]):"),
+                "{path}: generic base not distinct:\n{leaf}"
+            );
+            // References match their declarations: raw `None` → `None__`,
+            // raw `None_` → `None_`.
+            assert!(leaf.contains("    a: None__\n"), "{path}: a ref:\n{leaf}");
+            assert!(leaf.contains("    b: None_\n"), "{path}: b ref:\n{leaf}");
+        }
+    }
+
+    /// Class scope, order independence: the reversed declaration order
+    /// `{None_, None}` must yield the SAME mapping — raw `None_` keeps `None_`,
+    /// raw `None` is forced to `None__`.
+    #[test]
+    fn typevar_collision_is_order_independent_class_scope() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Box");
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None_"), BaseName::new("None")],
+                name: n,
+                docstring: None,
+                properties: vec![
+                    ClassProperty {
+                        name: BaseName::new("a"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("None_")),
+                    },
+                    ClassProperty {
+                        name: BaseName::new("b"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("None")),
+                    },
+                ],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains("class Box(pydantic.BaseModel, typing.Generic[None_, None__]):"),
+            "reversed order changed mapping:\n{leaf}"
+        );
+        assert!(leaf.contains("    a: None_\n"), "a ref:\n{leaf}");
+        assert!(leaf.contains("    b: None__\n"), "b ref:\n{leaf}");
+    }
+
+    /// Free-function scope: a generic free function declaring both
+    /// `None` and `None_` allocates distinct `TypeVar`s and its `.pyi`
+    /// signature references match the declarations.
+    #[test]
+    fn typevar_collision_none_and_none_underscore_diverge_function_scope() {
+        let mut pool: SymbolPool = HashMap::new();
+        let key = cg_name("user", &["lorem"], "echo");
+        pool.insert(
+            key,
+            Symbol::Function(Function {
+                name: BaseName::new("echo"),
+                generic_params: vec![BaseName::new("None"), BaseName::new("None_")],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("None")),
+                    default: None,
+                }],
+                return_type: type_var(BaseName::new("None_")),
+                throws: None,
+                watchers: vec![],
+                origin: origin("echo.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("None__ = typing.TypeVar(\"None__\")\n"),
+            "bumped decl missing:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("None_ = typing.TypeVar(\"None_\")\n"),
+            "natural decl missing:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("def echo(value: None__, *, _types: dict[str, type]) -> None_: ..."),
+            "signature refs not distinct:\n{pyi}"
+        );
+    }
+
+    /// Method scope: a generic instance method declaring both `None`
+    /// and `None_` allocates distinct `TypeVar`s in its `.pyi` signature.
+    #[test]
+    fn typevar_collision_none_and_none_underscore_diverge_method_scope() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Holder");
+        let mut method = bare_func("pick", "x.baml", 100);
+        method.generic_params = vec![BaseName::new("None"), BaseName::new("None_")];
+        method.arguments = vec![
+            FunctionArgument {
+                name: BaseName::new("self"),
+                docstring: None,
+                ty: class_ty(n.clone(), vec![]),
+                default: None,
+            },
+            FunctionArgument {
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: type_var(BaseName::new("None")),
+                default: None,
+            },
+        ];
+        method.return_type = type_var(BaseName::new("None_"));
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: Vec::new(),
+                name: n,
+                docstring: None,
+                properties: vec![],
+                static_methods: vec![],
+                instance_methods: vec![method],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("None__ = typing.TypeVar(\"None__\")\n"),
+            "bumped decl missing:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("None_ = typing.TypeVar(\"None_\")\n"),
+            "natural decl missing:\n{pyi}"
+        );
+        // The method value param resolves raw `None` → `None__`; the return
+        // resolves raw `None_` → `None_`.
+        assert!(pyi.contains("value: None__"), "param ref:\n{pyi}");
+        assert!(pyi.contains(") -> None_:"), "return ref:\n{pyi}");
+    }
+
+    /// Invariant: a plain no-keyword `TypeVar` scope renders exactly as
+    /// before the collision-aware change — the map path is identity on `T`.
+    #[test]
+    fn nonkeyword_typevar_scope_is_unchanged() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Box");
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("T")],
+                name: n,
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("item"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("T")),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains("T = typing.TypeVar(\"T\")\n"),
+            "decl:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("class Box(pydantic.BaseModel, typing.Generic[T]):\n"),
+            "base:\n{leaf}"
+        );
+        assert!(leaf.contains("    item: T\n"), "ref:\n{leaf}");
+        // No stray extra underscore leaked into the emitted spelling.
+        assert!(
+            !leaf.contains("T_ = typing.TypeVar"),
+            "spurious escape:\n{leaf}"
+        );
+    }
+
+    // ── Reserved-word codegen: TypeVar allocation and stub aggregation ───────
+
+    /// A leaf that already declares a class named `None__` plus a
+    /// generic `<None, None_>` must bump the keyword `TypeVar` PAST the taken class
+    /// name (`None`→`None_`(raw)→`None__`(class)→`None___`), so no module name is
+    /// declared twice and the `Generic[…]` list never shadows onto the class.
+    #[test]
+    fn typevar_bump_reserves_leaf_class_names() {
+        let mut pool: SymbolPool = HashMap::new();
+        // A source-valid class literally named `None__` (not a hard keyword, so
+        // it emits verbatim and lands in the leaf namespace).
+        let taken = cg_name("user", &["lorem"], "None__");
+        pool.insert(taken.clone(), class_with_fields(taken, &[("a", int_ty())]));
+        // A generic class whose `{None, None_}` twin would, per-scope, bump `None`
+        // onto the already-taken `None__`.
+        let boxn = cg_name("user", &["lorem"], "Box");
+        pool.insert(
+            boxn.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None"), BaseName::new("None_")],
+                name: boxn,
+                docstring: None,
+                properties: vec![
+                    ClassProperty {
+                        name: BaseName::new("a"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("None")),
+                    },
+                    ClassProperty {
+                        name: BaseName::new("b"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("None_")),
+                    },
+                ],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("box.baml", 10),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        for path in ["lorem/__init__.py", "lorem/__init__.pyi"] {
+            let leaf = &out[&PathBuf::from(path)];
+            // The class keeps its verbatim name.
+            assert!(
+                leaf.contains("class None__(pydantic.BaseModel):"),
+                "{path}: class None__ def missing:\n{leaf}"
+            );
+            // `None` bumped clear of BOTH the raw `None_` and the class `None__`.
+            assert!(
+                leaf.contains("None___ = typing.TypeVar(\"None___\")\n"),
+                "{path}: keyword TypeVar did not bump past the class name:\n{leaf}"
+            );
+            assert!(
+                leaf.contains("None_ = typing.TypeVar(\"None_\")\n"),
+                "{path}: natural TypeVar decl missing:\n{leaf}"
+            );
+            // Critically: `None__` is NEVER declared as a TypeVar — that name
+            // belongs to the class, so a `None__` TypeVar would collide on import.
+            assert!(
+                !leaf.contains("None__ = typing.TypeVar"),
+                "{path}: TypeVar collided with the leaf class None__:\n{leaf}"
+            );
+            // The generic base lists the bumped + natural params, neither of which
+            // is the class name.
+            assert!(
+                leaf.contains("class Box(pydantic.BaseModel, typing.Generic[None___, None_]):"),
+                "{path}: generic base shadows the class or is not distinct:\n{leaf}"
+            );
+            assert!(leaf.contains("    a: None___\n"), "{path}: a ref:\n{leaf}");
+            assert!(leaf.contains("    b: None_\n"), "{path}: b ref:\n{leaf}");
+        }
+    }
+
+    /// Distinct raw `TypeVar` spellings must never collapse onto one emitted name
+    /// (identical spellings deliberately share one module-level `TypeVar`). A class
+    /// `<None, None_>` with an instance method `<None__>` yields THREE distinct
+    /// emitted `TypeVars`, and the runtime `type_params` (method) and
+    /// `class_type_params` (class) key lists are disjoint.
+    #[test]
+    fn class_and_method_typevars_stay_disjoint() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "MethodCollisionBox");
+        let mut method = bare_func("pick", "x.baml", 100);
+        method.generic_params = vec![BaseName::new("None__")];
+        method.arguments = vec![
+            FunctionArgument {
+                name: BaseName::new("self"),
+                docstring: None,
+                ty: class_ty(n.clone(), vec![]),
+                default: None,
+            },
+            FunctionArgument {
+                name: BaseName::new("other"),
+                docstring: None,
+                ty: type_var(BaseName::new("None__")),
+                default: None,
+            },
+        ];
+        method.return_type = type_var(BaseName::new("None__"));
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None"), BaseName::new("None_")],
+                name: n,
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("None")),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![method],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        // Three DISTINCT emitted names: class `None`→`None___`, class `None_`→
+        // `None_`, method `None__`→`None__`.
+        for decl in [
+            "None___ = typing.TypeVar(\"None___\")\n",
+            "None_ = typing.TypeVar(\"None_\")\n",
+            "None__ = typing.TypeVar(\"None__\")\n",
+        ] {
+            assert!(pyi.contains(decl), "missing decl {decl:?}:\n{pyi}");
+        }
+        // Class binder `None` (→`None___`) is not confused with the method's
+        // distinct `None__` binder.
+        assert!(
+            pyi.contains(
+                "class MethodCollisionBox(pydantic.BaseModel, typing.Generic[None___, None_]):"
+            ),
+            "class generic base:\n{pyi}"
+        );
+        assert!(pyi.contains("    value: None___\n"), "class field:\n{pyi}");
+        assert!(
+            pyi.contains("other: None__,") || pyi.contains("other: None__)"),
+            "method param binder:\n{pyi}"
+        );
+        // Runtime `_types=` keys are disjoint: method binds `None__`, class binds
+        // `None___`/`None_` — no shared string (the runtime half).
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            py.contains("type_params=[\"None__\"], class_type_params=[\"None___\", \"None_\"]"),
+            "runtime _types keys overlap or wrong:\n{py}"
+        );
+    }
+
+    /// A STATIC method whose annotations reference the enclosing
+    /// class's `TypeVars` resolves them through the class map (BAML statics carry
+    /// class generics), so the raw class `None` resolves to the class's emitted
+    /// `None__` — not the stateless `None_`. The runtime `_types=` receiver
+    /// binding is unchanged (statics bind no `class_type_params`).
+    #[test]
+    fn static_method_signature_uses_class_typevar_map() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Factory");
+        let mut make = bare_func("make", "x.baml", 100);
+        make.generic_params = vec![];
+        make.arguments = vec![FunctionArgument {
+            name: BaseName::new("value"),
+            docstring: None,
+            ty: type_var(BaseName::new("None")),
+            default: None,
+        }];
+        make.return_type = type_var(BaseName::new("None"));
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None"), BaseName::new("None_")],
+                name: n,
+                docstring: None,
+                properties: vec![],
+                static_methods: vec![make],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("class Factory(pydantic.BaseModel, typing.Generic[None__, None_]):"),
+            "class generic base:\n{pyi}"
+        );
+        // Static annotation resolves raw class `None` to the class's emitted
+        // `None__` (would be `None_` under the dropped-map bug).
+        assert!(
+            pyi.contains("def make(value: None__) -> None__: ..."),
+            "static sig did not resolve class TypeVar map:\n{pyi}"
+        );
+        // Runtime binding is untouched: a static binds no class_type_params.
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            !py.contains("class_type_params="),
+            "static wrongly bound class_type_params at runtime:\n{py}"
+        );
+    }
+
+    fn optional_callback(param: &str, var: &str) -> Ty {
+        Ty::Function {
+            params: vec![CallableParam {
+                name: Some(BaseName::new(param)),
+                ty: type_var(BaseName::new(var)),
+                mode: CodegenFunctionParamMode::Optional,
+            }],
+            ret: Box::new(type_var(BaseName::new(var))),
+            throws: Box::new(Ty::Never {
+                attr: baml_base::TyAttr::EMPTY,
+            }),
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
+
+    fn callback_fn(bare: &str, generics: &[&str], cb: Ty) -> Function {
+        Function {
+            generic_params: generics.iter().map(BaseName::new).collect(),
+            name: BaseName::new(bare),
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("cb"),
+                docstring: None,
+                ty: cb,
+                default: None,
+            }],
+            return_type: int_ty(),
+            throws: None,
+            watchers: vec![],
+            origin: origin("cb.baml", 0),
+        }
+    }
+
+    /// An optional-callback Protocol renders under its generic
+    /// OWNER's map (bumped keyword spelling), not the stateless escape; two owners
+    /// whose callbacks render IDENTICALLY share one Protocol (sharing control),
+    /// while a structurally-different callback gets its own.
+    ///
+    /// Note: under the leaf-global allocation two owners in one leaf always
+    /// spell a shared raw binder identically, so the "incompatible maps" split is
+    /// unreachable within a leaf; distinctness here is driven by the callbacks
+    /// referencing DIFFERENT binders (`None` vs `None_`), which is the reachable
+    /// analog.
+    #[test]
+    fn optional_callback_protocol_uses_owner_map_and_dedups_on_rendering() {
+        let mut pool: SymbolPool = HashMap::new();
+        // fa/fb reference raw `None` (→ owner spelling `None__`) — same rendering,
+        // must share ONE Protocol. fc references raw `None_` (→ `None_`) — distinct.
+        pool.insert(
+            cg_name("user", &["lorem"], "fa"),
+            Symbol::Function(callback_fn(
+                "fa",
+                &["None", "None_"],
+                optional_callback("x", "None"),
+            )),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "fb"),
+            Symbol::Function(callback_fn("fb", &["None"], optional_callback("x", "None"))),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "fc"),
+            Symbol::Function(callback_fn(
+                "fc",
+                &["None", "None_"],
+                optional_callback("x", "None_"),
+            )),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        // P1: fa's Protocol renders the OWNER spelling `None__` (bug renders `None_`).
+        assert!(
+            pyi.contains("class _fa__cb1(typing.Protocol):\n    def __call__(self, x: None__ = ...) -> None__: ...\n"),
+            "P1 not rendered with owner spelling:\n{pyi}"
+        );
+        // P2: fc's structurally-distinct callback gets its own Protocol at `None_`.
+        assert!(
+            pyi.contains("class _fc__cb1(typing.Protocol):\n    def __call__(self, x: None_ = ...) -> None_: ...\n"),
+            "P2 (distinct callback) missing:\n{pyi}"
+        );
+        // Sharing control: fa AND fb both reference the SAME Protocol; fb never
+        // mints its own.
+        assert!(
+            pyi.contains("def fa(cb: _fa__cb1, *, _types: dict[str, type]) -> int: ..."),
+            "fa signature:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("def fb(cb: _fa__cb1, *, _types: dict[str, type]) -> int: ..."),
+            "fb did not share fa's Protocol:\n{pyi}"
+        );
+        assert!(
+            !pyi.contains("_fb__cb"),
+            "fb minted a redundant Protocol instead of sharing:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("def fc(cb: _fc__cb1, *, _types: dict[str, type]) -> int: ..."),
+            "fc signature:\n{pyi}"
+        );
+    }
+
+    /// A callable-child function that returns a
+    /// root-routed keyword class is rendered into the PARENT stub, so the parent
+    /// `.pyi` must aggregate the child's guarded import. The aggregation is kept
+    /// isolated so it can be reverted as a unit.
+    #[test]
+    fn callable_child_return_import_aggregated_into_parent_stub() {
+        let mut pool: SymbolPool = HashMap::new();
+        // Root-routed keyword class → emitted `None_`.
+        let none = cg_name("user", &[], "None");
+        pool.insert(none.clone(), class(none.clone()));
+        // Parent callable `boundary.id` returns `str` (no None_ import from parent).
+        pool.insert(
+            cg_name("boundary", &[], "id"),
+            zero_arg_func(
+                "id",
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                "core.baml",
+                0,
+            ),
+        );
+        // Child `boundary.id.current` returns the root keyword class — the parent
+        // stub renders `def current(self) -> None_` but historically dropped its
+        // import.
+        pool.insert(
+            cg_name("boundary", &["id"], "current"),
+            zero_arg_func("current", class_ty(none, vec![]), "id.baml", 0),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("vendor/boundary/__init__.pyi")];
+        // The child's return type is spelled in the parent stub …
+        assert!(
+            pyi.contains("def current(self) -> None_: ..."),
+            "child signature not in parent stub:\n{pyi}"
+        );
+        // … and the aggregation now carries its guarded import (parent leaf depth = 3 dots).
+        assert!(
+            pyi.contains("from ... import None_\n"),
+            "parent stub missing aggregated child import:\n{pyi}"
+        );
+    }
+
+    /// A leaf that owns a child package whose
+    /// module name equals a keyword `TypeVar`'s natural escape must bump the
+    /// `TypeVar` PAST the child name. Leaf `lorem` owns generic raw `None` (→
+    /// escapes to `None_`) AND a child submodule `lorem/None_/`; the `TypeVar`
+    /// must allocate `None__`, leaving the lazy child binding `None_` intact so
+    /// `import baml_sdk.lorem.None_` still resolves the module (not the `TypeVar`).
+    #[test]
+    fn keyword_typevar_bumps_past_child_module_name() {
+        let mut pool: SymbolPool = HashMap::new();
+        // Child package `lorem/None_/` (a class in namespace `lorem.None_`).
+        // `None_` is a valid identifier (not a hard keyword), so routing keeps it
+        // verbatim and it becomes an immediate child of `lorem`.
+        let child = cg_name("user", &["lorem", "None_"], "Child");
+        pool.insert(child.clone(), class(child));
+        // Parent leaf `lorem` owns a generic class whose raw binder is `None`.
+        let boxn = cg_name("user", &["lorem"], "Box");
+        pool.insert(
+            boxn.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None")],
+                name: boxn,
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("item"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("None")),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("box.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        // The keyword TypeVar bumps PAST the child module name `None_` → `None__`.
+        assert!(
+            py.contains("None__ = typing.TypeVar(\"None__\")\n"),
+            "TypeVar did not bump past child module None_:\n{py}"
+        );
+        // `None_` is NEVER a TypeVar — that name belongs to the child module, and
+        // a `None_` TypeVar would overwrite the lazy child binding on import.
+        assert!(
+            !py.contains("None_ = typing.TypeVar"),
+            "TypeVar collided with child module None_:\n{py}"
+        );
+        // The lazy child binding survives in the parent package.
+        assert!(
+            py.contains("_LAZY_CHILDREN = frozenset({\n") && py.contains("    \"None_\",\n"),
+            "child module None_ lazy binding dropped:\n{py}"
+        );
+        // The generic base and field reference the bumped spelling.
+        assert!(
+            py.contains("class Box(pydantic.BaseModel, typing.Generic[None__]):"),
+            "generic base did not use bumped TypeVar:\n{py}"
+        );
+        assert!(py.contains("    item: None__\n"), "field ref:\n{py}");
+        // The `.pyi` cascade re-export `from . import None_` coexists with the
+        // bumped `None__` TypeVar, un-collided.
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("from . import None_\n"),
+            "child re-export missing in stub:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("None__ = typing.TypeVar(\"None__\")\n"),
+            "stub TypeVar not bumped:\n{pyi}"
+        );
+        assert!(
+            !pyi.contains("None_ = typing.TypeVar"),
+            "stub TypeVar collided with child re-export:\n{pyi}"
+        );
+    }
+
+    /// A parent leaf
+    /// owning generic raw `None` whose callable child returns a root KEYWORD class
+    /// (`None`→`None_`). The stub aggregation adds `from ... import None_` into the
+    /// parent stub; the reservation pre-pass reserves that anchor so the `TypeVar`
+    /// bumps to `None__`, leaving `from ... import None_` denoting the imported
+    /// class rather than being rebound to a `TypeVar`. Materializes the composed
+    /// fixture exercising the child-import-anchor and TypeVar-bump interaction
+    /// together.
+    #[test]
+    fn keyword_typevar_bumps_past_aggregated_child_import_anchor() {
+        let mut pool: SymbolPool = HashMap::new();
+        // Root-routed keyword class → emitted `None_`.
+        let none = cg_name("user", &[], "None");
+        pool.insert(none.clone(), class(none.clone()));
+        // Parent callable `boundary.id` returns `str`.
+        pool.insert(
+            cg_name("boundary", &[], "id"),
+            zero_arg_func(
+                "id",
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                "core.baml",
+                0,
+            ),
+        );
+        // Child `boundary.id.current` returns the root keyword class, so the
+        // aggregation adds `from ... import None_` into the parent stub.
+        pool.insert(
+            cg_name("boundary", &["id"], "current"),
+            zero_arg_func("current", class_ty(none, vec![]), "id.baml", 0),
+        );
+        // The SAME parent leaf `vendor/boundary` also owns generic raw `None`,
+        // whose TypeVar would (unreserved) collide with the aggregated `None_`.
+        let boxn = cg_name("boundary", &[], "Box");
+        pool.insert(
+            boxn.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None")],
+                name: boxn,
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("item"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("None")),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("box.baml", 5),
+            }),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("vendor/boundary/__init__.pyi")];
+        // Aggregated import retained (child return class), keyword-gate fires
+        // because `None` is a keyword.
+        assert!(
+            pyi.contains("from ... import None_\n"),
+            "aggregated child import anchor dropped:\n{pyi}"
+        );
+        // The generic TypeVar bumped PAST the anchor → `None__`.
+        assert!(
+            pyi.contains("None__ = typing.TypeVar(\"None__\")\n"),
+            "TypeVar did not bump past aggregated import anchor:\n{pyi}"
+        );
+        // `None_` is NOT rebound to a TypeVar — it still denotes the imported class.
+        assert!(
+            !pyi.contains("None_ = typing.TypeVar"),
+            "TypeVar rebound the imported child class None_:\n{pyi}"
+        );
+        // The child annotation resolves to the imported class spelling `None_`.
+        assert!(
+            pyi.contains("def current(self) -> None_: ..."),
+            "child annotation spelling:\n{pyi}"
+        );
+    }
+
+    /// Negative control that makes the restored byte-identity
+    /// universal falsifiable: a KEYWORD-FREE callable child returning ordinary
+    /// root class `Widget` must NOT change the parent stub — the keyword-gate
+    /// suppresses the stub aggregation, so no `import Widget` line appears (byte-
+    /// identical to parent/canary, whose keyword-free unbound-stub bug is a
+    /// disclosed pre-existing follow-up).
+    #[test]
+    fn keyword_free_callable_child_class_return_stays_byte_identical() {
+        let mut pool: SymbolPool = HashMap::new();
+        // Root-routed ORDINARY class (not a keyword).
+        let widget = cg_name("user", &[], "Widget");
+        pool.insert(widget.clone(), class(widget.clone()));
+        // Parent callable `boundary.id` returns `str`.
+        pool.insert(
+            cg_name("boundary", &[], "id"),
+            zero_arg_func(
+                "id",
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                "core.baml",
+                0,
+            ),
+        );
+        // Child `boundary.id.current` returns the ordinary root class.
+        pool.insert(
+            cg_name("boundary", &["id"], "current"),
+            zero_arg_func("current", class_ty(widget, vec![]), "id.baml", 0),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("vendor/boundary/__init__.pyi")];
+        // The child signature is still rendered into the parent stub (pre-existing
+        // behavior, unchanged) …
+        assert!(
+            pyi.contains("def current(self) -> Widget: ..."),
+            "child signature not in parent stub:\n{pyi}"
+        );
+        // … but the keyword-gate suppresses the aggregated import: NO `import
+        // Widget` line. Under an unconditional aggregation this would be
+        // `from ... import Widget`, which is exactly the keyword-free output delta
+        // that broke byte-identity. Its absence pins strict byte-identity for
+        // keyword-free schemas.
+        assert!(
+            !pyi.contains("import Widget"),
+            "keyword-free callable child changed the parent stub (aggregation not gated):\n{pyi}"
+        );
+    }
+
+    /// Generator-side marker emission: the provenance markers the
+    /// bridge encoder consumes are emitted ONLY on keyword-escaped artifacts and
+    /// ONLY in the runtime `.py` (never the `.pyi` stub). A class with ≥1 escaped
+    /// field gets a plain unannotated dunder `__baml_wire_names__` mapping escaped
+    /// attr → raw wire name; an enum with ≥1 escaped member gets a plain dunder
+    /// `__baml_wire_values__`. Keyword-free symbols in the same leaf emit NO
+    /// marker, so their output stays byte-identical.
+    #[test]
+    fn wire_markers_emitted_only_for_escaped_symbols_and_py_only() {
+        let mut pool: SymbolPool = HashMap::new();
+        // Escaped class: field `pass` → `pass_` (alias "pass"); `keep` untouched.
+        let c = cg_name("user", &["lorem"], "C");
+        pool.insert(
+            c.clone(),
+            class_with_fields(c, &[("pass", int_ty()), ("keep", int_ty())]),
+        );
+        // Escaped enum: member `None` → `None_` (wire "None"); `Ok` untouched.
+        let e = cg_name("user", &["lorem"], "E");
+        pool.insert(
+            e.clone(),
+            enum_with_variants(e, &[("None", "None"), ("Ok", "Ok")]),
+        );
+        // Keyword-free class + enum in the SAME leaf: must emit NO marker.
+        let plain_c = cg_name("user", &["lorem"], "Plain");
+        pool.insert(
+            plain_c.clone(),
+            class_with_fields(plain_c, &[("x", int_ty())]),
+        );
+        let plain_e = cg_name("user", &["lorem"], "PlainE");
+        pool.insert(plain_e.clone(), enum_with_variants(plain_e, &[("A", "A")]));
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+
+        // Class marker: exact plain dunder dict of the escaped field only, `.py` only.
+        assert!(
+            py.contains("    __baml_wire_names__ = {\"pass_\": \"pass\"}\n"),
+            "class wire-name marker missing/incorrect:\n{py}"
+        );
+        // Enum marker: exact plain dunder dict of the escaped member only, `.py` only.
+        assert!(
+            py.contains("    __baml_wire_values__ = {\"None_\": \"None\"}\n"),
+            "enum wire-value marker missing/incorrect:\n{py}"
+        );
+        // Exactly ONE of each marker across the whole leaf → keyword-free `Plain`
+        // and `PlainE` emitted none (byte-identity for keyword-free schemas).
+        assert_eq!(
+            py.matches("__baml_wire_names__").count(),
+            1,
+            "expected exactly one class marker (escaped C only):\n{py}"
+        );
+        assert_eq!(
+            py.matches("__baml_wire_values__").count(),
+            1,
+            "expected exactly one enum marker (escaped E only):\n{py}"
+        );
+        // Markers are runtime-only: the stub never carries them.
+        assert!(
+            !pyi.contains("__baml_wire_names__") && !pyi.contains("__baml_wire_values__"),
+            "provenance marker leaked into the .pyi stub:\n{pyi}"
+        );
+    }
+
+    /// A user member (here an instance method) named exactly like the generated
+    /// wire-name marker must not clobber it. On a class that also carries a
+    /// keyword-escaped field (so the marker is emitted), the colliding member is
+    /// bumped one trailing underscore past the marker and the marker survives as a
+    /// plain dunder dict, so the bridge still recovers the raw wire key.
+    #[test]
+    fn wire_name_marker_survives_user_member_named_like_marker() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Collision");
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: Vec::new(),
+                name: n,
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("pass"),
+                    docstring: None,
+                    ty: int_ty(),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![method_func(
+                    "__baml_wire_names__",
+                    &["self"],
+                    "x.baml",
+                    100,
+                )],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+
+        // The marker survives as a plain dunder dict of the escaped field.
+        assert!(
+            py.contains("    __baml_wire_names__ = {\"pass_\": \"pass\"}\n"),
+            "wire-name marker missing or clobbered:\n{py}"
+        );
+        // No `_define_function` binding targets the bare marker name (that would
+        // overwrite the dict with a callable at class creation).
+        let binds_marker_name = py.lines().any(|l| {
+            let t = l.trim_start();
+            t.starts_with("__baml_wire_names__ ") && t.contains("_define_function")
+        });
+        assert!(
+            !binds_marker_name,
+            "a method binding still targets the bare marker name:\n{py}"
+        );
+        // The colliding method is bumped one underscore past the marker.
+        let binds_bumped_name = py.lines().any(|l| {
+            let t = l.trim_start();
+            t.starts_with("__baml_wire_names___ ") && t.contains("_define_function")
+        });
+        assert!(
+            binds_bumped_name,
+            "colliding method was not bumped past the marker name:\n{py}"
+        );
+    }
+
+    /// A user FIELD named exactly like the wire-name marker is the import-crash
+    /// case: unlike a colliding method (a bare class-body assignment), a field must
+    /// not keep the marker's leading underscores. A plain trailing-underscore bump
+    /// (`__baml_wire_names___`) still leads with `__`, and
+    /// `__baml_wire_names___: T = pydantic.Field(alias=…)` raises
+    /// `NameError: Fields must not use names with leading underscores` at class
+    /// creation, breaking `import` of the whole leaf. The field is instead projected
+    /// onto a leading-underscore-free spelling (`baml_wire_names___`) while the raw
+    /// `__baml_wire_names__` stays the wire key via the alias and the marker entry,
+    /// so the generated module imports and wire identity is preserved. See the
+    /// import-level companion in `tests/test_reserved_keywords.py`.
+    #[test]
+    fn wire_name_marker_field_collision_projects_off_leading_underscore() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Collision");
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: Vec::new(),
+                name: n,
+                docstring: None,
+                properties: vec![
+                    ClassProperty {
+                        name: BaseName::new("pass"),
+                        docstring: None,
+                        ty: int_ty(),
+                    },
+                    ClassProperty {
+                        name: BaseName::new("__baml_wire_names__"),
+                        docstring: None,
+                        ty: int_ty(),
+                    },
+                ],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+
+        // The user field is projected off the marker onto a pydantic-legal,
+        // leading-underscore-free spelling, aliased to its raw wire name.
+        assert!(
+            py.contains(
+                "    baml_wire_names___: int = pydantic.Field(alias=\"__baml_wire_names__\")\n"
+            ),
+            "field not projected off the marker to a legal spelling:\n{py}"
+        );
+        // The import-crashing shape (an ANNOTATED field still leading with `__`)
+        // must not be emitted. `__baml_wire_names___` as a bare assignment (a
+        // bumped METHOD) is fine; only an annotated field crashes, so key on `:`.
+        let crashing_field = py.lines().any(|l| {
+            let t = l.trim_start();
+            t.starts_with("__baml_wire_names___:")
+        });
+        assert!(
+            !crashing_field,
+            "import-crashing leading-underscore annotated field emitted:\n{py}"
+        );
+        // The marker survives as a plain dunder dict and records BOTH the escaped
+        // keyword field and the projected marker field under their raw wire names.
+        assert!(
+            py.contains(
+                "    __baml_wire_names__ = {\"pass_\": \"pass\", \
+                 \"baml_wire_names___\": \"__baml_wire_names__\"}\n"
+            ),
+            "marker missing the projected field's raw wire entry:\n{py}"
+        );
+    }
+
+    /// The class wire-name marker is emitted as a plain dunder assignment, never a
+    /// `typing.ClassVar[dict[str, str]]` annotation. A bare-builtin `dict[...]`
+    /// subscript inside a class-level annotation is shadowable by a user
+    /// `type dict = ...` lowered into the same leaf and breaks
+    /// `typing.get_type_hints`; the plain dunder dict (mirroring the enum marker)
+    /// carries no annotation and is immune.
+    #[test]
+    fn wire_name_marker_is_a_plain_dunder_assignment() {
+        let mut pool: SymbolPool = HashMap::new();
+        let c = cg_name("user", &["lorem"], "C");
+        pool.insert(c.clone(), class_with_fields(c, &[("pass", int_ty())]));
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+
+        // Emitted as a plain dunder dict, identical in shape to the enum marker.
+        assert!(
+            py.contains("    __baml_wire_names__ = {\"pass_\": \"pass\"}\n"),
+            "marker not emitted as a plain dunder dict:\n{py}"
+        );
+        // The shadowable ClassVar-annotated bare-`dict` subscript is gone.
+        assert!(
+            !py.contains("__baml_wire_names__: typing.ClassVar[dict[str, str]]"),
+            "marker still carries the shadowable ClassVar[dict[...]] annotation:\n{py}"
+        );
+        // No bare-builtin `dict[...]` subscript survives on any marker line.
+        assert!(
+            !py.contains("dict[str, str]"),
+            "a bare-builtin dict[...] subscript leaked into the leaf:\n{py}"
+        );
+    }
+
+    #[test]
+    fn field_collision_pass_and_pass_underscore_diverge() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Coll");
+        pool.insert(
+            n.clone(),
+            class_with_fields(n, &[("pass", int_ty()), ("pass_", int_ty())]),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // `pass` is pushed past the raw `pass_` (reserved in pass 1) → `pass__`,
+        // aliased to the raw wire key `pass`. `pass_` is not a keyword: unchanged
+        // and un-aliased.
+        assert!(
+            leaf.contains("    pass__: int = pydantic.Field(alias=\"pass\")\n"),
+            "pass not bumped to pass__:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("    pass_: int\n"),
+            "raw pass_ perturbed:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn enum_member_collision_pass_and_pass_underscore_diverge() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Coll");
+        pool.insert(
+            n.clone(),
+            enum_with_variants(n, &[("pass", "pass"), ("pass_", "pass_")]),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains("    pass__ = \"pass\"\n"),
+            "enum pass twin:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("    pass_ = \"pass_\"\n"),
+            "enum pass_ twin:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn soft_keywords_are_never_escaped() {
+        let mut pool: SymbolPool = HashMap::new();
+        let en = cg_name("user", &["lorem"], "SoftEnum");
+        pool.insert(
+            en.clone(),
+            enum_with_variants(
+                en,
+                &[("match", "match"), ("case", "case"), ("type", "type")],
+            ),
+        );
+        let cl = cg_name("user", &["lorem"], "SoftClass");
+        pool.insert(
+            cl.clone(),
+            class_with_fields(
+                cl,
+                &[("match", int_ty()), ("case", int_ty()), ("type", int_ty())],
+            ),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        for soft in ["match", "case", "type"] {
+            assert!(
+                leaf.contains(&format!("    {soft} = \"{soft}\"\n")),
+                "soft member {soft} wrongly escaped:\n{leaf}"
+            );
+            assert!(
+                leaf.contains(&format!("    {soft}: int\n")),
+                "soft field {soft} wrongly escaped:\n{leaf}"
+            );
+        }
+        // No escaped field anywhere → no alias / populate_by_name machinery.
+        assert!(
+            !leaf.contains("pydantic.Field"),
+            "soft keywords pulled in Field:\n{leaf}"
+        );
+        assert!(
+            !leaf.contains("populate_by_name"),
+            "soft keywords flipped populate_by_name:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn no_keyword_class_config_is_byte_identical_to_baseline() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Plain");
+        pool.insert(
+            n.clone(),
+            class_with_fields(n, &[("x", int_ty()), ("y", int_ty())]),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // Exact pre-fix shape: no populate_by_name, no Field, plain annotations.
+        assert!(
+            leaf.contains(
+                "    model_config = pydantic.ConfigDict(extra=\"forbid\")\n    \
+                 x: int\n    y: int\n"
+            ),
+            "non-keyword class churned:\n{leaf}"
+        );
+        assert!(!leaf.contains("populate_by_name"));
+        assert!(!leaf.contains("pydantic.Field"));
+    }
+
+    #[test]
+    fn canonical_4059_repro_cases_render_valid_python() {
+        // The three canonical #4059 repros: enum member `None`,
+        // class field `pass`, class field `lambda` (the silent-corruption trap).
+        let mut pool: SymbolPool = HashMap::new();
+        let e = cg_name("user", &["lorem"], "E");
+        pool.insert(e.clone(), enum_with_variants(e, &[("None", "None")]));
+        let c = cg_name("user", &["lorem"], "C");
+        pool.insert(
+            c.clone(),
+            class_with_fields(c, &[("pass", int_ty()), ("lambda", int_ty())]),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // (a) `None` enum member → `None_ = "None"`.
+        assert!(
+            leaf.contains("    None_ = \"None\"\n"),
+            "enum None:\n{leaf}"
+        );
+        // (b) `pass` field → aliased escape.
+        assert!(
+            leaf.contains("    pass_: int = pydantic.Field(alias=\"pass\")\n"),
+            "field pass:\n{leaf}"
+        );
+        // (b/lambda) `lambda` field → a real annotated field, NOT a bare
+        // `lambda: int` (which would parse as a lambda expression and vanish).
+        assert!(
+            leaf.contains("    lambda_: int = pydantic.Field(alias=\"lambda\")\n"),
+            "field lambda:\n{leaf}"
+        );
+        assert!(
+            !leaf.contains("    lambda: int"),
+            "lambda silent-corruption:\n{leaf}"
         );
     }
 }

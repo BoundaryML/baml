@@ -22,6 +22,7 @@ use baml_base::{Literal, MediaKind};
 use baml_codegen_types::{CodegenFunctionParamMode, Name, Ty};
 
 use crate::{
+    leaf::safe_decl_name,
     routing::{LeafPath, route_class_ref},
     ts_string,
 };
@@ -153,11 +154,17 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::EnumVariant(name, variant, _) => {
             let mut result = render_name_ref(name, ctx);
             result.expr.push('.');
+            // The MEMBER stays raw. An enum member name is an `IdentifierName`,
+            // so a reserved word is legal both in the declaration
+            // (`{ import = "import" }`) and in this member access
+            // (`Kw.import`); escaping it here would dangle.
             result.expr.push_str(variant.as_str());
             result
         }
         Ty::TypeAlias(name, _) => render_name_ref(name, ctx),
-        Ty::TypeVar(name, _) => TranslatedType::bare(name.as_str().to_string()),
+        // A type parameter is a binding identifier at its declaration site
+        // (`leaf::generic_decl`), so the use site takes the same escape.
+        Ty::TypeVar(name, _) => TranslatedType::bare(safe_decl_name(name.as_str())),
 
         Ty::Function { params, ret, .. } => {
             let ret_t = translate_ty(ret, ctx);
@@ -241,7 +248,8 @@ pub(crate) const ROOT_ALIAS: &str = "_bamlRoot";
 /// The emitted identifier is the BAML name verbatim — including any
 /// `$stream` suffix (spec2: `$` is a valid TS identifier char, and stream
 /// companions live beside their base type rather than in a `stream_types/`
-/// namespace).
+/// namespace), except that a reserved word takes the same trailing-underscore
+/// escape [`crate::leaf::safe_decl_name`] applies to the declaration.
 ///
 /// - Same leaf → bare name, no import.
 /// - Root-namespace symbol referenced from a non-root leaf → `_bamlRoot.Name`
@@ -251,9 +259,13 @@ pub(crate) const ROOT_ALIAS: &str = "_bamlRoot";
 ///   `LeafPath` in `imports`.
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> TranslatedType {
     let routed = route_class_ref(name);
-    let ident = name.name().as_str();
+    // Re-derived from the IR `Name`, never read back off the emitted
+    // declaration, so it has to apply the identical stateless escape that
+    // `emit::build_emitted` applied when it named the declaration. Escaping one
+    // side alone produces a dangling reference instead of a fixed file.
+    let ident = safe_decl_name(name.name().as_str());
     if routed == ctx.current_leaf {
-        return TranslatedType::bare(ident.to_string());
+        return TranslatedType::bare(ident);
     }
     let mut imports = BTreeSet::new();
     if routed.segments.is_empty() {
@@ -1009,5 +1021,59 @@ mod tests {
         for case in &cases {
             assert_ty(case);
         }
+    }
+
+    #[test]
+    fn reserved_declaration_names_are_re_escaped_at_reference_sites() {
+        // Same leaf: the bare identifier, escaped exactly as the declaration
+        // was escaped in `emit::build_emitted`.
+        assert_eq!(
+            translate_ty(
+                &enum_ty(name("user", &["lorem"], "import")),
+                &ctx(&["lorem"])
+            )
+            .expr,
+            "import_"
+        );
+        // Cross leaf: only the identifier moves; the routed namespace path is
+        // untouched, because a module path segment is not a binding site.
+        assert_eq!(
+            translate_ty(&enum_ty(name("user", &["lorem"], "import")), &ctx(&[])).expr,
+            "lorem.import_"
+        );
+        // Root-namespace symbol reached from a nested leaf.
+        assert_eq!(
+            translate_ty(
+                &class_ty(name("user", &[], "class"), vec![]),
+                &ctx(&["lorem"])
+            )
+            .expr,
+            "_bamlRoot.class_"
+        );
+        // The enum MEMBER keeps its source spelling: it is an `IdentifierName`
+        // in both the declaration and the member access.
+        assert_eq!(
+            translate_ty(
+                &enum_variant_ty(name("user", &["lorem"], "import"), "default"),
+                &ctx(&["lorem"])
+            )
+            .expr,
+            "import_.default"
+        );
+        // Type parameters are binding identifiers too.
+        assert_eq!(
+            translate_ty(&type_var(BaseName::new("package")), &ctx(&[])).expr,
+            "package_"
+        );
+        // Non-reserved names are untouched, so keyword-free schemas emit
+        // byte-identical output to before this change.
+        assert_eq!(
+            translate_ty(
+                &alias_ty(name("user", &["lorem"], "Json")),
+                &ctx(&["lorem"])
+            )
+            .expr,
+            "Json"
+        );
     }
 }
