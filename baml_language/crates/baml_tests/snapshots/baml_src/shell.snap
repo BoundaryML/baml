@@ -86,6 +86,20 @@ function shell.$init_test_ns_shell_shell(registry: testing.TestCollector) -> nul
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "pid_is_positive"
+    make_closure .<lambda($init_test_ns_shell_shell, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "pid_is_stable"
+    make_closure .<lambda($init_test_ns_shell_shell, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }

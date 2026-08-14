@@ -2946,6 +2946,10 @@ fn baml.fs.remove_dir = builtin(io)
 
 fn baml.fs.remove_dir_all = builtin(io)
 
+fn baml.fs.chmod = builtin(io)
+
+fn baml.fs.symlink = builtin(io)
+
 fn baml.future.Future.cancel = builtin(vm)
 
 fn baml.future.Future.is_settled = builtin(vm)
@@ -7549,6 +7553,8 @@ fn baml.sys.panic = builtin(vm)
 fn baml.sys.exit = builtin(vm)
 
 fn baml.sys.argv = builtin(vm)
+
+fn baml.sys.pid = builtin(io)
 
 fn baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {
     // Locals:

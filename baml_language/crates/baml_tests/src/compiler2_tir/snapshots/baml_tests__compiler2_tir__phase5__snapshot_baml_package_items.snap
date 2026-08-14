@@ -109,6 +109,7 @@ namespace baml.fs:
   class DirEntry { methods: [] }
   class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes] }
   class MkdirOptions { methods: [] }
+  function chmod
   function exists
   function mkdir
   function open
@@ -118,6 +119,7 @@ namespace baml.fs:
   function remove_dir
   function remove_dir_all
   function size
+  function symlink
   function write
   function write_bytes
 namespace baml.future:
@@ -293,6 +295,7 @@ namespace baml.sys:
   function exec
   function exit
   function panic
+  function pid
   function shell
   function sleep
   function start_process

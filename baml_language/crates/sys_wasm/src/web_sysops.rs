@@ -486,6 +486,36 @@ impl IoNamespaceFs for WebFs {
     ) -> SysOpOutput<()> {
         unsupported()
     }
+
+    // These two declare `throws root.errors.Io`, which cannot carry the
+    // `Unsupported` that `unsupported()` builds — an off-contract error escapes
+    // every typed `catch` arm the caller can write — so the browser's lack of a
+    // permission model and of symbolic links is reported as `Io`.
+    fn chmod(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _mode: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Io {
+            message: "File permissions are not supported in the browser".to_string(),
+        })
+    }
+
+    fn symlink(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _target: String,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Io {
+            message: "Symbolic links are not supported in the browser".to_string(),
+        })
+    }
 }
 
 fn parse_fetch_result(
