@@ -22,7 +22,7 @@ that code exists.
 | [ ] | L-04 | 3 | `reflect.X` type shorthand is tried only after ordinary local, user, and package resolution fails. |
 | [ ] | L-05 | 4 | Only the exact extraction contract permits an outer function type without `throws`; ordinary function types retain current diagnostics and recovery. |
 | [ ] | R-01 | 3 | Value roots `reflect`, `type`, and `json` fall back to package `baml` only after ordinary resolution fails, preserving the full path. |
-| [ ] | T-01 | 2, 5 | Runtime type operands and type-binding values are ordinary hidden expression edges for throw-fact traversal. |
+| [x] | T-01 | 2, 5 | Runtime type operands and type-binding values are ordinary hidden expression edges for throw-fact traversal. |
 | [ ] | B-01 | 2, 4 | Runtime slots and loc-free callables are isolated per body/default run and survive only in durable result tables. |
 | [ ] | B-02 | 5 | Inference-time type lowering sees declared generics plus the active scoped overlay. |
 | [ ] | B-03 | 4 | Only the special `Session.eval` result slot defaults an uninferable generic to `unknown`; ordinary slots keep current errors. |

@@ -2506,6 +2506,18 @@ mod traverse_coverage_tests {
   let branched = `${if (n > 0)}pos${else}neg${endif}`
   return plain + looped + branched
 }"#,
+            // BEP-066 hides ordinary expression nodes inside type arguments,
+            // type bindings, and patterns. Canonical traversal must still see
+            // every one exactly once.
+            r#"function runtime_edges(t: type, value: int) -> int throws never {
+  type T = unreflect(t)
+  let called = identity<unreflect(t)>(value)
+  let tested = value is unreflect(t)
+  match (value) {
+    unreflect(t) => called,
+    _ => if (tested) { value } else { 0 }
+  }
+}"#,
         ];
         for source in sources {
             for item in super::tests::parse_and_lower(source) {

@@ -28,7 +28,7 @@ use baml_compiler2_ast::{
 };
 use baml_compiler2_hir::{
     body::BodyOwnerId,
-    body_type_refs::BodyTypeRefs,
+    body_type_refs::{BodyTypeArgRef, BodyTypeRefs},
     scope::FileScopeId,
     semantic_index::{
         BindingId, BindingKind, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex,
@@ -5592,9 +5592,19 @@ impl<'db> InferenceContext<'db> {
             .cloned()
             .unwrap_or_default()
             .iter()
-            .map(|&type_ref| {
-                let lowered = self.lower.lower_type_ref(&self.type_refs.store, type_ref);
-                self.reject_expr_position_holes(&lowered, site)
+            .map(|slot| match slot {
+                BodyTypeArgRef::Static(type_ref) => {
+                    let lowered = self.lower.lower_type_ref(&self.type_refs.store, *type_ref);
+                    self.reject_expr_position_holes(&lowered, site)
+                }
+                // Slice 2 preserves the runtime operand's HIR identity. Slice 4
+                // replaces this inert static occurrence with the parameter's
+                // first bound (or unknown), checks the operand, and records the
+                // deferred runtime gate in CallPlan. It is deliberately not an
+                // inference variable in the meantime.
+                BodyTypeArgRef::Runtime { .. } => Ty::intern(TyKind::Unknown {
+                    attr: TyAttr::default(),
+                }),
             })
             .collect();
         // Explicit turbofish counts against the WRITABLE params (synthetic

@@ -10,9 +10,9 @@
 //!
 //! Collected today: pattern type ascriptions (`let x: T`, type patterns in
 //! match arms), array-pattern ascriptions, explicit expression-position type
-//! args (`f<int>(..)`, `Box<int> { .. }` turbofish), `.as<T>` upcast
-//! targets, and lambda signature slots. Class-destructure generic args join
-//! when pattern inference needs them.
+//! args (`f<int>(..)`, `f<unreflect(t)>(..)`, `Box<int> { .. }` turbofish),
+//! `.as<T>` upcast targets, and lambda signature slots. Class-destructure
+//! generic args join when pattern inference needs them.
 
 use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, TypeArg};
@@ -39,11 +39,23 @@ pub struct BodyTypeRefs {
     /// Explicit expression-position type arguments (`Call`, `GenericApply`,
     /// and `Object` constructors), in written order. Never empty when
     /// present.
-    pub expr_type_args: FxHashMap<ExprId, Box<[TypeRefId]>>,
+    pub expr_type_args: FxHashMap<ExprId, Box<[BodyTypeArgRef]>>,
     /// `.as<T>` upcast targets.
     pub upcast_targets: FxHashMap<ExprId, TypeRefId>,
     /// Lambda signature slots, keyed by the lambda expression.
     pub lambda_signatures: FxHashMap<ExprId, LambdaTypeRefs>,
+}
+
+/// One explicit expression-position type argument, preserving whether the
+/// written slot is a static type reference or a runtime type-value operand.
+///
+/// Runtime operands stay as ordinary body expression identities. They are not
+/// lowered to a type reference and must never be represented as solver-owned
+/// inference variables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BodyTypeArgRef {
+    Static(TypeRefId),
+    Runtime { operand: ExprId },
 }
 
 /// A lambda's written signature slots (each optional: lambdas may omit any
@@ -101,19 +113,16 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, TypeRefSourceMa
 
     for (expr_id, expr) in body.exprs.iter() {
         match expr {
-            Expr::Call { type_args, .. }
-                if !type_args.is_empty()
-                    && type_args
-                        .iter()
-                        .all(|arg| matches!(arg, TypeArg::Static(_))) =>
-            {
+            Expr::Call { type_args, .. } if !type_args.is_empty() => {
                 refs.expr_type_args.insert(
                     expr_id,
                     type_args
                         .iter()
                         .map(|arg| match arg {
-                            TypeArg::Static(ty) => builder.lower(ty),
-                            TypeArg::Unreflect(_) => unreachable!("guarded above"),
+                            TypeArg::Static(ty) => BodyTypeArgRef::Static(builder.lower(ty)),
+                            TypeArg::Unreflect(operand) => {
+                                BodyTypeArgRef::Runtime { operand: *operand }
+                            }
                         })
                         .collect(),
                 );
@@ -123,7 +132,10 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, TypeRefSourceMa
             {
                 refs.expr_type_args.insert(
                     expr_id,
-                    type_args.iter().map(|arg| builder.lower(arg)).collect(),
+                    type_args
+                        .iter()
+                        .map(|arg| BodyTypeArgRef::Static(builder.lower(arg)))
+                        .collect(),
                 );
             }
             Expr::Upcast { target, .. } => {
@@ -150,4 +162,41 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, TypeRefSourceMa
     let (store, source_map) = builder.finish();
     refs.store = store;
     (refs, source_map)
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_compiler2_ast::{Expr, ExprBody, TypeArg, TypeExprKind};
+    use text_size::{TextRange, TextSize};
+
+    use super::*;
+
+    #[test]
+    fn expression_type_arguments_preserve_static_runtime_order_and_identity() {
+        let mut body = ExprBody::default();
+        let callee = body.exprs.alloc(Expr::Path(vec![Name::new("f")]));
+        let operand = body
+            .exprs
+            .alloc(Expr::Path(vec![Name::new("runtime_type")]));
+        let static_span = TextRange::new(TextSize::from(10), TextSize::from(13));
+        let static_ty = TypeExprKind::Int { attrs: Vec::new() }.at(static_span);
+        let call = body.exprs.alloc(Expr::Call {
+            callee,
+            type_args: vec![TypeArg::Static(static_ty), TypeArg::Unreflect(operand)],
+            args: Vec::new(),
+        });
+
+        let (refs, source_map) = collect_body_type_refs(&body);
+        let slots = refs.expr_type_args.get(&call).expect("call type slots");
+        let [
+            BodyTypeArgRef::Static(static_ref),
+            BodyTypeArgRef::Runtime { operand: runtime },
+        ] = slots.as_ref()
+        else {
+            panic!("expected ordered static/runtime slots, got {slots:?}");
+        };
+        assert_eq!(*runtime, operand);
+        assert_eq!(source_map.span(*static_ref), static_span);
+        assert_eq!(refs.store.iter().count(), 1, "runtime slots are not types");
+    }
 }

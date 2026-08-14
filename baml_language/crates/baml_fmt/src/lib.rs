@@ -565,6 +565,26 @@ implements<T extends Named> Printable for Box<T> {
             );
         }
     }
+
+    #[test]
+    fn test_runtime_type_syntax_formatting_is_idempotent() {
+        let source = r#"function f(t: type, value: int) -> int {
+    type T = unreflect(t)
+    let result = identity<unreflect(t), string>(value)
+    match (value) {
+        unreflect(t) => result,
+        _ => 0
+    }
+}
+"#;
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("runtime type syntax should format");
+        assert!(formatted.contains("type T = unreflect(t)"));
+        assert!(formatted.contains("identity<unreflect(t), string>"));
+        assert!(formatted.contains("unreflect(t) => result"));
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
 }
 
 #[cfg(test)]
