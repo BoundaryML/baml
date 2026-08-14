@@ -18,6 +18,7 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+baml_compiler2_ast = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
@@ -29,4 +30,3 @@ baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 baml_workspace = { workspace = true }
 salsa = { workspace = true }
-

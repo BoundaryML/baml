@@ -52,6 +52,7 @@ flate2 = { workspace = true }
 hex = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
+juniper = { workspace = true }
 libsui = { workspace = true }
 mimalloc = { workspace = true }
 mime_guess = { workspace = true }

@@ -170,6 +170,9 @@ pub(crate) enum Commands {
     #[command(about = "Generate client code from BAML definitions")]
     Generate(crate::generate::GenerateArgs),
 
+    #[command(about = "Query the BAML project AST with GraphQL")]
+    Graphql(crate::graphql_command::GraphqlArgs),
+
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
 
@@ -347,9 +350,13 @@ impl RuntimeCli {
         // of the guard (after the match below returns) the queue file is
         // sealed and a detached child process delivers it after this
         // process has already exited. It never fails or delays the command.
-        let _telemetry = crate::telemetry::record_invocation(
-            self.invoked_subcommand.as_deref().unwrap_or("unknown"),
-        );
+        let _telemetry = if matches!(&self.command, Commands::Graphql(_)) {
+            None
+        } else {
+            Some(crate::telemetry::record_invocation(
+                self.invoked_subcommand.as_deref().unwrap_or("unknown"),
+            ))
+        };
 
         // Resolve every output dial once, before any subcommand writes.
         crate::output::init(self.output);
@@ -377,6 +384,7 @@ impl RuntimeCli {
             Commands::Agent(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
+            Commands::Graphql(args) => args.run(),
             Commands::Test(args) => args.run(),
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
@@ -403,6 +411,7 @@ impl Commands {
             Self::Check(args) => args.from.is_some(),
             Self::Format(args) => args.from.is_some(),
             Self::Describe(args) => args.from.is_some(),
+            Self::Graphql(args) => args.from.is_some(),
             Self::Generate(args) => args.has_legacy_project(),
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
@@ -424,6 +433,7 @@ impl Commands {
             Self::Check(args) => args.from = Some(project.clone()),
             Self::Format(args) => args.from = Some(project.clone()),
             Self::Describe(args) => args.from = Some(project.clone()),
+            Self::Graphql(args) => args.from = Some(project.clone()),
             Self::Generate(args) => args.apply_project(&project),
             Self::Test(args) => args.from = Some(project.clone()),
             Self::Run(args) => args.from = Some(project.clone()),
@@ -483,6 +493,7 @@ mod tests {
         &["fmt"],
         &["describe"],
         &["generate"],
+        &["graphql"],
         &["test"],
         &["init"],
         &["new"],
@@ -872,6 +883,13 @@ mod tests {
             &["baml", "generate"],
             &["baml", "generate", "--project", "./my-project"],
             &["baml", "generate", "--output-dir", "./generated"],
+            &[
+                "baml",
+                "graphql",
+                "--query",
+                "{ classes { name fields { name type { display } } } }",
+            ],
+            &["baml", "graphql", "--schema"],
             &["baml", "init"],
             &["baml", "init", "./my-project", "--name", "my_project"],
             &["baml", "new", "./my-project"],
