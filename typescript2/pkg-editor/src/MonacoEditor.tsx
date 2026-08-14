@@ -134,150 +134,157 @@ const SkeletonLine: FC<{
 );
 
 const EditorSkeleton: FC<{ height: string }> = ({ height }) => (
-  <div
-    aria-hidden="true"
-    className="baml-editor-skeleton"
-    style={{ background: sk.bg, height }}
-  >
+  <>
+    <output className="baml-editor-loading-status">
+      Loading the BAML editor.
+    </output>
     <div
-      className="baml-editor-skeleton-titlebar"
-      style={{ background: sk.bg, borderColor: sk.border }}
+      aria-hidden="true"
+      className="baml-editor-skeleton"
+      style={{ background: sk.bg, height }}
     >
       <div
-        className="baml-editor-skeleton-window-title"
-        style={{ background: sk.text }}
-      />
-    </div>
-
-    <div className="baml-editor-skeleton-main">
-      <div
-        className="baml-editor-skeleton-activitybar"
+        className="baml-editor-skeleton-titlebar"
         style={{ background: sk.bg, borderColor: sk.border }}
       >
-        {[0, 1, 2, 3].map((item) => (
-          <div className="baml-editor-skeleton-activity-item" key={item}>
-            {item === 0 && (
-              <div
-                className="baml-editor-skeleton-activity-indicator"
-                style={{ background: sk.accent }}
-              />
-            )}
-            <div
-              className="baml-editor-skeleton-activity-icon"
-              style={{ background: item === 0 ? sk.text : sk.activityInactive }}
-            />
-          </div>
-        ))}
-      </div>
-
-      <div
-        className="baml-editor-skeleton-sidebar"
-        style={{ background: sk.sidebar, borderColor: sk.border }}
-      >
-        <div className="baml-editor-skeleton-sidebar-title-row">
-          <div
-            className="baml-editor-skeleton-sidebar-title"
-            style={{ background: sk.text }}
-          />
-        </div>
-        {[90, 70, 110, 60].map((w, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: Skeleton rows are a static ordered list.
-          <div className="baml-editor-skeleton-sidebar-row" key={i}>
-            <div
-              className="baml-editor-skeleton-sidebar-file"
-              style={{ background: sk.text, width: w }}
-            />
-          </div>
-        ))}
-      </div>
-
-      <div className="baml-editor-skeleton-editor">
         <div
-          className="baml-editor-skeleton-gutter"
-          style={{ background: sk.bg }}
+          className="baml-editor-skeleton-window-title"
+          style={{ background: sk.text }}
+        />
+      </div>
+
+      <div className="baml-editor-skeleton-main">
+        <div
+          className="baml-editor-skeleton-activitybar"
+          style={{ background: sk.bg, borderColor: sk.border }}
         >
-          {Array.from({ length: 12 }, (_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: Skeleton lines are a static ordered list.
-            <div className="baml-editor-skeleton-gutter-line" key={i}>
+          {[0, 1, 2, 3].map((item) => (
+            <div className="baml-editor-skeleton-activity-item" key={item}>
+              {item === 0 && (
+                <div
+                  className="baml-editor-skeleton-activity-indicator"
+                  style={{ background: sk.accent }}
+                />
+              )}
               <div
-                className="baml-editor-skeleton-line-number"
-                style={{ background: sk.lineNum }}
+                className="baml-editor-skeleton-activity-icon"
+                style={{
+                  background: item === 0 ? sk.text : sk.activityInactive,
+                }}
               />
             </div>
           ))}
         </div>
 
-        <div className="baml-editor-skeleton-code">
-          <SkeletonLine tokens={[{ color: sk.comment, w: 48 }]} />
-          <SkeletonLine
-            tokens={[
-              { color: sk.keyword, w: 55 },
-              { color: sk.text, w: 80 },
-            ]}
-          />
-          <SkeletonLine
-            indent={1}
-            tokens={[
-              { color: sk.keyword, w: 45 },
-              { color: sk.text, w: 60 },
-            ]}
-          />
-          <SkeletonLine
-            indent={1}
-            tokens={[
-              { color: sk.keyword, w: 50 },
-              { color: sk.string, w: 90 },
-            ]}
-          />
-          <SkeletonLine tokens={[{ color: sk.text, w: 10 }]} />
-          <SkeletonLine tokens={[]} />
-          <SkeletonLine
-            tokens={[
-              { color: sk.keyword, w: 42 },
-              { color: sk.text, w: 70 },
-            ]}
-          />
-          <SkeletonLine
-            indent={1}
-            tokens={[
-              { color: sk.keyword, w: 60 },
-              { color: sk.text, w: 50 },
-            ]}
-          />
-          <SkeletonLine
-            indent={1}
-            tokens={[
-              { color: sk.string, w: 55 },
-              { color: sk.string, w: 80 },
-            ]}
-          />
-          <SkeletonLine
-            indent={1}
-            tokens={[
-              { color: sk.keyword, w: 40 },
-              { color: sk.string, w: 100 },
-            ]}
-          />
-          <SkeletonLine tokens={[{ color: sk.text, w: 10 }]} />
-          <SkeletonLine tokens={[]} />
+        <div
+          className="baml-editor-skeleton-sidebar"
+          style={{ background: sk.sidebar, borderColor: sk.border }}
+        >
+          <div className="baml-editor-skeleton-sidebar-title-row">
+            <div
+              className="baml-editor-skeleton-sidebar-title"
+              style={{ background: sk.text }}
+            />
+          </div>
+          {[90, 70, 110, 60].map((w, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: Skeleton rows are a static ordered list.
+            <div className="baml-editor-skeleton-sidebar-row" key={i}>
+              <div
+                className="baml-editor-skeleton-sidebar-file"
+                style={{ background: sk.text, width: w }}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="baml-editor-skeleton-editor">
+          <div
+            className="baml-editor-skeleton-gutter"
+            style={{ background: sk.bg }}
+          >
+            {Array.from({ length: 12 }, (_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: Skeleton lines are a static ordered list.
+              <div className="baml-editor-skeleton-gutter-line" key={i}>
+                <div
+                  className="baml-editor-skeleton-line-number"
+                  style={{ background: sk.lineNum }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="baml-editor-skeleton-code">
+            <SkeletonLine tokens={[{ color: sk.comment, w: 48 }]} />
+            <SkeletonLine
+              tokens={[
+                { color: sk.keyword, w: 55 },
+                { color: sk.text, w: 80 },
+              ]}
+            />
+            <SkeletonLine
+              indent={1}
+              tokens={[
+                { color: sk.keyword, w: 45 },
+                { color: sk.text, w: 60 },
+              ]}
+            />
+            <SkeletonLine
+              indent={1}
+              tokens={[
+                { color: sk.keyword, w: 50 },
+                { color: sk.string, w: 90 },
+              ]}
+            />
+            <SkeletonLine tokens={[{ color: sk.text, w: 10 }]} />
+            <SkeletonLine tokens={[]} />
+            <SkeletonLine
+              tokens={[
+                { color: sk.keyword, w: 42 },
+                { color: sk.text, w: 70 },
+              ]}
+            />
+            <SkeletonLine
+              indent={1}
+              tokens={[
+                { color: sk.keyword, w: 60 },
+                { color: sk.text, w: 50 },
+              ]}
+            />
+            <SkeletonLine
+              indent={1}
+              tokens={[
+                { color: sk.string, w: 55 },
+                { color: sk.string, w: 80 },
+              ]}
+            />
+            <SkeletonLine
+              indent={1}
+              tokens={[
+                { color: sk.keyword, w: 40 },
+                { color: sk.string, w: 100 },
+              ]}
+            />
+            <SkeletonLine tokens={[{ color: sk.text, w: 10 }]} />
+            <SkeletonLine tokens={[]} />
+          </div>
         </div>
       </div>
-    </div>
 
-    <div
-      className="baml-editor-skeleton-statusbar"
-      style={{ background: sk.status, borderColor: sk.border }}
-    >
       <div
-        className="baml-editor-skeleton-status-item"
-        style={{ background: sk.statusForeground, width: 44 }}
-      />
-      <div
-        className="baml-editor-skeleton-status-item"
-        style={{ background: sk.statusForeground, width: 92 }}
-      />
+        className="baml-editor-skeleton-statusbar"
+        style={{ background: sk.status, borderColor: sk.border }}
+      >
+        <div
+          className="baml-editor-skeleton-status-item"
+          style={{ background: sk.statusForeground, width: 44 }}
+        />
+        <div
+          className="baml-editor-skeleton-status-item"
+          style={{ background: sk.statusForeground, width: 92 }}
+        />
+      </div>
     </div>
-  </div>
+  </>
 );
 
 // ---------------------------------------------------------------------------
@@ -609,7 +616,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
                     { close: '"', open: '"' },
                     ['#"', '"#'],
                     ["'", "'"],
-                    ['{#', '}'],
+                    ['{#', '#}'],
                     ['{//', '//}'],
                   ],
                   brackets: [
@@ -969,18 +976,16 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
 
       // Determine which file to show — prefer main.baml, fall back to first text file
       const fileNames = Object.keys(allFiles).filter((f) => !isMediaPath(f));
-      const firstFileIndex = fileNames.findIndex((path) =>
-        path.endsWith('main.baml'),
-      );
       const firstFile =
-        firstFileIndex !== -1 ? fileNames[firstFileIndex] : fileNames[0];
-      const firstFileUri = vscode.Uri.file(`${rootPrefix}${firstFile}`);
+        fileNames.find((path) => path.endsWith('main.baml')) ?? fileNames[0];
 
-      // Open the document and show it in the editor
-      await vscode.workspace.openTextDocument(firstFileUri);
-      if (disposed) return;
-      await vscode.window.showTextDocument(firstFileUri);
-      if (disposed) return;
+      if (firstFile) {
+        const firstFileUri = vscode.Uri.file(`${rootPrefix}${firstFile}`);
+        await vscode.workspace.openTextDocument(firstFileUri);
+        if (disposed) return;
+        await vscode.window.showTextDocument(firstFileUri);
+        if (disposed) return;
+      }
 
       await vscode.commands.executeCommand('baml.openPlayground');
       if (disposed) return;

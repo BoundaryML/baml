@@ -31,6 +31,16 @@ div[is="app"] {
   font-family: var(--vscode-editor-font-family, monospace);
 }
 
+.baml-editor-loading-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
 .baml-editor-skeleton-titlebar {
   box-sizing: border-box;
   display: flex;

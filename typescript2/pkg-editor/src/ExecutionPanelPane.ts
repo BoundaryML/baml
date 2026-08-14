@@ -223,7 +223,11 @@ export function setRuntimePort(
     const shouldOpen = !singletonInput || singletonInput.isDisposed?.();
     portResolve(port);
     portResolve = null;
-    if (shouldOpen) openPlaygroundTab();
+    if (shouldOpen) {
+      void openPlaygroundTab().catch((error: unknown) => {
+        console.error('[ExecutionPanelPane] failed to open Playground:', error);
+      });
+    }
   } else {
     portChangeListeners.forEach((cb) => cb(port));
   }
