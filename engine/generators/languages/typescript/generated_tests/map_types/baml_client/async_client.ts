@@ -121,7 +121,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -177,7 +177,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -233,7 +233,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -289,7 +289,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -345,7 +345,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -401,7 +401,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -457,7 +457,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -513,7 +513,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -569,7 +569,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -625,7 +625,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -681,7 +681,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -737,7 +737,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -793,7 +793,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -849,7 +849,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -930,7 +930,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1004,7 +1004,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1078,7 +1078,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1152,7 +1152,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1226,7 +1226,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1300,7 +1300,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1374,7 +1374,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1448,7 +1448,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1522,7 +1522,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1596,7 +1596,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1670,7 +1670,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1744,7 +1744,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1818,7 +1818,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -1892,7 +1892,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );

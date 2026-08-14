@@ -426,12 +426,17 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
 
         let http_config = properties.ensure_http_config("openai");
 
-        Self::create_common(
+        let mut instance = Self::create_common(
             properties,
             Some(either::Either::Left(base_url)),
             api_key,
             http_config,
-        )
+        )?;
+        if instance.client_response_type.is_none() {
+            instance.client_response_type = Some(UnresolvedResponseType::OpenAITranscription);
+        }
+
+        Ok(instance)
     }
 
     /// Creates an OpenRouter client with sensible defaults.
@@ -571,6 +576,10 @@ mod tests {
         assert_eq!(api_key.provenance.as_deref(), Some("OPENAI_API_KEY"));
         assert_eq!(resolved.supported_request_modes.stream, None);
         assert!(resolved.supports_streaming());
+        assert!(matches!(
+            resolved.client_response_type,
+            ResponseType::OpenAITranscription
+        ));
     }
 
     #[test]

@@ -350,7 +350,7 @@ pub fn parse_openai_transcription_response<C: WithClient + RequestBuilder>(
         content: response.text,
         start_time: system_now,
         latency: instant_now.elapsed(),
-        model: model_name.unwrap_or_default(),
+        model: model_name.unwrap_or_else(|| "<unknown>".to_string()),
         request_options: client.request_options().clone(),
         metadata: LLMCompleteResponseMetadata {
             baml_is_complete: true,

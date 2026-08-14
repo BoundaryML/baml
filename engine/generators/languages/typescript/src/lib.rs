@@ -553,6 +553,8 @@ mod tests {
         assert!(!async_client.contains("const raw = this.runtime.streamFunction"));
         assert!(!async_client.contains("const stream = this.stream."));
         assert!(async_client.contains("const __options__ ="));
+        assert!(!async_client.contains("__baml_options__?.env"));
+        assert!(async_client.contains("__options__.env"));
 
         let sync_client = include_str!("./_templates/sync_client.ts.j2");
         assert!(!sync_client.contains("const options ="));
@@ -562,6 +564,8 @@ mod tests {
         assert!(!sync_client.contains("const env: Record<string, string> ="));
         assert!(!sync_client.contains("const raw = this.runtime.callFunctionSync"));
         assert!(sync_client.contains("const __options__ ="));
+        assert!(!sync_client.contains("__baml_options__?.env"));
+        assert!(sync_client.contains("__options__.env"));
 
         let async_request = include_str!("./_templates/async_request.ts.j2");
         assert!(!async_request.contains("const rawEnv ="));

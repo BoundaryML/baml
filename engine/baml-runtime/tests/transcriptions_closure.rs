@@ -35,7 +35,7 @@ const EXPECTED_FILENAME: &str = "audio.mp3";
 
 #[tokio::test]
 async fn openai_transcriptions_audio_returns_transcript_through_real_http() {
-    let audio_bytes = b"fake mp3 bytes for the transcription closure";
+    let audio_bytes = b"fake mp3 bytes for the transcription closure\r\n";
     let request_observation = Arc::new(Mutex::new(None));
     let server = MockServer::start().await;
 
@@ -326,20 +326,20 @@ fn parse_multipart(content_type: &str, body: &[u8]) -> Result<Vec<MultipartPart>
     let mut parts = Vec::new();
 
     for segment in split_on_subslice(body, delimiter) {
-        let mut segment = trim_ascii_crlf(segment);
-        if segment.is_empty() || segment == b"--" {
+        let mut segment = strip_leading_crlf(segment);
+        if segment.is_empty() || strip_trailing_crlf(segment) == b"--" {
             continue;
         }
         if segment.ends_with(b"--") {
             segment = &segment[..segment.len() - 2];
-            segment = trim_ascii_crlf(segment);
+            segment = strip_trailing_crlf(segment);
         }
 
         let header_end = find_subslice(segment, b"\r\n\r\n")
             .ok_or_else(|| "multipart part missing header/body separator".to_string())?;
         let headers = std::str::from_utf8(&segment[..header_end])
             .map_err(|_| "multipart headers are not utf-8".to_string())?;
-        let body = trim_ascii_crlf(&segment[header_end + 4..]).to_vec();
+        let body = strip_trailing_crlf(&segment[header_end + 4..]).to_vec();
 
         let disposition = header_value(headers, "content-disposition");
         let content_type = header_value(headers, "content-type");
@@ -415,12 +415,10 @@ fn find_subslice(input: &[u8], needle: &[u8]) -> Option<usize> {
         .position(|window| window == needle)
 }
 
-fn trim_ascii_crlf(mut input: &[u8]) -> &[u8] {
-    while matches!(input.first(), Some(b'\r' | b'\n')) {
-        input = &input[1..];
-    }
-    while matches!(input.last(), Some(b'\r' | b'\n')) {
-        input = &input[..input.len() - 1];
-    }
-    input
+fn strip_leading_crlf(input: &[u8]) -> &[u8] {
+    input.strip_prefix(b"\r\n").unwrap_or(input)
+}
+
+fn strip_trailing_crlf(input: &[u8]) -> &[u8] {
+    input.strip_suffix(b"\r\n").unwrap_or(input)
 }
