@@ -30,11 +30,11 @@ test-group = 'rust-sdk-fixture'
 filter = 'package(=sdk_test_csharp)'
 test-group = 'csharp-sdk-fixture'
 
-# Each backtick test compiles and executes a complete BAML program. Account for
-# that footprint globally on macOS, where running one per CPU can exhaust the
-# runner and abort an otherwise healthy test process.
+# Engine-backed tests have a substantial per-process footprint. Account for it
+# globally on macOS, where running one per CPU can exhaust the runner and abort
+# an otherwise healthy test process.
 [[profile.default.overrides]]
-filter = 'binary(=backtick_strings)'
+filter = 'package(=bex_engine) | package(=baml_bridge)'
 platform = { host = 'cfg(target_os = "macos")' }
 threads-required = 3
 
