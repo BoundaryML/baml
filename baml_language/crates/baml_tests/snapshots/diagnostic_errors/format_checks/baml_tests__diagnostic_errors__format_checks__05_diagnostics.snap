@@ -980,7 +980,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:498:1]
  498 │ ╭─▶ client<llm> C {
  499 │ │       provider openai

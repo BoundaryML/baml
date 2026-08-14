@@ -65,26 +65,19 @@ function null_coalesce_assign.$init_test_ns_null_coalesce_assign_null_coalesce_a
 function null_coalesce_assign.nca_cross_field(a: int | null, b: int | null) -> int | null {
     load_var2 1 2
     init_instance user.null_coalesce_assign.NcaBox .a, .b
-    store_var s
-    load_var s
+    store_var_load_var s
     load_field .a
     store_var_load_var _4
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var s
+    load_field .b
+    store_var _4
 
   L0:
     load_var2 3 4
     store_field .a
-    jump L2
-
-  L1:
-    load_var2 3 3
-    load_field .b
-    store_field .a
-
-  L2:
     load_var s
     load_field .a
     return
@@ -96,22 +89,17 @@ function null_coalesce_assign.nca_field_self(seed: int | null, incoming: int | n
     init_instance user.null_coalesce_assign.NcaBox .a, .b
     store_var s
     load_var incoming
+    store_var_load_var _4
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var s
+    load_field .a
+    store_var _4
 
   L0:
-    load_var2 3 2
+    load_var2 3 4
     store_field .a
-    jump L2
-
-  L1:
-    load_var2 3 3
-    load_field .a
-    store_field .a
-
-  L2:
     load_var s
     load_field .a
     return
@@ -121,21 +109,16 @@ function null_coalesce_assign.nca_local_int(seed: int | null, incoming: int | nu
     load_var seed
     store_var a
     load_var incoming
+    store_var_load_var _4
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var a
+    store_var _4
 
   L0:
-    load_var incoming
+    load_var _4
     store_var a
-    jump L2
-
-  L1:
-    load_var a
-    store_var a
-
-  L2:
     load_var a
     return
 }
@@ -144,21 +127,16 @@ function null_coalesce_assign.nca_local_string(seed: string | null, incoming: st
     load_var seed
     store_var a
     load_var incoming
+    store_var_load_var _4
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var a
+    store_var _4
 
   L0:
-    load_var incoming
+    load_var _4
     store_var a
-    jump L2
-
-  L1:
-    load_var a
-    store_var a
-
-  L2:
     load_var a
     return
 }
@@ -170,23 +148,16 @@ function null_coalesce_assign.nca_method_lhs(seed: int | null, xs: int[]) -> int
     load_var xs
     load_const 0
     call baml.Array.at
-    store_var _4
-    load_var _4
+    store_var_load_var _4
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var a
+    store_var _4
 
   L0:
     load_var _4
     store_var a
-    jump L2
-
-  L1:
-    load_var a
-    store_var a
-
-  L2:
     load_var a
     return
 }
@@ -195,86 +166,63 @@ function null_coalesce_assign.nca_nested(seed: int | null, outer: int | null, in
     load_var seed
     store_var a
     load_var outer
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_var inner
+    store_var_load_var _7
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var a
+    store_var _7
 
   L0:
-    load_var outer
-    store_var a
-    jump L4
+    load_var _7
+    store_var _5
 
   L1:
-    load_var inner
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var inner
+    load_var _5
     store_var a
-    jump L4
-
-  L3:
-    load_var a
-    store_var a
-
-  L4:
     load_var a
     return
 }
 
 function null_coalesce_assign.nca_plain(n: int | null, fallback: int) -> int {
     load_var n
+    store_var_load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var fallback
+    store_var _3
 
   L0:
-    load_var n
-    jump L2
-
-  L1:
-    load_var fallback
-
-  L2:
+    load_var _3
     return
 }
 
 function null_coalesce_assign.nca_plain_chain(x: int | null, y: int | null, z: int) -> int {
     load_var x
+    store_var_load_var _6
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var y
+    store_var _6
 
   L0:
-    load_var x
-    store_var _4
-    jump L2
-
-  L1:
-    load_var y
-    store_var _4
-
-  L2:
-    load_var _4
+    load_var _6
+    store_var_load_var _4
     load_const null
     cmp_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _4
-    jump L5
-
-  L4:
+    pop_jump_if_false L1
     load_var z
+    store_var _4
 
-  L5:
+  L1:
+    load_var _4
     return
 }
 
@@ -284,25 +232,20 @@ function null_coalesce_assign.nca_rhs_not_evaluated(seed: int | null, incoming: 
     load_var seed
     store_var a
     load_var incoming
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var incoming
-    store_var a
-    jump L2
-
-  L1:
     load_var calls
     load_const 1
     add_int
     store_var calls
     load_var a
-    store_var a
+    store_var _5
 
-  L2:
+  L0:
+    load_var _5
+    store_var a
     load_var calls
     return
 }
@@ -311,19 +254,15 @@ function null_coalesce_assign.nca_via_temp(seed: int | null, incoming: int | nul
     load_var seed
     store_var a
     load_var incoming
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var a
+    store_var _5
 
   L0:
-    load_var incoming
-    jump L2
-
-  L1:
-    load_var a
-
-  L2:
+    load_var _5
     store_var a
     load_var a
     return

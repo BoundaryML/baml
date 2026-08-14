@@ -194,21 +194,15 @@ function env_ref_clients.EnvRefDynamicEcho$spec(question: string) -> ai.Function
     load_const "BAML_TEST_ENV_REF_UNSET_CLIENT"
     call baml.env.ref
     call baml.env.Ref.get
-    store_var _8
-    load_var _8
+    store_var_load_var _8
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_const "openai/gpt-4o-mini"
+    store_var _8
 
   L0:
     load_var _8
-    jump L2
-
-  L1:
-    load_const "openai/gpt-4o-mini"
-
-  L2:
     call ai.clients.resolve
     store_var _6
     load_const "EnvRefDynamicEcho"
@@ -599,21 +593,15 @@ function env_ref_clients.LiveEnvRefFallbackEcho$spec(question: string) -> ai.Fun
     load_const "BAML_TEST_CLIENT_UNSET"
     call baml.env.ref
     call baml.env.Ref.get
-    store_var _8
-    load_var _8
+    store_var_load_var _8
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_const "openai/gpt-4o-mini"
+    store_var _8
 
   L0:
     load_var _8
-    jump L2
-
-  L1:
-    load_const "openai/gpt-4o-mini"
-
-  L2:
     call ai.clients.resolve
     store_var _6
     load_const "LiveEnvRefFallbackEcho"
@@ -871,166 +859,108 @@ function env_ref_clients.resolve_credential_arms() -> string {
     load_const "sk-literal"
     load_const "HOME"
     call ai.wire.resolve_credential
-    store_var _3
-    load_var _3
+    store_var_load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_const "<null>"
+    store_var _3
 
   L0:
     load_var _3
     store_var _2
-    jump L2
-
-  L1:
-    load_const "<null>"
-    store_var _2
-
-  L2:
     load_const "   "
     load_const "HOME"
     call ai.wire.resolve_credential
+    store_var_load_var _7
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const "<null>"
+    store_var _7
+
+  L1:
+    load_var _7
     store_var _6
-    load_var _6
+    load_const "BAML_TEST_ENV_REF_UNSET"
+    call baml.env.ref
+    load_const "HOME"
+    call ai.wire.resolve_credential
+    store_var_load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const "<null>"
+    store_var _11
+
+  L2:
+    load_var _11
+    store_var _10
+    load_const "HOME"
+    call baml.env.ref
+    load_const null
+    call ai.wire.resolve_credential
+    store_var_load_var _16
     load_const null
     cmp_op ==
     pop_jump_if_false L3
-    jump L4
+    load_const "<null>"
+    store_var _16
 
   L3:
-    load_var _6
-    store_var _5
-    jump L5
-
-  L4:
-    load_const "<null>"
-    store_var _5
-
-  L5:
+    load_var _16
+    store_var _15
     load_const "BAML_TEST_ENV_REF_UNSET"
     call baml.env.ref
+    load_const null
+    call ai.wire.resolve_credential
+    store_var_load_var _21
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const "<null>"
+    store_var _21
+
+  L4:
+    load_var _21
+    store_var _20
+    load_const null
     load_const "HOME"
     call ai.wire.resolve_credential
-    store_var _9
-    load_var _9
+    store_var_load_var _26
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const "<null>"
+    store_var _26
+
+  L5:
+    load_var _26
+    store_var _25
+    load_const null
+    load_const null
+    call ai.wire.resolve_credential
+    store_var_load_var _30
     load_const null
     cmp_op ==
     pop_jump_if_false L6
-    jump L7
+    load_const "<null>"
+    store_var _30
 
   L6:
-    load_var _9
-    store_var _8
-    jump L8
+    load_var _30
+    store_var _29
+    load_const null
+    load_const "BAML_TEST_ENV_REF_UNSET"
+    call ai.wire.resolve_credential
+    store_var_load_var _34
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const "<null>"
+    store_var _34
 
   L7:
-    load_const "<null>"
-    store_var _8
-
-  L8:
-    load_const "HOME"
-    call baml.env.ref
-    load_const null
-    call ai.wire.resolve_credential
-    store_var _13
-    load_var _13
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var _13
-    store_var _12
-    jump L11
-
-  L10:
-    load_const "<null>"
-    store_var _12
-
-  L11:
-    load_const "BAML_TEST_ENV_REF_UNSET"
-    call baml.env.ref
-    load_const null
-    call ai.wire.resolve_credential
-    store_var _17
-    load_var _17
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L12
-    jump L13
-
-  L12:
-    load_var _17
-    store_var _16
-    jump L14
-
-  L13:
-    load_const "<null>"
-    store_var _16
-
-  L14:
-    load_const null
-    load_const "HOME"
-    call ai.wire.resolve_credential
-    store_var _21
-    load_var _21
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L15
-    jump L16
-
-  L15:
-    load_var _21
-    store_var _20
-    jump L17
-
-  L16:
-    load_const "<null>"
-    store_var _20
-
-  L17:
-    load_const null
-    load_const null
-    call ai.wire.resolve_credential
-    store_var _24
-    load_var _24
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L18
-    jump L19
-
-  L18:
-    load_var _24
-    store_var _23
-    jump L20
-
-  L19:
-    load_const "<null>"
-    store_var _23
-
-  L20:
-    load_const null
-    load_const "BAML_TEST_ENV_REF_UNSET"
-    call ai.wire.resolve_credential
-    store_var _27
-    load_var _27
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L21
-    jump L22
-
-  L21:
-    load_var _27
-    store_var _26
-    jump L23
-
-  L22:
-    load_const "<null>"
-    store_var _26
-
-  L23:
     load_type string
     load_var2 1 3
     load_var2 5 7

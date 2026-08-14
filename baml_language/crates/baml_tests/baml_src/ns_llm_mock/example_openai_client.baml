@@ -17,8 +17,8 @@
 // out.
 
 function MockEcho(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `

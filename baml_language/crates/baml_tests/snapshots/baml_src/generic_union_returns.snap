@@ -109,17 +109,17 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     load_var metadata
     load_const null
     cmp_op ==
-    pop_jump_if_false L6
-    jump L7
+    pop_jump_if_false L4
+    jump L5
 
-  L6:
+  L4:
     load_var metadata
     make_bound_method baml.Map.length
     call_indirect
     store_var _19
     jump L6
 
-  L7:
+  L5:
     load_const null
     store_var _19
 
@@ -140,48 +140,48 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     load_var children
     load_const null
     cmp_op ==
-    pop_jump_if_false L12
-    jump L15
+    pop_jump_if_false L8
+    jump L11
 
-  L12:
+  L8:
     load_const 0
     load_var children
     make_bound_method baml.Array.at
     call_indirect
     load_const null
     cmp_op ==
-    pop_jump_if_false L13
-    jump L15
+    pop_jump_if_false L9
+    jump L11
 
-  L13:
+  L9:
     load_var children
     load_const null
     cmp_op ==
-    pop_jump_if_false L14
-    jump L15
+    pop_jump_if_false L10
+    jump L11
 
-  L14:
+  L10:
     load_const 0
     load_var children
     make_bound_method baml.Array.at
     call_indirect
     load_field .0
-    jump L16
+    jump L12
 
-  L15:
+  L11:
     load_const null
 
-  L16:
+  L12:
     load_const "first"
     call baml.ops.equals_equals
     store_var children_ok
     load_var statuses
     load_const null
     cmp_op ==
-    pop_jump_if_false L17
-    jump L18
+    pop_jump_if_false L13
+    jump L14
 
-  L17:
+  L13:
     load_const 0
     load_var statuses
     make_bound_method baml.Array.at
@@ -189,7 +189,7 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     store_var _39
     jump L15
 
-  L18:
+  L14:
     load_const null
     store_var _39
 
@@ -200,21 +200,21 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     call baml.ops.equals_equals
     store_var statuses_ok
     load_var empty_ok
-    jump_if_false L20
+    jump_if_false L16
     pop 1
     load_var map_ok
 
-  L20:
-    jump_if_false L21
+  L16:
+    jump_if_false L17
     pop 1
     load_var children_ok
 
-  L21:
-    jump_if_false L22
+  L17:
+    jump_if_false L18
     pop 1
     load_var statuses_ok
 
-  L22:
+  L18:
     return
 }
 

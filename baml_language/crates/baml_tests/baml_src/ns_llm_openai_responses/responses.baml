@@ -18,30 +18,30 @@
 // ─── specs under test ────────────────────────────────────────────────────────
 
 function OaiEcho(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `
 }
 
 function OaiPicture(subject: string) -> image {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         Draw ${subject}.
     `
 }
 
 function OaiLook(pic: image, clip: audio, doc: pdf) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         Look: ${pic} ${clip} ${doc}
     `
 }
 
 function OaiSystemLook(pic: image) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("system")}
         Look: ${pic}
     `
@@ -50,8 +50,8 @@ function OaiSystemLook(pic: image) -> string {
 // `role(...)` builds a metadata-less marker, so a per-message directive is
 // authored by interpolating the typed marker class directly.
 function OaiMetaEcho(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `${baml.prompt.Role { name: "system", metadata: { "cache_hint": "ephemeral" } }}Follow the rules.${role("user")}${question}`
+    client: "openai/gpt-4o-mini"
+    prompt: `${baml.prompt.Role { name: "system", metadata: { "cache_hint": "ephemeral" } }}Follow the rules.${role("user")}${question}`
 }
 
 // ─── canned provider bodies ──────────────────────────────────────────────────

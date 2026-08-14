@@ -18,8 +18,8 @@
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
 function ChatEcho(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("system")}
         You are terse.
         ${role("user")}
@@ -29,13 +29,13 @@ function ChatEcho(question: string) -> string {
 
 // No `${role(...)}` marker anywhere: the whole prompt is role-less content.
 function ChatBare(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `Answer briefly: ${question}`
+    client: "openai/gpt-4o-mini"
+    prompt: `Answer briefly: ${question}`
 }
 
 function ChatVision(photo: image) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("user")}
         Describe ${photo}
     `
@@ -838,8 +838,8 @@ test "chat_runs_through_the_agent" {
 // wire or the typed error the finding said was missing.
 
 function ChatDoc(doc: pdf) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("user")}
         Summarize ${doc}
     `
@@ -1030,8 +1030,8 @@ test "chat_terminated_stream_still_completes" {
 // verbatim — and a message carrying one never collapses to a bare string, which
 // would drop it.
 function ChatCached(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `${baml.prompt.Role { name: "system", metadata: { "prompt_cache_breakpoint": { "type": "enabled" } } }}Follow the rules.${role("user")}${question}`
+    client: "openai/gpt-4o-mini"
+    prompt: `${baml.prompt.Role { name: "system", metadata: { "prompt_cache_breakpoint": { "type": "enabled" } } }}Follow the rules.${role("user")}${question}`
 }
 
 function _chat_cached_input() -> ai.ModelTurnInput {

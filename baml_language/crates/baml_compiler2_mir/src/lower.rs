@@ -6576,7 +6576,6 @@ impl LoweringContext<'_> {
         }
 
         self.builder.set_current_block(bb_lhs);
-        self.builder.assign(dest, Rvalue::Use(lhs_op));
         self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);

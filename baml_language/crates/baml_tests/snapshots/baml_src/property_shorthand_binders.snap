@@ -124,21 +124,15 @@ function property_shorthand_binders.psb_lookup(m: map<string, string>) -> string
     load_var m
     load_const "key"
     call baml.Map.get
-    store_var _2
-    load_var _2
+    store_var_load_var _2
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_const "MISSING"
+    store_var _2
 
   L0:
     load_var _2
-    jump L2
-
-  L1:
-    load_const "MISSING"
-
-  L2:
     return
 }
 
@@ -264,7 +258,7 @@ function property_shorthand_binders.psb_quoted_key_differs_from_binder(v: string
 
   L0:
     load_const "NONE"
-    jump L4
+    jump L3
 
   L1:
     load_type string
@@ -276,21 +270,17 @@ function property_shorthand_binders.psb_quoted_key_differs_from_binder(v: string
     alloc_map 1
     load_const "other"
     call baml.Map.get
-    store_var _6
-    load_var _6
+    store_var_load_var _6
     load_const null
     cmp_op ==
     pop_jump_if_false L2
-    jump L3
+    load_const "MISSING"
+    store_var _6
 
   L2:
     load_var _6
-    jump L4
 
   L3:
-    load_const "MISSING"
-
-  L4:
     return
 }
 

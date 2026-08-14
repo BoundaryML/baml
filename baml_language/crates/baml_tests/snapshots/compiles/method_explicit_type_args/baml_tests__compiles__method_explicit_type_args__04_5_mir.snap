@@ -51,11 +51,6 @@ fn user.use_method_type_args() -> int {
     }
 
     bb4: {
-        _0 = copy _2;
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

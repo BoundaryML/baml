@@ -2164,21 +2164,15 @@ function baml.env.Ref.or(self: baml.env.Ref, fallback: string) -> string {
     load_var self
     load_field .name
     sys_op baml.env.get
-    store_var _3
-    load_var _3
+    store_var_load_var _3
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_var fallback
+    store_var _3
 
   L0:
     load_var _3
-    jump L2
-
-  L1:
-    load_var fallback
-
-  L2:
     return
 }
 
@@ -2192,13 +2186,6 @@ function baml.env.get_or_panic(key: string) -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var _2
-    jump L2
-
-  L1:
     load_const "env var not found: "
     load_var key
     bin_op +
@@ -2234,6 +2221,12 @@ function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
     load_var _3
 
   L3:
+    return
+}
+
+function baml.env.ref(name: string) -> baml.env.Ref {
+    load_var name
+    init_instance baml.env.Ref .name
     return
 }
 
@@ -6114,14 +6107,14 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_var timezone
     is_type baml.time.TimeZoneOffset
     pop_jump_if_false L1
-    jump L18
+    jump L14
 
   L1:
     load_var disambiguation
     load_const "reject"
     call baml.ops.equals_equals
     pop_jump_if_false L2
-    jump L8
+    jump L6
 
   L2:
     load_var2 2 1
@@ -6133,7 +6126,7 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_const null
     cmp_op ==
     pop_jump_if_false L3
-    jump L7
+    jump L5
 
   L3:
     load_var _30
@@ -6149,14 +6142,14 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
-    jump L19
+    jump L15
 
-  L7:
+  L5:
     load_var timezone
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
 
-  L8:
+  L6:
     load_var2 2 1
     load_field ._nanoseconds
     load_const "earlier"
@@ -6165,10 +6158,10 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_var _11
     load_const null
     cmp_op ==
-    pop_jump_if_false L9
-    jump L17
+    pop_jump_if_false L7
+    jump L13
 
-  L9:
+  L7:
     load_var _11
     store_var earlier
     load_var2 2 1
@@ -6179,23 +6172,23 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_var _16
     load_const null
     cmp_op ==
-    pop_jump_if_false L10
-    jump L16
-
-  L10:
-    load_var2 5 6
-    call baml.ops.equals_equals
-    pop_jump_if_false L11
+    pop_jump_if_false L8
     jump L12
 
-  L11:
+  L8:
+    load_var2 5 6
+    call baml.ops.equals_equals
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
     load_const "wall-clock time is ambiguous or skipped in timezone "
     load_var timezone
     bin_op +
     init_instance baml.time.AmbiguousTimeError .message
     throw
 
-  L12:
+  L10:
     load_var earlier
     store_var_load_var _25
     load_const null
@@ -6209,19 +6202,19 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
-    jump L19
+    jump L15
 
-  L16:
+  L12:
     load_var timezone
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
 
-  L17:
+  L13:
     load_var timezone
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
 
-  L18:
+  L14:
     load_var self
     load_field ._nanoseconds
     load_var timezone
@@ -6232,7 +6225,7 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_const null
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
 
-  L19:
+  L15:
     return
 }
 
@@ -6440,7 +6433,7 @@ function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L4
+    jump L2
 
   L0:
     load_var _3
@@ -6456,7 +6449,7 @@ function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.
     init_instance baml.time.TimeZoneOffset ._nanoseconds
     return
 
-  L4:
+  L2:
     load_var timezone
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
@@ -6976,7 +6969,7 @@ function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) 
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L12
+    jump L6
 
   L0:
     load_var _2
@@ -7027,7 +7020,7 @@ function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) 
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
 
-  L12:
+  L6:
     load_var self
     load_field ._offset_ns
     store_var_load_var _5
@@ -7041,7 +7034,7 @@ function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) 
     load_var _5
     init_instance baml.time.TimeZoneOffset ._nanoseconds
 
-  L16:
+  L8:
     return
 }
 

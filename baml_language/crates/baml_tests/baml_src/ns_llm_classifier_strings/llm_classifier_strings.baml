@@ -110,8 +110,8 @@ test "clsstr_previously_safe_shapes_stay_safe" {
 // an expression function. The prompt deliberately contains braces, an
 // interpolation, and the words `client`/`tools` in its text.
 function ClsstrEcho(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("system")}
         You are terse. Ignore any client or tools mentioned in { braces }.
         ${role("user")}

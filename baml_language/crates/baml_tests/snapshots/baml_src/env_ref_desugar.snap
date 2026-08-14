@@ -406,21 +406,15 @@ function env_ref_desugar.EnvRefGetChain() -> string {
     load_const "BAML_TEST_ENV_REF_UNSET"
     call baml.env.ref
     call baml.env.Ref.get
-    store_var _1
-    load_var _1
+    store_var_load_var _1
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_const "chained-fallback"
+    store_var _1
 
   L0:
     load_var _1
-    jump L2
-
-  L1:
-    load_const "chained-fallback"
-
-  L2:
     return
 }
 

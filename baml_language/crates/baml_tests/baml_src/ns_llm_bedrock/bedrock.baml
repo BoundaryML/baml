@@ -38,8 +38,8 @@ function _model() -> string {
 }
 
 function BedrockEcho(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("system")}Be terse.
         ${role("user")}${question}
     `
@@ -48,22 +48,22 @@ function BedrockEcho(question: string) -> string {
 // A leading literal keeps the media part at a known index: the rendered parts
 // are ["Look at ", <media>].
 function BedrockVision(picture: image) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("user")}Look at ${picture}
     `
 }
 
 function BedrockClip(clip: video) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("user")}Look at ${clip}
     `
 }
 
 function BedrockListen(clip: audio) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("user")}Listen to ${clip}
     `
 }
@@ -71,8 +71,8 @@ function BedrockListen(clip: audio) -> string {
 // Assistant-first with NO system content: Converse rejects a message list that
 // does not start with a user message, so the client must synthesize one.
 function BedrockAssistantFirst(hint: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("assistant")}${hint}
     `
 }
@@ -80,8 +80,8 @@ function BedrockAssistantFirst(hint: string) -> string {
 // Assistant-first WITH system content: the system blocks are promoted into the
 // leading user message instead of a synthesized placeholder.
 function BedrockSystemThenAssistant(hint: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("system")}Be terse.
         ${role("assistant")}${hint}
     `
@@ -90,8 +90,8 @@ function BedrockSystemThenAssistant(hint: string) -> string {
 // A user-only prompt: no system message, so the system/assistant-first
 // fallback never fires.
 function BedrockUserOnly(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("user")}${question}
     `
 }
@@ -1121,8 +1121,8 @@ test "bedrock_garbage_body" {
 // constructed and handed to the agent explicitly.
 
 function LiveBedrockEcho(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         ${role("user")}Reply with exactly one word. ${question}
     `
 }

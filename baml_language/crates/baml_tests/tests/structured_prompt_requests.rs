@@ -52,9 +52,9 @@ async fn media_request_body(expr: &str, include_video: bool, include_audio: bool
     let source = format!(
         r#"
 function MediaShape(photo: image{audio_parameter}, document: pdf{video_parameter}) -> string {{
-  client "google/gemini-2.5-flash"
-  tools []
-  prompt `${{role("user")}}Inspect:${{photo}}:{audio_prompt}${{document}}:{video_prompt}`
+  client: "google/gemini-2.5-flash"
+  tools: []
+  prompt: `${{role("user")}}Inspect:${{photo}}:{audio_prompt}${{document}}:{video_prompt}`
 }}
 
 function main() -> string {{
@@ -213,9 +213,9 @@ async fn anthropic_lowers_image_and_pdf_parts() {
 async fn anthropic_rejects_audio_parts() {
     let source = r#"
 function AudioShape(sound: audio) -> string {
-  client "google/gemini-2.5-flash"
-  tools []
-  prompt `${role("user")}Listen:${sound}`
+  client: "google/gemini-2.5-flash"
+  tools: []
+  prompt: `${role("user")}Listen:${sound}`
 }
 
 function main() -> string {

@@ -8380,8 +8380,8 @@ impl<'db> InferenceContext<'db> {
         else {
             return names;
         };
-        for ancestor in index.ancestor_scopes(scope) {
-            let bindings = &index.scope_bindings[ancestor.index() as usize];
+        for ancestor in self.index.ancestor_scopes(scope) {
+            let bindings = &self.index.scope_bindings[ancestor.index() as usize];
             names.extend(bindings.bindings.iter().map(|b| b.name.clone()));
             names.extend(
                 bindings

@@ -22,8 +22,8 @@
 //     env fallback (`openai.GenericClient.base_url`) rather than an api_key.
 
 function EnvRefEcho(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `
@@ -33,8 +33,8 @@ function EnvRefEcho(question: string) -> string {
 // client — at CALL time, not during `$init`. This is the shape a deployment
 // uses to override its model from the environment.
 function EnvRefDynamicEcho(question: string) -> string {
-    client env.BAML_TEST_ENV_REF_UNSET_CLIENT.get() ?? "openai/gpt-4o-mini"
-    prompt `
+    client: env.BAML_TEST_ENV_REF_UNSET_CLIENT.get() ?? "openai/gpt-4o-mini"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `
@@ -43,8 +43,8 @@ function EnvRefDynamicEcho(question: string) -> string {
 // The same thing written explicitly, for the case where the selector is built
 // by ordinary code rather than by the `client:` sugar.
 function EnvRefResolvedEcho(question: string) -> string {
-    client ai.clients.resolve("openai/gpt-4o-mini")
-    prompt `
+    client: ai.clients.resolve("openai/gpt-4o-mini")
+    prompt: `
         Reply with exactly one word.
         ${question}
     `
@@ -390,8 +390,8 @@ client LiveEnvRefOpenAi = openai.ResponsesClient.new(
 );
 
 function LiveEnvRefEcho(question: string) -> string {
-    client LiveEnvRefOpenAi
-    prompt `
+    client: LiveEnvRefOpenAi
+    prompt: `
         Reply with exactly one word.
         ${question}
     `
@@ -400,8 +400,8 @@ function LiveEnvRefEcho(question: string) -> string {
 // Call-time client selection: the variable is unset, so `??` picks the default,
 // and the pick happens on the call rather than at $init.
 function LiveEnvRefFallbackEcho(question: string) -> string {
-    client env.BAML_TEST_CLIENT_UNSET.get() ?? "openai/gpt-4o-mini"
-    prompt `
+    client: env.BAML_TEST_CLIENT_UNSET.get() ?? "openai/gpt-4o-mini"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `

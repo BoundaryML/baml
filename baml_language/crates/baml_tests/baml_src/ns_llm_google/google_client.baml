@@ -16,8 +16,8 @@
 // Two system messages on purpose: Google MERGES them into one
 // `systemInstruction` (PLAN §5) rather than demoting the second to a user turn.
 function GoogleEcho(question: string) -> string {
-    client "google/gemini-2.5-flash"
-    prompt `${role("system")}Be brief.${role("system")}Answer in one word.${role("user")}${question}`
+    client: "google/gemini-2.5-flash"
+    prompt: `${role("system")}Be brief.${role("system")}Answer in one word.${role("user")}${question}`
 }
 
 /// Report the weather for a city.
@@ -27,9 +27,9 @@ function weather_lookup(city: string) -> string {
 }
 
 function GoogleToolEcho(question: string) -> string {
-    client "google/gemini-2.5-flash"
-    tools [weather_lookup]
-    prompt `${role("user")}${question}`
+    client: "google/gemini-2.5-flash"
+    tools: [weather_lookup]
+    prompt: `${role("user")}${question}`
 }
 
 // One completed non-streaming Gemini turn.
@@ -429,13 +429,13 @@ test "google_tool_loop_without_signature" {
 // ─── media lowering ──────────────────────────────────────────────────────────
 
 function GoogleVision(img: image) -> string {
-    client "google/gemini-2.5-flash"
-    prompt `${role("user")}Describe this.${img}`
+    client: "google/gemini-2.5-flash"
+    prompt: `${role("user")}Describe this.${img}`
 }
 
 function GoogleWatch(clip: video) -> string {
-    client "google/gemini-2.5-flash"
-    prompt `${role("user")}Summarize this.${clip}`
+    client: "google/gemini-2.5-flash"
+    prompt: `${role("user")}Summarize this.${clip}`
 }
 
 // Vertex resolves media URLs server-side, so an http(s) URL rides through as
@@ -935,8 +935,8 @@ test "google_error_taxonomy" {
 // ─── live ────────────────────────────────────────────────────────────────────
 
 function LiveGeminiEcho(question: string) -> string {
-    client "google/gemini-2.5-flash"
-    prompt `
+    client: "google/gemini-2.5-flash"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `

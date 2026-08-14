@@ -32,24 +32,24 @@
 // `test` block only asserts (test-block local-boxing VM bug).
 
 function LiveSmokeOpenAi(question: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `
 }
 
 function LiveSmokeAnthropic(question: string) -> string {
-    client "anthropic/claude-haiku-4-5"
-    prompt `
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `
 }
 
 function LiveSmokeGoogle(question: string) -> string {
-    client "google/gemini-2.5-flash"
-    prompt `
+    client: "google/gemini-2.5-flash"
+    prompt: `
         Reply with exactly one word.
         ${question}
     `

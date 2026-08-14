@@ -87,8 +87,8 @@ function EnvRefClientId() -> string {
 // An LLM function declared against the env-reading client. Never called — the
 // point is that declaring it compiles and initializes.
 function EnvRefDesugarFn() -> string {
-    client EnvRefDesugarClient
-    prompt `hi`
+    client: EnvRefDesugarClient
+    prompt: `hi`
 }
 
 // The client expression is resolved when the FUNCTION is called (at `$spec`
@@ -106,8 +106,8 @@ function EnvRefDynSelector() -> string {
 }
 
 function EnvRefDynClientFn() -> string {
-    client EnvRefDynSelector()
-    prompt `hi`
+    client: EnvRefDynSelector()
+    prompt: `hi`
 }
 
 function EnvRefDynClientId() -> string {
@@ -123,8 +123,8 @@ function EnvRefBadSelector() -> string {
 }
 
 function EnvRefBadClientFn() -> string {
-    client EnvRefBadSelector()
-    prompt `hi`
+    client: EnvRefBadSelector()
+    prompt: `hi`
 }
 
 // THE TIMING PROOF. The client expression lives in the synthesized `<Fn>$spec`

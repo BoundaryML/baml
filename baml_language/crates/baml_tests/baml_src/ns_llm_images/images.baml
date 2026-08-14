@@ -32,57 +32,57 @@
 // ─── functions under test ────────────────────────────────────────────────────
 
 function ImagesDraw(subject: string) -> image {
-    client "openai-images/gpt-image-1"
-    prompt `
+    client: "openai-images/gpt-image-1"
+    prompt: `
         A studio photograph of ${subject}.
     `
 }
 
 function ImagesDrawSet(subject: string) -> image[] {
-    client "openai-images/gpt-image-1"
-    prompt `
+    client: "openai-images/gpt-image-1"
+    prompt: `
         Two studio photographs of ${subject}.
     `
 }
 
 function ImagesDrawOrSay(subject: string) -> string | image {
-    client "openai-images/gpt-image-1"
-    prompt `
+    client: "openai-images/gpt-image-1"
+    prompt: `
         A studio photograph of ${subject}, or a sentence explaining why not.
     `
 }
 
 function ImagesRedraw(source: image, subject: string) -> image {
-    client "openai-images/gpt-image-1"
-    prompt `
+    client: "openai-images/gpt-image-1"
+    prompt: `
         Redraw ${source} as ${subject}.
     `
 }
 
 function GatewayRedraw(source: image, subject: string) -> image {
-    client "ai-gateway-images/openai/gpt-image-1"
-    prompt `
+    client: "ai-gateway-images/openai/gpt-image-1"
+    prompt: `
         Redraw ${source} as ${subject}.
     `
 }
 
 function GatewayRedrawAudio(clip: audio) -> image {
-    client "ai-gateway-images/openai/gpt-image-1"
-    prompt `
+    client: "ai-gateway-images/openai/gpt-image-1"
+    prompt: `
         Draw what you hear in ${clip}.
     `
 }
 
 function GatewayDraw(subject: string) -> image {
-    client "ai-gateway-images/bfl/flux-2-pro"
-    prompt `
+    client: "ai-gateway-images/bfl/flux-2-pro"
+    prompt: `
         A studio photograph of ${subject}.
     `
 }
 
 function GatewayDrawSet(subject: string) -> image[] {
-    client "ai-gateway-images/bfl/flux-2-pro"
-    prompt `
+    client: "ai-gateway-images/bfl/flux-2-pro"
+    prompt: `
         Two studio photographs of ${subject}.
     `
 }
@@ -1000,8 +1000,8 @@ testset "missing_key" {
 // ─── live ────────────────────────────────────────────────────────────────────
 
 function LiveDrawSquare() -> image {
-    client "openai-images/gpt-image-1"
-    prompt `
+    client: "openai-images/gpt-image-1"
+    prompt: `
         A plain solid red square centered on a white background. No text.
     `
 }
