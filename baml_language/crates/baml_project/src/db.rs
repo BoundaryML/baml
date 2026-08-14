@@ -170,6 +170,9 @@ pub struct ProjectDatabase {
     /// handle would leave a stale memo on a reused database, e.g. the LSP's
     /// long-lived `ProjectDatabase`).
     seeded_callable_throws: Option<baml_workspace::SeededCallableThrows>,
+    /// Source-less dependency packages, present from database construction so
+    /// Salsa queries always track the mount map even while it is empty.
+    mounted_packages: Option<baml_workspace::MountedPackages>,
     /// Maps file paths to their `SourceFile` handles (user files only).
     ///
     /// `Arc`-wrapped (with `Arc::make_mut` at the mutation sites) so cloning a
@@ -224,6 +227,10 @@ impl baml_workspace::Db for ProjectDatabase {
 
     fn seeded_callable_throws(&self) -> Option<baml_workspace::SeededCallableThrows> {
         self.seeded_callable_throws
+    }
+
+    fn mounted_packages(&self) -> Option<baml_workspace::MountedPackages> {
+        self.mounted_packages
     }
 }
 
@@ -310,6 +317,7 @@ impl ProjectDatabase {
             seeded_throw_facts: None,
             seeded_stdlib_interface: None,
             seeded_callable_throws: None,
+            mounted_packages: None,
             file_map: Arc::new(HashMap::new()),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: Arc::new(HashMap::new()),
@@ -324,6 +332,10 @@ impl ProjectDatabase {
             std::collections::BTreeMap::new(),
         ));
         db.seeded_callable_throws = Some(baml_workspace::SeededCallableThrows::new(
+            &db,
+            std::collections::BTreeMap::new(),
+        ));
+        db.mounted_packages = Some(baml_workspace::MountedPackages::new(
             &db,
             std::collections::BTreeMap::new(),
         ));
@@ -394,6 +406,40 @@ impl ProjectDatabase {
             .seeded_callable_throws
             .expect("SeededCallableThrows input is created in ProjectDatabase::new");
         seeds.set_by_path(self).to(by_path);
+    }
+
+    /// Add a compiler2-only virtual source file to the extra-files input.
+    /// Tests use `<builtin>/<package>/...` paths to compile an independent
+    /// package interface without making the file a user project file.
+    pub fn add_compiler2_virtual_file(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+        content: &str,
+    ) -> SourceFile {
+        let path = path.as_ref().to_path_buf();
+        let file = self.add_file_internal(&path, content);
+        let file_id = file.file_id(self);
+        Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
+        self.compiler2_file_map.insert(path, file);
+        let extra = self
+            .compiler2_extra_files
+            .expect("set_project_root creates the Compiler2ExtraFiles input");
+        let mut files = extra.files(self).clone();
+        files.push(file);
+        extra.set_files(self).to(files);
+        file
+    }
+
+    /// Replace the mounted source-less package map and invalidate all tracked
+    /// package/interface lookups that read it.
+    pub fn set_mounted_packages(
+        &mut self,
+        by_package: std::collections::BTreeMap<String, Vec<u8>>,
+    ) {
+        let mounts = self
+            .mounted_packages
+            .expect("MountedPackages input is created in ProjectDatabase::new");
+        mounts.set_by_package(self).to(by_package);
     }
 
     /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
@@ -1199,14 +1245,14 @@ impl ProjectDatabase {
         callee_path: &[baml_db::Name],
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
         use baml_compiler2_hir::{contributions::Definition, file_package, package::PackageId};
-        use baml_compiler2_hir_ty::package_interface::ResolvedSource;
+        use baml_compiler2_hir_ty::package_interface::ResolvedValue;
 
         let caller_package = file_package::file_package(self, caller_file);
         let package_id = PackageId::new(self, caller_package.package.clone());
         let resolution =
             baml_compiler2_hir_ty::package_interface::package_resolution_context(self, package_id);
         match resolution.resolve_value(self, callee_path, &caller_package.namespace_path) {
-            Some((ResolvedSource::Item, Definition::Function(function))) => Some(function),
+            Some(ResolvedValue::Source(Definition::Function(function))) => Some(function),
             _ => None,
         }
     }

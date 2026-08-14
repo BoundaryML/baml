@@ -3747,6 +3747,7 @@ mod tests {
                 direct: Default::default(),
                 transitive: Default::default(),
             },
+            namespaces: Default::default(),
         };
         let mut seed = std::collections::BTreeMap::new();
         seed.insert(

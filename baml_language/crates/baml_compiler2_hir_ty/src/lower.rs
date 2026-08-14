@@ -36,6 +36,12 @@ use baml_type::{
 };
 use rustc_hash::FxHashMap;
 
+#[derive(Debug, Clone)]
+enum ResolvedTypeDefinition<'db> {
+    Source(Definition<'db>),
+    Exported(Box<crate::package_interface::ExportedType>),
+}
+
 /// Everything needed to lower type syntax appearing in one file, for one
 /// generic frame.
 /// One unresolved written type (E0002), anchored at its `TypeRefId` -
@@ -412,7 +418,15 @@ impl<'db> LowerCtx<'db> {
     /// rejection intact instead of tripping the existential completeness
     /// check first.
     fn probe_projection_prefix(&self, prefix: &[Name]) -> Option<Ty> {
-        if let Some(Definition::Enum(_)) = self.resolve_type(prefix) {
+        let resolved = self.resolve_type(prefix);
+        if matches!(
+            resolved,
+            Some(ResolvedTypeDefinition::Source(Definition::Enum(_)))
+        ) || matches!(
+            resolved,
+            Some(ResolvedTypeDefinition::Exported(ref exported))
+                if matches!(exported.as_ref(), crate::package_interface::ExportedType::Enum { .. })
+        ) {
             return None;
         }
         let saved = self.diags.as_ref().map(|d| d.borrow().len());
@@ -602,7 +616,14 @@ impl<'db> LowerCtx<'db> {
         let short = segments.last().expect("type paths are never empty");
 
         if let Some(def) = self.resolve_type(segments) {
-            return self.lower_definition(def, short, args, bindings, position);
+            return match def {
+                ResolvedTypeDefinition::Source(def) => {
+                    self.lower_definition(def, short, args, bindings, position)
+                }
+                ResolvedTypeDefinition::Exported(exported) => {
+                    self.lower_exported_type(*exported, short, args, bindings, position)
+                }
+            };
         }
 
         // Fallback 1: a single segment naming an in-scope generic param
@@ -631,21 +652,30 @@ impl<'db> LowerCtx<'db> {
         if segments.len() >= 2
             && args.is_empty()
             && bindings.is_empty()
-            && let Some(Definition::Enum(enum_loc)) =
-                self.resolve_type(&segments[..segments.len() - 1])
+            && let Some(enum_def) = self.resolve_type(&segments[..segments.len() - 1])
         {
-            let enum_data = baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc);
-            if enum_data
-                .variants
-                .iter()
-                .any(|variant| &variant.name == short)
-            {
-                let enum_short = &segments[segments.len() - 2];
-                return Ty::intern(TyKind::EnumVariant(
-                    self.qualify(Definition::Enum(enum_loc), enum_short),
-                    short.clone(),
-                    attr(),
-                ));
+            let enum_qtn = match enum_def {
+                ResolvedTypeDefinition::Source(Definition::Enum(enum_loc)) => {
+                    let enum_data = baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc);
+                    enum_data
+                        .variants
+                        .iter()
+                        .any(|variant| &variant.name == short)
+                        .then(|| {
+                            self.qualify(Definition::Enum(enum_loc), &segments[segments.len() - 2])
+                        })
+                }
+                ResolvedTypeDefinition::Exported(exported) => match *exported {
+                    crate::package_interface::ExportedType::Enum { qtn, variants } => variants
+                        .iter()
+                        .any(|variant| variant == short)
+                        .then_some(qtn),
+                    _ => None,
+                },
+                ResolvedTypeDefinition::Source(_) => None,
+            };
+            if let Some(qtn) = enum_qtn {
+                return Ty::intern(TyKind::EnumVariant(qtn, short.clone(), attr()));
             }
         }
 
@@ -939,10 +969,148 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
+    fn lower_exported_type(
+        &self,
+        exported: crate::package_interface::ExportedType,
+        short: &Name,
+        mut args: Vec<Ty>,
+        bindings: Vec<(Name, Ty)>,
+        position: TypePosition,
+    ) -> Ty {
+        use crate::package_interface::ExportedType;
+        let attr = TyAttr::default;
+        match exported {
+            ExportedType::Class {
+                qtn,
+                generic_params,
+                ..
+            } => {
+                self.record_arity(short, args.len(), generic_params.len());
+                enforce_arity(&mut args, generic_params.len());
+                Ty::intern(TyKind::Class(qtn, args.into_boxed_slice(), attr()))
+            }
+            ExportedType::Enum { qtn, .. } => {
+                self.record_arity(short, args.len(), 0);
+                self.reject_non_interface_bindings(bindings);
+                Ty::intern(TyKind::Enum(qtn, attr()))
+            }
+            ExportedType::TypeAlias { qtn, .. } => {
+                self.record_arity(short, args.len(), 0);
+                self.reject_non_interface_bindings(bindings);
+                Ty::intern(TyKind::TypeAlias(qtn, attr()))
+            }
+            ExportedType::Interface {
+                qtn,
+                self_param,
+                generic_params,
+                associated_types,
+                ..
+            } => {
+                self.record_arity(short, args.len(), generic_params.len());
+                enforce_arity(&mut args, generic_params.len());
+
+                let mut checked = Vec::with_capacity(bindings.len());
+                for (name, value) in bindings {
+                    if !associated_types.iter().any(|assoc| assoc.name == name) {
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::UnresolvedType {
+                                name,
+                                suggestions: associated_types
+                                    .iter()
+                                    .map(|assoc| assoc.name.clone())
+                                    .collect(),
+                            },
+                        ]);
+                        continue;
+                    }
+                    if checked.iter().any(|(seen, _)| seen == &name) {
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::DuplicateAssociatedTypeBinding {
+                                interface: qtn.clone(),
+                                name,
+                            },
+                        ]);
+                        continue;
+                    }
+                    checked.push((name, value));
+                }
+
+                if position == TypePosition::Existential {
+                    let plain_args: Vec<_> = args.iter().map(Ty::to_plain).collect();
+                    for assoc in &associated_types {
+                        if checked.iter().any(|(name, _)| name == &assoc.name) {
+                            continue;
+                        }
+                        let Some(default) = &assoc.default else {
+                            continue;
+                        };
+                        let self_ty = Ty::intern(TyKind::Interface(
+                            qtn.clone(),
+                            args.clone().into_boxed_slice(),
+                            checked.clone().into_boxed_slice(),
+                            attr(),
+                        ))
+                        .to_plain();
+                        let realized = crate::interfaces::realize_associated_default(
+                            default,
+                            &generic_params,
+                            &plain_args,
+                            &self_param,
+                            &self_ty,
+                        );
+                        checked.push((assoc.name.clone(), Ty::from_plain(&realized)));
+                    }
+                    let missing: Vec<Name> = associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone())
+                        .filter(|name| !checked.iter().any(|(bound, _)| bound == name))
+                        .collect();
+                    if !missing.is_empty() {
+                        checked.extend(missing.iter().cloned().map(|name| (name, Ty::error())));
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::MissingAssociatedTypeBindings {
+                                interface: qtn.clone(),
+                                missing,
+                            },
+                        ]);
+                    }
+                }
+                checked.sort_by(|(a, _), (b, _)| a.cmp(b));
+                Ty::intern(TyKind::Interface(
+                    qtn,
+                    args.into_boxed_slice(),
+                    checked.into_boxed_slice(),
+                    attr(),
+                ))
+            }
+        }
+    }
+
+    fn reject_non_interface_bindings(&self, bindings: Vec<(Name, Ty)>) {
+        for (name, _) in bindings {
+            self.record_type_errors(vec![crate::diagnostics::TirTypeError::UnresolvedType {
+                name,
+                suggestions: Vec::new().into(),
+            }]);
+        }
+    }
+
+    fn can_access_package(&self, package: &Name) -> bool {
+        if &self.package_items.package == package {
+            return true;
+        }
+        baml_compiler2_hir::package::package_dependencies(
+            self.db,
+            PackageId::new(self.db, self.package_items.package.clone()),
+        )
+        .iter()
+        .any(|dep| dep.name(self.db) == *package)
+    }
+
     /// TIR's `resolve_type_in`, mirrored: (1) namespace-relative in the
     /// current package (no outward walk); (2) `root.`-absolute or
     /// package-prefixed; (3) the `$stream` companion fallback.
-    fn resolve_type(&self, segments: &[Name]) -> Option<Definition<'db>> {
+    fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
         let (item, seg_ns) = segments.split_last().expect("type paths are never empty");
 
         let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
@@ -951,22 +1119,32 @@ impl<'db> LowerCtx<'db> {
             self.ns_context.iter().chain(seg_ns).cloned().collect()
         };
         if let Some(def) = self.package_items.lookup_type(&relative_ns, item) {
-            return Some(def);
+            return Some(ResolvedTypeDefinition::Source(def));
         }
 
         if segments.len() >= 2 {
             let prefix_ns = &segments[1..segments.len() - 1];
             if segments[0].as_str() == "root" {
                 if let Some(def) = self.package_items.lookup_type(prefix_ns, item) {
-                    return Some(def);
+                    return Some(ResolvedTypeDefinition::Source(def));
                 }
             } else {
+                if baml_compiler2_hir::package::is_mounted_package(self.db, &segments[0]) {
+                    if !self.can_access_package(&segments[0]) {
+                        return None;
+                    }
+                    let interface =
+                        crate::package_interface::mounted_interface(self.db, &segments[0])?;
+                    if let Some(exported) = interface.lookup_type(prefix_ns, item) {
+                        return Some(ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
+                    }
+                }
                 let dep_items = baml_compiler2_ppir::package_items(
                     self.db,
                     PackageId::new(self.db, segments[0].clone()),
                 );
                 if let Some(def) = dep_items.lookup_type(prefix_ns, item) {
-                    return Some(def);
+                    return Some(ResolvedTypeDefinition::Source(def));
                 }
             }
         }
@@ -977,13 +1155,14 @@ impl<'db> LowerCtx<'db> {
         if segments
             .first()
             .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
+            && self.can_access_package(&Name::new("baml"))
         {
             let baml_items = baml_compiler2_ppir::package_items(
                 self.db,
                 PackageId::new(self.db, Name::new("baml")),
             );
             if let Some(def) = baml_items.lookup_type(&segments[..segments.len() - 1], item) {
-                return Some(def);
+                return Some(ResolvedTypeDefinition::Source(def));
             }
         }
 
@@ -992,9 +1171,17 @@ impl<'db> LowerCtx<'db> {
         if let Some(base) = item.as_str().strip_suffix("$stream") {
             let mut base_segments = segments.to_vec();
             *base_segments.last_mut().expect("non-empty") = Name::new(base);
-            return self
-                .resolve_type(&base_segments)
-                .filter(|def| matches!(def, Definition::Class(_) | Definition::TypeAlias(_)));
+            return self.resolve_type(&base_segments).filter(|def| match def {
+                ResolvedTypeDefinition::Source(Definition::Class(_) | Definition::TypeAlias(_)) => {
+                    true
+                }
+                ResolvedTypeDefinition::Exported(exported) => matches!(
+                    exported.as_ref(),
+                    crate::package_interface::ExportedType::Class { .. }
+                        | crate::package_interface::ExportedType::TypeAlias { .. }
+                ),
+                ResolvedTypeDefinition::Source(_) => false,
+            });
         }
 
         None
@@ -1032,6 +1219,7 @@ impl<'db> LowerCtx<'db> {
         if segments
             .first()
             .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
+            && self.can_access_package(&Name::new("baml"))
         {
             let baml_items = baml_compiler2_ppir::package_items(
                 self.db,
@@ -1046,7 +1234,10 @@ impl<'db> LowerCtx<'db> {
 
     /// Type-namespace resolution, exposed for constructor and member typing.
     pub fn resolve_type_definition(&self, segments: &[Name]) -> Option<Definition<'db>> {
-        self.resolve_type(segments)
+        match self.resolve_type(segments) {
+            Some(ResolvedTypeDefinition::Source(def)) => Some(def),
+            _ => None,
+        }
     }
 
     /// A dotted TYPE path in value position (the `Type` prefix of
