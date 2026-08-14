@@ -604,10 +604,10 @@ mod tests {
             panic!("expected union self type")
         };
         assert_eq!(union.options.len(), 2);
-        assert!(matches!(
-            union.options[1].ty,
-            Some(crate::baml_bridge::cffi::baml_ty::Ty::Null(_))
-        ));
+        assert_eq!(
+            union.options[1],
+            crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::null())
+        );
     }
 
     #[test]
