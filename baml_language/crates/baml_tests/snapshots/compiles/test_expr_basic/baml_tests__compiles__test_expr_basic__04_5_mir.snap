@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23423
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -7,9 +8,9 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
     let _2: void
-    let _3: () -> void throws unknown
+    let _3: () -> void throws never
     let _4: void
-    let _5: () -> void throws unknown
+    let _5: () -> void throws never
 
     bb0: {
         _3 = make_closure lambda[0]();

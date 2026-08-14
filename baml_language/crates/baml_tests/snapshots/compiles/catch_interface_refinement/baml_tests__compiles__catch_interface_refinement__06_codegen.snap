@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6927
 ---
 function user.QuotaExceeded.Failure.is_transient(self: QuotaExceeded) -> bool {
     load_const false
@@ -81,7 +82,7 @@ function user.local_throw() -> string {
     load_var e
     store_var _4
     load_var _4
-    narrow_bind Throttled, slot=2
+    narrow_bind Failure, slot=2
     pop_jump_if_false L0
     jump L1
 

@@ -91,7 +91,7 @@ fn render_signature(db: &dyn Db, function: Function<'_>) -> String {
     );
     let throws = function.throws(db);
     if !matches!(throws.effective, baml_type::Ty::Never { .. }) {
-        let _ = write!(line, " throws {}", ty(throws.effective));
+        let _ = write!(line, " throws {}", ty(&throws.effective));
     }
     line
 }
@@ -371,7 +371,7 @@ fn render_type_alias(db: &ProjectDatabase, alias: TypeAlias<'_>) -> String {
         out,
         "type {} = {}   {}",
         alias.qualified_name(db).render_user_facing(),
-        ty(alias.resolved(db)),
+        ty(&alias.resolved(db)),
         location(db, alias.file(db), alias.name_span(db)),
     );
     push_docstring(&mut out, alias.docstring(db));

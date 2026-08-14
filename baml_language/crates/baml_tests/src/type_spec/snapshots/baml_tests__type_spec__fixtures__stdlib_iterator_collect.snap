@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+435..440 'drain': throws (T as baml.iter.Iterator).Error
+505..583 '{\n   ...  r\n}': (T as baml.iter.Iterator).Item[]
+511..516 'let r': (T as baml.iter.Iterator).Item[]
+519..529 'it.collect': (self: T) -> (T as baml.iter.Iterator).Item[] throws (T as baml.iter.Iterator).Error
+519..531 'it.collect()': (T as baml.iter.Iterator).Item[]
+580..581 'r': (T as baml.iter.Iterator).Item[]

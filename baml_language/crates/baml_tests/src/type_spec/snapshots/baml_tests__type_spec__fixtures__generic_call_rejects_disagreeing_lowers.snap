@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+678..682 'same': throws never
+712..725 '{\n    first\n}': T
+718..723 'first': T
+736..738 'ok': throws never
+748..785 '{\n   ...int\n}': int
+754..758 'same': (first: int, second: int) -> int throws never
+754..764 'same(1, 2)': int
+759..760 '1': 1
+762..763 '2': 2
+796..807 'disagreeing': throws never
+820..879 '{\n   ...ok"\n}': "ok"
+826..831 'let r': !error
+834..838 'same': (first: !error, second: !error) -> !error throws never
+834..850 'same(1...ello")': !error
+839..840 '1': 1
+842..849 '"hello"': "hello"
+873..877 '"ok"': "ok"

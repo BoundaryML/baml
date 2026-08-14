@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 9031
 ---
 function user.B.greet(self: B) -> string {
     load_var self

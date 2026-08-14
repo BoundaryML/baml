@@ -184,16 +184,18 @@ test "TypeScript direct and enclosing suite gates set runtime membership" {
     let valid_scan = SourceScan { config: scan.config, matches: valid_matches };
     let tests = discover_tests([valid_scan]);
     apply_typescript_runtime_gates(tests, [valid_scan]);
-    let direct: DiscoveredTest? = null;
-    let suite: DiscoveredTest? = null;
-    for (let test_case in tests) {
-        if (test_case.sdk_test_id == "fixture/runtime_case") {
-            direct = test_case;
-        }
-        if (test_case.sdk_test_id == "fixture/suite_runtime_case") {
-            suite = test_case;
-        }
-    }
+    let direct = match (tests.find((test_case: DiscoveredTest) -> bool {
+        test_case.sdk_test_id == "fixture/runtime_case"
+    })) {
+        let found: DiscoveredTest => found,
+        null => baml.sys.panic("expected direct runtime-gated fixture"),
+    };
+    let suite = match (tests.find((test_case: DiscoveredTest) -> bool {
+        test_case.sdk_test_id == "fixture/suite_runtime_case"
+    })) {
+        let found: DiscoveredTest => found,
+        null => baml.sys.panic("expected suite runtime-gated fixture"),
+    };
     assert.equal(direct.runtimes, ["web"]);
     assert.equal(suite.runtimes, ["web", "workers"])
 }

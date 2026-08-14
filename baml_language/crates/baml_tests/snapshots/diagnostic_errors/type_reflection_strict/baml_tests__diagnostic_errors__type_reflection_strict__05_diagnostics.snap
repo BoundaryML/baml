@@ -14,9 +14,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: NonExistent
-    ╭─[reflect_intrinsic_errors.baml:18:5]
+    ╭─[reflect_intrinsic_errors.baml:18:21]
  18 │     reflect.type_of<NonExistent>()
-    ·     ──────────────────────────────
+    ·                     ───────────
     ╰────
 
   [type] E0005

@@ -823,10 +823,11 @@ dependencies = [
  "baml_base",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_type",
+ "baml_type_runtime",
  "baml_workspace",
  "bex_vm_types",
  "borsh",
@@ -855,15 +856,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler2_hir_ty"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_ppir",
+ "baml_type",
+ "baml_type_runtime",
+ "borsh",
+ "ena",
+ "num-bigint",
+ "rustc-hash 2.1.2",
+ "salsa",
+ "smol_str 0.3.6",
+ "strsim",
+ "text-size",
+]
+
+[[package]]
 name = "baml_compiler2_mir"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_type",
+ "baml_type_runtime",
  "baml_workspace",
  "indexmap",
  "num-bigint",
@@ -884,28 +907,6 @@ dependencies = [
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
- "text-size",
-]
-
-[[package]]
-name = "baml_compiler2_tir"
-version = "0.1.0"
-dependencies = [
- "baml_base",
- "baml_builtins2",
- "baml_compiler2_ast",
- "baml_compiler2_hir",
- "baml_compiler2_ppir",
- "baml_type",
- "baml_type_runtime",
- "baml_workspace",
- "borsh",
- "indexmap",
- "num-bigint",
- "rustc-hash 2.1.2",
- "salsa",
- "smol_str 0.3.6",
- "strsim",
  "text-size",
 ]
 
@@ -969,9 +970,9 @@ dependencies = [
  "baml_base",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
  "baml_compiler_parser",
@@ -1019,11 +1020,12 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
  "baml_workspace",
  "bitflags 2.11.1",
  "indexmap",
@@ -1109,14 +1111,15 @@ dependencies = [
 name = "baml_project"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_builtins2",
  "baml_codegen_types",
  "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_db",
@@ -1159,8 +1162,8 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_project",
  "baml_type",
  "insta",
@@ -1179,9 +1182,9 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_fmt",
@@ -1206,6 +1209,7 @@ dependencies = [
  "rayon",
  "salsa",
  "serde_json",
+ "similar",
  "syn 2.0.117",
  "sys_native",
  "sys_ops",
@@ -1223,6 +1227,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_type_macros",
+ "bitflags 2.11.1",
  "borsh",
  "rustc-hash 2.1.2",
 ]
@@ -2782,6 +2787,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "491bdf728bf25ddd9ad60d4cf1c48588fa82c013a2440b91aa7fc43e34a07c32"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "ena"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eabffdaee24bd1bf95c5ef7cec31260444317e72ea56c4c91750e8b7ee58d5f1"
+dependencies = [
+ "log",
 ]
 
 [[package]]

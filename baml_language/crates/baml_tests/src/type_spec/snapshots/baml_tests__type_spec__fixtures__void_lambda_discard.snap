@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+223..229 'ptc_id': throws never
+258..296 '{\n   ...  y\n}': int
+264..269 'let y': int
+272..273 'x': int
+293..294 'y': int
+303..314 '"ptc_probe"': "ptc_probe"
+315..487 '{\n   ...  }\n}': "one" | null
+315..487 '{\n   ...  }\n}': () -> void throws never
+321..444 '{\n   ...n    }': "one"
+321..485 '{\n   ...n    }': "one" | null
+331..336 'let x': int
+339..345 'ptc_id': (x: int) -> int throws never
+339..348 'ptc_id(2)': int
+346..347 '2': 2
+358..438 'match ...     }': "one"
+365..366 'x': int
+382..383 '1': 1
+387..392 '"one"': "one"
+406..407 '_': int
+411..427 '{ thro...oom" }': never
+419..425 '"boom"': "boom"
+452..453 'e': "boom"
+465..471 'string': string
+475..479 'null': null

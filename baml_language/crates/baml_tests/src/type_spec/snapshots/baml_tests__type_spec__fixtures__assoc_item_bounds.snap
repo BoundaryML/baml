@@ -1,0 +1,54 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+171..181 'same_label': throws never
+222..274 '{\n   ...n    }': never
+239..249 'self.label': (self: Self) -> string throws never
+239..251 'self.label()': string
+239..268 'self.l...abel()': bool
+255..266 'other.label': (self: Self) -> string throws never
+255..268 'other.label()': string
+465..470 'label': throws never
+487..527 '{\n   ...     }': never
+508..517 'self.name': string
+656..659 'get': throws never
+679..719 '{\n   ...     }': never
+700..709 'self.item': user.AibWidget
+737..746 'aib_label': throws never
+802..890 '{\n   ...ext\n}': string
+808..816 'let item': (H as user.AibHolder).Item
+819..829 'holder.get': (self: H) -> (H as user.AibHolder).Item throws never
+819..831 'holder.get()': (H as user.AibHolder).Item
+836..844 'let text': string
+847..857 'item.label': (self: (H as user.AibHolder).Item) -> string throws never
+847..859 'item.label()': string
+884..888 'text': string
+900..908 'aib_same': throws never
+962..1057 '{\n   ...ame\n}': bool
+968..976 'let item': (H as user.AibHolder).Item
+979..989 'holder.get': (self: H) -> (H as user.AibHolder).Item throws never
+979..991 'holder.get()': (H as user.AibHolder).Item
+996..1004 'let same': bool
+1007..1022 'item.same_label': (self: (H as user.AibHolder).Item, other: (H as user.AibHolder).Item) -> bool throws never
+1007..1028 'item.s...(item)': bool
+1023..1027 'item': (H as user.AibHolder).Item
+1051..1055 'same': bool
+1067..1075 'aib_main': throws never
+1101..1275 '{\n   ..." }\n}': string
+1107..1117 'let holder': user.AibWidgetHolder
+1120..1173 'AibWid...a" } }': user.AibWidgetHolder
+1144..1171 'AibWid...pha" }': user.AibWidget
+1162..1169 '"alpha"': "alpha"
+1178..1186 'let text': string
+1189..1198 'aib_label': (holder: user.AibWidgetHolder) -> string throws never
+1189..1206 'aib_la...older)': string
+1199..1205 'holder': user.AibWidgetHolder
+1231..1273 'if aib..."no" }': string
+1234..1242 'aib_same': (holder: user.AibWidgetHolder) -> bool throws never
+1234..1250 'aib_sa...older)': bool
+1243..1249 'holder': user.AibWidgetHolder
+1251..1259 '{ text }': string
+1253..1257 'text': string
+1265..1273 '{ "no" }': "no"
+1267..1271 '"no"': "no"

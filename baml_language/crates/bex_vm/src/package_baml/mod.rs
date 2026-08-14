@@ -33,6 +33,7 @@ pub mod json;
 mod map;
 mod media;
 mod ops;
+mod ops_bitwise;
 mod ops_math;
 mod prompt;
 mod random;

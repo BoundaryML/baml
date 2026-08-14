@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+410..426 'iter_m...ollect': throws never
+451..565 '{\n   ...led\n}': int[]
+457..468 'let doubled': int[]
+471..480 '[1, 2, 3]': int[]
+471..485 '[1, 2, 3].iter': (self: int[]) -> baml.iter.Iterator<Error = never, Item = int> throws never
+471..487 '[1, 2,...iter()': baml.iter.Iterator<Error = never, Item = int>
+471..491 '[1, 2,...().map': (self: baml.iter.Iterator<Error = never, Item = int>, fn: (int) -> int throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never
+471..518 '[1, 2,...* 2 })': baml.iter.Iterator<Error = never, Item = int>
+471..526 '[1, 2,...ollect': (self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never
+471..528 '[1, 2,...lect()': int[]
+472..473 '1': 1
+475..476 '2': 2
+478..479 '3': 3
+492..517 '(x: in... * 2 }': (x: int) -> int throws never
+508..517 '{ x * 2 }': int
+510..511 'x': int
+510..515 'x * 2': int
+514..515 '2': 2
+556..563 'doubled': int[]
+576..587 'iter_reduce': throws never
+610..806 '{\n   ...tal\n}': int
+616..669 'let it...never>': baml.iter.Iterator<Error = never, Item = int>
+624..669 'baml.i...never>': baml.iter.Iterator<Error = never, Item = int>
+672..699 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
+672..710 'baml.i...2, 3])': baml.iter.ArrayIterator<int>
+700..709 '[1, 2, 3]': int[]
+701..702 '1': 1
+704..705 '2': 2
+707..708 '3': 3
+716..725 'let total': int
+728..737 'it.reduce': (self: baml.iter.Iterator<Error = never, Item = int>, fn: (int, int) -> int throws never, initial: int) -> int throws never
+728..775 'it.red... }, 0)': int
+738..771 '(a: in... + x }': (a: int, x: int) -> int throws never
+762..771 '{ a + x }': int
+764..765 'a': int
+764..769 'a + x': int
+768..769 'x': int
+773..774 '0': 0
+799..804 'total': int

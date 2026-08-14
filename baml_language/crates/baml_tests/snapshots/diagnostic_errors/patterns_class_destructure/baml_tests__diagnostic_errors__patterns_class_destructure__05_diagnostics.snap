@@ -118,18 +118,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × generic class destructure `Box { ... }` must specify type arguments
-     ╭─[patterns_class_destructure.baml:146:25]
+     ╭─[patterns_class_destructure.baml:146:5]
  146 │     let Box { value } = boxed;
-     ·                         ─────
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[patterns_class_destructure.baml:147:5]
- 147 │     value
-     ·     ──┬──
-     ·       ╰── expected `int`, found `T`
+     ·     ─────────────────
      ╰────
 
   [type] E0111
@@ -189,6 +180,14 @@ source: crates/baml_tests/src/generated_tests.rs
      ·     ───────────────────────────────
      ╰────
 
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:223:5]
+ 223 │     let Box<string> { value: int } = boxed;
+     ·     ──────────────────────────────
+     ╰────
+
   [type] E0001
 
   × mismatched types
@@ -207,28 +206,45 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                   ╰── alternatives bind different names
      ╰────
 
+  [type] E0003
+
+  × unresolved name: `age`
+     ╭─[patterns_class_destructure.baml:237:33]
+ 237 │         Person { age } | int => age
+     ·                                 ───
+     ╰────
+
   [type] E0001
 
   × or-pattern binding `age` has conflicting types: int and string
-     ╭─[patterns_class_destructure.baml:243:34]
+     ╭─[patterns_class_destructure.baml:243:9]
  243 │         Person { age } | Admin { age } => age
-     ·                                  ───
+     ·         ──────────────────────────────
      ╰────
 
   [type] E0001
 
   × or-pattern binding `age` has conflicting types: string and int
-     ╭─[patterns_class_destructure.baml:249:34]
+     ╭─[patterns_class_destructure.baml:249:9]
  249 │         Admin { age } | Person { age } => age
-     ·                                  ───
+     ·         ──────────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:249:43]
+ 249 │         Admin { age } | Person { age } => age
+     ·                                           ─┬─
+     ·                                            ╰── expected `int`, found `string`
      ╰────
 
   [type] E0001
 
   × or-pattern binding `value` has conflicting types: int and string
-     ╭─[patterns_class_destructure.baml:255:62]
+     ╭─[patterns_class_destructure.baml:255:9]
  255 │         Box<int> { value: let value } | Box<string> { value: let value } => 1
-     ·                                                              ─────────
+     ·         ────────────────────────────────────────────────────────────────
      ╰────
 
   [hir] E0094
@@ -257,6 +273,14 @@ source: crates/baml_tests/src/generated_tests.rs
  277 │ ╭─▶     let Person {
  278 │ │           missing: let renamed
  279 │ ╰─▶     } = Person {
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:289:9]
+ 289 │         let Person { age: string } = p;
+     ·         ──────────────────────────
      ╰────
 
   [type] E0001

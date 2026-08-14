@@ -18,17 +18,14 @@ function ThrowsVariantExact(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// E0096
-//
-//   × declared throws is `Errors`, but this function may also throw `Errors.AuthError | Errors.NotFoundError`
-//     ╭─[throw_throws_enum_variant_precise.baml:12:54]
-//  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {
-//     ·                                                      ──────
-//     ╰────
 // E0097
 //
 //   ⚠ extraneous throws declaration: Errors
-//     ╭─[throw_throws_enum_variant_precise.baml:12:54]
-//  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {
-//     ·                                                      ──────
+//     ╭─[throw_throws_enum_variant_precise.baml:12:61]
+//  12 │ ╭─▶ function ThrowsVariantExact(x: int) -> string throws Errors {
+//  13 │ │     match (x) {
+//  14 │ │       0 => throw Errors.AuthError,
+//  15 │ │       _ => throw Errors.NotFoundError
+//  16 │ │     }
+//  17 │ ╰─▶ }
 //     ╰────

@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+625..626 'f': throws never
+675..741 '{\n   ...  x\n}': T
+681..700 'let z:...| int>': user.Foo<int | T>
+688..700 'Foo<T | int>': user.Foo<int | T>
+703..704 'x': T
+738..739 'x': T

@@ -210,12 +210,18 @@ namespace baml.net:
   function _timeout_nanos
 namespace baml.ops:
   type Add
+  type BitAnd
+  type BitOr
+  type BitXor
   type Compare
   type Divide
   type Equals
+  type Index
   type Multiply
   type Negate
   type Remainder
+  type ShiftLeft
+  type ShiftRight
   type Subtract
   function __union_add
   function __union_div

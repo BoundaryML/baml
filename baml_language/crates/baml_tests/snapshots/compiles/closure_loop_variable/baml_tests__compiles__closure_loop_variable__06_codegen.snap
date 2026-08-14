@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7454
 ---
 function user.sum_array(arr: int[]) -> int {
     load_var ?2
@@ -10,7 +11,7 @@ function user.sum_array(arr: int[]) -> int {
     store_var ?6
     load_const 0
     store_deref ?2
-    load_type never
+    load_type () -> void throws never
     alloc_array 0
     store_var total
     load_var arr
@@ -36,6 +37,7 @@ function user.sum_array(arr: int[]) -> int {
     store_var i
     load_var _5
     store_deref ?6
+    load_type () -> void throws never
     load_var2 3 2
     load_var i
     make_closure .<lambda(sum_array, 0)>, 2
@@ -48,21 +50,21 @@ function user.sum_array(arr: int[]) -> int {
     load_type baml.iter.Iterable<Error = never, Item = () -> void throws never>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _12
+    store_var _13
 
   L3:
-    load_var _12
+    load_var _13
     load_type baml.iter.Iterator<Error = never, Item = () -> void throws never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _13
-    load_var _13
+    store_var _14
+    load_var _14
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L5
 
   L4:
-    load_var _13
+    load_var _14
     call_indirect
     pop 1
     jump L3

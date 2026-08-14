@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+275..279 'pick': throws never
+306..379 '{\n   ...  s\n}': user.EvShape.Rectangle
+312..317 'let s': user.EvShape.Rectangle
+320..337 'EvShap...tangle': user.EvShape.Rectangle
+376..377 's': user.EvShape.Rectangle
+390..394 'flip': throws never
+431..546 '{\n   ...  }\n}': user.EvShape
+437..544 'match ...n    }': user.EvShape
+444..445 'v': user.EvShape
+457..471 'EvShape.Circle': user.EvShape.Circle
+475..492 'EvShap...tangle': user.EvShape.Rectangle
+502..519 'EvShap...tangle': user.EvShape.Rectangle
+523..537 'EvShape.Circle': user.EvShape.Circle

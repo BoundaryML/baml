@@ -5682,9 +5682,8 @@ impl<'a> Parser<'a> {
                 }
 
                 p.expect(TokenKind::RParen);
-            } else {
+            } else if p.at_binding_intro_stmt() && p.looks_like_for_in_loop() {
                 // Non-parenthesized form: `for let <pattern> in <expr> { }`.
-                // The `let` is required — bindings always require it.
                 p.parse_for_in_pattern();
                 p.expect(TokenKind::In);
                 p.suppress_object_literal_depth += 1;
@@ -5692,6 +5691,21 @@ impl<'a> Parser<'a> {
                 p.parse_expr();
                 p.allow_object_literal_before_for_body_depth -= 1;
                 p.suppress_object_literal_depth -= 1;
+            } else {
+                // Recover a C-style header whose opening `(` is missing. Do
+                // not route it through the iterator grammar: that would leave
+                // the update expression outside the FOR_EXPR, where `x {}` in
+                // `for ;;i += x {}` is reinterpreted as an object constructor.
+                p.expect(TokenKind::LParen);
+                p.suppress_object_literal_depth += 1;
+                if p.at_binding_intro_stmt() {
+                    p.parse_let_stmt();
+                    p.parse_c_style_for_tail();
+                } else {
+                    p.parse_c_style_for_body();
+                }
+                p.suppress_object_literal_depth -= 1;
+                p.eat(TokenKind::RParen);
             }
 
             // Body
@@ -5802,8 +5816,15 @@ impl<'a> Parser<'a> {
         // Consume first semicolon (separates initializer from condition)
         self.eat(TokenKind::Semicolon);
 
+        self.parse_c_style_for_tail();
+    }
+
+    fn parse_c_style_for_tail(&mut self) {
         // Parse condition expression (if present)
-        if !self.at(TokenKind::Semicolon) && !self.at(TokenKind::RParen) {
+        if !self.at(TokenKind::Semicolon)
+            && !self.at(TokenKind::RParen)
+            && !self.at(TokenKind::LBrace)
+        {
             self.parse_expr();
         }
 
@@ -5811,7 +5832,7 @@ impl<'a> Parser<'a> {
         self.eat(TokenKind::Semicolon);
 
         // Parse update expression (if present)
-        if !self.at(TokenKind::RParen) {
+        if !self.at(TokenKind::RParen) && !self.at(TokenKind::LBrace) {
             self.parse_expr();
         }
     }
@@ -11102,6 +11123,45 @@ function Demo() -> int {
             )
         });
         assert!(!has_in, "C-style for must not contain KW_IN");
+    }
+
+    #[test]
+    fn for_c_style_missing_open_paren_recovers_through_body() {
+        let source = r#"
+function Demo() -> int {
+  for ;;i += x {}
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::UnexpectedToken {
+                    expected,
+                    found,
+                    ..
+                } if expected == "'('" && found == "';'"
+            )),
+            "expected a missing opening parenthesis diagnostic, got: {errors:#?}"
+        );
+
+        let for_expr = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        assert!(
+            for_expr
+                .children()
+                .any(|node| node.kind() == SyntaxKind::BLOCK_EXPR),
+            "recovery must retain the loop body inside the FOR_EXPR"
+        );
+        assert!(
+            !for_expr
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::OBJECT_LITERAL),
+            "the loop body must not be reinterpreted as `x {{}}`"
+        );
     }
 
     #[test]

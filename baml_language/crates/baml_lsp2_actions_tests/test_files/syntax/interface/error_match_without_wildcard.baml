@@ -28,7 +28,7 @@ function describe(a: Animal) -> string {
 //- diagnostics
 // E0062
 //
-//   × non-exhaustive match on type Animal; missing: _
+//   × non-exhaustive match on type Animal; missing: Animal {}
 //     ╭─[interface_error_match_without_wildcard.baml:21:10]
 //  21 │ ╭─▶   return match (a) {
 //  22 │ │       let d: Dog => "dog"

@@ -1423,7 +1423,7 @@ function arrays.run_sort_generic_ints() -> int[] {
 
 function arrays.sort_bigints(xs: bigint[]) -> bigint[] {
     load_var xs
-    load_type baml.Sortable<SortError = (bigint as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -1433,7 +1433,7 @@ function arrays.sort_bigints(xs: bigint[]) -> bigint[] {
 
 function arrays.sort_flaky(xs: arrays.ComparableFlaky[]) -> arrays.ComparableFlaky[] {
     load_var xs
-    load_type baml.Sortable<SortError = (arrays.ComparableFlaky as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = arrays.ComparableCompareError>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -1443,7 +1443,7 @@ function arrays.sort_flaky(xs: arrays.ComparableFlaky[]) -> arrays.ComparableFla
 
 function arrays.sort_floats(xs: float[]) -> float[] {
     load_var xs
-    load_type baml.Sortable<SortError = (float as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -1463,7 +1463,7 @@ function arrays.sort_generic(xs: #0[]) -> #0[] {
 
 function arrays.sort_ints(xs: int[]) -> int[] {
     load_var xs
-    load_type baml.Sortable<SortError = (int as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -1473,7 +1473,7 @@ function arrays.sort_ints(xs: int[]) -> int[] {
 
 function arrays.sort_items(xs: arrays.SortableItem[]) -> arrays.SortableItem[] {
     load_var xs
-    load_type baml.Sortable<SortError = (arrays.SortableItem as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -1483,7 +1483,7 @@ function arrays.sort_items(xs: arrays.SortableItem[]) -> arrays.SortableItem[] {
 
 function arrays.sort_strings(xs: string[]) -> string[] {
     load_var xs
-    load_type baml.Sortable<SortError = (string as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var _0

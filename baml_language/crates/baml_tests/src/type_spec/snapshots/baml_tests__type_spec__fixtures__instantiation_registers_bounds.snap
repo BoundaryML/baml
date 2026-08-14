@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+177..181 'make': throws never
+226..243 '{\n   ...n    }': 0
+236..237 '0': 0
+293..297 'pick': throws never
+348..365 '{\n   ...n    }': 0
+358..359 '0': 0
+377..386 'rb_static': throws never
+419..529 '{\n   ...  r\n}': int
+425..430 'let r': int
+433..443 'RbBox.make': (v: user.RbPlain) -> int throws never
+433..446 'RbBox.make(p)': int
+444..445 'p': user.RbPlain
+526..527 'r': int
+539..554 'rb_method_value': throws never
+600..713 '{\n   ...  r\n}': int
+606..611 'let g': (v: user.RbPlain) -> int throws never
+614..620 'h.pick': (v: user.RbPlain) -> int throws never
+693..698 'let r': int
+701..702 'g': (v: user.RbPlain) -> int throws never
+701..705 'g(p)': int
+703..704 'p': user.RbPlain
+710..711 'r': int
+433..446 'RbBox.make(p)': [mismatch] expected user.RbShow, got user.RbPlain
+614..620 'h.pick': [mismatch] expected user.RbShow, got user.RbPlain

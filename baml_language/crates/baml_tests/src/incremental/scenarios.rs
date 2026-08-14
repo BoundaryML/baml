@@ -6,7 +6,6 @@
 //! NOTE: These scenarios were ported from the legacy HIR (baml_compiler_hir)
 //! to compiler2 HIR (baml_compiler2_hir) as part of the compiler2 migration.
 
-use baml_compiler2_tir::inference::infer_scope_types;
 use baml_db::{SourceFile, baml_compiler2_hir};
 use salsa::Setter;
 
@@ -811,7 +810,7 @@ function free_standing(x: int) -> int throws never {
             .copied()
             .find(|&iface_loc| {
                 baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
-                    .default_methods
+                    .methods
                     .contains(&loc)
             });
         let by_free_impl = baml_compiler2_ppir::item_data::file_free_impls(db, file)
@@ -957,46 +956,110 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
     );
 }
 
-/// The whole refactor exists so that a cosmetic edit does not re-run type
-/// inference. That does not hold yet: `infer_scope_types` reads the `no_eq`
-/// `file_semantic_index` directly, so any edit to its file re-executes it.
-/// Un-ignore once inference consumes the per-item firewall queries instead of the
-/// coarse index.
-#[test]
-#[ignore = "infer_scope_types still reads the no_eq file_semantic_index directly; un-ignore once it consumes the firewall queries"]
-fn comment_edit_does_not_reexecute_type_inference() {
-    let mut test_db = IncrementalTestDb::new();
+// ── hir_ty inference firewall (S2/S3) ────────────────────────────────────────
 
+/// Run hir_ty inference for every body owner in `file`.
+fn query_hir_ty_inference(db: &baml_project::ProjectDatabase, file: SourceFile) {
+    for owner in baml_compiler2_ppir::file_body_owners(db, file) {
+        let _ = baml_compiler2_hir_ty::infer::infer_body(db, owner);
+    }
+}
+
+/// The tracked `infer_function_body` is cached: a repeat query with no
+/// edit executes nothing.
+#[test]
+fn hir_ty_inference_cached_on_repeat() {
+    let mut test_db = IncrementalTestDb::new();
     let file = test_db.db_mut().add_file(
         "test.baml",
-        "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
+        "function f(x: int) -> int throws never {\n    x + 1\n}\n",
     );
 
-    // Prime inference for `Add`'s body scope.
-    let scope_id = {
-        let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_scope(db, function_loc(db, file, "Add"))
-            .expect("Add has a scope")
-    };
-    let _ = test_db.log_executed(|db| {
-        let _ = infer_scope_types(db, scope_id);
-    });
-
-    // Add a comment: semantically a no-op for the function body.
-    file.set_text(test_db.db_mut())
-        .to("// a comment\nfunction Add(x: int, y: int) -> int {\n  x + y\n}\n".to_string());
-
-    // Re-fetch the scope (its tracked-struct id may have been re-minted by the
-    // no_eq index) and assert inference is served from cache.
-    let scope_id = {
-        let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_scope(db, function_loc(db, file, "Add"))
-            .expect("Add has a scope")
-    };
+    test_db.assert_executed(
+        |db| query_hir_ty_inference(db, file),
+        &[("infer_function_body", 1)],
+    );
     test_db.assert_not_executed(
+        |db| query_hir_ty_inference(db, file),
+        &[
+            "infer_function_body",
+            "function_signature",
+            "callable_throws",
+        ],
+    );
+}
+
+/// Editing one file's body leaves OTHER files' inference untouched
+/// (cross-file isolation: inference inputs are per-file).
+#[test]
+fn hir_ty_editing_one_file_preserves_other_files_inference() {
+    let mut test_db = IncrementalTestDb::new();
+    let file_a = test_db.db_mut().add_file(
+        "a.baml",
+        "function alpha() -> int throws never {\n    1\n}\n",
+    );
+    let file_b = test_db.db_mut().add_file(
+        "b.baml",
+        "function beta() -> int throws never {\n    2\n}\n",
+    );
+
+    test_db.assert_executed(
         |db| {
-            let _ = infer_scope_types(db, scope_id);
+            query_hir_ty_inference(db, file_a);
+            query_hir_ty_inference(db, file_b);
         },
-        &["infer_scope_types"],
+        &[("infer_function_body", 2)],
+    );
+
+    file_b
+        .set_text(test_db.db_mut())
+        .to("function beta() -> int throws never {\n    3\n}\n".to_string());
+
+    // Re-querying A alone recomputes nothing: its inputs are unchanged.
+    test_db.assert_not_executed(
+        |db| query_hir_ty_inference(db, file_a),
+        &["infer_function_body"],
+    );
+}
+
+/// THE firewall (S3): a body edit that leaves the callee's SIGNATURE
+/// unchanged (declared return, unchanged inferred effect) does not
+/// re-infer its callers - `function_signature`/`callable_throws`
+/// re-execute but produce EQUAL results, and the PartialEq-driven
+/// `salsa::Update` cuts the caller's `infer_function_body` off.
+#[test]
+fn hir_ty_body_edit_with_stable_signature_does_not_reinfer_callers() {
+    let mut test_db = IncrementalTestDb::new();
+    let file_a = test_db.db_mut().add_file(
+        "a.baml",
+        "function callee() -> int throws never {\n    1\n}\n",
+    );
+    let file_b = test_db.db_mut().add_file(
+        "b.baml",
+        "function caller() -> int throws never {\n    callee()\n}\n",
+    );
+
+    test_db.assert_executed(
+        |db| {
+            query_hir_ty_inference(db, file_a);
+            query_hir_ty_inference(db, file_b);
+        },
+        &[("infer_function_body", 2)],
+    );
+
+    // Edit the callee's BODY only: its own inference changes (the literal
+    // types differ), but the signature - declared return, `never` effect -
+    // is identical.
+    file_a
+        .set_text(test_db.db_mut())
+        .to("function callee() -> int throws never {\n    2\n}\n".to_string());
+
+    // Only the callee re-infers; the caller is cut off at the signature.
+    test_db.assert_executed(
+        |db| {
+            query_hir_ty_inference(db, file_a);
+            query_hir_ty_inference(db, file_b);
+        },
+        &[("infer_function_body", 1)],
     );
 }

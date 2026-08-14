@@ -535,13 +535,13 @@ impl TestArgs {
             // seed served every stdlib package); a cold run reports up to 6.
             crate::bytecode_cache::cache_debug(format_args!(
                 "stdlib interface: {} honest derivation(s) this process",
-                baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+                baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
             ));
             // Warm-incremental evidence: with the diagnostics cache serving clean
             // files this counts only the dirty files' scopes.
             crate::bytecode_cache::cache_debug(format_args!(
-                "scope inferences: {} this process",
-                baml_db::baml_compiler2_tir::inference::scope_inferences()
+                "body inferences: {} this process",
+                baml_db::baml_compiler2_hir_ty::infer::body_inferences()
             ));
 
             let bytecode = compiled.program;

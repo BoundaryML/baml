@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+735..736 'g': throws never
+777..786 '{\n    x\n}': T
+783..784 'x': T
+797..798 'h': throws never
+827..898 '{\n   ...int\n}': int
+833..834 'g': (x: int) -> int throws never
+833..837 'g(n)': int
+835..836 'n': int
+833..837 'g(n)': [mismatch] expected user.Need, got int

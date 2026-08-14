@@ -41,25 +41,25 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × or-pattern binding `x` has conflicting types: int and string
-    ╭─[patterns_new.baml:41:25]
+    ╭─[patterns_new.baml:41:9]
  41 │         (let x: int) | (let x: string) => 1
-    ·                         ─────────────
+    ·         ──────────────────────────────
     ╰────
 
   [type] E0001
 
   × or-pattern binding `a` has conflicting types: int and string
-    ╭─[patterns_new.baml:53:32]
+    ╭─[patterns_new.baml:53:9]
  53 │         (let a: let b: int) | (let a: let b: string) => 1
-    ·                                ────────────────────
+    ·         ────────────────────────────────────────────
     ╰────
 
   [type] E0001
 
   × or-pattern binding `b` has conflicting types: int and string
-    ╭─[patterns_new.baml:53:39]
+    ╭─[patterns_new.baml:53:9]
  53 │         (let a: let b: int) | (let a: let b: string) => 1
-    ·                                       ─────────────
+    ·         ────────────────────────────────────────────
     ╰────
 
   [type] E0111
@@ -94,14 +94,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·          ────────────────────────────────────
     ╰────
 
-  [type] E0137
-
-  ⚠ irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead
-     ╭─[patterns_new.baml:102:11]
- 102 │     while let x: int = n {
-     ·           ──────────
-     ╰────
-
   [type] E0063
 
   × unreachable arm
@@ -122,7 +114,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Pair; missing: Pair { kind: true, payload: string }, Pair { kind: false, payload: string }
+  × non-exhaustive match on type Pair; missing: Pair { kind: bool, payload: string }
      ╭─[patterns_new.baml:150:5]
  150 │ ╭─▶     match (p) {
  151 │ │           Pair { kind: int, payload: int } => 1,

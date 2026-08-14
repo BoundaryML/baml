@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+298..299 'f': throws never
+336..402 '{\n   ...ull\n}': int | null
+342..360 '(m.at(...[]).at': (self: int[], index: int) -> int | null throws never
+342..363 '(m.at(....at(v)': int | null
+343..347 'm.at': (self: int[][], index: int) -> int[] | null throws never
+343..350 'm.at(u)': int[] | null
+343..356 'm.at(u) ?? []': int[]
+348..349 'u': int
+354..356 '[]': int[]
+361..362 'v': int

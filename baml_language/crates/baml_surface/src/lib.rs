@@ -6,7 +6,7 @@
 //! a compiler crate first and is *wrapped* here.
 //!
 //! This layer is the API boundary between the compiler
-//! (`baml_compiler2_{hir,ppir,tir}`) and everything that describes code to a
+//! (`baml_compiler2_{hir,ppir,hir_ty}`) and everything that describes code to a
 //! human or a tool: `baml describe`, SDK codegen's symbol pool, the playground
 //! schemas, and the editor crate's hover/completion internals. Consumers
 //! depend on this crate, not on compiler internals — so the compiler's
@@ -20,8 +20,8 @@
 //!   database. Properties are methods taking `&dyn Db`, memoized at the query
 //!   layer below, never materialized here.
 //! - **All type-system facts come through [`facts`].** That module is the
-//!   single file importing from `baml_compiler2_tir`, and its doc header is
-//!   the contract the type-system rework must keep answering.
+//!   single file importing from `baml_compiler2_hir_ty`, and its doc header is
+//!   the contract the type provider must keep answering.
 
 pub mod display;
 pub mod export;
@@ -41,10 +41,10 @@ mod ids_tests;
 
 /// Database trait for `baml_surface`.
 ///
-/// Extends `baml_compiler2_tir::Db` (and through it the HIR/workspace chain),
+/// Extends `baml_compiler2_ppir::Db` (and through it the HIR/workspace chain),
 /// so a handle method can reach every query in [`facts`]' contract.
 #[salsa::db]
-pub trait Db: baml_compiler2_tir::Db {}
+pub trait Db: baml_compiler2_ppir::Db {}
 
 // In this crate's own test build, the crate is compiled a second time (the
 // dev-dependency on `baml_project` closes a cycle back to the published

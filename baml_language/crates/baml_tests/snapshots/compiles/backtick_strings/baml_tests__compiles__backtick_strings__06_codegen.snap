@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4818
 ---
 function user.BacktickEquality() -> bool {
     load_const true

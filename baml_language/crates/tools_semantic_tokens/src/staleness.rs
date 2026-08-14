@@ -38,7 +38,6 @@ fn newest_source_mtime() -> Option<SystemTime> {
     let roots = [
         manifest.join("src"),
         manifest.join("../baml_lsp2_actions/src"),
-        manifest.join("../baml_compiler2_tir/src"),
         manifest.join("../baml_compiler_syntax/src"),
     ];
     let mut newest = None;

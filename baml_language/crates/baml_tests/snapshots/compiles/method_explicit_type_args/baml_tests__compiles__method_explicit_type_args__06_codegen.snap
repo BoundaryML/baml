@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16131
 ---
 function user.Foo.zero(self: Foo) -> #0 | null {
     load_const null

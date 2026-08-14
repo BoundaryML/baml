@@ -596,8 +596,8 @@ mod tests {
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = extract_union(external_to_outbound(&value, &options).unwrap());
 
-        // RuntimeTy::optional preserves [inner, null] order.
         assert_eq!(encoded.selected_option_index, Some(1));
+        assert!(encoded.is_optional);
     }
 
     #[test]

@@ -26,7 +26,7 @@ use baml_compiler_syntax::{
         ObjectField, TypeExpr,
     },
 };
-use baml_compiler2_tir::resolve::{
+use baml_compiler2_ppir::resolve::{
     resolve_enum_variant, resolve_field, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
 };
 use rowan::{NodeOrToken, WalkEvent, ast::AstNode};

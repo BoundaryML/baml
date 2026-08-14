@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5605
 ---
 function user.GetBigint() -> bigint {
     load_const 42n

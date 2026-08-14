@@ -1,0 +1,54 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+449..450 'f': throws never
+482..739 '{\n   ...  }\n}': int
+488..737 'match ...n    }': int
+495..497 'xs': int[]
+509..532 '[let a...let z]': int[]
+510..515 'let a': int
+519..524 'let r': int[]
+526..531 'let z': int
+536..612 '{\n   ...     }': int
+550..555 'let m': int[]
+558..559 'r': int[]
+597..598 'a': int
+597..602 'a + z': int
+601..602 'z': int
+622..638 '[let a...let r]': int[]
+623..628 'let a': int
+632..637 'let r': int[]
+642..714 '{\n   ...     }': int
+656..661 'let n': int[]
+664..665 'r': int[]
+703..704 'a': int
+724..725 '_': int[]
+729..730 '0': 0
+750..751 'g': throws never
+774..858 '{\n   ...h()\n}': int
+784..795 '[..let all]': int[]
+787..794 'let all': int[]
+798..807 '[1, 2, 3]': int[]
+799..800 '1': 1
+802..803 '2': 2
+805..806 '3': 3
+813..818 'let k': int[]
+821..824 'all': int[]
+846..854 'k.length': (self: int[]) -> int throws never
+846..856 'k.length()': int
+869..870 'h': throws never
+905..1067 '{\n   ...  }\n}': int
+911..1065 'match ...n    }': int
+918..921 'xss': int[][]
+933..953 '[[..le..., .._]': int[][]
+934..947 '[..let inner]': int[]
+937..946 'let inner': int[]
+951..952 '_': int[][]
+957..1042 '{\n   ...     }': int
+971..976 'let w': int[]
+979..984 'inner': int[]
+1022..1030 'w.length': (self: int[]) -> int throws never
+1022..1032 'w.length()': int
+1052..1053 '_': int[][]
+1057..1058 '0': 0

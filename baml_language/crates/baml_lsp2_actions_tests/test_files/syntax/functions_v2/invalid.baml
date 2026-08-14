@@ -33,3 +33,10 @@ function FooBar(arg) -> bar {
 //    ·                  ▲
 //    ·                  ╰── unparseable type
 //    ╰────
+// E0002
+//
+//   × unresolved type: bar
+//    ╭─[functions_v2_invalid.baml:6:25]
+//  6 │ function FooBar(arg) -> bar {
+//    ·                         ───
+//    ╰────

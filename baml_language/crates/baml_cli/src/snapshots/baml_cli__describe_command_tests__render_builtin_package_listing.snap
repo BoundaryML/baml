@@ -1,5 +1,6 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 417
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:30
@@ -192,9 +193,15 @@ class            baml.net.TcpStream               <builtin>/baml/ns_net/net.baml
 class            baml.net.TcpListener             <builtin>/baml/ns_net/net.baml:88
 class            baml.net.UdpSocket               <builtin>/baml/ns_net/net.baml:110
 class            baml.net.Datagram                <builtin>/baml/ns_net/net.baml:168
+interface        baml.ops.BitAnd                  <builtin>/baml/ns_ops/bitwise.baml:28
+interface        baml.ops.BitOr                   <builtin>/baml/ns_ops/bitwise.baml:34
+interface        baml.ops.BitXor                  <builtin>/baml/ns_ops/bitwise.baml:40
+interface        baml.ops.ShiftLeft               <builtin>/baml/ns_ops/bitwise.baml:46
+interface        baml.ops.ShiftRight              <builtin>/baml/ns_ops/bitwise.baml:52
 interface        baml.ops.Equals                  <builtin>/baml/ns_ops/comparison.baml:1
 interface        baml.ops.Compare                 <builtin>/baml/ns_ops/comparison.baml:8
 function         baml.ops.equals_equals           <builtin>/baml/ns_ops/comparison.baml:34
+interface        baml.ops.Index                   <builtin>/baml/ns_ops/index.baml:19
 interface        baml.ops.Add                     <builtin>/baml/ns_ops/math.baml:25
 interface        baml.ops.Subtract                <builtin>/baml/ns_ops/math.baml:32
 interface        baml.ops.Multiply                <builtin>/baml/ns_ops/math.baml:39

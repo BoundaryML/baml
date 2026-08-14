@@ -287,6 +287,14 @@ fn codegen_fixture(
                     "cargo:warning=sdkgen_rust skipped {} unsupported symbol(s) in fixture `{fixture}`",
                     output.warnings.len()
                 ));
+                if env::var("SDKGEN_SKIP_REASONS").is_ok() {
+                    for warning in &output.warnings {
+                        emit_cargo_line(format_args!(
+                            "cargo:warning=  skip {}: {}",
+                            warning.fqn, warning.reason
+                        ));
+                    }
+                }
             }
             write_codegen_output(
                 &generated,

@@ -1,14 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 28139
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0145
 
   × generic bound `TagAlias` is not an interface; bounds must be interfaces
-    ╭─[alias_bounds.baml:18:1]
- 18 │ ╭─▶ function bare_alias_bound<T extends TagAlias>(t: T, v: unknown) -> bool {
- 19 │ │       v is T.Label
- 20 │ ╰─▶ }
+    ╭─[alias_bounds.baml:18:37]
+ 18 │ function bare_alias_bound<T extends TagAlias>(t: T, v: unknown) -> bool {
+    ·                                     ────────
     ╰────
 
   [type] E0002
@@ -22,26 +22,23 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0145
 
   × generic bound `TagPinned` is not an interface; bounds must be interfaces
-    ╭─[alias_bounds.baml:22:1]
- 22 │ ╭─▶ function pinning_alias_bound<T extends TagPinned>(t: T) -> int {
- 23 │ │       0
- 24 │ ╰─▶ }
+    ╭─[alias_bounds.baml:22:40]
+ 22 │ function pinning_alias_bound<T extends TagPinned>(t: T) -> int {
+    ·                                        ─────────
     ╰────
 
   [type] E0145
 
   × generic bound `TagChain` is not an interface; bounds must be interfaces
-    ╭─[alias_bounds.baml:26:1]
- 26 │ ╭─▶ function chained_alias_bound<T extends TagChain>(t: T) -> int {
- 27 │ │       0
- 28 │ ╰─▶ }
+    ╭─[alias_bounds.baml:26:40]
+ 26 │ function chained_alias_bound<T extends TagChain>(t: T) -> int {
+    ·                                        ────────
     ╰────
 
   [type] E0145
 
   × generic bound `TagAlias` is not an interface; bounds must be interfaces
-    ╭─[alias_bounds.baml:30:1]
- 30 │ ╭─▶ class AliasBounded<T extends TagAlias> {
- 31 │ │       value: T
- 32 │ ╰─▶ }
+    ╭─[alias_bounds.baml:30:30]
+ 30 │ class AliasBounded<T extends TagAlias> {
+    ·                              ────────
     ╰────

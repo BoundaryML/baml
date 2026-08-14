@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+677..678 'f': throws never
+701..832 '{\n   ...  0\n}': 0
+707..727 'let m:..., int>': map<int, int>
+714..727 'map<int, int>': map<int, int>
+730..732 '{}': map<int, int>
+762..788 'let k:..., int>': map<"a" | "b", int>
+769..788 'map<"a..., int>': map<"a" | "b", int>
+791..793 '{}': map<"a" | "b", int>
+829..830 '0': 0

@@ -42,7 +42,9 @@ struct PathRootReference {
 
 #[derive(Default)]
 struct PatternNames {
-    names: FxHashMap<Name, TextRange>,
+    /// Per introduced name: its source range and the `Pattern::Bind` node
+    /// that introduces it.
+    names: FxHashMap<Name, (TextRange, ast::PatId)>,
     duplicates: FxHashSet<Name>,
 }
 
@@ -77,6 +79,8 @@ pub struct SemanticIndexBuilder<'db> {
 
     /// Expression to lexical scope mappings, sorted by arena-safe key at the end.
     expr_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
+    /// Lambda expression -> the `Lambda` scope it opened (span-free join).
+    lambda_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
 
     /// Path root resolutions, sorted by arena-safe expression key at the end.
     path_resolutions: Vec<(ExprMetadataKey, PathResolution)>,
@@ -109,6 +113,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             scope_stack: Vec::new(),
             class_depth: 0,
             expr_scopes: Vec::new(),
+            lambda_scopes: Vec::new(),
             path_resolutions: Vec::new(),
             expr_metadata_scope_stack: Vec::new(),
             path_root_references: Vec::new(),
@@ -178,6 +183,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         // Sort expr_scopes for binary search
         self.expr_scopes.sort_by_key(|(key, _)| *key);
+        self.lambda_scopes.sort_by_key(|(key, _)| *key);
 
         // Sort path_resolutions for binary search
         self.path_resolutions.sort_by_key(|(key, _)| *key);
@@ -210,6 +216,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         FileSemanticIndex {
             scopes: self.scopes,
             expr_scopes: self.expr_scopes,
+            lambda_scopes: self.lambda_scopes,
             scope_bindings: self.scope_bindings,
             scope_ids,
             item_scopes: self.item_scopes,
@@ -757,8 +764,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         // at the end of this function.
         let enclosing_lambda = self.lambda_stack.last().copied();
 
+        // Span-free scope join, keyed by the template expression — the same
+        // registration `walk_lambda_expr` does for real lambdas, so type
+        // inference can enter this scope without spans.
+        let key = self.current_expr_metadata_key(expr_id);
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
+        self.lambda_scopes.push((key, scope_id));
         // Mark this as a synthetic template body: it is a Lambda scope for
         // capture-analysis purposes, but TIR types its body inline in the
         // enclosing scope, so `inference_owner_scope` must climb past it.
@@ -830,13 +842,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .insert((source_map.pattern_span(pat_id), pat_id), scope_id);
         }
 
-        for (name, name_range) in names.names {
+        for (name, (name_range, bind_pattern)) in names.names {
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
                     name,
                     site,
                     pattern: pat_id,
+                    bind_pattern,
                     name_range,
                     visible_from,
                 });
@@ -867,7 +880,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 let mut result = PatternNames::default();
                 result
                     .names
-                    .insert(name.clone(), source_map.pattern_span(pat_id));
+                    .insert(name.clone(), (source_map.pattern_span(pat_id), pat_id));
                 if let Some(sp) = subpat {
                     let inner = Self::collect_pattern_names(patterns, *sp, source_map, diagnostics);
                     Self::merge_with_dup_check(&mut result, inner, diagnostics);
@@ -996,15 +1009,15 @@ impl<'db> SemanticIndexBuilder<'db> {
         diagnostics: &mut Vec<Hir2Diagnostic>,
     ) {
         target.duplicates.extend(source.duplicates);
-        for (name, range) in source.names {
-            if let Some(prev) = target.names.get(&name) {
+        for (name, (range, bind_pattern)) in source.names {
+            if let Some((prev, _)) = target.names.get(&name) {
                 diagnostics.push(Hir2Diagnostic::DuplicatePatternBinding {
                     name: name.clone(),
                     sites: vec![*prev, range],
                 });
                 target.duplicates.insert(name);
             } else {
-                target.names.insert(name, range);
+                target.names.insert(name, (range, bind_pattern));
             }
         }
     }
@@ -1114,8 +1127,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
     ) {
+        let key = self.current_expr_metadata_key(expr_id);
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
+        self.lambda_scopes.push((key, scope_id));
         for (idx, param) in lambda.params.iter().enumerate() {
             self.scope_bindings[scope_id.index() as usize]
                 .params
@@ -1498,14 +1513,21 @@ impl<'db> SemanticIndexBuilder<'db> {
         // back to the interface and field/method dispatch inside a default
         // body falls through to dynamic map lookup.
         self.class_depth += 1;
-        let default_method_ids: Vec<_> = i
+        let mut method_ids: Vec<_> = i
             .default_methods
             .iter()
             .map(|m| self.lower_function(m))
             .collect();
         self.class_depth -= 1;
+        // Required signatures are the SAME item kind, just bodyless
+        // (r-a's shape); no body walk, so no scope coverage needed.
+        method_ids.extend(
+            i.required_methods
+                .iter()
+                .map(|m| self.item_tree.alloc_function_signature(m)),
+        );
 
-        let local_id = self.item_tree.alloc_interface(i, default_method_ids);
+        let local_id = self.item_tree.alloc_interface(i, method_ids);
         self.record_scope_owner(interface_scope, ItemScopeOwner::Interface(local_id));
         let loc = InterfaceLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 27728
 ---
 function user.TypeBuilderFn(from_text: string, client: ai.Client | null) -> Resume {
     load_var client
@@ -21,7 +22,7 @@ function user.TypeBuilderFn(from_text: string, client: ai.Client | null) -> Resu
     call user.TypeBuilderFn$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<Resume, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<Resume>>
+    load_type ai.Runner<Resume, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Resume>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

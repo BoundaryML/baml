@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+368..373 'label': throws never
+403..426 '{\n   ...n    }': "shape"
+413..420 '"shape"': "shape"
+549..557 'describe': throws never
+587..689 '{\n   ...     }': string
+601..609 'let base': string
+612..625 'default.label': (self: user.DfBox) -> string throws never
+612..627 'default.label()': string
+669..673 'base': string
+669..679 'base + "!"': string
+676..679 '"!"': "!"
+778..781 'tag': throws never
+811..832 '{\n   ...n    }': "tag"
+821..826 '"tag"': "tag"
+891..894 'tag': throws never
+924..1015 '{\n   ...     }': string
+938..943 'let t': string
+946..957 'default.tag': (self: user.DfWrap) -> string throws never
+946..959 'default.tag()': string
+998..999 't': string
+998..1005 't + "!"': string
+1002..1005 '"!"': "!"
+1034..1040 'df_use': throws never
+1085..1115 '{\n   ...g()\n}': string
+1091..1101 'b.describe': (self: user.DfBox) -> string throws never
+1091..1103 'b.describe()': string
+1091..1113 'b.desc....tag()': string
+1106..1111 'w.tag': (self: user.DfWrap) -> string throws never
+1106..1113 'w.tag()': string

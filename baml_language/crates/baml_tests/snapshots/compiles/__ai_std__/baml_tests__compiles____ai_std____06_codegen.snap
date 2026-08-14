@@ -443,6 +443,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
   L5:
     load_var _39
     store_var u
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 21 26
     load_field .id
     load_var u
@@ -457,10 +458,11 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
   L6:
     load_var turn
     load_field .usage
-    store_var _49
-    load_var _49
+    store_var _50
+    load_var _50
     narrow_bind ai.events.Usage, slot=27
     pop_jump_if_false L7
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var2 21 27
     call baml.Array.push
     pop 1
@@ -468,10 +470,10 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
   L7:
     load_var turn
     call ai.ModelTurn.terminal_text
-    store_var _54
-    load_var _54
+    store_var _56
+    load_var _56
     store_var candidate
-    load_var _54
+    load_var _56
     load_const null
     cmp_op ==
     pop_jump_if_false L8
@@ -482,8 +484,8 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_var turn
     call ai.ModelTurn.tool_uses
     container_len
-    store_var _60
-    load_var _60
+    store_var _62
+    load_var _62
     load_const 0
     cmp_int_op >
     jump_if_false L9
@@ -538,12 +540,13 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _86
+    store_var _89
     load_var2 33 28
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
   L17:
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     load_var batch
     load_const "The reply did not match the required schema. Answer again with only the corrected value."
     init_instance ai.events.UserMessage .content
@@ -593,8 +596,8 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _75
-    load_var _75
+    store_var _77
+    load_var _77
     load_const "the model declined to answer"
     load_const null
     init_instance ai.errors.Refused .provider, .reason, .raw_body
@@ -605,7 +608,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _72
+    store_var _74
     load_var2 31 28
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
@@ -640,37 +643,37 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
     call baml.Array.at
     store_var _12
     load_var _12
-    narrow_bind ai.events.AssistantMessage, slot=8
+    narrow_bind ai.events.RunStarted, slot=8
     pop_jump_if_false L3
     jump L10
 
   L3:
     load_var _12
-    narrow_bind ai.events.FinalProduced, slot=8
+    narrow_bind ai.events.UserMessage, slot=8
     pop_jump_if_false L4
     jump L10
 
   L4:
     load_var _12
-    narrow_bind ai.events.RunStarted, slot=8
+    narrow_bind ai.events.AssistantMessage, slot=8
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var _12
-    narrow_bind ai.events.ToolCompleted, slot=8
+    narrow_bind ai.events.ToolRequested, slot=8
     pop_jump_if_false L6
     jump L10
 
   L6:
     load_var _12
-    narrow_bind ai.events.ToolFailed, slot=8
+    narrow_bind ai.events.ToolCompleted, slot=8
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var _12
-    narrow_bind ai.events.ToolRequested, slot=8
+    narrow_bind ai.events.ToolFailed, slot=8
     pop_jump_if_false L8
     jump L10
 
@@ -682,7 +685,7 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
 
   L9:
     load_var _12
-    narrow_bind ai.events.UserMessage, slot=8
+    narrow_bind ai.events.FinalProduced, slot=8
     pop_jump_if_false L11
 
   L10:
@@ -761,7 +764,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_var call
     load_field .id
     store_var _15
-    load_type baml.errors.InvalidArgument | baml.json.JsonSerializationError | unknown
+    load_type unknown
     load_var e
     call baml.String.from
     store_var _16
@@ -822,7 +825,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_var call
     load_field .name
     store_var _27
-    load_type baml.errors.InvalidArgument | baml.json.JsonSerializationError | unknown
+    load_type unknown
     load_var e
     call baml.String.from
     store_var _28
@@ -945,14 +948,14 @@ function ai.FunctionSpec.tools(self: ai.FunctionSpec<#0>) -> ai.tools.Toolbox {
 
 function ai.Journal.append_all(self: ai.Journal, events: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[]) -> void {
     load_var events
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -1003,14 +1006,14 @@ function ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null {
     store_var out
     load_var self
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1041,14 +1044,14 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
     store_var out
     load_var self
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Text | ai.content.Reasoning | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1063,6 +1066,7 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
     load_var _9
     narrow_bind ai.content.ToolUse, slot=5
     pop_jump_if_false L0
+    load_type ai.content.ToolUse
     load_var2 2 5
     call baml.Array.push
     pop 1
@@ -1807,6 +1811,7 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
     load_var _13
     call baml.Map.set
     pop 1
+    load_type string
     load_var2 4 7
     load_field .name
     call baml.Array.push
@@ -2078,14 +2083,14 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     load_type baml.json.json
     alloc_array 0
     call baml.json.path_or
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _12
 
   L0:
     load_var _12
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
@@ -2111,6 +2116,7 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     load_const ""
     call baml.json.path_or
     store_var _22
+    load_type string
     load_var2 5 9
     call baml.Array.push
     pop 1
@@ -2138,17 +2144,17 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     load_type string
     load_var name
     call baml.String.from
-    store_var _34
+    store_var _35
     load_type string
     load_var joined
     call baml.String.from
-    store_var _36
+    store_var _37
     load_const "mcp tool "
-    load_var _34
+    load_var _35
     bin_op +
     load_const " failed: "
     bin_op +
-    load_var _36
+    load_var _37
     bin_op +
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -2212,8 +2218,8 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     load_var conn
     load_const "initialize"
     load_const "2025-06-18"
-    load_type never
-    load_type never
+    load_type string
+    load_type unknown
     alloc_map 0
     load_const "baml-mcp"
     load_const "0.1"
@@ -2259,14 +2265,14 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
     load_type baml.json.json
     alloc_array 0
     call baml.json.path_or
-    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
 
   L0:
     load_var _9
-    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _10
@@ -2321,6 +2327,7 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
     load_const <omitted>
     call ai.tools.raw_tool
     store_var _26
+    load_type ai.tools.Tool
     load_var2 3 11
     call baml.Array.push
     pop 1
@@ -2757,7 +2764,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_field ._decode
     store_var _40
     load_var _40
-    narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta)[] throws unknown, slot=17
+    narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws unknown, slot=17
     pop_jump_if_false L0
     load_var2 16 17
     call_indirect
@@ -3175,6 +3182,7 @@ function ai.tools.Toolbox.new(tools: ai.tools.Tool[]) -> ai.tools.Toolbox {
     jump L3
 
   L2:
+    load_type string
     load_var2 2 5
     load_field .name
     call baml.Array.push

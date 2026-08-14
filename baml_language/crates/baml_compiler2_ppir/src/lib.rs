@@ -10,6 +10,7 @@
 
 pub mod expand;
 pub mod item_data;
+pub mod resolve;
 pub mod ty;
 
 use std::sync::Arc;
@@ -624,6 +625,165 @@ pub fn function_body_source_map<'db>(
         Some(ast::FunctionBodyDef::Expr(_body, source_map)) => Some(source_map.clone()),
         _ => None,
     }
+}
+
+/// Canonical body for any body owner (rust-analyzer's `DefWithBodyId`
+/// pattern). Functions go through PPIR's item tree so synthetic companions
+/// are found; PPIR never synthesizes lets, so HIR's `let_body` is canonical
+/// for them.
+pub fn body<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> baml_compiler2_hir::body::OwnerBody {
+    use baml_compiler2_hir::body::{BodyOwnerId, OwnerBody};
+    match owner {
+        BodyOwnerId::Function(function) => OwnerBody::Function(function_body(db, function)),
+        BodyOwnerId::Let(let_binding) => {
+            OwnerBody::Let(baml_compiler2_hir::body::let_body(db, let_binding))
+        }
+        BodyOwnerId::ParameterDefaults(function) => {
+            OwnerBody::ParameterDefaults(function_parameter_defaults(db, function))
+        }
+    }
+}
+
+/// Canonical body source map for any body owner (spans only).
+pub fn body_source_map<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Option<ast::AstSourceMap> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => function_body_source_map(db, function),
+        BodyOwnerId::Let(let_binding) => {
+            baml_compiler2_hir::body::let_body_source_map(db, let_binding)
+        }
+        BodyOwnerId::ParameterDefaults(function) => Some(
+            function_parameter_defaults(db, function)
+                .defaults
+                .source_map
+                .clone(),
+        ),
+    }
+}
+
+/// The scope opened for a body owner's body.
+pub fn body_scope<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => item_data::function_scope(db, function),
+        BodyOwnerId::Let(let_binding) => item_data::let_scope(db, let_binding),
+        // Defaults are keyed under the FUNCTION's scope (the semantic
+        // index walks them there, `ExprMetadataScope::ParameterDefault`).
+        BodyOwnerId::ParameterDefaults(function) => item_data::function_scope(db, function),
+    }
+}
+
+/// Every body owner in `file`: functions (methods and synthetic companions
+/// included), then top-level lets, each group in source order.
+pub fn file_body_owners(
+    db: &dyn Db,
+    file: baml_base::SourceFile,
+) -> Vec<baml_compiler2_hir::body::BodyOwnerId<'_>> {
+    let functions = item_data::file_functions(db, file)
+        .iter()
+        .copied()
+        .map(Into::into);
+    let lets = item_data::file_lets(db, file)
+        .iter()
+        .copied()
+        .map(Into::into);
+    functions.chain(lets).collect()
+}
+
+/// Canonical per-body type references for a function (rust-analyzer's
+/// bodies-own-their-type-refs shape): every type expression written inside
+/// the body, lowered once into a span-free store. Salsa-tracked over PPIR's
+/// canonical body, so downstream type queries depend on structure only.
+#[salsa::tracked]
+pub fn function_body_type_refs<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let body = function_body(db, function);
+    let refs = match body.as_ref() {
+        baml_compiler2_hir::body::FunctionBody::Expr(expr_body) => {
+            baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).0
+        }
+        _ => baml_compiler2_hir::body_type_refs::BodyTypeRefs::default(),
+    };
+    Arc::new(refs)
+}
+
+/// The span map for a body's collected type references (the `.1` the
+/// tracked ref query drops; recomputed on demand - the check layer's
+/// annotation-diagnostic anchors resolve through it).
+pub fn body_type_ref_spans(
+    db: &dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'_>,
+) -> Option<baml_compiler2_hir::type_ref::TypeRefSourceMap> {
+    use baml_compiler2_hir::body::{BodyOwnerId, FunctionBody, LetBody};
+    match owner {
+        BodyOwnerId::Function(function) => match function_body(db, function).as_ref() {
+            FunctionBody::Expr(expr_body) => {
+                Some(baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).1)
+            }
+            _ => None,
+        },
+        BodyOwnerId::Let(let_binding) => {
+            match baml_compiler2_hir::body::let_body(db, let_binding).as_ref() {
+                LetBody::Expr(expr_body) => {
+                    Some(baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).1)
+                }
+                LetBody::Missing => None,
+            }
+        }
+        BodyOwnerId::ParameterDefaults(_) => None,
+    }
+}
+
+/// Per-body type references for a top-level let's initializer.
+#[salsa::tracked]
+pub fn let_body_type_refs<'db>(
+    db: &'db dyn Db,
+    let_binding: baml_compiler2_hir::loc::LetLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let body = baml_compiler2_hir::body::let_body(db, let_binding);
+    let refs = match body.as_ref() {
+        baml_compiler2_hir::body::LetBody::Expr(expr_body) => {
+            baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).0
+        }
+        baml_compiler2_hir::body::LetBody::Missing => {
+            baml_compiler2_hir::body_type_refs::BodyTypeRefs::default()
+        }
+    };
+    Arc::new(refs)
+}
+
+/// Per-body type references for any body owner.
+pub fn body_type_refs<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => function_body_type_refs(db, function),
+        BodyOwnerId::Let(let_binding) => let_body_type_refs(db, let_binding),
+        BodyOwnerId::ParameterDefaults(function) => parameter_defaults_type_refs(db, function),
+    }
+}
+
+/// Per-body type references for a function's parameter-default arena.
+#[salsa::tracked]
+pub fn parameter_defaults_type_refs<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let defaults = function_parameter_defaults(db, function);
+    Arc::new(baml_compiler2_hir::body_type_refs::collect_body_type_refs(&defaults.defaults.exprs).0)
 }
 
 /// Canonical function signature — uses PPIR's item tree.

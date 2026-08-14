@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 35800
 ---
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0143
@@ -14,15 +15,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0097
 
   ⚠ extraneous throws declaration: baml.json.JsonParseError
-    ╭─[json_static_method_arity.baml:23:60]
- 23 │     function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-    ·                                                            ────────────────────────────────────────────────────
-    ╰────
-
-  [type] E0005
-
-  × function `from_json` expects 1 type argument(s), got 2
-    ╭─[json_static_method_arity.baml:35:5]
- 35 │     Box<int, string>.from_json(j)
-    ·     ─────────────────────────────
+    ╭─[json_static_method_arity.baml:23:113]
+ 23 │ ╭─▶     function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+ 24 │ │           Box<T> { value: baml.json.from_json<T>(baml.json.field(j, "value")) }
+ 25 │ ╰─▶     }
     ╰────

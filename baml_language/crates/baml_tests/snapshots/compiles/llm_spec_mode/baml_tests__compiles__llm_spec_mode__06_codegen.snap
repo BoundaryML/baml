@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15867
 ---
 function user.NamedTools(q: string, client: ai.Client | null) -> Answer {
     load_var client
@@ -21,7 +22,7 @@ function user.NamedTools(q: string, client: ai.Client | null) -> Answer {
     call user.NamedTools$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<Answer, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<Answer>>
+    load_type ai.Runner<Answer, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Answer>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -97,7 +98,7 @@ function user.PlainChat(q: string, client: ai.Client | null) -> string {
     call user.PlainChat$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -194,7 +195,7 @@ function user.SpecAgent(q: string, client: ai.Client | null) -> Answer {
     call user.SpecAgent$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<Answer, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<Answer>>
+    load_type ai.Runner<Answer, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Answer>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

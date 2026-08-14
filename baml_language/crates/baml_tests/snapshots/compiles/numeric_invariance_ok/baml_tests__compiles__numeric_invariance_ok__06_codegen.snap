@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18309
 ---
 function user.BigintFieldOk() -> BigintCounter {
     load_const 1n
@@ -31,7 +32,7 @@ function user.EmptyBigintArray() -> bigint[] {
 }
 
 function user.EvolvingRetype() -> bigint[] {
-    load_type never
+    load_type bigint
     alloc_array 0
     return
 }

@@ -495,7 +495,7 @@ fn function_export(
                 })
                 .collect(),
             returns: TyRef::of(&sig.return_type),
-            throws: TyRef::of(function.throws(db).effective),
+            throws: TyRef::of(&function.throws(db).effective),
         },
         source: source_export(db, function.file(db), function.span(db)),
     }
@@ -711,7 +711,7 @@ fn export_item<'db>(
             }
         }
         Symbol::TypeAlias(alias) => ItemDetail::TypeAlias {
-            resolved: TyRef::of(alias.resolved(db)),
+            resolved: TyRef::of(&alias.resolved(db)),
         },
         Symbol::Function(function) => ItemDetail::Function {
             signature: function_export(db, function, false, None).signature,

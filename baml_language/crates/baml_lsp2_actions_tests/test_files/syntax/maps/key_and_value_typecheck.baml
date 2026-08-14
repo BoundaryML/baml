@@ -53,6 +53,24 @@ function UseMapTypecheck() -> int {
 //    ·              ┬
 //    ·              ╰── expected `expression`, found `':'`
 //    ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[maps_key_and_value_typecheck.baml:18:9]
+//  18 │     map["string"]
+//     ·         ────┬───
+//     ·             ╰── expected `int`, found `"string"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[maps_key_and_value_typecheck.baml:16:35]
+//  16 │ ╭─▶ function UseMapTypecheck() -> int {
+//  17 │ │       let map = CreateMapExpr();
+//  18 │ │       map["string"]
+//  19 │ ├─▶ }
+//     · ╰──── expected `int`, found `string`
+//     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
@@ -60,27 +78,3 @@ function UseMapTypecheck() -> int {
 //  2 │ function CreateMapExpr() -> map<int, string> {
 //    ·                             ────────────────
 //    ╰────
-// E0001
-//
-//   × mismatched types
-//    ╭─[maps_key_and_value_typecheck.baml:3:16]
-//  3 │     { (1 + 1): "2" }
-//    ·                ─┬─
-//    ·                 ╰── expected `map<int, string>`, found `"2"`
-//    ╰────
-// E0001
-//
-//   × mismatched types
-//     ╭─[maps_key_and_value_typecheck.baml:18:9]
-//  18 │     map["string"]
-//     ·         ────┬───
-//     ·             ╰── expected `int`, found `string`
-//     ╰────
-// E0001
-//
-//   × mismatched types
-//     ╭─[maps_key_and_value_typecheck.baml:18:5]
-//  18 │     map["string"]
-//     ·     ──────┬──────
-//     ·           ╰── expected `int`, found `string`
-//     ╰────
