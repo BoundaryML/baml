@@ -1796,6 +1796,39 @@ fn run_expr_without_baml_toml_picks_up_baml_src_context() {
     );
 }
 
+/// B-359: an expression that only needs the standard library must not compile
+/// or diagnose the surrounding project. Unrelated project errors should not
+/// block `-e` from being used as an interactive probe.
+#[test]
+fn run_expr_ignores_unrelated_project_compile_errors() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function broken() -> int {\n  Int.parse(\"1\")\n}\n",
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "-e", "int.parse(\"42\")", "--from", "."],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected an independent expression to ignore unrelated project errors, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("unresolved name: Int"),
+        "Unrelated project diagnostic leaked into expression evaluation:\n{stderr}"
+    );
+}
+
 /// `baml test` reaches test discovery on a manifest-less `baml_src/`
 /// project — a project with no test blocks returns the `NoTestsRun` code (5),
 /// proving the loader accepted it rather than bailing on the missing manifest.
