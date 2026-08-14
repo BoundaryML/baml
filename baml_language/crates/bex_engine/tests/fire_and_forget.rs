@@ -512,7 +512,7 @@ async fn call_completion_does_not_join_but_shutdown_does() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn shutdown_periodically_reports_pending_threads() {
+async fn shutdown_periodically_reports_pending_futures() {
     let source = r#"
         function main() -> int {
             spawn {

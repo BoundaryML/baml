@@ -15,8 +15,8 @@ pub(crate) fn shutdown_engine(
 }
 
 fn wait_message(count: usize) -> String {
-    let threads = if count == 1 { "thread" } else { "threads" };
-    format!("for {count} remaining BAML {threads} to finish; press Ctrl+C to cancel")
+    let futures = if count == 1 { "future" } else { "futures" };
+    format!("for {count} remaining BAML {futures} to finish (press Ctrl+C to cancel now)")
 }
 
 #[cfg(test)]
@@ -24,14 +24,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wait_message_pluralizes_thread_count() {
+    fn wait_message_pluralizes_future_count() {
         assert_eq!(
             wait_message(1),
-            "for 1 remaining BAML thread to finish; press Ctrl+C to cancel"
+            "for 1 remaining BAML future to finish (press Ctrl+C to cancel now)"
         );
         assert_eq!(
             wait_message(2),
-            "for 2 remaining BAML threads to finish; press Ctrl+C to cancel"
+            "for 2 remaining BAML futures to finish (press Ctrl+C to cancel now)"
         );
     }
 }

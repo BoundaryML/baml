@@ -2207,13 +2207,13 @@ impl BexEngine {
         self.shutdown_with_progress(|count| {
             tracing::warn!(
                 count,
-                "BAML is still waiting for active threads to finish; press Ctrl+C to cancel"
+                "BAML is still waiting for active futures to finish (press Ctrl+C to cancel now)"
             );
         })
         .await;
     }
 
-    /// Shut down the engine, reporting the number of active BAML threads every
+    /// Shut down the engine, reporting the number of active BAML futures every
     /// five seconds while shutdown is blocked.
     pub async fn shutdown_with_progress<F>(self: &Arc<Self>, on_wait: F)
     where
