@@ -89,7 +89,9 @@ impl GraphqlArgs {
     fn run_inner(&self) -> Result<crate::ExitCode> {
         let schema = schema();
         if self.schema {
-            print!("{}", schema.as_sdl());
+            let stdout = std::io::stdout();
+            let mut stdout = stdout.lock();
+            write!(stdout, "{}", schema.as_sdl()).context("failed to write GraphQL schema")?;
             return Ok(crate::ExitCode::Success);
         }
 
@@ -241,7 +243,7 @@ impl QueryRoot {
     }
 
     /// Source packages, optionally filtered by exact package name.
-    fn packages<'a>(context: &'a GraphqlContext, name: Option<String>) -> Vec<&'a GraphPackage> {
+    fn packages(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphPackage> {
         filter_name(
             &context.snapshot.project.packages,
             name.as_deref(),
@@ -250,7 +252,7 @@ impl QueryRoot {
     }
 
     /// Source files, optionally filtered by exact project-relative path.
-    fn files<'a>(context: &'a GraphqlContext, path: Option<String>) -> Vec<&'a GraphSourceFile> {
+    fn files(context: &GraphqlContext, path: Option<String>) -> Vec<&GraphSourceFile> {
         context
             .snapshot
             .project
@@ -261,11 +263,11 @@ impl QueryRoot {
     }
 
     /// All top-level definitions with exact name and kind filters.
-    fn definitions<'a>(
-        context: &'a GraphqlContext,
+    fn definitions(
+        context: &GraphqlContext,
         name: Option<String>,
         kind: Option<Vec<DefinitionKind>>,
-    ) -> Vec<&'a GraphDefinition> {
+    ) -> Vec<&GraphDefinition> {
         context
             .snapshot
             .project
@@ -276,22 +278,19 @@ impl QueryRoot {
             .collect()
     }
 
-    fn classes<'a>(context: &'a GraphqlContext, name: Option<String>) -> Vec<&'a GraphClass> {
+    fn classes(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphClass> {
         filter_name(&context.snapshot.project.classes, name.as_deref(), |item| {
             &item.name
         })
     }
 
-    fn enums<'a>(context: &'a GraphqlContext, name: Option<String>) -> Vec<&'a GraphEnum> {
+    fn enums(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphEnum> {
         filter_name(&context.snapshot.project.enums, name.as_deref(), |item| {
             &item.name
         })
     }
 
-    fn type_aliases<'a>(
-        context: &'a GraphqlContext,
-        name: Option<String>,
-    ) -> Vec<&'a GraphTypeAlias> {
+    fn type_aliases(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphTypeAlias> {
         filter_name(
             &context.snapshot.project.type_aliases,
             name.as_deref(),
@@ -299,7 +298,7 @@ impl QueryRoot {
         )
     }
 
-    fn functions<'a>(context: &'a GraphqlContext, name: Option<String>) -> Vec<&'a GraphFunction> {
+    fn functions(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphFunction> {
         filter_name(
             &context.snapshot.project.functions,
             name.as_deref(),
@@ -307,16 +306,13 @@ impl QueryRoot {
         )
     }
 
-    fn clients<'a>(context: &'a GraphqlContext, name: Option<String>) -> Vec<&'a GraphClient> {
+    fn clients(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphClient> {
         filter_name(&context.snapshot.project.clients, name.as_deref(), |item| {
             &item.name
         })
     }
 
-    fn generators<'a>(
-        context: &'a GraphqlContext,
-        name: Option<String>,
-    ) -> Vec<&'a GraphGenerator> {
+    fn generators(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphGenerator> {
         filter_name(
             &context.snapshot.project.generators,
             name.as_deref(),
@@ -324,7 +320,7 @@ impl QueryRoot {
         )
     }
 
-    fn tests<'a>(context: &'a GraphqlContext, name: Option<String>) -> Vec<&'a GraphTest> {
+    fn tests(context: &GraphqlContext, name: Option<String>) -> Vec<&GraphTest> {
         filter_name(&context.snapshot.project.tests, name.as_deref(), |item| {
             &item.name
         })
@@ -401,6 +397,7 @@ struct SourceLocation {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "AttributeArgument")]
 struct GraphAttributeArgument {
     key: Option<String>,
     value: String,
@@ -408,6 +405,7 @@ struct GraphAttributeArgument {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Attribute")]
 struct GraphAttribute {
     name: String,
     arguments: Vec<GraphAttributeArgument>,
@@ -415,6 +413,7 @@ struct GraphAttribute {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "TypeRef")]
 struct GraphTypeRef {
     kind: TypeRefKind,
     /// Canonical source-like spelling.
@@ -438,6 +437,7 @@ struct GraphTypeRef {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Definition")]
 struct GraphDefinition {
     kind: DefinitionKind,
     name: String,
@@ -448,6 +448,7 @@ struct GraphDefinition {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Field")]
 struct GraphField {
     name: String,
     documentation: Option<String>,
@@ -458,6 +459,7 @@ struct GraphField {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "EnumValue")]
 struct GraphEnumValue {
     name: String,
     documentation: Option<String>,
@@ -466,6 +468,7 @@ struct GraphEnumValue {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Parameter")]
 struct GraphParameter {
     name: String,
     #[graphql(name = "type")]
@@ -475,6 +478,7 @@ struct GraphParameter {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Function")]
 struct GraphFunction {
     name: String,
     qualified_name: String,
@@ -490,6 +494,7 @@ struct GraphFunction {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Class")]
 struct GraphClass {
     name: String,
     qualified_name: String,
@@ -502,6 +507,7 @@ struct GraphClass {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Enum")]
 struct GraphEnum {
     name: String,
     qualified_name: String,
@@ -512,6 +518,7 @@ struct GraphEnum {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "TypeAlias")]
 struct GraphTypeAlias {
     name: String,
     qualified_name: String,
@@ -522,6 +529,7 @@ struct GraphTypeAlias {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "ConfigEntry")]
 struct GraphConfigEntry {
     key: String,
     value: String,
@@ -529,6 +537,7 @@ struct GraphConfigEntry {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Client")]
 struct GraphClient {
     name: String,
     qualified_name: String,
@@ -537,6 +546,7 @@ struct GraphClient {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Generator")]
 struct GraphGenerator {
     name: String,
     output_type: Option<String>,
@@ -547,12 +557,14 @@ struct GraphGenerator {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "TestArgument")]
 struct GraphTestArgument {
     name: String,
     value_json: String,
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Test")]
 struct GraphTest {
     name: String,
     qualified_name: String,
@@ -562,6 +574,7 @@ struct GraphTest {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "SourceFile")]
 struct GraphSourceFile {
     path: String,
     package: String,
@@ -576,6 +589,7 @@ struct GraphSourceFile {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Package")]
 struct GraphPackage {
     name: String,
     files: Vec<GraphSourceFile>,
@@ -590,6 +604,7 @@ struct GraphPackage {
 }
 
 #[derive(Clone, GraphQLObject)]
+#[graphql(name = "Project")]
 struct GraphProject {
     /// Package name from baml.toml, when present.
     name: Option<String>,
@@ -1410,15 +1425,12 @@ mod tests {
     #[test]
     fn schema_sdl_is_stable_and_has_search_roots() {
         let sdl = schema().as_sdl();
-        assert!(
-            sdl.contains("classes(name: String): [GraphClass!]!"),
-            "{sdl}"
-        );
+        assert!(sdl.contains("classes(name: String): [Class!]!"), "{sdl}");
         assert!(
             sdl.contains("definitions(name: String, kind: [DefinitionKind!])"),
             "{sdl}"
         );
-        assert!(sdl.contains("type GraphTypeRef"), "{sdl}");
+        assert!(sdl.contains("type TypeRef"), "{sdl}");
         assert_eq!(sdl, schema().as_sdl());
     }
 }

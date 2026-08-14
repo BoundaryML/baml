@@ -1,4 +1,4 @@
-# Experimental GraphQL AST queries
+# `baml graphql`
 
 `baml graphql` is an experimental, read-only, one-shot interface for querying a BAML project's source model. It performs no network or LLM calls and does not start a server.
 

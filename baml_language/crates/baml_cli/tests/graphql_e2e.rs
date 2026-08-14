@@ -105,7 +105,7 @@ fn realistic_query_supports_fragments_variables_traversal_and_locations() {
   generators { name outputType outputDir }
   tests { name qualifiedName functions arguments { name valueJson } }
 }
-fragment ClassDetails on GraphClass {
+fragment ClassDetails on Class {
   name
   qualifiedName
   documentation
@@ -238,7 +238,7 @@ fn stdin_queries_and_introspection_work_without_a_server() {
     assert!(schema.status.success());
     let schema = String::from_utf8(schema.stdout).unwrap();
     assert!(schema.contains("type QueryRoot"), "{schema}");
-    assert!(schema.contains("type GraphTypeRef"), "{schema}");
+    assert!(schema.contains("type TypeRef"), "{schema}");
 }
 
 #[test]
