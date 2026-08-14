@@ -251,34 +251,32 @@ fn scrub_binary_body(
         return body.to_vec();
     }
 
-    let mut scrubbed = body.to_vec();
-    for (key, value) in env_vars {
-        if value.is_empty() {
-            continue;
+    let mut secrets = env_vars
+        .iter()
+        .filter(|(_, value)| !value.is_empty())
+        .collect::<Vec<_>>();
+    secrets.sort_by(|(left_key, left_value), (right_key, right_value)| {
+        right_value
+            .len()
+            .cmp(&left_value.len())
+            .then_with(|| left_key.cmp(right_key))
+    });
+
+    let mut scrubbed = Vec::with_capacity(body.len());
+    let mut offset = 0;
+    while offset < body.len() {
+        if let Some((key, value)) = secrets
+            .iter()
+            .find(|(_, value)| body[offset..].starts_with(value.as_bytes()))
+        {
+            scrubbed.extend_from_slice(format!("${key}").as_bytes());
+            offset += value.len();
+        } else {
+            scrubbed.push(body[offset]);
+            offset += 1;
         }
-        scrubbed = replace_bytes(&scrubbed, value.as_bytes(), format!("${key}").as_bytes());
     }
     scrubbed
-}
-
-fn replace_bytes(haystack: &[u8], needle: &[u8], replacement: &[u8]) -> Vec<u8> {
-    if needle.is_empty() {
-        return haystack.to_vec();
-    }
-
-    let mut result = Vec::with_capacity(haystack.len());
-    let mut start = 0;
-    while let Some(offset) = haystack[start..]
-        .windows(needle.len())
-        .position(|window| window == needle)
-    {
-        let match_start = start + offset;
-        result.extend_from_slice(&haystack[start..match_start]);
-        result.extend_from_slice(replacement);
-        start = match_start + needle.len();
-    }
-    result.extend_from_slice(&haystack[start..]);
-    result
 }
 
 impl<'ir, T> WithPrompt<'ir> for T
@@ -936,7 +934,7 @@ mod tests_curl {
     use base64::{prelude::BASE64_STANDARD, Engine};
     use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 
-    use super::to_curl_command;
+    use super::{scrub_binary_body, to_curl_command};
 
     #[test]
     fn multipart_curl_preserves_binary_body() {
@@ -987,6 +985,19 @@ mod tests_curl {
 
         assert!(curl.contains(&BASE64_STANDARD.encode(b"\x00\xff$TRANSCRIPTION_PROMPT\x00")));
         assert!(!curl.contains(&BASE64_STANDARD.encode(b"\x00\xffsecret-value\x00")));
+    }
+
+    #[test]
+    fn multipart_scrubbing_prefers_the_longest_overlapping_secret() {
+        let env_vars = HashMap::from([
+            ("SHORT".to_string(), "abc".to_string()),
+            ("LONG".to_string(), "abcdef".to_string()),
+        ]);
+
+        assert_eq!(
+            scrub_binary_body(b"before abcdef after", &env_vars, false),
+            b"before $LONG after"
+        );
     }
 }
 
