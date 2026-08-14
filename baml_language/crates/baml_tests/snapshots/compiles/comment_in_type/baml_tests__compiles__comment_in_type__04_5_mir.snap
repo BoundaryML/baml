@@ -34,7 +34,7 @@ fn user.FunctionWithComments(a: string, b: int, client: null | ai.Client) -> str
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -238,7 +238,7 @@ fn user.CommentAfterArrow(client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
+        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
     }
 
     bb5: {

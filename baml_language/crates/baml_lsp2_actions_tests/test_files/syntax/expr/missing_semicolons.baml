@@ -172,13 +172,13 @@ function MissingReturnExpression() -> int {
 //      · ────────┬───────
 //      ·         ╰── move this binding into a function body
 //      ╰────
-// E0029
+// E0001
 //
-//   × missing return expression
+//   × mismatched types
 //      ╭─[expr_missing_semicolons.baml:160:43]
 //  160 │ ╭─▶ function MissingReturnExpression() -> int {
 //  161 │ │       let x = 42;  // This is a statement, not a return expression
 //  162 │ │       // ERROR: missing return expression
 //  163 │ ├─▶ }
-//      · ╰──── expected return value of type `int`
+//      · ╰──── expected `int`, found `void`
 //      ╰────

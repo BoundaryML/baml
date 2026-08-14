@@ -29,7 +29,7 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: a
     call user.AskDocs$spec
     store_var _9
     load_var2 6 7
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _6

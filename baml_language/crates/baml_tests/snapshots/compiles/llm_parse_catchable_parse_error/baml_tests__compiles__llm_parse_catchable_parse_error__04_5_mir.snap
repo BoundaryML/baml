@@ -33,7 +33,7 @@ fn user.ExtractInvoice(text: string, client: null | ai.Client) -> Invoice {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Invoice, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<Invoice>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Invoice, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Invoice>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -140,7 +140,7 @@ fn .<lambda(ExtractInvoice$spec, 0)>( __spec_output_format: string) -> ai.Prompt
     let _14: type
     let _15: int
     let _16: string[]
-    let _17: string
+    let _17: ""
     let _18: type
     let _19: string[]
     let _20: unknown[]

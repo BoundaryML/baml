@@ -67,7 +67,7 @@ fn user.PlainChat(q: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -178,25 +178,24 @@ fn .<lambda(PlainChat$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _13: unknown[]
     let _14: string
     let _15: type
-    let _16: string
-    let _17: int
-    let _18: string[]
-    let _19: string
-    let _20: type
-    let _21: int
-    let _22: unknown[]
-    let _23: string
-    let _24: type
-    let _25: int
-    let _26: string[]
-    let _27: string
-    let _28: type
-    let _29: string[]
-    let _30: unknown[]
-    let _31: string[]
-    let _32: baml.TaggedString
-    let _33: unknown[]
-    let _34: baml.TaggedString
+    let _16: int
+    let _17: string[]
+    let _18: "\n"
+    let _19: type
+    let _20: int
+    let _21: unknown[]
+    let _22: string
+    let _23: type
+    let _24: int
+    let _25: string[]
+    let _26: ""
+    let _27: type
+    let _28: string[]
+    let _29: unknown[]
+    let _30: string[]
+    let _31: baml.TaggedString
+    let _32: unknown[]
+    let _33: baml.TaggedString
 
     bb0: {
         _2 = ai.internal.SpecCtx { copy _1 };
@@ -220,38 +219,37 @@ fn .<lambda(PlainChat$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 
     bb2: {
-        _16 = copy _6;
-        _6 = copy _16 + const "\n";
-        _18 = copy _4;
-        _19 = copy _6;
-        _20 = load_type(string);
-        _17 = call const fn baml.Array.push<copy _20>(copy _18, copy _19) -> [bb3];
+        _6 = const "\n";
+        _17 = copy _4;
+        _18 = copy _6;
+        _19 = load_type(string);
+        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
     }
 
     bb3: {
         _6 = const "";
-        _22 = copy _5;
-        _23 = copy _2.0;
-        _24 = load_type(unknown);
-        _21 = call const fn baml.Array.push<copy _24>(copy _22, copy _23) -> [bb4];
+        _21 = copy _5;
+        _22 = copy _2.0;
+        _23 = load_type(unknown);
+        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4];
     }
 
     bb4: {
-        _26 = copy _4;
-        _27 = copy _6;
-        _28 = load_type(string);
-        _25 = call const fn baml.Array.push<copy _28>(copy _26, copy _27) -> [bb5];
+        _25 = copy _4;
+        _26 = copy _6;
+        _27 = load_type(string);
+        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5];
     }
 
     bb5: {
-        _29 = copy _4;
-        _30 = copy _5;
-        _3 = baml.TaggedString { copy _29, copy _30 };
-        _32 = copy _3;
-        _31 = copy _32.0;
-        _34 = copy _3;
-        _33 = copy _34.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _31, copy _33) -> [bb6];
+        _28 = copy _4;
+        _29 = copy _5;
+        _3 = baml.TaggedString { copy _28, copy _29 };
+        _31 = copy _3;
+        _30 = copy _31.0;
+        _33 = copy _3;
+        _32 = copy _33.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
     }
 
     bb6: {
@@ -325,7 +323,7 @@ fn user.SpecAgent(q: string, client: null | ai.Client) -> Answer {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Answer, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -440,25 +438,24 @@ fn .<lambda(SpecAgent$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _12: unknown[]
     let _13: string
     let _14: type
-    let _15: string
-    let _16: int
-    let _17: string[]
-    let _18: string
-    let _19: type
-    let _20: int
-    let _21: unknown[]
-    let _22: string
-    let _23: type
-    let _24: int
-    let _25: string[]
-    let _26: string
-    let _27: type
-    let _28: string[]
-    let _29: unknown[]
-    let _30: string[]
-    let _31: baml.TaggedString
-    let _32: unknown[]
-    let _33: baml.TaggedString
+    let _15: int
+    let _16: string[]
+    let _17: "\n"
+    let _18: type
+    let _19: int
+    let _20: unknown[]
+    let _21: string
+    let _22: type
+    let _23: int
+    let _24: string[]
+    let _25: ""
+    let _26: type
+    let _27: string[]
+    let _28: unknown[]
+    let _29: string[]
+    let _30: baml.TaggedString
+    let _31: unknown[]
+    let _32: baml.TaggedString
 
     bb0: {
         _2 = ai.internal.SpecCtx { copy _1 };
@@ -480,38 +477,37 @@ fn .<lambda(SpecAgent$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 
     bb2: {
-        _15 = copy _6;
-        _6 = copy _15 + const "\n";
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
+        _6 = const "\n";
+        _16 = copy _4;
+        _17 = copy _6;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
     }
 
     bb3: {
         _6 = const "";
-        _21 = copy _5;
-        _22 = copy _2.0;
-        _23 = load_type(unknown);
-        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4];
+        _20 = copy _5;
+        _21 = copy _2.0;
+        _22 = load_type(unknown);
+        _19 = call const fn baml.Array.push<copy _22>(copy _20, copy _21) -> [bb4];
     }
 
     bb4: {
-        _25 = copy _4;
-        _26 = copy _6;
-        _27 = load_type(string);
-        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5];
+        _24 = copy _4;
+        _25 = copy _6;
+        _26 = load_type(string);
+        _23 = call const fn baml.Array.push<copy _26>(copy _24, copy _25) -> [bb5];
     }
 
     bb5: {
-        _28 = copy _4;
-        _29 = copy _5;
-        _3 = baml.TaggedString { copy _28, copy _29 };
-        _31 = copy _3;
-        _30 = copy _31.0;
-        _33 = copy _3;
-        _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
+        _27 = copy _4;
+        _28 = copy _5;
+        _3 = baml.TaggedString { copy _27, copy _28 };
+        _30 = copy _3;
+        _29 = copy _30.0;
+        _32 = copy _3;
+        _31 = copy _32.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _29, copy _31) -> [bb6];
     }
 
     bb6: {
@@ -550,7 +546,7 @@ fn user.NamedTools(q: string, client: null | ai.Client) -> Answer {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Answer, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -663,25 +659,24 @@ fn .<lambda(NamedTools$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _12: unknown[]
     let _13: string
     let _14: type
-    let _15: string
-    let _16: int
-    let _17: string[]
-    let _18: string
-    let _19: type
-    let _20: int
-    let _21: unknown[]
-    let _22: string
-    let _23: type
-    let _24: int
-    let _25: string[]
-    let _26: string
-    let _27: type
-    let _28: string[]
-    let _29: unknown[]
-    let _30: string[]
-    let _31: baml.TaggedString
-    let _32: unknown[]
-    let _33: baml.TaggedString
+    let _15: int
+    let _16: string[]
+    let _17: "\n"
+    let _18: type
+    let _19: int
+    let _20: unknown[]
+    let _21: string
+    let _22: type
+    let _23: int
+    let _24: string[]
+    let _25: ""
+    let _26: type
+    let _27: string[]
+    let _28: unknown[]
+    let _29: string[]
+    let _30: baml.TaggedString
+    let _31: unknown[]
+    let _32: baml.TaggedString
 
     bb0: {
         _2 = ai.internal.SpecCtx { copy _1 };
@@ -703,38 +698,37 @@ fn .<lambda(NamedTools$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 
     bb2: {
-        _15 = copy _6;
-        _6 = copy _15 + const "\n";
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
+        _6 = const "\n";
+        _16 = copy _4;
+        _17 = copy _6;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
     }
 
     bb3: {
         _6 = const "";
-        _21 = copy _5;
-        _22 = copy _2.0;
-        _23 = load_type(unknown);
-        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4];
+        _20 = copy _5;
+        _21 = copy _2.0;
+        _22 = load_type(unknown);
+        _19 = call const fn baml.Array.push<copy _22>(copy _20, copy _21) -> [bb4];
     }
 
     bb4: {
-        _25 = copy _4;
-        _26 = copy _6;
-        _27 = load_type(string);
-        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5];
+        _24 = copy _4;
+        _25 = copy _6;
+        _26 = load_type(string);
+        _23 = call const fn baml.Array.push<copy _26>(copy _24, copy _25) -> [bb5];
     }
 
     bb5: {
-        _28 = copy _4;
-        _29 = copy _5;
-        _3 = baml.TaggedString { copy _28, copy _29 };
-        _31 = copy _3;
-        _30 = copy _31.0;
-        _33 = copy _3;
-        _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
+        _27 = copy _4;
+        _28 = copy _5;
+        _3 = baml.TaggedString { copy _27, copy _28 };
+        _30 = copy _3;
+        _29 = copy _30.0;
+        _32 = copy _3;
+        _31 = copy _32.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _29, copy _31) -> [bb6];
     }
 
     bb6: {

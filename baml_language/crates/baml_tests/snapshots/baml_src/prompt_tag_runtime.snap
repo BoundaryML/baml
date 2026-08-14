@@ -154,7 +154,7 @@ function prompt_tag_runtime.PtRenderPerson(client: ai.Client | null) -> prompt_t
     call user.prompt_tag_runtime.PtRenderPerson$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<prompt_tag_runtime.Person, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<prompt_tag_runtime.Person>>
+    load_type ai.Runner<prompt_tag_runtime.Person, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<prompt_tag_runtime.Person>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
@@ -243,7 +243,7 @@ function prompt_tag_runtime.PtStructuredGreeting(name: string, client: ai.Client
     call user.prompt_tag_runtime.PtStructuredGreeting$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -340,7 +340,7 @@ function prompt_tag_runtime.PtStructuredImage(photo: image, client: ai.Client | 
     call user.prompt_tag_runtime.PtStructuredImage$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

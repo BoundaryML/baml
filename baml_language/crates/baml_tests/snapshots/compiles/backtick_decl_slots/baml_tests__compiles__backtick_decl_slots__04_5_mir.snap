@@ -33,7 +33,7 @@ fn user.Greet(name: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -138,17 +138,16 @@ fn .<lambda(Greet$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _12: unknown[]
     let _13: string
     let _14: type
-    let _15: string
-    let _16: int
-    let _17: string[]
-    let _18: string
-    let _19: type
-    let _20: string[]
-    let _21: unknown[]
-    let _22: string[]
-    let _23: baml.TaggedString
-    let _24: unknown[]
-    let _25: baml.TaggedString
+    let _15: int
+    let _16: string[]
+    let _17: "."
+    let _18: type
+    let _19: string[]
+    let _20: unknown[]
+    let _21: string[]
+    let _22: baml.TaggedString
+    let _23: unknown[]
+    let _24: baml.TaggedString
 
     bb0: {
         _3 = []: string[];
@@ -171,23 +170,22 @@ fn .<lambda(Greet$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 
     bb2: {
-        _15 = copy _5;
-        _5 = copy _15 + const ".";
-        _17 = copy _3;
-        _18 = copy _5;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
+        _5 = const ".";
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
     }
 
     bb3: {
-        _20 = copy _3;
-        _21 = copy _4;
-        _2 = baml.TaggedString { copy _20, copy _21 };
-        _23 = copy _2;
-        _22 = copy _23.0;
-        _25 = copy _2;
-        _24 = copy _25.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _22, copy _24) -> [bb4];
+        _19 = copy _3;
+        _20 = copy _4;
+        _2 = baml.TaggedString { copy _19, copy _20 };
+        _22 = copy _2;
+        _21 = copy _22.0;
+        _24 = copy _2;
+        _23 = copy _24.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
     }
 
     bb4: {

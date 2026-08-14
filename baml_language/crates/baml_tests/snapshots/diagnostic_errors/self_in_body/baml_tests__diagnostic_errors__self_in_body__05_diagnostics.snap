@@ -29,15 +29,15 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: Self
-    ╭─[main.baml:37:20]
+    ╭─[main.baml:37:24]
  37 │             let s: Box<Self> => 1,
-    ·                    ─────────
+    ·                        ────
     ╰────
 
   [type] E0002
 
   × unresolved type: Self
-    ╭─[main.baml:42:9]
+    ╭─[main.baml:42:17]
  42 │         type.of<Self>().to_string()
-    ·         ───────────────
+    ·                 ────
     ╰────

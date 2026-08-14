@@ -28,7 +28,7 @@ function user.GenerateImage(prompt: string, client: ai.Client | null) -> image {
     call user.GenerateImage$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -119,7 +119,7 @@ function user.GenerateImageSet(prompt: string, client: ai.Client | null) -> imag
     call user.GenerateImageSet$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image[], Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<image[]>>
+    load_type ai.Runner<image[], Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -199,7 +199,7 @@ function user.GenerateMixedImageNarrative(prompt: string, client: ai.Client | nu
     store_var client
 
   L0:
-    load_type (image | string)[]
+    load_type (string | image)[]
     load_const <omitted>
     load_var client
     load_const <omitted>
@@ -210,7 +210,7 @@ function user.GenerateMixedImageNarrative(prompt: string, client: ai.Client | nu
     call user.GenerateMixedImageNarrative$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<(image | string)[], Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<(image | string)[]>>
+    load_type ai.Runner<(string | image)[], Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -220,7 +220,7 @@ function user.GenerateMixedImageNarrative(prompt: string, client: ai.Client | nu
 }
 
 function user.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] {
-    load_type (image | string)[]
+    load_type (string | image)[]
     load_var json
     call baml.sap.parse
     return
@@ -233,7 +233,7 @@ function user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> ai.Pr
     load_type (image | string)[]
     call ai.wire.render_output_format
     store_var _3
-    load_type (image | string)[]
+    load_type (string | image)[]
     load_var2 2 3
     call ai.FunctionSpec.prompt
     return
@@ -274,8 +274,8 @@ function user.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stre
     load_var prompt
     call user.GenerateMixedImageNarrative$spec
     store_var _4
-    load_type (image | string)[]
-    load_type (image | string)[]
+    load_type (string | image)[]
+    load_type (string | image)[]
     load_var2 3 2
     call ai.stream.from_spec
     return

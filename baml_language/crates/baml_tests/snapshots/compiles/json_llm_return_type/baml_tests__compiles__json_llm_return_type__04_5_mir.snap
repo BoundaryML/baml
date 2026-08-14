@@ -32,7 +32,7 @@ fn user.ExtractAny(client: null | ai.Client) -> int | float | string | bool | nu
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<baml.json.json, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<baml.json.json>>(copy _4, copy _6) -> [bb5];
+        _3 = virtual_call run as ai.Runner<int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<baml.json.json>>(copy _4, copy _6) -> [bb5];
     }
 
     bb5: {
@@ -138,7 +138,7 @@ fn .<lambda(ExtractAny$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _15: type
     let _16: int
     let _17: string[]
-    let _18: string
+    let _18: ""
     let _19: type
     let _20: string[]
     let _21: unknown[]
@@ -215,7 +215,7 @@ fn user.ExtractAny$stream(client: null | ai.stream.StreamingClient) -> ai.stream
     }
 
     bb3: {
-        _4 = load_type(baml.json.json$stream | null);
+        _4 = load_type(baml.json.json$stream);
         _5 = load_type(baml.json.json);
         _0 = call const fn ai.stream.from_spec<copy _4, copy _5>(copy _3, copy _1) -> [bb4];
     }
