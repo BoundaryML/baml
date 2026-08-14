@@ -658,19 +658,14 @@ pub struct LlmFunctionBody {
     /// Fields may appear in any order in the input; printing canonicalizes to
     /// client, tools, prompt.
     pub client: ClientField,
-    /// Optional `tools [a, b]` list (BEP spec mode).
+    /// Optional `tools: [a, b]` list (BEP spec mode).
     pub tools: Option<ToolsField>,
     pub prompt: PromptField,
-    /// Optional `type_builder { ... }` block for inline schema overrides.
-    pub type_builder: Option<TypeBuilderBlock>,
     pub close_brace: t::RBrace,
 }
 impl FromCST for LlmFunctionBody {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        // A duplicate LLM-body field is a hard error, not an overwrite: the
-        // parser has no duplicate check for `type_builder`, and silently
-        // printing only the survivor would DELETE the other block from the
-        // user's source. An errored declaration is left unformatted instead.
+        // A duplicate LLM-body field is a hard error, not an overwrite.
         fn fill<T>(
             slot: &mut Option<T>,
             value: T,
@@ -699,7 +694,6 @@ impl FromCST for LlmFunctionBody {
         let mut client: Option<ClientField> = None;
         let mut tools: Option<ToolsField> = None;
         let mut prompt: Option<PromptField> = None;
-        let mut type_builder: Option<TypeBuilderBlock> = None;
         loop {
             if let Some(n) = it.next_if_kind(SyntaxKind::CLIENT_FIELD) {
                 fill(
@@ -720,13 +714,6 @@ impl FromCST for LlmFunctionBody {
                     &mut prompt,
                     PromptField::from_cst(n)?,
                     SyntaxKind::PROMPT_FIELD,
-                    node.text_range(),
-                )?;
-            } else if let Some(n) = it.next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK) {
-                fill(
-                    &mut type_builder,
-                    TypeBuilderBlock::from_cst(n)?,
-                    SyntaxKind::TYPE_BUILDER_BLOCK,
                     node.text_range(),
                 )?;
             } else {
@@ -751,7 +738,6 @@ impl FromCST for LlmFunctionBody {
             client,
             tools,
             prompt,
-            type_builder,
             close_brace,
         })
     }
@@ -787,11 +773,6 @@ impl Printable for LlmFunctionBody {
         printer.print_standalone_with_trivia(&self.prompt, inner_indent);
         printer.print_newline();
 
-        if let Some(type_builder) = &self.type_builder {
-            printer.print_standalone_with_trivia(type_builder, inner_indent);
-            printer.print_newline();
-        }
-
         let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
         printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
@@ -811,7 +792,7 @@ impl Printable for LlmFunctionBody {
 #[derive(Debug)]
 pub struct ClientField {
     pub keyword: t::Client,
-    pub colon: Option<t::Colon>,
+    pub colon: t::Colon,
     pub name: ClientName,
 }
 
@@ -824,10 +805,7 @@ impl FromCST for ClientField {
 
         let keyword = it.expect_parse()?;
 
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
+        let colon = it.expect_parse()?;
 
         let name = it.expect_next("STRING_LITERAL, WORD, or PATH_EXPR")?;
         let name = match name.kind() {
@@ -872,12 +850,10 @@ impl KnownKind for ClientField {
 impl Printable for ClientField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
-        let colon_trailing = if let Some(colon) = &self.colon {
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            colon_trailing
-        } else {
-            &[][..]
-        };
+        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
+        printer.print_trivia_squished(keyword_trailing);
+        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
+        printer.print_trivia_squished(colon_leading);
         printer.print_str(": ");
         printer.print_trivia_squished(colon_trailing);
         let name_leading = printer.trivia.get_leading_for_element(&self.name);
@@ -896,7 +872,7 @@ impl Printable for ClientField {
 pub enum ClientName {
     Path(PathExpr),
     String(t::QuotedString),
-    /// An arbitrary ai.Client expression (`client openai.OpenAiClient.new(...)`).
+    /// An arbitrary ai.Client expression (`client: openai.OpenAiClient.new(...)`).
     Expr(Box<Expression>),
 }
 
@@ -928,7 +904,7 @@ impl Printable for ClientName {
 #[derive(Debug)]
 pub struct PromptField {
     pub prompt: t::Word,
-    pub colon: Option<t::Colon>,
+    pub colon: t::Colon,
     pub string: StringLiteralValue,
 }
 
@@ -942,10 +918,7 @@ impl FromCST for PromptField {
         // It's a word, but we should never be in a `PROMPT_FIELD` context if it's not a prompt
         let prompt = it.expect_parse()?;
 
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
+        let colon = it.expect_parse()?;
 
         let string = StringLiteralValue::from_cst(it.expect_next("a prompt string")?)?;
 
@@ -968,12 +941,10 @@ impl KnownKind for PromptField {
 impl Printable for PromptField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.prompt);
-        let colon_trailing = if let Some(colon) = &self.colon {
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            colon_trailing
-        } else {
-            &[][..]
-        };
+        let (_, prompt_trailing) = printer.trivia.get_for_range_split(self.prompt.span());
+        printer.print_trivia_squished(prompt_trailing);
+        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
+        printer.print_trivia_squished(colon_leading);
         printer.print_str(": ");
         printer.print_trivia_squished(colon_trailing);
         let string_leading = printer.trivia.get_leading_for_element(&self.string);
@@ -988,13 +959,13 @@ impl Printable for PromptField {
     }
 }
 
-/// Corresponds to a [`SyntaxKind::TOOLS_FIELD`] node: `tools [a, b]` in an
+/// Corresponds to a [`SyntaxKind::TOOLS_FIELD`] node: `tools: [a, b]` in an
 /// LLM function body (BEP spec mode). The value is an arbitrary expression
 /// producing the tool list.
 #[derive(Debug)]
 pub struct ToolsField {
     pub keyword: t::Word,
-    pub colon: Option<t::Colon>,
+    pub colon: t::Colon,
     pub value: Expression,
 }
 
@@ -1008,10 +979,7 @@ impl FromCST for ToolsField {
         // It's a word; we are only in a TOOLS_FIELD context if it is `tools`.
         let keyword = it.expect_parse()?;
 
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
+        let colon = it.expect_parse()?;
 
         let value = Expression::from_cst(it.expect_next("a tools expression")?)?;
 
@@ -1034,12 +1002,10 @@ impl KnownKind for ToolsField {
 impl Printable for ToolsField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
-        let colon_trailing = if let Some(colon) = &self.colon {
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            colon_trailing
-        } else {
-            &[][..]
-        };
+        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
+        printer.print_trivia_squished(keyword_trailing);
+        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
+        printer.print_trivia_squished(colon_leading);
         printer.print_str(": ");
         printer.print_trivia_squished(colon_trailing);
         let value_leading = printer.trivia.get_leading_for_element(&self.value);
@@ -2349,22 +2315,17 @@ impl FromCST for ConfigBlock {
 
         let mut items = Vec::new();
         let close_brace = loop {
-            let elem =
-                it.expect_next("CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE")?;
+            let elem = it.expect_next("CONFIG_ITEM, BLOCK_ATTRIBUTE, or R_BRACE")?;
 
             let item = match elem.kind() {
                 SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
                 SyntaxKind::CONFIG_ITEM => ConfigBlockMember::Item(ConfigItem::from_cst(elem)?),
-                SyntaxKind::TYPE_BUILDER_BLOCK => {
-                    ConfigBlockMember::TypeBuilder(TypeBuilderBlock::from_cst(elem)?)
-                }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     ConfigBlockMember::BlockAttribute(BlockAttribute::from_cst(elem)?)
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc:
-                            "CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE".into(),
+                        expected_desc: "CONFIG_ITEM, BLOCK_ATTRIBUTE, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -2433,7 +2394,7 @@ impl Printable for ConfigBlock {
             .iter()
             .filter_map(|(item, comma)| match item {
                 ConfigBlockMember::BlockAttribute(attr) => Some((attr, item, comma.as_ref())),
-                _ => None,
+                ConfigBlockMember::Item(_) => None,
             })
             .collect();
         block_attrs.sort_by_cached_key(|(attr, _, _)| {
@@ -2511,7 +2472,6 @@ impl Printable for ConfigBlock {
 #[derive(Debug)]
 pub enum ConfigBlockMember {
     Item(ConfigItem),
-    TypeBuilder(TypeBuilderBlock),
     BlockAttribute(BlockAttribute),
 }
 
@@ -2519,21 +2479,18 @@ impl Printable for ConfigBlockMember {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
             ConfigBlockMember::Item(item) => item.print(shape, printer),
-            ConfigBlockMember::TypeBuilder(block) => block.print(shape, printer),
             ConfigBlockMember::BlockAttribute(attr) => attr.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ConfigBlockMember::Item(item) => item.leftmost_token(),
-            ConfigBlockMember::TypeBuilder(block) => block.leftmost_token(),
             ConfigBlockMember::BlockAttribute(attr) => attr.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ConfigBlockMember::Item(item) => item.rightmost_token(),
-            ConfigBlockMember::TypeBuilder(block) => block.rightmost_token(),
             ConfigBlockMember::BlockAttribute(attr) => attr.rightmost_token(),
         }
     }
@@ -2916,189 +2873,6 @@ impl Printable for ConfigArray {
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_bracket.span()
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::TYPE_BUILDER_BLOCK`] node.
-#[derive(Debug)]
-pub struct TypeBuilderBlock {
-    pub keyword: t::TypeBuilder,
-    pub open_brace: t::LBrace,
-    pub items: Vec<TypeBuilderItem>,
-    pub close_brace: t::RBrace,
-}
-
-impl FromCST for TypeBuilderBlock {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_BUILDER_BLOCK)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let keyword = it.expect_parse()?;
-
-        let open_brace = it.expect_parse()?;
-
-        let mut items = Vec::new();
-        let close_brace = loop {
-            let elem = it.expect_next("DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF")?;
-            if elem.kind() == SyntaxKind::R_BRACE {
-                break t::RBrace::from_cst(elem)?;
-            }
-
-            items.push(TypeBuilderItem::from_cst(elem)?);
-        };
-
-        it.expect_end()?;
-
-        Ok(TypeBuilderBlock {
-            keyword,
-            open_brace,
-            items,
-            close_brace,
-        })
-    }
-}
-
-impl KnownKind for TypeBuilderBlock {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TYPE_BUILDER_BLOCK
-    }
-}
-
-impl Printable for TypeBuilderBlock {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_indent = shape.indent + printer.config.indent_width;
-
-        printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
-        printer.print_newline();
-
-        if let Some((first, rest)) = self.items.split_first() {
-            let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
-            printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
-            printer.print_spaces(inner_indent);
-            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            printer.print(first, inner_shape);
-            printer.print_trivia_trailing(first_trailing);
-            printer.print_newline();
-
-            for item in rest {
-                printer.print_standalone_with_trivia(item, inner_indent);
-                printer.print_newline();
-            }
-        }
-
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
-        PrintInfo::default_multi_lined()
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
-    }
-}
-
-/// Any of the valid items in a [`TypeBuilderBlock`].
-#[derive(Debug)]
-pub enum TypeBuilderItem {
-    /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins a class definition.
-    DynamicClass(t::Dynamic, ClassDecl),
-    /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins an enum definition.
-    DynamicEnum(t::Dynamic, EnumDecl),
-    Class(ClassDecl),
-    Enum(EnumDecl),
-    TypeAlias(TypeAliasDecl),
-}
-
-impl FromCST for TypeBuilderItem {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        match elem.kind() {
-            SyntaxKind::DYNAMIC_TYPE_DEF => {
-                let node = StrongAstError::assert_is_node(elem)?;
-                let mut it = SyntaxNodeIter::new(&node);
-                let dynamic = it.expect_parse()?;
-                let class_or_enum = it.expect_next("CLASS_DEF or ENUM_DEF")?;
-                match class_or_enum.kind() {
-                    SyntaxKind::CLASS_DEF => {
-                        let class = ClassDecl::from_cst(class_or_enum)?;
-                        it.expect_end()?;
-                        Ok(TypeBuilderItem::DynamicClass(dynamic, class))
-                    }
-                    SyntaxKind::ENUM_DEF => {
-                        let enum_def = EnumDecl::from_cst(class_or_enum)?;
-                        it.expect_end()?;
-                        Ok(TypeBuilderItem::DynamicEnum(dynamic, enum_def))
-                    }
-                    _ => Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "CLASS_DEF or ENUM_DEF".into(),
-                        found: class_or_enum.kind(),
-                        at: class_or_enum.text_range(),
-                    }),
-                }
-            }
-            SyntaxKind::CLASS_DEF => {
-                let class = ClassDecl::from_cst(elem)?;
-                Ok(TypeBuilderItem::Class(class))
-            }
-            SyntaxKind::ENUM_DEF => {
-                let enum_def = EnumDecl::from_cst(elem)?;
-                Ok(TypeBuilderItem::Enum(enum_def))
-            }
-            SyntaxKind::TYPE_ALIAS_DEF => {
-                let alias = TypeAliasDecl::from_cst(elem)?;
-                Ok(TypeBuilderItem::TypeAlias(alias))
-            }
-            _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF".into(),
-                found: elem.kind(),
-                at: elem.text_range(),
-            }),
-        }
-    }
-}
-
-impl Printable for TypeBuilderItem {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            TypeBuilderItem::DynamicClass(dynamic, class) => {
-                printer.print_raw_token(dynamic);
-                printer.print_str(" ");
-                printer.print(class, shape)
-            }
-            TypeBuilderItem::DynamicEnum(dynamic, enum_def) => {
-                printer.print_raw_token(dynamic);
-                printer.print_str(" ");
-                printer.print(enum_def, shape)
-            }
-            TypeBuilderItem::Class(class) => printer.print(class, shape),
-            TypeBuilderItem::Enum(enum_def) => printer.print(enum_def, shape),
-            TypeBuilderItem::TypeAlias(alias) => printer.print(alias, shape),
-        }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            TypeBuilderItem::DynamicClass(dynamic, _) => dynamic.span(),
-            TypeBuilderItem::DynamicEnum(dynamic, _) => dynamic.span(),
-            TypeBuilderItem::Class(class) => class.leftmost_token(),
-            TypeBuilderItem::Enum(enum_def) => enum_def.leftmost_token(),
-            TypeBuilderItem::TypeAlias(alias) => alias.leftmost_token(),
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            TypeBuilderItem::DynamicClass(_, class) => class.rightmost_token(),
-            TypeBuilderItem::DynamicEnum(_, enum_def) => enum_def.rightmost_token(),
-            TypeBuilderItem::Class(class) => class.rightmost_token(),
-            TypeBuilderItem::Enum(enum_def) => enum_def.rightmost_token(),
-            TypeBuilderItem::TypeAlias(alias) => alias.rightmost_token(),
-        }
     }
 }
 

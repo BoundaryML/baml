@@ -79,22 +79,22 @@ class GuessResponse {
 }
 
 function GenerateFamousPersonName(previous_names: string[]) -> string {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     ${previous_names}
   `
 }
 
 function SimulateHumanGuess(history: string[]) -> string {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     ${history}
   `
 }
 
 function TakeGuess(user_guess: string, famous_person_name: string, history: string[]) -> GuessResponse {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     ${user_guess}
     ${famous_person_name}
     ${history}

@@ -41,7 +41,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::TestSet => SyntaxKind::KW_TESTSET,
         TokenKind::RetryPolicy => SyntaxKind::KW_RETRY_POLICY,
         TokenKind::TemplateString => SyntaxKind::KW_TEMPLATE_STRING,
-        TokenKind::TypeBuilder => SyntaxKind::KW_TYPE_BUILDER,
         TokenKind::If => SyntaxKind::KW_IF,
         TokenKind::Else => SyntaxKind::KW_ELSE,
         TokenKind::For => SyntaxKind::KW_FOR,
@@ -54,7 +53,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throw => SyntaxKind::KW_THROW,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Is => SyntaxKind::KW_IS,
-        TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
@@ -811,10 +809,7 @@ impl<'a> Parser<'a> {
 
         i = self.skip_trivia_and_comments_from(i);
         let name_kind = self.tokens.get(i)?.kind;
-        if !matches!(
-            name_kind,
-            TokenKind::Word | TokenKind::Dynamic | TokenKind::Throws
-        ) {
+        if !matches!(name_kind, TokenKind::Word | TokenKind::Throws) {
             return None;
         }
         i += 1;
@@ -828,10 +823,7 @@ impl<'a> Parser<'a> {
 
             i = self.skip_trivia_and_comments_from(i);
             let segment_kind = self.tokens.get(i)?.kind;
-            if !matches!(
-                segment_kind,
-                TokenKind::Word | TokenKind::Dynamic | TokenKind::Throws
-            ) {
+            if !matches!(segment_kind, TokenKind::Word | TokenKind::Throws) {
                 return None;
             }
             i += 1;
@@ -1139,7 +1131,6 @@ impl<'a> Parser<'a> {
                     | TokenKind::TestSet
                     | TokenKind::RetryPolicy
                     | TokenKind::TemplateString
-                    | TokenKind::TypeBuilder
             )
         )
     }
@@ -2164,7 +2155,6 @@ impl<'a> Parser<'a> {
                     | TokenKind::TestSet
                     | TokenKind::RetryPolicy
                     | TokenKind::TemplateString
-                    | TokenKind::TypeBuilder
             ) && self.token_starts_line(i)
             {
                 return false;
@@ -2634,19 +2624,18 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse an @@attr: @@dynamic or @@stream.done
+    /// Parse an `@@attr`, such as `@@stream.done`.
     pub(crate) fn parse_atat_attribute(&mut self) {
         self.with_node(SyntaxKind::BLOCK_ATTRIBUTE, |p| {
             p.expect(TokenKind::AtAt);
 
             // Attribute name (can be dotted like @@stream.done)
-            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Throws) {
+            if p.at(TokenKind::Word) || p.at(TokenKind::Throws) {
                 p.bump();
                 // Handle dotted attribute names like @@stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Throws)
-                    {
+                    if p.at(TokenKind::Word) || p.at(TokenKind::Throws) {
                         p.bump(); // consume next segment
                     } else {
                         p.error_unexpected_token("attribute name segment after dot".to_string());
@@ -3098,7 +3087,7 @@ impl<'a> Parser<'a> {
                 }
 
                 if p.at(TokenKind::AtAt) {
-                    // Block attribute: @@dynamic
+                    // Block attribute
                     p.parse_atat_attribute();
                 } else if p.at(TokenKind::Word) {
                     // Enum variant
@@ -3259,7 +3248,7 @@ impl<'a> Parser<'a> {
                     // Method definition with leading block attributes.
                     p.parse_function();
                 } else if p.at(TokenKind::AtAt) {
-                    // Block attribute: @@dynamic
+                    // Block attribute
                     p.parse_atat_attribute();
                 } else if p.at(TokenKind::Function) {
                     // Method definition
@@ -4040,110 +4029,37 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_body(&mut self, allow_llm_body: bool) {
-        // Scan tokens to determine function type before parsing (single pass)
-        if allow_llm_body && self.looks_like_llm_function_body() {
+        if allow_llm_body && self.at_llm_function_body_start() {
             self.parse_llm_function_body();
         } else {
             self.parse_expr_function_body();
         }
     }
 
-    /// Scan tokens to detect if this looks like an LLM function body.
-    /// LLM functions contain `client` and `prompt` keywords at brace depth 1.
-    /// Expression functions contain `let`, `return`, `if`, `while`, `for`.
-    fn looks_like_llm_function_body(&self) -> bool {
+    /// LLM bodies are distinguished from expression bodies by their first
+    /// member. Scalar LLM fields require `:`, so their starts are not valid
+    /// expression statements.
+    fn at_llm_function_body_start(&self) -> bool {
+        debug_assert!(self.at(TokenKind::LBrace));
+
         self.looks_like_llm_function_body_from(self.current)
     }
 
-    fn looks_like_llm_function_body_from(&self, mut i: usize) -> bool {
-        let mut brace_depth = 0;
+    fn looks_like_llm_function_body_from(&self, body_start: usize) -> bool {
+        let open_brace = self.skip_trivia_and_comments_from(body_start);
+        let first = self.skip_trivia_and_comments_from(open_brace + 1);
+        let second = self.skip_trivia_and_comments_from(first + 1);
+        let first = self
+            .tokens
+            .get(first)
+            .map(|token| (token.kind, token.text.as_str()));
+        let second = self.tokens.get(second).map(|token| token.kind);
 
-        while i < self.tokens.len() {
-            let new_i = self.skip_comment_at(i);
-            if new_i != i {
-                i = new_i;
-                continue;
-            }
-
-            let token = &self.tokens[i];
-            if self.is_basic_trivia(token.kind) {
-                i += 1;
-                continue;
-            }
-
-            match token.kind {
-                TokenKind::LBrace => brace_depth += 1,
-                TokenKind::RBrace if brace_depth == 1 => break,
-                TokenKind::RBrace => brace_depth -= 1,
-                TokenKind::Word if brace_depth == 1 => {
-                    let text = &token.text;
-                    if text == "const" {
-                        return false;
-                    }
-                    // `tools` is deliberately NOT a trigger: every LLM function
-                    // must also declare `client` and `prompt`, and raw string
-                    // contents lex as ordinary tokens in this scan, so a body
-                    // containing e.g. "tools/list" would misclassify.
-                    if text == "client" || text == "prompt" {
-                        // An LLM field is `client <value>` / `prompt <template>`.
-                        // A following `=`, `,`, `)`, or `.` means a named call
-                        // arg, plain identifier use, or a member access, and a
-                        // following `(` is a call (e.g. `spec.prompt()`), so
-                        // those are expression bodies — a field value never
-                        // starts with any of them.
-                        let j = self.skip_trivia_and_comments_from(i + 1);
-                        let next = self.tokens.get(j).map(|t| t.kind);
-                        if !matches!(
-                            next,
-                            Some(
-                                TokenKind::Equals
-                                    | TokenKind::Comma
-                                    | TokenKind::RParen
-                                    | TokenKind::Dot
-                                    | TokenKind::LParen
-                            )
-                        ) {
-                            return true;
-                        }
-                    }
-                }
-                // `client` as KW_CLIENT: the LLM directive is `client Model`,
-                // not `client.method(...)`, the named call arg `client = ...`,
-                // or a call THROUGH a parameter named `client` — `client(...)`.
-                TokenKind::Client if brace_depth == 1 => {
-                    let j = self.skip_trivia_and_comments_from(i + 1);
-                    let next = self.tokens.get(j).map(|t| t.kind);
-                    if !matches!(
-                        next,
-                        Some(
-                            TokenKind::Dot
-                                | TokenKind::Equals
-                                | TokenKind::Comma
-                                | TokenKind::RParen
-                                | TokenKind::LParen
-                        )
-                    ) {
-                        return true;
-                    }
-                }
-                // Check for expression function keywords
-                TokenKind::Let
-                | TokenKind::Return
-                | TokenKind::If
-                | TokenKind::While
-                | TokenKind::For
-                | TokenKind::Throw
-                | TokenKind::Catch
-                | TokenKind::CatchAll
-                    if brace_depth == 1 =>
-                {
-                    return false;
-                }
-                _ => {}
-            }
-            i += 1;
+        match first {
+            Some((TokenKind::Client, _)) => second == Some(TokenKind::Colon),
+            Some((TokenKind::Word, "prompt" | "tools")) => second == Some(TokenKind::Colon),
+            _ => false,
         }
-        false // default to expression function
     }
 
     fn parse_llm_function_body(&mut self) {
@@ -4153,15 +4069,11 @@ impl<'a> Parser<'a> {
             let mut has_client = false;
             let mut has_prompt = false;
             let mut has_tools = false;
-            let mut has_type_builder = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword (except Client and TypeBuilder)
-                // assume we missed a closing brace
-                if p.at_top_level_keyword()
-                    && !p.at(TokenKind::Client)
-                    && !p.at(TokenKind::TypeBuilder)
-                {
+                // Error recovery: if we see a top-level keyword other than Client,
+                // assume we missed a closing brace.
+                if p.at_top_level_keyword() && !p.at(TokenKind::Client) {
                     break;
                 }
 
@@ -4187,13 +4099,6 @@ impl<'a> Parser<'a> {
                     }
                     has_tools = true;
                     p.parse_tools_field();
-                } else if p.at(TokenKind::TypeBuilder) {
-                    if has_type_builder {
-                        p.error_unexpected_token("Duplicate 'type_builder' block".to_string());
-                    }
-                    has_type_builder = true;
-                    // Parse type_builder block - HIR will emit proper error for non-test context
-                    p.parse_type_builder_block();
                 } else if p.at(TokenKind::Comma) || p.at(TokenKind::Semicolon) {
                     // LLM-block fields are separated by a newline, not by `,`/`;`.
                     // Name the real requirement here instead of letting the value
@@ -4234,18 +4139,16 @@ impl<'a> Parser<'a> {
     fn parse_client_field(&mut self) {
         self.with_node(SyntaxKind::CLIENT_FIELD, |p| {
             p.expect(TokenKind::Client);
-
-            // Optional colon
-            p.eat(TokenKind::Colon);
+            p.expect(TokenKind::Colon);
 
             // The client value is either:
-            // - A quoted "provider/model" string: client "openai/gpt-4o"
+            // - A quoted "provider/model" string: client: "openai/gpt-4o"
             // - An expression evaluating to an ai.Client: a declared client
-            //   name (`client Fast`), a constructor call
-            //   (`client openai.OpenAiClient.new(...)`), a wrapper
-            //   (`client ai.Retry.new(Fast)`), etc.
+            //   name (`client: Fast`), a constructor call
+            //   (`client: openai.OpenAiClient.new(...)`), a wrapper
+            //   (`client: ai.Retry.new(Fast)`), etc.
             //
-            // The unquoted `client openai/gpt-4o` shorthand of the legacy
+            // The unquoted `client: openai/gpt-4o` shorthand of the legacy
             // world is no longer special-cased: as an expression it would be
             // a division of two unresolved names, so lowering rejects a
             // division-shaped client value with a "quote the model string"
@@ -4260,9 +4163,8 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse the `tools` field of an LLM function body: `tools [a, b]` or
-    /// `tools: [a, b]`. The value is an arbitrary expression producing the
-    /// tool list (usually an array literal of function references).
+    /// Parse the `tools` field of an LLM function body. The value is an
+    /// arbitrary expression producing the tool list.
     fn parse_tools_field(&mut self) {
         self.with_node(SyntaxKind::TOOLS_FIELD, |p| {
             // 'tools' keyword (as Word token)
@@ -4271,9 +4173,7 @@ impl<'a> Parser<'a> {
             } else {
                 p.error_unexpected_token("'tools' keyword".to_string());
             }
-
-            // Optional colon
-            p.eat(TokenKind::Colon);
+            p.expect(TokenKind::Colon);
 
             p.parse_expr();
         });
@@ -4287,9 +4187,7 @@ impl<'a> Parser<'a> {
             } else {
                 p.error_unexpected_token("'prompt' keyword".to_string());
             }
-
-            // Optional colon
-            p.eat(TokenKind::Colon);
+            p.expect(TokenKind::Colon);
 
             // Prompt value (usually a raw string)
             if !p.parse_any_string() {
@@ -7524,14 +7422,10 @@ impl<'a> Parser<'a> {
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace.
                 // Exceptions - these keywords can appear as config keys:
                 // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
-                // - TypeBuilder: `type_builder { ... }` inside test blocks
-                // - Dynamic: `dynamic class Foo { ... }` inside type_builder blocks
                 // - Enum: `enum ["celsius", "fahrenheit"]` inside nested option maps
                 // - Class: `class "MyClass"` inside nested option maps
                 if p.at_top_level_keyword()
                     && !p.at(TokenKind::RetryPolicy)
-                    && !p.at(TokenKind::TypeBuilder)
-                    && !p.at(TokenKind::Dynamic)
                     && !p.at(TokenKind::Enum)
                     && !p.at(TokenKind::Class)
                 {
@@ -7553,22 +7447,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_item(&mut self) {
-        // Special handling for type_builder blocks inside test definitions
-        if self.at(TokenKind::TypeBuilder) {
-            self.parse_type_builder_block();
-            return;
-        }
-
-        // Special handling for dynamic type definitions inside type_builder blocks
-        if self.at(TokenKind::Dynamic) {
-            self.parse_dynamic_type_def();
-            return;
-        }
-
-        // Note: type_builder blocks handle class/enum declarations in their own loop
-        // (see parse_type_builder_block). In regular config blocks, "class" and "enum"
-        // should be treated as config keys (e.g., `enum ["celsius", "fahrenheit"]`).
-
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
             // Config key: identifier, keyword-as-identifier, or quoted/raw string
             // Note: Some top-level keywords are also valid as config keys:
@@ -7615,69 +7493,6 @@ impl<'a> Parser<'a> {
             // Optional field attributes after config value (e.g., args { ... } @some_attr(...))
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                 p.parse_at_attribute();
-            }
-        });
-    }
-
-    /// Parse a `type_builder` block inside a test definition.
-    /// Contains class, enum, dynamic class, dynamic enum, and type alias definitions.
-    fn parse_type_builder_block(&mut self) {
-        self.with_node(SyntaxKind::TYPE_BUILDER_BLOCK, |p| {
-            p.expect(TokenKind::TypeBuilder);
-
-            // Optional colon
-            p.eat(TokenKind::Colon);
-
-            if !p.expect(TokenKind::LBrace) {
-                return;
-            }
-
-            while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword that's not valid in type_builder
-                if p.at_top_level_keyword()
-                    && !p.at(TokenKind::Class)
-                    && !p.at(TokenKind::Enum)
-                    && !p.at(TokenKind::Dynamic)
-                    && !p.at(TokenKind::TypeBuilder)
-                {
-                    break;
-                }
-
-                if p.at(TokenKind::Dynamic) {
-                    p.parse_dynamic_type_def();
-                } else if p.at(TokenKind::Class) {
-                    p.parse_class();
-                } else if p.at(TokenKind::Enum) {
-                    p.parse_enum();
-                } else if p.at(TokenKind::Word)
-                    && p.current().map(|t| t.text == "type").unwrap_or(false)
-                {
-                    p.parse_type_alias();
-                } else {
-                    p.error_unexpected_token(
-                        "class, enum, dynamic class, dynamic enum, or type alias".to_string(),
-                    );
-                    p.bump();
-                }
-            }
-
-            p.expect(TokenKind::RBrace);
-        });
-    }
-
-    /// Parse a dynamic type definition (dynamic class or dynamic enum).
-    fn parse_dynamic_type_def(&mut self) {
-        self.with_node(SyntaxKind::DYNAMIC_TYPE_DEF, |p| {
-            p.expect(TokenKind::Dynamic);
-
-            if p.at(TokenKind::Class) {
-                p.parse_class();
-            } else if p.at(TokenKind::Enum) {
-                p.parse_enum();
-            } else {
-                p.error_unexpected_token(
-                    "Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute.".to_string()
-                );
             }
         });
     }
@@ -7899,17 +7714,15 @@ impl<'a> Parser<'a> {
         let Some(next) = self.peek(1) else {
             return true;
         };
-        // Old-style is only: `test Name { functions ...}` or `test Name { type_builder ...}`
+        // Old-style is only: `test Name { functions ...}`
         // There is no old-style form with parens — `test Name(...)` was never valid old-style
         // syntax (the old parser just emits a "remove parentheses" error).
         if next.kind == TokenKind::Word {
             if let Some(after_word) = self.peek(2) {
                 if after_word.kind == TokenKind::LBrace {
-                    // Peek inside the brace: `test Name { functions` or `test Name { type_builder`
+                    // Peek inside the brace: `test Name { functions`
                     if let Some(inside) = self.peek(3) {
-                        if inside.kind == TokenKind::Word
-                            && (inside.text == "functions" || inside.text == "type_builder")
-                        {
+                        if inside.kind == TokenKind::Word && inside.text == "functions" {
                             return false; // old-style config block
                         }
                     }
@@ -9067,19 +8880,12 @@ client<llm> TestClient {
 test Legacy {
   //# test config
   functions []
-  type_builder {
-    //# type builder items
-    class Built {
-      //# class members
-      value string
-    }
-  }
 }
 
 function llm_body() -> string {
-  client TestClient
+  client: TestClient
   //# llm fields
-  prompt `hello`
+  prompt: `hello`
 }
 
 function executable() -> int {
@@ -9092,7 +8898,7 @@ function executable() -> int {
 
         assert_eq!(
             errors.len(),
-            10,
+            8,
             "every non-expression header should produce one diagnostic: {errors:#?}"
         );
         assert!(errors.iter().all(|error| {
@@ -9118,7 +8924,7 @@ function executable() -> int {
                     )
                 })
                 .count(),
-            10,
+            8,
             "non-expression headers should be ordinary line-comment trivia"
         );
     }
@@ -9133,8 +8939,8 @@ function top_level(x: int = 8 >> 1) -> int {
 
 //# top-level LLM function
 function llm() -> string {
-  client "openai/gpt-4o"
-  prompt `hello`
+  client: "openai/gpt-4o"
+  prompt: `hello`
 }
 
 class Methods {
@@ -9145,8 +8951,8 @@ class Methods {
 
   //# LLM method
   function generated(self) -> string {
-    client "openai/gpt-4o"
-    prompt `hello`
+    client: "openai/gpt-4o"
+    prompt: `hello`
   }
 }
 
@@ -9572,6 +9378,106 @@ function main() -> string {
     }
 
     #[test]
+    fn prompt_parameter_followed_by_string_is_an_expression_body() {
+        let source = r#"
+function echo(prompt: string) -> string {
+  prompt
+  "tail"
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn llm_body_can_start_with_a_colon_prefixed_prompt() {
+        let source = r###"
+function F() -> string {
+  prompt: ##"hello"##
+  client: Fast
+}
+"###;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY),
+            "expected an LLM body"
+        );
+    }
+
+    #[test]
+    fn llm_body_can_start_with_tools() {
+        let source = r#"
+function F() -> string {
+  tools: []
+  client: Fast
+  prompt: `hello`
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY),
+            "expected an LLM body"
+        );
+    }
+
+    #[test]
+    fn formerly_ambiguous_body_is_an_expression_body_without_colons() {
+        let source = r#"
+function f(client: (string) -> string, prompt: string) -> string {
+  client("ignored")
+  prompt
+  "tail"
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn colonless_fields_do_not_select_the_llm_grammar() {
+        let source = r#"
+function F() -> string {
+  client Fast
+  prompt "hello"
+}
+"#;
+
+        let (root, _errors) = parse_source(source);
+        assert!(
+            !root
+                .descendants()
+                .any(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY),
+            "colonless fields must not select the LLM grammar"
+        );
+    }
+
+    #[test]
     fn expression_body_header_comment_with_prompt_word_is_not_llm_body() {
         let source = r#"
 function f() -> string {
@@ -9618,9 +9524,6 @@ function Foo() -> {
 
     #[test]
     fn single_line_llm_body_parses_client_and_prompt_fields() {
-        // B-621: a single-line LLM body with `client` and `prompt` on the same
-        // line must not swallow `prompt` into the unquoted client value and then
-        // misreport it as missing. Both fields must be recognized, error-free.
         let source = "function F(raw: string) -> C { client: Fast prompt: `hi` }\n";
 
         let (root, errors) = parse_source(source);
@@ -9640,8 +9543,6 @@ function Foo() -> {
             "client field should name `Fast`, got: {}",
             client_field.text()
         );
-        // The `prompt` word and its value must land in the PROMPT_FIELD, not the
-        // client value.
         assert!(
             !client_field.text().to_string().contains("prompt"),
             "client value must not swallow the `prompt` field: {}",
@@ -9658,10 +9559,7 @@ function Foo() -> {
 
     #[test]
     fn llm_body_bare_client_does_not_swallow_next_line_prompt_field() {
-        // B-621 regression guard: a bare `client` with no value on its line must
-        // NOT absorb the `prompt` field that starts on the following line into the
-        // client value. The client value stays empty and the PROMPT_FIELD is parsed.
-        let source = "function F(raw: string) -> C {\n  client\n  prompt #\"hi\"#\n}\n";
+        let source = "function F(raw: string) -> C {\n  client:\n  prompt: #\"hi\"#\n}\n";
 
         let (root, _errors) = parse_source(source);
         let llm_body = root
@@ -9687,33 +9585,26 @@ function Foo() -> {
     }
 
     #[test]
-    fn llm_body_client_scan_terminates_on_truncated_and_eof_inputs() {
-        // B-621 hang guard: the unquoted client-value scan must make forward
-        // progress and terminate for every input, including bodies truncated at
-        // EOF with no closing brace, newline, or next-field-start to break on.
-        // If the scan can spin, `parse_source` never returns and this test hangs
-        // (surfacing as a timeout instead of relying on wasm-pack to catch it).
+    fn llm_body_parser_terminates_on_truncated_and_eof_inputs() {
         let inputs = [
             "function F() -> C { client",
             "function F() -> C { client:",
-            "function F() -> C { client Fast",
             "function F() -> C { client: Fast",
-            "function F() -> C { client Fast prompt",
-            "function F() -> C { client Fast prompt:",
-            "function F() -> C { client Fast, ",
-            "function F() -> C { client Fast; ",
-            "function F() -> C { client Fast prompt: `hi`",
-            "function F() -> C { client openai/gpt-4o-mini",
-            "function F() -> C { client openai/gpt-4o-mini prompt",
-            "function F() -> C { client Fast //trailing",
-            "function F() -> C { client Fast /*unterminated",
-            "function F() -> C { client Fast prompt `hi",
+            "function F() -> C { client: Fast prompt",
+            "function F() -> C { client: Fast prompt:",
+            "function F() -> C { client: Fast, ",
+            "function F() -> C { client: Fast; ",
+            "function F() -> C { client: Fast prompt: `hi`",
+            "function F() -> C { client: openai/gpt-4o-mini",
+            "function F() -> C { client: openai/gpt-4o-mini prompt",
+            "function F() -> C { client: Fast //trailing",
+            "function F() -> C { client: Fast /*unterminated",
+            "function F() -> C { client: Fast prompt: `hi",
             "function F() -> C {\n  client",
-            "function F() -> C {\n  client\n  prompt",
-            "function F() -> C {\n  client\n",
+            "function F() -> C {\n  client:\n  prompt:",
+            "function F() -> C {\n  client:\n",
         ];
         for input in inputs {
-            // The assertion is simply that this call returns.
             let _ = parse_source(input);
         }
     }

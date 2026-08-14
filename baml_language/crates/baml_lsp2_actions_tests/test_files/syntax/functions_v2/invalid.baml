@@ -1,6 +1,6 @@
 function Foo() -> {
-  client Bar
-  prompt `fa`
+  client: Bar
+  prompt: `fa`
 }
 
 function FooBar(arg) -> bar {
@@ -16,6 +16,22 @@ function FooBar(arg) -> bar {
 //  1 │ function Foo() -> {
 //    ·                   ┬
 //    ·                   ╰── expected `type`, found `'{'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid.baml:2:9]
+//  2 │   client: Bar
+//    ·         ┬
+//    ·         ╰── expected `expression`, found `':'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid.baml:3:9]
+//  3 │   prompt: `fa`
+//    ·         ┬
+//    ·         ╰── expected `expression`, found `':'`
 //    ╰────
 // E0010
 //

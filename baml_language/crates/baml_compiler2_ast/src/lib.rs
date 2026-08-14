@@ -476,8 +476,8 @@ mod tests {
     fn llm_function_user_client_param_is_reserved() {
         let source = r##"
 function Extract(client: string, text: string) -> string {
-  client "openai/gpt-4o"
-  prompt `${text} ${ctx.output_format}`
+  client: "openai/gpt-4o"
+  prompt: `${text} ${ctx.output_format}`
 }
 "##;
 

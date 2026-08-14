@@ -973,31 +973,31 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `BasicClient`
-     ╭─[config_decls.baml:446:12]
- 446 │     client BasicClient
-     ·            ───────────
+     ╭─[config_decls.baml:446:13]
+ 446 │     client: BasicClient
+     ·             ───────────
      ╰────
 
   [hir] E0010
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:658:1]
- 658 │ ╭─▶ client<llm> C {
- 659 │ │       provider openai
- 660 │ │       options {
- 661 │ │           model "gpt-4"
- 662 │ │       }
- 663 │ ├─▶ }
+     ╭─[config_decls.baml:498:1]
+ 498 │ ╭─▶ client<llm> C {
+ 499 │ │       provider openai
+ 500 │ │       options {
+ 501 │ │           model "gpt-4"
+ 502 │ │       }
+ 503 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`R` has no effect)
-     ╭─[config_decls.baml:665:1]
- 665 │ ╭─▶ retry_policy R {
- 666 │ │       max_retries 1
- 667 │ ├─▶ }
+     ╭─[config_decls.baml:505:1]
+ 505 │ ╭─▶ retry_policy R {
+ 506 │ │       max_retries 1
+ 507 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
@@ -1005,23 +1005,23 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:670:1]
- 670 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
- 671 │ │       provider    openai
- 672 │ │       options    {
- 673 │ │           model    "gpt-4"
- 674 │ │       }
- 675 │ ├─▶ }
+     ╭─[config_decls.baml:510:1]
+ 510 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
+ 511 │ │       provider    openai
+ 512 │ │       options    {
+ 513 │ │           model    "gpt-4"
+ 514 │ │       }
+ 515 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`ExtraWhitespaceRetry` has no effect)
-     ╭─[config_decls.baml:677:1]
- 677 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
- 678 │ │       max_retries    3
- 679 │ ├─▶ }
+     ╭─[config_decls.baml:517:1]
+ 517 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
+ 518 │ │       max_retries    3
+ 519 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
@@ -1029,14 +1029,14 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:682:1]
- 682 │ ╭─▶ client<llm> CommaClient {
- 683 │ │       provider openai,
- 684 │ │       options {
- 685 │ │           model "gpt-4",
- 686 │ │           max_tokens 100,
- 687 │ │       }
- 688 │ ├─▶ }
+     ╭─[config_decls.baml:522:1]
+ 522 │ ╭─▶ client<llm> CommaClient {
+ 523 │ │       provider openai,
+ 524 │ │       options {
+ 525 │ │           model "gpt-4",
+ 526 │ │           max_tokens 100,
+ 527 │ │       }
+ 528 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -1044,11 +1044,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:691:1]
- 691 │ ╭─▶ client<llm> SameLineClient {
- 692 │ │       provider openai
- 693 │ │       options { model "gpt-4" }
- 694 │ ├─▶ }
+     ╭─[config_decls.baml:531:1]
+ 531 │ ╭─▶ client<llm> SameLineClient {
+ 532 │ │       provider openai
+ 533 │ │       options { model "gpt-4" }
+ 534 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -1103,33 +1103,33 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:454:12]
- 454 │     client GPT4
-     ·            ────
+     ╭─[function_decls.baml:454:13]
+ 454 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:465:12]
- 465 │     client GPT4
-     ·            ────
+     ╭─[function_decls.baml:465:13]
+ 465 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:482:12]
- 482 │     client GPT4
-     ·            ────
+     ╭─[function_decls.baml:482:13]
+ 482 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:489:12]
- 489 │     client GPT4
-     ·            ────
+     ╭─[function_decls.baml:489:13]
+ 489 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0146

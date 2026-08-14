@@ -1632,7 +1632,7 @@ pub struct LlmBodyDef {
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     /// True when the function's `tools` field can hold tools at runtime:
     /// any value other than an absent field or a literal empty list (`tools
-    /// []`). A non-literal expression (`tools shared()`) counts as `true`
+    /// []`). A non-literal expression (`tools: shared()`) counts as `true`
     /// even if it evaluates empty — the compile-time signal is conservative.
     /// PPIR skips `$stream` synthesis when set (streaming does not run the
     /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the

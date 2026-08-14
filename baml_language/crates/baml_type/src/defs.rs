@@ -21,7 +21,6 @@ pub struct SchemaDefs {
 pub struct ClassDef {
     pub name: Name,
     pub fields: Vec<FieldDef>,
-    pub is_dynamic: bool,
     pub description: Option<String>,
     pub alias: Option<String>,
     pub ty_attr: TyAttr,

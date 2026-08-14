@@ -1,8 +1,8 @@
 // Test that unknown function references in test blocks produce errors
 
 function RealFunction(input: string) -> string {
-  client "openai/gpt-4"
-  prompt `Test function`
+  client: "openai/gpt-4"
+  prompt: `Test function`
 }
 
 test TestWithUnknown {

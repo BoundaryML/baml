@@ -813,8 +813,8 @@ mod tests {
 client GPT4 = openai.OpenAiClient.new(model = "gpt-4o");
 
 function Extract(text: string) -> string {
-  client GPT4
-  prompt `${text} ${ctx.output_format}`
+  client: GPT4
+  prompt: `${text} ${ctx.output_format}`
 }
 
 function Plain(x: int) -> int { x }

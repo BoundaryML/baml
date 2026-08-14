@@ -1,6 +1,6 @@
 function Foo(bla: int) -> int {
-    client GPT4
-    prompt `Return 4`
+    client: GPT4
+    prompt: `Return 4`
 }
 
 

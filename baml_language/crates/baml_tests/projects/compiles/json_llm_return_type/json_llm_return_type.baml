@@ -8,8 +8,8 @@ client TestClient = openai.OpenAiClient.new(
 );
 
 function ExtractAny() -> json {
-    client TestClient
-    prompt `
+    client: TestClient
+    prompt: `
       Return whatever JSON you like.
 
       ${ctx.output_format}

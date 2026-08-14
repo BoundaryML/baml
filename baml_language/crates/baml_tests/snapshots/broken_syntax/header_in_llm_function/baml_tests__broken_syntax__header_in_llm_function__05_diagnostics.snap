@@ -64,7 +64,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `VertexGCP`
-    ╭─[test.baml:14:12]
- 14 │     client VertexGCP
-    ·            ─────────
+    ╭─[test.baml:14:13]
+ 14 │     client: VertexGCP
+    ·             ─────────
     ╰────
