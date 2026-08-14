@@ -36,10 +36,37 @@ function media_json_union_respects_reversed_order() -> string {
     }
 }
 
+function rejects_media_json<T>(json: string) -> bool {
+    {
+        baml.json.from_string<T>(json);
+        false
+    } catch (e) {
+        baml.json.JsonDecodeError => true
+    }
+}
+
 test "media JSON unions roundtrip every kind" {
     assert.equal(media_json_union_roundtrips_every_kind(), "image,audio,video,pdf")
 }
 
 test "media JSON unions respect reversed order" {
     assert.equal(media_json_union_respects_reversed_order(), "image")
+}
+
+test "media JSON rejects missing kind" {
+    assert.is_true(rejects_media_json<image>(
+        "{\"source\":\"base64\",\"value\":\"aGk=\",\"mime\":\"image/png\"}",
+    ))
+}
+
+test "media JSON rejects mismatched concrete kind" {
+    assert.is_true(rejects_media_json<image>(
+        "{\"kind\":\"audio\",\"source\":\"base64\",\"value\":\"aGk=\",\"mime\":\"audio/mpeg\"}",
+    ))
+}
+
+test "media JSON rejects generic kind" {
+    assert.is_true(rejects_media_json<image | audio | video | pdf>(
+        "{\"kind\":\"media\",\"source\":\"base64\",\"value\":\"aGk=\"}",
+    ))
 }

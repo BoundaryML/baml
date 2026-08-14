@@ -16,6 +16,27 @@ function media_json_union.$init_test_ns_media_json_union_media_json_union(regist
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.media_json_union"
+    load_const "media JSON rejects missing kind"
+    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.media_json_union"
+    load_const "media JSON rejects mismatched concrete kind"
+    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.media_json_union"
+    load_const "media JSON rejects generic kind"
+    make_closure .<lambda($init_test_ns_media_json_union_media_json_union, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -158,5 +179,31 @@ function media_json_union.media_json_union_roundtrips_every_kind() -> string {
     bin_op +
     load_var _36
     bin_op +
+    return
+}
+
+function media_json_union.rejects_media_json(json: string) -> bool {
+    load_type #0
+    load_var json
+    call baml.json.from_string
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.json.JsonDecodeError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const false
+
+  L3:
     return
 }
