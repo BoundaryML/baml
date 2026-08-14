@@ -154,10 +154,15 @@ jobs:
           sampler_pid=$!
           trap 'kill "$sampler_pid" 2>/dev/null || true; wait "$sampler_pid" 2>/dev/null || true' EXIT
 
+          # ulimit is process-local, so it must be set in this shell to be
+          # inherited by nextest and each test process.
+          ulimit -c unlimited || true
+
           set +e
           cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge 2>&1 | tee "$diagnostic_dir/nextest-output.log"
           nextest_status=${PIPESTATUS[0]}
           set -e
+          printf '%s\n' "$nextest_status" > "$diagnostic_dir/nextest-exit-status"
 
           kill "$sampler_pid" 2>/dev/null || true
           wait "$sampler_pid" 2>/dev/null || true
@@ -171,8 +176,13 @@ jobs:
           set -euo pipefail
 
           diagnostic_dir="$RUNNER_TEMP/b1545-diagnostics"
-          crash_dir="$HOME/Library/Logs/DiagnosticReports"
           mkdir -p "$diagnostic_dir/crash-reports" "$diagnostic_dir/nextest-state"
+
+          # ReportCrash writes asynchronously after the child exits. Give it
+          # a short, bounded window only when nextest failed.
+          if [[ -f "$diagnostic_dir/nextest-exit-status" ]] && [[ "$(< "$diagnostic_dir/nextest-exit-status")" != "0" ]]; then
+            sleep 15
+          fi
 
           {
             date -u
@@ -182,15 +192,19 @@ jobs:
             ps -axo pid,ppid,%cpu,%mem,rss,vsz,state,etime,command
           } > "$diagnostic_dir/post-test-resources.txt" 2>&1
 
-          if [[ -d "$crash_dir" ]]; then
-            find "$crash_dir" -maxdepth 1 -type f -newer "$diagnostic_dir/investigation-start" -exec cp {} "$diagnostic_dir/crash-reports/" \;
-          fi
+          for crash_dir in "$HOME/Library/Logs/DiagnosticReports" "/Library/Logs/DiagnosticReports"; do
+            if [[ -d "$crash_dir" ]]; then
+              find "$crash_dir" -maxdepth 2 -type f -newer "$diagnostic_dir/investigation-start" -exec cp {} "$diagnostic_dir/crash-reports/" \;
+            fi
+          done
 
           if [[ -d baml_language/target/nextest ]]; then
             cp -R baml_language/target/nextest/. "$diagnostic_dir/nextest-state/"
           fi
 
           find /cores -maxdepth 1 -type f -newer "$diagnostic_dir/investigation-start" -exec cp {} "$diagnostic_dir/crash-reports/" \; 2>/dev/null || true
+          /usr/bin/log show --last 10m --style syslog --predicate 'process == "ReportCrash" OR eventMessage CONTAINS[c] "SIGABRT" OR eventMessage CONTAINS[c] "abort"' > "$diagnostic_dir/macos-crash-log.txt" 2>&1 || true
+          ls -lah /cores "$HOME/Library/Logs/DiagnosticReports" "/Library/Logs/DiagnosticReports" > "$diagnostic_dir/crash-report-directories.txt" 2>&1 || true
           sccache --show-stats --stats-format json > "$diagnostic_dir/sccache-stats.json" 2>&1 || true
           cp /tmp/sccache-baml.log "$diagnostic_dir/sccache.log" 2>/dev/null || true
 
