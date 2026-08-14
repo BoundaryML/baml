@@ -28,6 +28,10 @@ use std::{
 /// `cargo build -p baml_pack_host` freshness check costs ~10s per test
 /// process under nextest even when fully fresh.
 fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
+    run_baml_cli_with_env(built, dir, args, &[])
+}
+
+fn run_baml_cli_with_env(built: &Path, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let home = dir.join(".baml-home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
@@ -42,6 +46,9 @@ fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
     // `agent`, which disables the progress lines some assertions read.
     cmd.env("BAML_OUTPUT_PRESET", "human");
     cmd.env("BAML_HOME", &home);
+    // Tests are quiet unless they explicitly exercise the inherited log level.
+    cmd.env_remove("BAML_LOG");
+    cmd.envs(env.iter().copied());
     // Share the bytecode cache across the suite so only the first invocation
     // pays the stdlib compile; see `common::shared_cache_dir`.
     cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());
@@ -454,9 +461,9 @@ fn run_valid_project_outputs_only_program_output() {
 }
 
 /// `baml run` keeps logs silent by default and streams the selected levels
-/// before printing the target's return value when `--logs` is enabled.
+/// before printing the target's return value when `--log` or `BAML_LOG` enables them.
 #[test]
-fn run_logs_flag_surfaces_filtered_logs_for_targets_and_expressions() {
+fn run_log_sources_surface_filtered_logs_for_targets_and_expressions() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
@@ -512,14 +519,15 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
     );
     assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
 
-    let info = run_baml_cli(
+    let info = run_baml_cli_with_env(
         built,
         tmp.path(),
-        &["run", "logged", "--from", ".", "--logs", "INFO"],
+        &["run", "logged", "--from", ".", "--log", "INFO"],
+        &[("BAML_LOG", "ERROR")],
     );
     assert!(
         info.status.success(),
-        "--logs INFO run failed; stdout: {}\nstderr: {}",
+        "--log INFO run failed; stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&info.stdout),
         String::from_utf8_lossy(&info.stderr),
     );
@@ -536,6 +544,24 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
         "captured logs must be flushed before the return value: {stdout}"
     );
 
+    let from_env = run_baml_cli_with_env(
+        built,
+        tmp.path(),
+        &["run", "logged", "--from", "."],
+        &[("BAML_LOG", "WARN")],
+    );
+    assert!(
+        from_env.status.success(),
+        "BAML_LOG=WARN run failed; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&from_env.stdout),
+        String::from_utf8_lossy(&from_env.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&from_env.stdout);
+    assert!(stdout.contains("[WARN]"), "stdout: {stdout}");
+    assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
+    assert!(!stdout.contains("info-detail"), "stdout: {stdout}");
+    assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
+
     let expression = run_baml_cli(
         built,
         tmp.path(),
@@ -543,7 +569,7 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
             "run",
             "--from",
             ".",
-            "--logs",
+            "--log",
             "INFO",
             "-e",
             r#"log.info("expression-detail"); 7"#,
@@ -582,7 +608,7 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
             "logged_conversion",
             "--from",
             ".",
-            "--logs",
+            "--log",
             "INFO",
             "--output-format",
             "json",
@@ -809,9 +835,9 @@ test "passes" {
 }
 
 /// BAML log events stay silent by default and become stdout lines only when
-/// the caller opts into a level threshold with `--logs`.
+/// the caller opts into a level threshold with `--log` or `BAML_LOG`.
 #[test]
-fn test_logs_flag_routes_filtered_baml_logs_to_stdout_without_changing_exit_codes() {
+fn test_log_sources_route_filtered_baml_logs_to_stdout_without_changing_exit_codes() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
@@ -852,14 +878,15 @@ test "fails" {
 
     // Uppercase is intentional: this is the documented shell spelling and
     // guards clap's case-insensitive value parsing.
-    let info = run_baml_cli(
+    let info = run_baml_cli_with_env(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "::logs", "--logs", "INFO"],
+        &["test", "--from", ".", "-i", "::logs"],
+        &[("BAML_LOG", "INFO")],
     );
     assert!(
         info.status.success(),
-        "expected --logs INFO to pass; stdout: {}\nstderr: {}",
+        "expected BAML_LOG=INFO to pass; stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&info.stdout),
         String::from_utf8_lossy(&info.stderr),
     );
@@ -886,12 +913,12 @@ test "fails" {
     let failure = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "::fails", "--logs", "ERROR"],
+        &["test", "--from", ".", "-i", "::fails", "--log", "ERROR"],
     );
     assert_eq!(
         failure.status.code(),
         Some(2),
-        "--logs must preserve the test-failure exit code; stdout: {}\nstderr: {}",
+        "--log must preserve the test-failure exit code; stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&failure.stdout),
         String::from_utf8_lossy(&failure.stderr),
     );
@@ -931,7 +958,7 @@ test "streams" {
 
     let home = tmp.path().join(".baml-home");
     let mut child = Command::new(built)
-        .args(["test", "--from", ".", "--logs", "INFO"])
+        .args(["test", "--from", ".", "--log", "INFO"])
         .current_dir(tmp.path())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)

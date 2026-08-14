@@ -728,7 +728,7 @@ fn bigint_to_hex(value: &str) -> String {
 ///
 /// The trace artifact itself remains an encoded [`BamlOutboundValue`]. This
 /// renderer is only used at the display boundary (for example, `baml test
-/// --logs`) and mirrors BAML's default structural `to_string()` shape:
+/// --log`) and mirrors BAML's default structural `to_string()` shape:
 /// top-level strings are bare, nested strings are quoted, and containers and
 /// class instances recurse without exposing protobuf or Rust wrapper types.
 pub(crate) fn render_encoded_trace_value(body: &[u8]) -> Result<String, String> {

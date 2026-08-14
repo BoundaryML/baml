@@ -111,22 +111,24 @@ pub struct TestArgs {
     pub(crate) cli_output: TestOutputOverrides,
 
     #[arg(
-        long,
+        long = "log",
+        env = "BAML_LOG",
         value_enum,
         default_value_t = TestLogLevel::Off,
         ignore_case = true,
         value_name = "LEVEL",
-        help = "Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]",
+        help = "Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error, warn, info, debug, trace]",
         hide_default_value = true,
+        hide_env = true,
         hide_possible_values = true,
         help_heading = "Test output options"
     )]
-    pub logs: TestLogLevel,
+    pub log: TestLogLevel,
 
     /// Explicit command-line log level, injected by the top-level parser so a
     /// direct scalar value can override the selected profile's value.
     #[arg(skip)]
-    pub(crate) cli_logs: Option<TestLogLevel>,
+    pub(crate) cli_log: Option<TestLogLevel>,
 }
 
 #[derive(Debug, Default)]
@@ -747,9 +749,9 @@ impl TestArgs {
             cli_exclude: self.exclude.clone(),
             output,
             logs: self
-                .cli_logs
+                .cli_log
                 .or_else(|| profile_args.as_ref().and_then(|p| p.logs))
-                .unwrap_or(self.logs),
+                .unwrap_or(self.log),
         };
         validate_selectors(
             invocation
@@ -800,7 +802,7 @@ impl TestArgs {
             .map_err(|e| anyhow!("invalid args in test profile `{name}`: {e}"))?;
         let logs_is_explicit = matches
             .subcommand_matches("test")
-            .and_then(|matches| matches.value_source("logs"))
+            .and_then(|matches| matches.value_source("log"))
             == Some(clap::parser::ValueSource::CommandLine);
         let parsed = crate::commands::RuntimeCli::from_arg_matches(&matches)
             .map_err(|e| anyhow!("invalid args in test profile `{name}`: {e}"))?;
@@ -809,7 +811,7 @@ impl TestArgs {
             unreachable!("synthetic profile argv always selects the test command")
         };
         Ok(Some(ParsedProfileArgs {
-            logs: logs_is_explicit.then_some(test.logs),
+            logs: logs_is_explicit.then_some(test.log),
             test,
             output,
         }))
@@ -1504,7 +1506,7 @@ mod tests {
             "root::integration::*".to_string(),
             "-x".to_string(),
             "*::flaky::*".to_string(),
-            "--logs".to_string(),
+            "--log".to_string(),
             "info".to_string(),
         ];
         let parsed = TestArgs::parse_profile_args("ci", &tokens)
@@ -1553,7 +1555,7 @@ mod tests {
             "ci".into(),
             "--color".into(),
             "always".into(),
-            "--logs".into(),
+            "--log".into(),
             "debug".into(),
         ]);
         let crate::commands::Commands::Test(args) = cli.command else {
@@ -1564,7 +1566,7 @@ mod tests {
                 Some(
                     r#"
 [test.profiles.ci]
-args = ["--color", "never", "--logs", "warn"]
+args = ["--color", "never", "--log", "warn"]
 "#,
                 ),
                 std::path::Path::new("/project"),

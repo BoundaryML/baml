@@ -218,21 +218,23 @@ pub struct RunArgs {
 
     /// Print BAML `log.*` events to stdout at or above this level.
     #[arg(
-        long,
+        long = "log",
+        env = "BAML_LOG",
         value_enum,
         default_value_t = RunLogLevel::Off,
         ignore_case = true,
         value_name = "LEVEL",
-        help = "Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]",
+        help = "Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error, warn, info, debug, trace]",
         hide_default_value = true,
+        hide_env = true,
         hide_possible_values = true,
         help_heading = "Run output options"
     )]
-    pub logs: RunLogLevel,
+    pub log: RunLogLevel,
 
     /// Write CLI diagnostic logs to a file.
     ///
-    /// Unrelated to `--logs`, which prints BAML `log.*` events to stdout.
+    /// Unrelated to `--log`, which prints BAML `log.*` events to stdout.
     #[arg(long, help_heading = "Run output options")]
     pub log_file: Option<PathBuf>,
 
@@ -260,11 +262,11 @@ pub use baml_exec::OutputFormat;
 impl RunArgs {
     fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
         let builder = FunctionCallContextBuilder::new(call_id);
-        LogOutput::new(self.logs, "run").call_context(builder)
+        LogOutput::new(self.log, "run").call_context(builder)
     }
 
     fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
-        LogOutput::new(self.logs, "run").print(producer);
+        LogOutput::new(self.log, "run").print(producer);
     }
 
     fn block_on_with_logs<T>(
@@ -273,7 +275,7 @@ impl RunArgs {
         future: impl std::future::Future<Output = T>,
         producer: Option<&TraceCaptureProducer>,
     ) -> T {
-        LogOutput::new(self.logs, "run").block_on(rt, future, producer)
+        LogOutput::new(self.log, "run").block_on(rt, future, producer)
     }
 
     /// Emit the "your code is unformatted" advisory. This is the one
@@ -1924,7 +1926,7 @@ mod tests {
             file: None,
             list: false,
             output_format: OutputFormat::Debug,
-            logs: RunLogLevel::Off,
+            log: RunLogLevel::Off,
             log_file: None,
             include_generated: false,
             from: None,

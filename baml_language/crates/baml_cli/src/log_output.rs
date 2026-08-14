@@ -16,6 +16,7 @@ pub(crate) enum LogLevel {
     Warn,
     Info,
     Debug,
+    Trace,
 }
 
 impl LogLevel {
@@ -26,6 +27,7 @@ impl LogLevel {
             Self::Warn => 2,
             Self::Info => 3,
             Self::Debug => 4,
+            Self::Trace => 5,
         };
         let event = match event_level.unwrap_or("info").to_ascii_lowercase().as_str() {
             "error" => 1,
@@ -136,6 +138,7 @@ mod tests {
         assert!(LogLevel::Info.allows(None));
         assert!(!LogLevel::Info.allows(Some("debug")));
         assert!(LogLevel::Debug.allows(Some("debug")));
+        assert!(LogLevel::Trace.allows(Some("debug")));
     }
 
     #[test]

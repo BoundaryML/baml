@@ -68,13 +68,14 @@ Run output options:
       --output-format <FORMAT>
           Format returned values [default: debug] [possible values: debug, json]
 
-      --logs <LEVEL>
-          Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]
+      --log <LEVEL>
+          Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error,
+          warn, info, debug, trace]
 
       --log-file <LOG_FILE>
           Write CLI diagnostic logs to a file.
 
-          Unrelated to `--logs`, which prints BAML `log.*` events to stdout.
+          Unrelated to `--log`, which prints BAML `log.*` events to stdout.
 
       --include-generated
           Include compiler-synthesized functions in `--list` output
