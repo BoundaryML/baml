@@ -2141,7 +2141,7 @@ class baml.time.PlainTime$stream {
 function baml.time._from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime  [builtin]
 function baml.time._to_string_impl(self: ?) -> string  [builtin]
 function baml.time._wrap_into_day(total_ns: bigint) -> int  [expr] {
-  { let day_ns = 86400000000000n; let wrapped = total_ns Mod day_ns Add day_ns Mod day_ns } {  } wrapped.to_int() catch (e) { root.errors.InvalidArgument => {  } baml.sys.panic("unreachable: nano...") }
+  { let day_ns = 86400000000000n; let wrapped = total_ns Mod day_ns Add day_ns Mod day_ns } {  } wrapped.to_int() catch (e) { root.errors.InvalidArgument => baml.sys.panic("unreachable: nano...") }
 }
 function baml.time.add(self: ?, other: Duration) -> baml.time.PlainTime  [expr] {
   {  } baml.time.PlainTime { _nanoseconds: _wrap_into_day(self._nanoseconds Add other._nanoseconds) }

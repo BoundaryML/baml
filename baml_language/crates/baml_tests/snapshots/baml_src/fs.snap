@@ -483,6 +483,17 @@ function fs.fs_chmod_rejects_high_mode_fn() -> bool {
     pop 1
     load_var path
     load_const 4096
+    call user.fs.fs_chmod_rejects_mode
+    store_var threw
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var threw
+    return
+}
+
+function fs.fs_chmod_rejects_mode(path: string, mode: int) -> bool {
+    load_var2 1 2
     sys_op baml.fs.chmod
     pop 1
     jump L2
@@ -497,18 +508,12 @@ function fs.fs_chmod_rejects_high_mode_fn() -> bool {
 
   L1:
     load_const true
-    store_var threw
     jump L3
 
   L2:
     load_const false
-    store_var threw
 
   L3:
-    load_var path
-    sys_op baml.fs.remove
-    pop 1
-    load_var threw
     return
 }
 
@@ -524,28 +529,8 @@ function fs.fs_chmod_rejects_negative_mode_fn() -> bool {
     load_const 0
     load_const 1
     sub_int
-    sys_op baml.fs.chmod
-    pop 1
-    jump L2
-    load_var e
-    is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var e
-    rethrow
-
-  L1:
-    load_const true
+    call user.fs.fs_chmod_rejects_mode
     store_var threw
-    jump L3
-
-  L2:
-    load_const false
-    store_var threw
-
-  L3:
     load_var path
     sys_op baml.fs.remove
     pop 1
@@ -2078,14 +2063,7 @@ function fs.fs_size_returns_length_fn() -> int {
     return
 }
 
-function fs.fs_symlink_onto_existing_path_errors_fn() -> bool {
-    load_const "symlink_taken.txt"
-    call user.fs.fs_tmp
-    store_var path
-    load_var path
-    load_const "keep me"
-    sys_op baml.fs.write
-    pop 1
+function fs.fs_symlink_is_refused_at(path: string) -> bool {
     load_var2 1 1
     sys_op baml.fs.symlink
     pop 1
@@ -2101,28 +2079,40 @@ function fs.fs_symlink_onto_existing_path_errors_fn() -> bool {
 
   L1:
     load_const true
-    store_var threw
     jump L3
 
   L2:
     load_const false
-    store_var threw
 
   L3:
+    return
+}
+
+function fs.fs_symlink_onto_existing_path_errors_fn() -> bool {
+    load_const "symlink_taken.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "keep me"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    call user.fs.fs_symlink_is_refused_at
+    store_var threw
     load_var path
     sys_op baml.fs.read
-    store_var _11
+    store_var _7
     load_var path
     sys_op baml.fs.remove
     pop 1
     load_var threw
-    jump_if_false L4
+    jump_if_false L0
     pop 1
-    load_var _11
+    load_var _7
     load_const "keep me"
     cmp_op ==
 
-  L4:
+  L0:
     return
 }
 

@@ -714,15 +714,23 @@ test "fs_chmod_on_existing_file" {
 
 // A mode outside `0..=0o7777` is a caller mistake, rejected before the syscall
 // the kernel would have silently masked it in.
-function fs_chmod_rejects_high_mode_fn() -> bool {
-    let path = fs_tmp("chmod_high_mode.txt");
-    baml.fs.write(path, "content");
-    let threw = {
-        baml.fs.chmod(path, 0o10000);
+//
+// Each `catch` is the tail expression of its own helper so its result is
+// returned rather than bound to a local — the caller keeps the setup and
+// cleanup around the call.
+function fs_chmod_rejects_mode(path: string, mode: int) -> bool {
+    {
+        baml.fs.chmod(path, mode);
         false
     } catch (e) {
         baml.errors.InvalidArgument => true
-    };
+    }
+}
+
+function fs_chmod_rejects_high_mode_fn() -> bool {
+    let path = fs_tmp("chmod_high_mode.txt");
+    baml.fs.write(path, "content");
+    let threw = fs_chmod_rejects_mode(path, 0o10000);
     baml.fs.remove(path);
     threw
 }
@@ -734,12 +742,7 @@ test "fs_chmod_rejects_high_mode" {
 function fs_chmod_rejects_negative_mode_fn() -> bool {
     let path = fs_tmp("chmod_negative_mode.txt");
     baml.fs.write(path, "content");
-    let threw = {
-        baml.fs.chmod(path, 0 - 1);
-        false
-    } catch (e) {
-        baml.errors.InvalidArgument => true
-    };
+    let threw = fs_chmod_rejects_mode(path, 0 - 1);
     baml.fs.remove(path);
     threw
 }
@@ -773,15 +776,19 @@ test "fs_chmod_missing_path_errors" {
 // asserted here holds even where symlink creation is refused outright: the call
 // fails with `Io` and leaves the occupied path alone.
 
-function fs_symlink_onto_existing_path_errors_fn() -> bool {
-    let path = fs_tmp("symlink_taken.txt");
-    baml.fs.write(path, "keep me");
-    let threw = {
+function fs_symlink_is_refused_at(path: string) -> bool {
+    {
         baml.fs.symlink(path, path);
         false
     } catch (e) {
         baml.errors.Io => true
-    };
+    }
+}
+
+function fs_symlink_onto_existing_path_errors_fn() -> bool {
+    let path = fs_tmp("symlink_taken.txt");
+    baml.fs.write(path, "keep me");
+    let threw = fs_symlink_is_refused_at(path);
     let intact = baml.fs.read(path) == "keep me";
     baml.fs.remove(path);
     threw && intact

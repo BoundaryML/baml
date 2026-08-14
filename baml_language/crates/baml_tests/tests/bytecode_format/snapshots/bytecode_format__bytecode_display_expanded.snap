@@ -5053,20 +5053,20 @@ function claude_code.ClaudeCodeClient.new(model: string, executable: string, cwd
 }
 
 function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
-  165   0     load_type 0                        
+  163   0     load_type 0                        
         1     load_var 1                         (raw)
         2     load_const 1                       (".type")
         3     load_const 2                       ("?")
         4     call 343 ntypeargs=1               (baml.json.path_or)
         5     store_var 2                        (kind)
 
-  166   6     load_var 2                         (kind)
+  164   6     load_var 2                         (kind)
         7     load_const 3                       ("system")
         8     cmp_op ==                          
         9     pop_jump_if_false +2               (to 11)
         10    jump +183                          (to 193)
 
-  179   11    load_var 2                         (kind)
+  177   11    load_var 2                         (kind)
         12    load_const 4                       ("assistant")
         13    cmp_op ==                          
         14    jump_if_false +2                   (to 16)
@@ -5078,13 +5078,13 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         20    pop_jump_if_false +2               (to 22)
         21    jump +23                           (to 44)
 
-  197   22    load_var 2                         (kind)
+  195   22    load_var 2                         (kind)
         23    load_const 6                       ("result")
         24    cmp_op ==                          
         25    pop_jump_if_false +2               (to 27)
         26    jump +233                          (to 259)
 
-  200   27    load_type 0                        
+  198   27    load_type 0                        
         28    load_var 2                         (kind)
         29    call 138 ntypeargs=1               (baml.String.from)
         30    store_var 23                       (_88)
@@ -5102,18 +5102,18 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         42    pop 1                              
         43    jump +216                          (to 259)
 
-  180   44    load_type 0                        
+  178   44    load_type 0                        
         45    alloc_array 0                      
         46    store_var 9                        (parts)
 
-  181   47    load_type 13                       
+  179   47    load_type 13                       
         48    load_var 1                         (raw)
         49    load_const 14                      (".message.content")
         50    load_type 15                       
         51    alloc_array 0                      
         52    call 343 ntypeargs=1               (baml.json.path_or)
 
-  182   53    load_type 16                       
+  180   53    load_type 16                       
         54    load_const 17                      ("iter")
         55    virtual_call nargs=1 ntypeargs=0   
         56    store_var 10                       (_35)
@@ -5129,14 +5129,14 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         66    load_var 11                        (_36)
         67    store_var 12                       (b)
 
-  183   68    load_type 0                        
+  181   68    load_type 0                        
         69    load_var 12                        (b)
         70    load_const 21                      (".type")
         71    load_const 22                      ("?")
         72    call 343 ntypeargs=1               (baml.json.path_or)
         73    store_var 13                       (bt)
 
-  184   74    load_var 13                        (bt)
+  182   74    load_var 13                        (bt)
         75    load_const 23                      ("text")
         76    cmp_op ==                          
         77    pop_jump_if_false +2               (to 79)
@@ -5157,20 +5157,20 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         92    pop_jump_if_false +2               (to 94)
         93    jump +6                            (to 99)
 
-  193   94    load_type 0                        
+  191   94    load_type 0                        
         95    load_var2 9 13                     
         96    call 4 ntypeargs=1                 (baml.Array.push)
         97    pop 1                              
         98    jump -41                           (to 57)
 
-  192   99    load_type 0                        
+  190   99    load_type 0                        
         100   load_var 9                         (parts)
         101   load_const 27                      ("tool_result")
         102   call 4 ntypeargs=1                 (baml.Array.push)
         103   pop 1                              
         104   jump -47                           (to 57)
 
-  191   105   load_type 0                        
+  189   105   load_type 0                        
         106   load_var 12                        (b)
         107   load_const 28                      (".name")
         108   load_const 29                      ("?")
@@ -5189,7 +5189,7 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         121   pop 1                              
         122   jump -65                           (to 57)
 
-  188   123   load_type 0                        
+  186   123   load_type 0                        
         124   load_var 12                        (b)
         125   load_const 31                      (".thinking")
         126   load_const 32                      ("")
@@ -5201,17 +5201,17 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         132   call 138 ntypeargs=1               (baml.String.from)
         133   store_var 16                       (_55)
 
-  187   134   load_type 0                        
+  185   134   load_type 0                        
         135   load_var 9                         (parts)
 
-  188   136   load_const 33                      ("thinking: ")
+  186   136   load_const 33                      ("thinking: ")
         137   load_var 16                        (_55)
         138   bin_op +                           
         139   call 4 ntypeargs=1                 (baml.Array.push)
         140   pop 1                              
         141   jump -84                           (to 57)
 
-  185   142   load_type 0                        
+  183   142   load_type 0                        
         143   load_var 12                        (b)
         144   load_const 34                      (".text")
         145   load_const 35                      ("")
@@ -5231,7 +5231,7 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         159   pop 1                              
         160   jump -103                          (to 57)
 
-  196   161   load_type 0                        
+  194   161   load_type 0                        
         162   load_var 2                         (kind)
         163   call 138 ntypeargs=1               (baml.String.from)
         164   store_var 20                       (_78)
@@ -5264,20 +5264,20 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         191   pop 1                              
         192   jump +67                           (to 259)
 
-  167   193   load_type 0                        
+  165   193   load_type 0                        
         194   load_var 1                         (raw)
         195   load_const 45                      (".subtype")
         196   load_const 46                      ("?")
         197   call 343 ntypeargs=1               (baml.json.path_or)
         198   store_var 3                        (subtype)
 
-  168   199   load_var 3                         (subtype)
+  166   199   load_var 3                         (subtype)
         200   load_const 47                      ("thinking_tokens")
         201   cmp_op ==                          
         202   pop_jump_if_false +2               (to 204)
         203   jump +32                           (to 235)
 
-  176   204   load_type 0                        
+  174   204   load_type 0                        
         205   load_var 3                         (subtype)
         206   call 138 ntypeargs=1               (baml.String.from)
         207   store_var 6                        (_19)
@@ -5292,10 +5292,10 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         216   call 138 ntypeargs=1               (baml.String.from)
         217   store_var 7                        (_22)
 
-  175   218   load_const 50                      ("$baml_log")
+  173   218   load_const 50                      ("$baml_log")
         219   load_const 51                      ("info")
 
-  176   220   load_const 52                      ("cc event: system/")
+  174   220   load_const 52                      ("cc event: system/")
         221   load_var 6                         (_19)
         222   bin_op +                           
         223   load_const 53                      (" model=")
@@ -5308,11 +5308,11 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         230   load_type 12                       
         231   alloc_map 2                        
 
-  175   232   send_event                         
+  173   232   send_event                         
         233   pop 1                              
         234   jump +25                           (to 259)
 
-  172   235   load_type 56                       
+  170   235   load_type 56                       
         236   load_var 1                         (raw)
         237   load_const 57                      (".estimated_tokens")
         238   load_const 58                      (0)
@@ -5323,10 +5323,10 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         243   call 138 ntypeargs=1               (baml.String.from)
         244   store_var 4                        (_12)
 
-  171   245   load_const 59                      ("$baml_log")
+  169   245   load_const 59                      ("$baml_log")
         246   load_const 60                      ("debug")
 
-  172   247   load_const 61                      ("cc event: thinking ~")
+  170   247   load_const 61                      ("cc event: thinking ~")
         248   load_var 4                         (_12)
         249   bin_op +                           
         250   load_const 62                      (" tokens")
@@ -5337,26 +5337,26 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         255   load_type 12                       
         256   alloc_map 2                        
 
-  171   257   send_event                         
+  169   257   send_event                         
         258   pop 1                              
 
-  202   259   load_const 65                      (null)
+  200   259   load_const 65                      (null)
         260   return                             
 }
 
 function claude_code.internal._preview(text: string) -> string {
-  156   0    load_var 1             (text)
+  154   0    load_var 1             (text)
         1    call 139 ntypeargs=0   (baml.String.length)
         2    load_const 0           (120)
         3    cmp_int_op >           
         4    pop_jump_if_false +2   (to 6)
         5    jump +3                (to 8)
 
-  159   6    load_var 1             (text)
+  157   6    load_var 1             (text)
 
-  156   7    jump +11               (to 18)
+  154   7    jump +11               (to 18)
 
-  157   8    load_var 1             (text)
+  155   8    load_var 1             (text)
         9    load_const 1           (0)
         10   load_const 0           (120)
         11   call 153 ntypeargs=0   (baml.String.substring)
@@ -5370,10 +5370,10 @@ function claude_code.internal._preview(text: string) -> string {
 }
 
 function claude_code.internal._read_result(p: baml.sys.Process) -> baml.json.json {
-  129   0    load_const 0                       (null)
+  127   0    load_const 0                       (null)
         1    store_var 2                        (result)
 
-  130   2    load_var 1                         (p)
+  128   2    load_var 1                         (p)
         3    load_field 0                       (stdout)
         4    load_type 1                        
         5    load_const 2                       ("iter")
@@ -5392,29 +5392,29 @@ function claude_code.internal._read_result(p: baml.sys.Process) -> baml.json.jso
         18   call 144 ntypeargs=0               (baml.String.trim)
         19   store_var 5                        (trimmed)
 
-  132   20   load_var 5                         (trimmed)
+  130   20   load_var 5                         (trimmed)
         21   call 139 ntypeargs=0               (baml.String.length)
         22   load_const 6                       (0)
         23   cmp_int_op >                       
         24   pop_jump_if_false -16              (to 8)
 
-  133   25   load_var 5                         (trimmed)
+  131   25   load_var 5                         (trimmed)
         26   call 330 ntypeargs=0               (baml.json.parse)
         27   store_var 6                        (raw)
         28   jump +7                            (to 35)
         29   load_var 7                         (e)
         30   throw_if_panic                     
 
-  135   31   load_const 7                       ("claude-code")
+  133   31   load_const 7                       ("claude-code")
         32   load_var 5                         (trimmed)
         33   init_instance 0                    (ai.errors.ParseFailed .provider, .raw_output)
         34   throw                              
 
-  138   35   load_var 6                         (raw)
+  136   35   load_var 6                         (raw)
         36   call 924 ntypeargs=0               (claude_code.internal._log_cc_event)
         37   pop 1                              
 
-  139   38   load_type 8                        
+  137   38   load_type 8                        
         39   load_var 6                         (raw)
         40   load_const 9                       (".type")
         41   load_const 10                      ("")
@@ -5423,21 +5423,21 @@ function claude_code.internal._read_result(p: baml.sys.Process) -> baml.json.jso
         44   cmp_op ==                          
         45   pop_jump_if_false -37              (to 8)
 
-  140   46   load_var 6                         (raw)
+  138   46   load_var 6                         (raw)
         47   store_var 2                        (result)
 
-  139   48   jump -40                           (to 8)
+  137   48   jump -40                           (to 8)
 
-  146   49   load_var 2                         (result)
+  144   49   load_var 2                         (result)
         50   load_const 0                       (null)
         51   call 656 ntypeargs=0               (baml.ops.equals_equals)
         52   pop_jump_if_false +2               (to 54)
         53   jump +3                            (to 56)
 
-  152   54   load_var 2                         (result)
+  150   54   load_var 2                         (result)
         55   return                             
 
-  147   56   load_const 12                      ("claude-code")
+  145   56   load_const 12                      ("claude-code")
         57   load_const 13                      ("the Claude Code CLI stream ended without a result event")
         58   init_instance 1                    (ai.errors.ParseFailed .provider, .raw_output)
         59   throw                              
@@ -5462,7 +5462,7 @@ function claude_code.internal._type_schema(t: string) -> map<string, unknown> {
 }
 
 function claude_code.internal.allowed_mcp_tools(c: claude_code.ClaudeCodeClient) -> string {
-  221   0    load_type 0           
+  219   0    load_type 0           
         1    load_type 1           
         2    load_var 1            (c)
         3    load_field 6          (mcp_servers)
@@ -5473,11 +5473,11 @@ function claude_code.internal.allowed_mcp_tools(c: claude_code.ClaudeCodeClient)
         8    load_type 2           
         9    load_var 3            (_3)
 
-  222   10   make_closure 2243 0   
+  220   10   make_closure 2243 0   
         11   call 16 ntypeargs=3   (baml.Array.map)
         12   store_var 2           (_2)
 
-  221   13   load_type 0           
+  219   13   load_type 0           
         14   load_var 2            (_2)
         15   load_const 3          (",")
         16   call 15 ntypeargs=1   (baml.Array.join)
@@ -5746,29 +5746,29 @@ function claude_code.internal.envelope_schema(output_type: type) -> map<string, 
 }
 
 function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-  235   0     load_const 0                       ("")
+  233   0     load_const 0                       ("")
         1     load_var 2                         (input)
         2     load_field 0                       (prompt)
         3     call_indirect                      
         4     call 811 ntypeargs=0               (ai.Prompt.text)
         5     store_var 4                        (instructions)
 
-  236   6     load_var 2                         (input)
+  234   6     load_var 2                         (input)
         7     load_field 2                       (toolbox)
         8     call 826 ntypeargs=0               (ai.tools.Toolbox.is_empty)
         9     unary_op !                         
         10    store_var_load_var 5               (has_tools)
 
-  237   11    pop_jump_if_false +2               (to 13)
+  235   11    pop_jump_if_false +2               (to 13)
         12    jump +6                            (to 18)
 
-  240   13    load_var 2                         (input)
+  238   13    load_var 2                         (input)
         14    load_field 3                       (output_type)
         15    sys_op 344                         (baml.json.schema)
         16    store_var 6                        (schema)
         17    jump +9                            (to 26)
 
-  238   18    load_var 2                         (input)
+  236   18    load_var 2                         (input)
         19    load_field 3                       (output_type)
         20    call 919 ntypeargs=0               (claude_code.internal.envelope_schema)
         21    store_var 7                        (_11)
@@ -5777,11 +5777,11 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         24    call 334 ntypeargs=1               (baml.json.to_json)
         25    store_var 6                        (schema)
 
-  242   26    load_var 5                         (has_tools)
+  240   26    load_var 5                         (has_tools)
         27    pop_jump_if_false +2               (to 29)
         28    jump +17                           (to 45)
 
-  245   29    load_type 2                        
+  243   29    load_type 2                        
         30    load_var 4                         (instructions)
         31    call 138 ntypeargs=1               (baml.String.from)
         32    store_var 14                       (_29)
@@ -5797,9 +5797,9 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         42    bin_op +                           
         43    store_var 8                        (prompt_text)
 
-  242   44    jump +26                           (to 70)
+  240   44    jump +26                           (to 70)
 
-  243   45    load_type 2                        
+  241   45    load_type 2                        
         46    load_var 4                         (instructions)
         47    call 138 ntypeargs=1               (baml.String.from)
         48    store_var 9                        (_18)
@@ -5825,7 +5825,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         68    bin_op +                           
         69    store_var 8                        (prompt_text)
 
-  249   70    load_type 2                        
+  247   70    load_type 2                        
         71    load_var 1                         (c)
         72    load_field 1                       (model)
         73    call 138 ntypeargs=1               (baml.String.from)
@@ -5847,10 +5847,10 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         89    call 138 ntypeargs=1               (baml.String.from)
         90    store_var 20                       (_47)
 
-  248   91    load_const 4                       ("$baml_log")
+  246   91    load_const 4                       ("$baml_log")
         92    load_const 5                       ("info")
 
-  249   93    load_const 6                       ("claude-code invoke: model=")
+  247   93    load_const 6                       ("claude-code invoke: model=")
         94    load_var 17                        (_41)
         95    bin_op +                           
         96    load_const 7                       (" prompt_chars=")
@@ -5867,74 +5867,74 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         107   load_type 11                       
         108   alloc_map 2                        
 
-  248   109   send_event                         
+  246   109   send_event                         
         110   pop 1                              
 
-  251   111   load_type 2                        
+  249   111   load_type 2                        
         112   alloc_array 0                      
         113   store_var 22                       (args)
 
-  252   114   load_type 2                        
+  250   114   load_type 2                        
         115   load_var 22                        (args)
         116   load_const 12                      ("-p")
         117   call 4 ntypeargs=1                 (baml.Array.push)
         118   pop 1                              
 
-  253   119   load_type 2                        
+  251   119   load_type 2                        
         120   load_var 22                        (args)
         121   load_const 13                      ("--output-format")
         122   call 4 ntypeargs=1                 (baml.Array.push)
         123   pop 1                              
 
-  254   124   load_type 2                        
+  252   124   load_type 2                        
         125   load_var 22                        (args)
         126   load_const 14                      ("stream-json")
         127   call 4 ntypeargs=1                 (baml.Array.push)
         128   pop 1                              
 
-  255   129   load_type 2                        
+  253   129   load_type 2                        
         130   load_var 22                        (args)
         131   load_const 15                      ("--verbose")
         132   call 4 ntypeargs=1                 (baml.Array.push)
         133   pop 1                              
 
-  256   134   load_type 2                        
+  254   134   load_type 2                        
         135   load_var 22                        (args)
         136   load_const 16                      ("--model")
         137   call 4 ntypeargs=1                 (baml.Array.push)
         138   pop 1                              
 
-  257   139   load_type 2                        
+  255   139   load_type 2                        
         140   load_var2 22 1                     
         141   load_field 1                       (model)
         142   call 4 ntypeargs=1                 (baml.Array.push)
         143   pop 1                              
 
-  258   144   load_type 2                        
+  256   144   load_type 2                        
         145   load_var 22                        (args)
         146   load_const 17                      ("--permission-mode")
         147   call 4 ntypeargs=1                 (baml.Array.push)
         148   pop 1                              
 
-  259   149   load_type 2                        
+  257   149   load_type 2                        
         150   load_var2 22 1                     
         151   load_field 4                       (permission_mode)
         152   call 4 ntypeargs=1                 (baml.Array.push)
         153   pop 1                              
 
-  260   154   load_type 2                        
+  258   154   load_type 2                        
         155   load_var 22                        (args)
         156   load_const 18                      ("--no-session-persistence")
         157   call 4 ntypeargs=1                 (baml.Array.push)
         158   pop 1                              
 
-  261   159   load_type 2                        
+  259   159   load_type 2                        
         160   load_var 22                        (args)
         161   load_const 19                      ("--tools")
         162   call 4 ntypeargs=1                 (baml.Array.push)
         163   pop 1                              
 
-  262   164   load_type 2                        
+  260   164   load_type 2                        
         165   load_var 1                         (c)
         166   load_field 5                       (harness_tools)
         167   load_const 20                      (",")
@@ -5945,7 +5945,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         172   call 4 ntypeargs=1                 (baml.Array.push)
         173   pop 1                              
 
-  269   174   load_var 1                         (c)
+  267   174   load_var 1                         (c)
         175   call 925 ntypeargs=0               (claude_code.internal.mcp_config_json)
         176   store_var 24                       (_81)
         177   load_var 24                        (_81)
@@ -5954,24 +5954,24 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         180   load_var 24                        (_81)
         181   store_var 25                       (mcp)
 
-  270   182   load_type 2                        
+  268   182   load_type 2                        
         183   load_var 22                        (args)
         184   load_const 22                      ("--mcp-config")
         185   call 4 ntypeargs=1                 (baml.Array.push)
         186   pop 1                              
 
-  271   187   load_type 2                        
+  269   187   load_type 2                        
         188   load_var2 22 25                    
         189   call 4 ntypeargs=1                 (baml.Array.push)
         190   pop 1                              
 
-  272   191   load_type 2                        
+  270   191   load_type 2                        
         192   load_var 22                        (args)
         193   load_const 23                      ("--strict-mcp-config")
         194   call 4 ntypeargs=1                 (baml.Array.push)
         195   pop 1                              
 
-  273   196   load_var 1                         (c)
+  271   196   load_var 1                         (c)
         197   call 926 ntypeargs=0               (claude_code.internal.allowed_mcp_tools)
         198   store_var 27                       (_93)
         199   load_type 2                        
@@ -5986,13 +5986,13 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         208   call 4 ntypeargs=1                 (baml.Array.push)
         209   pop 1                              
 
-  275   210   load_type 2                        
+  273   210   load_type 2                        
         211   load_var 22                        (args)
         212   load_const 25                      ("--json-schema")
         213   call 4 ntypeargs=1                 (baml.Array.push)
         214   pop 1                              
 
-  276   215   load_var 6                         (schema)
+  274   215   load_var 6                         (schema)
         216   call 331 ntypeargs=0               (baml.json.stringify)
         217   store_var 28                       (_99)
         218   load_type 2                        
@@ -6000,17 +6000,17 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         220   call 4 ntypeargs=1                 (baml.Array.push)
         221   pop 1                              
 
-  277   222   load_type 2                        
+  275   222   load_type 2                        
         223   load_var2 22 8                     
         224   call 4 ntypeargs=1                 (baml.Array.push)
         225   pop 1                              
 
-  280   226   load_var 1                         (c)
+  278   226   load_var 1                         (c)
         227   load_field 0                       (executable)
 
-  281   228   load_var2 22 1                     
+  279   228   load_var2 22 1                     
 
-  282   229   load_field 2                       (cwd)
+  280   229   load_field 2                       (cwd)
         230   load_const 26                      (null)
         231   load_var 1                         (c)
         232   load_field 3                       (timeout_ms)
@@ -6021,10 +6021,10 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         237   store_var 29                       (p)
         238   jump +18                           (to 256)
 
-  279   239   load_var 30                        (e)
+  277   239   load_var 30                        (e)
         240   throw_if_panic                     
 
-  287   241   load_type 27                       
+  285   241   load_type 27                       
         242   load_var 30                        (e)
         243   call 138 ntypeargs=1               (baml.String.from)
         244   store_var 32                       (_115)
@@ -6033,34 +6033,34 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         247   call 138 ntypeargs=1               (baml.String.from)
         248   store_var 31                       (_114)
 
-  285   249   load_const 28                      ("claude-code")
+  283   249   load_const 28                      ("claude-code")
 
-  287   250   load_const 29                      ("the Claude Code CLI could not start: ")
+  285   250   load_const 29                      ("the Claude Code CLI could not start: ")
         251   load_var 31                        (_114)
         252   bin_op +                           
         253   load_const 26                      (null)
         254   init_instance 1                    (ai.errors.NetworkFailure .provider, .detail, .raw_body)
         255   throw                              
 
-  296   256   load_var 29                        (p)
+  294   256   load_var 29                        (p)
         257   sys_op 248                         (baml.sys.Process.close_stdin)
         258   pop 1                              
         259   jump +3                            (to 262)
         260   load_var 35                        (e)
         261   throw_if_panic                     
 
-  301   262   load_var 29                        (p)
+  299   262   load_var 29                        (p)
         263   call 922 ntypeargs=0               (claude_code.internal._read_result)
         264   store_var 36                       (result)
 
-  302   265   load_var 29                        (p)
+  300   265   load_var 29                        (p)
         266   sys_op 249                         (baml.sys.Process.wait)
         267   store_var 37                       (exit)
         268   jump +18                           (to 286)
         269   load_var 38                        (e)
         270   throw_if_panic                     
 
-  306   271   load_type 30                       
+  304   271   load_type 30                       
         272   load_var 38                        (e)
         273   call 138 ntypeargs=1               (baml.String.from)
         274   store_var 40                       (_129)
@@ -6069,22 +6069,22 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         277   call 138 ntypeargs=1               (baml.String.from)
         278   store_var 39                       (_128)
 
-  304   279   load_const 31                      ("claude-code")
+  302   279   load_const 31                      ("claude-code")
 
-  306   280   load_const 32                      ("the Claude Code CLI did not terminate cleanly: ")
+  304   280   load_const 32                      ("the Claude Code CLI did not terminate cleanly: ")
         281   load_var 39                        (_128)
         282   bin_op +                           
         283   load_const 26                      (null)
         284   init_instance 2                    (ai.errors.NetworkFailure .provider, .detail, .raw_body)
         285   throw                              
 
-  311   286   load_var 37                        (exit)
+  309   286   load_var 37                        (exit)
         287   call 242 ntypeargs=0               (baml.sys.ProcessExit.ok)
         288   unary_op !                         
         289   pop_jump_if_false +2               (to 291)
         290   jump +251                          (to 541)
 
-  320   291   load_type 33                       
+  318   291   load_type 33                       
         292   load_var 36                        (result)
         293   load_const 34                      (".is_error")
         294   load_const 35                      (false)
@@ -6092,7 +6092,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         296   pop_jump_if_false +2               (to 298)
         297   jump +231                          (to 528)
 
-  328   298   load_type 2                        
+  326   298   load_type 2                        
         299   load_var 36                        (result)
         300   load_const 36                      (".subtype")
         301   load_const 37                      ("?")
@@ -6123,10 +6123,10 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         326   call 138 ntypeargs=1               (baml.String.from)
         327   store_var 48                       (_163)
 
-  327   328   load_const 43                      ("$baml_log")
+  325   328   load_const 43                      ("$baml_log")
         329   load_const 44                      ("info")
 
-  328   330   load_const 45                      ("claude-code result: subtype=")
+  326   330   load_const 45                      ("claude-code result: subtype=")
         331   load_var 44                        (_153)
         332   bin_op +                           
         333   load_const 46                      (" cost_usd=")
@@ -6143,10 +6143,10 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         344   load_type 11                       
         345   alloc_map 2                        
 
-  327   346   send_event                         
+  325   346   send_event                         
         347   pop 1                              
 
-  330   348   load_type 50                       
+  328   348   load_type 50                       
         349   load_var 36                        (result)
         350   load_const 51                      (".structured_output")
         351   call 342 ntypeargs=1               (baml.json.path)
@@ -6155,7 +6155,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         354   load_var 51                        (e)
         355   throw_if_panic                     
 
-  332   356   load_type 2                        
+  330   356   load_type 2                        
         357   load_var 36                        (result)
         358   load_const 52                      (".result")
         359   load_const 53                      ("")
@@ -6166,49 +6166,49 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         364   load_var 52                        (inner)
         365   throw_if_panic                     
 
-  336   366   load_var 36                        (result)
+  334   366   load_var 36                        (result)
         367   call 331 ntypeargs=0               (baml.json.stringify)
         368   store_var 53                       (_177)
 
-  334   369   load_const 54                      ("claude-code")
+  332   369   load_const 54                      ("claude-code")
         370   load_var 53                        (_177)
         371   init_instance 3                    (ai.errors.ParseFailed .provider, .raw_output)
         372   throw                              
 
-  344   373   load_type 3                        
+  342   373   load_type 3                        
         374   load_var 36                        (result)
         375   load_const 55                      (".usage.input_tokens")
         376   load_const 56                      (0)
         377   call 343 ntypeargs=1               (baml.json.path_or)
         378   store_var 54                       (_180)
 
-  345   379   load_type 3                        
+  343   379   load_type 3                        
         380   load_var 36                        (result)
         381   load_const 57                      (".usage.output_tokens")
         382   load_const 56                      (0)
         383   call 343 ntypeargs=1               (baml.json.path_or)
         384   store_var 55                       (_183)
 
-  346   385   load_type 58                       
+  344   385   load_type 58                       
         386   load_var 36                        (result)
         387   load_const 59                      (".usage.cache_read_input_tokens")
         388   load_const 26                      (null)
         389   call 343 ntypeargs=1               (baml.json.path_or)
         390   store_var 56                       (_186)
 
-  350   391   load_type 60                       
+  348   391   load_type 60                       
         392   alloc_array 0                      
         393   store_var 57                       (content)
 
-  351   394   load_const 56                      (ai.content.StopReason.Complete)
+  349   394   load_const 56                      (ai.content.StopReason.Complete)
         395   alloc_variant 436                  (ai.content.StopReason)
         396   store_var 58                       (stop)
 
-  352   397   load_var 5                         (has_tools)
+  350   397   load_var 5                         (has_tools)
         398   pop_jump_if_false +2               (to 400)
         399   jump +10                           (to 409)
 
-  380   400   load_var 50                        (structured)
+  378   400   load_var 50                        (structured)
         401   call 331 ntypeargs=0               (baml.json.stringify)
         402   store_var 74                       (_247)
         403   load_type 60                       
@@ -6218,26 +6218,26 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         407   pop 1                              
         408   jump +108                          (to 516)
 
-  353   409   load_type 50                       
+  351   409   load_type 50                       
         410   load_var 36                        (result)
         411   load_const 61                      (".structured_output.outcome")
         412   load_var 50                        (structured)
         413   call 343 ntypeargs=1               (baml.json.path_or)
         414   store_var 59                       (outcome)
 
-  354   415   load_type 62                       
+  352   415   load_type 62                       
         416   load_var 59                        (outcome)
         417   load_const 63                      (".calls")
         418   load_const 26                      (null)
         419   call 343 ntypeargs=1               (baml.json.path_or)
 
-  355   420   store_var 60                       (_199)
+  353   420   store_var 60                       (_199)
         421   load_var 60                        (_199)
         422   narrow_bind 64 60                  
         423   pop_jump_if_false +2               (to 425)
         424   jump +10                           (to 434)
 
-  377   425   load_var 59                        (outcome)
+  375   425   load_var 59                        (outcome)
         426   call 331 ntypeargs=0               (baml.json.stringify)
         427   store_var 73                       (_242)
         428   load_type 60                       
@@ -6247,16 +6247,16 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         432   pop 1                              
         433   jump +83                           (to 516)
 
-  356   434   load_const 56                      (0)
+  354   434   load_const 56                      (0)
         435   store_var 61                       (i)
 
-  355   436   load_var 60                        (_199)
+  353   436   load_var 60                        (_199)
         437   load_type 65                       
         438   load_const 66                      ("iter")
         439   virtual_call nargs=1 ntypeargs=0   
         440   store_var 62                       (_203)
 
-  357   441   load_var 62                        (_203)
+  355   441   load_var 62                        (_203)
         442   load_type 67                       
         443   load_const 68                      ("next")
         444   virtual_call nargs=1 ntypeargs=0   
@@ -6268,7 +6268,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         450   load_var 63                        (_204)
         451   store_var 64                       (raw_call)
 
-  361   452   load_var 2                         (input)
+  359   452   load_var 2                         (input)
         453   load_field 1                       (journal)
         454   call 808 ntypeargs=0               (ai.Journal.entries)
         455   container_len                      
@@ -6282,12 +6282,12 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         463   call 138 ntypeargs=1               (baml.String.from)
         464   store_var 68                       (_218)
 
-  358   465   load_type 2                        
+  356   465   load_type 2                        
 
-  359   466   load_var 64                        (raw_call)
+  357   466   load_var 64                        (raw_call)
         467   load_const 70                      (".id")
 
-  361   468   load_const 71                      ("cc_call_")
+  359   468   load_const 71                      ("cc_call_")
         469   load_var 66                        (_213)
         470   bin_op +                           
         471   load_const 72                      ("_")
@@ -6297,14 +6297,14 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         475   call 343 ntypeargs=1               (baml.json.path_or)
         476   store_var 65                       (id)
 
-  363   477   load_type 2                        
+  361   477   load_type 2                        
         478   load_var 64                        (raw_call)
         479   load_const 73                      (".name")
         480   load_const 74                      ("")
         481   call 343 ntypeargs=1               (baml.json.path_or)
         482   store_var 69                       (name)
 
-  365   483   load_type 50                       
+  363   483   load_type 50                       
         484   load_var 64                        (raw_call)
         485   load_const 75                      (".args")
         486   load_type 2                        
@@ -6313,7 +6313,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         489   call 343 ntypeargs=1               (baml.json.path_or)
         490   store_var 72                       (_227)
 
-  364   491   load_type 1                        
+  362   491   load_type 1                        
         492   load_var 72                        (_227)
         493   call 337 ntypeargs=1               (baml.json.from_json)
         494   store_var 70                       (call_args)
@@ -6321,78 +6321,78 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         496   load_var 71                        (e)
         497   throw_if_panic                     
 
-  368   498   load_type 2                        
+  366   498   load_type 2                        
         499   load_type 11                       
         500   alloc_map 0                        
         501   store_var 70                       (call_args)
 
-  372   502   load_type 60                       
+  370   502   load_type 60                       
         503   load_var2 57 65                    
         504   load_var2 69 70                    
         505   init_instance 6                    (ai.content.ToolUse .id, .name, .args)
         506   call 4 ntypeargs=1                 (baml.Array.push)
         507   pop 1                              
 
-  373   508   load_var 61                        (i)
+  371   508   load_var 61                        (i)
         509   load_const 21                      (1)
         510   add_int                            
         511   store_var 61                       (i)
 
-  357   512   jump -71                           (to 441)
+  355   512   jump -71                           (to 441)
 
-  375   513   load_const 21                      (ai.content.StopReason.ToolUse)
+  373   513   load_const 21                      (ai.content.StopReason.ToolUse)
         514   alloc_variant 436                  (ai.content.StopReason)
         515   store_var 58                       (stop)
 
-  382   516   load_var2 57 58                    
+  380   516   load_var2 57 58                    
 
-  343   517   load_var2 54 55                    
+  341   517   load_var2 54 55                    
         518   load_var 56                        (_186)
         519   load_const 26                      (null)
         520   init_instance 7                    (ai.events.Usage .input_tokens, .output_tokens, .cached_input_tokens, .reasoning_tokens)
         521   init_instance 8                    (ai.ModelTurn .content, .stop_reason, .usage)
         522   store_var 3                        (_0)
 
-  293   523   load_var 29                        (p)
+  291   523   load_var 29                        (p)
         524   sys_op 251                         (baml.sys.Process.close)
         525   pop 1                              
         526   load_var 3                         (_0)
         527   return                             
 
-  323   528   load_type 2                        
+  321   528   load_type 2                        
         529   load_var 36                        (result)
         530   load_const 76                      (".subtype")
         531   load_const 77                      ("error")
         532   call 343 ntypeargs=1               (baml.json.path_or)
         533   store_var 42                       (_143)
 
-  324   534   load_var 36                        (result)
+  322   534   load_var 36                        (result)
         535   call 331 ntypeargs=0               (baml.json.stringify)
         536   store_var 43                       (_146)
 
-  321   537   load_const 78                      ("claude-code")
+  319   537   load_const 78                      ("claude-code")
         538   load_var2 42 43                    
         539   init_instance 9                    (ai.errors.Refused .provider, .reason, .raw_body)
         540   throw                              
 
-  315   541   load_type 3                        
+  313   541   load_type 3                        
         542   load_var 37                        (exit)
         543   load_field 0                       (exit_code)
         544   call 138 ntypeargs=1               (baml.String.from)
         545   store_var 41                       (_136)
         546   jump +6                            (to 552)
 
-  293   547   load_var 29                        (p)
+  291   547   load_var 29                        (p)
         548   sys_op 251                         (baml.sys.Process.close)
         549   pop 1                              
 
-  229   550   load_var 33                        (_118)
+  227   550   load_var 33                        (_118)
         551   rethrow                            
 
-  312   552   load_const 79                      ("claude-code")
+  310   552   load_const 79                      ("claude-code")
         553   load_const 26                      (null)
 
-  315   554   load_const 80                      ("the Claude Code CLI exited with code ")
+  313   554   load_const 80                      ("the Claude Code CLI exited with code ")
         555   load_var 41                        (_136)
         556   bin_op +                           
         557   load_const 26                      (null)
@@ -6401,7 +6401,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
 }
 
 function claude_code.internal.mcp_config_json(c: claude_code.ClaudeCodeClient) -> string | null {
-  209   0    load_var 1             (c)
+  207   0    load_var 1             (c)
         1    load_field 6           (mcp_servers)
         2    container_len          
         3    store_var 2            (_3)
@@ -6411,12 +6411,12 @@ function claude_code.internal.mcp_config_json(c: claude_code.ClaudeCodeClient) -
         7    pop_jump_if_false +2   (to 9)
         8    jump +18               (to 26)
 
-  212   9    load_type 1            
+  210   9    load_type 1            
         10   load_type 2            
         11   alloc_map 0            
         12   store_var 3            (wrapper)
 
-  213   13   load_type 1            
+  211   13   load_type 1            
         14   load_type 2            
         15   load_var 3             (wrapper)
         16   load_const 3           ("mcpServers")
@@ -6425,13 +6425,13 @@ function claude_code.internal.mcp_config_json(c: claude_code.ClaudeCodeClient) -
         19   call 37 ntypeargs=2    (baml.Map.set)
         20   pop 1                  
 
-  214   21   load_type 4            
+  212   21   load_type 4            
         22   load_var 3             (wrapper)
         23   call 334 ntypeargs=1   (baml.json.to_json)
         24   call 331 ntypeargs=0   (baml.json.stringify)
         25   jump +2                (to 27)
 
-  210   26   load_const 5           (null)
+  208   26   load_const 5           (null)
         27   return                 
 }
 
@@ -6499,7 +6499,7 @@ function claude_code.internal.tool_protocol(tb: ai.tools.Toolbox) -> string {
         56   pop 1                              
         57   jump -48                           (to 9)
 
-  122   58   load_type 0                        
+  121   58   load_type 0                        
         59   load_var 2                         (catalog)
         60   load_const 11                      (", ")
         61   call 15 ntypeargs=1                (baml.Array.join)
