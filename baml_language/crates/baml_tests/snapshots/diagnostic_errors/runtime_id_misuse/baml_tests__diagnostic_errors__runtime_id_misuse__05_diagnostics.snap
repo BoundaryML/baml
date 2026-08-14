@@ -1,37 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 39523
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × mismatched types
-    ╭─[runtime_id.baml:7:42]
-  7 │ ╭─▶ function compound_assignment() -> string {
-  8 │ │       $id += "-suffix";
-  9 │ │       $id
- 10 │ ├─▶ }
-    · ╰──── expected `string`, found `() -> int throws never`
-    ╰────
-
-  [type] E0004
-
-  × operator `+` cannot be applied to `() -> int throws never` and `"-suffix"`
-   ╭─[runtime_id.baml:8:12]
+  × `$id` cannot be the target of a compound assignment; use `$id = ...` with an override from `baml.id.new()`
+   ╭─[runtime_id.baml:8:5]
  8 │     $id += "-suffix";
-   ·            ─────────
+   ·     ───
    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[runtime_id.baml:14:44]
- 14 │ ╭─▶ function non_string_assignment() -> string {
- 15 │ │       $id = 42;
- 16 │ │       $id
- 17 │ ├─▶ }
-    · ╰──── expected `string`, found `() -> int throws never`
-    ╰────
 
   [type] E0001
 
@@ -39,7 +16,7 @@ assertion_line: 39523
     ╭─[runtime_id.baml:15:11]
  15 │     $id = 42;
     ·           ─┬
-    ·            ╰── expected `() -> int throws never`, found `42`
+    ·            ╰── expected `string`, found `42`
     ╰────
 
   [type] E0001
@@ -76,24 +53,12 @@ assertion_line: 39523
     ·                           ╰── `$id` is reserved here
     ╰────
 
-  [type] E0001
+  [type] E0096
 
-  × mismatched types
-    ╭─[runtime_id.baml:48:57]
- 48 │ ╭─▶ function setter_never(s: string) -> string throws never {
- 49 │ │       $id = s;
- 50 │ │       $id
- 51 │ ├─▶ }
-    · ╰──── expected `string`, found `() -> int throws never`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[runtime_id.baml:49:11]
+  × declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
+    ╭─[runtime_id.baml:49:5]
  49 │     $id = s;
-    ·           ┬
-    ·           ╰── expected `() -> int throws never`, found `string`
+    ·     ───
     ╰────
 
   [type] E0001

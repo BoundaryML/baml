@@ -1,6 +1,6 @@
 function TypeBuilderFn(from_text: string) -> Resume {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
   type_builder {
     class Foo {
       foo string
@@ -206,13 +206,33 @@ test IncompleteSyntax {
 //     ·     ───┬───
 //     ·        ╰── expected `type alias name`, found `dynamic`
 //     ╰────
-// E0010
+// E0002
 //
-//   × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
-//    ╭─[misc_dynamic_types_parser_errors.baml:3:10]
-//  3 │   prompt #"Hello"#
-//    ·          ────┬────
-//    ·              ╰── use a backtick prompt instead
+//   × unresolved type: Resume
+//    ╭─[misc_dynamic_types_parser_errors.baml:1:46]
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    ·                                              ──────
+//    ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//    ╭─[misc_dynamic_types_parser_errors.baml:1:1]
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    · ▲
+//    ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//    ╭─[misc_dynamic_types_parser_errors.baml:1:46]
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    ·                                              ──────
+//    ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//    ╭─[misc_dynamic_types_parser_errors.baml:1:1]
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    · ▲
 //    ╰────
 // E0002
 //

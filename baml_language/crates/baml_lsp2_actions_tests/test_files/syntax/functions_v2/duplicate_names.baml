@@ -5,7 +5,7 @@ function Bar {
 
 function Bar(a: string, b: int | bool) -> int {
   client Bar
-  prompt #"fa"#
+  prompt `fa`
 }
 
 // error: The function "Bar" cannot be re-defined because a function with that name already exists.
@@ -69,12 +69,4 @@ function Bar(a: string, b: int | bool) -> int {
 //  1 │ function Bar {
 //    ·              ┬
 //    ·              ╰── old-style function syntax; use `function Name(params...) -> ReturnType { ... }`
-//    ╰────
-// E0010
-//
-//   × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
-//    ╭─[functions_v2_duplicate_names.baml:8:10]
-//  8 │   prompt #"fa"#
-//    ·          ───┬──
-//    ·             ╰── use a backtick prompt instead
 //    ╰────

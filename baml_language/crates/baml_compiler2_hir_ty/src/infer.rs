@@ -814,6 +814,9 @@ enum PendingDiag<'db> {
         expr: ExprId,
         member: baml_type::Name,
     },
+    RuntimeIdCompoundAssignment {
+        expr: ExprId,
+    },
     UnknownPatternField {
         pat: PatId,
         class_name: baml_type::QualifiedTypeName,
@@ -2467,6 +2470,24 @@ impl<'db> InferenceContext<'db> {
         value: ExprId,
         op: Option<baml_compiler2_ast::AssignOp>,
     ) {
+        if Self::is_runtime_id_path(body, target) {
+            self.result.type_of_expr.insert(target, Ty::string());
+            if op.is_some() {
+                self.pending_diags
+                    .push(PendingDiag::RuntimeIdCompoundAssignment { expr: target });
+                self.infer_expr(body, value, &Expectation::None);
+                return;
+            }
+
+            let Some((param, throws)) = self.runtime_id_set_contract() else {
+                self.infer_expr(body, value, &Expectation::None);
+                return;
+            };
+            self.check_expr(body, value, &param);
+            self.record_throw(target, &throws);
+            return;
+        }
+
         // An INDEX target (`xs[0] = v`, `xs[0] += v`): the element type
         // comes from the same `baml.ops.Index` dispatch as a read, the
         // value checks against it (expectation propagation - an empty
@@ -4806,6 +4827,27 @@ impl<'db> InferenceContext<'db> {
         Some(function_value_ty(signature, &[target]))
     }
 
+    /// The source-level `$id = value` form is exactly a call to
+    /// `baml.id.set(value)`. Resolve its parameter and effect from the
+    /// builtin declaration so the type checker and MIR lowering cannot drift.
+    fn runtime_id_set_contract(&mut self) -> Option<(Ty, Ty)> {
+        let segments = [
+            baml_type::Name::new("baml"),
+            baml_type::Name::new("id"),
+            baml_type::Name::new("set"),
+        ];
+        let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
+            self.lower.resolve_value(&segments)
+        else {
+            return None;
+        };
+        let signature = function_signature(self.db, function);
+        let [param] = signature.params.as_slice() else {
+            return None;
+        };
+        Some((param.ty.clone(), signature.throws.clone()))
+    }
+
     /// The instantiated `string.from` callee backing the `to_string`
     /// operator-style fallback - a class STATIC (`baml.String.from<T>`),
     /// resolved through the same static-class correspondence written
@@ -4838,8 +4880,11 @@ impl<'db> InferenceContext<'db> {
     /// arguments explicitly, and the expectation's bounds resolve them here.
     /// Constants and enum variants join as later slices land.
     fn resolve_value_path(&mut self, expr: ExprId, segments: &[baml_type::Name]) -> Ty {
-        // `$id` is trailing call metadata, not a value: any dotted use
-        // reports the bind-it-first rewrite.
+        if segments.len() == 1 && segments[0].as_str() == "$id" {
+            return Ty::string();
+        }
+        // `$id` reads as a string value, but is not a binding: any dotted
+        // use reports the bind-it-first rewrite.
         if segments.len() > 1 && segments[0].as_str() == "$id" {
             self.pending_diags.push(PendingDiag::RuntimeIdMember {
                 expr,
@@ -6582,8 +6627,8 @@ impl<'db> InferenceContext<'db> {
         resolved
     }
 
-    /// `$id` is trailing call metadata, not a value: member access on it
-    /// reports the rewrite hint (bind it to a local first).
+    /// `$id` reads as a string value but is not a binding: member access on
+    /// it reports the rewrite hint (bind it to a local first).
     fn check_runtime_id_member(
         &mut self,
         body: &ExprBody,
@@ -6600,6 +6645,11 @@ impl<'db> InferenceContext<'db> {
             });
         }
         is_id
+    }
+
+    fn is_runtime_id_path(body: &ExprBody, expr: ExprId) -> bool {
+        matches!(&body.exprs[expr], Expr::Path(segments)
+            if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
     /// A `?.` link whose base PROVABLY cannot be null is noise the user
@@ -7365,6 +7415,9 @@ impl<'db> InferenceContext<'db> {
                     ),
                     PendingDiag::RuntimeIdMember { expr, member } => {
                         (TirTypeError::RuntimeIdMemberAccess { member }, expr)
+                    }
+                    PendingDiag::RuntimeIdCompoundAssignment { expr } => {
+                        (TirTypeError::RuntimeIdCompoundAssignment, expr)
                     }
                     PendingDiag::DeadCode {
                         at,
