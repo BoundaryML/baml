@@ -213,7 +213,7 @@ ty_family! {
         /// concrete type whose *values* are concrete Rust types on the VM heap; the
         /// type system treats it nominally (no structural decomposition).
         ///
-        /// Renders as its qualified name `baml.llm.Resource`.
+        /// Renders as its qualified name `baml.prompt.Resource`.
         #[axis(concrete)]
         Resource {
             attr: TyAttr,
@@ -222,7 +222,7 @@ ty_family! {
         /// *values* are concrete Rust types on the VM heap; the type system treats
         /// it nominally (no structural decomposition).
         ///
-        /// Renders as its qualified name `baml.llm.PromptAst`.
+        /// Renders as its qualified name `ai.Prompt`.
         #[axis(concrete)]
         PromptAst {
             attr: TyAttr,

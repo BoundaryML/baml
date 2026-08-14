@@ -219,6 +219,9 @@ macro_rules! assert_compiler2_snapshot {
 pub mod compiler2_hir;
 
 #[cfg(test)]
+pub mod compiler2_hir_ty;
+
+#[cfg(test)]
 pub mod compiler2_ppir;
 
 #[cfg(test)]
@@ -232,6 +235,9 @@ pub mod compiler2_emit;
 
 #[cfg(test)]
 pub mod incremental;
+
+#[cfg(test)]
+pub mod type_spec;
 
 #[cfg(test)]
 pub mod string_literals;

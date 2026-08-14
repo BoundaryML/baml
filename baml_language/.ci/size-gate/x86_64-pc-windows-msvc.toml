@@ -8,5 +8,5 @@ stripped_bytes = "21.9 MiB"
 gzip_bytes = "9.9 MiB"
 
 [artifacts.packed-program]
-file_bytes = "14.1 MiB"
-gzip_bytes = "6.2 MiB"
+file_bytes = "14.8 MiB"
+gzip_bytes = "6.4 MiB"

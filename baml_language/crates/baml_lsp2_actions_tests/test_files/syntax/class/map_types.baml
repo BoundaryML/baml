@@ -1,8 +1,6 @@
 // Tests for validating map types
 
-client<llm> MyClient {
-  provider openai
-}
+client MyClient = openai.OpenAiClient.new(model = "gpt-4o");
 
 class MapDummy {
   inner string
@@ -25,10 +23,10 @@ class MapFields {
 }
 
 function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> map<string, int> {
-  client MyClient
-  prompt #"
-    Merge these: {{i1}} {{i2}}
-  "#
+  client: MyClient
+  prompt: `
+    Merge these: ${i1} ${i2}
+  `
 }
 
 // error: Error validating: Maps may only have strings, enums or literal strings as keys
@@ -91,56 +89,105 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 // E0067
 //
 //   × map keys must be `string`; got `MapDummy`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types.baml:27:54]
-//  27 │ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> map<string, int> {
+//     ╭─[class_map_types.baml:25:54]
+//  25 │ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> map<string, int> {
 //     ·                                                      ─────────────────────
 //     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types.baml:16:6]
-//  16 │   b1 map<int, string>
+//     ╭─[class_map_types.baml:14:6]
+//  14 │   b1 map<int, string>
 //     ·      ────────────────
 //     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `float`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types.baml:17:6]
-//  17 │   b2 map<float, string>
+//     ╭─[class_map_types.baml:15:6]
+//  15 │   b2 map<float, string>
 //     ·      ──────────────────
 //     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `MapDummy`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types.baml:18:6]
-//  18 │   b3 map<MapDummy, string>
+//     ╭─[class_map_types.baml:16:6]
+//  16 │   b3 map<MapDummy, string>
 //     ·      ─────────────────────
 //     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `string | null`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types.baml:19:6]
-//  19 │   b4 map<string?, string>
+//     ╭─[class_map_types.baml:17:6]
+//  17 │   b4 map<string?, string>
 //     ·      ────────────────────
 //     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `string | int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types.baml:20:6]
-//  20 │   b5 map<string | int, string>
+//     ╭─[class_map_types.baml:18:6]
+//  18 │   b5 map<string | int, string>
 //     ·      ─────────────────────────
 //     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types.baml:23:6]
-//  23 │   c2 string | map<int, string>
-//     ·      ─────────────────────────
+//    ╭─[class_map_types.baml:1:1]
+//  1 │ // Tests for validating map types
+//    · ▲
+//    ╰────
+// E0067
+//
+//   × map keys must be `string`; got `string | null`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    ╭─[class_map_types.baml:1:1]
+//  1 │ // Tests for validating map types
+//    · ▲
+//    ╰────
+// E0067
+//
+//   × map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types.baml:14:6]
+//  14 │   b1 map<int, string>
+//     ·      ────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `float`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types.baml:15:6]
+//  15 │   b2 map<float, string>
+//     ·      ──────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapDummy`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types.baml:16:6]
+//  16 │   b3 map<MapDummy, string>
+//     ·      ─────────────────────
 //     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `string | null`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types.baml:24:6]
-//  24 │   c3 string | map<string?, string>
-//     ·      ─────────────────────────────
+//     ╭─[class_map_types.baml:17:6]
+//  17 │   b4 map<string?, string>
+//     ·      ────────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `string | int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types.baml:18:6]
+//  18 │   b5 map<string | int, string>
+//     ·      ─────────────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types.baml:21:15]
+//  21 │   c2 string | map<int, string>
+//     ·               ───
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `string | null`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types.baml:22:15]
+//  22 │   c3 string | map<string?, string>
+//     ·               ───
 //     ╰────

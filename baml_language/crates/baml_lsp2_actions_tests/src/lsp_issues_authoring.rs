@@ -19,7 +19,6 @@ fn function_completion_is_a_snippet() {
         "client",
         "test",
         "retry_policy",
-        "template_string",
         "type",
         "interface",
         "implements",

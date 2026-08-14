@@ -1,13 +1,12 @@
 use ::baml_type::TypeName;
 use ::bex_sap::sap_model;
 
-/// Contains all the information needed to run SAP parsing on a stream (or oneshot),
-/// with the ability to cache data for streaming.
-pub struct SapStreamCache {
+/// Cached schema information for incremental or one-shot SAP parsing.
+pub struct SapParseCache {
     types: bex_sap::CompiledSapModel,
 }
 
-impl SapStreamCache {
+impl SapParseCache {
     pub fn new(types: bex_sap::CompiledSapModel) -> Self {
         Self { types }
     }

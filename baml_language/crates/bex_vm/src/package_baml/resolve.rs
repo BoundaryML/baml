@@ -8,19 +8,14 @@
 //! impl applies (the caller decides the fallback).
 //!
 //! This mirrors the compiler's selection (`match_ty_pattern` + bound validation
-//! in `baml_compiler2_tir::interfaces`), run on `baml_type::RealizedTy`: unify the rule's
+//! in `baml_compiler2_hir_ty::interfaces`), run on `baml_type::RealizedTy`: unify the rule's
 //! `for_ty_pattern` against the concrete type (binding the impl's generic
 //! params), then discharge each param's declared bound as a nested obligation.
 
 use std::borrow::Cow;
 
-use baml_type::{
-    Literal, MediaKind, Name, RealizedTy, TyAttr, TyTemplate, TypeName, normalize::TypeContext,
-};
-use bex_vm_types::{
-    errors::VmInternalError,
-    types::{Object, RuntimeImplRule},
-};
+use baml_type::{Literal, Name, RealizedTy, TyTemplate, TypeName, normalize::TypeContext};
+use bex_vm_types::{errors::VmInternalError, types::RuntimeImplRule};
 
 use crate::{BexVm, type_context::StructuralEquivCtx};
 
@@ -572,95 +567,7 @@ impl<'vm> ImplResolver<'vm> {
     }
 }
 
-/// One implementor of an interface: the concrete implementor type plus the
-/// interface args / associated bindings that impl pins (empty = "matches any
-/// instantiation", for blanket impls and typevar-bearing dimensions).
-type ImplementorEntry = (RealizedTy, Vec<RealizedTy>, Vec<(Name, RealizedTy)>);
-
 impl ImplResolver<'_> {
-    /// The concrete types that nominally implement `iface`, each paired with the
-    /// interface instantiation its impl fixes — the inverse of
-    /// [`Self::type_implements`]. Reflection (`type.implementors()`) filters these by
-    /// the requested args/assoc.
-    ///
-    /// Every impl of `iface` in the program is considered — the same
-    /// [`Self::rules_for`] view membership selection uses, so the two can never
-    /// disagree about which impls exist. A non-generic impl contributes its
-    /// concrete for-type; a generic class contributes its base (instantiations
-    /// can't be enumerated, so typevar-bearing interface args are erased to "match
-    /// any"); a blanket `for T` contributes every loaded concrete class whose
-    /// bounds it satisfies. Container/union for-types have no nominal implementor
-    /// to list.
-    pub(super) fn implementor_entries(self, iface: &TypeName) -> Vec<ImplementorEntry> {
-        let mut out: Vec<ImplementorEntry> = Vec::new();
-        // `rules_for` borrows the VM for the iteration; the blanket arm below
-        // re-enters it via `concrete_types`, so collect the candidates first.
-        let candidates: Vec<&RuntimeImplRule> = self.rules_for(iface).collect();
-        for rule in candidates {
-            match &rule.for_ty_pattern {
-                TyTemplate::TypeArgRef(_) => {
-                    // Blanket impl: its bounds decide membership; every concrete
-                    // type satisfying them is an implementor, at the interface
-                    // instantiation the blanket pins (typevar dimensions erased).
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
-                    for ty in self.concrete_types() {
-                        if self.rule_applies(rule, &ty, &mut Vec::new()).is_some() {
-                            push_unique(&mut out, (ty, args.clone(), assoc.clone()));
-                        }
-                    }
-                }
-                // A concrete for-type (`int`, a monomorphic class, `int[]`, …)
-                // narrows to a realized type — the implementor is that type.
-                other if <&RealizedTy>::try_from(other).is_ok() => {
-                    let realized = <&RealizedTy>::try_from(other)
-                        .unwrap_or_else(|_| unreachable!("guarded by the `is_ok` above"));
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
-                    push_unique(&mut out, (realized.clone(), args, assoc));
-                }
-                // A generic class for-type (`Foo<T>`) is reported by its base.
-                TyTemplate::Class(name, _, _) => {
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
-                    let base = RealizedTy::Class(name.clone(), Vec::new(), TyAttr::default());
-                    push_unique(&mut out, (base, args, assoc));
-                }
-                _ => {}
-            }
-        }
-        out.sort_by_cached_key(|(ty, _, _)| ty.to_string());
-        out
-    }
-
-    /// The interface args / associated bindings a non-blanket impl pins, with any
-    /// dimension that references the impl's generic params erased to empty (a
-    /// generic class is reported by its base, so a per-instantiation arg can't be
-    /// named — empty then matches any requested instantiation).
-    fn pinned_interface_instantiation(
-        self,
-        rule: &RuntimeImplRule,
-    ) -> (Vec<RealizedTy>, Vec<(Name, RealizedTy)>) {
-        let args = if rule.interface_args.iter().any(template_has_type_arg_ref) {
-            Vec::new()
-        } else {
-            rule.interface_args
-                .iter()
-                .map(|t| self.substitute_checked(t, &[]))
-                .collect()
-        };
-        let assoc = if rule
-            .interface_assoc
-            .iter()
-            .any(|(_, t)| template_has_type_arg_ref(t))
-        {
-            Vec::new()
-        } else {
-            rule.interface_assoc
-                .iter()
-                .map(|(n, t)| (n.clone(), self.substitute_checked(t, &[])))
-                .collect()
-        };
-        (args, assoc)
-    }
-
     /// Realize an impl rule's interface-arg [`TyTemplate`] against a *complete* env
     /// (one binding per impl generic param) for the resolver's own arg *comparison* —
     /// not value materialization. An out-of-range `TypeArgRef` (a malformed rule) is
@@ -680,139 +587,7 @@ impl ImplResolver<'_> {
     }
 }
 
-/// Whether a template references any impl generic parameter (a `TypeArgRef`).
-fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
-    match t {
-        TyTemplate::TypeArgRef(_) => true,
-        TyTemplate::List(inner, _) => template_has_type_arg_ref(inner),
-        TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
-            template_has_type_arg_ref(key) || template_has_type_arg_ref(value)
-        }
-        TyTemplate::Union(parts, _) => parts.iter().any(template_has_type_arg_ref),
-        TyTemplate::Class(_, args, _) => args.iter().any(template_has_type_arg_ref),
-        TyTemplate::Interface(_, args, assoc, _) => {
-            args.iter().any(template_has_type_arg_ref)
-                || assoc.iter().any(|(_, t)| template_has_type_arg_ref(t))
-        }
-        TyTemplate::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params.iter().any(|p| template_has_type_arg_ref(&p.ty))
-                || template_has_type_arg_ref(ret)
-                || template_has_type_arg_ref(throws)
-        }
-        TyTemplate::AssociatedTypeProjection {
-            base, interface, ..
-        } => {
-            template_has_type_arg_ref(base)
-                || interface.generics.iter().any(template_has_type_arg_ref)
-                || interface
-                    .associated_types
-                    .iter()
-                    .any(|(_, t)| template_has_type_arg_ref(t))
-        }
-        // Realized leaves carry no frame ref.
-        _ => false,
-    }
-}
-
-impl ImplResolver<'_> {
-    /// Every loaded concrete type — classes, enums, and the primitives — as a `RealizedTy` at
-    /// its base (no type args). The candidate set a blanket impl's bounds are checked
-    /// against: a blanket `for T` can be satisfied by any concrete type, not just
-    /// classes. (`all_class_and_enum_ptrs` covers both classes and enums across every
-    /// loaded package.) `$stream` companions are filtered later by
-    /// `push_unique`.
-    fn concrete_types(self) -> Vec<RealizedTy> {
-        let mut types: Vec<RealizedTy> = self
-            .vm
-            .all_class_and_enum_ptrs()
-            .filter_map(|ptr| match self.vm.get_object(ptr) {
-                Object::Class(class) => Some(RealizedTy::Class(
-                    class.name.clone(),
-                    Vec::new(),
-                    TyAttr::default(),
-                )),
-                Object::Enum(enum_def) => {
-                    Some(RealizedTy::Enum(enum_def.name.clone(), TyAttr::default()))
-                }
-                _ => None,
-            })
-            .collect();
-        // Primitives and the other arg-less builtin value types have no owning object, so
-        // they aren't in any package's class/enum tables; a blanket `for T` (or one whose bound they
-        // satisfy) admits them, so add the fixed set. This mirrors `Ty::is_valid_impl_subject`'s
-        // arg-less accepted variants — keeping reflection's blanket-implementor enumeration
-        // from silently dropping, e.g., `uint8array` (which has a builtin `Equals` impl).
-        // Parameterized subjects (`List`/`Map`) and non-value types are intentionally omitted:
-        // their instantiations can't be enumerated.
-        types.extend([
-            RealizedTy::Int {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::Bigint {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::Float {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::String {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::Bool {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::Null {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::Uint8Array {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::Type {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::Resource {
-                attr: TyAttr::default(),
-            },
-            RealizedTy::PromptAst {
-                attr: TyAttr::default(),
-            },
-        ]);
-        // `Media` carries a kind, so a media value's concrete type pins one — enumerate each.
-        types.extend(
-            [
-                MediaKind::Image,
-                MediaKind::Audio,
-                MediaKind::Video,
-                MediaKind::Pdf,
-                MediaKind::Generic,
-            ]
-            .map(|kind| RealizedTy::Media(kind, TyAttr::default())),
-        );
-        types
-    }
-}
-
-fn push_unique(out: &mut Vec<ImplementorEntry>, entry: ImplementorEntry) {
-    // Hide `…$stream` companion types: they implement their base's interfaces so
-    // dispatch works on stream values, but they are compiler-synthesized and must
-    // not surface in reflection's implementor lists.
-    if is_stream_companion(&entry.0) || out.contains(&entry) {
-        return;
-    }
-    out.push(entry);
-}
-
-/// Whether `ty` is an internal `…$stream` companion type.
-fn is_stream_companion(ty: &RealizedTy) -> bool {
-    match ty {
-        RealizedTy::Class(tn, ..) | RealizedTy::Enum(tn, ..) => tn.name().ends_with("$stream"),
-        _ => false,
-    }
-}
+impl ImplResolver<'_> {}
 
 #[cfg(test)]
 mod tests {

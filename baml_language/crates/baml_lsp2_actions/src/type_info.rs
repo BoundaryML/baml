@@ -39,7 +39,7 @@ use baml_compiler_syntax::{SyntaxKind, SyntaxToken};
 use baml_compiler2_hir::{
     contributions::Definition, scope::ScopeKind, semantic_index::DefinitionSite,
 };
-use baml_compiler2_tir::ty::BuiltinTypeName;
+use baml_type::BuiltinTypeName;
 use text_size::{TextRange, TextSize};
 
 use crate::{Db, utils};
@@ -319,25 +319,25 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
     }
 
     // ── Step 2: resolve the name in scope ─────────────────────────────────────
-    let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &name);
+    let resolved = baml_compiler2_ppir::resolve::resolve_name_at(db, file, offset, &name);
 
     // ── Step 3: build TypeInfo based on the resolution ────────────────────────
     match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => {
+        baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+        | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => {
             Some(type_info_for_definition(db, def))
         }
 
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             name: local_name,
             definition_site: Some(site),
         } => local_type_info(db, file, offset, &local_name, site),
 
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             definition_site: None,
             ..
         }
-        | baml_compiler2_tir::resolve::ResolvedName::Unknown => None,
+        | baml_compiler2_ppir::resolve::ResolvedName::Unknown => None,
     }
 }
 
@@ -422,12 +422,10 @@ fn literal_type_info(token: &SyntaxToken) -> Option<TypeInfo> {
             "An exact `float` literal type.",
         ),
         _ => {
-            if token.parent_ancestors().any(|node| {
-                matches!(
-                    node.kind(),
-                    SyntaxKind::TEMPLATE_INTERPOLATION | SyntaxKind::BACKTICK_INTERPOLATION
-                )
-            }) {
+            if token
+                .parent_ancestors()
+                .any(|node| matches!(node.kind(), SyntaxKind::BACKTICK_INTERPOLATION))
+            {
                 return None;
             }
             let string = token.parent_ancestors().find(|node| {
@@ -658,17 +656,15 @@ fn declaration_type_info_at(
     let scope_id = index.scope_at_offset(offset, None);
     let scope = &index.scopes[scope_id.index() as usize];
     let preferred_class = if matches!(scope.kind, ScopeKind::Class) {
-        scope.name.as_ref().and_then(
-            |class_name| match baml_compiler2_tir::resolve::resolve_name_at(
-                db, file, offset, class_name,
-            ) {
-                baml_compiler2_tir::resolve::ResolvedName::Item(Definition::Class(loc))
-                | baml_compiler2_tir::resolve::ResolvedName::Builtin(Definition::Class(loc)) => {
+        scope.name.as_ref().and_then(|class_name| {
+            match baml_compiler2_ppir::resolve::resolve_name_at(db, file, offset, class_name) {
+                baml_compiler2_ppir::resolve::ResolvedName::Item(Definition::Class(loc))
+                | baml_compiler2_ppir::resolve::ResolvedName::Builtin(Definition::Class(loc)) => {
                     Some(loc)
                 }
                 _ => None,
-            },
-        )
+            }
+        })
     } else {
         None
     };
@@ -778,9 +774,9 @@ fn declaration_type_info_at(
             && item_data::function_data(db, *func_loc).name == *name
         {
             if matches!(
-                baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, name),
-                baml_compiler2_tir::resolve::ResolvedName::Item(Definition::Function(_))
-                    | baml_compiler2_tir::resolve::ResolvedName::Builtin(Definition::Function(_))
+                baml_compiler2_ppir::resolve::resolve_name_at(db, file, offset, name),
+                baml_compiler2_ppir::resolve::ResolvedName::Item(Definition::Function(_))
+                    | baml_compiler2_ppir::resolve::ResolvedName::Builtin(Definition::Function(_))
             ) {
                 continue;
             }
@@ -948,7 +944,7 @@ fn member_type_info_at(
 ) -> Option<TypeInfo> {
     use baml_compiler2_ast::Expr;
     use baml_compiler2_hir::body::FunctionBody;
-    use baml_compiler2_tir::inference::MemberResolution;
+    use baml_compiler2_hir_ty::infer::MemberResolution;
 
     let index = baml_compiler2_hir::file_semantic_index(db, file);
     let scope_id = index.scope_at_offset(offset, None);
@@ -968,13 +964,13 @@ fn member_type_info_at(
         return None;
     };
     let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
-    let inference = baml_compiler2_tir::inference::infer_scope_types(
+    let inference = baml_compiler2_hir_ty::ide::infer_for_scope(
         db,
         index.scope_ids[enclosing_func_scope.index() as usize],
-    );
+    )?;
     let bare_name_is_local = matches!(
-        baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &Name::new(token_text),),
-        baml_compiler2_tir::resolve::ResolvedName::Local { .. }
+        baml_compiler2_ppir::resolve::resolve_name_at(db, file, offset, &Name::new(token_text),),
+        baml_compiler2_ppir::resolve::ResolvedName::Local { .. }
     );
 
     let mut best: Option<(baml_compiler2_ast::ExprId, TextRange, Option<usize>)> = None;
@@ -1026,13 +1022,15 @@ fn member_type_info_at(
     let (expr_id, _, path_segment_idx) = best?;
     let resolution = match path_segment_idx {
         Some(segment_idx) => inference
-            .path_member_resolution(expr_id)
-            .and_then(|items| items.get(segment_idx - 1))
-            .or_else(|| inference.resolution(expr_id)),
-        None => inference.resolution(expr_id),
+            .path_resolutions
+            .get(&expr_id)
+            .and_then(|path| path.segments.get(segment_idx))
+            .and_then(|step| step.resolution.as_ref())
+            .or_else(|| inference.member_resolutions.get(&expr_id)),
+        None => inference.member_resolutions.get(&expr_id),
     };
 
-    if let Some(MemberResolution::Free { func_loc }) = resolution {
+    if let Some(MemberResolution::Free { func: func_loc }) = resolution {
         return Some(type_info_for_definition(
             db,
             Definition::Function(*func_loc),
@@ -1041,7 +1039,7 @@ fn member_type_info_at(
 
     if let Some(MemberResolution::Variant {
         enum_loc,
-        variant_name,
+        variant: variant_name,
     }) = resolution
     {
         let enum_data = baml_compiler2_ppir::item_data::enum_data(db, *enum_loc);
@@ -1056,11 +1054,22 @@ fn member_type_info_at(
     }
 
     let ty = path_segment_idx
-        .and_then(|segment_idx| inference.path_segment_type(expr_id, segment_idx))
-        .or_else(|| inference.expression_type(expr_id))?;
+        .and_then(|segment_idx| {
+            inference
+                .path_resolutions
+                .get(&expr_id)
+                .and_then(|path| path.segments.get(segment_idx))
+                .map(|step| step.ty.to_plain())
+        })
+        .or_else(|| {
+            inference
+                .type_of_expr
+                .get(&expr_id)
+                .map(baml_type::interned::Ty::to_plain)
+        })?;
     Some(TypeInfo::LocalVar {
         name: token_text.to_string(),
-        ty: utils::display_ty_for_file(db, file, ty),
+        ty: utils::display_ty_for_file(db, file, &ty),
     })
 }
 
@@ -1096,7 +1105,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let file = func_loc.file(db);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
             let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-            let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+            let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
             let function_name = sig.name.clone();
 
@@ -1140,10 +1149,8 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .collect();
             let return_type = Some(display_surface_ty(db, file, &exported.return_type));
             let throws = if exported.declared_throws.is_some()
-                || !matches!(
-                    exported.callable_throws,
-                    baml_compiler2_tir::ty::Ty::Never { .. }
-                ) {
+                || !matches!(exported.callable_throws, baml_type::Ty::Never { .. })
+            {
                 Some(display_surface_ty(db, file, &exported.callable_throws))
             } else {
                 None
@@ -1163,9 +1170,8 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
 
             // Use resolved field types (Salsa-cached), rendered canonically so
             // builtin companion classes collapse to their alias (`string`).
-            let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
+            let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
             let fields = resolved
-                .fields
                 .iter()
                 .map(|(field_name, ty, _attrs)| {
                     (
@@ -1183,7 +1189,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .map(|block| render_implements_block(block, &class_data.type_refs))
                 .collect();
 
-            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &class_data.name);
+            let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &class_data.name);
             let canonical_fqn = utils::canonical_fqn_string(&qtn);
             let methods = crate::describe::class_method_sigs(db, class_loc);
 
@@ -1232,8 +1238,8 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let alias_name = alias_data.name.as_str().to_string();
 
             // Use the resolved (lowered) type for display.
-            let resolved = baml_compiler2_tir::inference::resolve_type_alias(db, alias_loc);
-            let expansion = utils::display_ty_for_file(db, alias_loc.file(db), &resolved.ty);
+            let resolved = baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc).to_plain();
+            let expansion = utils::display_ty_for_file(db, alias_loc.file(db), &resolved);
 
             TypeInfo::TypeAlias {
                 name: alias_name,
@@ -1321,23 +1327,19 @@ fn render_implements_block(
     }
 }
 
-fn display_surface_ty(db: &dyn Db, file: SourceFile, ty: &baml_compiler2_tir::ty::Ty) -> String {
+fn display_surface_ty(db: &dyn Db, file: SourceFile, ty: &baml_type::Ty) -> String {
     utils::display_ty_for_file(db, file, ty)
 }
 
-fn display_local_binding_ty(
-    db: &dyn Db,
-    file: SourceFile,
-    ty: &baml_compiler2_tir::ty::Ty,
-) -> String {
+fn display_local_binding_ty(db: &dyn Db, file: SourceFile, ty: &baml_type::Ty) -> String {
     utils::display_ty_for_file(db, file, ty)
 }
 
 fn function_param_matches_effect_slot(
-    ty: &baml_compiler2_tir::ty::Ty,
-    effect_param: &baml_compiler2_tir::ty::ParamTy,
+    ty: &baml_type::Ty,
+    effect_param: &baml_type::ParamTy,
 ) -> bool {
-    use baml_compiler2_tir::ty::Ty;
+    use baml_type::Ty;
 
     match ty {
         Ty::Function { throws, .. } => matches!(
@@ -1362,12 +1364,12 @@ fn function_param_matches_effect_slot(
 }
 
 fn callback_forwarding_note(
-    exported: &baml_compiler2_tir::package_interface::ExportedFunction,
+    exported: &baml_compiler2_hir_ty::package_interface::ExportedFunction,
 ) -> Option<String> {
-    use baml_compiler2_tir::ty::Ty;
+    use baml_type::Ty;
 
     let throws_facts =
-        baml_compiler2_tir::throw_inference::flatten_ty_to_facts(&exported.callable_throws);
+        baml_compiler2_hir_ty::package_interface::flatten_ty_to_facts(&exported.callable_throws);
     let throw_fact_refs = throws_facts.iter().collect::<Vec<_>>();
     let [only_fact] = throw_fact_refs.as_slice() else {
         return None;
@@ -1375,7 +1377,7 @@ fn callback_forwarding_note(
     let Ty::TypeVar(effect_name, _) = only_fact else {
         return None;
     };
-    if !baml_compiler2_tir::ty::is_synthetic_effect_param(effect_name.name()) {
+    if !baml_type::is_synthetic_effect_param(effect_name.name()) {
         return None;
     }
 
@@ -1455,10 +1457,11 @@ fn local_type_info(
             // infer_scope_types is keyed by ScopeId. We need the function scope's
             // ScopeId to get the binding type, since bindings are stored per scope.
             let func_scope_id = index.scope_ids[enclosing_func_scope.index() as usize];
-            let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
+            let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_scope_id)?;
             let ty_str = inference
-                .binding_type(pat_id)
-                .map(|ty| display_local_binding_ty(db, file, ty))
+                .type_of_pat
+                .get(&pat_id)
+                .map(|ty| display_local_binding_ty(db, file, &ty.to_plain()))
                 .unwrap_or_else(|| {
                     // Try the use-site's ancestor scope chain — restricts the
                     // lookup to inferences for bodies that share the
@@ -1542,12 +1545,14 @@ fn find_binding_ty_in_scopes(
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     from_scope: baml_compiler2_hir::scope::FileScopeId,
     pat_id: baml_compiler2_ast::PatId,
-) -> Option<baml_compiler2_tir::ty::Ty> {
+) -> Option<baml_type::Ty> {
     for ancestor_id in index.ancestor_scopes(from_scope) {
         let scope_id = index.scope_ids[ancestor_id.index() as usize];
-        let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
-        if let Some(ty) = inference.binding_type(pat_id) {
-            return Some(ty.clone());
+        let Some(inference) = baml_compiler2_hir_ty::ide::infer_for_scope(db, scope_id) else {
+            continue;
+        };
+        if let Some(ty) = inference.type_of_pat.get(&pat_id) {
+            return Some(ty.to_plain());
         }
     }
     None

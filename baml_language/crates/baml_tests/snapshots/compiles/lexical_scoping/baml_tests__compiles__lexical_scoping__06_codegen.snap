@@ -1,21 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14551
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
-}
-
-function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
-}
-
 function user.branch_locals(b: bool) -> int {
     load_var b
     pop_jump_if_false L0
@@ -46,15 +32,13 @@ function user.capture_before_after_shadow() -> int {
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 0)>, 1
     call_indirect
-    store_var _6
+    load_const 10
+    mul_int
+    store_var _5
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 1)>, 1
     call_indirect
-    store_var _8
-    load_var _6
-    load_const 10
-    mul_int
-    load_var _8
+    load_var _5
     add_int
     return
 }

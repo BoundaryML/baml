@@ -8,7 +8,7 @@ function iter_collect() -> int[] throws unknown {
 }
 
 test "iter_collect" {
-  assert.is_true(baml.deep_equals(iter_collect(), [5, 6, 7]))
+  assert.equal(iter_collect(), [5, 6, 7])
 }
 
 function iter_reduce() -> int throws unknown {
@@ -45,7 +45,7 @@ function iter_range() -> int[] throws unknown {
 }
 
 test "iter_range" {
-  assert.is_true(baml.deep_equals(iter_range(), [0, 1, 2, 3, 4]))
+  assert.equal(iter_range(), [0, 1, 2, 3, 4])
 }
 
 function iter_chain() -> int[] throws unknown {
@@ -55,7 +55,7 @@ function iter_chain() -> int[] throws unknown {
 }
 
 test "iter_chain" {
-  assert.is_true(baml.deep_equals(iter_chain(), [1, 2, 3, 4]))
+  assert.equal(iter_chain(), [1, 2, 3, 4])
 }
 
 function iter_repeat() -> int[] throws unknown {
@@ -63,7 +63,7 @@ function iter_repeat() -> int[] throws unknown {
 }
 
 test "iter_repeat" {
-  assert.is_true(baml.deep_equals(iter_repeat(), [7, 7, 7]))
+  assert.equal(iter_repeat(), [7, 7, 7])
 }
 
 function iter_map() -> int[] throws unknown {
@@ -72,7 +72,7 @@ function iter_map() -> int[] throws unknown {
 }
 
 test "iter_map" {
-  assert.is_true(baml.deep_equals(iter_map(), [2, 4, 6]))
+  assert.equal(iter_map(), [2, 4, 6])
 }
 
 function iter_map_implicit_source() -> int[] throws unknown {
@@ -80,7 +80,7 @@ function iter_map_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_map_implicit_source(), [2, 4, 6]))
+  assert.equal(iter_map_implicit_source(), [2, 4, 6])
 }
 
 function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
@@ -93,7 +93,7 @@ function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
 }
 
 test "iter_explicit_map_coerces_to_iterator" {
-  assert.is_true(baml.deep_equals(iter_explicit_map_coerces_to_iterator(), [3, 6, 9]))
+  assert.equal(iter_explicit_map_coerces_to_iterator(), [3, 6, 9])
 }
 
 function iter_filter() -> int[] throws unknown {
@@ -102,7 +102,7 @@ function iter_filter() -> int[] throws unknown {
 }
 
 test "iter_filter" {
-  assert.is_true(baml.deep_equals(iter_filter(), [2, 4]))
+  assert.equal(iter_filter(), [2, 4])
 }
 
 function iter_filter_implicit_source() -> int[] throws unknown {
@@ -110,7 +110,7 @@ function iter_filter_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_filter_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_filter_implicit_source(), [2, 4]))
+  assert.equal(iter_filter_implicit_source(), [2, 4])
 }
 
 function iter_filter_map() -> int[] throws unknown {
@@ -125,7 +125,7 @@ function iter_filter_map() -> int[] throws unknown {
 }
 
 test "iter_filter_map" {
-  assert.is_true(baml.deep_equals(iter_filter_map(), [20, 40]))
+  assert.equal(iter_filter_map(), [20, 40])
 }
 
 function iter_filter_map_implicit_source() -> int[] throws unknown {
@@ -139,7 +139,7 @@ function iter_filter_map_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_filter_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_filter_map_implicit_source(), [20, 40]))
+  assert.equal(iter_filter_map_implicit_source(), [20, 40])
 }
 
 function iter_flat_map() -> int[] throws unknown {
@@ -150,7 +150,7 @@ function iter_flat_map() -> int[] throws unknown {
 }
 
 test "iter_flat_map" {
-  assert.is_true(baml.deep_equals(iter_flat_map(), [1, 11, 2, 12]))
+  assert.equal(iter_flat_map(), [1, 11, 2, 12])
 }
 
 function iter_flat_map_implicit_source() -> int[] throws unknown {
@@ -160,7 +160,7 @@ function iter_flat_map_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_flat_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_flat_map_implicit_source(), [1, 11, 2, 12]))
+  assert.equal(iter_flat_map_implicit_source(), [1, 11, 2, 12])
 }
 
 function iter_flatten() -> int[] throws unknown {
@@ -173,7 +173,7 @@ function iter_flatten() -> int[] throws unknown {
 }
 
 test "iter_flatten" {
-  assert.is_true(baml.deep_equals(iter_flatten(), [1, 2, 3, 4]))
+  assert.equal(iter_flatten(), [1, 2, 3, 4])
 }
 
 function iter_peekable() -> int[] throws unknown {
@@ -199,7 +199,7 @@ function iter_peekable() -> int[] throws unknown {
 }
 
 test "iter_peekable" {
-  assert.is_true(baml.deep_equals(iter_peekable(), [4, 4, 5, 99]))
+  assert.equal(iter_peekable(), [4, 4, 5, 99])
 }
 
 function iter_step_by() -> int[] throws unknown {
@@ -207,7 +207,7 @@ function iter_step_by() -> int[] throws unknown {
 }
 
 test "iter_step_by" {
-  assert.is_true(baml.deep_equals(iter_step_by(), [0, 2, 4]))
+  assert.equal(iter_step_by(), [0, 2, 4])
 }
 
 function iter_array_iter() -> int[] throws unknown {
@@ -215,7 +215,7 @@ function iter_array_iter() -> int[] throws unknown {
 }
 
 test "iter_array_iter" {
-  assert.is_true(baml.deep_equals(iter_array_iter(), [1, 2, 3]))
+  assert.equal(iter_array_iter(), [1, 2, 3])
 }
 
 function out_of_body_inferred_ctor_dispatch() -> int throws unknown {

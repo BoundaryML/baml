@@ -124,7 +124,7 @@ fn write_entries(out: &mut String, name: &str, entries: &[(String, String, Strin
 
 #[cfg(test)]
 mod tests {
-    use baml_base::Name as BaseName;
+    use baml_base::{Name as BaseName, qualified_name::AI_STREAM_STREAM};
     use baml_codegen_types::Name;
 
     use super::*;
@@ -231,8 +231,8 @@ mod tests {
         let media_leaf = LeafPath {
             segments: vec!["baml".into(), "media".into()],
         };
-        let llm_leaf = LeafPath {
-            segments: vec!["baml".into(), "llm".into()],
+        let stream_leaf = LeafPath {
+            segments: vec!["ai".into(), "stream".into()],
         };
         let mut bodies = BTreeMap::new();
         bodies.insert(
@@ -243,18 +243,18 @@ mod tests {
             ),
         );
         bodies.insert(
-            llm_leaf.clone(),
+            stream_leaf.clone(),
             body(
-                llm_leaf,
-                vec![class_sym(name("baml", &["llm"], "Stream"), "Stream")],
+                stream_leaf,
+                vec![class_sym(name("ai", &["stream"], "Stream"), "Stream")],
             ),
         );
         let out = render_typemap_module(&bodies, "baml_sdk", "@boundaryml/baml-bridge-web");
-        assert!(out.contains("import * as __leaf_0 from \"./baml/llm/index.js\";"));
+        assert!(out.contains("import * as __leaf_0 from \"./ai/stream/index.js\";"));
         assert!(out.contains("import * as __leaf_1 from \"./baml/media/index.js\";"));
-        assert!(out.contains(
-            "\"baml.llm.Stream\": () => (__leaf_0 as Record<string, unknown>)[\"Stream\"],"
-        ));
+        assert!(out.contains(&format!(
+            "\"{AI_STREAM_STREAM}\": () => (__leaf_0 as Record<string, unknown>)[\"Stream\"],"
+        )));
         assert!(out.contains(
             "\"baml.media.Image\": () => (__leaf_1 as Record<string, unknown>)[\"Image\"],"
         ));

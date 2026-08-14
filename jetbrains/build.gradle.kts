@@ -1,5 +1,6 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
@@ -83,7 +84,7 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
-            // untilBuild = providers.gradleProperty("pluginUntilBuild")
+            untilBuild = providers.gradleProperty("pluginUntilBuild")
         }
     }
 
@@ -103,7 +104,14 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            recommended()
+            if (providers.gradleProperty("verifyDeclaredPlatformOnly").map(String::toBoolean).getOrElse(false)) {
+                ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+            } else if (providers.gradleProperty("verifyMarketplaceBoundary").map(String::toBoolean).getOrElse(false)) {
+                ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+                ide(IntelliJPlatformType.IntellijIdeaUltimate, providers.gradleProperty("marketplaceVerificationVersion").get())
+            } else {
+                recommended()
+            }
         }
     }
 }

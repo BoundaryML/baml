@@ -115,15 +115,13 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
     builtin!("baml", "ns_json/json.baml"),
-    builtin!("baml", "ns_schema/schema.baml"),
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
-    builtin!("baml", "ns_llm/llm_types.baml"),
-    builtin!("baml", "ns_llm/llm.baml"),
+    builtin!("baml", "ns_prompt/prompt.baml"),
+    builtin!("baml", "ns_prompt/sys_llm_types.baml"),
     builtin!("baml", "ns_sap/sap.baml"),
     builtin!("baml", "ns_ws/ws.baml"),
-    builtin!("baml", "ns_stream/stream.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
     builtin!("baml", "ns_future/future.baml"),
     builtin!("baml", "ns_spawn/spawn.baml"),
@@ -135,7 +133,9 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/plaindate.baml"),
     builtin!("baml", "ns_time/plaindatetime.baml"),
     builtin!("baml", "ns_time/zoneddatetime.baml"),
+    builtin!("baml", "ns_ops/bitwise.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
+    builtin!("baml", "ns_ops/index.baml"),
     builtin!("baml", "ns_ops/math.baml"),
     builtin!("baml", "ns_random/random.baml"),
     // --- boundary package ---
@@ -151,6 +151,30 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("assert", "assert.baml"),
     // --- log package ---
     builtin!("log", "log.baml"),
+    // --- ai package (specs, journal, runner, client interface) ---
+    builtin!("ai", "ns_content/content.baml"),
+    builtin!("ai", "ns_events/events.baml"),
+    builtin!("ai", "journal.baml"),
+    builtin!("ai", "spec.baml"),
+    builtin!("ai", "ns_tools/tools.baml"),
+    builtin!("ai", "turn.baml"),
+    builtin!("ai", "ns_wire/wire.baml"),
+    builtin!("ai", "ns_clients/clients.baml"),
+    builtin!("ai", "runner.baml"),
+    builtin!("ai", "ns_stream/stream.baml"),
+    builtin!("ai", "ns_errors/errors.baml"),
+    builtin!("ai", "ns_internal/helpers.baml"),
+    // --- provider client packages ---
+    builtin!("openai", "responses.baml"),
+    builtin!("openai", "ns_internal/responses.baml"),
+    builtin!("anthropic", "messages.baml"),
+    builtin!("anthropic", "ns_internal/messages.baml"),
+    builtin!("google", "gemini.baml"),
+    builtin!("google", "ns_internal/gemini.baml"),
+    builtin!("claude_code", "cli.baml"),
+    builtin!("claude_code", "ns_internal/cli.baml"),
+    // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
+    builtin!("ai", "ns_mcp/mcp.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the

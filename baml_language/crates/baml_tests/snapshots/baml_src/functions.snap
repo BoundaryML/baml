@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function functions.$init_test_ns_functions_functions(registry: testing.TestCollector) -> null {
     load_var registry
@@ -104,8 +105,7 @@ function functions.call_twice(f: (int, int) -> int throws never, x: int, y: int)
     load_var2 2 3
     load_var f
     call_indirect
-    store_var _5
-    load_var2 4 5
+    load_var _4
     add_int
     return
 }
@@ -214,6 +214,7 @@ function functions.fib_main() -> int {
 }
 
 function functions.function_as_value_main() -> int {
+    load_type never
     load_const user.functions.add
     load_const 20
     load_const 1

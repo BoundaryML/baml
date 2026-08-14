@@ -10,7 +10,7 @@
 //   stream_e2e_extract_doc(text) -> StreamingDoc   ($stream: Stream<StreamingDoc$stream | null, StreamingDoc>)
 //
 // The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
-// before `StreamFinished` (asserted below); finals are checked for type, not
+// before `Done` (asserted below); finals are checked for type, not
 // exact content. The class-typed tests are the bridge-level regression guard for
 // the class-typed streaming bug (bridge-generics/streaming, doc 00).
 //
@@ -22,7 +22,7 @@ import { describe, it, expect } from "vitest";
 // initialization happens as a side effect of the root module.
 import "./baml_sdk/index.js";
 import * as lorem from "./baml_sdk/lorem/index.js";
-import { StreamFinished } from "./baml_sdk/baml/stream/index.js";
+import { Done } from "./baml_sdk/ai/stream/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
 let withReplayServer: typeof import("./replay_harness.js").withReplayServer =
@@ -45,7 +45,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
       let results = 0;
       for (;;) {
         const v: unknown = stream.next();
-        if (v instanceof StreamFinished) break;
+        if (v instanceof Done) break;
         results += 1;
         expect(v === null || typeof v === "string").toBe(true);
         expect(results).toBeLessThan(10_000);
@@ -65,7 +65,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
       let results = 0;
       for (;;) {
         const v: unknown = await stream.nextAsync();
-        if (v instanceof StreamFinished) break;
+        if (v instanceof Done) break;
         results += 1;
         expect(v === null || typeof v === "string").toBe(true);
         expect(results).toBeLessThan(10_000);
@@ -102,7 +102,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
       let results = 0;
       for (;;) {
         const v: unknown = stream.next();
-        if (v instanceof StreamFinished) break;
+        if (v instanceof Done) break;
         results += 1;
         if (v !== null) expect(v).toHaveProperty("title");
         expect(results).toBeLessThan(10_000);
@@ -122,7 +122,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
       let results = 0;
       for (;;) {
         const v: unknown = await stream.nextAsync();
-        if (v instanceof StreamFinished) break;
+        if (v instanceof Done) break;
         results += 1;
         if (v !== null) expect(v).toHaveProperty("title");
         expect(results).toBeLessThan(10_000);

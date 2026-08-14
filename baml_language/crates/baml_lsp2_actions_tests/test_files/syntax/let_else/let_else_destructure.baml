@@ -23,10 +23,4 @@ function IrrefutableDestructure(u: User) -> string {
 
 //----
 //- diagnostics
-// E0114
-//
-//   ⚠ irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//     ╭─[let_else_let_else_destructure.baml:20:3]
-//  20 │   let User { name, age } = u else { return "unreachable"; };
-//     ·   ──────────────────────
-//     ╰────
+// <no-diagnostics-expected>

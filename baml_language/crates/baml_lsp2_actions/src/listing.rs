@@ -5,7 +5,7 @@ use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     package::{PackageId, PackageItems, package_items},
 };
-use baml_compiler2_tir::ty::{BuiltinTypeName, Package};
+use baml_type::{BuiltinTypeName, Package};
 
 use crate::Db;
 

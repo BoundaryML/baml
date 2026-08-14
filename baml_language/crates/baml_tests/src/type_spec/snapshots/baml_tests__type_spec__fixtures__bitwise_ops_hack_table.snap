@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+255..259 'bits': throws never
+283..421 '{\n   ...int\n}': int
+289..299 'let masked': int
+302..303 'a': int
+302..307 'a & b': int
+306..307 'b': int
+332..343 'let shifted': int
+346..347 'a': int
+346..352 'a << 2': int
+351..352 '2': 2
+378..384 'masked': int
+378..394 'masked...hifted': int
+387..394 'shifted': int

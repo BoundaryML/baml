@@ -12,7 +12,6 @@ pub mod cleanup_guard;
 pub(crate) mod companions;
 pub(crate) mod disambiguate;
 pub mod docstring;
-pub(crate) mod lower_config_item;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
@@ -25,14 +24,10 @@ pub use ast::*;
 /// Re-exported from [`baml_base::escape::unescape_string_literal`] so existing
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
-pub use companions::llm_parse as llm_parse_companion;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
-pub use lower_cst::{
-    lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
-    synthesize_llm_builtin_call, synthesize_llm_make_stream_call,
-};
-pub use lower_expr_body::EnvVarRef;
+pub use lower_cst::{lower_file, lower_file_with_path, lower_file_with_path_and_test_owner};
+pub use lower_expr_body::{EnvVarRef, synthesize_spec_stream_body};
 pub use lowering_diagnostic::LoweringDiagnostic;
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type
 // without depending on `text_size` directly.
@@ -480,17 +475,9 @@ mod tests {
     #[test]
     fn llm_function_user_client_param_is_reserved() {
         let source = r##"
-client<llm> GPT4 {
-  provider "openai"
-  options {
-    model "gpt-4o"
-    api_key "test"
-  }
-}
-
 function Extract(client: string, text: string) -> string {
-  client GPT4
-  prompt #"{{ text }}"#
+  client: "openai/gpt-4o"
+  prompt: `${text} ${ctx.output_format}`
 }
 "##;
 
@@ -519,73 +506,49 @@ function Extract(client: string, text: string) -> string {
         let default_id = function.params[1].default.expect("expected client default");
         let default_expr = &function.defaults.exprs.exprs[default_id.expr()];
         assert!(
-            matches!(default_expr, Expr::Path(path) if path.len() == 1 && path[0].as_str() == "GPT4"),
-            "expected compiler-injected client default to reference GPT4, got {default_expr:#?}"
+            matches!(default_expr, Expr::Null),
+            "the injected ai.Client? override defaults to null, got {default_expr:#?}"
         );
     }
 
-    /// The synthesized `<Client>$new` constructor for `client_name`.
-    fn client_new_companion(items: Vec<Item>, client_name: &str) -> crate::ast::FunctionDef {
-        let target = format!("{client_name}$new");
-        items
-            .into_iter()
-            .find_map(|item| match item {
-                Item::Function(f) if f.name.as_str() == target => Some(f),
-                _ => None,
-            })
-            .unwrap_or_else(|| panic!("expected synthesized {target} function"))
-    }
-
-    /// Does `$new`'s body read `env_var` via a soft `baml.env.get`?
-    fn new_companion_reads_env(function: &crate::ast::FunctionDef, env_var: &str) -> bool {
-        use baml_base::Name;
-        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
-            panic!("expected expression body for $new companion");
-        };
-        body.exprs.iter().any(|(_, expr)| {
-            let Expr::Call { callee, args, .. } = expr else {
-                return false;
-            };
-            let Expr::Path(path) = &body.exprs[*callee] else {
-                return false;
-            };
-            let is_env_get =
-                path.iter().map(Name::as_str).collect::<Vec<_>>() == ["baml", "env", "get"];
-            let reads_var = args.first().is_some_and(|arg| {
-                matches!(
-                    &body.exprs[arg.expr],
-                    Expr::Literal(baml_base::Literal::String(s)) if s == env_var
-                )
-            });
-            is_env_get && reads_var
-        })
+    #[test]
+    fn client_block_is_a_migration_error() {
+        let source = r#"
+client<llm> C {
+  provider openai
+  options { model "gpt-4o" }
+}
+"#;
+        let (items, diags) = parse_and_lower_with_diagnostics(source);
+        assert!(items.is_empty(), "client blocks lower to no items");
+        assert!(
+            diags.iter().any(|diag| matches!(
+                diag,
+                crate::LoweringDiagnostic::ClientBlockRemoved { name, .. } if name == "C"
+            )),
+            "expected ClientBlockRemoved, got: {diags:#?}"
+        );
     }
 
     #[test]
-    fn named_clients_do_not_apply_provider_defaults_during_lowering() {
-        for (provider, model, env_var) in [
-            ("openai", "gpt-4o", "OPENAI_API_KEY"),
-            ("openai-responses", "gpt-4o", "OPENAI_API_KEY"),
-            (
-                "anthropic",
-                "claude-3-5-sonnet-20241022",
-                "ANTHROPIC_API_KEY",
-            ),
-        ] {
-            let source = format!(
-                r#"
-client<llm> C {{
-  provider {provider}
-  options {{ model "{model}" }}
-}}
-"#
-            );
-            let new_fn = client_new_companion(parse_and_lower(&source), "C");
-            assert!(
-                !new_companion_reads_env(&new_fn, env_var),
-                "{provider} defaults must be applied at runtime"
-            );
-        }
+    fn client_value_decl_lowers_to_client_let() {
+        use crate::ast::LetOrigin;
+        let source = r#"
+client Fast = openai.OpenAiClient.new(model = "gpt-4o-mini");
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(items.len(), 1, "expected exactly one item");
+        let Item::Let(let_def) = &items[0] else {
+            panic!("expected Item::Let, got {:?}", items[0]);
+        };
+        assert_eq!(let_def.name.as_str(), "Fast");
+        assert_eq!(let_def.origin, LetOrigin::Client);
+        let (body, _) = let_def.initializer.as_ref().expect("expected initializer");
+        let root = body.root_expr.expect("expected root expr");
+        assert!(
+            matches!(&body.exprs[root], Expr::Call { .. }),
+            "initializer is the user's constructor call"
+        );
     }
 
     #[test]
@@ -1965,110 +1928,22 @@ function f() -> int {
 
     #[test]
     fn retry_policy_produces_let_item_with_retry_policy_origin() {
-        use crate::ast::{Expr, Item, LetOrigin, Literal};
-
+        // Renamed behavior: retry_policy blocks are removed; retry composes
+        // at the client boundary (ai.Retry).
         let source = r#"
 retry_policy MyRetry {
   max_retries 3
-  initial_delay_ms 500
-  multiplier 2.0
-  max_delay_ms 60000
 }
 "#;
-        let items = parse_and_lower(source);
-        assert_eq!(items.len(), 1, "expected exactly one item");
-
-        let let_def = match &items[0] {
-            Item::Let(ld) => ld,
-            other => panic!("expected Item::Let, got {other:?}"),
-        };
-
-        assert_eq!(let_def.name.as_str(), "MyRetry");
-        assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
-
-        let (body, source_map) = let_def.initializer.as_ref().expect("expected initializer");
-
-        let root_id = body.root_expr.expect("expected root expr");
+        let (items, diags) = parse_and_lower_with_diagnostics(source);
+        assert!(items.is_empty(), "retry_policy lowers to no items");
         assert!(
-            source_map.is_synthetic_expr(root_id),
-            "retry_policy's class-shaped initializer is compiler-synthesized"
+            diags.iter().any(|diag| matches!(
+                diag,
+                crate::LoweringDiagnostic::RetryPolicyRemoved { name, .. } if name == "MyRetry"
+            )),
+            "expected RetryPolicyRemoved, got: {diags:#?}"
         );
-        let root_expr = &body.exprs[root_id];
-
-        let (type_name, fields, _) = match root_expr {
-            Expr::Object {
-                type_name,
-                fields,
-                spreads,
-                ..
-            } => (type_name, fields, spreads),
-            other => panic!("expected Expr::Object, got {other:?}"),
-        };
-
-        assert_eq!(
-            type_name.to_string(),
-            "baml.llm.RetryPolicy",
-            "expected type_name to be baml.llm.RetryPolicy"
-        );
-
-        // Check field names
-        let field_names: Vec<&str> = fields.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(
-            field_names,
-            vec![
-                "max_retries",
-                "initial_delay_ms",
-                "multiplier",
-                "max_delay_ms"
-            ]
-        );
-
-        // Check field values
-        let field_exprs: Vec<&Expr> = fields.iter().map(|(_, id)| &body.exprs[*id]).collect();
-
-        assert_eq!(
-            field_exprs[0],
-            &Expr::Literal(Literal::Int(3)),
-            "max_retries should be Int(3)"
-        );
-        assert_eq!(
-            field_exprs[1],
-            &Expr::Literal(Literal::Int(500)),
-            "initial_delay_ms should be Int(500)"
-        );
-        assert_eq!(
-            field_exprs[2],
-            &Expr::Literal(Literal::Float("2.0".to_string())),
-            "multiplier should be Float(2.0)"
-        );
-        assert_eq!(
-            field_exprs[3],
-            &Expr::Literal(Literal::Int(60000)),
-            "max_delay_ms should be Int(60000)"
-        );
-    }
-
-    #[test]
-    fn retry_policy_with_defaults_produces_let_item() {
-        use crate::ast::{Item, LetOrigin};
-
-        // A retry_policy with only max_retries set; other fields use defaults
-        let source = r#"
-retry_policy Simple {
-  max_retries 5
-}
-"#;
-        let items = parse_and_lower(source);
-        assert_eq!(items.len(), 1);
-
-        let let_def = match &items[0] {
-            Item::Let(ld) => ld,
-            other => panic!("expected Item::Let, got {other:?}"),
-        };
-
-        assert_eq!(let_def.name.as_str(), "Simple");
-        assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
-        assert!(let_def.initializer.is_some(), "expected an initializer");
     }
 
     #[test]
@@ -2541,6 +2416,58 @@ function Demo(name: string) -> string {
             &body.exprs[*lhs2],
             Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
         ));
+    }
+
+    #[test]
+    fn property_syntax_is_structural_ast_data() {
+        let items = parse_and_lower(
+            r#"
+class Config { name string }
+function build(name: string) -> unknown {
+  let shorthand_map = { name };
+  let explicit_map = { "name": name };
+  let shorthand_object = Config { name };
+  let explicit_object = Config { name: name };
+  [shorthand_map, explicit_map, shorthand_object, explicit_object]
+}
+"#,
+        );
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+
+        let map_syntax: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(_, expr)| match expr {
+                Expr::Map { entries } => entries.first().map(|entry| entry.syntax),
+                _ => None,
+            })
+            .collect();
+        let object_syntax: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(_, expr)| match expr {
+                Expr::Object { fields, .. } => fields.first().map(|field| field.syntax),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            map_syntax,
+            vec![
+                crate::ast::PropertySyntax::Shorthand,
+                crate::ast::PropertySyntax::Explicit,
+            ]
+        );
+        assert_eq!(
+            object_syntax,
+            vec![
+                crate::ast::PropertySyntax::Shorthand,
+                crate::ast::PropertySyntax::Explicit,
+            ]
+        );
     }
 }
 

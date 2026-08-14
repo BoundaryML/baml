@@ -764,6 +764,56 @@ fn function_type_throws_builtin_map_propagates_callback_surface() {
 }
 
 #[test]
+fn generic_bound_associated_error_is_reused_by_throws_analysis() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"class Boom {}
+
+interface Runner<Input> {
+  type Output
+  type Error
+
+  function run(self, input: Input) -> Self.Output throws Self.Error
+}
+
+class Task<T> {
+  function run<Output, Error, R extends Runner<Task<T>, Output = Output, Error = Error>>(
+    self,
+    runner: R,
+  ) -> Output throws Error {
+    runner.run(self)
+  }
+}
+
+class ConcreteRunner {
+  implements Runner<Task<int>> {
+    type Output = int
+    type Error = Boom
+
+    function run(self, input: Task<int>) -> int throws Boom {
+      throw Boom {}
+    }
+  }
+}
+
+function caller(task: Task<int>) -> int throws Boom {
+  task.run(runner = ConcreteRunner {})
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("declared throws"),
+        "expected the runner's concrete associated Error to satisfy the caller, got:\n{output}"
+    );
+    assert!(
+        !output.contains("extraneous throws declaration"),
+        "expected the concrete Boom throw to remain visible, got:\n{output}"
+    );
+}
+
+#[test]
 fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
     let mut db = make_db();
     let file = db.add_file(
@@ -815,9 +865,11 @@ function calls(value: int) -> int throws never {
         "neither the definer nor its caller may violate `throws never`, got:\n{output}"
     );
     // The effect is not lost, just attributed to the right place: the lambda's
-    // own inferred type carries it.
+    // own inferred type carries it. FLIPPED to literal grain: the spec's
+    // callback_effect_param_flows_through fixture pins inferred surfaces
+    // keeping the thrown literal's type (TIR widened here).
     assert!(
-        output.contains("(n: int) -> int throws string"),
+        output.contains("(n: int) -> int throws \"boom\""),
         "the throw must land on the lambda's inferred type, got:\n{output}"
     );
 }
@@ -968,11 +1020,14 @@ function f() -> int {
 
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
-    // Only the trailing wildcard `_ => 3` should be unreachable (int is fully
-    // handled by the literal + typed arms). The `int` arm must stay reachable.
-    assert!(
-        unreachable_count <= 1,
-        "typed int arm after literal 42 arm should NOT be unreachable, got:\n{output}"
+    // hir_ty keeps LITERAL grain on cross-function throw surfaces (the
+    // ratified S13 rule; TIR widened facts at the call boundary), so the
+    // one fact here is `42`: the literal arm handles it completely and
+    // BOTH later arms are provably unreachable.
+    assert_eq!(
+        unreachable_count, 2,
+        "under literal-grain facts the typed and wildcard arms are dead, got:
+{output}"
     );
 }
 

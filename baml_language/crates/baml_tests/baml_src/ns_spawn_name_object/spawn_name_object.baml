@@ -15,7 +15,7 @@ function spawn_name_then_struct_body_parses_correctly_fn() -> int {
 }
 
 test "spawn_name_then_struct_body_parses_correctly" {
-    assert.is_true(baml.deep_equals(spawn_name_then_struct_body_parses_correctly_fn(), 7))
+    assert.equal(spawn_name_then_struct_body_parses_correctly_fn(), 7)
 }
 
 function spawn_name_then_map_literal_body_fn() -> int {
@@ -25,5 +25,5 @@ function spawn_name_then_map_literal_body_fn() -> int {
 }
 
 test "spawn_name_then_map_literal_body" {
-    assert.is_true(baml.deep_equals(spawn_name_then_map_literal_body_fn(), 1))
+    assert.equal(spawn_name_then_map_literal_body_fn(), 1)
 }

@@ -5,6 +5,9 @@ fn update_suggests_the_toolchain_and_wrapper_commands() {
     let output = Command::new(env!("CARGO_BIN_EXE_baml-cli"))
         .arg("update")
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
+        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
+        .env("BAML_OUTPUT_PRESET", "human")
         .output()
         .unwrap();
 

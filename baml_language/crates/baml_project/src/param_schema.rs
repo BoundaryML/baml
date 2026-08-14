@@ -19,12 +19,11 @@
 
 use std::collections::BTreeMap;
 
+use baml_base::Literal as LiteralValue;
 use baml_compiler2_hir::{loc::FunctionLoc, package::PackageId};
-use baml_compiler2_tir::{
-    package_interface::{ExportedType, PackageInterface, package_interface},
-    ty::{FunctionParamMode, LiteralValue, QualifiedTypeName, Ty},
-};
+use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
 use baml_db::Name;
+use baml_type::{FunctionParamMode, QualifiedTypeName, Ty};
 use serde::Serialize;
 
 use crate::db::ProjectDatabase;
@@ -39,10 +38,11 @@ use crate::db::ProjectDatabase;
 /// `CycleDetector`.
 const MAX_DEPTH: usize = 64;
 
-/// The compiler appends this synthetic parameter to every LLM function
-/// (`append_default_client_param`); `client` is a reserved name there, so a
-/// trailing match can only be the injected one. The form must not render it.
-const INJECTED_CLIENT_PARAM: (&str, &str) = ("client", "baml.llm.Client");
+/// The compiler appends a synthetic trailing `client: ai.Client? = null`
+/// parameter to every LLM function. `client` is a reserved parameter name on LLM functions
+/// (`reject_reserved_llm_client_params`), so a trailing param with this name
+/// can only be the injected one. The form must not render it.
+const INJECTED_CLIENT_PARAM_NAME: &str = "client";
 
 /// Schema for one function parameter.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -148,12 +148,10 @@ pub(crate) fn function_param_schemas(
     let func = iface.lookup_function(namespace_path, name)?;
     let mut params = func.params.as_slice();
     if is_llm && let Some((last, rest)) = params.split_last() {
-        let (client_name, client_ty) = INJECTED_CLIENT_PARAM;
         let is_injected_client = last
             .name
             .as_ref()
-            .is_some_and(|n| n.as_str() == client_name)
-            && matches!(&last.ty, Ty::Class(qtn, _, _) if qtn.render_dotted(false) == client_ty);
+            .is_some_and(|n| n.as_str() == INJECTED_CLIENT_PARAM_NAME);
         if is_injected_client {
             params = rest;
         }
@@ -812,17 +810,11 @@ mod tests {
     }
 
     const LLM_FIXTURE: &str = r##"
-client<llm> GPT4 {
-  provider "openai"
-  options {
-    model "gpt-4o"
-    api_key "test"
-  }
-}
+client GPT4 = openai.OpenAiClient.new(model = "gpt-4o");
 
 function Extract(text: string) -> string {
-  client GPT4
-  prompt #"{{ text }}"#
+  client: GPT4
+  prompt: `${text} ${ctx.output_format}`
 }
 
 function Plain(x: int) -> int { x }
@@ -833,7 +825,7 @@ function Plain(x: int) -> int { x }
         let db = db_with(&[("main.baml", LLM_FIXTURE)]);
         let listing = list_functions_with_metadata(&db);
         // Only the user-declared param survives; the compiler-injected
-        // trailing `client: baml.llm.Client` must not reach the form.
+        // trailing `client: ai.Client?` must not reach the form.
         assert_eq!(
             params_json(&listing, "Extract"),
             json!([

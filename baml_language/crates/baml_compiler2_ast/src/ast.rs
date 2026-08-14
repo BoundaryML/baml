@@ -629,12 +629,6 @@ pub struct AstSourceMap {
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
     pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
-    /// Value expressions synthesized from property shorthand. For example,
-    /// `{ options }` lowers to the same key/value shape as
-    /// `{ options: options }`, while this set preserves that the user wrote the
-    /// shorthand so diagnostics can explain its exact-name requirement.
-    pub property_shorthand_exprs: HashSet<ExprId>,
-
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
     /// and the concat accumulator that backtick interpolation lowers to). Their
@@ -662,7 +656,6 @@ impl AstSourceMap {
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
             object_field_name_spans: HashMap::new(),
-            property_shorthand_exprs: HashSet::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
             synthetic_patterns: HashSet::new(),
@@ -677,12 +670,6 @@ impl AstSourceMap {
     /// Whether `id` names a compiler-synthesized statement (see `synthetic_stmts`).
     pub fn is_synthetic_stmt(&self, id: StmtId) -> bool {
         self.synthetic_stmts.contains(&id)
-    }
-
-    /// Whether `id` is the value expression synthesized for a shorthand
-    /// property such as the `options` value in `{ options }`.
-    pub fn is_property_shorthand_expr(&self, id: ExprId) -> bool {
-        self.property_shorthand_exprs.contains(&id)
     }
 
     /// Look up a span in an arena that is index-parallel to the arena `id`
@@ -768,6 +755,66 @@ impl AstSourceMap {
 impl Default for AstSourceMap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// How a property value was written in source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PropertySyntax {
+    /// An explicit key/value pair such as `{ "name": value }` or
+    /// `Config { name: value }`.
+    Explicit,
+    /// A shorthand property such as `{ name }` or `Config { name }`.
+    Shorthand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectExprField {
+    pub name: Name,
+    pub value: ExprId,
+    pub syntax: PropertySyntax,
+}
+
+impl ObjectExprField {
+    pub fn explicit(name: Name, value: ExprId) -> Self {
+        Self {
+            name,
+            value,
+            syntax: PropertySyntax::Explicit,
+        }
+    }
+
+    pub fn shorthand(name: Name, value: ExprId) -> Self {
+        Self {
+            name,
+            value,
+            syntax: PropertySyntax::Shorthand,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapExprEntry {
+    pub key: ExprId,
+    pub value: ExprId,
+    pub syntax: PropertySyntax,
+}
+
+impl MapExprEntry {
+    pub fn explicit(key: ExprId, value: ExprId) -> Self {
+        Self {
+            key,
+            value,
+            syntax: PropertySyntax::Explicit,
+        }
+    }
+
+    pub fn shorthand(key: ExprId, value: ExprId) -> Self {
+        Self {
+            key,
+            value,
+            syntax: PropertySyntax::Shorthand,
+        }
     }
 }
 
@@ -884,14 +931,14 @@ pub enum Expr {
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,
-        fields: Vec<(Name, ExprId)>,
+        fields: Vec<ObjectExprField>,
         spreads: Vec<SpreadField>,
     },
     Array {
         elements: Vec<ExprId>,
     },
     Map {
-        entries: Vec<(ExprId, ExprId)>,
+        entries: Vec<MapExprEntry>,
     },
     Block {
         stmts: Vec<StmtId>,
@@ -1500,8 +1547,9 @@ pub enum Item {
 pub enum DeclarativeMeta {
     /// LLM function metadata (client name, prompt template).
     /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
-    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
-    /// while this field preserves the original metadata for Jinja type-checking.
+    /// The body is desugared to a synthetic `Expr` that constructs an
+    /// `ai.FunctionSpec` and runs it through `ai.Agent`, while this field
+    /// preserves the original declaration metadata.
     Llm(LlmBodyDef),
 }
 
@@ -1622,41 +1670,27 @@ pub enum BuiltinKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
-    pub prompt: Option<RawPrompt>,
-    /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
-    /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th
-    /// argument is the synthesized prompt closure. Built in `lower_cst` while
-    /// the CST backtick literal is still in hand (the AST must stay CST-free for
-    /// Salsa: a rowan node is `!Send`), and consumed by PPIR when it
-    /// materializes the `$stream` companion. The closure must capture the
-    /// companion's params, so it can't be shared with the oneshot body by
-    /// `ExprId` — it's a fully independent arena. `None` for legacy Jinja
-    /// `#"..."#` prompts (their `$stream` companion uses the 3-arg Jinja path).
-    pub stream_body: Option<(ExprBody, AstSourceMap)>,
-    /// BEP-049 M5: for a new-mode (backtick) prompt, the pre-lowered bodies of
-    /// the `render_prompt` / `build_request` / `build_request_stream` companions,
-    /// keyed by target name. Each is a `<target>(client, fn, args,
-    /// prompt_closure=…)` call carrying the same synthesized prompt closure, so
-    /// the static preview/cURL render through the closure exactly like execution.
-    /// Built in `lower_cst` while the CST backtick is in hand (same reason as
-    /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
-    /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
+    /// Pre-lowered companion bodies keyed by target name. The single-path
+    /// world stashes exactly one: `"spec"` — the `<Fn>$spec` body, built in
+    /// `lower_cst` while the CST backtick is still in hand (the AST must stay
+    /// CST-free for Salsa: a rowan node is `!Send`), and read back by
+    /// `companions::llm_spec`. Absent when the prompt or client is unusable
+    /// (a migration diagnostic was emitted instead).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
+    /// True when the function's `tools` field can hold tools at runtime:
+    /// any value other than an absent field or a literal empty list (`tools
+    /// []`). A non-literal expression (`tools: shared()`) counts as `true`
+    /// even if it evaluates empty — the compile-time signal is conservative.
+    /// PPIR skips `$stream` synthesis when set (streaming does not run the
+    /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
+    /// dynamic cases.
+    pub has_tools: bool,
     pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawPrompt {
     pub text: std::string::String,
-    /// Interpolation locations within the template.
-    pub interpolations: Vec<Interpolation>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Interpolation {
-    pub content: std::string::String,
-    /// Span of the full interpolation, including delimiters.
     pub span: TextRange,
 }
 
@@ -1787,6 +1821,7 @@ pub struct ImplementsForDef {
     /// Method definitions inside the block.
     pub methods: Vec<FunctionDef>,
     pub span: TextRange,
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1847,6 +1882,7 @@ pub struct TypeAliasDef {
     pub type_expr: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

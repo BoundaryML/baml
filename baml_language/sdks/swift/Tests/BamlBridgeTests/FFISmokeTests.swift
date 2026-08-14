@@ -32,6 +32,38 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(decoded.kwargs.first?.value.hasValueType == true)
     }
 
+    func testStreamHandleRetainsCarriedClassIdentity() throws {
+        var classType = BamlBridge_Cffi_V1_BamlTyClass()
+        classType.name = "ai.stream.Stream"
+        classType.typeArgs = [BamlTypeDescriptor.string.raw, BamlTypeDescriptor.string.raw]
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.classTy = classType
+
+        var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
+        handle.key = 101
+        handle.handleType = .adtTaggedHeapHandle
+        handle.ty = ty
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.handleValue = handle
+
+        let stream = try BamlStream<String, String>._bamlDecode(BamlOutboundValue(raw))
+        XCTAssertEqual(stream.bamlClassFQN, "ai.stream.Stream")
+        XCTAssertEqual(stream.nextFQN, "ai.stream.Stream.next")
+        XCTAssertEqual(stream.finalFQN, "ai.stream.Stream.final")
+    }
+
+    func testStreamHandleRequiresCarriedClassIdentity() {
+        var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
+        handle.key = 102
+        handle.handleType = .adtTaggedHeapHandle
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.handleValue = handle
+
+        XCTAssertThrowsError(
+            try BamlStream<String, String>._bamlDecode(BamlOutboundValue(raw))
+        )
+    }
+
     /// A static Swift union knows which empty-list arm was constructed. The
     /// selected child carries that exact list type while the payload stays a
     /// bare list value; no recursive scan of runtime entries is needed.

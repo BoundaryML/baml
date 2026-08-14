@@ -15,6 +15,7 @@ pub mod debug;
 pub mod errors;
 pub mod indexable;
 pub mod kperf;
+pub mod package_ai;
 pub mod package_baml;
 pub mod package_boundary;
 pub mod package_load;

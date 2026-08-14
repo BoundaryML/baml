@@ -11,7 +11,7 @@
 //!   * class  `T` — `stream_e2e_extract_doc(text) -> StreamingDoc { title, body, word_count }`
 //!
 //! The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
-//! before `StreamFinished` (asserted below). The class-typed tests are the
+//! before the end marker (asserted below). The class-typed tests are the
 //! deterministic, bridge-level regression guard for the class-typed streaming bug
 //! (thoughts/sam-projects/bridge-generics/streaming, doc 00).
 //!
@@ -24,7 +24,7 @@
 //   * `$stream` companions bind as `<function>_stream` /
 //     `<function>_stream_async` (mirroring the python binding names);
 //   * the stream's `next()` returns `Result<Option<S>, _>`, with `None`
-//     playing python's `StreamFinished` sentinel, and `final_()` returns
+//     adapting the engine's `ai.stream.Done` sentinel, and `final_()` returns
 //     `Result<T, _>` (`final` is a reserved keyword);
 //   * the `_async` companion returns a stream whose `next()`/`final_()` are
 //     themselves `async` — python names those methods `next_async` /
@@ -36,7 +36,7 @@ use crate::replay_harness::{replay_server, replay_server_async};
 // String-typed `T` — Stream<null | string, string>.
 // ---------------------------------------------------------------------------
 
-/// Sync `next()` yields a stream of partials and drains to `StreamFinished`.
+/// Sync `next()` yields a stream of partials and drains to `None`.
 #[test]
 fn test_streaming_e2e_stream() {
     use baml_sdk::lorem::stream_e2e_extract_stream;
@@ -85,7 +85,7 @@ async fn test_streaming_e2e_stream_async() {
     .await;
 }
 
-/// BAML-driven counterpart: the `S | StreamFinished` union stays engine-side.
+/// BAML-driven counterpart: the `S | ai.stream.Done` union stays engine-side.
 #[test]
 fn test_streaming_e2e_stream_collect_in_baml() {
     use baml_sdk::lorem::{StreamE2ECollectResult, stream_e2e_collect};
@@ -167,7 +167,7 @@ async fn test_streaming_e2e_stream_doc_async() {
     .await;
 }
 
-/// BAML-driven counterpart: the `S | StreamFinished` union stays engine-side;
+/// BAML-driven counterpart: the `S | ai.stream.Done` union stays engine-side;
 /// only the concrete `StreamingDoc` crosses the FFI boundary.
 #[test]
 fn test_streaming_e2e_stream_doc_collect_in_baml() {

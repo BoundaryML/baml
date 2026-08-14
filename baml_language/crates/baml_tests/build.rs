@@ -417,12 +417,15 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     let is_stdlib = project.name == "__baml_std__";
     let is_testing_std = project.name == "__testing_std__";
     let is_assert_std = project.name == "__assert_std__";
+    let is_ai_std = project.name == "__ai_std__";
     let stdlib_package_filter: Option<&str> = if is_stdlib {
         Some("baml")
     } else if is_testing_std {
         Some("testing")
     } else if is_assert_std {
         Some("assert")
+    } else if is_ai_std {
+        Some("ai")
     } else {
         None
     };
@@ -439,18 +442,16 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         Tier::DiagnosticErrors => {
             // Tier 2: HIR, TIR, formatter — no MIR, no codegen
             let hir = generate_hir_test(project, stdlib_package_filter);
-            let tir = generate_tir_test(project, stdlib_package_filter);
             let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-            (hir, tir, quote! {}, quote! {}, fmt)
+            (hir, quote! {}, quote! {}, quote! {}, fmt)
         }
         Tier::Compiles | Tier::Passing | Tier::PassingLlm => {
             // Tier 3+: all compiler phases
             let hir = generate_hir_test(project, stdlib_package_filter);
-            let tir = generate_tir_test(project, stdlib_package_filter);
             let mir = generate_mir_test(project, stdlib_package_filter);
             let cg = generate_codegen_test(project, stdlib_package_filter);
             let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-            (hir, tir, mir, cg, fmt)
+            (hir, quote! {}, mir, cg, fmt)
         }
     };
 
@@ -565,78 +566,6 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("03_ppir", output);
-            });
-        }
-    }
-}
-
-fn generate_tir_test(project: &TestProject, stdlib_package_filter: Option<&str>) -> TokenStream {
-    let file_loaders: TokenStream = project
-        .files
-        .iter()
-        .map(|baml_file| {
-            let full_path = baml_file.full_path.display().to_string();
-            let relative_path = baml_file.relative_path.display().to_string();
-            let include_content = make_include_str(&full_path);
-
-            quote! {
-                {
-                    let content = #include_content;
-                    let content = content.replace("\r\n", "\n");
-                    let sf = db.add_file(
-                        #relative_path,
-                        &content,
-                    );
-                    source_files.push(sf);
-                }
-            }
-        })
-        .collect();
-
-    let stdlib_section = if let Some(pkg_name) = stdlib_package_filter {
-        let pkg_lit = syn::LitStr::new(pkg_name, proc_macro2::Span::call_site());
-        quote! {
-            {
-                let pkg_filter = #pkg_lit;
-                writeln!(output, "\n=== TIR2 (package {}) ===", pkg_filter).unwrap();
-                use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
-                let mut baml_files: Vec<_> = compiler2_all_files(&db)
-                    .into_iter()
-                    .filter(|f| file_package(&db, *f).package.as_str() == pkg_filter)
-                    .collect();
-                baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
-                for sf in baml_files {
-                    writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
-                    output.push_str(&render_tir(&db, sf));
-                }
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    quote! {
-        #[test]
-        fn test_04_tir() {
-            use crate::compiler2_tir::support::render_tir;
-
-            let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
-            let mut source_files = Vec::new();
-
-            #file_loaders
-
-            let mut output = String::new();
-            writeln!(output, "=== TIR2 ===").unwrap();
-
-            for source_file in &source_files {
-                output.push_str(&render_tir(&db, *source_file));
-            }
-
-            #stdlib_section
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!("04_tir", output);
             });
         }
     }
@@ -946,7 +875,21 @@ fn generate_codegen_test(
         let pkg_prefix_lit = syn::LitStr::new(&pkg_prefix, proc_macro2::Span::call_site());
         quote! { |name: &&String| name.starts_with(#pkg_prefix_lit) }
     } else {
-        quote! { |name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env.") && !name.starts_with("testing.") && !name.starts_with("assert.") && !name.starts_with("log.") }
+        // A user project's snapshot shows USER code only. The stdlib package
+        // list is derived from `baml_builtins2::ALL`, so adding a builtin
+        // package never again balloons every project's snapshot — the
+        // per-package `__*_std__` projects are what cover stdlib bytecode.
+        quote! { |name: &&String| {
+            let is_stdlib = baml_builtins2::stdlib_package_names()
+                .iter()
+                .any(|pkg| {
+                    let pkg: &str = pkg;
+                    name.len() > pkg.len()
+                        && name.as_bytes()[pkg.len()] == b'.'
+                        && name.starts_with(pkg)
+                });
+            !is_stdlib && !name.starts_with("env.")
+        } }
     };
 
     quote! {

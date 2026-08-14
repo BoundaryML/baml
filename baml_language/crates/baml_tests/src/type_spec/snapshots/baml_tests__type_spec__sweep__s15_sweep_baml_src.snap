@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/type_spec/sweep.rs
+expression: report
+---
+files: 121
+typed nodes: 62910
+hir_ty error-channel entries: 0
+panics: 0
+
+== hir_ty error channel

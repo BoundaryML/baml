@@ -9,8 +9,8 @@ class Input {
 }
 
 function Foo(input: Input) -> string {
-  client "openai/gpt-4o-mini"
-  prompt #"Tell me a haiku."#
+  client: "openai/gpt-4o-mini"
+  prompt: `Tell me a haiku.`
 }
 
 test Foo {
@@ -25,19 +25,6 @@ test Foo {
     bool_array_field [true, false]
   }
 }
-
-// error: Property not known: "input". Did you mean one of these: "args", "functions"?
-//   -->  tests/values.baml:18
-//    |
-// 17 |   functions [Foo]
-// 18 |   input {
-//    |
-// error: Error validating: Missing `args` property
-//   -->  tests/values.baml:16
-//    |
-// 15 |
-// 16 | test Foo {
-//    |
 
 //----
 //- diagnostics

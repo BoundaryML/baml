@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function future_types.$init_test_ns_future_types_future_types(registry: testing.TestCollector) -> null {
     load_var registry
@@ -355,8 +356,7 @@ function future_types.int_future_is_string_future_fn() -> bool {
     store_var _3
     load_var _3
     store_var_load_var f
-    pop 1
-    load_const false
+    is_type future<string, never>
     pop_jump_if_false L0
     jump L1
 
@@ -461,8 +461,7 @@ function future_types.throwing_future_is_non_throwing_future_fn() -> bool {
     store_var _3
     load_var _3
     store_var_load_var f
-    pop 1
-    load_const false
+    is_type future<int, never>
     pop_jump_if_false L0
     jump L1
 
@@ -506,8 +505,7 @@ function future_types.wrong_future_array_fn() -> bool {
     load_type future<string, never>
     alloc_array 1
     store_var_load_var fs
-    pop 1
-    load_const false
+    is_type future<int, never>[]
     pop_jump_if_false L0
     jump L1
 

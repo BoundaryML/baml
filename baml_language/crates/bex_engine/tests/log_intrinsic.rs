@@ -70,10 +70,7 @@ async fn structured_log_executes_without_faulting() {
     assert_eq!(report.logs[1].metadata.level.as_deref(), Some("debug"));
     assert_eq!(report.logs[1].body, "42");
     assert_eq!(report.logs[2].metadata.level.as_deref(), Some("warn"));
-    assert!(report.logs[2].body.contains("ListValue"));
-    assert!(report.logs[2].body.contains("IntValue(1)"));
+    assert_eq!(report.logs[2].body, "[1, 2, 3]");
     assert_eq!(report.logs[3].metadata.level.as_deref(), Some("error"));
-    assert!(report.logs[3].body.contains("MapValue"));
-    assert!(report.logs[3].body.contains("user"));
-    assert!(report.logs[3].body.contains("ada"));
+    assert_eq!(report.logs[3].body, r#"{"user": "ada", "role": "admin"}"#);
 }

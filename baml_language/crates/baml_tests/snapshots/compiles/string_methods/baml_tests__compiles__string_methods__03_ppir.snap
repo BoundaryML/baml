@@ -1,5 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 30086
 ---
 === PPIR ===
+function user.SplitCount(s: string) -> string  [expr] {
+  {  } `...`
+}
+function user.StartsWith(s: string) -> string  [expr] {
+  {  } `...`
+}
+function user.Trimmed(s: string) -> string  [expr] {
+  {  } `...`
+}
+function user.Upper(s: string) -> string  [expr] {
+  {  } `...`
+}

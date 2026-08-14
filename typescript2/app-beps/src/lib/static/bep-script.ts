@@ -146,11 +146,16 @@ def read_local_bep(folder: Path) -> dict:
 
     pages_dir = folder / "pages"
     if pages_dir.exists() and pages_dir.is_dir():
-        for page_file in sorted(pages_dir.glob("*.md")):
-            result["pages"].append({
+        for page_file in sorted(pages_dir.rglob("*.md")):
+            rel = page_file.relative_to(pages_dir)
+            page = {
                 "slug": page_file.stem,
                 "content": page_file.read_text(encoding="utf-8"),
-            })
+            }
+            # Nested pages: the immediate folder name is the parent page's slug
+            if len(rel.parts) > 1:
+                page["parent_slug"] = rel.parts[-2]
+            result["pages"].append(page)
 
     return result
 
@@ -479,34 +484,45 @@ def cmd_diff(args: argparse.Namespace) -> int:
         else:
             print(f"README.md: {server_lines} → {local_lines} lines")
 
-    # Compare pages
+    # Compare pages (tracking each page's immediate parent to detect moves)
     server_pages = {}
     for f_path, content in server_files.items():
         if f_path.startswith("pages/") and f_path.endswith(".md"):
-            slug = f_path[6:-3]  # Remove "pages/" and ".md"
-            server_pages[slug] = content
+            # Slug is the basename; nested pages live at pages/<ancestors>/<slug>.md
+            parts = f_path[:-3].split("/")[1:]
+            slug = parts[-1]
+            parent = parts[-2] if len(parts) > 1 else None
+            server_pages[slug] = (parent, content)
 
-    local_pages = {p["slug"]: p["content"] for p in local_bep["pages"]}
+    local_pages = {
+        p["slug"]: (p.get("parent_slug"), p["content"]) for p in local_bep["pages"]
+    }
 
     all_slugs = set(server_pages.keys()) | set(local_pages.keys())
     for slug in sorted(all_slugs):
-        server_content = server_pages.get(slug, "")
-        local_content = local_pages.get(slug, "")
+        server_parent, server_content = server_pages.get(slug, (None, ""))
+        local_parent, local_content = local_pages.get(slug, (None, ""))
 
         if slug not in server_pages:
             print(f"pages/{slug}.md: NEW ({len(local_content.splitlines())} lines)")
         elif slug not in local_pages:
             print(f"pages/{slug}.md: DELETED")
-        elif server_content != local_content:
-            print(f"pages/{slug}.md: MODIFIED")
-            if args.full:
-                diff = difflib.unified_diff(
-                    server_content.splitlines(keepends=True),
-                    local_content.splitlines(keepends=True),
-                    fromfile=f"server/pages/{slug}.md",
-                    tofile=f"local/pages/{slug}.md",
+        else:
+            if server_parent != local_parent:
+                print(
+                    f"pages/{slug}.md: MOVED "
+                    f"({server_parent or '(top level)'} -> {local_parent or '(top level)'})"
                 )
-                print("".join(diff))
+            if server_content != local_content:
+                print(f"pages/{slug}.md: MODIFIED")
+                if args.full:
+                    diff = difflib.unified_diff(
+                        server_content.splitlines(keepends=True),
+                        local_content.splitlines(keepends=True),
+                        fromfile=f"server/pages/{slug}.md",
+                        tofile=f"local/pages/{slug}.md",
+                    )
+                    print("".join(diff))
 
     return 0
 
@@ -538,11 +554,14 @@ def cmd_push(args: argparse.Namespace) -> int:
         # Extract title from first heading or use slug
         title_match = re.search(r"^#\\s+(.+)$", page["content"], re.MULTILINE)
         title = title_match.group(1).strip() if title_match else page["slug"].title()
-        pages.append({
+        page_payload = {
             "slug": page["slug"],
             "title": title,
             "content": page["content"],
-        })
+        }
+        if page.get("parent_slug"):
+            page_payload["parentSlug"] = page["parent_slug"]
+        pages.append(page_payload)
 
     # Show diff first
     print("Changes to push:")

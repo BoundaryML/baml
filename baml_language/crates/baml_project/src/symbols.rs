@@ -7,10 +7,10 @@ use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     package::{PackageId, package_items},
 };
+use baml_compiler2_hir_ty::package_interface::package_interface;
 use baml_compiler2_ppir::item_data::{
     function_data, function_llm_meta, function_source_map, test_data,
 };
-use baml_compiler2_tir::package_interface::package_interface;
 use baml_db::Name;
 use baml_workspace::Db as _;
 
@@ -270,6 +270,8 @@ pub(crate) fn playground_function_name(namespace_path: &[Name], name: &Name) -> 
 }
 
 /// List tests with full metadata for the playground.
+// BUG: duplicated with different semantics in
+// `baml_cli::test_command::discover_legacy_tests` — see the note there.
 pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
     let pkg_id = PackageId::new(db, Name::new("user"));
     let pkg = package_items(db, pkg_id);

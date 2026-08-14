@@ -785,7 +785,7 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
         # reads back as an empty class (`.name == ""`).
         class_fqn = handle.ty.class_ty.name
         cls = type_map.get_class(class_fqn)
-        return cls._from_pyhandle(pyhandle)
+        return cls._from_pyhandle(pyhandle, class_fqn)
     if ht == HT.FUNCTION_REF:
         ty = getattr(handle, "ty", None)
         function_ty = (

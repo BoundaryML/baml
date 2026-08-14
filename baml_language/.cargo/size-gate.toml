@@ -55,14 +55,17 @@ max_file_bytes = "22.5 MiB"
 kind = "pack"
 policy.max_delta_pct = 3.0
 
+# Bumped ~3% above the Aug 2026 baselines when the builtin ai/provider
+# stdlib packages landed (PR #4352): the packed program carries their
+# bytecode (~700 KB).
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = "13.6 MiB"
+max_file_bytes = "14.3 MiB"
 
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "17.4 MiB"
+max_file_bytes = "18.3 MiB"
 
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "14.5 MiB"
+max_file_bytes = "15.3 MiB"
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"

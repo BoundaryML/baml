@@ -1,17 +1,38 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 23957
 ---
 === PPIR ===
-function user.Gpt4oClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "Gpt4oClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-test", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.AskGpt4o(question: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(AskGpt4o$spec(question)).value
 }
-function user.O1Client$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "O1Client", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "o1", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-test", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.AskGpt4o$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
 }
-function user.O1MiniClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "O1MiniClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "o1-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-test", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.AskGpt4o$render_prompt(question: string) -> ai.Prompt  [expr] {
+  AskGpt4o$spec(question).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.O1WithExplicitRoles$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "O1WithExplicitRoles", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "o1", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: "sk-test", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "AskGpt4o", args: map { "question": question }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: Gpt4oClient }
 }
+function user.AskGpt4o$stream(question: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(AskGpt4o$spec(question), client = client)
+}
+function user.AskO1(question: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(AskO1$spec(question)).value
+}
+function user.AskO1$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.AskO1$render_prompt(question: string) -> ai.Prompt  [expr] {
+  AskO1$spec(question).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+}
+function user.AskO1$spec(question: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "AskO1", args: map { "question": question }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: O1Client }
+}
+function user.AskO1$stream(question: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(AskO1$spec(question), client = client)
+}
+
+--- captures ---
+lambda ( __spec_output_format) in AskO1$spec: captures [question]
+lambda ( __spec_output_format) in AskGpt4o$spec: captures [question]

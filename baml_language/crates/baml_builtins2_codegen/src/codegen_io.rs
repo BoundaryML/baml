@@ -74,7 +74,7 @@ impl IoNamespaceNode<'_> {
 /// All IO builtins start with "baml." and have a namespace as the second segment:
 /// - "baml.fs.open" → "fs"
 /// - "baml.fs.File.read" → "fs"
-/// - `"baml.llm.get_client"` → `"llm"`
+/// - `"baml.prompt.get_client"` → `"llm"`
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
     let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
     after_baml.split('.').next().unwrap_or("")
@@ -1074,8 +1074,8 @@ fn emit_view_struct(
 /// A class is non-defaultable if it directly contains a `$rust_type` field,
 /// or if any of its fields transitively references a non-defaultable class.
 ///
-/// Both the fully-qualified name (`baml.llm.StreamAccumulator`) and the short
-/// name (`StreamAccumulator`) are stored, because field type references may use
+/// Both a fully-qualified name (for example `baml.sap.ParseCache`) and its
+/// short name are stored, because field type references may use
 /// either form depending on whether the path was single- or multi-segment.
 fn compute_non_defaultable_classes(
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,

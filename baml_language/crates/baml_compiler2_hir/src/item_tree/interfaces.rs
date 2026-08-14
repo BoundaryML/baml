@@ -4,13 +4,16 @@ use text_size::TextRange;
 
 use crate::{
     ids::{ClassMarker, FunctionMarker, LocalItemId},
-    item_tree::{Attribute, ClassField, FunctionParam, GenericParam},
+    item_tree::{Attribute, ClassField, GenericParam},
 };
 
 /// An interface (BEP-044) stored in the `ItemTree`.
 ///
-/// Default methods are stored as full `FunctionMarker` entries in `methods`
-/// (same as `Class::methods`). Required signatures live in `required_methods`.
+/// ALL methods - default (with a body) and required (without) - are full
+/// `FunctionMarker` entries in `methods`, the same item kind classes use;
+/// a required method is simply a `Function` whose `body` is `None`
+/// (rust-analyzer's shape: the has-body distinction matters only to body
+/// lowering, never to signatures or resolution).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interface {
     pub name: Name,
@@ -23,24 +26,9 @@ pub struct Interface {
     pub fields: Vec<ClassField>,
     /// Associated type declarations on the interface (BEP-057).
     pub associated_types: Vec<ast::AssociatedTypeDef>,
-    /// Default methods (with bodies). Implementing classes inherit them.
-    pub default_methods: Vec<LocalItemId<FunctionMarker>>,
-    /// Required methods (no body). Implementing classes must provide a body.
-    pub required_methods: Vec<InterfaceMethodSig>,
-    pub attributes: Vec<Attribute>,
-    pub docstring: Option<String>,
-    pub span: TextRange,
-}
-
-/// A required (no-body) method signature on an interface (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterfaceMethodSig {
-    pub name: Name,
-    /// Generic type parameters local to this method, each with its bounds.
-    pub generic_params: Vec<GenericParam>,
-    pub params: Vec<FunctionParam>,
-    pub return_type: Option<ast::TypeExpr>,
-    pub throws: Option<ast::TypeExpr>,
+    /// Every method, default and required alike (required = `body: None`),
+    /// in declaration-list order (defaults first, then required).
+    pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
     pub span: TextRange,
@@ -79,6 +67,9 @@ pub struct ImplBlock {
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub span: TextRange,
+    /// Leading `///` docstring — populated for free `implements … for …`
+    /// blocks; in-body `implements I { … }` blocks do not carry one today.
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

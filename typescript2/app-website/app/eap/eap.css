@@ -30,15 +30,9 @@
 }
 
 .eap-wrap {
-  max-width: 1040px;
+  max-width: 800px;
   padding: 120px 24px 96px;
   margin: 0 auto;
-}
-/* The header and secondary CTA read best as a narrow measure even when the
-   schedule below goes full width. */
-.eap-header,
-.eap-cta-band {
-  max-width: 640px;
 }
 
 .eap-h1 {
@@ -51,7 +45,6 @@
   text-wrap: balance;
 }
 .eap-sub {
-  max-width: 48ch;
   margin: 16px 0 0;
   font-size: 18px;
   line-height: 1.55;

@@ -146,7 +146,7 @@ fn load_type_concrete_int() {
 
 /// A `TyTemplate::from(string)` produces a `RuntimeTy::string()` payload distinct
 /// from a `TyTemplate::from(int)`, and the resulting heap objects compare
-/// unequal under `deep_equals`.
+/// unequal under `==`.
 #[test]
 fn load_type_concrete_string_different_from_int() {
     let (r_int, vm_int) = run_with_bytecode_keep_vm(

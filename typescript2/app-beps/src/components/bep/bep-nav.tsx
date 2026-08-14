@@ -85,12 +85,14 @@ export function BepNav({
   onAddPage,
 }: BepNavProps) {
   // Arrange sections as a tree: children (parentSlug) render under their
-  // parent, indented. Children whose parent isn't visible stay at top level.
+  // parent, indented one step per ancestor. Children whose parent isn't
+  // visible stay at top level.
   const visibleSections = sections.filter(
     (s) => s.hasContent || pageStatuses[s.id] === "new"
   );
   const visibleIds = new Set(visibleSections.map((s) => s.id));
-  const orderedSections: Array<Section & { depth: number }> = [];
+  const childrenByParent = new Map<string, Section[]>();
+  const rootSections: Section[] = [];
   for (const section of visibleSections) {
     // Self-referential pages (parentSlug === own id) render at top level
     if (
@@ -98,15 +100,26 @@ export function BepNav({
       section.parentSlug !== section.id &&
       visibleIds.has(section.parentSlug)
     ) {
-      continue;
-    }
-    orderedSections.push({ ...section, depth: 0 });
-    for (const child of visibleSections) {
-      if (child.id !== section.id && child.parentSlug === section.id) {
-        orderedSections.push({ ...child, depth: 1 });
-      }
+      const siblings = childrenByParent.get(section.parentSlug) ?? [];
+      siblings.push(section);
+      childrenByParent.set(section.parentSlug, siblings);
+    } else {
+      rootSections.push(section);
     }
   }
+  const orderedSections: Array<Section & { depth: number }> = [];
+  const placed = new Set<string>();
+  const appendSubtree = (section: Section, depth: number) => {
+    if (placed.has(section.id)) return;
+    placed.add(section.id);
+    orderedSections.push({ ...section, depth });
+    for (const child of childrenByParent.get(section.id) ?? []) {
+      appendSubtree(child, depth + 1);
+    }
+  };
+  for (const section of rootSections) appendSubtree(section, 0);
+  // Sections trapped in parent cycles have no root; render them at top level
+  for (const section of visibleSections) appendSubtree(section, 0);
 
   // Keep the active item visible inside the sidebar's own scroll container
   // without touching window scroll (scrollIntoView would also scroll
@@ -151,8 +164,13 @@ export function BepNav({
                   ? "bg-accent text-accent-foreground font-medium"
                   : "text-muted-foreground",
                 isDeleted && "opacity-50 line-through",
-                section.depth > 0 && "ml-4 border-l pl-3"
+                section.depth > 0 && "border-l pl-3"
               )}
+              style={
+                section.depth > 0
+                  ? { marginLeft: `${section.depth}rem` }
+                  : undefined
+              }
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="truncate">{section.title}</span>

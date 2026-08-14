@@ -51,6 +51,8 @@ public final class BamlHandle implements AutoCloseable {
 
     private final long key;
     private final int handleType;
+    /** Root class identity carried by an outbound tagged handle's {@code ty}. */
+    private final String classFqn;
     private final State state;
     private final Cleaner.Cleanable cleanable;
 
@@ -97,8 +99,18 @@ public final class BamlHandle implements AutoCloseable {
      * object will release it on cleanup.
      */
     public BamlHandle(long key, int handleType) {
+        this(key, handleType, null);
+    }
+
+    /**
+     * Wrap an engine row together with the root class identity carried on the
+     * outbound handle. Ordinary/media handles have no class identity; tagged
+     * heap handles use it to derive their instance-method FQNs.
+     */
+    public BamlHandle(long key, int handleType, String classFqn) {
         this.key = key;
         this.handleType = handleType;
+        this.classFqn = classFqn;
         this.state = new State(key, handleType);
         this.cleanable = CLEANER.register(this, state);
     }
@@ -111,6 +123,11 @@ public final class BamlHandle implements AutoCloseable {
     /** The wire {@code BamlHandleType} discriminant. */
     public int handleType() {
         return handleType;
+    }
+
+    /** Root BAML class FQN carried by this handle, or {@code null} if absent. */
+    public String classFqn() {
+        return classFqn;
     }
 
     /**

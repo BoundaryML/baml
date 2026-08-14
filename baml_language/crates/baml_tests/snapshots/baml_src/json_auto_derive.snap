@@ -369,7 +369,7 @@ function json_auto_derive.BZeroFrom.baml.FromJson.from_json(j: baml.json.json) -
 function json_auto_derive.G.f(self: json_auto_derive.G<#0>) -> baml.json.json[] {
     load_type #0
     load_type baml.json.json
-    load_type baml.json.JsonSerializationError
+    load_type baml.json.JsonParseError | baml.json.JsonSerializationError
     load_var self
     load_field .items
     load_type #0
@@ -421,14 +421,10 @@ function json_auto_derive.alias_chain_dispatch_from_json_val() -> int {
 function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
     load_const 7
     init_instance user.json_auto_derive.BAliasTo .y
-    load_type baml.ToJson
-    load_const "to_json"
-    virtual_call nargs=1 ntypeargs=0
-    store_var j
-    load_var j
+    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
     store_var _3
     load_var _3
-    narrow_bind int, slot=2
+    narrow_bind int, slot=1
     pop_jump_if_false L0
     jump L1
 

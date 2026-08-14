@@ -307,8 +307,8 @@ pub struct UserFunctionInfo {
     /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
     /// is the path to the file containing `main`.
     pub source_file: String,
-    /// `true` when the function carries `FunctionMeta::Llm` — i.e. it
-    /// was declared with `client X { ... } prompt #"..."#` and the
+    /// `true` when the function carries `FunctionMeta::Llm` and was declared
+    /// with an LLM client and backtick prompt.
     /// compiler synthesized the LLM dispatch body. Surfaced here so
     /// `baml run --list` can annotate LLM functions inline without
     /// reaching back into the heap to inspect `body_meta`.
@@ -1797,7 +1797,6 @@ impl BexEngine {
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
-            template_strings_macros: Arc::new(bytecode.template_strings_macros),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bex_vm::package_load::all_recursive_type_aliases(
@@ -2026,15 +2025,10 @@ impl BexEngine {
             // SAFETY: ptr is from resolved_function_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Function(func) = obj {
-                if let Some(FunctionMeta::Llm {
-                    prompt_template,
-                    client,
-                }) = &func.body_meta
-                {
+                if let Some(FunctionMeta::Llm { client }) = &func.body_meta {
                     llm_functions.insert(
                         name.clone(),
                         sys_types::LlmFunctionInfo {
-                            prompt_template: prompt_template.clone(),
                             client_name: client.clone(),
                             return_type: declared_symbolic(&func.return_type, func),
                         },
@@ -2614,7 +2608,7 @@ impl BexEngine {
         // bindings (source (b)); fold in source (a): class type args recovered
         // from a generic `self` receiver (instance methods). A generic instance
         // method called by name leaves its declared types with the class's type
-        // vars unsubstituted (e.g. `Stream.next`'s `TStream | StreamFinished`);
+        // vars unsubstituted (e.g. `Stream.next`'s `TStream | Done`);
         // the inbound `self` handle carries them concretely, so zipping the
         // declared `self` against the actual recovers the bindings. See
         // bridge-generics/streaming/04. `collect_type_var_bindings` only fills

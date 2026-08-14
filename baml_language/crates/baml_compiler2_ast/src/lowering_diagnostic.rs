@@ -175,6 +175,48 @@ pub enum LoweringDiagnostic {
     /// generic function may be specialized into a value (`foo<int>`).
     TypeArgsOnNonPathBase { span: TextRange },
 
+    /// An LLM function's `tools` field cannot switch the function to the
+    /// ai-package spec desugar: the function is missing a backtick prompt or a
+    /// `"provider/model"` client string with a known provider prefix.
+    InvalidLlmToolsField {
+        function_name: String,
+        reason: &'static str,
+        span: TextRange,
+    },
+
+    /// A legacy `client<llm> Name { ... }` config block. Removed: clients are
+    /// plain values now — `client Name = <expr>;`.
+    ClientBlockRemoved { name: String, span: TextRange },
+
+    /// A legacy `retry_policy` block. Removed: retry composes at the client
+    /// boundary via `ai.Retry.new(inner, ...)`.
+    RetryPolicyRemoved { name: String, span: TextRange },
+
+    /// A legacy Jinja `#"..."#` prompt on an LLM function. Removed: prompts
+    /// are backtick templates.
+    LlmJinjaPromptRemoved { span: TextRange },
+
+    /// A legacy `template_string` declaration. Removed: use a function
+    /// returning a backtick string.
+    TemplateStringRemoved { span: TextRange },
+
+    /// The LLM function's `client` value cannot be used: unknown provider
+    /// prefix, a string without a `provider/model` shape, or the removed
+    /// unquoted shorthand.
+    InvalidLlmClient {
+        function_name: String,
+        reason: String,
+        span: TextRange,
+    },
+
+    /// A `${role(...)}` marker in an LLM prompt. Removed: the prompt is
+    /// instructions-only; the conversation lives in the journal and roles are
+    /// the client's wire concern.
+    LlmRoleMarkerRemoved {
+        function_name: String,
+        span: TextRange,
+    },
+
     /// A numeric literal token failed validation (`baml_base::num_lit`):
     /// uppercase base prefix, no digits after the prefix, a digit invalid
     /// for the base, or an integer magnitude exceeding `i64::MAX`. For
@@ -503,6 +545,80 @@ impl LoweringDiagnostic {
                 "type arguments can only be applied to a function reference".to_string(),
                 *span,
                 "specialize a generic function directly, e.g. `foo<int>`",
+            ),
+            LoweringDiagnostic::InvalidLlmToolsField {
+                function_name,
+                reason,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!("LLM function `{function_name}` cannot use a `tools` field: {reason}"),
+                *span,
+                "`tools` requires a backtick prompt and a \"provider/model\" client string",
+            ),
+            LoweringDiagnostic::ClientBlockRemoved { name, span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!(
+                    "`client<llm>` config blocks are removed; declare a client value instead: \
+                     `client {name} = openai.OpenAiClient.new(model = \"...\");` \
+                     (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)"
+                ),
+                *span,
+                "replace with `client Name = <expr>;`",
+            ),
+            LoweringDiagnostic::RetryPolicyRemoved { name, span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!(
+                    "`retry_policy` blocks are removed; wrap the client instead: \
+                     `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` \
+                     (`{name}` has no effect)"
+                ),
+                *span,
+                "retry composes at the client boundary now",
+            ),
+            LoweringDiagnostic::LlmJinjaPromptRemoved { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "Jinja `#\"...\"#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead."
+                    .to_string(),
+                *span,
+                "use a backtick prompt instead",
+            ),
+            LoweringDiagnostic::TemplateStringRemoved { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`template_string` declarations are no longer supported. Use a function returning a backtick string instead."
+                    .to_string(),
+                *span,
+                "use a function returning a backtick string instead",
+            ),
+            LoweringDiagnostic::InvalidLlmClient {
+                function_name,
+                reason,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!("LLM function `{function_name}` has an unusable `client`: {reason}"),
+                *span,
+                "use a \"provider/model\" string or an expression evaluating to ai.Client",
+            ),
+            LoweringDiagnostic::LlmRoleMarkerRemoved {
+                function_name,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!(
+                    "`${{role(...)}}` markers are removed; the prompt of `{function_name}` is \
+                     instructions-only — the conversation lives in the journal, and message \
+                     roles are the client's wire concern"
+                ),
+                *span,
+                "delete the role marker; write plain instructions",
             ),
             LoweringDiagnostic::InvalidNumericLiteral { error, span } => {
                 use baml_base::num_lit::IntLitError;

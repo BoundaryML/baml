@@ -9,7 +9,8 @@ use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
-    runtime_ty_structurally_equal, selected_arm_equal, value_satisfies_json,
+    is_canonical_json_alias, runtime_ty_structurally_equal, selected_arm_equal,
+    value_satisfies_json,
 };
 use bex_vm::BexVm;
 
@@ -244,8 +245,8 @@ impl BexEngine {
                     panic!("Instance.class should point to a Class object")
                 };
 
-                // Lift `baml.llm.Stream` to an opaque ADT handle.  The four
-                // child fields (_client/_acc/_sse/_cache) stay on the heap
+                // Lift the canonical AI stream to an opaque ADT handle. Its
+                // BAML-owned state stays on the heap
                 // behind the GC-rooted handle so the BAML interpreter can
                 // walk them when running `Stream.next` / `Stream.final`
                 // bodies on subsequent calls.  See plan 21b §"Phase 1a".
@@ -254,7 +255,8 @@ impl BexEngine {
                 // once at lift time and carried inline on the variant so
                 // the wire encoder doesn't need a heap permit. See plan
                 // 23a §"Engine-side ripple effects".
-                if class.name.display_name().as_str() == "baml.llm.Stream" {
+                if class.name.display_name().as_str() == baml_type::qualified_name::AI_STREAM_STREAM
+                {
                     let handle = self.heap.create_handle(ptr);
                     let ty = RuntimeTy::Class(
                         class.name.clone(),
@@ -507,7 +509,7 @@ impl BexEngine {
                 SynthTy::Known(RuntimeTy::Media(media.kind, attr()))
             }
             // A collector inhabits the concrete `Resource` leaf type, and a
-            // rendered prompt inhabits `PromptAst` — bind T to those rather than
+            // rendered prompt inhabits `ai.Prompt` — bind T to those rather than
             // falling into the host-only catch-all below.
             BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
                 SynthTy::Known(RuntimeTy::resource())
@@ -734,9 +736,26 @@ impl BexEngine {
     pub(crate) fn convert_external_to_vm_value_with_ty<T: RootHaver + TlabHolder>(
         &self,
         holder: &mut impl HeapPermit<T>,
-        external: BexExternalValue,
+        mut external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
     ) -> Result<Value, EngineError> {
+        // A `baml.json.json` slot materializes containers with the alias as
+        // their element/value type, exactly like BAML-born `baml.json.parse`
+        // values (`serde_to_value`), so runtime type tests (`match (j) { let
+        // m: map<string, json> => ... }`) treat host and BAML json alike.
+        // `coerce_inbound_arg` already re-annotates argument trees; this hook
+        // covers the paths that convert without a coercion pass, notably
+        // host-callable return values.
+        if let Some(declared @ RuntimeTy::TypeAlias(name, _)) = expected_ty
+            && is_canonical_json_alias(name)
+            && matches!(
+                external,
+                BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
+            )
+            && value_satisfies_json(&external)
+        {
+            external = annotate_json_container_types(external, declared);
+        }
         // Structural host-only stash (03b §F/§G): when the declared slot resolves
         // to `RustType` (the generic var bound to `rust_type`) but the value is a
         // structural `BexExternalValue` (e.g. an unbound generic instance), ride
@@ -981,7 +1000,7 @@ impl BexEngine {
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 return Err(EngineError::CannotConvert {
-                    type_name: "PromptAst".to_string(),
+                    type_name: "ai.Prompt".to_string(),
                 });
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
@@ -1348,9 +1367,6 @@ pub(crate) fn maybe_wrap_union(
                 0 => Ok(value),
                 1 => maybe_wrap_union(value, &non_null[0]),
                 _ => {
-                    // Keep `null` in the recorded union type so the value stays
-                    // marked optional (preserving the nullable FFI wire shape);
-                    // select the matching non-null arm.
                     let selected = find_matching_member(&value, &non_null)?;
                     let metadata = UnionMetadata::new(
                         RuntimeTy::Union(members.clone(), attr.clone()),
@@ -1433,7 +1449,7 @@ pub(crate) fn collect_type_var_bindings(
 ///
 /// This is the fix for the host-driven streaming `TStream`-typevar bug: a
 /// generic method's declared return type (e.g. `Stream.next`'s
-/// `TStream | StreamFinished`) reaches the FFI return conversion with `TStream`
+/// `TStream | Done`) reaches the FFI return conversion with `TStream`
 /// unsubstituted, so a concrete partial value matched no union member and the
 /// conversion panicked. Substituting from the receiver's bound type args (see
 /// [`collect_type_var_bindings`]) makes the concrete arm present.
@@ -2006,7 +2022,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
 /// `BuiltinUnknown` arms match any value (see `value_matches_type`) and are
 /// considered last so a more-specific arm wins. This keeps the union
 /// metadata's `selected_option` faithful when concrete arms (e.g.
-/// `StreamFinished` in `BuiltinUnknown | StreamFinished`) actually fit.
+/// `Done` in `BuiltinUnknown | Done`) actually fit.
 fn find_matching_member(
     value: &BexExternalValue,
     members: &[RuntimeTy],
@@ -2186,7 +2202,7 @@ fn runtime_ty_resolves_to_exact_null<'a>(
     for _ in 0..=aliases.len() {
         match ty {
             RuntimeTy::Null { .. } => return true,
-            RuntimeTy::TypeAlias(name, _) if name.display_name().as_str() != "baml.json.json" => {
+            RuntimeTy::TypeAlias(name, _) if !is_canonical_json_alias(name) => {
                 let Some(expanded) = aliases.get(name) else {
                     return false;
                 };
@@ -2301,7 +2317,7 @@ fn value_matches_type_with_definitions(
     classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
 ) -> bool {
     if let RuntimeTy::TypeAlias(name, _) = ty
-        && name.display_name().as_str() != "baml.json.json"
+        && !is_canonical_json_alias(name)
         && let Some(expanded) = aliases.get(name)
     {
         return value_matches_type_with_definitions(value, expanded, aliases, classes);
@@ -2311,7 +2327,7 @@ fn value_matches_type_with_definitions(
         // `BuiltinUnknown` is the engine's "any value matches" sentinel
         // (TypeScript `unknown` semantics — see `baml_type::RuntimeTy::BuiltinUnknown`).
         // Used by the stdlib generics hardcode in `baml_compiler2_mir::lower`
-        // so e.g. `Stream<TStream, TFinal>.next() -> TStream | StreamFinished`
+        // so e.g. `Stream<TStream, TFinal>.next() -> TStream | Done`
         // accepts any partial-stream payload as the `TStream` arm.
         (_, RuntimeTy::BuiltinUnknown { .. }) => true,
         (BexExternalValue::Null, RuntimeTy::Null { .. }) => true,
@@ -2409,17 +2425,18 @@ fn value_matches_type_with_definitions(
                     && value_matches_type_with_definitions(value, member, aliases, classes)
             })
         }
-        (BexExternalValue::Union { .. }, RuntimeTy::TypeAlias(name, _))
-            if name.display_name().as_str() == "baml.json.json" =>
+        // `value_satisfies_json` peels sparse inbound leaf annotations (the
+        // Swift bridge annotates every json scalar leaf) but still rejects
+        // genuine union carriers and annotations outside the JSON algebra.
+        (union_value @ BexExternalValue::Union { .. }, RuntimeTy::TypeAlias(name, _))
+            if is_canonical_json_alias(name) =>
         {
-            false
+            value_satisfies_json(union_value)
         }
         (BexExternalValue::Union { value, .. }, ty) => {
             value_matches_type_with_definitions(value, ty, aliases, classes)
         }
-        (value, RuntimeTy::TypeAlias(name, _))
-            if name.display_name().as_str() == "baml.json.json" =>
-        {
+        (value, RuntimeTy::TypeAlias(name, _)) if is_canonical_json_alias(name) => {
             value_satisfies_json(value)
         }
         // Handle nested unions (including nullable `T | null`) in the type.
@@ -3293,13 +3310,7 @@ fn stdlib_media_wrapper_kind(annotation: &RuntimeTy) -> Option<baml_type::MediaK
     if !args.is_empty() {
         return None;
     }
-    match name.render_dotted(false).as_str() {
-        "baml.media.Image" => Some(baml_type::MediaKind::Image),
-        "baml.media.Audio" => Some(baml_type::MediaKind::Audio),
-        "baml.media.Video" => Some(baml_type::MediaKind::Video),
-        "baml.media.Pdf" => Some(baml_type::MediaKind::Pdf),
-        _ => None,
-    }
+    baml_type::MediaKind::from_wrapper_class_name(&name.render_dotted(false))
 }
 
 fn resolve_runtime_alias<'a>(
@@ -3450,7 +3461,7 @@ fn coerce_arg_to_declared_type_with_aliases(
     // recursive context; recursive references consume payload structure before
     // returning here again, so productive aliases terminate with the value.
     if let RuntimeTy::TypeAlias(name, _) = ty
-        && name.display_name().as_str() != "baml.json.json"
+        && !is_canonical_json_alias(name)
         && let Some(expanded) = aliases.get(name)
     {
         return coerce_arg_to_declared_type_with_aliases(
@@ -3607,6 +3618,27 @@ fn coerce_arg_to_declared_type_with_aliases(
             )?;
             Ok(BexExternalValue::typed(coerced, effective_type.clone()))
         }
+        // A declared `baml.json.json` slot receiving a container. Untyped
+        // bridge encoders (Go `baml.JSON`, Python dicts/lists, `--json-args`)
+        // send containers without a `value_type` annotation, which the wire
+        // decoder defaults to a scalar-union element type. Left as-is, the
+        // materialized VM map/list would carry that synthesized type and fail
+        // runtime type tests such as `match (j) { let m: map<string, json> =>
+        // ... }` — diverging from BAML-born `baml.json.parse` values, whose
+        // containers carry the `json` alias itself (`serde_to_value`).
+        // Re-annotate the container tree with the declared alias so both
+        // materialize identically. Values outside the JSON algebra are left
+        // unchanged for the standard validation paths to reject.
+        (value, declared @ RuntimeTy::TypeAlias(name, _))
+            if is_canonical_json_alias(name)
+                && matches!(
+                    value,
+                    BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
+                )
+                && value_satisfies_json(&value) =>
+        {
+            Ok(annotate_json_container_types(value, declared))
+        }
         (BexExternalValue::Array { items, .. }, RuntimeTy::List(expected_element, _)) => {
             Ok(BexExternalValue::Array {
                 element_type: expected_element.as_ref().clone(),
@@ -3654,7 +3686,7 @@ fn coerce_arg_to_declared_type_with_aliases(
         // shell before validating/materializing the annotated node.
         (BexExternalValue::Instance { mut fields, .. }, media_ty @ RuntimeTy::Media(..)) => {
             let data = fields
-                .shift_remove("_data")
+                .shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
                 .ok_or_else(|| EngineError::TypeMismatch {
                     message: format!(
                         "host media payload for `{media_ty}` is missing its `_data` handle"
@@ -3749,6 +3781,37 @@ fn coerce_arg_to_declared_type_with_aliases(
 
         // ── Numeric / optional / union ───────────────────────────────────
         (v, ty) => coerce_numeric_to_declared_type(v, ty),
+    }
+}
+
+/// Rewrite every container annotation in a JSON value tree to the `json`
+/// alias itself: lists become `json[]`, maps become `map<string, json>`.
+/// Scalars carry no annotation and pass through; sparse inbound leaf
+/// annotations (transient `Union` carriers) are recursed through with their
+/// metadata intact. The caller has already proven the tree inhabits the JSON
+/// algebra (`value_satisfies_json`).
+fn annotate_json_container_types(value: BexExternalValue, json_ty: &RuntimeTy) -> BexExternalValue {
+    match value {
+        BexExternalValue::Array { items, .. } => BexExternalValue::Array {
+            element_type: json_ty.clone(),
+            items: items
+                .into_iter()
+                .map(|item| annotate_json_container_types(item, json_ty))
+                .collect(),
+        },
+        BexExternalValue::Map { entries, .. } => BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: json_ty.clone(),
+            entries: entries
+                .into_iter()
+                .map(|(key, entry)| (key, annotate_json_container_types(entry, json_ty)))
+                .collect(),
+        },
+        BexExternalValue::Union { value, metadata } => BexExternalValue::Union {
+            value: Box::new(annotate_json_container_types(*value, json_ty)),
+            metadata,
+        },
+        scalar => scalar,
     }
 }
 
@@ -4027,6 +4090,119 @@ mod union_container_selection_tests {
         assert!(runtime_ty_structurally_equal(
             &metadata.selected_option,
             &json
+        ));
+    }
+
+    #[test]
+    fn canonical_json_alias_accepts_leaf_annotated_inbound_trees() {
+        // The Swift bridge annotates every json scalar leaf with a sparse
+        // inbound `value_type` (a transient `Union` carrier). Such trees must
+        // satisfy `json` and re-annotate their containers exactly like
+        // untyped trees; annotations outside the JSON algebra must not.
+        let json = json_ty();
+        let mut entries = indexmap::IndexMap::new();
+        entries.insert(
+            "type".to_string(),
+            BexExternalValue::typed(BexExternalValue::String("ok".into()), RuntimeTy::string()),
+        );
+        let object = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries,
+        };
+        assert!(value_matches_type(&object, &json));
+
+        let coerced = coerce_arg_to_declared_type(object, &json).unwrap();
+        let BexExternalValue::Map {
+            value_type,
+            entries,
+            ..
+        } = coerced
+        else {
+            panic!("annotated JSON object must stay a map")
+        };
+        assert!(runtime_ty_structurally_equal(&value_type, &json));
+        let BexExternalValue::Union { metadata, .. } = &entries["type"] else {
+            panic!("leaf annotation must be preserved")
+        };
+        assert!(metadata.is_inbound_type_annotation);
+
+        // A leaf annotated outside the JSON algebra keeps the tree non-JSON.
+        let mut bigint_entries = indexmap::IndexMap::new();
+        bigint_entries.insert(
+            "huge".to_string(),
+            BexExternalValue::typed(
+                BexExternalValue::Bigint(num_bigint::BigInt::from(1)),
+                RuntimeTy::bigint(),
+            ),
+        );
+        let bigint_object = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: bigint_entries,
+        };
+        assert!(!value_matches_type(&bigint_object, &json));
+    }
+
+    #[test]
+    fn canonical_json_alias_reannotates_untyped_inbound_containers() {
+        // Untyped bridges (Go `baml.JSON`, Python dicts, `--json-args`) send
+        // containers without element annotations; the wire decoder synthesizes
+        // a scalar-union element type. A declared `json` slot must rewrite
+        // those to the alias itself so the materialized VM containers pass
+        // `match (j) { let m: map<string, json> => ... }` exactly like
+        // BAML-born `baml.json.parse` values.
+        let json = json_ty();
+        let nested_list = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![BexExternalValue::Int(1)],
+        };
+        let mut nested_entries = indexmap::IndexMap::new();
+        nested_entries.insert("inner".to_string(), nested_list);
+        let object = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: nested_entries,
+        };
+
+        let coerced = coerce_arg_to_declared_type(object, &json).unwrap();
+        let BexExternalValue::Map {
+            key_type,
+            value_type,
+            entries,
+        } = coerced
+        else {
+            panic!("JSON object must stay a map")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &key_type,
+            &RuntimeTy::string()
+        ));
+        assert!(runtime_ty_structurally_equal(&value_type, &json));
+        let BexExternalValue::Array { element_type, .. } = &entries["inner"] else {
+            panic!("nested JSON list must stay a list")
+        };
+        assert!(runtime_ty_structurally_equal(element_type, &json));
+
+        // A tree outside the JSON algebra is left untouched for the standard
+        // validation paths to reject.
+        let mut binary_entries = indexmap::IndexMap::new();
+        binary_entries.insert(
+            "bytes".to_string(),
+            BexExternalValue::Uint8Array(vec![1, 2]),
+        );
+        let binary = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: binary_entries,
+        };
+        let untouched = coerce_arg_to_declared_type(binary, &json).unwrap();
+        let BexExternalValue::Map { value_type, .. } = untouched else {
+            panic!("non-JSON map must stay a map")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &value_type,
+            &RuntimeTy::unknown()
         ));
     }
 
@@ -4938,7 +5114,7 @@ mod peel_to_rust_type_tests {
 
     #[test]
     fn unrelated_opaque_does_not_match() {
-        // A different opaque leaf type — e.g. `baml.llm.PromptAst` — must
+        // A different opaque leaf type — e.g. `ai.Prompt` — must
         // not be confused with `$rust_type`.
         let ty = RuntimeTy::PromptAst {
             attr: TyAttr::default(),

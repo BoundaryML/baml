@@ -14,136 +14,54 @@
 
 test "match_jump_table_first_arm" {
     let x = 0;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            1 => 101,
-            2 => 102,
-            3 => 103,
-            _ => 999
-        },
-        100
-    ))
+    assert.equal(match (x) { 0 => 100, 1 => 101, 2 => 102, 3 => 103, _ => 999 }, 100)
 }
 
 test "match_jump_table_middle_arm" {
     let x = 2;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            1 => 101,
-            2 => 102,
-            3 => 103,
-            _ => 999
-        },
-        102
-    ))
+    assert.equal(match (x) { 0 => 100, 1 => 101, 2 => 102, 3 => 103, _ => 999 }, 102)
 }
 
 test "match_jump_table_last_arm" {
     let x = 3;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            1 => 101,
-            2 => 102,
-            3 => 103,
-            _ => 999
-        },
-        103
-    ))
+    assert.equal(match (x) { 0 => 100, 1 => 101, 2 => 102, 3 => 103, _ => 999 }, 103)
 }
 
 test "match_jump_table_fallback" {
     let x = 10;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            1 => 101,
-            2 => 102,
-            3 => 103,
-            _ => 999
-        },
-        999
-    ))
+    assert.equal(match (x) { 0 => 100, 1 => 101, 2 => 102, 3 => 103, _ => 999 }, 999)
 }
 
 test "match_jump_table_negative_fallback" {
     let x = -1;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            1 => 101,
-            2 => 102,
-            3 => 103,
-            _ => 999
-        },
-        999
-    ))
+    assert.equal(match (x) { 0 => 100, 1 => 101, 2 => 102, 3 => 103, _ => 999 }, 999)
 }
 
 test "match_jump_table_with_holes_miss" {
     // 4 values in range of 7: density ~57% (above 50% threshold)
     // Hole at value 1 should fall through to default
     let x = 1;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            2 => 102,
-            4 => 104,
-            6 => 106,
-            _ => 999
-        },
-        999
-    ))
+    assert.equal(match (x) { 0 => 100, 2 => 102, 4 => 104, 6 => 106, _ => 999 }, 999)
 }
 
 test "match_jump_table_with_holes_hit" {
     let x = 4;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            2 => 102,
-            4 => 104,
-            6 => 106,
-            _ => 999
-        },
-        104
-    ))
+    assert.equal(match (x) { 0 => 100, 2 => 102, 4 => 104, 6 => 106, _ => 999 }, 104)
 }
 
 test "match_jump_table_offset_values" {
     // Jump table with non-zero base offset
     let x = 11;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            10 => 110,
-            11 => 111,
-            12 => 112,
-            13 => 113,
-            _ => 999
-        },
-        111
-    ))
+    assert.equal(match (x) { 10 => 110, 11 => 111, 12 => 112, 13 => 113, _ => 999 }, 111)
 }
 
 test "match_jump_table_large" {
     // 8 consecutive values - should still use jump table
     let x = 5;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 1000,
-            1 => 1001,
-            2 => 1002,
-            3 => 1003,
-            4 => 1004,
-            5 => 1005,
-            6 => 1006,
-            7 => 1007,
-            _ => 9999
-        },
-        1005
-    ))
+    assert.equal(
+        match (x) { 0 => 1000, 1 => 1001, 2 => 1002, 3 => 1003, 4 => 1004, 5 => 1005, 6 => 1006, 7 => 1007, _ => 9999 },
+        1005,
+    )
 }
 
 // Tests that a match with 4 dense consecutive integer arms uses a jump table
@@ -159,7 +77,7 @@ function classify_jump_table_dense_four_arms_param(x: int) -> int {
 }
 
 test "match_jump_table_dense_four_arms_param" {
-    assert.is_true(baml.deep_equals(classify_jump_table_dense_four_arms_param(2), 102))
+    assert.equal(classify_jump_table_dense_four_arms_param(2), 102)
 }
 
 // ============================================================================
@@ -168,89 +86,38 @@ test "match_jump_table_dense_four_arms_param" {
 
 test "match_binary_search_first_arm" {
     let x = 0;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            30 => 130,
-            60 => 160,
-            99 => 199,
-            _ => 999
-        },
-        100
-    ))
+    assert.equal(match (x) { 0 => 100, 30 => 130, 60 => 160, 99 => 199, _ => 999 }, 100)
 }
 
 test "match_binary_search_middle_arm" {
     let x = 60;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            30 => 130,
-            60 => 160,
-            99 => 199,
-            _ => 999
-        },
-        160
-    ))
+    assert.equal(match (x) { 0 => 100, 30 => 130, 60 => 160, 99 => 199, _ => 999 }, 160)
 }
 
 test "match_binary_search_last_arm" {
     let x = 99;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            30 => 130,
-            60 => 160,
-            99 => 199,
-            _ => 999
-        },
-        199
-    ))
+    assert.equal(match (x) { 0 => 100, 30 => 130, 60 => 160, 99 => 199, _ => 999 }, 199)
 }
 
 test "match_binary_search_fallback" {
     let x = 50;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            30 => 130,
-            60 => 160,
-            99 => 199,
-            _ => 999
-        },
-        999
-    ))
+    assert.equal(match (x) { 0 => 100, 30 => 130, 60 => 160, 99 => 199, _ => 999 }, 999)
 }
 
 test "match_binary_search_very_sparse" {
     let x = 500;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 1000,
-            100 => 1100,
-            200 => 1200,
-            300 => 1300,
-            400 => 1400,
-            500 => 1500,
-            _ => 9999
-        },
-        1500
-    ))
+    assert.equal(
+        match (x) { 0 => 1000, 100 => 1100, 200 => 1200, 300 => 1300, 400 => 1400, 500 => 1500, _ => 9999 },
+        1500,
+    )
 }
 
 test "match_binary_search_large_values" {
     let x = 750;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            250 => 1250,
-            500 => 1500,
-            750 => 1750,
-            1000 => 2000,
-            1250 => 2250,
-            _ => 9999
-        },
-        1750
-    ))
+    assert.equal(
+        match (x) { 250 => 1250, 500 => 1500, 750 => 1750, 1000 => 2000, 1250 => 2250, _ => 9999 },
+        1750,
+    )
 }
 
 // Binary search with function parameter (non-constant scrutinee).
@@ -265,7 +132,7 @@ function classify_binary_search_sparse_four_arms_param(x: int) -> int {
 }
 
 test "match_binary_search_sparse_four_arms_param" {
-    assert.is_true(baml.deep_equals(classify_binary_search_sparse_four_arms_param(30), 130))
+    assert.equal(classify_binary_search_sparse_four_arms_param(30), 130)
 }
 
 // ============================================================================
@@ -282,7 +149,7 @@ function classify_if_else_chain_three_arms(x: int) -> int {
 }
 
 test "match_if_else_chain_three_arms" {
-    assert.is_true(baml.deep_equals(classify_if_else_chain_three_arms(0), 100))
+    assert.equal(classify_if_else_chain_three_arms(0), 100)
 }
 
 // ============================================================================
@@ -292,47 +159,19 @@ test "match_if_else_chain_three_arms" {
 test "match_density_exactly_50_percent" {
     // 4 arms in range of 8: 0, 2, 4, 6 = 50% density (should use jump table)
     let x = 4;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            2 => 102,
-            4 => 104,
-            6 => 106,
-            _ => 999
-        },
-        104
-    ))
+    assert.equal(match (x) { 0 => 100, 2 => 102, 4 => 104, 6 => 106, _ => 999 }, 104)
 }
 
 test "match_density_below_50_percent" {
     // 4 arms in range of 10: 0, 3, 6, 9 = 40% density (should use binary search)
     let x = 6;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            3 => 103,
-            6 => 106,
-            9 => 109,
-            _ => 999
-        },
-        106
-    ))
+    assert.equal(match (x) { 0 => 100, 3 => 103, 6 => 106, 9 => 109, _ => 999 }, 106)
 }
 
 test "match_density_above_50_percent" {
     // 5 arms in range of 6: 0, 1, 2, 4, 5 = 83% density (should use jump table)
     let x = 4;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            1 => 101,
-            2 => 102,
-            4 => 104,
-            5 => 105,
-            _ => 999
-        },
-        104
-    ))
+    assert.equal(match (x) { 0 => 100, 1 => 101, 2 => 102, 4 => 104, 5 => 105, _ => 999 }, 104)
 }
 
 // ============================================================================
@@ -342,45 +181,18 @@ test "match_density_above_50_percent" {
 test "match_large_range_dense" {
     // Dense values starting from offset (100-103)
     let x = 102;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            100 => 1000,
-            101 => 1001,
-            102 => 1002,
-            103 => 1003,
-            _ => 9999
-        },
-        1002
-    ))
+    assert.equal(match (x) { 100 => 1000, 101 => 1001, 102 => 1002, 103 => 1003, _ => 9999 }, 1002)
 }
 
 test "match_large_range_sparse" {
     // Sparse values with large gaps
     let x = 1000;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 1,
-            500 => 2,
-            1000 => 3,
-            1500 => 4,
-            _ => 9999
-        },
-        3
-    ))
+    assert.equal(match (x) { 0 => 1, 500 => 2, 1000 => 3, 1500 => 4, _ => 9999 }, 3)
 }
 
 test "match_zero_in_range" {
     let x = 0;
-    assert.is_true(baml.deep_equals(
-        match (x) {
-            0 => 100,
-            1 => 101,
-            2 => 102,
-            3 => 103,
-            _ => 999
-        },
-        100
-    ))
+    assert.equal(match (x) { 0 => 100, 1 => 101, 2 => 102, 3 => 103, _ => 999 }, 100)
 }
 
 // ============================================================================
@@ -496,7 +308,7 @@ function classify_range_at_limit_uses_jump_table(x: int) -> int {
 }
 
 test "match_range_at_limit_uses_jump_table" {
-    assert.is_true(baml.deep_equals(classify_range_at_limit_uses_jump_table(254), 3))
+    assert.equal(classify_range_at_limit_uses_jump_table(254), 3)
 }
 
 // Values spanning more than 256 range should NOT use jump table.
@@ -511,7 +323,7 @@ function classify_range_exceeds_limit_uses_binary_search(x: int) -> int {
 }
 
 test "match_range_exceeds_limit_uses_binary_search" {
-    assert.is_true(baml.deep_equals(classify_range_exceeds_limit_uses_binary_search(200), 3))
+    assert.equal(classify_range_exceeds_limit_uses_binary_search(200), 3)
 }
 
 // ============================================================================
@@ -536,7 +348,7 @@ function classify_large_jump_table(x: int) -> int {
 }
 
 test "match_large_jump_table" {
-    assert.is_true(baml.deep_equals(classify_large_jump_table(7), 107))
+    assert.equal(classify_large_jump_table(7), 107)
 }
 
 // ============================================================================
@@ -558,5 +370,5 @@ function classify_binary_search_eight_arms(x: int) -> int {
 }
 
 test "match_binary_search_eight_arms" {
-    assert.is_true(baml.deep_equals(classify_binary_search_eight_arms(50), 5))
+    assert.equal(classify_binary_search_eight_arms(50), 5)
 }

@@ -4,24 +4,22 @@
 // `test` block. Tests using `baml_test!{ entry: "fn", args: {...} }` form keep
 // the function as a top-level definition and call it.
 //
-// Scalar/primitive return values: `assert.is_true(baml.deep_equals(...))` for
-// direct call results (not stored in locals), `assert.equal` for optional returns.
-// Instance results use `baml.deep_equals`.
+// Scalar/primitive return values and instance results both use `assert.equal`.
 
 function literal_int() -> int { 42 }
 function literal_bool() -> bool { true }
 function literal_string() -> string { "hello" }
 
 test "return_literal_int" {
-    assert.is_true(baml.deep_equals(literal_int(), 42))
+    assert.equal(literal_int(), 42)
 }
 
 test "return_literal_bool" {
-    assert.is_true(baml.deep_equals(literal_bool(), true))
+    assert.is_true(literal_bool())
 }
 
 test "return_literal_string" {
-    assert.is_true(baml.deep_equals(literal_string(), "hello"))
+    assert.equal(literal_string(), "hello")
 }
 
 function one() -> int {
@@ -29,7 +27,7 @@ function one() -> int {
 }
 
 test "return_function_call" {
-    assert.is_true(baml.deep_equals(one(), 1))
+    assert.equal(one(), 1)
 }
 
 function two() -> int {
@@ -42,7 +40,7 @@ function two_plus_one() -> int {
 }
 
 test "call_function_assign_to_variable" {
-    assert.is_true(baml.deep_equals(two_plus_one(), 3))
+    assert.equal(two_plus_one(), 3)
 }
 
 function mutable_variables_fn() -> int {
@@ -52,7 +50,7 @@ function mutable_variables_fn() -> int {
 }
 
 test "mutable_variables" {
-    assert.is_true(baml.deep_equals(mutable_variables_fn(), 5))
+    assert.equal(mutable_variables_fn(), 5)
 }
 
 function one_of(a: int, b: int) -> int {
@@ -65,7 +63,7 @@ function call_with_arguments_fn() -> int {
 }
 
 test "call_with_arguments" {
-    assert.is_true(baml.deep_equals(call_with_arguments_fn(), 1))
+    assert.equal(call_with_arguments_fn(), 1)
 }
 
 function get_greeting() -> string {
@@ -79,7 +77,7 @@ function unused_variable_fn() -> string {
 }
 
 test "unused_variable_does_not_affect_result" {
-    assert.is_true(baml.deep_equals(unused_variable_fn(), "Hello"))
+    assert.equal(unused_variable_fn(), "Hello")
 }
 
 function early_return(x: int) -> int {
@@ -88,7 +86,7 @@ function early_return(x: int) -> int {
 }
 
 test "early_return" {
-    assert.is_true(baml.deep_equals(early_return(42), 1))
+    assert.equal(early_return(42), 1)
 }
 
 function early_return_nested() -> int {
@@ -117,7 +115,7 @@ function early_return_nested() -> int {
 }
 
 test "early_return_from_nested_scopes" {
-    assert.is_true(baml.deep_equals(early_return_nested(), 0))
+    assert.equal(early_return_nested(), 0)
 }
 
 function fib(n: int) -> int {
@@ -133,7 +131,7 @@ function fib_main() -> int {
 }
 
 test "recursion" {
-    assert.is_true(baml.deep_equals(fib_main(), 2))
+    assert.equal(fib_main(), 2)
 }
 
 function add(a: int, b: int) -> int {
@@ -150,5 +148,5 @@ function function_as_value_main() -> int {
 }
 
 test "function_as_value" {
-    assert.is_true(baml.deep_equals(function_as_value_main(), 42))
+    assert.equal(function_as_value_main(), 42)
 }

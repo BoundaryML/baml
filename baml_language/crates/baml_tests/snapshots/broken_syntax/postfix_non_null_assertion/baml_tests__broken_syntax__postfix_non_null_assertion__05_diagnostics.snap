@@ -2,20 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] E0001
-
-  × mismatched types
-   ╭─[main.baml:7:9]
- 7 │         xs.at(0)!
-   ·         ────┬───
-   ·             ╰── expected `int`, found `int | null`
-   ╰────
-
   [parse] E0010
 
   × invalid syntax
    ╭─[main.baml:7:17]
  7 │         xs.at(0)!
    ·                 ┬
-   ·                 ╰── unexpected '!'; BAML has no non-null assertion operator — unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'
+   ·                 ╰── unexpected '!'; BAML has no non-null assertion operator — unwrap optionals with '?? <default>' or 'if let x: T = opt { ... }'
    ╰────

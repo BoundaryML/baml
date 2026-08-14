@@ -2,6 +2,14 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+   ╭─[nested.baml:1:1]
+ 1 │ // Group D: @alias in nested type positions.
+   · ▲
+   ╰────
+
   [hir] E0106
 
   × `@alias` is only allowed on class fields and enum variants; remove it here
@@ -19,6 +27,14 @@ source: crates/baml_tests/src/generated_tests.rs
     ·      ──────────────────────────────────
     ╰────
 
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[nested.baml:18:6]
+ 18 │   d4 map<NFoo @alias("d4_alias"), NBar>
+    ·      ──────────────────────────────────
+    ╰────
+
   [hir] E0106
 
   × `@alias` is only allowed on class fields and enum variants; remove it here
@@ -26,6 +42,14 @@ source: crates/baml_tests/src/generated_tests.rs
  18 │   d4 map<NFoo @alias("d4_alias"), NBar>
     ·               ─────────┬────────
     ·                        ╰── field attribute here
+    ╰────
+
+  [type] E0067
+
+  × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[nested.baml:21:6]
+ 21 │   d5 map<NFoo @stream.done, NBar>
+    ·      ────────────────────────────
     ╰────
 
   [type] E0067
@@ -57,9 +81,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0067
 
   × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-    ╭─[nested.baml:36:7]
+    ╭─[nested.baml:36:19]
  36 │   d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
-    ·       ────────────────────────────────────────────────
+    ·                   ───────────────────────────────────
     ╰────
 
   [hir] E0106

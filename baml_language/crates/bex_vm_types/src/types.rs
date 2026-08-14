@@ -82,10 +82,6 @@ pub struct Program {
     /// until `$init` runs at load time via `StoreGlobal`.
     pub let_global_indices: HashMap<String, usize>,
 
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    /// Prepended to function prompt templates by `get_jinja_template`.
-    pub template_strings_macros: String,
-
     /// Client build metadata for constructing full client trees at runtime.
     /// Keyed by client name.
     pub client_metadata: HashMap<String, ClientBuildMeta>,

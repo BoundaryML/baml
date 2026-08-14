@@ -50,9 +50,8 @@ function generic_union_returns.model_step_flattens_union_type_arg() -> bool {
 
 function generic_union_returns.parse_model_step(raw: string) -> generic_union_returns.ModelStep<#0> {
     load_type #0 | generic_union_returns.PendingCalls
-    load_type #0 | generic_union_returns.PendingCalls
     load_var raw
-    call baml.llm.parse
+    call baml.sap.parse
     load_type #0
     init_instance<1> user.generic_union_returns.ModelStep .outcome
     return
@@ -60,9 +59,8 @@ function generic_union_returns.parse_model_step(raw: string) -> generic_union_re
 
 function generic_union_returns.sap_nullable_container_types_are_preserved() -> bool {
     load_type generic_union_returns.ParsedNullableContainers
-    load_type generic_union_returns.ParsedNullableContainers
     load_const "{\n      \"empty_json\": [],\n      \"metadata\": {\"attempt\": 1},\n      \"children\": [{\"name\": \"first\"}],\n      \"statuses\": [\"Ready\"]\n    }"
-    call baml.llm.parse
+    call baml.sap.parse
     store_var parsed
     load_var parsed
     load_field .empty_json
@@ -95,8 +93,7 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
 
   L2:
     load_var _10
-    store_var _9
-    load_var _10
+    store_var_load_var _9
     load_const null
     cmp_op ==
     pop_jump_if_false L3
@@ -119,25 +116,24 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     load_var metadata
     make_bound_method baml.Map.length
     call_indirect
-    store_var _18
+    store_var _19
     jump L6
 
   L5:
     load_const null
-    store_var _18
+    store_var _19
 
   L6:
-    load_var _18
-    store_var _17
-    load_var _18
+    load_var _19
+    store_var_load_var _18
     load_const null
     cmp_op ==
     pop_jump_if_false L7
     load_const 0
-    store_var _17
+    store_var _18
 
   L7:
-    load_var _17
+    load_var _18
     load_const 1
     cmp_int_op ==
     store_var map_ok
@@ -190,15 +186,15 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     load_var statuses
     make_bound_method baml.Array.at
     call_indirect
-    store_var _38
+    store_var _39
     jump L15
 
   L14:
     load_const null
-    store_var _38
+    store_var _39
 
   L15:
-    load_var _38
+    load_var _39
     load_const user.generic_union_returns.ParsedStatus.Ready
     alloc_variant user.generic_union_returns.ParsedStatus
     call baml.ops.equals_equals
@@ -224,9 +220,8 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
 
 function generic_union_returns.sap_parses_optional_json_null() -> bool {
     load_type baml.json.json | null
-    load_type baml.json.json | null
     load_const "null"
-    call baml.llm.parse
+    call baml.sap.parse
     store_var parsed
     load_var parsed
     load_const null
@@ -250,9 +245,8 @@ function generic_union_returns.sap_parses_optional_json_null() -> bool {
 
 function generic_union_returns.sap_parses_optional_json_value() -> bool {
     load_type baml.json.json | null
-    load_type baml.json.json | null
     load_const "true"
-    call baml.llm.parse
+    call baml.sap.parse
     call baml.json.stringify
     load_const "true"
     cmp_op ==

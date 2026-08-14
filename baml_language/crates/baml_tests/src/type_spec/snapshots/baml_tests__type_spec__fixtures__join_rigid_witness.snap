@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+72..79 'jrw_one': throws never
+100..109 '{\n    1\n}': 1
+106..107 '1': 1
+119..131 'jrw_anchored': throws never
+161..224 '{\n   ...  x\n}': 1
+167..172 'let x': 1
+175..204 'if c {...ne() }': 1
+178..179 'c': bool
+180..185 '{ 1 }': 1
+182..183 '1': 1
+191..204 '{ jrw_one() }': 1
+193..200 'jrw_one': () -> 1 throws never
+193..202 'jrw_one()': 1
+221..222 'x': 1
+234..247 'jrw_all_fresh': throws never
+277..334 '{\n   ...  y\n}': int
+283..288 'let y': int
+291..312 'if c {... { 1 }': 1
+294..295 'c': bool
+296..301 '{ 1 }': 1
+298..299 '1': 1
+307..312 '{ 1 }': 1
+309..310 '1': 1
+331..332 'y': int

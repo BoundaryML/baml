@@ -93,7 +93,7 @@ baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
-baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
+baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
@@ -105,8 +105,6 @@ bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
-sys_jinja = { path = "crates/sys_jinja" }
-sys_jinja_types = { path = "crates/sys_jinja_types" }
 sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
@@ -119,6 +117,7 @@ baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
+baml_surface = { path = "crates/baml_surface" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
@@ -135,16 +134,6 @@ bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
 
-# External dependency for sys_llm jinja module
-minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
-  "macros",
-  "builtins",
-  "debug",
-  "preserve_order",
-  "serde",
-  "unstable_machinery",
-] }
-minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", features = [ "pycompat" ] }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
@@ -188,6 +177,9 @@ ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
+# Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
+# crate rustc and rust-analyzer build their inference tables on.
+ena = "0.14"
 flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
@@ -201,6 +193,7 @@ indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
 infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+similar = "2"
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"

@@ -1,7 +1,28 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 9761
 ---
 === MIR2 ===
+fn user.Sized.size(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.Tagged.tag(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn user.Both.Sized.size(self: Both) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -139,6 +160,38 @@ fn user.field_into_switch(item: T) -> int {
 
     bb3: {
         return;
+    }
+}
+
+fn user.Registry.put(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.Registry.summarize(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.Printable.display(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
     }
 }
 

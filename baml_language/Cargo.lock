@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "baml_release",
@@ -668,6 +668,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
 ]
 
 [[package]]
@@ -683,7 +684,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "hex",
  "indexmap",
@@ -737,6 +738,7 @@ dependencies = [
  "baml_lsp_server",
  "baml_project",
  "baml_release",
+ "baml_surface",
  "baml_tests",
  "baml_type",
  "baml_version",
@@ -821,10 +823,11 @@ dependencies = [
  "baml_base",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_type",
+ "baml_type_runtime",
  "baml_workspace",
  "bex_vm_types",
  "borsh",
@@ -853,15 +856,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler2_hir_ty"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_ppir",
+ "baml_type",
+ "baml_type_runtime",
+ "borsh",
+ "ena",
+ "num-bigint",
+ "rustc-hash 2.1.2",
+ "salsa",
+ "smol_str 0.3.6",
+ "strsim",
+ "text-size",
+]
+
+[[package]]
 name = "baml_compiler2_mir"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_type",
+ "baml_type_runtime",
  "baml_workspace",
  "indexmap",
  "num-bigint",
@@ -882,28 +907,6 @@ dependencies = [
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
- "text-size",
-]
-
-[[package]]
-name = "baml_compiler2_tir"
-version = "0.1.0"
-dependencies = [
- "baml_base",
- "baml_builtins2",
- "baml_compiler2_ast",
- "baml_compiler2_hir",
- "baml_compiler2_ppir",
- "baml_type",
- "baml_type_runtime",
- "baml_workspace",
- "borsh",
- "indexmap",
- "num-bigint",
- "rustc-hash 2.1.2",
- "salsa",
- "smol_str 0.3.6",
- "strsim",
  "text-size",
 ]
 
@@ -967,9 +970,9 @@ dependencies = [
  "baml_base",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
  "baml_compiler_parser",
@@ -1017,11 +1020,12 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
  "baml_workspace",
  "bitflags 2.11.1",
  "indexmap",
@@ -1029,7 +1033,6 @@ dependencies = [
  "rowan 0.16.1",
  "salsa",
  "serde",
- "sys_jinja_types",
  "text-size",
 ]
 
@@ -1118,18 +1121,20 @@ dependencies = [
 name = "baml_project"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_builtins2",
  "baml_codegen_types",
  "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_lsp2_actions",
+ "baml_surface",
  "baml_type",
  "baml_workspace",
  "bex_vm_types",
@@ -1160,6 +1165,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_surface"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
+ "baml_compiler2_ppir",
+ "baml_project",
+ "baml_type",
+ "insta",
+ "salsa",
+ "serde",
+ "serde_json",
+ "text-size",
+]
+
+[[package]]
 name = "baml_tests"
 version = "0.0.0-beta"
 dependencies = [
@@ -1168,9 +1192,9 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler2_ppir",
- "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_fmt",
@@ -1195,6 +1219,7 @@ dependencies = [
  "rayon",
  "salsa",
  "serde_json",
+ "similar",
  "syn 2.0.117",
  "sys_native",
  "sys_ops",
@@ -1212,6 +1237,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_type_macros",
+ "bitflags 2.11.1",
  "borsh",
  "rustc-hash 2.1.2",
 ]
@@ -1486,7 +1512,6 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "wasm-bindgen-futures",
- "web-time",
  "yaml_serde",
 ]
 
@@ -2774,6 +2799,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "491bdf728bf25ddd9ad60d4cf1c48588fa82c013a2440b91aa7fc43e34a07c32"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "ena"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eabffdaee24bd1bf95c5ef7cec31260444317e72ea56c4c91750e8b7ee58d5f1"
+dependencies = [
+ "log",
 ]
 
 [[package]]
@@ -4570,24 +4604,6 @@ checksum = "4869b6a491569605d66d3952bcdf03df789e5b536e5f0cf7758a7f08a55ae24d"
 dependencies = [
  "cc",
  "walkdir",
-]
-
-[[package]]
-name = "minijinja"
-version = "2.16.0"
-source = "git+https://github.com/boundaryml/minijinja.git?branch=value-cmp#8cfc770a5dffeda2de5b910d2b9f870d7edeff7c"
-dependencies = [
- "indexmap",
- "serde",
-]
-
-[[package]]
-name = "minijinja-contrib"
-version = "2.16.0"
-source = "git+https://github.com/boundaryml/minijinja.git?branch=value-cmp#8cfc770a5dffeda2de5b910d2b9f870d7edeff7c"
-dependencies = [
- "minijinja",
- "serde",
 ]
 
 [[package]]
@@ -6803,6 +6819,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "base64",
 ]
 
 [[package]]
@@ -7307,26 +7324,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sys_jinja"
-version = "0.0.0-beta"
-dependencies = [
- "minijinja",
- "minijinja-contrib",
- "regex",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "sys_jinja_types"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "indexmap",
- "minijinja",
- "strsim",
-]
-
-[[package]]
 name = "sys_llm"
 version = "0.0.0-beta"
 dependencies = [
@@ -7348,14 +7345,12 @@ dependencies = [
  "getrandom 0.3.4",
  "indexmap",
  "infer",
- "minijinja",
  "num-bigint",
  "rsa",
  "rustls",
  "serde",
  "serde_json",
  "strum",
- "sys_jinja",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",

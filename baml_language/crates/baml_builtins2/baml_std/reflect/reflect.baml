@@ -18,14 +18,14 @@ function type_of<T>() -> type {
 
 /// One parameter of a function signature (BEP-062).
 class Arg {
-  /// The parameter's name. When the callable carries no name for a
-  /// positional parameter (a host callable from a language without
-  /// parameter-name introspection), this is the placeholder `$argN` for
-  /// position N. `$` cannot appear in a user identifier, so a placeholder
-  /// can never collide with a declared parameter or named-argument key.
-  name string
-  /// The parameter's type.
-  type type
+    /// The parameter's name. When the callable carries no name for a
+    /// positional parameter (a host callable from a language without
+    /// parameter-name introspection), this is the placeholder `$argN` for
+    /// position N. `$` cannot appear in a user identifier, so a placeholder
+    /// can never collide with a declared parameter or named-argument key.
+    name: string,
+    /// The parameter's type.
+    type: type,
 }
 
 /// The runtime signature of a function value, reconstructed from the value
@@ -33,19 +33,19 @@ class Arg {
 /// declaration order; named/optional parameters appear in `opts`, keyed by
 /// name. A bound method reports its receiver-adjusted signature (no `self`).
 class Signature {
-  /// The name the function was declared with; null for host callables and
-  /// compiler-synthesized callables (including lambdas).
-  name string?
-  /// Positional (required) parameters, in order.
-  args Arg[]
-  /// Named/optional parameters, keyed by parameter name.
-  opts map<string, Arg>
-  /// The return type.
-  returns type
-  /// The error type; `never` if the function cannot throw.
-  errors type
-  /// The function's doc comment (joined `///` lines); null when absent.
-  docstring string?
+    /// The name the function was declared with; null for host callables and
+    /// compiler-synthesized callables (including lambdas).
+    name: string?,
+    /// Positional (required) parameters, in order.
+    args: Arg[],
+    /// Named/optional parameters, keyed by parameter name.
+    opts: map<string, Arg>,
+    /// The return type.
+    returns: type,
+    /// The error type; `never` if the function cannot throw.
+    errors: type,
+    /// The function's doc comment (joined `///` lines); null when absent.
+    docstring: string?,
 }
 
 /// Thrown by `reflect.call_any` when the supplied arguments do not fit the
@@ -55,9 +55,9 @@ class Signature {
 /// type and `never`; a key naming no parameter reports the callee's whole
 /// function type and the value's type.
 class InvalidArgumentError {
-  argument string
-  expected type
-  got type
+    argument: string,
+    expected: type,
+    got: type,
 }
 
 /// Returns the runtime signature of `f`.
@@ -68,7 +68,7 @@ class InvalidArgumentError {
 //baml:mut_vm
 //baml:fallible
 function signature(f: baml.AnyFunction) -> Signature throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Calls `f` with `args`, every argument keyed by parameter name (a nameless
@@ -82,6 +82,9 @@ function signature(f: baml.AnyFunction) -> Signature throws never {
 /// throws `unknown` (which covers `InvalidArgumentError`).
 //baml:mut_vm
 //baml:may_yield
-function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError {
-  $rust_function
+function call_any<R, E>(
+    f: baml.AnyFunction<Returns = R, Throws = E>,
+    args: map<string, unknown>,
+) -> R throws E | InvalidArgumentError {
+    $rust_function
 }

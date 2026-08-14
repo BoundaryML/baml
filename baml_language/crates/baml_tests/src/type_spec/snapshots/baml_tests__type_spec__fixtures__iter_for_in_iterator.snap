@@ -1,0 +1,40 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+85..99 'ifi_array_iter': throws never
+124..299 '{\n   ...out\n}': int[]
+130..144 'let out: int[]': int[]
+139..144 'int[]': int[]
+147..149 '[]': int[]
+159..164 'let x': int
+168..195 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
+168..206 'baml.i...4, 6])': baml.iter.ArrayIterator<int>
+196..205 '[2, 4, 6]': int[]
+197..198 '2': 2
+200..201 '4': 4
+203..204 '6': 6
+208..289 '{\n   ...n    }': int
+218..229 'let element': int
+232..233 'x': int
+266..274 'out.push': (self: int[], item: int) -> int throws never
+266..283 'out.pu...ement)': int
+275..282 'element': int
+294..297 'out': int[]
+309..318 'ifi_range': throws never
+343..505 '{\n   ...out\n}': int[]
+349..363 'let out: int[]': int[]
+358..363 'int[]': int[]
+366..368 '[]': int[]
+378..383 'let x': int
+387..406 'baml.i...ge.new': (min: int, max: int, step?: int) -> baml.iter.Range throws never
+387..412 'baml.i...(1, 4)': baml.iter.Range
+407..408 '1': 1
+410..411 '4': 4
+414..495 '{\n   ...n    }': int
+424..435 'let element': int
+438..439 'x': int
+472..480 'out.push': (self: int[], item: int) -> int throws never
+472..489 'out.pu...ement)': int
+481..488 'element': int
+500..503 'out': int[]

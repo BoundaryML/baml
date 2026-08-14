@@ -1288,34 +1288,6 @@ fn reflect_implemented_by_is_reverse() {
 }
 
 #[test]
-fn reflect_implementors_returns_type_array() {
-    // `Animal.implementors()` returns `type[]`. We just check the program
-    // compiles + the types line up; the runtime test below verifies semantics.
-    assert_no_interface_errors(
-        r#"
-        interface Animal {
-            function speak(self) -> string throws never
-        }
-        class Dog {
-            implements Animal {
-                function speak(self) -> string { return "Woof!" }
-            }
-        }
-        class Cat {
-            implements Animal {
-                function speak(self) -> string { return "Meow." }
-            }
-        }
-
-        function main() -> int {
-            let animal_t = reflect.type_of<Animal>()
-            return animal_t.implementors().length()
-        }
-        "#,
-    );
-}
-
-#[test]
 fn calling_implements_block_method_works() {
     // The class methods array is flattened to include `implements` block
     // methods. Calling them via `obj.method()` should resolve through the
@@ -2200,8 +2172,8 @@ fn self_param_method_rejects_mismatched_literal_arg() {
 fn generic_class_unannotated_self_is_parameterized() {
     // An unannotated `self` in a generic class must be typed `Wrap<T>`, not bare
     // `Wrap`, so it satisfies a parameterized expected type. Regression for the
-    // StreamCache builtin failure: the auto-derived `to_json` passed a bare
-    // `self` to `baml.json.to_string<StreamCache<TStream, TFinal>>`. Because the
+    // ParseCache builtin failure: the auto-derived `to_json` passed a bare
+    // `self` to `baml.json.to_string<ParseCache<TStream, TFinal>>`. Because the
     // callee's generic is differently named, the class params stay rigid and the
     // argument is *checked* (not deferred), which surfaced the bare `self`.
     assert_zero_compile_errors(
@@ -3160,64 +3132,6 @@ async fn reflect_implements_transitive_via_requires() {
 }
 
 #[tokio::test]
-async fn reflect_implementors_lists_lexicographic_order_and_identity() {
-    // `implementors()` returns implementors in a deterministic lexicographic
-    // order by qualified name — `Cat` before `Dog` — independent of source
-    // declaration order.
-    let output = baml_test!(
-        r#"
-        interface Animal {
-            function speak(self) -> string throws never
-        }
-        class Dog {
-            implements Animal {
-                function speak(self) -> string { return "Woof!" }
-            }
-        }
-        class Cat {
-            implements Animal {
-                function speak(self) -> string { return "Meow." }
-            }
-        }
-        function main() -> bool {
-            let impls = reflect.type_of<Animal>().implementors()
-            return impls.length() == 2
-                && impls[0] == reflect.type_of<Cat>()
-                && impls[1] == reflect.type_of<Dog>()
-        }
-    "#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
-}
-
-#[tokio::test]
-async fn reflect_implementors_empty_for_concrete_class() {
-    let output = baml_test!(
-        r#"
-        class Dog {
-            breed: string
-        }
-        function main() -> int {
-            return reflect.type_of<Dog>().implementors().length()
-        }
-    "#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(0));
-}
-
-#[tokio::test]
-async fn reflect_implementors_empty_for_primitive() {
-    let output = baml_test!(
-        r#"
-        function main() -> int {
-            return reflect.type_of<int>().implementors().length()
-        }
-    "#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(0));
-}
-
-#[tokio::test]
 async fn reflect_implements_inside_generic_function() {
     let output = baml_test!(
         r#"
@@ -3821,11 +3735,11 @@ fn llm_function_can_return_interface_type() {
             }
         }
         function detect_animal(description: string) -> Animal {
-            client GPT4o
-            prompt #"
-                Identify the animal from the description: {{description}}.
-                {{ ctx.output_format }}
-            "#
+            client: GPT4o
+            prompt: `
+                Identify the animal from the description: ${description}.
+                ${ctx.output_format}
+            `
         }
         "##,
     );
@@ -3836,9 +3750,7 @@ fn llm_function_returning_interface_enumerates_implementors_in_schema() {
     // BEP-044 §"LLM Functions": a function declared to return an
     // interface must compile, with the schema-rendering side later
     // expanding the interface into a `oneOf` of its implementors at
-    // prompt evaluation time. This test pins the type-check surface;
-    // the prompt-rendering snapshot would require a separate harness
-    // that captures the rendered Jinja output.
+    // prompt evaluation time. This test pins the type-check surface.
     assert_no_interface_errors(
         r##"
         client<llm> GPT4o {
@@ -3859,11 +3771,11 @@ fn llm_function_returning_interface_enumerates_implementors_in_schema() {
             }
         }
         function detect_animal(description: string) -> Animal {
-            client GPT4o
-            prompt #"
-                Identify the animal: {{ description }}.
-                {{ ctx.output_format }}
-            "#
+            client: GPT4o
+            prompt: `
+                Identify the animal: ${description}.
+                ${ctx.output_format}
+            `
         }
         "##,
     );
@@ -4982,11 +4894,11 @@ fn llm_function_with_interface_array_return_compiles() {
             }
         }
         function detect_zoo(description: string) -> Animal[] {
-            client GPT4o
-            prompt #"
-                Identify every animal mentioned in {{description}}.
-                {{ ctx.output_format }}
-            "#
+            client: GPT4o
+            prompt: `
+                Identify every animal mentioned in ${description}.
+                ${ctx.output_format}
+            `
         }
         "##,
     );
@@ -5007,12 +4919,12 @@ fn llm_function_with_interface_in_union_return_compiles() {
             }
         }
         function detect_or_describe(description: string) -> Animal | string {
-            client GPT4o
-            prompt #"
-                If {{description}} clearly identifies an animal, return one.
+            client: GPT4o
+            prompt: `
+                If ${description} clearly identifies an animal, return one.
                 Otherwise, paraphrase the description.
-                {{ ctx.output_format }}
-            "#
+                ${ctx.output_format}
+            `
         }
         "##,
     );
@@ -5037,11 +4949,11 @@ fn llm_function_takes_interface_typed_parameter_compiles() {
             }
         }
         function describe_animal(a: Animal) -> string {
-            client GPT4o
-            prompt #"
-                Describe the animal named {{a.name}}.
-                {{ ctx.output_format }}
-            "#
+            client: GPT4o
+            prompt: `
+                Describe the animal named ${a.name}.
+                ${ctx.output_format}
+            `
         }
         "##,
     );
@@ -5617,10 +5529,8 @@ async fn out_of_body_implements_is_visible_to_reflection_registry() {
             function speak(self) -> string { return "woof" }
         }
         function main() -> bool {
-            let impls = reflect.type_of<Animal>().implementors()
             return reflect.type_of<Dog>().implements(reflect.type_of<Animal>())
-                && impls.length() == 1
-                && impls[0] == reflect.type_of<Dog>()
+                && reflect.type_of<Animal>().implemented_by(reflect.type_of<Dog>())
         }
         "#
     );
@@ -6780,9 +6690,8 @@ async fn unified_rule_reflection_sees_generic_class_implementor_once() {
             function display(self) -> string { return "box" }
         }
         function main() -> bool {
-            let impls = reflect.type_of<Printable>().implementors()
             return reflect.type_of<Box<int>>().implements(reflect.type_of<Printable>())
-                && impls.length() == 1
+                && reflect.type_of<Box<string>>().implements(reflect.type_of<Printable>())
         }
     "#
     );
@@ -6932,7 +6841,7 @@ async fn form2_reflect_implements_returns_true() {
 }
 
 #[tokio::test]
-async fn form2_reflect_implementors_includes_satisfying_classes() {
+async fn form2_reflect_membership_includes_satisfying_classes() {
     let output = baml_test!(
         r#"
         interface Named {
@@ -6956,7 +6865,6 @@ async fn form2_reflect_implementors_includes_satisfying_classes() {
             let printable = reflect.type_of<Printable>()
             return printable.implemented_by(reflect.type_of<Person>())
                 && printable.implemented_by(reflect.type_of<Team>())
-                && printable.implementors().length() == 2
         }
     "#
     );
@@ -6979,8 +6887,8 @@ async fn blanket_interface_rule_reflection_includes_concrete_container_implement
                 && reflect.type_of<Container<string>>().implements(reflect.type_of<Printable<string>>())
                 && reflect.type_of<Printable<int>>().implemented_by(reflect.type_of<Container<int>>())
                 && reflect.type_of<Printable<string>>().implemented_by(reflect.type_of<Container<string>>())
-                && reflect.type_of<Printable<int>>().implementors().length() == 1
-                && reflect.type_of<Printable<string>>().implementors().length() == 1
+                && !reflect.type_of<Printable<int>>().implemented_by(reflect.type_of<Container<string>>())
+                && !reflect.type_of<Printable<string>>().implemented_by(reflect.type_of<Container<int>>())
         }
     "#
     );
@@ -9515,58 +9423,6 @@ function main() -> bool {
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(false));
 }
 
-/// Finding #36 [wrong-result]: implementors() on a generic interface ignores type args — Box<int>.implementors() returns both IntBox and StringBox
-#[tokio::test]
-async fn fuzz_bug36_reflect_implementors_respects_generic_type_args() {
-    let output = baml_test!(
-        r##"interface Box<T> {
-    function get(self) -> T throws never
-}
-class IntBox {
-    implements Box<int> {
-        function get(self) -> int { return 1 }
-    }
-}
-class StringBox {
-    implements Box<string> {
-        function get(self) -> string { return "hello" }
-    }
-}
-
-function main() -> int {
-    // Box<int>.implementors() returns just [IntBox] (length 1) — the type
-    // argument filters out StringBox (which implements Box<string>).
-    return reflect.type_of<Box<int>>().implementors().length()
-}
-"##
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
-}
-
-/// Finding #37 [wrong-result]: implementors() returned items in a
-/// nondeterministic order with 3+ implementors. They are now in a stable
-/// lexicographic order by qualified name (`A,B,C`).
-#[tokio::test]
-async fn fuzz_bug37_reflect_implementors_deterministic_order() {
-    let output = baml_test!(
-        r##"interface I {}
-class A { implements I {} }
-class B { implements I {} }
-class C { implements I {} }
-
-function main() -> string {
-    let impls = reflect.type_of<I>().implementors()
-    // Lexicographic by name: A,B,C
-    return impls[0].to_string() + "," + impls[1].to_string() + "," + impls[2].to_string()
-}
-"##
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("A,B,C".into())
-    );
-}
-
 /// Finding #38 [wrong-result]: E0096 false positive: throwing a class that implements the declared throws interface is rejected
 #[tokio::test]
 async fn fuzz_bug38_throw_subtype_of_declared_throws_interface_is_allowed() {
@@ -10200,9 +10056,9 @@ async fn wf3_reflect_type_of_wrapped_generic_substitutes_param_runtime() {
     );
 }
 
-/// wf3 #7 [high]: consequence of #6 — `implemented_by`/`implementors` of
-/// `Box<U>` are wrong inside a generic fn because the param substitution is
-/// dropped. `_plan/wf3/generics-reflection/gen_reflect_boxT.baml`
+/// wf3 #7 [high]: consequence of #6 — `implemented_by` on `Box<U>` is wrong
+/// inside a generic fn because the param substitution is dropped.
+/// `_plan/wf3/generics-reflection/gen_reflect_boxT.baml`
 #[tokio::test]
 async fn wf3_reflect_implemented_by_generic_arg_substitution_runtime() {
     let output = baml_test!(
@@ -10562,9 +10418,9 @@ async fn wf3_out_of_body_primitive_impl_visible_to_reflection_runtime() {
         }
         function main() -> int {
             let a = reflect.type_of<int>().implements(reflect.type_of<Debuggable>())
-            let impls = reflect.type_of<Debuggable>().implementors()
-            if a { return 1000 + impls.length() }
-            return impls.length()
+            let b = reflect.type_of<Debuggable>().implemented_by(reflect.type_of<int>())
+            if a && b { return 1001 }
+            return 0
         }
         "#
     );
@@ -11089,34 +10945,6 @@ async fn wf3_bare_generic_interface_reflection_is_arity_error() {
     );
 }
 
-/// wf3 pin: a blanket impl's implementor is reported by reflection as the bare
-/// generic class name (`Box`), not a concrete `Box<int>`.
-/// `_plan/wf3/generics-reflection/gen_blanket_id.baml`
-#[tokio::test]
-async fn wf3_blanket_implementor_identity_is_bare_class_pins() {
-    let output = baml_test!(
-        r#"
-        interface Printable {
-            function display(self) -> string throws never
-        }
-        class Box<T> {
-            value: T
-        }
-        implements<T> Printable for Box<T> {
-            function display(self) -> string { return "box" }
-        }
-        function main() -> string {
-            let p = reflect.type_of<Printable>()
-            return p.implementors()[0].to_string()
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("Box".into())
-    );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Group: union-fuzz findings (workflow_scratch_files/FINDINGS.md, 2026-06-01)
 //
@@ -11559,19 +11387,15 @@ async fn union_fuzz_f06_reflection_generic_union_arg_order_insensitive() {
           if ub.implements(fwd) { d1 = 1 }
           let d2 = 0
           if fwd.implemented_by(ub) { d2 = 1 }
-          let d3 = 0
-          if fwd.implementors().length() == 1 { d3 = 1 }
           let d4 = 0
           if ub.implements(rev) { d4 = 1 }
           let d5 = 0
           if rev.implemented_by(ub) { d5 = 1 }
-          let d6 = 0
-          if rev.implementors().length() == 1 { d6 = 1 }
-          return d1*100000 + d2*10000 + d3*1000 + d4*100 + d5*10 + d6
+          return d1*1000 + d2*100 + d4*10 + d5
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(111111));
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1111));
 }
 
 /// F7: calling a method that both arms declare through *different* interfaces

@@ -2,7 +2,7 @@ interface UriLike<U> {
   readonly scheme: string;
   readonly authority: string;
   readonly path: string;
-  with(change: { path: string }): U;
+  with(change: { authority?: string; path?: string }): U;
 }
 
 interface UriApi<U> {
@@ -13,6 +13,24 @@ interface UriApi<U> {
 function normalizeRootPath(path: string): string {
   if (path === '/' || /^\/[A-Za-z]:\/$/.test(path)) return path;
   return path.replace(/\/+$/, '') || '/';
+}
+
+function workspaceRootUri<U extends UriLike<U>>(
+  uri: UriApi<U>,
+  workspaceRoot: string,
+): U {
+  const normalized = (workspaceRoot || '/workspace').replace(/\\/g, '/');
+  const unc = normalized.match(/^\/\/([^/]+)(\/.*)?$/);
+  if (unc) {
+    return uri.file(unc[2] || '/').with({ authority: unc[1] });
+  }
+
+  const drive = normalized.match(/^\/?([A-Za-z]:)(\/.*)?$/);
+  if (drive) {
+    return uri.file(`/${drive[1]}${drive[2] || '/'}`);
+  }
+
+  return uri.file(normalized);
 }
 
 function splitRelativeFilename(filename: string): string[] {
@@ -42,7 +60,7 @@ export function createWorkspacePathModel<U extends UriLike<U>>(
   uri: UriApi<U>,
   workspaceRoot: string,
 ) {
-  const parsedRoot = uri.file(workspaceRoot || '/workspace');
+  const parsedRoot = workspaceRootUri(uri, workspaceRoot);
   const rootPath = normalizeRootPath(parsedRoot.path);
   const rootUri =
     parsedRoot.path === rootPath

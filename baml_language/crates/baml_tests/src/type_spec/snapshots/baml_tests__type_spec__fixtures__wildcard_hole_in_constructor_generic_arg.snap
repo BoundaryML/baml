@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+397..398 'f': throws never
+408..472 '{\n   ...b.v\n}': int
+414..419 'let b': user.Box<int>
+422..437 'Box<_> { v: 5 }': user.Box<int>
+434..435 '5': 5
+467..470 'b.v': int

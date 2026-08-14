@@ -10,10 +10,17 @@ import Foundation
 public final class BamlHandle: @unchecked Sendable {
     let key: UInt64
     let handleType: BamlBridge_Cffi_V1_BamlHandleType
+    /// Root class identity carried by an outbound tagged handle's `ty`.
+    let classFQN: String?
 
-    init(key: UInt64, handleType: BamlBridge_Cffi_V1_BamlHandleType) {
+    init(
+        key: UInt64,
+        handleType: BamlBridge_Cffi_V1_BamlHandleType,
+        classFQN: String? = nil
+    ) {
         self.key = key
         self.handleType = handleType
+        self.classFQN = classFQN
     }
 
     deinit {
@@ -65,7 +72,17 @@ extension BamlHandle: BamlDecodable {
         guard handle.handleType != .handleUnspecified else {
             throw BamlDecodeError.typeMismatch(expected: "tagged handle", got: "HANDLE_UNSPECIFIED")
         }
-        return BamlHandle(key: handle.key, handleType: handle.handleType)
+        let classFQN: String?
+        if handle.hasTy, case .classTy(let classType)? = handle.ty.ty {
+            classFQN = classType.name.isEmpty ? nil : classType.name
+        } else {
+            classFQN = nil
+        }
+        return BamlHandle(
+            key: handle.key,
+            handleType: handle.handleType,
+            classFQN: classFQN
+        )
     }
 }
 

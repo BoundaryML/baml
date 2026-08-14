@@ -1,0 +1,389 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+tool_repo="$(cd "${script_dir}/../.." && pwd -P)"
+invocation_dir="$(pwd -P)"
+output_file="${script_dir}/report/matrix.md"
+json_file="${script_dir}/report/matrix.json"
+skip_extract=0
+check_only=0
+baseline_file=""
+previous_file=""
+review_all=0
+concurrency=""
+only=""
+use_llm=0
+
+absolute_path() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *) printf '%s/%s\n' "${invocation_dir}" "$1" ;;
+    esac
+}
+
+usage() {
+    cat <<'EOF'
+Usage: tools/stdlib-matrix/run [--output PATH] [--json-output PATH]
+                               [--skip-extract] [--llm] [--previous PATH]
+                               [--review-all] [--concurrency N] [--only SUBJECT]
+                               [--check --baseline PATH]
+
+Compare the BAML stdlib surface against the TypeScript stdlib and write two
+artifacts: report/matrix.json, the canonical symbol matrix, and report/matrix.md,
+a rendered view of it.
+
+The data/ intermediates (BAML export IR, TS surface) are regenerated on every
+run: they are gitignored, derived from the compiler at HEAD and the
+lockfile-pinned typescript/@types/node packages. --skip-extract reuses
+existing data/ files instead.
+
+--llm judges the surface. One session per TypeScript container asks what a BAML
+developer would do instead, looking the answer up with `baml describe`,
+`baml describe --search`, the repository's own call sites, and the type system
+reference. Nothing else produces a judgement: without --llm every symbol comes
+out unjudged. Requires OPENAI_API_KEY in the environment.
+
+--previous PATH carries judgements forward from an earlier report. A symbol
+keeps its previous answer when it and every type it names are unchanged, so a
+run costs only what actually moved. Distinct from --baseline, which compares
+inputs and decides an exit code without changing the report; in practice both
+take the same file.
+
+--review-all keeps the previous report but carries nothing from it: every
+symbol goes to the passes again with its previous conclusion shown, so a model
+can bless it or change its mind. Use it after changing a prompt, when the
+question being asked has moved rather than the surface being asked about.
+
+--concurrency N caps how many calls are in flight (default 8). Raise it if your
+account's rate limits allow; the passes are wide, so this is what bounds a cold
+run's wall clock.
+
+--only SUBJECT judges only the sessions whose subject contains SUBJECT, as a
+substring, case-insensitively: --only Date, --only node:fs. For proving the loop
+end to end without paying for the whole surface. The report it writes is a real
+report with almost everything unjudged, so do not publish one.
+
+The report is not checked into the repository: it is a generated artifact.
+CI publishes matrix.json per run; locally it lands in report/ (gitignored).
+
+--check writes no report and instead compares this run against a baseline
+report given by --baseline, exiting 1 when the baseline's recorded inputs no
+longer match the current ones — a changed BAML stdlib surface, TypeScript
+release, or export format. It still refreshes data/ unless --skip-extract is
+passed, since it has to read the current surface to compare it. Exit codes:
+0 up to date, 1 out of date, 2 tool error.
+EOF
+}
+
+while (($# > 0)); do
+    case "$1" in
+        --output)
+            output_file="$(absolute_path "$2")"
+            shift 2
+            ;;
+        --json-output)
+            json_file="$(absolute_path "$2")"
+            shift 2
+            ;;
+        --skip-extract)
+            skip_extract=1
+            shift
+            ;;
+        --check)
+            check_only=1
+            shift
+            ;;
+        --llm)
+            use_llm=1
+            shift
+            ;;
+        --baseline)
+            baseline_file="$(absolute_path "$2")"
+            shift 2
+            ;;
+        --previous)
+            previous_file="$(absolute_path "$2")"
+            shift 2
+            ;;
+        --review-all)
+            review_all=1
+            shift
+            ;;
+        --only)
+            only="$2"
+            shift 2
+            ;;
+        --concurrency)
+            concurrency="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "stdlib-matrix: unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+# --check compares inputs and calls no model, so a model flag alongside it is a
+# request the run cannot honour. Rejecting beats quietly dropping it: the whole
+# point of --check is to decide whether a --llm run is worth paying for.
+if ((check_only == 1)) && ((use_llm == 1)); then
+    echo "stdlib-matrix: --check never calls a model; drop --llm" >&2
+    exit 2
+fi
+if ((check_only == 1)) && [[ -n "${concurrency}" ]]; then
+    echo "stdlib-matrix: --check never calls a model; --concurrency does not apply" >&2
+    exit 2
+fi
+
+if ((check_only == 1)) && [[ -z "${baseline_file}" ]]; then
+    echo "stdlib-matrix: --check needs --baseline PATH (a previously generated matrix.json)" >&2
+    echo "Reports are CI artifacts, not checked in, so there is no default baseline." >&2
+    exit 2
+fi
+if ((check_only == 0)) && [[ -n "${baseline_file}" ]]; then
+    echo "stdlib-matrix: --baseline only applies with --check" >&2
+    exit 2
+fi
+if [[ -n "${previous_file}" && ! -f "${previous_file}" ]]; then
+    echo "stdlib-matrix: no previous report at ${previous_file}" >&2
+    exit 2
+fi
+if ((review_all == 1)); then
+    if [[ -z "${previous_file}" ]]; then
+        echo "stdlib-matrix: --review-all needs --previous PATH — there is nothing to review without it" >&2
+        exit 2
+    fi
+    # Without the passes, "review everything again" means "carry nothing and
+    # ask no one", which would replace a report full of judgements with an
+    # empty one — nothing else concludes anything.
+    if ((use_llm == 0)); then
+        echo "stdlib-matrix: --review-all needs --llm — reviewing means asking, and without it this" \
+             "would discard the previous report's judgements rather than re-examine them" >&2
+        exit 2
+    fi
+fi
+if [[ -n "${only}" ]] && ((use_llm == 0)); then
+    echo "stdlib-matrix: --only selects which sessions to judge, so it needs --llm" >&2
+    exit 2
+fi
+if [[ -n "${concurrency}" ]]; then
+    if [[ ! "${concurrency}" =~ ^[1-9][0-9]*$ ]]; then
+        echo "stdlib-matrix: --concurrency takes a positive integer, got ${concurrency}" >&2
+        exit 2
+    fi
+    if ((use_llm == 0)); then
+        echo "stdlib-matrix: --concurrency only applies with --llm" >&2
+        exit 2
+    fi
+fi
+
+baml_bin="${BAML_BIN:-${tool_repo}/baml_language/target/debug/baml-cli}"
+if [[ ! -x "${baml_bin}" ]]; then
+    echo "stdlib-matrix: local baml-cli not found at ${baml_bin}" >&2
+    echo "Build it with: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli" >&2
+    exit 2
+fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "stdlib-matrix: jq is required to decode BAML output" >&2
+    exit 2
+fi
+
+temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/stdlib-matrix.XXXXXX")"
+temporary_output=""
+cleanup() {
+    if [[ -n "${temporary_output}" ]]; then
+        rm -f "${temporary_output}"
+    fi
+    rm -rf "${temporary_dir}"
+}
+trap cleanup EXIT
+
+data_dir="${script_dir}/data"
+mkdir -p "${data_dir}"
+if ((skip_extract == 0)); then
+    if ! command -v node >/dev/null 2>&1; then
+        echo "stdlib-matrix: node is required to extract the TS surface (or pass --skip-extract to reuse data/)" >&2
+        exit 2
+    fi
+    node "${script_dir}/extractors/ts-surface.mjs" --repo-root "${tool_repo}" > "${temporary_dir}/ts_surface.json"
+    mv "${temporary_dir}/ts_surface.json" "${data_dir}/ts_surface.json"
+    "${baml_bin}" describe baml --export > "${temporary_dir}/baml_surface.json"
+    mv "${temporary_dir}/baml_surface.json" "${data_dir}/baml_surface.json"
+elif [[ ! -f "${data_dir}/ts_surface.json" || ! -f "${data_dir}/baml_surface.json" ]]; then
+    echo "stdlib-matrix: --skip-extract passed but data/ is incomplete; run once without it" >&2
+    exit 2
+fi
+
+# The ratchet keys on the BAML surface's content hash rather than a version or
+# commit, because this runs against intermediate and uncommitted states where
+# neither of those tracks the stdlib. BAML has no hashing API, so it is
+# computed here.
+if command -v shasum >/dev/null 2>&1; then
+    baml_surface_sha256="$(shasum -a 256 "${data_dir}/baml_surface.json" | cut -d' ' -f1)"
+elif command -v sha256sum >/dev/null 2>&1; then
+    baml_surface_sha256="$(sha256sum "${data_dir}/baml_surface.json" | cut -d' ' -f1)"
+else
+    echo "stdlib-matrix: neither shasum nor sha256sum is available to fingerprint the BAML surface" >&2
+    exit 2
+fi
+
+# `--baseline_file` exists only on check_matrix, so it is passed only there.
+target="build_matrix"
+target_args=()
+if [[ -n "${previous_file}" ]]; then
+    target_args+=(--previous_file "${previous_file}")
+fi
+if ((review_all == 1)); then
+    target_args+=(--review_all true)
+fi
+if ((check_only == 1)); then
+    target="check_matrix"
+    target_args+=(--baseline_file "${baseline_file}")
+elif ((use_llm == 1)); then
+    if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+        echo "stdlib-matrix: --llm requires OPENAI_API_KEY in the environment" >&2
+        exit 2
+    fi
+    target="build_matrix_aligned"
+    # The sessions look things up with the compiler and with the repository, so
+    # they need to be told where both are. `repo_root` is this checkout;
+    # `baml_bin` is the same binary that produced the surface being compared,
+    # never whichever `baml` happens to be installed.
+    target_args+=(--repo_root "${tool_repo}")
+    target_args+=(--type_system_file "${tool_repo}/baml_language/TYPE_SYSTEM.md")
+    target_args+=(--skill_cache "${data_dir}/baml_skill.md")
+    target_args+=(--baml_bin "${baml_bin}")
+    target_args+=(--scratch_root "${data_dir}/scratch")
+    if [[ -n "${concurrency}" ]]; then
+        target_args+=(--concurrency "${concurrency}")
+    fi
+    if [[ -n "${only}" ]]; then
+        target_args+=(--only "${only}")
+    fi
+fi
+
+cd "${tool_repo}"
+if ! "${baml_bin}" run --output-format json --from tools/stdlib-matrix "${target}" -- \
+    --baml_surface_file "${data_dir}/baml_surface.json" \
+    --ts_surface_file "${data_dir}/ts_surface.json" \
+    --output_file "${output_file}" \
+    --json_file "${json_file}" \
+    --baml_surface_sha256 "${baml_surface_sha256}" \
+    ${target_args[@]+"${target_args[@]}"} > "${temporary_dir}/result.json"; then
+    echo "stdlib-matrix: matrix construction failed" >&2
+    exit 2
+fi
+
+# The raw result, kept before anything is done with it. A --llm run costs
+# minutes of model time, and every step after this point — extracting fields,
+# formatting a summary — is one that could fail and take the run with it. This
+# file is what makes that recoverable rather than expensive.
+#
+# Not under --check, which promises to write nothing: a comparison has no result
+# worth salvaging, and leaving one behind would be a lie about what ran.
+raw_result=""
+if ((check_only == 0)); then
+    raw_result="${script_dir}/report/last-run.json"
+    mkdir -p "$(dirname "${raw_result}")"
+    cp "${temporary_dir}/result.json" "${raw_result}"
+fi
+
+if ((check_only == 1)); then
+    if [[ "$(jq -er '.comparison.baseline_present' "${temporary_dir}/result.json")" != "true" ]]; then
+        echo "stdlib-matrix: no baseline report at ${baseline_file}" >&2
+        exit 1
+    fi
+    if [[ "$(jq -er '.comparison.up_to_date' "${temporary_dir}/result.json")" == "true" ]]; then
+        echo "This run matches the baseline report (inputs unchanged)"
+        if [[ "$(jq -er '.comparison.counts_differ' "${temporary_dir}/result.json")" == "true" ]]; then
+            echo "Note: the tallies differ from the baseline even though the inputs match," \
+                 "which means the tool changed between the two reports."
+        fi
+        exit 0
+    fi
+    echo "This run no longer matches the baseline report:" >&2
+    jq -r '.comparison.input_changes[] | "  input: \(.)"' "${temporary_dir}/result.json" >&2
+    jq -r '.comparison.regressions[] | "  regression: \(.)"' "${temporary_dir}/result.json" >&2
+    jq -r '.comparison.improvements[] | "  improvement: \(.)"' "${temporary_dir}/result.json" >&2
+    jq -r '.comparison.neutral[] | "  changed:     \(.)"' "${temporary_dir}/result.json" >&2
+    if [[ "$(jq -er '.comparison.counts_differ' "${temporary_dir}/result.json")" == "false" ]]; then
+        echo "  the tallies are unchanged — only the inputs' fingerprint moved," \
+             "so the comparison is unaffected and needs no review" >&2
+    fi
+    echo "Review the differences, then adopt this run's report as the new baseline." >&2
+    exit 1
+fi
+
+if ! resolved_output="$(jq -er '.output_file' "${temporary_dir}/result.json")"; then
+    echo "stdlib-matrix: BAML returned an invalid result" >&2
+    exit 2
+fi
+if ! resolved_json="$(jq -er '.json_file' "${temporary_dir}/result.json")"; then
+    echo "stdlib-matrix: BAML returned an invalid result" >&2
+    exit 2
+fi
+
+# The JSON report is canonical; the markdown is a rendered view of it. Both are
+# written atomically so a failure never leaves the pair disagreeing.
+write_artifact() {
+    local destination="$1"
+    shift
+    mkdir -p "$(dirname "${destination}")"
+    temporary_output="$(mktemp "${destination}.XXXXXX")"
+    if ! jq "$@" "${temporary_dir}/result.json" > "${temporary_output}"; then
+        echo "stdlib-matrix: BAML returned an invalid report" >&2
+        exit 2
+    fi
+    chmod 0644 "${temporary_output}"
+    mv "${temporary_output}" "${destination}"
+    temporary_output=""
+}
+
+write_artifact "${resolved_json}" -e '.report'
+write_artifact "${resolved_output}" -er '.markdown'
+
+# Reporting only, and never fatal. The artifacts are already on disk by this
+# point, and a run that spent minutes of model time must not be thrown away
+# because a summary line could not be formatted. `field` yields "?" for
+# anything missing rather than failing, so a report whose shape has moved on
+# still gets written and still says so.
+field() {
+    local value
+    value="$(jq -r "$1 // \"?\"" "${temporary_dir}/result.json" 2>/dev/null || echo "?")"
+    if [[ "${value}" == "?" ]]; then
+        # A count the report no longer carries: the two sides have drifted, and
+        # saying so beats printing a confident "?" and moving on.
+        echo "stdlib-matrix: the report has no ${1}; this wrapper is out of date" >&2
+    fi
+    printf '%s' "${value}"
+}
+
+echo "Wrote ${resolved_json} (canonical), ${resolved_output}, and ${raw_result} (raw)"
+echo "TypeScript: $(field .report.counts.matched) of $(field .report.counts.ts_symbols) symbols have a" \
+     "BAML counterpart · $(field .report.counts.unnecessary) unnecessary in BAML ·" \
+     "$(field .report.counts.unmatched) judged to have none ·" \
+     "$(field .report.counts.unjudged) unjudged"
+echo "BAML: $(field '(.report.counts.baml_symbols - .report.counts.baml_unclaimed)') of" \
+     "$(field .report.counts.baml_symbols) symbols are named by a judgement"
+
+if ((use_llm == 1)); then
+    echo "Sessions: $(field .carried) carried · $(field .sessions) sessions ·" \
+         "$(field .judged) judged"
+    rejected_count="$(field '(.rejected | length)')"
+    if [[ "${rejected_count}" != "0" && "${rejected_count}" != "?" ]]; then
+        echo "${rejected_count} claims refused:" >&2
+        jq -r '.rejected[]? | "  refused: \(.)"' "${temporary_dir}/result.json" >&2 || true
+    fi
+    failures="$(field .failures)"
+    if [[ "${failures}" != "0" && "${failures}" != "?" ]]; then
+        echo "${failures} sessions did not come back; see the failures list in the report" >&2
+    fi
+fi

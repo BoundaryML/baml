@@ -1,20 +1,20 @@
 function GetUser(id: int) -> User {
-    client "openai/gpt-4o"
-    prompt #"Get user {{id}}"#
+    client: "openai/gpt-4o"
+    prompt: `Get user ${id}`
 }
 
 function GetStatus() -> Status {
-    client GPT4
-    prompt #"Get status"#
+    client: GPT4
+    prompt: `Get status`
 }
 
 // Test direct type usage without alias
 function GetMixedList() -> (int | string)[] {
-    client GPT4
-    prompt #"Get mixed list"#
+    client: GPT4
+    prompt: `Get mixed list`
 }
 
 function GetMixedMap() -> map<string, int | string> {
-    client GPT4
-    prompt #"Get mixed map"#
+    client: GPT4
+    prompt: `Get mixed map`
 }

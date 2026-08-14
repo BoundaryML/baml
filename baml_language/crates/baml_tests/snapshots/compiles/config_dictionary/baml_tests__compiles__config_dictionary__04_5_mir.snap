@@ -1,42 +1,96 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8355
 ---
 === MIR2 ===
-fn user.MyClient$new(lenient: bool) -> null {
+fn user.StringConfig() -> map<string, string> {
     // Locals:
-    let _0: null // _0 // return
-    let _1: bool // lenient // param
-    let _2: baml.llm.PrimitiveClientOptions
-    let _3: map<string, string>
-    let _4: map<string, string>
-    let _5: map<string, unknown>
-    let _6: string[]
-    let _7: string[]
-    let _8: string[]
-    let _9: int[]
-    let _10: map<string, int | string | string[]>
-    let _11: string[]
-    let _12: (map<string, string> | map<string, string | map<string, string>>)[]
-    let _13: map<string, string | map<string, string>>
-    let _14: map<string, string>
-    let _15: map<string, string>
+    let _0: map<string, string> // _0 // return
 
     bb0: {
-        _3 = {  }: map<string, string>;
-        _4 = {  }: map<string, string>;
-        _6 = [const "abc", const "abc", const "ccc"]: string[];
-        _7 = [const "one", const "two"]: string[];
-        _8 = [const "one", const "two"]: string[];
-        _9 = [const 1_i64, const 2_i64, const 3_i64]: int[];
-        _11 = [const "yes", const "queen"]: string[];
-        _10 = { const "key": const "value", const "key2": const "value2", const "nestedArray": copy _11, const "number": const 10_i64 }: map<string, string | string[] | int>;
-        _14 = { const "authorization": const "Bearertoken" }: map<string, string>;
-        _13 = { const "server_label": const "parallel_web_search", const "server_url": const "https://example.com", const "headers": copy _14, const "type": const "mcp" }: map<string, string | map<string, string>>;
-        _15 = { const "another_tool": const "value" }: map<string, string>;
-        _12 = [copy _13, copy _15]: map<string, string | map<string, string>> | map<string, string>[];
-        _5 = { const "max_tokens": const 100_i64, const "array_key_with_quoted_unquoted": copy _6, const "key2": const "somerandomvalue", const "hello": const "world", const "thing": const "hello", const "block_string": const "#hellotheremyfriend#", const "inline_raw_string": const "#inlinerawstring,,#", const "booleanValue": const true, const "stringKey": const true, const "array1": copy _7, const "array2": copy _8, const "array3Numbers": copy _9, const "nestedKey": copy _10, const "oneMoreValueToTestBrokenness": const "value", const "myInteger": const 100_i64, const "tools": copy _12, const "block_string": const "#hellotheremyfriend{#acommentinaprompt#}#" }: map<string, unknown>;
-        _2 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _3, copy _4, copy _5 };
-        _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _2 };
+        _0 = { const "key2": const "some random value", const "hello": const "world", const "thing": const "hello", const "block_string": const "hello there my frien\n                d", const "inline_raw_string": const "inline \"raw\" string,,", const "string key": const "value with spaces", const "stringKey": const "true", const "oneMoreValueToTestBrokenness": const "value" }: map<string, string>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.NumberConfig() -> map<string, int> {
+    // Locals:
+    let _0: map<string, int> // _0 // return
+
+    bb0: {
+        _0 = { const "max_tokens": const 100_i64, const "myInteger": const 100_i64 }: map<string, int>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BoolConfig() -> map<string, bool> {
+    // Locals:
+    let _0: map<string, bool> // _0 // return
+
+    bb0: {
+        _0 = { const "booleanValue": const true }: map<string, bool>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ArrayConfig() -> map<string, string[]> {
+    // Locals:
+    let _0: map<string, string[]> // _0 // return
+    let _1: string[]
+    let _2: string[]
+    let _3: string[]
+
+    bb0: {
+        _1 = [const "abc", const "abc", const "ccc"]: string[];
+        _2 = [const "one", const "two"]: string[];
+        _3 = [const "one", const "two"]: string[];
+        _0 = { const "array_key_with_quoted_unquoted": copy _1, const "array1": copy _2, const "array2": copy _3 }: map<string, string[]>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.NumberArrayConfig() -> map<string, int[]> {
+    // Locals:
+    let _0: map<string, int[]> // _0 // return
+    let _1: int[]
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
+        _0 = { const "array3Numbers": copy _1 }: map<string, int[]>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.NestedConfig() -> map<string, map<string, string>> {
+    // Locals:
+    let _0: map<string, map<string, string>> // _0 // return
+    let _1: map<string, string>
+    let _2: map<string, string>
+
+    bb0: {
+        _1 = { const "key": const "value", const "key2": const "value2" }: map<string, string>;
+        _2 = { const "x-api-key": const "myapikey", const "authorization": const "Bearer token" }: map<string, string>;
+        _0 = { const "nestedKey": copy _1, const "headers": copy _2 }: map<string, map<string, string>>;
         goto -> bb1;
     }
 

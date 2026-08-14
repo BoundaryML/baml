@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6749
+---
+=== PPIR ===
+class user.QuotaExceeded {
+  quota_name: string
+}
+class user.QuotaExceeded$stream {
+  quota_name: string | null
+}
+class user.Throttled {
+  retry_after_ms: int
+}
+class user.Throttled$stream {
+  retry_after_ms: int | null
+}
+function user.app(mode: int) -> string  [expr] {
+  {  } provider_call(mode) catch (e) { q: user.QuotaExceeded => "quota: " Add q.quota_name, f: Failure => if (f.is_transient()) {  } "retry" else {  } "fail", u: baml.errors.UnknownError => "unknown" }
+}
+function user.is_transient(self: ?) -> bool  [missing]
+function user.is_transient(self: ?) -> bool  [expr] {
+  {  } false
+}
+function user.is_transient(self: ?) -> bool  [expr] {
+  {  } true
+}
+function user.local_throw() -> string  [expr] {
+  { let r: string = throw user.Throttled { retry_after_ms: 1 } catch (e) { f: Failure => "classified" } } r
+}
+function user.provider_call(mode: int) -> string  [expr] {
+  { if (mode Eq 0) { throw user.Throttled { retry_after_ms: 250 } }; if (mode Eq 1) { throw user.QuotaExceeded { quota_name: "daily" } }; throw baml.errors.UnknownError { data: "socket reset", message: ["transport"] } }
+}

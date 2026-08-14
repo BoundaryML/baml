@@ -2,10 +2,21 @@
 /// (see BEP-021): offset datetime → `ZonedDateTime` (fixed offset), local
 /// datetime → `PlainDateTime`, local date → `PlainDate`, local time →
 /// `PlainTime`.
-type Item = Table | Item[] | bool | int | float | string | baml.time.ZonedDateTime | baml.time.PlainDateTime | baml.time.PlainDate | baml.time.PlainTime
+type Item = Table
+    | Item[]
+    | bool
+    | int
+    | float
+    | string
+    | baml.time.ZonedDateTime
+    | baml.time.PlainDateTime
+    | baml.time.PlainDate
+    | baml.time.PlainTime;
 
+/// A TOML [table](https://toml.io/en/latest#table).
+/// Represents a collection of key/value pairs.
 class Table {
-    items: map<string, Item>
+    items: map<string, Item>,
 
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -41,16 +52,19 @@ class Table {
 function table_from_json(j: baml.json.json) -> Table throws baml.json.JsonDecodeError {
     match (j) {
         map<string, baml.json.json> => {
-            let items: map<string, Item> = map {};
+            let items: map<string, Item> = map {  };
             for (let key in j.keys()) {
-                items[key] = match (j[key]) {
-                    null => { continue; }, // skip null values
-                    let item => item_from_json(item)
-                }
+                items[key]
+                    = match (j[key]) {
+                        null => {
+                            continue;
+                        }, // skip null values
+                        let item => item_from_json(item),
+                    }
             }
             Table { items: items }
         },
-        _ => throw baml.json.JsonDecodeError { message: "expected map", path: "" }
+        _ => throw baml.json.JsonDecodeError { message: "expected map", path: "" },
     }
 }
 
@@ -69,6 +83,7 @@ function item_to_json(item: Item) -> baml.json.json throws baml.json.JsonSeriali
         baml.time.PlainTime => item.to_json(),
     }
 }
+
 /// Errors if the JSON value is `null`.
 /// Usually `Table.from_json` is a better entrypoint, as it will skip null values without erroring.
 function item_from_json(json: baml.json.json) -> Item throws baml.json.JsonDecodeError {
@@ -81,5 +96,5 @@ function item_from_json(json: baml.json.json) -> Item throws baml.json.JsonDecod
 }
 
 class TomlParseError {
-    message: string
+    message: string,
 }

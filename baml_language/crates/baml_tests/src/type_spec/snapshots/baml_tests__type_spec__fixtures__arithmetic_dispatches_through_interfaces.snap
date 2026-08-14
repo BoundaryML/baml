@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+9..14 'arith': throws never
+62..206 '{\n   ...ing\n}': string
+68..75 'let sum': int
+78..79 'a': int
+78..83 'a + b': int
+82..83 'b': int
+105..114 'let mixed': float
+117..118 'a': int
+117..122 'a * x': float
+121..122 'x': float
+148..155 'let neg': int
+158..160 '-a': int
+159..160 'a': int
+182..183 's': string
+182..187 's + s': string
+186..187 's': string

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 22997
 ---
 function $init() -> null {
     call $init_let_0
@@ -8,201 +9,105 @@ function $init() -> null {
     return
 }
 
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
-}
-
-function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
-}
-
-function user.TestClient$new(lenient: bool) -> null {
-    load_const "TestClient"
-    load_const "openai"
-    load_const "gpt-4o-mini"
-    load_const "http://localhost:1234"
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const null
-    load_const "test-key"
-    load_const null
-    load_const null
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type string
-    alloc_map 0
-    load_type string
-    load_type unknown
-    alloc_map 0
-    init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
-    init_instance baml.llm.PrimitiveClient .name, .provider, .options
-    return
-}
-
-function user.TestFunc(input: string, client: baml.llm.Client) -> string {
+function user.TestFunc(input: string, client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_global user.TestClient
+    load_const null
     store_var client
 
   L0:
     load_type string
+    load_const <omitted>
     load_var client
-    load_const "TestFunc"
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
     load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    call user.TestFunc$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
     return
 }
 
-function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "TestFunc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request
-    return
-}
-
-function user.TestFunc$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "TestFunc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.build_request_stream
-    return
-}
-
-function user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_type string | null
+function user.TestFunc$parse(json: string) -> string {
     load_type string
     load_var json
-    call baml.llm.parse
+    call baml.sap.parse
     return
 }
 
-function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_type string | null
-    load_type string
-    load_var2 2 1
-    call baml.llm.Client.__make_stream
-    return
-}
-
-function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_var client
-    load_const "TestFunc"
+function user.TestFunc$render_prompt(input: string) -> ai.Prompt {
     load_var input
+    call user.TestFunc$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function user.TestFunc$spec(input: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "TestFunc"
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
-    call baml.llm.render_prompt
+    load_var input
+    make_closure .<lambda(TestFunc$spec, 0)>, 1
+    load_var _4
+    load_global user.TestClient
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.TestFunc$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_global user.TestClient
+    load_const null
     store_var client
 
   L0:
+    load_var input
+    call user.TestFunc$spec
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "TestFunc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 3 2
+    call ai.stream.from_spec
     return
 }
 
-function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
-    load_type null | string
-    load_type string
-    load_global user.TestClient
-    load_const "TestFunc"
+function user.call_stream_inferred() -> ai.stream.Stream<string | null, string> {
     load_const "world"
-    load_const "input"
+    call user.TestFunc$spec
+    store_var _1
+    load_type string | null
     load_type string
-    load_type unknown
-    alloc_map 1
+    load_var _1
     load_const <omitted>
-    call baml.llm.stream_llm_function
+    call ai.stream.from_spec
     return
 }

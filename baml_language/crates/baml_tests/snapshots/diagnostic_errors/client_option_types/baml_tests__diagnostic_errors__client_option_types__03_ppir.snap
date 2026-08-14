@@ -1,23 +1,55 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 41423
 ---
 === PPIR ===
-function user.BadAzureMissingUrl$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "BadAzureMissingUrl", provider: "azure-openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: baml.llm.AzureOpenAiOptions { resource_name: null, deployment_id: null, api_version: "2024-02-15-preview", max_tokens: null }, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.LegacyRoleMarker(input: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(LegacyRoleMarker$spec(input)).value
 }
-function user.BadMaxTokens$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "BadMaxTokens", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": "notanumber" } } }
+function user.LegacyRoleMarker$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
 }
-function user.BadTemperature$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "BadTemperature", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "temperature": "warm" } } }
+function user.LegacyRoleMarker$render_prompt(input: string) -> ai.Prompt  [expr] {
+  LegacyRoleMarker$spec(input).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.ValidAzure$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "ValidAzure", provider: "azure-openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: baml.llm.AzureOpenAiOptions { resource_name: "my-resource", deployment_id: "gpt-4o", api_version: "2024-02-15-preview", max_tokens: null }, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.LegacyRoleMarker$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "LegacyRoleMarker", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } baml.prompt.make_role("system"));  __tt_cur =  __tt_cur Add "Be terse. ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ValidClient }
 }
-function user.ValidAzureBaseUrl$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "ValidAzureBaseUrl", provider: "azure-openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: "https://my-resour...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: baml.llm.AzureOpenAiOptions { resource_name: null, deployment_id: null, api_version: "2024-02-15-preview", max_tokens: null }, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.LegacyRoleMarker$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(LegacyRoleMarker$spec(input), client = client)
 }
-function user.ValidOpenAI$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "ValidOpenAI", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7 } } }
+function user.MigratedPrompt(input: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(MigratedPrompt$spec(input)).value
 }
+function user.MigratedPrompt$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.MigratedPrompt$render_prompt(input: string) -> ai.Prompt  [expr] {
+  MigratedPrompt$spec(input).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+}
+function user.MigratedPrompt$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "MigratedPrompt", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Echo: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ValidClient }
+}
+function user.MigratedPrompt$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(MigratedPrompt$spec(input), client = client)
+}
+function user.UnknownProviderPrefix(input: string, client: ai.Client? = null) -> string  [llm]
+function user.ValidFunction(input: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(ValidFunction$spec(input)).value
+}
+function user.ValidFunction$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.ValidFunction$render_prompt(input: string) -> ai.Prompt  [expr] {
+  ValidFunction$spec(input).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+}
+function user.ValidFunction$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "ValidFunction", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Echo: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ValidClient }
+}
+function user.ValidFunction$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ValidFunction$spec(input), client = client)
+}
+
+--- captures ---
+lambda ( __spec_output_format) in MigratedPrompt$spec: captures [input]
+lambda ( __spec_output_format) in LegacyRoleMarker$spec: captures [input]
+lambda ( __spec_output_format) in ValidFunction$spec: captures [input]

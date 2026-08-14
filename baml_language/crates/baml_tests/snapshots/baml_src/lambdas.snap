@@ -621,14 +621,14 @@ function lambdas.lambdas_issue_e_method_resolution_different_types() -> int {
     alloc_array 3
     container_len
     store_var arr_len
-    load_const "hello"
-    make_closure .<lambda(lambdas_issue_e_method_resolution_different_types, 0)>, 0
-    call_indirect
-    store_var _6
     load_var arr_len
     load_const 10
     mul_int
-    load_var _6
+    store_var _4
+    load_const "hello"
+    make_closure .<lambda(lambdas_issue_e_method_resolution_different_types, 0)>, 0
+    call_indirect
+    load_var _4
     add_int
     return
 }
@@ -647,15 +647,13 @@ function lambdas.lambdas_issue_f_shadowing_capture_correct_binding() -> int {
     load_var x
     make_closure .<lambda(lambdas_issue_f_shadowing_capture_correct_binding, 0)>, 1
     call_indirect
-    store_var _6
+    load_const 10
+    mul_int
+    store_var _5
     load_var x
     make_closure .<lambda(lambdas_issue_f_shadowing_capture_correct_binding, 1)>, 1
     call_indirect
-    store_var _8
-    load_var _6
-    load_const 10
-    mul_int
-    load_var _8
+    load_var _5
     add_int
     return
 }

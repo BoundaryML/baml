@@ -1,4 +1,5 @@
-//! Snapshot tests for `baml_compiler2_tir`.
+//! Snapshot tests for the type-provider surface (typed renders over
+//! `baml_compiler2_hir_ty`'s tables; historically TIR's).
 //!
 //! Each test creates a minimal DB, adds a `.baml` file, runs type inference,
 //! and snapshots the fully-typed output using the same format as the onion skin
@@ -35,13 +36,7 @@ pub(crate) mod support {
     use baml_compiler2_hir::{
         body::FunctionBody, contributions::Definition, item_tree::DefaultExprRef, scope::ScopeKind,
     };
-    use baml_compiler2_tir::{
-        inference::{
-            ScopeInference, infer_scope_types, render_scope_diagnostics, resolve_class_fields,
-            resolve_type_alias,
-        },
-        lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr},
-    };
+    use baml_compiler2_hir_ty::infer::InferenceResult;
     use baml_project::ProjectDatabase;
 
     // ── Rendering helpers ────────────────────────────────────────────────────
@@ -269,7 +264,7 @@ pub(crate) mod support {
                 let tn = type_name.to_string();
                 let field_strs: Vec<String> = fields
                     .iter()
-                    .map(|(name, val)| format!("{name}: {}", expr_desc(*val, body)))
+                    .map(|field| format!("{}: {}", field.name, expr_desc(field.value, body)))
                     .collect();
                 format!("{tn} {{ {} }}", field_strs.join(", "))
             }
@@ -280,7 +275,13 @@ pub(crate) mod support {
             Expr::Map { entries } => {
                 let entry_strs: Vec<String> = entries
                     .iter()
-                    .map(|(k, v)| format!("{}: {}", expr_desc(*k, body), expr_desc(*v, body)))
+                    .map(|entry| {
+                        format!(
+                            "{}: {}",
+                            expr_desc(entry.key, body),
+                            expr_desc(entry.value, body)
+                        )
+                    })
                     .collect();
                 format!("map {{ {} }}", entry_strs.join(", "))
             }
@@ -402,7 +403,7 @@ pub(crate) mod support {
     }
 
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
-    fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &ScopeInference) -> String {
+    fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &InferenceResult) -> String {
         let expr = &body.exprs[expr_id];
         if let Expr::Call { callee, args, .. } = expr {
             let callee_str = expr_desc(*callee, body);
@@ -413,8 +414,8 @@ pub(crate) mod support {
                     None => expr_desc(a.expr, body),
                 })
                 .collect();
-            let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
-                collect_typevars(callee_ty)
+            let type_params = if let Some(callee_ty) = inference.type_of_expr.get(callee) {
+                collect_typevars(&callee_ty.to_plain())
             } else {
                 Vec::new()
             };
@@ -447,17 +448,18 @@ pub(crate) mod support {
     /// Uses `render_canonical()` (fully-qualified leaf names, including the
     /// implicit `user` package) so the TIR dump keeps `user.X` rather than the
     /// user-facing `Display`, which elides `user`.
-    fn expr_ty(inference: &ScopeInference, expr_id: ExprId) -> String {
+    fn expr_ty(inference: &InferenceResult, expr_id: ExprId) -> String {
         inference
-            .expression_type(expr_id)
-            .map(|t| t.render_canonical())
+            .type_of_expr
+            .get(&expr_id)
+            .map(|t| t.to_plain().render_canonical())
             .unwrap_or_else(|| "unknown".into())
     }
 
     fn render_expr(
         expr_id: ExprId,
         body: &ExprBody,
-        inference: &ScopeInference,
+        inference: &InferenceResult,
         indent: usize,
         output: &mut String,
     ) {
@@ -545,8 +547,8 @@ pub(crate) mod support {
                         None => expr_desc(a.expr, body),
                     })
                     .collect();
-                let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
-                    collect_typevars(callee_ty)
+                let type_params = if let Some(callee_ty) = inference.type_of_expr.get(callee) {
+                    collect_typevars(&callee_ty.to_plain())
                 } else {
                     Vec::new()
                 };
@@ -578,7 +580,7 @@ pub(crate) mod support {
     /// Render a lambda's body without type information.
     ///
     /// The body shares the enclosing function's arena, but its types live in
-    /// the lambda's own `ScopeInference`, which this renderer does not hold.
+    /// the lambda's own tables, which this renderer does not hold.
     fn render_expr_body_untyped(
         body: &ExprBody,
         expr_id: ExprId,
@@ -730,14 +732,14 @@ pub(crate) mod support {
     }
 
     /// Collect unique TypeVar names from a Ty (in order of appearance).
-    fn collect_typevars(ty: &baml_compiler2_tir::ty::Ty) -> Vec<String> {
+    fn collect_typevars(ty: &baml_type::Ty) -> Vec<String> {
         let mut result = Vec::new();
         collect_typevars_inner(ty, &mut result);
         result
     }
 
-    fn collect_typevars_inner(ty: &baml_compiler2_tir::ty::Ty, out: &mut Vec<String>) {
-        use baml_compiler2_tir::ty::Ty;
+    fn collect_typevars_inner(ty: &baml_type::Ty, out: &mut Vec<String>) {
+        use baml_type::Ty;
         match ty {
             Ty::TypeVar(name, _) => {
                 let s = name.to_string();
@@ -776,7 +778,7 @@ pub(crate) mod support {
     fn render_stmt(
         stmt_id: StmtId,
         body: &ExprBody,
-        inference: &ScopeInference,
+        inference: &InferenceResult,
         indent: usize,
         output: &mut String,
     ) {
@@ -792,8 +794,9 @@ pub(crate) mod support {
                 if let Some(init) = initializer {
                     let init_ty = expr_ty(inference, *init);
                     let binding_ty = inference
-                        .binding_type(*pattern)
-                        .map(|t| t.render_canonical());
+                        .type_of_pat
+                        .get(pattern)
+                        .map(|t| t.to_plain().render_canonical());
                     let ty_display = match &binding_ty {
                         Some(bt) if *bt != init_ty => format!("{init_ty} -> {bt}"),
                         _ => init_ty,
@@ -923,9 +926,6 @@ pub(crate) mod support {
     /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         use baml_compiler2_hir::package::PackageId;
-        use baml_compiler2_tir::inference::{
-            detect_invalid_alias_cycles, detect_invalid_class_cycles,
-        };
 
         let mut output = String::new();
         let index = baml_compiler2_ppir::file_semantic_index(db, file);
@@ -936,13 +936,38 @@ pub(crate) mod support {
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
-        let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
+        let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
 
-        // Pre-compute invalid alias cycles for the package
-        let invalid_cycles = detect_invalid_alias_cycles(db, pkg_id);
-
-        // Pre-compute invalid class cycles — build a map from class QN → cycle_path
-        let class_cycles_info = detect_invalid_class_cycles(db, pkg_id);
+        // Pre-compute invalid alias/class cycles for the package (the
+        // declaration cycle analysis over hir-lowered values).
+        let mut aliases = std::collections::HashMap::new();
+        let mut class_fields = std::collections::HashMap::new();
+        for ns in pkg_items.namespaces.values() {
+            for (name, def) in &ns.types {
+                match def {
+                    Definition::TypeAlias(loc) => {
+                        aliases.insert(
+                            baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
+                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain(),
+                        );
+                    }
+                    Definition::Class(loc) => {
+                        let fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, *loc)
+                            .iter()
+                            .map(|(n, ty, _)| (n.clone(), ty.clone()))
+                            .collect::<Vec<_>>();
+                        class_fields.insert(
+                            baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
+                            fields,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let invalid_cycles = baml_type::decl_cycles::find_invalid_alias_cycles(&aliases);
+        let class_cycles_info =
+            baml_type::decl_cycles::find_invalid_class_cycles(&class_fields, &aliases);
         let mut class_cycle_map = std::collections::HashMap::new();
         for cycle in &class_cycles_info {
             for member in &cycle.members {
@@ -974,9 +999,11 @@ pub(crate) mod support {
                             if scope.name.as_ref() == Some(name)
                                 && let Definition::Class(class_loc) = c.definition
                             {
-                                let resolved = resolve_class_fields(db, class_loc);
+                                let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(
+                                    db, class_loc,
+                                );
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
-                                for (fname, fty, fattrs) in &resolved.fields {
+                                for (fname, fty, fattrs) in resolved {
                                     let ty_attr_names = fty.attr().attr_names();
                                     let field_attr_strs: Vec<String> = fattrs
                                         .iter()
@@ -1017,7 +1044,7 @@ pub(crate) mod support {
                                 }
                                 writeln!(output, "}}").ok();
                                 // Render class cycle diagnostic if applicable
-                                let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+                                let qn = baml_type::QualifiedTypeName::new(
                                     pkg_info.package.clone(),
                                     pkg_info.namespace_path.clone(),
                                     name.clone(),
@@ -1040,21 +1067,27 @@ pub(crate) mod support {
                             if scope.name.as_ref() == Some(name)
                                 && let Definition::TypeAlias(alias_loc) = c.definition
                             {
-                                let resolved = resolve_type_alias(db, alias_loc);
+                                let resolved =
+                                    baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc)
+                                        .to_plain();
                                 writeln!(
                                     output,
                                     "{kind_str} {fqn} = {}",
-                                    resolved.ty.render_canonical()
+                                    resolved.render_canonical()
                                 )
                                 .ok();
                                 // Render type-lowering diagnostics
-                                for (diag, span) in &resolved.diagnostics {
+                                for (span, diag) in
+                                    baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(
+                                        db, alias_loc,
+                                    )
+                                {
                                     let start = u32::from(span.start());
                                     let end = u32::from(span.end());
                                     writeln!(output, "  !! {start}..{end}: {diag}").ok();
                                 }
                                 // Render cycle diagnostic if this alias is in an invalid cycle
-                                let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+                                let qn = baml_type::QualifiedTypeName::new(
                                     pkg_info.package.clone(),
                                     pkg_info.namespace_path.clone(),
                                     name.clone(),
@@ -1081,7 +1114,9 @@ pub(crate) mod support {
             }
 
             // ── Function/Lambda/Block scopes ────────────────────────
-            let inference = infer_scope_types(db, scope_id);
+            let Some(inference) = baml_compiler2_hir_ty::ide::infer_for_scope(db, scope_id) else {
+                continue;
+            };
 
             let mut func_body_opt: Option<std::sync::Arc<FunctionBody>> = None;
             let mut sig_display = String::new();
@@ -1093,65 +1128,9 @@ pub(crate) mod support {
                 {
                     let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
                     func_body_opt = Some(baml_compiler2_ppir::function_body(db, func_loc));
-                    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
-                    let ns = &pkg_info.namespace_path;
-
-                    // The enclosing class/interface and its declared generic
-                    // params, if this function is a method. A method signature
-                    // can reference an enclosing generic (e.g. a synthesized
-                    // `from_json` returning `Box<T>` on `class Box<T>`), so
-                    // those params must be in scope when lowering the signature
-                    // — otherwise `T` erases to `unknown`. (Interfaces share the
-                    // `Class` scope kind; both must be handled, or an interface
-                    // method's unannotated `self` would erase to `unknown`.)
-                    let enclosing_class_ty = scope.parent.and_then(|parent_idx| {
-                        let parent = &index.scopes[parent_idx.index() as usize];
-                        if !matches!(parent.kind, ScopeKind::Class) {
-                            return None;
-                        }
-                        let cn = parent.name.as_ref()?;
-                        let def = pkg_items.lookup_type(ns, cn)?;
-                        let generic_params = match def {
-                            Definition::Class(class_loc) => {
-                                baml_compiler2_tir::class_generic_params(db, class_loc)
-                            }
-                            Definition::Interface(iface_loc) => {
-                                baml_compiler2_tir::interface_declared_generic_params(db, iface_loc)
-                            }
-                            _ => return None,
-                        };
-                        let class_ty = baml_compiler2_tir::ty::Ty::Class(
-                            baml_compiler2_tir::lower_type_expr::qualify_def(db, def, cn),
-                            generic_params
-                                .iter()
-                                .map(|param| {
-                                    baml_compiler2_tir::ty::Ty::TypeVar(
-                                        param.clone(),
-                                        Default::default(),
-                                    )
-                                })
-                                .collect(),
-                            Default::default(),
-                        );
-                        Some(class_ty)
-                    });
+                    let sig = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
 
                     let gp = &func_data.generic_params;
-                    // Type-lowering scope for the signature: the enclosing
-                    // class's generics plus the function's own. (The displayed
-                    // `<...>` below still shows only the function's own.)
-                    let sig_generics = baml_compiler2_tir::function_generic_params(db, func_loc);
-                    // One lowering scope shared by the param/return/throws sites
-                    // below (a display helper — no type-var bounds threaded).
-                    let sig_bounds = TypeVarBoundsMap::default();
-                    let sig_scope = ScopeCtx {
-                        db,
-                        package_items: pkg_items,
-                        ns_context: ns,
-                        generic_params: &sig_generics,
-                        bounds: &sig_bounds,
-                        self_ty: None,
-                    };
                     let generics_display = if gp.is_empty() {
                         String::new()
                     } else {
@@ -1167,20 +1146,6 @@ pub(crate) mod support {
                         .iter()
                         .enumerate()
                         .map(|(index, param)| {
-                            let ty = if param.name.as_str() == "self"
-                                && matches!(
-                                    param.ty.kind,
-                                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
-                                ) {
-                                enclosing_class_ty.clone().unwrap_or(
-                                    baml_compiler2_tir::ty::Ty::Unknown {
-                                        attr: Default::default(),
-                                    },
-                                )
-                            } else {
-                                let mut diags = Vec::new();
-                                lower_type_expr(&param.ty, &sig_scope, &mut diags)
-                            };
                             let default_suffix = default_ref_suffix(
                                 parameter_defaults.param_default(index),
                                 &parameter_defaults.defaults,
@@ -1188,20 +1153,13 @@ pub(crate) mod support {
                             format!(
                                 "{}: {}{}",
                                 param.name,
-                                ty.render_canonical(),
+                                param.ty.to_plain().render_canonical(),
                                 default_suffix
                             )
                         })
                         .collect();
-                    let ret = sig
-                        .return_type
-                        .as_ref()
-                        .map(|t| {
-                            let mut diags = Vec::new();
-                            lower_type_expr(t, &sig_scope, &mut diags).render_canonical()
-                        })
-                        .unwrap_or_else(|| "?".into());
-                    // Compute inferred throws from transitive throw set
+                    let ret = sig.ret.to_plain().render_canonical();
+                    // Inferred throws from the package transitive throw set.
                     let inferred_throws: Option<String> = {
                         let key = baml_base::Name::new(&*fqn);
                         throw_sets
@@ -1213,11 +1171,8 @@ pub(crate) mod support {
                                 types.join(" | ")
                             })
                     };
-
-                    let throws = if let Some(t) = &sig.throws {
-                        let mut diags = Vec::new();
-                        let declared =
-                            lower_type_expr(t, &sig_scope, &mut diags).render_canonical();
+                    let throws = if sig.throws_declared {
+                        let declared = sig.throws.to_plain().render_canonical();
                         match &inferred_throws {
                             Some(inferred) => {
                                 format!(" throws {declared} infers {inferred}")
@@ -1236,7 +1191,7 @@ pub(crate) mod support {
             }
 
             // Collect expression types for this scope — skip if none
-            if inference.iter_expressions().next().is_none() {
+            if inference.type_of_expr.is_empty() {
                 continue;
             }
 
@@ -1256,14 +1211,65 @@ pub(crate) mod support {
                 render_expr(root, body, inference, 2, &mut output);
             }
 
-            // Per-scope diagnostics
-            let rendered = render_scope_diagnostics(db, scope_id);
-            for rd in &rendered {
-                let marker = match rd.severity {
-                    baml_compiler2_tir::infer_context::DiagnosticSeverity::Error => "!!",
-                    baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning => "??",
-                };
-                writeln!(output, "  {marker} {rd}").ok();
+            // Owner diagnostics (rendered once, on the owner's own scope):
+            // the body run's, the PARAMETER-DEFAULTS run's, the structural
+            // default rules, and the signature walk - the same union the
+            // check layer assembles.
+            if matches!(scope.kind, ScopeKind::Function)
+                && let Some(owner) = baml_compiler2_hir_ty::ide::owner_for_scope(db, scope_id)
+            {
+                let source_map = baml_compiler2_ppir::body_source_map(db, owner);
+                let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
+                let mut rendered = Vec::new();
+                for diagnostic in &inference.diagnostics {
+                    rendered.push(diagnostic.render_with_type_refs(
+                        db,
+                        file,
+                        source_map.as_ref(),
+                        type_ref_spans.as_ref(),
+                    ));
+                }
+                if let baml_compiler2_hir::body::BodyOwnerId::Function(func_loc) = owner {
+                    let defaults_owner =
+                        baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(func_loc);
+                    let defaults = baml_compiler2_hir_ty::infer::infer_body(db, defaults_owner);
+                    let defaults_map = baml_compiler2_ppir::body_source_map(db, defaults_owner);
+                    let defaults_spans =
+                        baml_compiler2_ppir::body_type_ref_spans(db, defaults_owner);
+                    for diagnostic in &defaults.diagnostics {
+                        rendered.push(diagnostic.render_with_type_refs(
+                            db,
+                            file,
+                            defaults_map.as_ref(),
+                            defaults_spans.as_ref(),
+                        ));
+                    }
+                    for (range, error) in
+                        baml_compiler2_hir_ty::defaults::parameter_default_diagnostics(db, func_loc)
+                            .into_iter()
+                            .chain(
+                                baml_compiler2_hir_ty::lower::signature_lowering_diagnostics(
+                                    db, func_loc,
+                                ),
+                            )
+                    {
+                        rendered.push(baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                            message: error.to_string(),
+                            error,
+                            range,
+                            severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                            related: Vec::new(),
+                        });
+                    }
+                }
+                rendered.sort_by_key(|rd| (rd.range.start(), rd.range.end()));
+                for rd in &rendered {
+                    let marker = match rd.severity {
+                        baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error => "!!",
+                        baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning => "??",
+                    };
+                    writeln!(output, "  {marker} {rd}").ok();
+                }
             }
 
             writeln!(output, "}}").ok();
@@ -1853,10 +1859,11 @@ pub(crate) mod support {
                     let tn = qualify_type_name(type_name, prefix, local_type_names);
                     let field_strs: Vec<String> = fields
                         .iter()
-                        .map(|(name, val)| {
+                        .map(|field| {
                             format!(
-                                "{name}: {}",
-                                expr_desc_hir(*val, body, prefix, local_type_names)
+                                "{}: {}",
+                                field.name,
+                                expr_desc_hir(field.value, body, prefix, local_type_names)
                             )
                         })
                         .collect();
@@ -1872,11 +1879,11 @@ pub(crate) mod support {
                 Expr::Map { entries } => {
                     let entry_strs: Vec<String> = entries
                         .iter()
-                        .map(|(k, v)| {
+                        .map(|entry| {
                             format!(
                                 "{}: {}",
-                                expr_desc_hir(*k, body, prefix, local_type_names),
-                                expr_desc_hir(*v, body, prefix, local_type_names)
+                                expr_desc_hir(entry.key, body, prefix, local_type_names),
+                                expr_desc_hir(entry.value, body, prefix, local_type_names)
                             )
                         })
                         .collect();
@@ -2266,9 +2273,10 @@ pub(crate) mod support {
 
         // The authoritative function→scope link, replacing a `scope.range ==
         // func.span` join.
-        let scope_id = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
-            .unwrap_or_else(|| panic!("scope for function `{function_name}` not found"));
-        let inference = infer_scope_types(db, scope_id);
+        let inference = baml_compiler2_hir_ty::infer::infer_body(
+            db,
+            baml_compiler2_hir::body::BodyOwnerId::Function(func_loc),
+        );
 
         let matches: Vec<_> = body
             .exprs
@@ -2284,8 +2292,9 @@ pub(crate) mod support {
         };
 
         inference
-            .expression_type(expr_id)
-            .map(|ty| ty.render_canonical())
+            .type_of_expr
+            .get(&expr_id)
+            .map(|ty| ty.to_plain().render_canonical())
             .unwrap_or_else(|| {
                 panic!(
                     "expression `{expr_text}` in function `{function_name}` has no inferred type"

@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+assertion_line: 71
+expression: outcome.dump
+---
+76..84 'del_pair': throws never
+118..127 '{\n    a\n}': T
+124..125 'a': T
+137..150 'del_empty_arg': throws never
+175..248 '{\n   ...ned\n}': int[]
+181..191 'let joined': int[]
+194..202 'del_pair': (a: int[], b: int[]) -> int[] throws never
+194..214 'del_pa...], [])': int[]
+203..209 '[1, 2]': int[]
+204..205 '1': 1
+207..208 '2': 2
+211..213 '[]': int[]
+240..246 'joined': int[]
+258..264 'del_eq': throws never
+301..313 '{\n    true\n}': true
+307..311 'true': true
+323..337 'del_empty_deep': throws never
+361..441 '{\n   ...ame\n}': bool
+367..373 'let xs': int[]
+376..382 '[1, 2]': int[]
+377..378 '1': 1
+380..381 '2': 2
+387..395 'let same': bool
+398..404 'del_eq': (a: int[], b: int[]) -> bool throws never
+398..412 'del_eq(xs, [])': bool
+405..407 'xs': int[]
+409..411 '[]': int[]
+435..439 'same': bool

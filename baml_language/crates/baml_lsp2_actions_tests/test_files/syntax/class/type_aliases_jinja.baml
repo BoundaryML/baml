@@ -1,8 +1,8 @@
 type ProjectId = int
 
 function NormalAlias(pid: ProjectId) -> string {
-  client "openai/gpt-4o"
-  prompt #"Pid: {{ pid.id }}. Generate a fake name for it."#
+  client: "openai/gpt-4o"
+  prompt: `Pid: ${pid}. Generate a fake name for it.`
 }
 
 type A = float
@@ -10,8 +10,8 @@ type B = A
 type C = B
 
 function LongerAlias(c: C) -> string {
-  client "openai/gpt-4o"
-  prompt #"{{ c.value }}"#
+  client: "openai/gpt-4o"
+  prompt: `${c}`
 }
 
 type JsonValue = int | string | bool | float | JsonObject | JsonArray
@@ -19,76 +19,18 @@ type JsonObject = map<string, JsonValue>
 type JsonArray = JsonValue[]
 
 function RecursiveAliases(j: JsonValue) -> string {
-  client "openai/gpt-4o"
-  prompt #"{{ j.value }}"#
+  client: "openai/gpt-4o"
+  prompt: `${j}`
 }
 
 type I = J
 type J = I
 
 function InvalidAlias(i: I) -> string {
-  client "openai/gpt-4o"
-  prompt #"{{ i.value }}"#
+  client: "openai/gpt-4o"
+  prompt: `${i}`
 }
-
-// warning: 'pid' is a type alias ProjectId (resolves to int), expected class
-//   -->  class/type_aliases_jinja.baml:5
-//    |
-//  4 |   client "openai/gpt-4o"
-//  5 |   prompt #"Pid: {{ pid.id }}. Generate a fake name for it."#
-//    |
-// warning: 'c' is a type alias C (resolves to float), expected class
-//   -->  class/type_aliases_jinja.baml:14
-//    |
-// 13 |   client "openai/gpt-4o"
-// 14 |   prompt #"{{ c.value }}"#
-//    |
-// warning: 'j' is a recursive type alias JsonValue, expected class
-//   -->  class/type_aliases_jinja.baml:23
-//    |
-// 22 |   client "openai/gpt-4o"
-// 23 |   prompt #"{{ j.value }}"#
-//    |
-// warning: 'i' is a recursive type alias I, expected class
-//   -->  class/type_aliases_jinja.baml:31
-//    |
-// 30 |   client "openai/gpt-4o"
-// 31 |   prompt #"{{ i.value }}"#
-//    |
-// error: Error validating: These aliases form a dependency cycle: I -> J
-//   -->  class/type_aliases_jinja.baml:26
-//    |
-// 25 |
-// 26 | type I = J
-//    |
 
 //----
 //- diagnostics
-// E0073
-//
-//   ⚠ 'pid' is a type alias ProjectId (resolves to int), expected class
-//    ╭─[class_type_aliases_jinja.baml:5:20]
-//  5 │   prompt #"Pid: {{ pid.id }}. Generate a fake name for it."#
-//    ·                    ──────
-//    ╰────
-// E0073
-//
-//   ⚠ 'c' is a type alias C (resolves to type alias B (resolves to type alias A (resolves to float))), expected class
-//     ╭─[class_type_aliases_jinja.baml:14:15]
-//  14 │   prompt #"{{ c.value }}"#
-//     ·               ───────
-//     ╰────
-// E0074
-//
-//   ⚠ cannot access property 'value' on 'j': union contains non-class type map[string, recursive type alias JsonValue]
-//     ╭─[class_type_aliases_jinja.baml:23:15]
-//  23 │   prompt #"{{ j.value }}"#
-//     ·               ───────
-//     ╰────
-// E0073
-//
-//   ⚠ 'i' is a type alias I (resolves to type alias J (resolves to recursive type alias I)), expected class
-//     ╭─[class_type_aliases_jinja.baml:31:15]
-//  31 │   prompt #"{{ i.value }}"#
-//     ·               ───────
-//     ╰────
+// <no-diagnostics-expected>

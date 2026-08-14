@@ -254,6 +254,41 @@ function fs.$init_test_ns_fs_fs(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_chmod_on_existing_file"
+    make_closure .<lambda($init_test_ns_fs_fs, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_chmod_rejects_high_mode"
+    make_closure .<lambda($init_test_ns_fs_fs, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_chmod_rejects_negative_mode"
+    make_closure .<lambda($init_test_ns_fs_fs, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_chmod_missing_path_errors"
+    make_closure .<lambda($init_test_ns_fs_fs, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_symlink_onto_existing_path_errors"
+    make_closure .<lambda($init_test_ns_fs_fs, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -386,6 +421,120 @@ function fs.$init_test_ns_fs_fs_from_rust(registry: testing.TestCollector) -> nu
     call testing.TestCollector.register_test_at
     pop 1
     load_const null
+    return
+}
+
+function fs.fs_chmod_missing_path_errors_fn() -> bool {
+    load_const "chmod_missing.txt"
+    call user.fs.fs_tmp
+    load_const 420
+    sys_op baml.fs.chmod
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const false
+
+  L3:
+    return
+}
+
+function fs.fs_chmod_on_existing_file_fn() -> bool {
+    load_const "chmod_ok.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    load_const 420
+    sys_op baml.fs.chmod
+    pop 1
+    load_var path
+    sys_op baml.fs.exists
+    store_var existed
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var existed
+    return
+}
+
+function fs.fs_chmod_rejects_high_mode_fn() -> bool {
+    load_const "chmod_high_mode.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    load_const 4096
+    call user.fs.fs_chmod_rejects_mode
+    store_var threw
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var threw
+    return
+}
+
+function fs.fs_chmod_rejects_mode(path: string, mode: int) -> bool {
+    load_var2 1 2
+    sys_op baml.fs.chmod
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const false
+
+  L3:
+    return
+}
+
+function fs.fs_chmod_rejects_negative_mode_fn() -> bool {
+    load_const "chmod_negative_mode.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    load_const 0
+    load_const 1
+    sub_int
+    call user.fs.fs_chmod_rejects_mode
+    store_var threw
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var threw
     return
 }
 
@@ -531,10 +680,9 @@ function fs.fs_file_read_bytes_n_fn() -> bool {
     load_var data
     container_len
     store_var _9
-    load_type int
     load_var _9
     load_const 3
-    call baml.deep_equals
+    cmp_int_op ==
     return
 }
 
@@ -723,10 +871,9 @@ function fs.fs_file_rw_write_bytes_fn() -> bool {
     load_var dst
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 2
-    call baml.deep_equals
+    cmp_int_op ==
     return
 }
 
@@ -997,10 +1144,9 @@ function fs.fs_open_and_read_bytes_fn() -> bool {
     load_var data
     container_len
     store_var _9
-    load_type int
     load_var _9
     load_const 16
-    call baml.deep_equals
+    cmp_int_op ==
     return
 }
 
@@ -1044,16 +1190,14 @@ function fs.fs_open_append_creates_and_appends_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 5
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_type string
     load_var readback
     load_const "start!more!"
-    call baml.deep_equals
+    cmp_op ==
 
   L0:
     return
@@ -1081,16 +1225,14 @@ function fs.fs_open_append_creates_missing_file_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 2
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_type string
     load_var readback
     load_const "hi"
-    call baml.deep_equals
+    cmp_op ==
 
   L0:
     return
@@ -1173,16 +1315,14 @@ function fs.fs_open_w_creates_missing_file_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 2
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_type string
     load_var readback
     load_const "hi"
-    call baml.deep_equals
+    cmp_op ==
 
   L0:
     return
@@ -1205,16 +1345,14 @@ function fs.fs_open_w_creates_parent_dirs_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 6
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_type string
     load_var readback
     load_const "nested"
-    call baml.deep_equals
+    cmp_op ==
 
   L0:
     return
@@ -1271,16 +1409,14 @@ function fs.fs_open_w_truncates_existing_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 3
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_type string
     load_var readback
     load_const "new"
-    call baml.deep_equals
+    cmp_op ==
 
   L0:
     return
@@ -1299,10 +1435,9 @@ function fs.fs_read_dir_empty_dir_fn() -> bool {
     sys_op baml.fs.read_dir
     container_len
     store_var _7
-    load_type int
     load_var _7
     load_const 0
-    call baml.deep_equals
+    cmp_int_op ==
     return
 }
 
@@ -1416,11 +1551,6 @@ function fs.fs_read_dir_returns_entries_fn() -> bool {
     load_var entries
     container_len
     store_var _24
-    load_type int
-    load_var _24
-    load_const 3
-    call baml.deep_equals
-    store_var count_ok
     load_type baml.fs.DirEntry
     load_type never
     load_var entries
@@ -1439,7 +1569,9 @@ function fs.fs_read_dir_returns_entries_fn() -> bool {
     make_closure .<lambda(fs_read_dir_returns_entries_fn, 2)>, 0
     call baml.Array.some
     store_var has_sub
-    load_var count_ok
+    load_var _24
+    load_const 3
+    cmp_int_op ==
     jump_if_false L0
     pop 1
     load_var has_a
@@ -1568,11 +1700,7 @@ function fs.fs_remove_deletes_file_fn() -> bool {
     pop 1
     load_var path
     sys_op baml.fs.exists
-    store_var _6
-    load_type bool
-    load_var _6
-    load_const false
-    call baml.deep_equals
+    unary_op !
     return
 }
 
@@ -1585,11 +1713,7 @@ function fs.fs_remove_dir_all_idempotent_fn() -> bool {
     pop 1
     load_var dir
     sys_op baml.fs.exists
-    store_var _4
-    load_type bool
-    load_var _4
-    load_const false
-    call baml.deep_equals
+    unary_op !
     return
 }
 
@@ -1667,11 +1791,7 @@ function fs.fs_remove_dir_all_removes_tree_fn() -> bool {
     pop 1
     load_var dir
     sys_op baml.fs.exists
-    store_var _14
-    load_type bool
-    load_var _14
-    load_const false
-    call baml.deep_equals
+    unary_op !
     return
 }
 
@@ -1816,11 +1936,7 @@ function fs.fs_remove_dir_removes_empty_fn() -> bool {
     pop 1
     load_var dir
     sys_op baml.fs.exists
-    store_var _7
-    load_type bool
-    load_var _7
-    load_const false
-    call baml.deep_equals
+    unary_op !
     return
 }
 
@@ -1947,25 +2063,89 @@ function fs.fs_size_returns_length_fn() -> int {
     return
 }
 
+function fs.fs_symlink_is_refused_at(path: string) -> bool {
+    load_var2 1 1
+    sys_op baml.fs.symlink
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const false
+
+  L3:
+    return
+}
+
+function fs.fs_symlink_onto_existing_path_errors_fn() -> bool {
+    load_const "symlink_taken.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "keep me"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    call user.fs.fs_symlink_is_refused_at
+    store_var threw
+    load_var path
+    sys_op baml.fs.read
+    store_var _7
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var threw
+    jump_if_false L0
+    pop 1
+    load_var _7
+    load_const "keep me"
+    cmp_op ==
+
+  L0:
+    return
+}
+
 function fs.fs_tmp(name: string) -> string {
-    call baml.sys.now_ms
-    call baml.json.stringify
+    load_type string
+    load_var name
+    call baml.String.from
     store_var _6
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _9
+    load_type bigint
+    load_var _9
+    call baml.String.from
+    store_var _8
     load_const 0
     load_const 1000000000
     call baml.Int.random
-    call baml.json.stringify
-    store_var _8
+    store_var _13
+    load_type int
+    load_var _13
+    call baml.String.from
+    store_var _12
     load_const "/tmp/baml_fs_"
-    load_var name
-    bin_op +
-    load_const "_"
-    bin_op +
     load_var _6
     bin_op +
     load_const "_"
     bin_op +
     load_var _8
+    bin_op +
+    load_const "_"
+    bin_op +
+    load_var _12
     bin_op +
     return
 }
@@ -2000,19 +2180,17 @@ function fs.fs_write_bytes_fn() -> bool {
     load_var dst
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 11
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
     load_var readback
     container_len
-    store_var _21
-    load_type int
-    load_var _21
+    store_var _20
+    load_var _20
     load_const 11
-    call baml.deep_equals
+    cmp_int_op ==
 
   L0:
     return
@@ -2033,16 +2211,14 @@ function fs.fs_write_creates_parent_dirs_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 14
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_type string
     load_var readback
     load_const "nested content"
-    call baml.deep_equals
+    cmp_op ==
 
   L0:
     return
@@ -2066,16 +2242,14 @@ function fs.fs_write_overwrites_existing_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 11
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_type string
     load_var readback
     load_const "new content"
-    call baml.deep_equals
+    cmp_op ==
 
   L0:
     return
@@ -2095,16 +2269,14 @@ function fs.fs_write_string_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var n
     load_const 13
-    call baml.deep_equals
+    cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_type string
     load_var readback
     load_const "Hello, world!"
-    call baml.deep_equals
+    cmp_op ==
 
   L0:
     return

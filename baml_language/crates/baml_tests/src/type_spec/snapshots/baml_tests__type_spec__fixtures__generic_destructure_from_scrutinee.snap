@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+343..344 'f': throws never
+354..460 '{\n   ...int\n}': int
+360..380 'let bo...k<int>': user.Pack<int>
+371..380 'Pack<int>': user.Pack<int>
+383..401 'Pack {...: 42 }': user.Pack<int>
+397..399 '42': 42
+407..425 'let Pa...alue }': user.Pack<int>
+418..423 'value': int
+428..433 'boxed': user.Pack<int>
+439..444 'value': int

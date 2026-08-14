@@ -324,8 +324,8 @@ fn optional_defaults_emit_snapshot() {
 //
 // Note: `set_synthetic_items_for_file` was removed from the DB trait as part of
 // the compiler2 migration (Phase 2). These tests now use actual BAML source
-// declarations (clients, retry_policy) which produce `Item::Let` bindings and
-// exercise the same let-binding infrastructure.
+// declarations (`client Name = <expr>;`) which produce `Item::Let` bindings
+// and exercise the same let-binding infrastructure.
 
 /// Verify that a client declaration:
 /// - Produces a let binding with a global slot (appears in `let_global_indices`)
@@ -337,10 +337,7 @@ fn let_binding_global_slot_and_init_function() {
     db.add_file(
         "test.baml",
         r#"
-        client<llm> MyClient {
-          provider openai
-          options { model "gpt-4" }
-        }
+        client MyClient = openai.OpenAiClient.new(model = "gpt-4");
         function f() -> string { return "x"; }
         "#,
     );
@@ -454,14 +451,8 @@ fn multiple_let_bindings_with_valid_dependencies() {
     db.add_file(
         "test.baml",
         r#"
-        client<llm> ClientA {
-          provider openai
-          options { model "gpt-4" }
-        }
-        client<llm> ClientB {
-          provider openai
-          options { model "gpt-3.5-turbo" }
-        }
+        client ClientA = openai.OpenAiClient.new(model = "gpt-4");
+        client ClientB = openai.OpenAiClient.new(model = "gpt-3.5-turbo");
         function f() -> string { return "x"; }
         "#,
     );

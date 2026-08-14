@@ -1,7 +1,7 @@
 package com.boundaryml.baml.kotlin
 
 import baml_bridge.BamlStream
-import baml_sdk.baml.stream.StreamFinished
+import baml_sdk.ai.stream.Done
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.future.await
@@ -9,7 +9,7 @@ import kotlinx.coroutines.future.await
 /**
  * A cold [Flow] of this stream's partial values. Collecting drives the stream:
  * each step awaits `next_async()` and emits the partial, stopping — WITHOUT
- * emitting — when the engine returns the [StreamFinished] sentinel. Cold: no
+ * emitting — when the engine returns the [Done] sentinel. Cold: no
  * work happens until the flow is collected, and cancelling the collector stops
  * driving the stream (the suspended `await()` is cancellable and cancels the
  * underlying engine call).
@@ -33,14 +33,14 @@ public suspend fun <P, F> BamlStream<P, F>.awaitFinal(): F = get_final_async().a
  * The drain loop behind [asFlow], factored out as an internal seam so it can be
  * unit-tested offline against a fake `next` supplier (a real `BamlStream` is
  * engine-backed and `final`, hence unmockable). Emits every value `next` yields
- * until it yields the [StreamFinished] sentinel, which is consumed but never
+ * until it yields the [Done] sentinel, which is consumed but never
  * emitted; a `null` partial is a legitimate value and IS emitted (only the
  * sentinel terminates).
  */
 internal fun <P> streamFlow(next: suspend () -> Any?): Flow<P> = flow {
     while (true) {
         val value = next()
-        if (value is StreamFinished) {
+        if (value is Done) {
             break
         }
         @Suppress("UNCHECKED_CAST")

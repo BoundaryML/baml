@@ -134,6 +134,274 @@ mod format_options_tests {
 }
 
 #[cfg(test)]
+mod llm_tools_field_tests {
+    use super::*;
+
+    /// The BEP `tools` field must survive formatting — the print path used to
+    /// omit it entirely, silently deleting the field (and with it the
+    /// function's spec mode) from the user's source.
+    #[test]
+    fn test_tools_field_is_preserved_and_idempotent() {
+        let source = concat!(
+            "function Plan(q: string) -> string {\n",
+            "    client: \"openai/gpt-4o-mini\"\n",
+            "    // the toolbox\n",
+            "    tools: [search_flights, search_hotels]\n",
+            "    prompt: `\n",
+            "        ${q}\n",
+            "        ${ctx.output_format}\n",
+            "    `\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("tools field should format");
+        assert!(
+            formatted.contains("tools: [search_flights, search_hotels]"),
+            "tools field preserved (canonical colon form): {formatted}"
+        );
+        assert!(
+            formatted.contains("// the toolbox"),
+            "comment on the tools line preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_llm_field_comments_before_colons_are_preserved() {
+        let source = concat!(
+            "function Plan() -> string {\n",
+            "    client /* client colon */ : \"openai/gpt-4o-mini\"\n",
+            "    tools /* tools colon */ : []\n",
+            "    prompt /* prompt colon */ : `hello`\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("LLM field comments should format");
+
+        for comment in ["client colon", "tools colon", "prompt colon"] {
+            assert!(
+                formatted.contains(comment),
+                "comment `{comment}` must be preserved: {formatted}"
+            );
+        }
+
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
+mod object_spread_tests {
+    use super::*;
+
+    /// Struct-update spread (`Type { ...base, field: v }`) compiles, but the
+    /// object printer used to reject it outright: "Expected token/node
+    /// `OBJECT_FIELD` or `R_BRACE`, but found `SPREAD_ELEMENT`".
+    #[test]
+    fn test_spread_formats_and_is_idempotent() {
+        let source = concat!(
+            "class P {\n",
+            "    name: string,\n",
+            "    score: int,\n",
+            "}\n",
+            "\n",
+            "function f(p: P) -> P {\n",
+            "    P { ...p, score: 1 }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("class spread should format");
+        assert!(
+            formatted.contains("P { ...p, score: 1 }"),
+            "spread preserved without a space after `...`: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// Member order is semantic — later members win at runtime, so
+    /// `P { score: 9, ...p }` and `P { ...p, score: 9 }` evaluate differently.
+    /// The formatter must never reorder them, and must keep multiple spreads.
+    #[test]
+    fn test_spread_and_field_order_is_preserved() {
+        let options = FormatOptions::default();
+        for (source_expr, expected) in [
+            ("P { ...p, score: 9 }", "P { ...p, score: 9 }"),
+            ("P { score: 9, ...p }", "P { score: 9, ...p }"),
+            ("P { ...a, ...b }", "P { ...a, ...b }"),
+            ("P { ...a, score: 1, ...b }", "P { ...a, score: 1, ...b }"),
+        ] {
+            let source = format!(
+                concat!(
+                    "class P {{\n",
+                    "    name: string,\n",
+                    "    score: int,\n",
+                    "}}\n",
+                    "\n",
+                    "function f(p: P, a: P, b: P) -> P {{\n",
+                    "    {source_expr}\n",
+                    "}}\n",
+                ),
+                source_expr = source_expr
+            );
+            let formatted = format(&source, &options)
+                .unwrap_or_else(|e| panic!("`{source_expr}` should format: {e:?}"));
+            assert!(
+                formatted.contains(expected),
+                "order preserved for `{source_expr}`, got: {formatted}"
+            );
+            let second = format(&formatted, &options).expect("formatter should be idempotent");
+            assert_eq!(formatted, second, "idempotent for `{source_expr}`");
+        }
+    }
+
+    /// A spread wide enough to break must survive the multi-line path too,
+    /// and comments attached to a spread member must not be dropped.
+    #[test]
+    fn test_spread_multi_line_and_comments() {
+        let source = concat!(
+            "class Config {\n",
+            "    alpha: string,\n",
+            "    beta: string,\n",
+            "    gamma: string,\n",
+            "}\n",
+            "\n",
+            "function f(base: Config) -> Config {\n",
+            "    Config {\n",
+            "        // inherit everything from the base configuration first\n",
+            "        ...base,\n",
+            "        alpha: \"a much longer override value to force the multi-line path\",\n",
+            "        beta: \"another fairly long override value so this cannot fit\",\n",
+            "    }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("multi-line spread should format");
+        assert!(
+            formatted.contains("...base,"),
+            "spread member preserved on its own line: {formatted}"
+        );
+        assert!(
+            formatted.contains("// inherit everything from the base configuration first"),
+            "comment above the spread preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The spread operand is an arbitrary expression, not just a name.
+    #[test]
+    fn test_spread_of_call_expression() {
+        let source = concat!(
+            "class P {\n",
+            "    name: string,\n",
+            "    score: int,\n",
+            "}\n",
+            "\n",
+            "function base() -> P {\n",
+            "    P { name: \"b\", score: 0 }\n",
+            "}\n",
+            "\n",
+            "function f() -> P {\n",
+            "    P { ...base(), score: 1 }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("spread of a call should format");
+        assert!(
+            formatted.contains("P { ...base(), score: 1 }"),
+            "call operand preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
+mod contextual_keyword_identifier_tests {
+    use super::*;
+
+    /// `client` lexes as `KW_CLIENT` but is a legal identifier everywhere the
+    /// checker accepts one. The formatter must not die on it (it used to:
+    /// "Expected token/node of kind WORD, but found `KW_CLIENT`").
+    #[test]
+    fn test_client_as_identifier_formats() {
+        let source = concat!(
+            "class Session {\n",
+            "    client: string,\n",
+            "}\n",
+            "\n",
+            "function use_it(client: Session, f: (client: Session) -> int) -> int {\n",
+            "    let s = Session { client: client.client };\n",
+            "    if (s.client == client.client.to_upper_case()) {\n",
+            "        return f(client);\n",
+            "    }\n",
+            "    0\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options)
+            .expect("formatter should accept `client` as field/param/object-key name");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+        assert!(formatted.contains("client: string"), "field name preserved");
+    }
+}
+
+#[cfg(test)]
+mod header_comment_position_tests {
+    use super::*;
+
+    /// `//#` header comments survive formatting before expression functions and remain structural
+    /// at executable statement and arm boundaries.
+    #[test]
+    fn test_header_comments_in_expression_positions() {
+        let source = concat!(
+            "//# classify values\n",
+            "function classify(n: int) -> string {\n",
+            "    //# statements\n",
+            "    match (n) {\n",
+            "        //# leading header\n",
+            "        0 => \"zero\",\n",
+            "        //# between arms\n",
+            "        _ => \"big\",\n",
+            "    }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options)
+            .expect("formatter should accept header comments in expression positions");
+        for needle in [
+            "//# classify values",
+            "//# statements",
+            "//# leading header",
+            "//# between arms",
+        ] {
+            assert!(formatted.contains(needle), "lost {needle}:\n{formatted}");
+        }
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_header_comments_in_declarations_are_rejected() {
+        for source in [
+            "interface Animal {\n    //# methods\n    function name(self) -> string\n}\n",
+            "//# generated text\nfunction generate() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `hello`\n}\n",
+        ] {
+            let error = format(source, &FormatOptions::default())
+                .expect_err("formatter should reject headers outside expression functions");
+
+            assert!(
+                format!("{error:?}")
+                    .contains("header comments (`//#`) are only allowed in expression functions")
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod lambda_format_tests {
     use super::*;
 
@@ -376,8 +644,19 @@ mod backtick_format_tests {
     /// spaces), dedented by the common leading indent.
     #[test]
     fn backtick_prompt_multiline_dedents() {
-        let source = "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
+        let source = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
         let expected = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n        Hello ${name}\n        Goodbye\n    `\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    #[test]
+    fn backtick_function_return_dedents() {
+        let source = "function Foo(name: string) -> string {\n    `\n            Hello ${name}\n            Bye\n    `\n}\n";
+        let expected = "function Foo(name: string) -> string {\n    `\n        Hello ${name}\n        Bye\n    `\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
         assert_eq!(formatted, expected, "got:\n{formatted}");
@@ -388,7 +667,7 @@ mod backtick_format_tests {
     /// A single-line backtick prompt is accepted and printed verbatim.
     #[test]
     fn backtick_prompt_one_liner_accepted() {
-        let source = "function Demo() -> string {\n    client \"openai/gpt-4o\"\n    prompt `Just one line`\n}\n";
+        let source = "function Demo() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `Just one line`\n}\n";
         let expected = "function Demo() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `Just one line`\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
@@ -403,19 +682,6 @@ mod backtick_format_tests {
     fn backtick_attribute_arg_dedents() {
         let source = "class Foo {\n    bar string @description(`\n        some desc\n        more\n    `)\n}\n";
         let expected = "class Foo {\n    bar: string @description(\n        `\n            some desc\n            more\n        `,\n    ),\n}\n";
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(formatted, expected, "got:\n{formatted}");
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second);
-    }
-
-    /// A backtick `template_string` body is accepted and its interior re-indented
-    /// (closing backtick at column 0, like a raw-string body).
-    #[test]
-    fn backtick_template_string_dedents() {
-        let source = "template_string Foo(name: string) `\n        Hello ${name}\n        Bye\n`\n";
-        let expected = "template_string Foo(name: string) `\n    Hello ${name}\n    Bye\n`\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
         assert_eq!(formatted, expected, "got:\n{formatted}");
@@ -518,6 +784,65 @@ mod linear_formatter_regression_tests {
         );
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
+mod contextual_keyword_name_tests {
+    //! Regression tests for contextual keywords used as names. The lexer
+    //! emits a dedicated keyword kind for `client` (`KW_CLIENT`), and the
+    //! parser accepts it as a class field, parameter, and member-access
+    //! name (BEP-049 §10 `ctx.client`). The formatter used to reject those
+    //! files with "Expected token/node of kind WORD, but found `KW_CLIENT`".
+
+    use super::*;
+
+    fn assert_round_trips(source: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).unwrap_or_else(|error| {
+            panic!("formatter should accept contextual keyword name: {error:?}\nsource:\n{source}")
+        });
+        assert_eq!(formatted, source);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn client_as_class_field_name() {
+        assert_round_trips("class Agent {\n    client: string?,\n    name: string,\n}\n");
+    }
+
+    #[test]
+    fn client_as_function_parameter_name() {
+        // A `let` statement keeps the body classified as an expression
+        // function; a bare `client` tail expression would trip the parser's
+        // LLM-function-body heuristic, which is out of the formatter's hands.
+        assert_round_trips(
+            "function call_llm(client: string, function_name: string) -> string {\n    let out = client;\n    out\n}\n",
+        );
+    }
+
+    #[test]
+    fn client_as_member_access_name() {
+        assert_round_trips(
+            "class Agent {\n    client: string?,\n}\n\nfunction f(a: Agent) -> string? {\n    let c = a.client;\n    c\n}\n",
+        );
+    }
+
+    #[test]
+    fn client_as_object_literal_key() {
+        assert_round_trips(
+            "class Agent {\n    client: string?,\n}\n\nfunction make(client: string?) -> Agent {\n    let a = Agent { client: client };\n    a\n}\n",
+        );
+    }
+
+    #[test]
+    fn keyword_method_names_round_trip() {
+        // `implements` and friends stay valid as member names (reflection
+        // API, e.g. `dog_t.implements(animal_t)`).
+        assert_round_trips(
+            "function f(dog_t: type, animal_t: type) -> bool {\n    dog_t.implements(animal_t)\n}\n",
+        );
     }
 }
 
@@ -1393,6 +1718,129 @@ mod return_comment_tests {
     fn test_braceless_return_catch_arm_no_comment_round_trips() {
         let source = "function f(x: int) -> int {\n    let v = g(x) catch (e) {\n        _ => return -1,\n    };\n    v\n}\n";
         let expected = "function f(x: int) -> int {\n    let v = g(x) catch (e) {\n        _ => {\n            return -1;\n        },\n    };\n    v\n}\n";
+        assert_formats_to(source, expected);
+    }
+}
+
+#[cfg(test)]
+mod member_chain_layout_tests {
+    //! Regression tests for member-chain layout. `baml fmt` used to explode
+    //! dotted namespace paths one segment per line (`root\n.ai\n.Agent<T>\n…`)
+    //! whenever the full expression overflowed the line width. The rule is now
+    //! the standard prettier/rustfmt member-chain rule: plain accesses
+    //! (namespace segments, field accesses, generic type segments) are atomic
+    //! with their receiver, and the chain breaks only at method-call
+    //! boundaries — and only when the line overflows.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The headline case: the namespace path and both calls stay glued on the
+    /// receiver line; only the final call's arguments wrap.
+    #[test]
+    fn test_namespace_chain_stays_glued_only_args_wrap() {
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(plan_trip_spec(\"plan a weekend trip to yosemite with plenty of hiking\", root.anthropic.AnthropicClient.new()));\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking\",\n            root.anthropic.AnthropicClient.new(),\n        ),\n    );\n    result\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An already-exploded chain (the old formatter's output) collapses back
+    /// to the glued layout.
+    #[test]
+    fn test_exploded_chain_collapses() {
+        let source = "function f() -> int {\n    let result = root\n        .ai\n        .Agent<Itinerary>\n        .new()\n        .run(\n            plan_trip_spec(\n                \"plan a weekend trip to yosemite with plenty of hiking\",\n                root.anthropic.AnthropicClient.new(),\n            ),\n        );\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking\",\n            root.anthropic.AnthropicClient.new(),\n        ),\n    );\n    result\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A single call at the end of a namespace path keeps the whole path and
+    /// the call glued; the long array argument wraps inside the parens.
+    #[test]
+    fn test_namespace_call_with_long_array_arg() {
+        let source = "function f() -> int {\n    let c = root.ai.ScriptedClient.new([\"the first canned response text\", \"the second canned response text\", \"the third canned response text\"]);\n    c\n}\n";
+        let expected = "function f() -> int {\n    let c = root.ai.ScriptedClient.new(\n        [\n            \"the first canned response text\",\n            \"the second canned response text\",\n            \"the third canned response text\",\n        ],\n    );\n    c\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A chain too long to keep every call on the receiver line breaks at
+    /// method-call boundaries. The namespace path never breaks, and the first
+    /// call (`.new()`) stays attached to the path because it fits.
+    #[test]
+    fn test_long_chain_breaks_at_calls_only() {
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().with_client(root.anthropic.AnthropicClient.new()).with_options(the_default_options).run(the_spec_value);\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new()\n        .with_client(root.anthropic.AnthropicClient.new())\n        .with_options(the_default_options)\n        .run(the_spec_value);\n    result\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A dotted path of plain accesses never breaks internally, even past the
+    /// line width.
+    #[test]
+    fn test_plain_access_path_is_atomic() {
+        let source = "function f() -> int {\n    let value = root.some_namespace.another_namespace.deeply.nested.module.SomeVeryLongTypeName.CONSTANT_VALUE;\n    value\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// Enum-member paths in match arms (patterns and arm values) stay on one
+    /// line.
+    #[test]
+    fn test_enum_member_paths_in_match_arms() {
+        let source = "function f(r: StopReason) -> int {\n    match (r) {\n        StopReason.Complete => 1,\n        StopReason.MaxTokens => 2,\n        _ => root.some.namespaced.StopReason.Complete.value(),\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// A short chain that fits stays on one line.
+    #[test]
+    fn test_short_chain_stays_single_line() {
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(spec);\n    result\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// Plain accesses trailing a broken call group stay glued to each other
+    /// on the group's line.
+    #[test]
+    fn test_trailing_plain_accesses_stay_glued() {
+        let source = "function f() -> int {\n    let x = builder.configure(a_pretty_long_argument_name, another_pretty_long_argument_name).result.field.value;\n    x\n}\n";
+        let expected = "function f() -> int {\n    let x = builder.configure(a_pretty_long_argument_name, another_pretty_long_argument_name)\n        .result.field.value;\n    x\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A long chain ending in an optional call (`?.(…)`) uses the tail-broken
+    /// layout: the path stays glued, `?.` stays attached to the opening paren,
+    /// and only the arguments wrap.
+    #[test]
+    fn test_optional_call_tail_breaks_args_only() {
+        let source = "function f() -> int {\n    let result = root.ai.handlers.maybe_factory?.(the_first_long_argument_name, the_second_long_argument_name, the_third_long_argument_name);\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.handlers.maybe_factory?.(\n        the_first_long_argument_name,\n        the_second_long_argument_name,\n        the_third_long_argument_name,\n    );\n    result\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A chain whose final member is a long index `[…]` uses the tail-broken
+    /// layout too: the path stays glued and the index expression wraps inside
+    /// the brackets.
+    #[test]
+    fn test_final_long_index_breaks_inside_brackets() {
+        let source = "function f() -> int {\n    let x = the_data_table.rows_by_category[compute_the_category_key(the_first_component_value, the_second_component_value)];\n    x\n}\n";
+        let expected = "function f() -> int {\n    let x = the_data_table.rows_by_category[\n        compute_the_category_key(the_first_component_value, the_second_component_value)\n    ];\n    x\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An optional call applied directly to the receiver (`base?.(x).field`)
+    /// cannot break away from it: it stays glued to the receiver's line while
+    /// later call groups break normally.
+    #[test]
+    fn test_leading_optional_call_stays_glued_to_receiver() {
+        let source = "function f() -> int {\n    let out = fetch_handler?.(the_request_value).response.payload.decode_as_structured(schema_registry_value).validate_against(validation_rules_value);\n    out\n}\n";
+        let expected = "function f() -> int {\n    let out = fetch_handler?.(the_request_value).response.payload\n        .decode_as_structured(schema_registry_value)\n        .validate_against(validation_rules_value);\n    out\n}\n";
         assert_formats_to(source, expected);
     }
 }

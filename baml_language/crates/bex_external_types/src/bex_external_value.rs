@@ -61,12 +61,9 @@ impl UnionMetadata {
     pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
             RuntimeTy::Union(members, _) => {
-                let has_null = members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }));
-                let non_null_count = members
-                    .iter()
-                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
-                    .count();
-                (has_null, non_null_count == 1)
+                let is_optional = members.iter().any(RuntimeTy::is_null);
+                let non_null_count = members.iter().filter(|member| !member.is_null()).count();
+                (is_optional, non_null_count == 1)
             }
             _ => (false, false),
         };
@@ -86,7 +83,7 @@ impl UnionMetadata {
 pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
     Type(baml_type::RuntimeTy),
-    /// A rendered prompt AST (from `baml.llm.render_prompt`).
+    /// The Rust-backed payload inside a rendered `ai.Prompt`.
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<baml_builtins2::MediaValue>),
@@ -98,7 +95,7 @@ pub enum BexExternalAdt {
     /// the instance alive on the heap so the engine can re-enter it for
     /// instance-method calls (`Stream.next`, `Stream.final`, …).
     ///
-    /// Currently used by `baml.llm.Stream`; any future stdlib generic
+    /// Currently used by `ai.stream.Stream`; any future stdlib generic
     /// class that wants typed-handle round-trip treatment uses this same
     /// variant.
     TaggedHeapHandle {
@@ -376,7 +373,36 @@ impl BexExternalAdt {
     }
 }
 
+/// Field of the stdlib media wrapper classes (`baml.media.*`) that holds the
+/// structural media payload. The wrapper layout is private to the stdlib;
+/// host code must reach the payload through
+/// [`BexExternalValue::media_wrapper_inner`], never by naming this field
+/// elsewhere.
+pub const MEDIA_WRAPPER_DATA_FIELD: &str = "_data";
+
 impl BexExternalValue {
+    /// If this is an instance of a stdlib media wrapper class
+    /// (`baml.media.{Image,Audio,Video,Pdf}`), the media kind it wraps.
+    pub fn media_wrapper_kind(&self) -> Option<baml_type::MediaKind> {
+        match self {
+            BexExternalValue::Instance { class_name, .. } => {
+                baml_type::MediaKind::from_wrapper_class_name(class_name)
+            }
+            _ => None,
+        }
+    }
+
+    /// The structural media payload of a media wrapper instance. `None` when
+    /// this is not a media wrapper, or when the wrapper is missing its
+    /// payload field (malformed; callers decide whether that is an error).
+    pub fn media_wrapper_inner(&self) -> Option<&BexExternalValue> {
+        self.media_wrapper_kind()?;
+        match self {
+            BexExternalValue::Instance { fields, .. } => fields.get(MEDIA_WRAPPER_DATA_FIELD),
+            _ => None,
+        }
+    }
+
     /// Construct the transient carrier for an inbound value paired with its
     /// exact host-known type. This reuses the external union representation so
     /// existing type-directed VM materialization can honor `value_type`, while
@@ -552,7 +578,7 @@ impl BexExternalValue {
             BexExternalValue::Uint8Array(bytes) => format!("<bytes:{}>", bytes.len()),
             // A rendered prompt handle: render its readable text instead of the
             // `Adt(PromptAst(Message { .. }))` Rust `Debug` dump (B-627). Nested
-            // inside a `baml.llm.PromptAst { _data: .. }` instance, this makes the
+            // inside a `ai.Prompt { _data: .. }` instance, this makes the
             // CLI's value print readable.
             BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => ast.render_text(),
             _ => format!("{self:?}"),
@@ -843,7 +869,7 @@ mod render_readable_tests {
         }
     }
 
-    /// A rendered-prompt handle (`baml.llm.PromptAst`'s `_data`) renders as its
+    /// A rendered-prompt handle (`ai.Prompt`'s `_data`) renders as its
     /// readable prompt text, not the `Adt(PromptAst(Message { .. }))` Rust
     /// `Debug` dump. This is the B-627 repro for the CLI value print.
     #[test]

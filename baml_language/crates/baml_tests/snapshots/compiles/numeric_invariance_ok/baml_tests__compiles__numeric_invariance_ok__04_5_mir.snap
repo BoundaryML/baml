@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17843
 ---
 === MIR2 ===
 fn user.BigintLiteralArray() -> bigint[] {
@@ -36,7 +37,7 @@ fn user.EvolvingRetype() -> bigint[] {
     let _1: bigint[] // a
 
     bb0: {
-        _1 = []: never[];
+        _1 = []: bigint[];
         _0 = copy _1;
         goto -> bb1;
     }

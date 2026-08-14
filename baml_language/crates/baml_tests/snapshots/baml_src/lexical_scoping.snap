@@ -153,15 +153,13 @@ function lexical_scoping.capture_before_after_shadow() -> int {
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 0)>, 1
     call_indirect
-    store_var _6
+    load_const 10
+    mul_int
+    store_var _5
     load_var x
     make_closure .<lambda(capture_before_after_shadow, 1)>, 1
     call_indirect
-    store_var _8
-    load_var _6
-    load_const 10
-    mul_int
-    load_var _8
+    load_var _5
     add_int
     return
 }
@@ -406,13 +404,14 @@ function lexical_scoping.match_and_catch_main() -> int {
     store_var _2
     call user.lexical_scoping.match_later_arm_uses_outer
     store_var _4
-    call user.lexical_scoping.catch_base_uses_outer_lambda
-    store_var _6
-    load_var2 1 2
+    load_var2 2 3
     load_const 100
     mul_int
     add_int
-    load_var _6
+    store_var _1
+    call user.lexical_scoping.catch_base_uses_outer_lambda
+    store_var _6
+    load_var2 1 4
     load_const 10000
     mul_int
     add_int

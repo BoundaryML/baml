@@ -5,7 +5,7 @@
 // convertible.
 //
 // Helper functions live at top level to avoid the test-block local-boxing VM
-// bug. Results that are enum variants are asserted via `baml.deep_equals`
+// bug. Results that are enum variants are asserted via `assert.equal`
 // against the enum value; bool-array results use a local-bound expected.
 
 // All accessors after a successful settle: is_settled / is_result are true;
@@ -26,7 +26,7 @@ function methods_after_successful_settle() -> bool[] {
 test "methods_after_successful_settle" {
     // Compare against literal directly: a test-block local-bound expected
     // compares unequal to a function result (VM bug).
-    assert.is_true(baml.deep_equals(methods_after_successful_settle(), [true, true, false, false, false]))
+    assert.equal(methods_after_successful_settle(), [true, true, false, false, false])
 }
 
 // Pending future (long sleep keeps the spawn body parked): state() returns
@@ -43,7 +43,7 @@ function methods_on_pending_future() -> baml.future.FutureState {
 }
 
 test "methods_on_pending_future" {
-    assert.is_true(baml.deep_equals(methods_on_pending_future(), baml.future.FutureState.Pending))
+    assert.equal(methods_on_pending_future(), baml.future.FutureState.Pending)
 }
 
 // After f.cancel() on a pending future: state() returns Cancelled.
@@ -54,7 +54,7 @@ function methods_after_cancel() -> baml.future.FutureState {
 }
 
 test "methods_after_cancel" {
-    assert.is_true(baml.deep_equals(methods_after_cancel(), baml.future.FutureState.Cancelled))
+    assert.equal(methods_after_cancel(), baml.future.FutureState.Cancelled)
 }
 
 // Helper that throws so we can spawn it and observe an errored future.
@@ -70,5 +70,5 @@ function methods_on_errored_future() -> baml.future.FutureState {
 }
 
 test "methods_on_errored_future" {
-    assert.is_true(baml.deep_equals(methods_on_errored_future(), baml.future.FutureState.Error))
+    assert.equal(methods_on_errored_future(), baml.future.FutureState.Error)
 }

@@ -535,13 +535,13 @@ impl TestArgs {
             // seed served every stdlib package); a cold run reports up to 6.
             crate::bytecode_cache::cache_debug(format_args!(
                 "stdlib interface: {} honest derivation(s) this process",
-                baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+                baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
             ));
             // Warm-incremental evidence: with the diagnostics cache serving clean
             // files this counts only the dirty files' scopes.
             crate::bytecode_cache::cache_debug(format_args!(
-                "scope inferences: {} this process",
-                baml_db::baml_compiler2_tir::inference::scope_inferences()
+                "body inferences: {} this process",
+                baml_db::baml_compiler2_hir_ty::infer::body_inferences()
             ));
 
             let bytecode = compiled.program;
@@ -994,6 +994,14 @@ fn cached_legacy_test(t: &LegacyTest) -> crate::bytecode_cache::CachedLegacyTest
 // ---------------------------------------------------------------------------
 
 #[allow(unused_variables)]
+// BUG: test discovery is duplicated with different semantics in
+// `baml_project::symbols::list_tests_with_metadata`. This copy iterates files
+// (sees duplicate-named tests) and qualifies function refs unconditionally
+// with the *test's* namespace; the playground copy iterates resolved
+// namespace items (keep-first winner) and qualifies only when the ref
+// resolves in the same namespace. Neither handles a cross-namespace ref by
+// the *resolved function's* namespace, which is the correct rule. Unify on
+// one `baml_surface`-side derivation once that rule is ratified.
 fn discover_legacy_tests(
     db: &ProjectDatabase,
     project: baml_workspace::Project,

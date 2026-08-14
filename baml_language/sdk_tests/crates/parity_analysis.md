@@ -346,8 +346,8 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | function_calls/static_method_media_json_type_and_rust_type_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/static_method_required_default_and_structured_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/stdlib_entrypoints_compiler_intrinsics_are_not_emitted_as_entry_points | y | y | - | - | y | - | y | - | y | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
-| function_calls/stdlib_entrypoints_native_baml_sys_now_ms_is_callable_as_an_entry_point | - | y | y | y | - | - | - | - | - | - | all |  |
-| function_calls/stdlib_entrypoints_native_now_ms_callable_as_entry_point | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/stdlib_entrypoints_native_argv_callable_as_entry_point | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/stdlib_entrypoints_native_baml_sys_argv_is_callable_as_an_entry_point | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point | y | y | - | - | y | - | y | - | y | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/stdlib_error_surfaces_as_go_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/sync_call_returns_null | - | - | - | - | - | - | - | y | - | - | all |  |

@@ -29,7 +29,7 @@ function provider_stdlib.$init_test_ns_provider_stdlib_provider_stdlib(registry:
 
 function provider_stdlib.provider_schema() -> baml.json.json {
     load_type provider_stdlib.ProviderSchemaExample
-    sys_op baml.schema.json_schema
+    sys_op baml.json.schema
     return
 }
 

@@ -154,22 +154,17 @@ ast_node!(ConfigItem, CONFIG_ITEM);
 ast_node!(ConfigValue, CONFIG_VALUE);
 ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
+ast_node!(ToolsField, TOOLS_FIELD);
+ast_node!(SpecExpr, SPEC_EXPR);
+ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
 ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
 ast_node!(BacktickText, BACKTICK_TEXT);
 ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
-// Jinja template components (inside raw strings)
-ast_node!(JinjaExpression, TEMPLATE_INTERPOLATION);
-ast_node!(JinjaStatement, TEMPLATE_CONTROL);
-ast_node!(JinjaComment, TEMPLATE_COMMENT);
-ast_node!(PromptText, PROMPT_TEXT);
-
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
-ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
-ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);
 
@@ -978,24 +973,106 @@ impl TemplateStringDef {
 impl LlmFunctionBody {
     /// Get the client field if present.
     ///
-    /// For `function Foo() -> string { client GPT4 ... }`, returns the `client GPT4` field.
+    /// For `function Foo() -> string { client: GPT4 ... }`, returns the `client: GPT4` field.
     pub fn client_field(&self) -> Option<ClientField> {
         self.syntax.children().find_map(ClientField::cast)
     }
 
     /// Get the prompt field if present.
     ///
-    /// For `function Foo() -> string { ... prompt #"..."# }`, returns the `prompt #"..."#` field.
+    /// For `function Foo() -> string { ... prompt: #"..."# }`, returns the `prompt: #"..."#` field.
     pub fn prompt_field(&self) -> Option<PromptField> {
         self.syntax.children().find_map(PromptField::cast)
+    }
+
+    /// Get the tools field if present.
+    ///
+    /// For `function Foo() -> T { ... tools: [a, b] ... }`, returns the
+    /// `tools: [a, b]` field.
+    pub fn tools_field(&self) -> Option<ToolsField> {
+        self.syntax.children().find_map(ToolsField::cast)
+    }
+}
+
+impl ClientValueDef {
+    /// The declared client name (`Fast` in `client Fast = <expr>;`).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
+    }
+
+    /// The initializer — the first element after the `=` (a node, or a bare
+    /// identifier/literal token).
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        let mut seen_equals = false;
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) if seen_equals => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind() == SyntaxKind::EQUALS {
+                        seen_equals = true;
+                        continue;
+                    }
+                    if seen_equals && !t.kind().is_trivia() && t.kind() != SyntaxKind::SEMICOLON {
+                        return Some(el);
+                    }
+                }
+                rowan::NodeOrToken::Node(_) => {}
+            }
+        }
+        None
+    }
+}
+
+impl ToolsField {
+    /// The tools value expression — the first child node after the `tools`
+    /// keyword and colon (usually an `ARRAY_LITERAL`).
+    pub fn expr(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+
+    /// The tools value as a node-or-token element. A bare dot-free
+    /// identifier (`tools: my_tools`) is emitted by the parser as a WORD
+    /// token with no wrapping node, so [`Self::expr`] alone would miss it
+    /// and the field would silently lower to an empty toolbox.
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        let mut seen_keyword = false;
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind().is_trivia() || t.kind() == SyntaxKind::COLON {
+                        continue;
+                    }
+                    // The leading `tools` keyword lexes as a WORD; everything
+                    // after it (and the colon) is the value.
+                    if !seen_keyword && t.kind() == SyntaxKind::WORD && t.text() == "tools" {
+                        seen_keyword = true;
+                        continue;
+                    }
+                    return Some(el);
+                }
+            }
+        }
+        None
+    }
+}
+
+impl SpecExpr {
+    /// The base expression the postfix `@spec` was applied to (a `PATH_EXPR`
+    /// naming an LLM function).
+    pub fn base(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
     }
 }
 
 impl ClientField {
     /// Get the client name token if it's a simple identifier.
     ///
-    /// For `client GPT4`, returns the `GPT4` token.
-    /// For `client "openai/gpt-4o"`, returns None (use `name_or_string()` instead).
+    /// For `client: GPT4`, returns the `GPT4` token.
+    /// For `client: "openai/gpt-4o"`, returns None (use `name_or_string()` instead).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
@@ -1003,14 +1080,38 @@ impl ClientField {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// Get the client value as a string, whether it's an identifier or a string literal.
+    /// Get the client value as a string, whether it's an identifier, an
+    /// unquoted shorthand, or a string literal.
     ///
-    /// For `client GPT4`, returns "GPT4".
-    /// For `client "openai/gpt-4o"`, returns "openai/gpt-4o".
+    /// For `client: GPT4`, returns "GPT4".
+    /// For `client: "openai/gpt-4o"`, returns "openai/gpt-4o".
+    /// For `client: openai/gpt-4o` (unquoted shorthand), returns
+    /// "openai/gpt-4o" — the parser consumes the whole shorthand as value
+    /// tokens, and truncating to the first WORD would silently resolve the
+    /// provider prefix alone.
     pub fn value(&self) -> Option<String> {
-        // First try to get it as a simple identifier (WORD token)
-        if let Some(token) = self.name() {
-            return Some(token.text().to_string());
+        // Try token form first: concatenate every non-trivia value token after
+        // the `client` keyword and the leading colon. Only the FIRST
+        // colon is field syntax — later ones belong to the value (model ids
+        // like `ollama/llama3:8b`). A single WORD yields the plain identifier;
+        // a multi-token run reproduces the unquoted shorthand (its source has
+        // no interior whitespace).
+        let mut value = String::new();
+        let mut leading_colon_eaten = false;
+        for token in self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| !t.kind().is_trivia() && t.kind() != SyntaxKind::KW_CLIENT)
+        {
+            if token.kind() == SyntaxKind::COLON && value.is_empty() && !leading_colon_eaten {
+                leading_colon_eaten = true;
+                continue;
+            }
+            value.push_str(token.text());
+        }
+        if !value.is_empty() {
+            return Some(value);
         }
 
         // Otherwise, try to get it as a string literal
@@ -1020,22 +1121,38 @@ impl ClientField {
 
         None
     }
+
+    /// The client value as a node-or-token element: a `STRING_LITERAL` node
+    /// for the `"provider/model"` form, any other node for an expression
+    /// (`client: my_client()`), or a bare identifier token (`client: Fast`).
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind().is_trivia()
+                        || matches!(t.kind(), SyntaxKind::KW_CLIENT | SyntaxKind::COLON)
+                    {
+                        continue;
+                    }
+                    return Some(el);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl PromptField {
-    /// Get the raw string literal node containing the prompt.
-    ///
-    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node
-    /// (the legacy Jinja form). Returns `None` for a new-mode backtick prompt.
+    /// Get a legacy raw-string prompt for migration diagnostics.
     pub fn raw_string(&self) -> Option<RawStringLiteral> {
         self.syntax.children().find_map(RawStringLiteral::cast)
     }
 
-    /// Get the backtick string literal node containing a new-mode prompt.
+    /// Get the backtick string literal node containing the prompt.
     ///
-    /// For `` prompt `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
-    /// BEP-049 (M5f): a backtick prompt compiles to a prompt-tag closure instead
-    /// of a stored Jinja template. Returns `None` for a `#"..."#` prompt.
+    /// For `` prompt: `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
+    /// A backtick prompt compiles to a prompt-tag closure.
     pub fn backtick_string(&self) -> Option<BacktickStringLiteral> {
         self.syntax.children().find_map(BacktickStringLiteral::cast)
     }
@@ -1080,9 +1197,12 @@ impl BacktickStringLiteral {
     /// For `` `Hello, ${user.name}!` `` returns:
     /// `[Text("Hello, "), Interp(<${user.name}>), Text("!")]`.
     ///
-    /// Text segments are escape-decoded; multi-line content is dedented per
-    /// BEP §12 (interpolations do not affect the min-indent calculation per
-    /// §12 rule 8 — "Whitespace inside `${...}` is preserved verbatim").
+    /// Multi-line content is dedented per BEP §12 (see
+    /// [`baml_base::dedent::dedent_backtick`]) with interpolations excluded from
+    /// the min-indent calculation (§12 rule 8 — "Whitespace inside `${...}` is
+    /// preserved verbatim"), §13 block-tag whitespace control is applied, and
+    /// then text segments are escape-decoded. Only *layout* is stripped: an
+    /// authored `\n` at the end of a literal survives.
     pub fn segments(&self) -> Vec<BacktickSegment> {
         build_segment_tree(&mut self.flat_parts().into_iter().peekable())
     }
@@ -1099,9 +1219,10 @@ impl BacktickStringLiteral {
     }
 
     /// Pass (1) of the two-pass build: walk the CST into a flat `FlatPart`
-    /// stream (text + interp + block-tag opens/closes) with whole-literal
-    /// dedent and §13 whitespace control. Pass (2) — lifting matched
-    /// open/close pairs into nested For / If segments — is `build_segment_tree`.
+    /// stream (text + interp + block-tag opens/closes) with whole-literal §12
+    /// dedent, §13 whitespace control, and escape decoding — in that order.
+    /// Pass (2) — lifting matched open/close pairs into nested For / If
+    /// segments — is `build_segment_tree`.
     fn flat_parts(&self) -> Vec<FlatPart> {
         let n = self.delimiter_count();
         if n == 0 {
@@ -1181,20 +1302,22 @@ impl BacktickStringLiteral {
             parts.push(FlatPart::Text(current_text));
         }
 
-        // Decode escapes per text chunk.
-        for p in &mut parts {
-            if let FlatPart::Text(s) = p {
-                *s = unescape_backtick_string_literal(s);
-            }
-        }
+        // Everything from here through §13 whitespace control runs on the *raw*
+        // chunk text, with escapes still encoded. Both are source-layout rules,
+        // and an authored `\n` is content, not layout. Decoding first would turn
+        // it into a real newline that the dedent's edge handling and §13's
+        // line scan could then read as a line break of the layout — which is
+        // exactly how `` `${host}\n` `` used to lose its trailing newline.
 
-        // Dedent across the whole literal if any text chunk contains a
-        // newline. Replace each non-text part with a single-char placeholder
-        // so they don't influence min-indent, then split the dedented
-        // result back into text segments and reattach the parts in order.
+        // §12 dedent across the whole literal. Replace each non-text part with
+        // a single-char placeholder so an interpolation neither contributes to
+        // the min-indent nor has its own lines re-indented (§12 rule 8:
+        // "Whitespace inside `${...}` is preserved verbatim"), then split the
+        // dedented result back into text segments and reattach the parts in
+        // order.
         let needs_dedent = parts
             .iter()
-            .any(|p| matches!(p, FlatPart::Text(s) if s.contains('\n')));
+            .any(|p| matches!(p, FlatPart::Text(s) if s.contains(['\n', '\r'])));
         if needs_dedent {
             // Pick a placeholder that doesn't appear in user content
             // (ultrareview bug_006). Walk the PUA range U+E000..U+F8FF and
@@ -1223,7 +1346,7 @@ impl BacktickStringLiteral {
                     }
                 }
             }
-            let dedented = baml_base::dedent::preprocess_template(&joined);
+            let dedented = baml_base::dedent::dedent_backtick(&joined);
             let pieces: Vec<&str> = dedented.split(placeholder).collect();
 
             // Rebuild `parts` in dedented order: one text piece per gap,
@@ -1256,6 +1379,14 @@ impl BacktickStringLiteral {
         // block tags consume nothing. Applied to the flat sequence before
         // hierarchical lifting so it works uniformly across nested blocks.
         apply_block_tag_whitespace_rule(&mut parts);
+
+        // Escapes decode last, once every layout rule has run. `\n`/`\t`
+        // sequences produced here are user content and are never trimmed.
+        for p in &mut parts {
+            if let FlatPart::Text(s) = p {
+                *s = unescape_backtick_string_literal(s);
+            }
+        }
         parts
     }
 }
@@ -1644,40 +1775,6 @@ pub struct BacktickIfSegment {
 pub struct BacktickIfBranch {
     pub header: SyntaxNode,
     pub body: Vec<BacktickSegment>,
-}
-
-impl JinjaExpression {
-    /// Get the inner text of the Jinja expression, without the {{ }} delimiters.
-    ///
-    /// For `{{ input.name }}`, returns `input.name` (with whitespace trimmed).
-    pub fn inner_text(&self) -> String {
-        let text = self.syntax.text().to_string();
-        // Strip {{ and }}
-        if text.starts_with("{{") && text.ends_with("}}") {
-            text[2..text.len() - 2].trim().to_string()
-        } else {
-            text
-        }
-    }
-
-    /// Get the full text of the Jinja expression, including {{ }} delimiters.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-}
-
-impl JinjaStatement {
-    /// Get the full text of the Jinja statement, including {% %} delimiters.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-}
-
-impl PromptText {
-    /// Get the text content.
-    pub fn text(&self) -> String {
-        self.syntax.text().to_string()
-    }
 }
 
 impl Parameter {
@@ -2371,32 +2468,22 @@ impl TypeAliasDef {
 }
 
 impl BlockAttribute {
-    /// Get the first segment of the attribute name (e.g., "dynamic" from @@dynamic).
+    /// Get the first segment of the attribute name.
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
     }
 
     /// Get the full attribute name including dot-separated modifiers.
-    /// For @@stream.done returns "stream.done", for @@dynamic returns "dynamic".
+    /// For `@@stream.done`, returns `stream.done`.
     pub fn full_name(&self) -> Option<String> {
         let segments: Vec<String> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
             .map(|token| token.text().to_string())
             .collect();
 
@@ -2542,6 +2629,7 @@ impl BlockExpr {
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
                         | SyntaxKind::UPCAST_EXPR
+                        | SyntaxKind::SPEC_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR

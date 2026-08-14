@@ -8,8 +8,8 @@ use super::support::{make_db, render_tir};
 
 #[test]
 fn explicit_local_id_is_structural_call_metadata() {
-    use baml_compiler2_ppir::item_data::{file_functions, function_data, function_scope};
-    use baml_compiler2_tir::inference::{ParamBinding, infer_scope_types};
+    use baml_compiler2_hir_ty::infer::ParamBinding;
+    use baml_compiler2_ppir::item_data::{file_functions, function_data};
 
     let mut db = make_db();
     let file = db.add_file(
@@ -35,18 +35,23 @@ function main(id: boundary.LocalId) -> int {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let main_scope = function_scope(&db, main_loc).expect("main function scope");
-    let inference = infer_scope_types(&db, main_scope);
-    let plans = inference.iter_call_plans().collect::<Vec<_>>();
+    let inference = baml_compiler2_hir_ty::infer::infer_body(
+        &db,
+        baml_compiler2_hir::body::BodyOwnerId::Function(main_loc),
+    );
+    let plans = inference.call_plans.iter().collect::<Vec<_>>();
     assert_eq!(plans.len(), 1, "main contains exactly one call: {rendered}");
 
     let plan = plans[0].1;
     assert!(
-        plan.side_channels.runtime_id.is_some(),
+        plan.runtime_id.is_some(),
         "CallPlan must retain the explicit LocalId expression"
     );
     assert_eq!(
-        plan.provided_arg_count(),
+        plan.bindings
+            .iter()
+            .filter(|binding| matches!(binding, ParamBinding::Provided { .. }))
+            .count(),
         1,
         "the LocalId must not count as an ordinary argument"
     );
@@ -158,26 +163,21 @@ function main(id: boundary.LocalId) -> string {
 }
 
 #[test]
-fn backtick_llm_function_compiles_to_prompt_closure() {
-    // BEP-049 M5f: a backtick prompt in an LLM function compiles to a
-    // `call_llm_function(client, "Fn", args, prompt`…`)` body — the 4th arg is
-    // the synthesized `(Context) -> PromptAst` closure (legacy Jinja prompts
-    // keep the 3-arg form). The `${name}` interp captures the function param.
+fn backtick_llm_function_compiles_to_agent_loop() {
+    // Single-path world: a backtick prompt in an LLM function desugars to the
+    // ai Agent loop — the direct-call body runs
+    // `ai.Agent<Out>.new(client = client).run(Greet@spec(...))` and the
+    // `Greet$spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
+    // interp captures the function param inside the spec's prompt closure.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
         r#"
-client<llm> MyClient {
-  provider "openai"
-  options {
-    model "gpt-4o-mini"
-    api_key "k"
-  }
-}
+client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "k");
 
 function Greet(name: string) -> string {
-  client MyClient
-  prompt `Hello ${name}!`
+  client: MyClient
+  prompt: `Hello ${name}!`
 }
 "#,
     );
@@ -187,8 +187,8 @@ function Greet(name: string) -> string {
         "backtick LLM function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("call_llm_function") && tir.contains("prompt`"),
-        "body should call call_llm_function with a `prompt`…`` closure, got:\n{tir}"
+        tir.contains("Greet$spec") && tir.contains("FunctionSpec"),
+        "the spec companion should build an ai.FunctionSpec, got:\n{tir}"
     );
 }
 
@@ -198,7 +198,7 @@ fn new_mode_failures_have_good_diagnostics() {
     // surface a diagnostic that points at the user's `${…}` source with a
     // user-facing message — never a `0..0` span and never a leaked internal
     // desugaring type. The prompt body is lowered into a synthesized
-    // `(ctx: baml.llm.Context) -> PromptAst` closure, so the risk is that
+    // `(ctx: baml.prompt.Context) -> PromptAst` closure, so the risk is that
     // errors land on compiler-generated nodes. These cases pin that they don't.
     //
     // `expect_substr` is asserted; the span column is checked to be non-`0..0`
@@ -207,68 +207,62 @@ fn new_mode_failures_have_good_diagnostics() {
         // (label, client clause, prompt body, a phrase the diagnostic must contain)
         (
             "undef_var",
-            "client C",
-            "prompt `Hi ${nobody}!`",
+            "client: C",
+            "prompt: `Hi ${nobody}!`",
             "unresolved name: nobody",
         ),
         (
-            "role_bad_arg",
-            "client C",
-            "prompt `${role(5)}hi`",
-            "expected string, got 5",
-        ),
-        // The member error must name the *user-facing* `baml.llm.Context`, not
-        // an internal closure/accumulator type — proves nothing leaks.
-        (
             "ctx_bad_field",
-            "client C",
-            "prompt `${ctx.nope}`",
-            "`baml.llm.Context` has no member `nope`",
+            "client: C",
+            "prompt: `${ctx.nope}`",
+            "has no member `nope`",
         ),
         (
             "arith_type_err",
-            "client C",
-            r#"prompt `${1 + "a"}`"#,
+            "client: C",
+            r#"prompt: `${1 + "a"}`"#,
             "operator `+`",
         ),
+        // `ctx.output_format_with` is removed surface: only `output_format`
+        // exists on the spec ctx, so this is a member error now.
         (
-            "undef_ctx_method",
-            "client C",
-            "prompt `${ctx.output_format_with(5)}`",
-            "expected string | null, got 5",
+            "removed_ctx_method",
+            "client: C",
+            "prompt: `${ctx.output_format_with(5)}`",
+            "has no member `output_format_with`",
         ),
         (
             "bad_client",
-            "client Nope",
-            "prompt `Hi ${name}!`",
+            "client: Nope",
+            "prompt: `Hi ${name}!`",
             "unresolved name: Nope",
         ),
-        // Block-tag interps (`${for}`, `${role}`) must also report at the user's
+        // Block-tag interps (`${for}`) must also report at the user's
         // source. (A non-bool `${if}` condition is intentionally NOT an error —
         // it matches plain `if`/`while`, which BAML does not bool-check.)
         (
             "for_non_iterable",
-            "client C",
-            "prompt `${for (let x in 5)}${x}${endfor}`",
+            "client: C",
+            "prompt: `${for (let x in 5)}${x}${endfor}`",
             "cannot iterate over type `5`",
         ),
         (
             "for_body_type_err",
-            "client C",
-            r#"prompt `${for (let x in [1, 2])}${x + "a"}${endfor}`"#,
+            "client: C",
+            r#"prompt: `${for (let x in [1, 2])}${x + "a"}${endfor}`"#,
             "operator `+`",
         ),
         (
-            "role_wrong_arity",
-            "client C",
-            "prompt `${role()}hi`",
+            "role_marker_requires_name",
+            "client: C",
+            "prompt: `${role()}hi`",
             "expected 1 argument(s), got 0",
         ),
     ];
     for (label, client, body, expect_substr) in cases {
         let mut db = make_db();
         let src = format!(
-            "client<llm> C {{\n  provider \"openai\"\n  options {{ model \"m\" api_key \"k\" }}\n}}\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
+            "client C = openai.OpenAiClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
         );
         let file = db.add_file("test.baml", &src);
         let tir = render_tir(&db, file);
@@ -328,7 +322,7 @@ fn union_normalization_deduplicates() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int | int) -> int throws never {
       { : never
-        return x : int | int
+        return x : int
       }
     }
     ");
@@ -398,7 +392,7 @@ fn unresolved_variable() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
-        return nonexistent_var : unknown
+        return nonexistent_var : !error
       }
       !! 29..44: unresolved name: nonexistent_var
     }
@@ -415,8 +409,8 @@ fn unresolved_variable_in_let() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
-        let x = unknown_thing : unknown
-        return x : unknown
+        let x = unknown_thing : !error
+        return x : !error
       }
       !! 30..43: unresolved name: unknown_thing
     }
@@ -445,6 +439,96 @@ function build(option: string) -> map<string, string> {
     assert!(
         !tir.contains("unresolved name: options"),
         "shorthand should not fall back to the generic unresolved-name diagnostic:\n{tir}"
+    );
+}
+
+#[test]
+fn property_shorthand_in_parameter_default_uses_structural_syntax() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(option: string, config: map<string, string> = { options }) -> map<string, string> {
+  config
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected a shorthand diagnostic in the parameter-default arena, got:\n{tir}"
+    );
+}
+
+#[test]
+fn property_shorthand_uses_the_value_expression_scope() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(input: string?) -> map<string, string> {
+  if let option: string = input {
+    { options }
+  } else {
+    {}
+  }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected the if-let binding in shorthand suggestions, got:\n{tir}"
+    );
+}
+
+#[test]
+fn explicit_quoted_map_key_is_not_property_shorthand() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build() -> map<string, string> {
+  { "options": options }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("unresolved name: options"),
+        "expected the ordinary unresolved-name diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "an explicit quoted key must not use shorthand diagnostics:\n{tir}"
+    );
+}
+
+#[test]
+fn if_let_binding_resolves_in_property_shorthand() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(input: string?) -> map<string, string> {
+  if let options: string = input {
+    { options }
+  } else {
+    {}
+  }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("property shorthand") && !tir.contains("unresolved name"),
+        "the ordinary resolver should see the if-let binding:\n{tir}"
     );
 }
 
@@ -498,6 +582,29 @@ function build() -> Config {
 }
 
 #[test]
+fn explicit_same_name_unknown_class_field_is_not_shorthand() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build(badField: int) -> Config {
+  Config { badField: badField }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected an unknown-field diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "an explicit same-name field must not use shorthand diagnostics:\n{tir}"
+    );
+}
+
+#[test]
 fn inferred_object_rejects_explicit_unknown_class_field() {
     let mut db = make_db();
     let file = db.add_file(
@@ -532,14 +639,14 @@ function Main() -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.Main() -> int throws never {
-      { : unknown
-        MissingFunction(1) : unknown
+      { : !error
+        MissingFunction(1) : !error
       }
       !! 28..43: unresolved name: MissingFunction
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -623,57 +730,37 @@ function f() -> string {
 }
 
 #[test]
-fn llm_client_override_argument_is_callable_on_function_and_build_request() {
+fn llm_client_override_argument_is_callable_on_function() {
+    // The compiler injects a `client: ai.Client? = null` override parameter on
+    // every LLM function; a call site can pass any ai.Client value for it.
+    // (The legacy `$build_request` companion — which shared the override — is
+    // gone with the legacy LLM path.)
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
         r##"
-client<llm> DefaultClient {
-  provider "openai"
-  options {
-    model "gpt-4o-mini"
-    api_key "default-key"
-  }
-}
-
-client<llm> OverrideClient {
-  provider "openai"
-  options {
-    model "gpt-4o-mini"
-    api_key "override-key"
-  }
-}
+client DefaultClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "default-key");
+client OverrideClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "override-key");
 
 function Ask(input: string) -> string {
-  client DefaultClient
-  prompt #"{{ input }}"#
+  client: DefaultClient
+  prompt: `${input}`
 }
 
 function call_overrides() -> string {
   let answer = Ask("hello", client = OverrideClient)
-  let request_url = Ask$build_request("hello", client = OverrideClient).url
-  answer + request_url
+  answer
 }
 "##,
     );
     let tir = render_tir(&db, file);
 
     assert!(
-        tir.contains("function user.Ask(input: string, client: baml.llm.Client = DefaultClient)"),
-        "{tir}"
-    );
-    assert!(
-        tir.contains(
-            "function user.Ask$build_request(input: string, client: baml.llm.Client = DefaultClient) -> baml.http.Request"
-        ),
+        tir.contains("function user.Ask(input: string, client: ai.Client | null = null)"),
         "{tir}"
     );
     assert!(
         tir.contains(r#"Ask("hello", client = OverrideClient) : string"#),
-        "{tir}"
-    );
-    assert!(
-        tir.contains(r#"Ask$build_request("hello", client = OverrideClient).url : string"#),
         "{tir}"
     );
     assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
@@ -897,9 +984,9 @@ fn calling_non_function() {
     function user.f() -> int throws never {
       { : never
         let x = 42 : 42 -> int
-        return x(1) : unknown
+        return x(1) : !error
       }
-      !! 41..45: `int` is not a function — it cannot be called
+      !! 41..42: `int` is not a function — it cannot be called
     }
     ");
 }
@@ -917,9 +1004,9 @@ fn calling_class_as_function() {
     }
     function user.f() -> int throws never {
       { : never
-        return Foo(1) : unknown
+        return Foo(1) : !error
       }
-      !! 55..61: `Foo` is not a function — it cannot be called
+      !! 55..58: unresolved name: Foo
     }
     class user.Foo$stream {
       name: string | null
@@ -935,10 +1022,10 @@ fn missing_return() {
     let file = db.add_file("test.baml", "function f() -> int { let x = 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
-      { : int
+      { : void
         let x = 1 : 1 -> int
       }
-      !! 20..34: missing return: expected `int`
+      !! 20..34: type mismatch: expected int, got void
     }
     ");
 }
@@ -949,10 +1036,10 @@ fn block_ending_in_stmt() {
     let file = db.add_file("test.baml", "function f() -> string { let x = \"hello\"; }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> string throws never {
-      { : string
+      { : void
         let x = "hello" : "hello" -> string
       }
-      !! 23..43: missing return: expected `string`
+      !! 23..43: type mismatch: expected string, got void
     }
     "#);
 }
@@ -966,7 +1053,7 @@ fn invalid_binary_op_string_minus_int() {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> int throws never {
       { : never
-        return "hello" - 5 : unknown
+        return "hello" - 5 : !error
       }
       !! 29..40: operator `-` cannot be applied to `"hello"` and `5`
     }
@@ -980,7 +1067,7 @@ fn invalid_binary_op_bool_add() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
-        return true + false : unknown
+        return true + false : !error
       }
       !! 29..41: operator `+` cannot be applied to `true` and `false`
     }
@@ -994,7 +1081,7 @@ fn invalid_binary_op_float_plus_bigint() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
-        return 1.5 + 100n : unknown
+        return 1.5 + 100n : !error
       }
       !! 32..42: operator `+` cannot be applied to `1.5` and `100n`
     }
@@ -1008,7 +1095,7 @@ fn invalid_binary_op_bigint_plus_float() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
-        return 100n + 1.5 : unknown
+        return 100n + 1.5 : !error
       }
       !! 32..42: operator `+` cannot be applied to `100n` and `1.5`
     }
@@ -1312,9 +1399,9 @@ fn invalid_unary_op_neg_string() {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> int throws never {
       { : never
-        return Neg "hello" : unknown
+        return Neg "hello" : !error
       }
-      !! 29..37: operator `-` cannot be applied to `"hello"`
+      !! 30..37: operator `-` cannot be applied to `"hello"`
     }
     "#);
 }
@@ -1328,7 +1415,7 @@ fn indexing_bool() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int throws never {
       { : never
-        return x[0] : unknown
+        return x[0] : !error
       }
       !! 36..40: type `bool` is not indexable
     }
@@ -1342,7 +1429,7 @@ fn indexing_int() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int) -> int throws never {
       { : never
-        return x[0] : unknown
+        return x[0] : !error
       }
       !! 35..39: type `int` is not indexable
     }
@@ -1361,7 +1448,7 @@ fn float_literal_in_annotation() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: 3.14 | 2.72) -> float throws never {
       { : never
-        return x : 3.14 | 2.72
+        return x : 2.72 | 3.14
       }
     }
     ");
@@ -1385,7 +1472,9 @@ fn if_without_else_optional() {
               5 : 5
             }
       }
-      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 37..49: type mismatch: expected int | null, got void
+    }
+    block user.f {
     }
     ");
 }
@@ -1405,11 +1494,12 @@ fn if_without_else_let_binding() {
             { : 5
               5 : 5
             }
-        return y ?? 0 : void
+        return y ?? 0 : void | 0
       }
-      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
-      !! 58..64: did you mean `y`? `y ?? 0` is unnecessary, because `y` cannot be null
-      !! 58..64: type mismatch: expected int, got void
+      !! 37..49: cannot use return value of a void function
+      !! 58..64: type mismatch: expected int, got void | 0
+    }
+    block user.f {
     }
     ");
 }
@@ -1436,8 +1526,8 @@ function f(x: Color) -> string {
     enum user.Color
     function user.f(x: user.Color) -> string throws never {
       { : never
-        return : "red" | "green" | "blue"
-          match (x : user.Color) : "red" | "green" | "blue"
+        return : "blue" | "green" | "red"
+          match (x : user.Color) : "blue" | "green" | "red"
             Color.Red =>
               "red" : "red"
             Color.Green =>
@@ -1496,9 +1586,8 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
-        return x.name : unknown
+        return x.name : string
       }
-      !! 116..120: type `Cat | Dog` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.Cat$stream {
       name: string | null
@@ -1533,9 +1622,9 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
     }
     function user.f(x: user.Cat | user.Dog) -> int throws never {
       { : never
-        return x.whiskers : unknown
+        return x.whiskers : !error
       }
-      !! 118..126: type `Cat | Dog` has no member `whiskers`: its members implement no common interface that declares `whiskers`
+      !! 116..126: type `Cat | Dog` has no member `whiskers`: its members implement no common interface that declares `whiskers`
     }
     class user.Cat$stream {
       name: string | null
@@ -1571,9 +1660,9 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
-        return x.name : unknown
+        return x.name : !error
       }
-      !! 114..118: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
+      !! 112..118: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.A$stream {
       name: string | null
@@ -1610,9 +1699,9 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
-        return x.name : unknown
+        return x.name : !error
       }
-      !! 113..117: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
+      !! 111..117: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.A$stream {
       name: string | null
@@ -1645,9 +1734,9 @@ function f(x: A | B) -> string { return x.value; }"#,
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
-        return x.value : unknown
+        return x.value : int | string
       }
-      !! 89..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
+      !! 87..94: type mismatch: expected string, got int | string
     }
     class user.A$stream {
       value: int | null
@@ -1677,11 +1766,9 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     }
     function user.f(x: user.A | user.B | null) -> string throws never {
       { : never
-        return x.name : unknown | null
+        return x.name : !error
       }
-      !! 95..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
-      !! 97..101: type `A | B` has no member `name`: its members implement no common interface that declares `name`
-      !! 95..101: type mismatch: expected string, got unknown | null
+      !! 95..101: type `A | B | null` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.A$stream {
       name: string | null
@@ -1975,7 +2062,7 @@ fn explicit_unknown_list_annotation_pins_element_type() {
         r#"
 function main() -> int {
   let xs: unknown[] = []
-  let r = baml.llm.Role { name: "x", metadata: {} }
+  let r = baml.prompt.Role { name: "x", metadata: {} }
   xs.push(r)
   xs.push("hello")
   return 0

@@ -571,11 +571,11 @@ impl OutputFormatContent {
             // them (`type`, or the fixed qualified name).
             RuntimeTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
             RuntimeTy::Resource { .. } => Err(RenderError::UnsupportedType(
-                "baml.llm.Resource".to_string(),
+                "baml.prompt.Resource".to_string(),
             )),
-            RuntimeTy::PromptAst { .. } => Err(RenderError::UnsupportedType(
-                "baml.llm.PromptAst".to_string(),
-            )),
+            RuntimeTy::PromptAst { .. } => {
+                Err(RenderError::UnsupportedType("ai.Prompt".to_string()))
+            }
 
             RuntimeTy::TypeAlias(fqn, _) => {
                 // Recursive type aliases render as just their display name

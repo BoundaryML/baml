@@ -23,29 +23,23 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-   ╭─[functions.baml:6:32]
- 6 │ ╭─▶ function GetStatus() -> Status {
- 7 │ │       client GPT4
- 8 │ │       prompt #"Get status"#
- 9 │ ╰─▶ }
+   ╭─[functions.baml:7:13]
+ 7 │     client: GPT4
+   ·             ────
    ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[functions.baml:12:45]
- 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
- 13 │ │       client GPT4
- 14 │ │       prompt #"Get mixed list"#
- 15 │ ╰─▶ }
+    ╭─[functions.baml:13:13]
+ 13 │     client: GPT4
+    ·             ────
     ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[functions.baml:17:53]
- 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
- 18 │ │       client GPT4
- 19 │ │       prompt #"Get mixed map"#
- 20 │ ╰─▶ }
+    ╭─[functions.baml:18:13]
+ 18 │     client: GPT4
+    ·             ────
     ╰────

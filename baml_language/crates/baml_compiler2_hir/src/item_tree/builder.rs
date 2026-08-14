@@ -21,8 +21,8 @@ use crate::{
     item_tree::{
         Attribute, Class, ClassField, Client, DefaultExprRef, Enum, EnumVariant, Function,
         FunctionParam, ImplBlock, ImplSubject, ImplementsBlock, Interface, InterfaceFieldLink,
-        InterfaceMethodSig, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy,
-        TemplateString, Test, TypeAlias,
+        ItemSpans, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy, TemplateString,
+        Test, TypeAlias,
     },
 };
 
@@ -92,6 +92,7 @@ impl ItemTreeBuilder {
     /// Allocate a class, recording its field name spans in the source map.
     pub fn alloc_class(&mut self, c: &ast::ClassDef) -> LocalItemId<ClassMarker> {
         let id = self.alloc_id(ItemKind::Class, &c.name);
+        self.source_map.class_name_spans.insert(id, c.name_span);
         self.source_map
             .class_field_spans
             .insert(id, c.fields.iter().map(|f| f.name_span).collect());
@@ -211,6 +212,7 @@ impl ItemTreeBuilder {
     /// Allocate an enum, recording its variant name spans in the source map.
     pub fn alloc_enum(&mut self, e: &ast::EnumDef) -> LocalItemId<EnumMarker> {
         let id = self.alloc_id(ItemKind::Enum, &e.name);
+        self.source_map.enum_name_spans.insert(id, e.name_span);
         self.source_map
             .enum_variant_spans
             .insert(id, e.variants.iter().map(|v| v.name_span).collect());
@@ -236,24 +238,69 @@ impl ItemTreeBuilder {
         id
     }
 
+    /// Allocate a REQUIRED (bodyless) interface method as an ordinary
+    /// `Function` item - the rust-analyzer shape: one item kind for every
+    /// method, `body: None` the only difference. The signature carries no
+    /// defaults arena and default metadata; interface signatures declare
+    /// `throws` explicitly (spec rule 1), so nothing here needs a body.
+    pub fn alloc_function_signature(
+        &mut self,
+        m: &ast::MethodSigDef,
+    ) -> LocalItemId<FunctionMarker> {
+        let id = self.alloc_id(ItemKind::Function, &m.name);
+        self.source_map.function_name_spans.insert(id, m.name_span);
+        let params = m
+            .params
+            .iter()
+            .map(|p| FunctionParam {
+                name: p.name.clone(),
+                type_expr: p.type_expr.clone(),
+                default: None,
+                span: p.span,
+            })
+            .collect();
+        self.tree.functions.insert(
+            id,
+            Function {
+                name: m.name.clone(),
+                generic_params: m.generic_params.clone(),
+                params,
+                defaults: m.defaults.clone(),
+                return_type: m.return_type.clone(),
+                throws: m.throws.clone(),
+                body: None,
+                declarative_meta: None,
+                metadata: ast::FunctionMetadata {
+                    origin: ast::FunctionOrigin::UserDefined,
+                    is_language_internal: false,
+                },
+                docstring: m.docstring.clone(),
+                is_tagged_template_tag: false,
+                span: m.span,
+            },
+        );
+        id
+    }
+
     /// Allocate an interface (BEP-044) in the `ItemTree`.
     ///
-    /// `default_method_ids` are the `FunctionMarker` ids for any default
-    /// methods in the interface — those should be allocated separately via
-    /// `alloc_function` before this is called.
+    /// `method_ids` are the `FunctionMarker` ids for EVERY method -
+    /// defaults allocated via `alloc_function`, required signatures via
+    /// `alloc_function_signature` - in declaration-list order.
     pub fn alloc_interface(
         &mut self,
         i: &ast::InterfaceDef,
-        default_method_ids: Vec<LocalItemId<FunctionMarker>>,
+        method_ids: Vec<LocalItemId<FunctionMarker>>,
     ) -> LocalItemId<InterfaceMarker> {
         let id = self.alloc_id(ItemKind::Interface, &i.name);
+        self.source_map.interface_name_spans.insert(id, i.name_span);
         self.source_map
             .interface_field_spans
             .insert(id, i.fields.iter().map(|f| f.name_span).collect());
         self.source_map
             .interface_method_spans
             .insert(id, i.required_methods.iter().map(|m| m.name_span).collect());
-        for method in &default_method_ids {
+        for method in &method_ids {
             self.record_method_owner(*method, MethodOwner::Interface(id));
         }
         let fields = i
@@ -266,29 +313,6 @@ impl ItemTreeBuilder {
                 docstring: f.docstring.clone(),
             })
             .collect();
-        let required_methods = i
-            .required_methods
-            .iter()
-            .map(|m| InterfaceMethodSig {
-                name: m.name.clone(),
-                generic_params: m.generic_params.clone(),
-                params: m
-                    .params
-                    .iter()
-                    .map(|p| FunctionParam {
-                        name: p.name.clone(),
-                        type_expr: p.type_expr.clone(),
-                        default: None,
-                        span: p.span,
-                    })
-                    .collect(),
-                return_type: m.return_type.clone(),
-                throws: m.throws.clone(),
-                attributes: m.attributes.iter().map(Attribute::from).collect(),
-                docstring: m.docstring.clone(),
-                span: m.span,
-            })
-            .collect();
         self.tree.interfaces.insert(
             id,
             Interface {
@@ -297,8 +321,7 @@ impl ItemTreeBuilder {
                 requires: i.requires.clone(),
                 fields,
                 associated_types: i.associated_types.clone(),
-                default_methods: default_method_ids,
-                required_methods,
+                methods: method_ids,
                 attributes: i.attributes.iter().map(Attribute::from).collect(),
                 docstring: i.docstring.clone(),
                 span: i.span,
@@ -309,12 +332,16 @@ impl ItemTreeBuilder {
 
     pub fn alloc_type_alias(&mut self, ta: &ast::TypeAliasDef) -> LocalItemId<TypeAliasMarker> {
         let id = self.alloc_id(ItemKind::TypeAlias, &ta.name);
+        self.source_map
+            .type_alias_name_spans
+            .insert(id, ta.name_span);
         self.tree.type_aliases.insert(
             id,
             TypeAlias {
                 name: ta.name.clone(),
                 type_expr: ta.type_expr.clone(),
                 span: ta.span,
+                docstring: ta.docstring.clone(),
             },
         );
         id
@@ -322,6 +349,13 @@ impl ItemTreeBuilder {
 
     pub fn alloc_client(&mut self, c: &ast::ClientDef) -> LocalItemId<ClientMarker> {
         let id = self.alloc_id(ItemKind::Client, &c.name);
+        self.source_map.client_spans.insert(
+            id,
+            ItemSpans {
+                span: c.span,
+                name_span: c.name_span,
+            },
+        );
         let provider = c
             .config_items
             .iter()
@@ -353,6 +387,13 @@ impl ItemTreeBuilder {
 
     pub fn alloc_test(&mut self, t: &ast::TestDef) -> LocalItemId<TestMarker> {
         let id = self.alloc_id(ItemKind::Test, &t.name);
+        self.source_map.test_spans.insert(
+            id,
+            ItemSpans {
+                span: t.span,
+                name_span: t.name_span,
+            },
+        );
         self.tree.tests.insert(
             id,
             Test {
@@ -369,6 +410,9 @@ impl ItemTreeBuilder {
         ts: &ast::TemplateStringDef,
     ) -> LocalItemId<TemplateStringMarker> {
         let id = self.alloc_id(ItemKind::TemplateString, &ts.name);
+        self.source_map
+            .template_string_name_spans
+            .insert(id, ts.name_span);
         let params = ts
             .params
             .iter()
@@ -397,6 +441,13 @@ impl ItemTreeBuilder {
         rp: &ast::RetryPolicyDef,
     ) -> LocalItemId<RetryPolicyMarker> {
         let id = self.alloc_id(ItemKind::RetryPolicy, &rp.name);
+        self.source_map.retry_policy_spans.insert(
+            id,
+            ItemSpans {
+                span: rp.span,
+                name_span: rp.name_span,
+            },
+        );
         let get_field = |key: &str| -> Option<String> {
             rp.config_items
                 .iter()

@@ -1,21 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
-}
-
-function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
-}
-
 function user.bare_and_pinned() -> int {
     load_const user.web_search
     store_var g
@@ -34,7 +19,7 @@ function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns =
     load_const "search"
     load_const "now"
     load_type string
-    load_type baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError>
+    load_type baml.AnyFunction<Returns = string | Doc[], Throws = ToolError>
     alloc_map 2
     return
 }
@@ -156,7 +141,7 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
     call user.heterogeneous_tool_map
     store_var tools
     load_type string
-    load_type baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError>
+    load_type baml.AnyFunction<Returns = string | Doc[], Throws = ToolError>
     load_var2 3 1
     call baml.Map.get
     store_var f
@@ -178,7 +163,7 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
     jump L8
 
   L3:
-    load_type Doc[] | string
+    load_type string | Doc[]
     load_type ToolError
     load_var2 4 2
     call reflect.call_any

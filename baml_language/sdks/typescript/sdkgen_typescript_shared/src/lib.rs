@@ -32,6 +32,7 @@ use std::{
 
 use baml_codegen_types::SymbolPool;
 pub use baml_codegen_types::{NamingConvention, OutputType};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
@@ -195,16 +196,43 @@ fn init_ts_path(dir: &[String]) -> PathBuf {
     path
 }
 
+/// Base64 characters per emitted source line. Long enough that the line count
+/// stays small, short enough that the file is still diffable.
+const BYTECODE_BASE64_LINE: usize = 4096;
+
 fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
-    let mut out = String::from("export const BYTECODE = new Uint8Array([\n");
-    for chunk in bytecode.chunks(24) {
-        out.push_str("  ");
-        for byte in chunk {
-            let _ = write!(out, "{byte}, ");
-        }
-        out.push('\n');
+    // The bytecode ships as base64 rather than a decimal `new Uint8Array([...])`
+    // literal. That literal cost up to 5 source characters per byte (~3.8 on
+    // average, measured); base64 costs 1.33, which shrinks this module by ~65%.
+    //
+    // Size matters here beyond disk: bundlers and the Cloudflare Workers test
+    // pool move this module around as a unit, and workerd caps a single
+    // WebSocket message at 1 MiB — a large enough program made the pool drop
+    // the connection with a 1009 "Message is too large".
+    //
+    // `atob` is the one decoder available everywhere this runs: browsers,
+    // Workers, and Node (global since 16). BYTECODE stays a Uint8Array, so
+    // `initializeRuntimeFromBytecode` is unaffected.
+    let encoded = BASE64_STANDARD.encode(bytecode);
+    let mut out = String::with_capacity(encoded.len() + encoded.len() / 256 + 512);
+    out.push_str("const BYTECODE_BASE64 = [\n");
+    for chunk in encoded.as_bytes().chunks(BYTECODE_BASE64_LINE) {
+        out.push_str("  \"");
+        // base64 output is ASCII, so the chunk is always valid UTF-8 and needs
+        // no escaping.
+        out.push_str(std::str::from_utf8(chunk).expect("base64 output is ASCII"));
+        out.push_str("\",\n");
     }
-    out.push_str("]);\n");
+    out.push_str("].join(\"\");\n\n");
+    out.push_str("function decodeBytecode(encoded: string): Uint8Array {\n");
+    out.push_str("  const binary = atob(encoded);\n");
+    out.push_str("  const bytes = new Uint8Array(binary.length);\n");
+    out.push_str("  for (let i = 0; i < binary.length; i += 1) {\n");
+    out.push_str("    bytes[i] = binary.charCodeAt(i);\n");
+    out.push_str("  }\n");
+    out.push_str("  return bytes;\n");
+    out.push_str("}\n\n");
+    out.push_str("export const BYTECODE = decodeBytecode(BYTECODE_BASE64);\n");
     let manifest = embedded_baml_toml
         .map(ts_string)
         .unwrap_or_else(|| "undefined".to_string());
@@ -452,8 +480,47 @@ mod tests {
             GeneratorConfig::new("@boundaryml/baml-bridge"),
         );
         let inlined = &out[&PathBuf::from("_inlinedbaml.ts")];
-        assert!(inlined.contains("export const BYTECODE = new Uint8Array(["));
-        assert!(inlined.contains("0, 1, 2, 253, 254, 255,"));
+        assert!(inlined.contains("export const BYTECODE = decodeBytecode(BYTECODE_BASE64);"));
+        // The exact base64 for those six bytes, so a change to the encoding
+        // fails here rather than at runtime in a generated SDK.
+        assert!(
+            inlined.contains(&format!(
+                "  \"{}\",\n",
+                BASE64_STANDARD.encode([0, 1, 2, 253, 254, 255])
+            )),
+            "{inlined}"
+        );
+        // The decoder must be self-contained: no import, and byte-exact.
+        assert!(inlined.contains("const binary = atob(encoded);"));
+    }
+
+    #[test]
+    fn inlinedbaml_base64_round_trips_and_wraps_long_bytecode() {
+        // Enough bytes to span several emitted lines, with every byte value
+        // represented so a mangled alphabet or a bad chunk boundary shows up.
+        let bytecode: Vec<u8> = (0..(BYTECODE_BASE64_LINE * 3))
+            .map(|i| u8::try_from(i % 256).expect("i % 256 fits in u8"))
+            .collect();
+        let out = to_source_code(
+            &SymbolPool::new(),
+            &bytecode,
+            NamingConvention::PreserveCase,
+            GeneratorConfig::new("@boundaryml/baml-bridge"),
+        );
+        let inlined = &out[&PathBuf::from("_inlinedbaml.ts")];
+
+        let joined: String = inlined
+            .lines()
+            .filter(|l| l.starts_with("  \"") && l.ends_with("\","))
+            .map(|l| &l[3..l.len() - 2])
+            .collect();
+        assert_eq!(
+            BASE64_STANDARD
+                .decode(joined)
+                .expect("emitted base64 decodes"),
+            bytecode,
+            "emitted base64 must round-trip to the original bytecode"
+        );
     }
 
     #[test]

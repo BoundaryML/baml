@@ -97,43 +97,6 @@ pub fn function_llm_meta<'db>(
         })
 }
 
-/// The span-carrying Jinja prompt of an LLM (`{ client …; prompt … }`) function,
-/// for prompt-template validation.
-///
-/// This is the body-ish sibling of [`function_llm_meta`]: because its value
-/// carries the prompt's source span, it re-runs whenever the prompt text *or its
-/// position* changes — it does not offer the span-free early cutoff
-/// `function_llm_meta` does. It mirrors [`function_body`](crate::function_body)'s
-/// span-carrying tracked shape and exists so prompt validation can front the item
-/// tree without reading it directly.
-///
-/// `None` for a non-LLM function or an LLM function without a `prompt`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LlmPromptBody {
-    pub text: String,
-    pub span: TextRange,
-}
-
-/// The [`LlmPromptBody`] for one function, or `None` when it has no LLM prompt.
-#[salsa::tracked]
-pub fn function_llm_prompt<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-) -> Option<std::sync::Arc<LlmPromptBody>> {
-    let item_tree = crate::file_item_tree(db, function.file(db));
-    item_tree[function.id(db)]
-        .declarative_meta
-        .as_ref()
-        .and_then(|ast::DeclarativeMeta::Llm(llm)| {
-            llm.prompt.as_ref().map(|prompt| {
-                std::sync::Arc::new(LlmPromptBody {
-                    text: prompt.text.clone(),
-                    span: prompt.span,
-                })
-            })
-        })
-}
-
 /// Span-free semantic data for a function's *elaborated* signature — the
 /// canonical callable view TIR consumes.
 ///
@@ -281,6 +244,29 @@ pub fn method_owner<'db>(
             MethodOwner::FreeImpl(baml_compiler2_hir::loc::ImplLoc::new(db, file, id))
         }
     })
+}
+
+/// Whether `function` has a body - the ONLY distinction between a
+/// default and a required interface method (r-a's shape); resolution
+/// and signatures never consult it, body lowering and the `default.`
+/// delegation gate do.
+#[salsa::tracked]
+pub fn function_has_body<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> bool {
+    let item_tree = crate::file_item_tree(db, function.file(db));
+    item_tree[function.id(db)].body.is_some()
+}
+
+/// A REQUIRED interface method: a bodyless function item owned by an
+/// interface. Signature/resolution consumers treat it like any other
+/// method (the r-a shape); BODY-LOWERING consumers (MIR, emit) skip it -
+/// there is nothing to compile, exactly as before it was an item.
+#[salsa::tracked]
+pub fn is_required_interface_method<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> bool {
+    !function_has_body(db, function)
+        && matches!(method_owner(db, function), Some(MethodOwner::Interface(_)))
 }
 
 /// The interface target a method was declared under, when it sits inside an

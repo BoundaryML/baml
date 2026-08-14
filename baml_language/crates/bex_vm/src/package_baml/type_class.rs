@@ -53,49 +53,6 @@ impl BamlClassTypeValue for PackageBamlImpl {
     fn implemented_by(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         Self::implements(vm, other, self_value)
     }
-
-    /// BEP-044: `iface_t.implementors()` returns the concrete classes that
-    /// nominally satisfy this interface, in deterministic lexicographic order by
-    /// qualified name. Returns `[]` when `self_value` is not an interface (e.g. a
-    /// class type or a primitive type).
-    ///
-    /// Derived from the same per-package `interface_impls` registry as
-    /// [`Self::implements`] (via `resolve::implementor_entries`), so the two
-    /// reflection directions cannot disagree. A generic class is reported by its
-    /// base and a blanket impl by every loaded class its bounds admit, so a
-    /// specific generic instantiation (`Box<int>`) is not separately enumerable.
-    ///
-    /// Returns a raw `Vec<Value>`; the codegen glue wraps it into an
-    /// `Object::Array` allocation. The element `Object::Type` values are
-    /// allocated here because they each require a fresh TLAB slot.
-    fn implementors(vm: &mut BexVm, self_value: &Value) -> Vec<Value> {
-        let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *self_value)
-        else {
-            return Vec::new();
-        };
-        // Materialize the filtered entries first: the resolver holds a shared
-        // borrow of the VM, which must end before the TLAB allocations below
-        // take unique access.
-        let resolver = resolve::ImplResolver::new(vm);
-        let entries: Vec<_> = resolver
-            .implementor_entries(&iface_name)
-            .into_iter()
-            // Keep only implementors recorded at the requested instantiation
-            // (any, when the request or implementor entry carries no type args /
-            // associated bindings) — args and assoc handled symmetrically.
-            .filter(|(_, impl_args, impl_assoc)| {
-                (iface_args.is_empty()
-                    || impl_args.is_empty()
-                    || resolver.ty_args_equivalent(impl_args, &iface_args))
-                    && (impl_assoc.is_empty()
-                        || resolver.associated_bindings_equivalent(impl_assoc, &iface_assoc))
-            })
-            .collect();
-        entries
-            .into_iter()
-            .map(|(ty, _, _)| Value::object(vm.tlab.alloc(Object::Type(Box::new(ty)))))
-            .collect()
-    }
 }
 
 /// The concrete `RealizedTy` wrapped by a `type` value (class, enum, interface,

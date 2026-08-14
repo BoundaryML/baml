@@ -1,6 +1,6 @@
 ---
 source: crates/baml_cli/src/help_command.rs
-expression: "render_for_test(&[\"describe\"])"
+expression: "normalize_snapshot(&render_for_test(&[\"describe\"]))"
 ---
 Describe BAML symbols and language concepts.
 
@@ -29,6 +29,9 @@ Examples:
   Describe a keyword:
     baml describe match
 
+  Search for something by what it does:
+    baml describe --search 'read a file'
+
 Arguments:
   [NAME]
           Symbol, namespace, package, or keyword. Omit to list project symbols
@@ -50,6 +53,30 @@ Output options:
 
       --json
           Output results as JSON
+
+      --search
+          Search names *and* docstrings for NAME, instead of resolving it.
+
+          `describe` answers "what is this called"; `--search` answers "what does this", which is
+          the question you have when you know the job and not the name: `baml describe --search
+          'read a file'`. Matching is on whole words — of names and of docstrings — best first, so
+          it finds a symbol whose documentation uses your words even when its name does not.
+
+      --limit <N>
+          Most results to return from `--search`. At least 1.
+
+          Bounded below because `--limit 0` truncated a full result set to nothing and then reported
+          "no symbol matches", which is a different answer.
+
+          [default: 30]
+
+      --export
+          Export a whole package's surface as one versioned JSON document (NAME must be a package:
+          `baml`, `user`, …). Cross-package references are self-describing ids like
+          `T:baml.time.Duration` — the prefix is the kind (`T:` type, `V:` value, `M:` method, `F:`
+          field, `E:` variant, `A:` associated type; BAML's type and value namespaces are distinct,
+          so bare paths would be ambiguous). Export the referenced package for a foreign id's full
+          record. Filter with jq, e.g. `… --export | jq '.items[] | select(.namespace == ["json"])'`
 
 Global options:
   -q, --quiet...

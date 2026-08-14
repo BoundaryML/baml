@@ -16,8 +16,10 @@ use std::collections::{HashMap, HashSet};
 
 pub use baml_compiler2_mir::OptLevel;
 use baml_compiler2_mir::{
-    BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
+    BinOp, BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
+    Terminator, UnaryOp,
 };
+use baml_type::{Literal, RuntimeTy};
 
 use crate::stack_carry;
 
@@ -1445,6 +1447,15 @@ fn can_be_virtual(
         if rvalue_has_projection_reads(&def.rvalue) {
             return false;
         }
+        // A panicking evaluation is itself observable, and every path from the
+        // def block to the use block crosses at least the def block's
+        // terminator — a call, whose effects would then run before the panic.
+        // The use site can also sit in a different exception region than the
+        // def, which changes the handler and can double-run a `defer` body
+        // (once inline on the way out, once in the unwind landing pad).
+        if rvalue_can_panic(body, &def.rvalue) {
+            return false;
+        }
         //
         // Rather than walking all intermediate blocks (which requires full path
         // enumeration), we use a sound conservative check: if any local read by
@@ -1663,6 +1674,126 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
 /// so they can be re-emitted at every use site even with multiple uses.
 fn is_pure_constant(rvalue: &Rvalue) -> bool {
     matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
+}
+
+/// Can evaluating this rvalue raise a catchable panic (`baml.panics.*`)?
+///
+/// Virtual emission *moves* an rvalue's evaluation from its definition to its
+/// use site. That is only sound when the evaluation cannot fail: a panicking
+/// evaluation is itself an observable event, so moving it past a call, a store,
+/// or an exception-region boundary changes which effects run before the panic
+/// and which handler receives it.
+///
+/// Concretely, a `defer` block's inline replay is emitted between the
+/// definition and the `return` that uses it. Sinking a panicking arithmetic op
+/// past that replay runs the defer body once on the way out and a second time
+/// in the unwind landing pad.
+///
+/// Only arithmetic can fail, and only `/` fails for every operand type. The
+/// rest are `int`-only failures — `float` saturates to infinity or NaN,
+/// `bigint` grows, and `string + string` is concatenation — so they ask
+/// [`operand_could_be_int`]. Bitwise and/or/xor and the comparisons stay in
+/// range whatever the operands are.
+///
+/// Matched exhaustively on purpose. This is a soundness predicate, and a
+/// wrong `false` miscompiles silently — so a new `Rvalue` variant must fail to
+/// compile here rather than default into the infallible group.
+fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
+    match rvalue {
+        Rvalue::BinaryOp { op, left, right } => match op {
+            // `/` rejects a zero divisor on both numeric paths — BAML throws
+            // rather than yielding IEEE infinity (`OpCode::DivFloat`), so this
+            // holds whatever the operands are.
+            BinOp::Div => true,
+            // `%` is guarded on the `int` path only; the float path yields NaN.
+            BinOp::Mod | BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Shl | BinOp::Shr => {
+                operand_could_be_int(body, left) && operand_could_be_int(body, right)
+            }
+            BinOp::Eq
+            | BinOp::Ne
+            | BinOp::Lt
+            | BinOp::Le
+            | BinOp::Gt
+            | BinOp::Ge
+            | BinOp::BitAnd
+            | BinOp::BitOr
+            | BinOp::BitXor => false,
+        },
+        Rvalue::UnaryOp { op, operand } => match op {
+            UnaryOp::Neg => operand_could_be_int(body, operand),
+            UnaryOp::Not => false,
+        },
+        // Allocation can report `AllocFailure`, but that is a host resource
+        // condition rather than a property of the program point, and treating
+        // every allocation as a barrier would disable virtualization outright.
+        //
+        // `Use` is the one entry here with a real failing case: reading through
+        // an index projection can raise `IndexOutOfBounds`. Every rvalue with a
+        // projection read is rejected a few lines above this predicate's only
+        // caller, on the same cross-block path, so it never reaches here.
+        Rvalue::Use(_)
+        | Rvalue::Array(..)
+        | Rvalue::Uint8Array(_)
+        | Rvalue::Map(..)
+        | Rvalue::Aggregate { .. }
+        | Rvalue::Discriminant(_)
+        | Rvalue::TypeTag(_)
+        | Rvalue::Len(_)
+        | Rvalue::IsType { .. }
+        | Rvalue::IsTypeTag { .. }
+        | Rvalue::MakeClosure { .. }
+        | Rvalue::MakeBoundMethod { .. }
+        | Rvalue::MakeVirtualBoundMethod { .. }
+        | Rvalue::VirtualFieldAccess { .. }
+        | Rvalue::MakeGenericFunction { .. }
+        | Rvalue::MakeGenericFunctionFromValue { .. }
+        | Rvalue::LoadType(_) => false,
+    }
+}
+
+/// Could this operand hold an `int` at runtime?
+///
+/// Deliberately answers `true` for anything whose runtime representation is not
+/// pinned down — a union, a type variable, a value read through a projection, a
+/// type family variant added later. Only a type that provably never holds an
+/// `int` answers `false`.
+fn operand_could_be_int(body: &MirFunctionBody, operand: &Operand) -> bool {
+    match operand {
+        Operand::Constant(c) => matches!(c, Constant::Int(_)),
+        Operand::Copy(place) | Operand::Move(place) => match place {
+            Place::Local(local) => ty_could_be_int(&body.local(*local).ty),
+            // A field / index / capture read carries no type here.
+            Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => true,
+        },
+    }
+}
+
+/// See [`operand_could_be_int`]. The `_ => true` fallback keeps an unlisted or
+/// newly added variant on the conservative side.
+fn ty_could_be_int(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Int { .. } => true,
+        RuntimeTy::Literal(lit, ..) => matches!(lit, Literal::Int(_)),
+        RuntimeTy::Bigint { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::String { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Null { .. }
+        | RuntimeTy::Void { .. }
+        | RuntimeTy::Media(..)
+        | RuntimeTy::Class(..)
+        | RuntimeTy::Enum(..)
+        | RuntimeTy::EnumVariant(..)
+        | RuntimeTy::List(..)
+        | RuntimeTy::Map { .. }
+        | RuntimeTy::Function { .. }
+        | RuntimeTy::Future(..)
+        | RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. }
+        | RuntimeTy::Resource { .. }
+        | RuntimeTy::PromptAst { .. } => false,
+        _ => true,
+    }
 }
 
 /// Check if a local is a "call result immediate": defined by Call/Await/SysOp,

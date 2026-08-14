@@ -363,7 +363,7 @@ function par(shards: int, rounds: int) -> int {
 
 // -- helpers below ---------------------------------
 
-function spawn_shard(id: int, rounds: int) -> baml.future.Future<int, null> {
+function spawn_shard(id: int, rounds: int) -> baml.future.Future<int, never> {
   spawn { scan_shard(id, rounds) }
 }
 

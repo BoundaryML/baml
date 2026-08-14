@@ -29,12 +29,24 @@ export interface ExportPage {
 
 /**
  * Relative path of a page file within the export bundle.
- * Nested pages live in a subfolder named after their parent slug.
+ * Nested pages live in subfolders mirroring their ancestor chain of
+ * parentSlug links, e.g. pages/design/api/v2.md. Unknown parents still
+ * contribute a folder; cycles terminate at the first repeated slug.
  */
-export function pageExportPath(page: { slug: string; parentSlug?: string }): string {
-  return page.parentSlug
-    ? `pages/${page.parentSlug}/${page.slug}.md`
-    : `pages/${page.slug}.md`;
+export function pageExportPath(
+  page: { slug: string; parentSlug?: string },
+  allPages: Array<{ slug: string; parentSlug?: string }> = []
+): string {
+  const bySlug = new Map(allPages.map((p) => [p.slug, p]));
+  const segments = [page.slug];
+  const seen = new Set(segments);
+  let parent = page.parentSlug;
+  while (parent && !seen.has(parent)) {
+    seen.add(parent);
+    segments.unshift(parent);
+    parent = bySlug.get(parent)?.parentSlug;
+  }
+  return `pages/${segments.join("/")}.md`;
 }
 
 export interface ExportComment {
@@ -336,12 +348,39 @@ export function generateReadme(data: ExportData): string {
     md += `${contentWithComments}\n\n`;
   }
 
-  // Additional pages (linked)
+  // Additional pages (children listed under their parent, indented one step
+  // per ancestor)
   if (pages.length > 0) {
     md += `---\n\n## Additional Pages\n\n`;
+    const bySlug = new Map(pages.map((p) => [p.slug, p]));
+    const childrenByParent = new Map<string, ExportPage[]>();
+    const roots: ExportPage[] = [];
     for (const page of pages) {
-      md += `- [${page.title}](${pageExportPath(page)})\n`;
+      // Pages with a missing or self-referential parent list at top level
+      if (
+        page.parentSlug &&
+        page.parentSlug !== page.slug &&
+        bySlug.has(page.parentSlug)
+      ) {
+        const list = childrenByParent.get(page.parentSlug) ?? [];
+        list.push(page);
+        childrenByParent.set(page.parentSlug, list);
+      } else {
+        roots.push(page);
+      }
     }
+    const listed = new Set<string>();
+    const listSubtree = (page: ExportPage, depth: number) => {
+      if (listed.has(page.slug)) return;
+      listed.add(page.slug);
+      md += `${"  ".repeat(depth)}- [${page.title}](${pageExportPath(page, pages)})\n`;
+      for (const child of childrenByParent.get(page.slug) ?? []) {
+        listSubtree(child, depth + 1);
+      }
+    };
+    for (const page of roots) listSubtree(page, 0);
+    // Pages trapped in parent cycles have no root; surface them at top level
+    for (const page of pages) listSubtree(page, 0);
     md += `\n`;
   }
 
@@ -815,7 +854,7 @@ export function generateMetadataJson(data: ExportData): string {
     files: [
       "README.md",
       "AGENT_CONTEXT.md",
-      ...pages.map((p) => pageExportPath(p)),
+      ...pages.map((p) => pageExportPath(p, pages)),
       "discussion/issues.md",
       "discussion/decisions.md",
       "history/versions.md",
@@ -885,7 +924,7 @@ ${contentSummary}${contentSummary.length >= 500 ? "..." : ""}
 ## Pages
 
 - Main Content (README.md) - includes current version comments only
-${pages.length > 0 ? pages.map((p) => `- ${p.title} (${pageExportPath(p)})`).join("\n") : ""}
+${pages.length > 0 ? pages.map((p) => `- ${p.title} (${pageExportPath(p, pages)})`).join("\n") : ""}
 
 ## Comment Overview
 
@@ -936,7 +975,7 @@ ${bepNum}/
 ├── AGENT_CONTEXT.md        # This file
 ├── metadata.json           # Machine-readable metadata${pages.length > 0 ? `
 ├── pages/                  # Additional pages + v${currentVersion} comments
-${pages.map((p) => `│   └── ${p.parentSlug ? `${p.parentSlug}/` : ""}${p.slug}.md`).join("\n")}` : ""}
+${pages.map((p) => `│   └── ${pageExportPath(p, pages).slice("pages/".length)}`).join("\n")}` : ""}
 ├── discussion/
 │   ├── issues.md           # Open and resolved issues
 │   └── decisions.md        # Recorded decisions
@@ -1011,7 +1050,7 @@ export function generateAllExportFiles(data: ExportData): ExportFile[] {
       ...(page.parentSlug ? { parent: page.parentSlug } : {}),
     });
     files.push({
-      path: pageExportPath(page),
+      path: pageExportPath(page, pages),
       content: `${pageFrontmatter}# ${page.title}\n\n${contentWithComments}\n`,
     });
   }

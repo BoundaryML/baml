@@ -160,8 +160,8 @@ fn llm_companions_remain_visible_to_describe() {
         "functions.baml",
         r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt #"Summarize {{ input }}"#
+    client: "openai/gpt-4o-mini"
+    prompt: `Summarize ${input}`
 }
 "##,
     );
@@ -170,14 +170,20 @@ function Summarize(input: string) -> string {
         baml_compiler2_hir::package::PackageId::new(&project.db, baml_base::Name::new("user"));
     let entries = crate::listing::list_package_items(&project.db, pkg_id);
 
+    // The AST-level companions. `$stream` is synthesized in PPIR rather than
+    // lowered as an item, so it is deliberately absent from this listing.
     for name in [
+        "Summarize$spec",
         "Summarize$render_prompt",
-        "Summarize$build_request",
-        "Summarize$build_request_stream",
+        "Summarize$parse",
     ] {
         assert!(
             entries.iter().any(|entry| entry.item_name.as_str() == name),
-            "expected `{name}` in describe listing"
+            "expected `{name}` in describe listing; got {:?}",
+            entries
+                .iter()
+                .map(|entry| entry.item_name.as_str())
+                .collect::<Vec<_>>()
         );
         assert!(matches!(
             crate::listing::resolve_target(&project.db, pkg_id, name),

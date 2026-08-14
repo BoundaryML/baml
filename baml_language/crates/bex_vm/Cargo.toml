@@ -41,7 +41,6 @@ time = { workspace = true }
 tokio = { workspace = true, features = [ "macros" ] }
 tokio-util = { workspace = true }
 toml = { workspace = true }
-web-time = { workspace = true }
 
 # Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

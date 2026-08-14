@@ -1,29 +1,19 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 14424
 ---
 === PPIR ===
-function user.ExtractAny(client: baml.llm.Client = TestClient) -> baml.json.json  [llm] {
-  baml.llm.call_llm_function(client, "ExtractAny", map {  })
+function user.ExtractAny(client: ai.Client? = null) -> baml.json.json  [llm] {
+  ai.Agent.new(client = client).run(ExtractAny$spec()).value
 }
-function user.ExtractAny$build_request(client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "ExtractAny", map {  })
+function user.ExtractAny$parse(json: string) -> baml.json.json  [expr] {
+  baml.sap.parse(json)
 }
-function user.ExtractAny$build_request_stream(client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "ExtractAny", map {  })
+function user.ExtractAny$render_prompt() -> ai.Prompt  [expr] {
+  ExtractAny$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.ExtractAny$parse(json: string, client: baml.llm.Client = TestClient) -> baml.json.json  [expr] {
-  baml.llm.parse(json)
+function user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json>  [expr] {
+  ai.FunctionSpec { spec_name: "ExtractAny", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Return whatever J...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
 }
-function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json>  [expr] {
-  client.__make_stream(sse)
-}
-function user.ExtractAny$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "ExtractAny", map {  })
-}
-function user.ExtractAny$stream(client: baml.llm.Client = TestClient) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json>  [expr] {
-  baml.llm.stream_llm_function(client, "ExtractAny", map {  })
-}
-function user.TestClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.ExtractAny$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<baml.json.json$stream | null, baml.json.json>  [expr] {
+  ai.stream.from_spec(ExtractAny$spec(), client = client)
 }

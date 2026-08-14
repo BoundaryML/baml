@@ -11,7 +11,7 @@
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
 //! - `ops_math` — `BamlClassOps*` (`Add`/`Subtract`/`Multiply`/`Divide`/
 //!   `Remainder`/`Negate` for the numeric primitives)
-//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, the numeric-array
+//! - `root` — `BamlPackageBaml` (`deep_copy`, the numeric-array
 //!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
 //!   the saturating `_trunc_to_int`, and the `Sortable.sort` shims
 //!   `_compare_shim` / `_is_primitive_array` / `_rust_sort` / `_float_total_cmp`)
@@ -30,11 +30,12 @@ mod future;
 pub(crate) mod id;
 mod int;
 pub mod json;
-mod llm;
 mod map;
 mod media;
 mod ops;
+mod ops_bitwise;
 mod ops_math;
+mod prompt;
 mod random;
 mod resolve;
 pub(crate) use resolve::ImplResolver;
@@ -392,6 +393,10 @@ type NativeResolver = fn(&str) -> Option<NativeFunction>;
 
 const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     ("baml.", PackageBamlImpl::get_native_fn),
+    (
+        "ai.",
+        <crate::package_ai::PackageAiImpl as crate::package_ai::BamlPackageAi>::get_native_fn,
+    ),
     (
         "reflect.",
         <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,

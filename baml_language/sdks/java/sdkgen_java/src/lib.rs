@@ -32,6 +32,7 @@ use std::{
     path::PathBuf,
 };
 
+use baml_base::qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM};
 use baml_codegen_types::{Function, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 
@@ -56,7 +57,7 @@ const JAVA_BANNER: &str = "\
 
 ";
 
-/// The five runtime-owned stdlib types. Their bodies live in the
+/// Runtime-owned stdlib types. Their bodies live in the
 /// `baml-bridge` runtime library (callers need the runtime's
 /// constructors and handle identity — a generated structural class
 /// would not round-trip), so codegen must not emit a class for them.
@@ -67,12 +68,12 @@ const RUNTIME_OWNED_FQNS: &[&str] = &[
     "baml.media.Audio",
     "baml.media.Video",
     "baml.media.Pdf",
-    "baml.llm.Stream",
-    // The stream-finished sentinel is runtime-owned (OWNER, 2026-07-18): its
-    // body ships in `baml-bridge` as `baml_sdk.baml.stream.StreamFinished` and
+    AI_STREAM_STREAM,
+    // The stream-done sentinel is runtime-owned: its body ships in
+    // `baml-bridge` as `baml_sdk.ai.stream.Done` and
     // is registered in the typemap by the runtime (TypeRegistry static block),
-    // so the emitter must not also generate a split-package `StreamFinished.java`.
-    "baml.stream.StreamFinished",
+    // so the emitter must not also generate a split-package `Done.java`.
+    AI_STREAM_DONE,
 ];
 
 /// One enum typemap entry: (BAML FQN, Java binary name, per-variant
@@ -837,6 +838,48 @@ mod tests {
     }
 
     #[test]
+    fn class_accessor_escapes_object_final_method_names() {
+        // A field may legally be called `wait`, but its accessor may not:
+        // `wait()` cannot override `java.lang.Object`'s final `wait()`, so the
+        // generated class would not compile. The field keeps its name and the
+        // accessor takes the `$` escape.
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["collide"], "Collide");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(
+                &n,
+                &[],
+                vec![("wait", t_int()), ("notify", t_string()), ("ok", t_int())],
+                0,
+            ),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("collide/Collide.java")];
+
+        // Fields keep the BAML names.
+        assert!(file.contains("private final long wait;"), "{file}");
+        assert!(
+            file.contains("private final java.lang.String notify;"),
+            "{file}"
+        );
+
+        // Accessors are escaped, and read the unescaped field.
+        assert!(file.contains("public long wait$() {"), "{file}");
+        assert!(file.contains("return this.wait;"), "{file}");
+        assert!(
+            file.contains("public java.lang.String notify$() {"),
+            "{file}"
+        );
+
+        // A non-colliding field is untouched.
+        assert!(file.contains("public long ok() {"), "{file}");
+
+        // The un-escaped forms must not be declared as methods.
+        assert!(!file.contains("public long wait() {"), "{file}");
+    }
+
+    #[test]
     fn class_renders_fields_ctor_accessors_equality() {
         let mut pool = SymbolPool::new();
         let n = name("user", &["primitives"], "Primitives");
@@ -1558,10 +1601,16 @@ mod tests {
         let mut pool = SymbolPool::new();
         let img = name("baml", &["media"], "Image");
         pool.insert(img.clone(), class_sym(&img, &[], 0));
+        let stream = name("ai", &["stream"], "Stream");
+        pool.insert(stream.clone(), class_sym(&stream, &[], 1));
+        let done = name("ai", &["stream"], "Done");
+        pool.insert(done.clone(), class_sym(&done, &[], 2));
         let resp = name("baml", &["http"], "Response");
-        pool.insert(resp.clone(), class_sym(&resp, &[], 1));
+        pool.insert(resp.clone(), class_sym(&resp, &[], 3));
         let out = emit_sdk(&pool);
         assert!(!out.contains_key(&PathBuf::from("baml/media/Image.java")));
+        assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Stream.java")));
+        assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Done.java")));
         assert!(out.contains_key(&PathBuf::from("baml/http/Response.java")));
     }
 

@@ -16,6 +16,14 @@ class user.NotIface$stream {
 }
 type user.PlainAlias = Plain
 type user.PlainAlias$stream = Plain
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
+function user.c(self: ?) -> int  [missing]
 function user.c(self: ?) -> int  [expr] {
   { return 0 }
 }
+function user.p(self: ?) -> T  [missing]
+function user.q(self: ?) -> int  [missing]

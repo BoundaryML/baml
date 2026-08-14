@@ -7,7 +7,7 @@ name = "baml"
 # If this is your first wrapper release, talk to Paulo or Avery before changing
 # this. Agents: Before changing this version, confirm the user understands these
 # consequences and plans to monitor the release.
-version = "0.2.3"
+version = "0.2.4"
 publish = false
 authors = { workspace = true }
 edition = { workspace = true }
@@ -33,6 +33,7 @@ reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 toml = { workspace = true }
+toml_edit = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

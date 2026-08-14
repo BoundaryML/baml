@@ -139,7 +139,7 @@ function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
     load_var ?2
     make_cell
     store_var ?2
-    call baml.sys.now_ms
+    sys_op baml.time.Instant.now
     store_var started
     make_closure .<lambda(cancel_unblocks_await_on_non_descendant_fn, 0)>, 0
     load_const null
@@ -181,8 +181,9 @@ function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
     store_var got
 
   L2:
-    call baml.sys.now_ms
-    store_var _14
+    load_var started
+    call baml.time.Instant.elapsed
+    store_var elapsed
     load_deref ?2
     call baml.future.Future.cancel
     pop 1
@@ -191,10 +192,10 @@ function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
     cmp_int_op ==
     jump_if_false L3
     pop 1
-    load_var2 8 1
-    sub_int
-    load_const 5000
-    cmp_int_op <
+    load_var elapsed
+    call baml.time.Duration.to_milliseconds
+    load_const 5000n
+    cmp_bigint_op <
 
   L3:
     return

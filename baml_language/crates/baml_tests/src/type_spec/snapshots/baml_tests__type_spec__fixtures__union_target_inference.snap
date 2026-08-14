@@ -1,0 +1,54 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+593..601 'fmu_pick': throws never
+653..678 '{\n   ...ack\n}': R
+659..664 'value': R | null
+659..676 'value ...llback': R
+668..676 'fallback': R
+689..699 'fmu_direct': throws never
+722..773 '{\n   ...  r\n}': int
+728..733 'let r': int
+736..744 'fmu_pick': (value: int | null, fallback: int) -> int throws never
+736..750 'fmu_pick(7, 0)': int
+745..746 '7': 7
+748..749 '0': 0
+770..771 'r': int
+784..797 'fmu_null_side': throws never
+823..882 '{\n   ...  s\n}': string
+829..834 'let s': string
+837..845 'fmu_pick': (value: string | null, fallback: string) -> string throws never
+837..856 'fmu_pi..., "x")': string
+846..850 'null': null
+852..855 '"x"': "x"
+879..880 's': string
+893..902 'fmu_chain': throws never
+927..1118 '{\n   ...ept\n}': int[]
+933..941 'let kept': int[]
+944..971 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
+944..985 'baml.i...3, 4])': baml.iter.ArrayIterator<int>
+944..996 'baml.i...er_map': (self: baml.iter.ArrayIterator<int>, fn: (int) -> int | null throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never
+944..1096 'baml.i...    })': baml.iter.Iterator<Error = never, Item = int>
+944..1104 'baml.i...ollect': (self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never
+944..1106 'baml.i...lect()': int[]
+972..984 '[1, 2, 3, 4]': int[]
+973..974 '1': 1
+976..977 '2': 2
+979..980 '3': 3
+982..983 '4': 4
+997..1095 '(x: in...n    }': (x: int) -> int | null throws never
+1020..1095 '{\n   ...n    }': int | null
+1049..1089 'if (x ...null }': int | null
+1053..1054 'x': int
+1053..1058 'x % 2': int
+1053..1063 'x % 2 == 0': bool
+1057..1058 '2': 2
+1062..1063 '0': 0
+1065..1075 '{ x * 10 }': int
+1067..1068 'x': int
+1067..1073 'x * 10': int
+1071..1073 '10': 10
+1081..1089 '{ null }': null
+1083..1087 'null': null
+1112..1116 'kept': int[]

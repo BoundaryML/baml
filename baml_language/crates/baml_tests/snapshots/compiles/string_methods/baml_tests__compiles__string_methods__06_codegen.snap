@@ -1,17 +1,46 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23260
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+function user.SplitCount(s: string) -> string {
+    load_var s
+    load_const ","
+    call baml.String.split
+    container_len
+    store_var _2
+    load_type int
+    load_var _2
+    call baml.String.from
+    return
 }
 
-function boundary.id() -> boundary.LocalId {
+function user.StartsWith(s: string) -> string {
+    load_var s
+    load_const "hello"
+    call baml.String.starts_with
+    store_var _2
+    load_type bool
+    load_var _2
+    call baml.String.from
+    return
 }
 
-function boundary.id.current() -> string {
+function user.Trimmed(s: string) -> string {
+    load_var s
+    call baml.String.trim
+    store_var _2
+    load_type string
+    load_var _2
+    call baml.String.from
+    return
 }
 
-function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
-}
-
-function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+function user.Upper(s: string) -> string {
+    load_var s
+    call baml.String.to_upper_case
+    store_var _2
+    load_type string
+    load_var _2
+    call baml.String.from
+    return
 }

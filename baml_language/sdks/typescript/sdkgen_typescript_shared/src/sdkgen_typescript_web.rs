@@ -55,15 +55,15 @@ mod tests {
 
     fn runtime_owned_pool() -> SymbolPool {
         let mut pool = SymbolPool::new();
-        for (namespace, class_name) in [
-            ("media", "Image"),
-            ("media", "Audio"),
-            ("media", "Video"),
-            ("media", "Pdf"),
-            ("llm", "Stream"),
+        for (root, namespace, class_name) in [
+            ("baml", "media", "Image"),
+            ("baml", "media", "Audio"),
+            ("baml", "media", "Video"),
+            ("baml", "media", "Pdf"),
+            ("ai", "stream", "Stream"),
         ] {
             let name = Name::new(
-                BaseName::new("baml"),
+                BaseName::new(root),
                 vec![BaseName::new(namespace)],
                 BaseName::new(class_name),
             );
@@ -108,7 +108,7 @@ mod tests {
     fn generated_builtin_leaves_use_web_constructor_identity() {
         let output = to_source_code(&runtime_owned_pool(), &[], NamingConvention::PreserveCase);
         let media = &output[&PathBuf::from("baml/media/index.ts")];
-        let llm = &output[&PathBuf::from("baml/llm/index.ts")];
+        let stream = &output[&PathBuf::from("ai/stream/index.ts")];
         let typemap = &output[&PathBuf::from("_typemap.ts")];
         for (runtime_name, local_name) in [
             ("BamlImage", "Image"),
@@ -120,7 +120,7 @@ mod tests {
                 "import {{ {runtime_name} as {local_name} }} from \"{RUNTIME_PACKAGE}\";"
             )));
         }
-        assert!(llm.contains(&format!(
+        assert!(stream.contains(&format!(
             "import {{ BamlStream as Stream }} from \"{RUNTIME_PACKAGE}\";"
         )));
         for fqn in [
@@ -128,7 +128,7 @@ mod tests {
             "baml.media.Audio",
             "baml.media.Video",
             "baml.media.Pdf",
-            "baml.llm.Stream",
+            baml_base::qualified_name::AI_STREAM_STREAM,
         ] {
             assert!(typemap.contains(&format!("\"{fqn}\": () => (__leaf_")));
         }

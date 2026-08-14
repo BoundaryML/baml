@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function exceptions.$init_test_ns_exceptions_exceptions(registry: testing.TestCollector) -> null {
     load_var registry
@@ -1151,14 +1152,14 @@ function exceptions.catch_integer_overflow_via_panic_union_fn() -> int {
     jump L2
     load_var e
     type_tag
-    dense_tag [AllocFailure, AssertionFailed, Cancelled, DivisionByZero, Exit, HostContractViolation, HostUnavailable, IndexOutOfBounds, IntegerOverflow, InvalidFieldAccess, MapKeyNotFound, NegativeBitShift, SdkPanic, StackOverflow, Unreachable, UserPanic]
+    dense_tag [DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
     jump_table [L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1], default L0
 
   L0:
     load_var e
     rethrow
 
-  L1: UserPanic
+  L1: IntegerOverflow
     load_const 2
     unary_op -
 
@@ -1893,13 +1894,13 @@ function exceptions.mixed_union_alias_plus_wildcard_error_fires_fn() -> int {
     call user.exceptions.s9_risky_14
     jump L3
     load_var e
-    is_type baml.panics.DivisionByZero
+    is_type exceptions.AppError
     pop_jump_if_false L0
     jump L2
 
   L0:
     load_var e
-    is_type exceptions.AppError
+    is_type baml.panics.DivisionByZero
     pop_jump_if_false L1
     jump L2
 
@@ -1921,13 +1922,13 @@ function exceptions.mixed_union_alias_plus_wildcard_handles_both_domains_fn() ->
     call user.exceptions.s9_risky_13
     jump L3
     load_var e
-    is_type baml.panics.DivisionByZero
+    is_type exceptions.AppError
     pop_jump_if_false L0
     jump L2
 
   L0:
     load_var e
-    is_type exceptions.AppError
+    is_type baml.panics.DivisionByZero
     pop_jump_if_false L1
     jump L2
 
@@ -2362,14 +2363,14 @@ function exceptions.panic_alias_catches_any_panic_fn() -> int {
     jump L2
     load_var e
     type_tag
-    dense_tag [AllocFailure, AssertionFailed, Cancelled, DivisionByZero, Exit, HostContractViolation, HostUnavailable, IndexOutOfBounds, IntegerOverflow, InvalidFieldAccess, MapKeyNotFound, NegativeBitShift, SdkPanic, StackOverflow, Unreachable, UserPanic]
+    dense_tag [DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
     jump_table [L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1], default L0
 
   L0:
     load_var e
     rethrow
 
-  L1: UserPanic
+  L1: IntegerOverflow
     load_const 1
     unary_op -
 
@@ -2383,7 +2384,7 @@ function exceptions.panic_alias_plus_wildcard_dispatch_fn() -> int {
     jump L2
     load_var e
     type_tag
-    dense_tag [AllocFailure, AssertionFailed, Cancelled, DivisionByZero, Exit, HostContractViolation, HostUnavailable, IndexOutOfBounds, IntegerOverflow, InvalidFieldAccess, MapKeyNotFound, NegativeBitShift, SdkPanic, StackOverflow, Unreachable, UserPanic]
+    dense_tag [DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
     jump_table [L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1], default L0
 
   L0:
@@ -2392,7 +2393,7 @@ function exceptions.panic_alias_plus_wildcard_dispatch_fn() -> int {
     load_const 2
     jump L2
 
-  L1: UserPanic
+  L1: IntegerOverflow
     load_const 1
 
   L2:
@@ -3049,6 +3050,7 @@ function exceptions.s17_direct_cb(cb: (int) -> string throws never) -> string {
 }
 
 function exceptions.s17_forward_cb(cb: (int) -> string throws never) -> string {
+    load_type unknown
     load_var cb
     call user.exceptions.s17_direct_cb
     return

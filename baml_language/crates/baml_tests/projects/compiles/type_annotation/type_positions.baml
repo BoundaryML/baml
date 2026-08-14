@@ -2,7 +2,7 @@
 
 // In a let binding
 function test_let_binding(function_name: string) -> string {
-    let t: type = baml.llm.get_return_type(function_name);
+    let t: type = baml.prompt.get_return_type(function_name);
     return "ok";
 }
 
@@ -13,7 +13,7 @@ function test_param(t: type) -> string {
 
 // As a function return type
 function test_return_type(function_name: string) -> type {
-    return baml.llm.get_return_type(function_name);
+    return baml.prompt.get_return_type(function_name);
 }
 
 // Optional type

@@ -179,8 +179,7 @@ function classes.constructor_with_preceding_variables_fn() -> int {
     load_const 100
     load_const 200
     init_instance user.classes.MyClass .x, .y
-    store_var obj
-    load_var obj
+    store_var_load_var obj
     load_field .x
     load_var obj
     load_field .y
@@ -296,8 +295,7 @@ function classes.nested_constructor_with_preceding_variables_fn() -> int {
     init_instance user.classes.CInnerVal .val
     load_const 50
     init_instance user.classes.COuterXI .inner, .x
-    store_var obj
-    load_var obj
+    store_var_load_var obj
     load_field .inner
     load_field .val
     load_var obj

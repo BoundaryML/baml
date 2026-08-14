@@ -23,7 +23,6 @@ pub enum SyntaxKind {
     KW_TESTSET,
     KW_RETRY_POLICY,
     KW_TEMPLATE_STRING,
-    KW_TYPE_BUILDER,
 
     // Control flow keywords
     KW_IF,
@@ -49,7 +48,6 @@ pub enum SyntaxKind {
     // Other keywords
     KW_INSTANCEOF,
     KW_IS,
-    KW_DYNAMIC,
     KW_WITH,
     // Contextual keywords re-lexed from a `Word` at parse time (no lexer token).
     KW_AS,    // `.as<T>` cast / `(T as I)` / `field as field`
@@ -168,8 +166,6 @@ pub enum SyntaxKind {
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,
     TYPE_ALIAS_DEF,
-    TYPE_BUILDER_BLOCK, // type_builder { ... } inside test definitions
-    DYNAMIC_TYPE_DEF,   // dynamic class/enum inside type_builder blocks
 
     // Function components
     PARAMETER_LIST,
@@ -180,6 +176,7 @@ pub enum SyntaxKind {
     PROMPT_FIELD,
     CLIENT_REFERENCE,
     CLIENT_FIELD, // 'client' field in LLM function
+    TOOLS_FIELD,  // 'tools' field in LLM function (BEP: tools: [fn, ...])
     DEFAULT_IMPL,
 
     // Class components
@@ -203,6 +200,11 @@ pub enum SyntaxKind {
 
     // Client components
     CLIENT_TYPE, // <llm> part
+    /// `client Name = <expr>;` — a named client value declaration (the
+    /// single-path replacement for `client<llm>` config blocks). Children:
+    /// `KW_CLIENT`, `WORD` (name), `EQUALS`, one expression node/token,
+    /// optional `SEMICOLON`.
+    CLIENT_VALUE_DEF,
     CONFIG_BLOCK,
     CONFIG_ITEM,
     CONFIG_VALUE,
@@ -220,8 +222,8 @@ pub enum SyntaxKind {
     FUNCTION_TYPE_PARAM, // x: int (or just int)
 
     // Attributes
-    ATTRIBUTE,       // @alias("name")
-    BLOCK_ATTRIBUTE, // @@dynamic
+    ATTRIBUTE, // @alias("name")
+    BLOCK_ATTRIBUTE,
     ATTRIBUTE_ARGS,
 
     // Expressions (for attributes and function bodies)
@@ -257,6 +259,11 @@ pub enum SyntaxKind {
     FIELD_ACCESS_EXPR,
     /// Explicit interface/static upcast projection: `<expr>.as<T>`.
     UPCAST_EXPR,
+    /// LLM function spec reference: `MyFunc@spec` (postfix `@spec` on a path).
+    ///
+    /// Structure: `<PATH_EXPR> AT WORD("spec")`. Lowered by renaming the
+    /// path's last segment to the `<name>$spec` companion function.
+    SPEC_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///
     /// Structure: `<base_expr> QUESTION_DOT WORD`
@@ -432,13 +439,6 @@ pub enum SyntaxKind {
     BACKTICK_ELSE,     // ${else}
     BACKTICK_ENDIF,    // ${endif}
 
-    // Template components (inside raw strings)
-    TEMPLATE_CONTENT,       // Plain text (deprecated, use PROMPT_TEXT)
-    TEMPLATE_INTERPOLATION, // {{ expr }} - Jinja expressions
-    TEMPLATE_CONTROL,       // {% for ... %} - Jinja statements
-    TEMPLATE_COMMENT,       // {# comment #} - Jinja comments
-    PROMPT_TEXT,            // Plain text between Jinja constructs
-
     // Error recovery
     ERROR,
 
@@ -529,7 +529,6 @@ impl SyntaxKind {
                 | Self::KW_TESTSET
                 | Self::KW_RETRY_POLICY
                 | Self::KW_TEMPLATE_STRING
-                | Self::KW_TYPE_BUILDER
                 | Self::KW_IF
                 | Self::KW_ELSE
                 | Self::KW_FOR
@@ -551,7 +550,6 @@ impl SyntaxKind {
                 | Self::KW_AWAIT
                 | Self::KW_DEFER
                 | Self::KW_INSTANCEOF
-                | Self::KW_DYNAMIC
                 | Self::KW_WITH
                 | Self::KW_AS
                 | Self::KW_TYPE

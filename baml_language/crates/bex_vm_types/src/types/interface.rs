@@ -80,7 +80,7 @@ pub struct MethodImpl {
 /// One interface implementation, baked for the runtime resolver
 /// (`resolve_implements_rule`) — the analog of a rustc `ImplSource` plus its
 /// resolved method `Instance`s. Mirrors the compiler's `InterfaceImplRule`
-/// (`baml_compiler2_tir::interfaces`) with the method handles attached.
+/// (`baml_compiler2_hir_ty::interfaces`) with the method handles attached.
 // No `PartialEq`/`Eq`: `interface_head` (and `methods`' `fqn`) is a `HeapPtr`, so
 // a derived `Eq` would be pointer identity, not structural equality.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]

@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+421..422 'f': throws 7 | user.AppError
+439..550 '{\n   ...w 7\n}': never
+481..536 'if (c)...n    }': void
+485..486 'c': bool
+488..536 '{\n   ...n    }': never
+504..529 'AppErr... "x" }': user.AppError
+524..527 '"x"': "x"
+547..548 '7': 7

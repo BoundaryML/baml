@@ -58,7 +58,8 @@ use baml_compiler2_ast::{
     ast::{AstSourceMap, ExprBody, FunctionOrigin},
 };
 use baml_compiler2_hir::{body::FunctionBody, scope::FileScopeId};
-use baml_compiler2_tir::{inference::infer_scope_types, ty::Ty};
+use baml_compiler2_hir_ty::ide::infer_for_scope;
+use baml_type::Ty;
 use text_size::TextSize;
 
 use crate::{Db, utils};
@@ -218,10 +219,13 @@ fn process_body(
         let use_scope = scope_at_offset_within_body(index, pat_span.start(), owner_scope);
         for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
             let scope_id = index.scope_ids[file_scope_id.index() as usize];
-            let inference = infer_scope_types(db, scope_id);
-            if let Some(ty) = inference.binding_type(*pattern) {
-                if !should_suppress_type(ty) {
-                    ty_str = Some(utils::display_ty_for_file(db, file, ty));
+            let Some(inference) = infer_for_scope(db, scope_id) else {
+                continue;
+            };
+            if let Some(ty) = inference.type_of_pat.get(pattern) {
+                let ty = ty.to_plain();
+                if !should_suppress_type(&ty) {
+                    ty_str = Some(utils::display_ty_for_file(db, file, &ty));
                 }
                 break;
             }
@@ -270,8 +274,17 @@ fn process_body(
             let use_scope = scope_at_offset_within_body(index, callee_span.start(), owner_scope);
             for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
                 let scope_id = index.scope_ids[file_scope_id.index() as usize];
-                let inference = infer_scope_types(db, scope_id);
-                let Some(Ty::Function { params, .. }) = inference.expression_type(*callee) else {
+                let Some(inference) = infer_for_scope(db, scope_id) else {
+                    continue;
+                };
+                let Some(callee_ty) = inference
+                    .type_of_expr
+                    .get(callee)
+                    .map(baml_type::interned::Ty::to_plain)
+                else {
+                    continue;
+                };
+                let Ty::Function { ref params, .. } = callee_ty else {
                     continue;
                 };
                 if args.len() != params.len() {
@@ -391,8 +404,8 @@ mod tests {
             "main.baml",
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt #"Summarize {{ input }}"#
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 
 function Echo(x: string) -> string {

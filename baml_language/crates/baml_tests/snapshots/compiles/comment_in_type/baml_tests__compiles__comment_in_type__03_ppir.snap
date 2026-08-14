@@ -1,50 +1,34 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 10276
 ---
 === PPIR ===
-function user.CommentAfterArrow(client: baml.llm.Client = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "CommentAfterArrow", map {  })
+function user.CommentAfterArrow(client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(CommentAfterArrow$spec()).value
 }
-function user.CommentAfterArrow$build_request(client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "CommentAfterArrow", map {  })
+function user.CommentAfterArrow$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
 }
-function user.CommentAfterArrow$build_request_stream(client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "CommentAfterArrow", map {  })
+function user.CommentAfterArrow$render_prompt() -> ai.Prompt  [expr] {
+  CommentAfterArrow$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.CommentAfterArrow$parse(json: string, client: baml.llm.Client = TestClient) -> string  [expr] {
-  baml.llm.parse(json)
+function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
 }
-function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  client.__make_stream(sse)
+function user.CommentAfterArrow$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(CommentAfterArrow$spec(), client = client)
 }
-function user.CommentAfterArrow$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "CommentAfterArrow", map {  })
+function user.FunctionWithComments(a: string, b: int, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(FunctionWithComments$spec(a, b)).value
 }
-function user.CommentAfterArrow$stream(client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "CommentAfterArrow", map {  })
+function user.FunctionWithComments$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
 }
-function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "FunctionWithComments", map { "a": a, "b": b })
+function user.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt  [expr] {
+  FunctionWithComments$spec(a, b).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.FunctionWithComments$build_request(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "FunctionWithComments", map { "a": a, "b": b })
+function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
 }
-function user.FunctionWithComments$build_request_stream(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "FunctionWithComments", map { "a": a, "b": b })
-}
-function user.FunctionWithComments$parse(json: string, client: baml.llm.Client = TestClient) -> string  [expr] {
-  baml.llm.parse(json)
-}
-function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  client.__make_stream(sse)
-}
-function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "FunctionWithComments", map { "a": a, "b": b })
-}
-function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "FunctionWithComments", map { "a": a, "b": b })
-}
-function user.TestClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(FunctionWithComments$spec(a, b), client = client)
 }

@@ -124,15 +124,13 @@ function optional_function_parameters.ofp_mutable_default_array_is_fresh_per_cal
     load_const 1
     load_const <omitted>
     call user.optional_function_parameters.push_default
-    store_var _2
+    load_const 10
+    mul_int
+    store_var _1
     load_const 2
     load_const <omitted>
     call user.optional_function_parameters.push_default
-    store_var _3
-    load_var _2
-    load_const 10
-    mul_int
-    load_var _3
+    load_var _1
     add_int
     return
 }
@@ -191,6 +189,7 @@ function optional_function_parameters.push_default(value: int, items: int[]) -> 
     store_var items
 
   L0:
+    load_type int
     load_var2 2 1
     call baml.Array.push
     pop 1

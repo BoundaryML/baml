@@ -10,8 +10,8 @@
 // BamlStream wraps a BamlHandle whose HANDLE_TABLE row is a
 // `CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle })`
 // (handle_type ADT_TAGGED_HEAP_HANDLE). next/final round-trip through
-// getRuntime().callFunction* against the well-known FQNs
-// `baml.llm.Stream.next` and `baml.llm.Stream.final`.
+// getRuntime().callFunction* against methods on the class FQN carried by
+// that tagged handle.
 //
 // The runtime exports this under its `BamlStream` name; codegen aliases it as
 // `Stream` on re-export (`export { BamlStream as Stream } from ...`).
@@ -23,35 +23,38 @@
 import { getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
 import { supportsSyncStreamPulls } from './platform.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
-const STREAM_NEXT_FN = 'baml.llm.Stream.next';
-const STREAM_FINAL_FN = 'baml.llm.Stream.final';
 function newFunctionCall() {
     return BigInt(nativeNewFunctionCall());
 }
 export class BamlStream {
     _handle;
-    constructor(handle) {
+    _classFqn;
+    constructor(handle, classFqn) {
+        if (classFqn.length === 0) {
+            throw new Error('a BAML stream handle must carry its class FQN');
+        }
         this._handle = handle;
+        this._classFqn = classFqn;
     }
     /** Internal: produce a fresh BamlStream from a BamlHandle. Used by proto decode. */
-    static _fromHandle(handle) {
-        return new BamlStream(handle);
+    static _fromHandle(handle, classFqn) {
+        return new BamlStream(handle, classFqn);
     }
     /** Internal: expose the inner BamlHandle for inbound encode. */
     _toHandle() {
         return this._handle;
     }
     next() {
-        return this._callSync(STREAM_NEXT_FN);
+        return this._callSync(`${this._classFqn}.next`);
     }
     async nextAsync() {
-        return (await this._callAsync(STREAM_NEXT_FN));
+        return (await this._callAsync(`${this._classFqn}.next`));
     }
     final() {
-        return this._callSync(STREAM_FINAL_FN);
+        return this._callSync(`${this._classFqn}.final`);
     }
     async finalAsync() {
-        return (await this._callAsync(STREAM_FINAL_FN));
+        return (await this._callAsync(`${this._classFqn}.final`));
     }
     _callSync(fqn) {
         if (!supportsSyncStreamPulls) {

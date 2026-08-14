@@ -49,7 +49,10 @@ use sha2::{Digest, Sha256};
 /// (BEP-062 `reflect.signature`).
 ///
 /// Version 3: diagnostic cache blobs gained `message_highlights` fields.
-pub const FORMAT_VERSION: u32 = 3;
+///
+/// Version 4: `FunctionMeta::Llm` removed the Borsh-serialized
+/// `prompt_template` field.
+pub const FORMAT_VERSION: u32 = 4;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -209,7 +212,7 @@ pub struct ManifestFile {
     /// the transitive throws-taint closure already covers).
     pub sig_referenced_names: Vec<String>,
     /// Throw-analysis facts for every function the file defines, exactly as
-    /// `baml_compiler2_tir::throw_inference::file_throw_facts` extracted
+    /// `baml_compiler2_hir_ty::throw_facts::file_throw_facts` extracted
     /// them. Re-seeded into the next compile's database so unchanged files
     /// never re-walk their bodies just to answer "what does the package
     /// throw" — the package-level solve then runs from facts alone.

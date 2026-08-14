@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+372..376 'bump': throws never
+411..437 '{\n   ...n    }': int
+421..427 'self.n': int
+421..431 'self.n + d': int
+430..431 'd': int
+450..454 'grab': throws never
+490..561 '{\n   ...(2)\n}': int
+496..501 'let f': (d: int) -> int throws never
+504..510 'c.bump': (d: int) -> int throws never
+555..556 'f': (d: int) -> int throws never
+555..559 'f(2)': int
+557..558 '2': 2
+572..576 'ufcs': throws never
+612..718 '{\n   ... 3)\n}': int
+618..623 'let g': (self: user.BmvCounter, d: int) -> int throws never
+626..641 'BmvCounter.bump': (self: user.BmvCounter, d: int) -> int throws never
+709..710 'g': (self: user.BmvCounter, d: int) -> int throws never
+709..716 'g(c, 3)': int
+711..712 'c': user.BmvCounter
+714..715 '3': 3

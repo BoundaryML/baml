@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37227
 ---
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0152

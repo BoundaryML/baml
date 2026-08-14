@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+399..408 'grid_push': throws never
+435..577 '{\n   ...rid\n}': int[][]
+441..449 'let grid': int[][]
+452..471 'baml.A...nerate': (length: int, f: (int) -> int[] throws never) -> int[][] throws never
+452..521 'baml.A... 0) })': int[][]
+472..473 '3': 3
+475..520 '(r: in..., 0) }': (r: int) -> int[] throws never
+493..520 '{ baml..., 0) }': int[]
+495..512 'baml.A...filled': (length: int, value: int) -> int[] throws never
+495..518 'baml.A...(2, 0)': int[]
+513..514 '2': 2
+516..517 '0': 0
+527..532 'let n': int
+535..539 'grid': int[][]
+535..542 'grid[0]': int[]
+535..547 'grid[0].push': (self: int[], item: int) -> int throws never
+535..551 'grid[0...sh(99)': int
+540..541 '0': 0
+548..550 '99': 99
+571..575 'grid': int[][]

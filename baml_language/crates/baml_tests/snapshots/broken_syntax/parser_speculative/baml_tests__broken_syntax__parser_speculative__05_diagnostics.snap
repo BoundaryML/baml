@@ -2,16 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] E0003
-
-  × unresolved name: `GPT4`
-   ╭─[ambiguous_function.baml:2:45]
- 2 │ ╭─▶ function Ambiguous(input: string) -> string {
- 3 │ │     client GPT4  // This keyword determines it's an LLM function
- 4 │ │     // Even though it starts like it could be expression function
- 5 │ ╰─▶ }
-   ╰────
-
   [parse] E0010
 
   × unexpected token
@@ -21,94 +11,44 @@ source: crates/baml_tests/src/generated_tests.rs
    · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
    ╰────
 
-  [type] E0001
-
-  × mismatched types
-    ╭─[ambiguous_function.baml:8:1]
-  8 │ ╭─▶ function AnotherLLM(input: string) -> string {
-  9 │ │     clent GPT4  // Typo in "client"
- 10 │ │     prompt #"Process: {{ input }}"#  // "prompt" keyword helps disambiguate
- 11 │ ├─▶ }
-    · ╰──── expected `baml.llm.Client`, found `null`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[ambiguous_function.baml:8:46]
-  8 │ ╭─▶ function AnotherLLM(input: string) -> string {
-  9 │ │     clent GPT4  // Typo in "client"
- 10 │ │     prompt #"Process: {{ input }}"#  // "prompt" keyword helps disambiguate
- 11 │ ├─▶ }
-    · ╰──── expected `baml.llm.Client`, found `null`
-    ╰────
-
   [parse] E0010
 
   × unexpected token
-   ╭─[ambiguous_function.baml:9:3]
- 9 │   clent GPT4  // Typo in "client"
-   ·   ──┬──
-   ·     ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'clent'`, found `identifier`
+   ╭─[ambiguous_function.baml:9:8]
+ 9 │   clent: GPT4
+   ·        ┬
+   ·        ╰── expected `expression`, found `':'`
    ╰────
 
   [parse] E0010
 
   × unexpected token
-   ╭─[ambiguous_function.baml:9:9]
- 9 │   clent GPT4  // Typo in "client"
-   ·         ──┬─
-   ·           ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'GPT4'`, found `identifier`
-   ╰────
-
-  [parse] E0010
-
-  × unexpected token
-    ╭─[ambiguous_function.baml:11:1]
- 11 │ }
-    · ┬
-    · ╰── expected `LLM function missing 'client' field`, found `'}'`
+    ╭─[ambiguous_function.baml:10:9]
+ 10 │   prompt: `Process: ${input}`
+    ·         ┬
+    ·         ╰── expected `expression`, found `':'`
     ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-   ╭─[llm_function.baml:1:48]
- 1 │ ╭─▶ function ExtractData(text: string) -> JsonData {
- 2 │ │     client GPT4
- 3 │ │     prompt #"
- 4 │ │       Extract structured data from: {{ text }}
- 5 │ │       Return as JSON.
- 6 │ │     "#
- 7 │ ╰─▶ }
+   ╭─[llm_function.baml:2:11]
+ 2 │   client: GPT4
+   ·           ────
    ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[mixed_functions.baml:2:47]
-  2 │ ╭─▶ function LLMAnalyze(text: string) -> Analysis {
-  3 │ │     client GPT4
-  4 │ │     prompt #"
-  5 │ │       Analyze the following text:
-  6 │ │       {{ text }}
-  7 │ │       
-  8 │ │       Return an Analysis object with sentiment and keywords.
-  9 │ │     "#
- 10 │ ╰─▶ }
-    ╰────
+   ╭─[mixed_functions.baml:3:11]
+ 3 │   client: GPT4
+   ·           ────
+   ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[mixed_functions.baml:31:50]
- 31 │ ╭─▶ function ChainedProcess(input: string) -> string {
- 32 │ │     client GPT4
- 33 │ │     prompt #"
- 34 │ │       Process this through multiple steps:
- 35 │ │       1. {{ input }}
- 36 │ │       2. Transform it
- 37 │ │       3. Return result
- 38 │ │     "#
- 39 │ ╰─▶ }
+    ╭─[mixed_functions.baml:32:11]
+ 32 │   client: GPT4
+    ·           ────
     ╰────

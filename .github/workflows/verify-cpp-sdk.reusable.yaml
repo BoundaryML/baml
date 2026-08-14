@@ -86,12 +86,13 @@ jobs:
           name: bridge-cffi-${{ matrix.target }}
           path: runtime-dist
 
-      - name: Resolve expected version
+      - name: Stamp release plan
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
         run: |
           set -euo pipefail
           printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
           expected="$(jq -r .canonical_version release-plan.json)"
           echo "BAML_EXPECTED_VERSION=$expected" >> "$GITHUB_ENV"
 

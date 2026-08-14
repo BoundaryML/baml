@@ -38,14 +38,4 @@ class TypeValue {
     function implemented_by(self, other: type) -> bool throws never {
         $rust_function
     }
-
-    /// Concrete classes that implement this interface (BEP-044), in stable
-    /// declaration order. Returns `[]` when the receiver is not an interface.
-    ///
-    /// `mut_vm` because each implementor is materialised as a fresh
-    /// `Object::Type` allocation in the TLAB.
-    //baml:mut_vm
-    function implementors(self) -> type[] throws never {
-        $rust_function
-    }
 }

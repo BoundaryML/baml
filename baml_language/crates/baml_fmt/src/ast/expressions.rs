@@ -157,16 +157,18 @@ impl FromCST for Expression {
             SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
                 Literal::from_cst(elem).map(Expression::Literal)?
             }
-            SyntaxKind::WORD => PathExpr::from_cst(elem).map(Expression::Path)?,
+            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
+                PathExpr::from_cst(elem).map(Expression::Path)?
+            }
             SyntaxKind::PATH_EXPR => {
                 // The parser wraps any postfix `<...>` in a PATH_EXPR. When the
                 // base is a plain path (word / nested PATH_EXPR) it is a
                 // `PathExpr`; otherwise (a parenthesized expr, lambda, etc.) it
                 // is a generic instantiation on a non-path base.
                 let node = StrongAstError::assert_is_node(elem.clone())?;
-                let base_is_path = SyntaxNodeIter::new(&node)
-                    .next()
-                    .is_some_and(|c| matches!(c.kind(), SyntaxKind::WORD | SyntaxKind::PATH_EXPR));
+                let base_is_path = SyntaxNodeIter::new(&node).next().is_some_and(|c| {
+                    is_path_segment_kind(c.kind()) || c.kind() == SyntaxKind::PATH_EXPR
+                });
                 if base_is_path {
                     PathExpr::from_cst(elem).map(Expression::Path)?
                 } else {
@@ -1565,6 +1567,42 @@ impl Printable for IfLetExpr {
     }
 }
 
+/// An element of a match/catch arm list: an arm, or a `//#` header comment
+/// appearing between arms. Headers are legal arm-list elements (the parser
+/// consumes them there, mirroring statement blocks), so the strong AST must
+/// carry them through formatting.
+#[derive(Debug)]
+pub enum ArmListItem<A> {
+    Arm(A),
+    Header(t::HeaderComment),
+}
+
+impl<A: Printable> Printable for ArmListItem<A> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Self::Arm(arm) => arm.print(shape, printer),
+            Self::Header(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Self::Arm(arm) => arm.leftmost_token(),
+            Self::Header(header) => header.span(),
+        }
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Self::Arm(arm) => arm.rightmost_token(),
+            Self::Header(header) => header.span(),
+        }
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::MATCH_EXPR`] node.
 #[derive(Debug)]
 pub struct MatchExpr {
@@ -1573,7 +1611,7 @@ pub struct MatchExpr {
     pub scrutinee: Box<Expression>,
     pub close_paren: t::RParen,
     pub open_brace: t::LBrace,
-    pub arms: Vec<MatchArm>,
+    pub arms: Vec<ArmListItem<MatchArm>>,
     pub close_brace: t::RBrace,
 }
 
@@ -1612,11 +1650,14 @@ impl FromCST for MatchExpr {
                 }
                 SyntaxKind::MATCH_ARM => {
                     let arm = MatchArm::from_cst(elem)?;
-                    arms.push(arm);
+                    arms.push(ArmListItem::Arm(arm));
+                }
+                SyntaxKind::HEADER_COMMENT => {
+                    arms.push(ArmListItem::Header(t::HeaderComment::from_cst(elem)?));
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "MATCH_ARM or R_BRACE".into(),
+                        expected_desc: "MATCH_ARM, HEADER_COMMENT, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -2178,7 +2219,7 @@ pub struct CatchClause {
     pub stack_trace_binding: Option<(t::Comma, CatchBinding)>,
     pub close_paren: t::RParen,
     pub open_brace: t::LBrace,
-    pub arms: Vec<CatchArm>,
+    pub arms: Vec<ArmListItem<CatchArm>>,
     pub close_brace: t::RBrace,
 }
 
@@ -2216,10 +2257,13 @@ impl FromCST for CatchClause {
             };
             match elem.kind() {
                 SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
-                SyntaxKind::CATCH_ARM => arms.push(CatchArm::from_cst(elem)?),
+                SyntaxKind::CATCH_ARM => arms.push(ArmListItem::Arm(CatchArm::from_cst(elem)?)),
+                SyntaxKind::HEADER_COMMENT => {
+                    arms.push(ArmListItem::Header(t::HeaderComment::from_cst(elem)?));
+                }
                 found => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "CATCH_ARM or R_BRACE".into(),
+                        expected_desc: "CATCH_ARM, HEADER_COMMENT, or R_BRACE".into(),
                         found,
                         at: elem.text_range(),
                     });
@@ -3701,7 +3745,9 @@ impl Printable for ArrayInitializer {
 pub struct ObjectInitializer {
     pub name: PathExpr,
     pub open_brace: t::LBrace,
-    pub fields: Vec<(ObjectField, Option<t::Comma>)>,
+    /// Fields and `...spread` members, in source order. Order is significant:
+    /// later members win at runtime, so it must be preserved verbatim.
+    pub fields: Vec<(ObjectMember, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
 }
 
@@ -3727,8 +3773,8 @@ impl FromCST for ObjectInitializer {
                 SyntaxKind::R_BRACE => {
                     break t::RBrace::from_cst(elem)?;
                 }
-                SyntaxKind::OBJECT_FIELD => {
-                    let field = ObjectField::from_cst(elem)?;
+                SyntaxKind::OBJECT_FIELD | SyntaxKind::SPREAD_ELEMENT => {
+                    let field = ObjectMember::from_cst(elem)?;
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
@@ -3737,7 +3783,7 @@ impl FromCST for ObjectInitializer {
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "OBJECT_FIELD or R_BRACE".into(),
+                        expected_desc: "OBJECT_FIELD, SPREAD_ELEMENT, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -4259,6 +4305,132 @@ impl Printable for ObjectField {
     }
 }
 
+/// A member of an [`ObjectInitializer`]: either a `name: value` field or a
+/// `...expr` spread element.
+///
+/// Only [`SyntaxKind::OBJECT_LITERAL`] admits spreads; map literals and array
+/// literals keep using [`ObjectField`] directly.
+#[derive(Debug)]
+pub enum ObjectMember {
+    Field(ObjectField),
+    Spread(SpreadElement),
+}
+
+impl FromCST for ObjectMember {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::OBJECT_FIELD => Ok(ObjectMember::Field(ObjectField::from_cst(elem)?)),
+            SyntaxKind::SPREAD_ELEMENT => Ok(ObjectMember::Spread(SpreadElement::from_cst(elem)?)),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "OBJECT_FIELD or SPREAD_ELEMENT".into(),
+                found: elem.kind(),
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl ObjectMember {
+    /// Returns the width of the member if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        match self {
+            ObjectMember::Field(field) => field.single_line_width(input),
+            ObjectMember::Spread(spread) => spread.single_line_width(input),
+        }
+    }
+}
+
+impl Printable for ObjectMember {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ObjectMember::Field(field) => field.print(shape, printer),
+            ObjectMember::Spread(spread) => spread.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ObjectMember::Field(field) => field.leftmost_token(),
+            ObjectMember::Spread(spread) => spread.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ObjectMember::Field(field) => field.rightmost_token(),
+            ObjectMember::Spread(spread) => spread.rightmost_token(),
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::SPREAD_ELEMENT`] node.
+///
+/// Struct-update spread inside an object literal: `Type { ...base, field: v }`.
+#[derive(Debug)]
+pub struct SpreadElement {
+    pub dot_dot_dot: t::DotDotDot,
+    pub value: Expression,
+}
+
+impl FromCST for SpreadElement {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::SPREAD_ELEMENT)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let dot_dot_dot = it.expect_parse()?;
+        let value = it.expect_next("spread value")?;
+        let value = Expression::from_cst(value)?;
+
+        it.expect_end()?;
+
+        Ok(SpreadElement { dot_dot_dot, value })
+    }
+}
+
+impl KnownKind for SpreadElement {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::SPREAD_ELEMENT
+    }
+}
+
+impl SpreadElement {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        // Must match the trivia handled by `print`: dots_trailing + value_leading.
+        let mut trivia_len = 0usize;
+        let (_, dots_trailing) = input.trivia.get_for_range_split(self.dot_dot_dot.span());
+        for t in dots_trailing {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_leading = input.trivia.get_leading_for_element(&self.value);
+        for t in value_leading {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_width = self.value.single_line_width(input)?;
+        Some(const { "...".len() } + value_width + trivia_len)
+    }
+}
+
+impl Printable for SpreadElement {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // No space after `...` — it binds tightly to its operand.
+        printer.print_raw_token(&self.dot_dot_dot);
+        let (_, dots_trailing) = printer.trivia.get_for_range_split(self.dot_dot_dot.span());
+        printer.print_trivia_squished(dots_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        printer.print_trivia_squished(value_leading);
+        printer.print(&self.value, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.dot_dot_dot.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.value.rightmost_token()
+    }
+}
+
 /// Represents the a valid key for an [`ObjectField`].
 #[derive(Debug)]
 pub enum ObjectFieldKey {
@@ -4269,7 +4441,9 @@ pub enum ObjectFieldKey {
 impl FromCST for ObjectFieldKey {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::WORD => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
+            // `client` (KW_CLIENT) is a keyword but a valid field name, e.g.
+            // `Agent { client: ... }` — mirror `parse_object_field`.
+            kind if t::is_word_like(kind) => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
             SyntaxKind::STRING_LITERAL => {
                 Ok(ObjectFieldKey::String(t::QuotedString::from_cst(elem)?))
             }
@@ -5230,15 +5404,28 @@ impl<'a> PrintChain<'a> {
 }
 
 impl PrintMultiLine for PrintChain<'_> {
-    /// Prints the chained expression, with each field member on a new line.
+    /// Prints the chained expression broken at method-call boundaries,
+    /// prettier/rustfmt style.
     ///
-    /// Uses similar rules to rustfmt
+    /// Plain member accesses (namespace segments, field accesses, generic
+    /// type segments) are atomic with their receiver and never split, no
+    /// matter how long the path is. Break points sit before the `.name` of
+    /// each call group; the first call group stays glued to the receiver
+    /// line when it fits:
+    ///
+    /// ```baml
+    /// root.ai.Agent<Itinerary>.new()
+    ///     .with_client(client)
+    ///     .run(spec)
+    /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let first_single_line = match self.first {
             Expression::Path(path_expr) => {
                 printer.print_raw_token(&path_expr.first);
                 true
             }
+            // Call/Index print directly: routing them through
+            // `Expression::print` would rebuild this same chain and recurse.
             Expression::Call(call_expr) => {
                 let first_info = printer.print(call_expr, shape.clone());
                 !first_info.multi_lined
@@ -5252,85 +5439,89 @@ impl PrintMultiLine for PrintChain<'_> {
                 !first_info.multi_lined
             }
         };
+        let mut multi_lined = !first_single_line;
 
-        let offset = printer.current_line_len().saturating_sub(shape.indent);
-        // Only indent the chain when it actually has somewhere to break across
-        // lines — i.e. it has multiple field-access steps, or the first chunk
-        // already pushed past one indent. Single-call chains like
-        // `f(longarg)` or `obj.method(longarg)` should let the trailing
-        // `(args)` wrap at the *outer* indent rather than chain_indent + 4.
-        let field_access_steps = self
-            .chain_members
-            .iter()
-            .filter(|m| {
-                matches!(
-                    m,
-                    PrintChainItem::FieldAccess(..) | PrintChainItem::OptionalFieldAccess(..)
-                )
-            })
-            .count();
-        let should_indent_chain =
-            (first_single_line && field_access_steps > 1) || offset > printer.config.indent_width;
-        let chain_indent = if should_indent_chain {
-            shape.indent + printer.config.indent_width
-        } else {
-            shape.indent
-        };
-
+        let chain_indent = shape.indent + printer.config.indent_width;
         let mut line_remaining_width = printer.current_line_remaining_width();
-        let mut it = self.chain_members.iter();
-        if first_single_line && offset <= printer.config.indent_width {
-            // Try to print the second item on the same line if it's a field access and fits.
-            let peeked = it.next();
-            let second_len = match peeked {
-                Some(&PrintChainItem::FieldAccess(dot, word)) => {
-                    Some(usize::from(dot.span().len() + word.span().len()))
-                }
-                Some(&PrintChainItem::OptionalFieldAccess(qd, word)) => {
-                    Some(usize::from(qd.span().len() + word.span().len()))
-                }
-                _ => None,
-            };
-            if let Some(second_len) = second_len {
-                let item = peeked.unwrap();
-                if line_remaining_width >= second_len {
-                    Self::print_field_access_item(item, printer);
-                    line_remaining_width = line_remaining_width.saturating_sub(second_len);
-                } else {
-                    printer.print_newline();
-                    printer.print_spaces(chain_indent);
-                    Self::print_field_access_item(item, printer);
-                    line_remaining_width = printer
-                        .config
-                        .line_width
-                        .saturating_sub(chain_indent + second_len);
-                }
-            } else if let Some(item) = peeked {
-                Self::print_non_field_item(item, chain_indent, &mut line_remaining_width, printer);
+        let mut rest: &[PrintChainItem<'_>] = &self.chain_members;
+
+        // A call/index applied directly to the receiver (`base?.(x).field`)
+        // cannot break away from it: glue it to the receiver's line.
+        while let Some((item, tail)) = rest.split_first() {
+            if Self::is_plain_access(item) {
+                break;
             }
+            multi_lined |=
+                Self::print_non_field_item(item, chain_indent, &mut line_remaining_width, printer);
+            rest = tail;
         }
-        for item in it {
-            match item {
-                &PrintChainItem::FieldAccess(_, _) | &PrintChainItem::OptionalFieldAccess(_, _) => {
-                    printer.print_newline();
-                    printer.print_spaces(chain_indent);
-                    Self::print_field_access_item(item, printer);
-                    let item_len = match *item {
-                        PrintChainItem::FieldAccess(dot, word) => {
-                            usize::from(dot.span().len() + word.span().len())
-                        }
-                        PrintChainItem::OptionalFieldAccess(qd, word) => {
-                            usize::from(qd.span().len() + word.span().len())
-                        }
-                        _ => unreachable!(),
-                    };
-                    line_remaining_width = printer
-                        .config
-                        .line_width
-                        .saturating_sub(chain_indent + item_len);
-                }
-                _ => {
-                    Self::print_non_field_item(
+
+        // The leading run of plain accesses is the namespace path; it is
+        // atomic with the receiver and always stays on its line. When a call
+        // follows, the final access of the run is that call's method name and
+        // belongs to the call's group instead (`.new` stays glued to `()`).
+        let plain_run_len = rest
+            .iter()
+            .take_while(|item| Self::is_plain_access(item))
+            .count();
+        let path_len = if plain_run_len == rest.len() {
+            plain_run_len
+        } else {
+            rest[..plain_run_len]
+                .iter()
+                .rposition(|item| {
+                    matches!(
+                        item,
+                        PrintChainItem::FieldAccess(..) | PrintChainItem::OptionalFieldAccess(..)
+                    )
+                })
+                .unwrap_or(plain_run_len)
+        };
+        for item in &rest[..path_len] {
+            Self::print_plain_item(item, printer);
+        }
+        rest = &rest[path_len..];
+        line_remaining_width = printer.current_line_remaining_width();
+
+        // Split the remaining items into groups: each group is a run of
+        // plain accesses (the method name) followed by its calls/indexes.
+        let mut is_first_group = true;
+        while !rest.is_empty() {
+            let group_plain = rest
+                .iter()
+                .take_while(|item| Self::is_plain_access(item))
+                .count();
+            let group_callish = rest[group_plain..]
+                .iter()
+                .take_while(|item| !Self::is_plain_access(item))
+                .count();
+            let (group, tail) = rest.split_at(group_plain + group_callish);
+            rest = tail;
+
+            // A group can only start with a call/index when the path had no
+            // field access to serve as its name; such a group cannot move to
+            // its own line. Otherwise, the first call group stays glued to
+            // the receiver line when it fits; later groups always break.
+            let glue = if group_plain == 0 {
+                true
+            } else if is_first_group && first_single_line {
+                Self::group_single_line_width(group, printer)
+                    .is_some_and(|width| width <= line_remaining_width)
+            } else {
+                false
+            };
+            if !glue {
+                printer.print_newline();
+                printer.print_spaces(chain_indent);
+                line_remaining_width = printer.config.line_width.saturating_sub(chain_indent);
+                multi_lined = true;
+            }
+            for item in group {
+                if Self::is_plain_access(item) {
+                    Self::print_plain_item(item, printer);
+                    line_remaining_width = printer.current_line_remaining_width();
+                } else {
+                    multi_lined |= Self::print_non_field_item(
                         item,
                         chain_indent,
                         &mut line_remaining_width,
@@ -5338,14 +5529,28 @@ impl PrintMultiLine for PrintChain<'_> {
                     );
                 }
             }
+            is_first_group = false;
         }
 
-        PrintInfo::default_multi_lined()
+        PrintInfo { multi_lined }
     }
 }
 
 impl PrintChain<'_> {
-    fn print_field_access_item(item: &PrintChainItem<'_>, printer: &mut Printer) {
+    /// Plain (non-call) chain items: member accesses and generic type
+    /// segments. These are atomic with their receiver and never move to
+    /// their own line.
+    const fn is_plain_access(item: &PrintChainItem<'_>) -> bool {
+        matches!(
+            item,
+            PrintChainItem::FieldAccess(..)
+                | PrintChainItem::OptionalFieldAccess(..)
+                | PrintChainItem::GenericArgs(..)
+        )
+    }
+
+    /// Prints a plain access glued to whatever precedes it on the line.
+    fn print_plain_item(item: &PrintChainItem<'_>, printer: &mut Printer) {
         match *item {
             PrintChainItem::FieldAccess(dot, word) => {
                 printer.print_raw_token(dot);
@@ -5355,25 +5560,66 @@ impl PrintChain<'_> {
                 printer.print_raw_token(qd);
                 printer.print_raw_token(word);
             }
-            _ => unreachable!("print_field_access_item called with non-field-access item"),
+            PrintChainItem::GenericArgs(generic_args) => {
+                printer.print(generic_args, Shape::unlimited_single_line());
+            }
+            _ => unreachable!("print_plain_item called with a call/index item"),
         }
     }
 
+    /// Returns the single-line width of one chain item, or `None` if it can
+    /// never be single-lined.
+    fn item_single_line_width(item: &PrintChainItem<'_>, printer: &Printer<'_>) -> Option<usize> {
+        match item {
+            PrintChainItem::FieldAccess(dot, word) => {
+                Some(usize::from(dot.span().len() + word.span().len()))
+            }
+            PrintChainItem::OptionalFieldAccess(qd, word) => {
+                Some(usize::from(qd.span().len() + word.span().len()))
+            }
+            PrintChainItem::Index(index_args) => index_args.single_line_width(printer),
+            PrintChainItem::OptionalIndex(qd, index_args) => {
+                Some(usize::from(qd.span().len()) + index_args.single_line_width(printer)?)
+            }
+            PrintChainItem::Call(call_args) => call_args.single_line_width(printer),
+            PrintChainItem::OptionalCall(qd, call_args) => {
+                Some(usize::from(qd.span().len()) + call_args.single_line_width(printer)?)
+            }
+            PrintChainItem::GenericArgs(generic_args) => {
+                Some(generic_args.formatted_single_line_width())
+            }
+        }
+    }
+
+    /// Returns the single-line width of a group of chain items, or `None` if
+    /// any of them can never be single-lined.
+    fn group_single_line_width(
+        group: &[PrintChainItem<'_>],
+        printer: &Printer<'_>,
+    ) -> Option<usize> {
+        group
+            .iter()
+            .map(|item| Self::item_single_line_width(item, printer))
+            .sum()
+    }
+
+    /// Prints a call/index item on the current line. Its arguments may wrap.
+    ///
+    /// Returns whether the printed item spanned multiple lines.
     fn print_non_field_item(
         item: &PrintChainItem<'_>,
         chain_indent: usize,
         line_remaining_width: &mut usize,
         printer: &mut Printer,
-    ) {
-        match item {
+    ) -> bool {
+        let multi_lined = match item {
             PrintChainItem::Index(index_args) => {
                 let index_shape = Shape {
                     width: *line_remaining_width,
                     indent: chain_indent,
                     first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
                 };
-                printer.print(index_args, index_shape);
-                *line_remaining_width = printer.current_line_remaining_width();
+                printer.print(index_args, index_shape).multi_lined
             }
             PrintChainItem::OptionalIndex(qd, index_args) => {
                 printer.print_raw_token(*qd);
@@ -5382,8 +5628,7 @@ impl PrintChain<'_> {
                     indent: chain_indent,
                     first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
                 };
-                printer.print(index_args, index_shape);
-                *line_remaining_width = printer.current_line_remaining_width();
+                printer.print(index_args, index_shape).multi_lined
             }
             &PrintChainItem::Call(call_args) => {
                 let call_shape = Shape {
@@ -5391,8 +5636,7 @@ impl PrintChain<'_> {
                     indent: chain_indent,
                     first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
                 };
-                printer.print(call_args, call_shape);
-                *line_remaining_width = printer.current_line_remaining_width();
+                printer.print(call_args, call_shape).multi_lined
             }
             &PrintChainItem::OptionalCall(qd, call_args) => {
                 printer.print_raw_token(qd);
@@ -5401,20 +5645,12 @@ impl PrintChain<'_> {
                     indent: chain_indent,
                     first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
                 };
-                printer.print(call_args, call_shape);
-                *line_remaining_width = printer.current_line_remaining_width();
+                printer.print(call_args, call_shape).multi_lined
             }
-            &PrintChainItem::GenericArgs(generic_args) => {
-                let ga_shape = Shape {
-                    width: *line_remaining_width,
-                    indent: chain_indent,
-                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
-                };
-                printer.print(generic_args, ga_shape);
-                *line_remaining_width = printer.current_line_remaining_width();
-            }
-            _ => unreachable!("print_non_field_item called with field-access item"),
-        }
+            _ => unreachable!("print_non_field_item called with a plain access item"),
+        };
+        *line_remaining_width = printer.current_line_remaining_width();
+        multi_lined
     }
 
     /// Prints `first` followed by `members` in single-line form. Returns
@@ -5547,6 +5783,68 @@ impl PrintChain<'_> {
         };
         call_args.try_print_hug(&hug_shape, printer)
     }
+
+    /// Tail-broken layout: the receiver, the namespace path, and every
+    /// intermediate call stay on one line, and only the final call/index
+    /// wraps its arguments:
+    ///
+    /// ```baml
+    /// root.ai.Agent<Itinerary>.new().run(
+    ///     plan_trip_spec(...),
+    /// );
+    /// ```
+    ///
+    /// Applies when the whole prefix up to the final call fits the line.
+    /// Should be passed a sub-printer to avoid printing partial output in
+    /// the event that the layout does not apply.
+    fn try_print_tail_call_broken(
+        &self,
+        shape: &Shape,
+        printer: &mut Printer,
+    ) -> Option<PrintInfo> {
+        let (last, prefix) = self.chain_members.split_last()?;
+        let question_dot = match last {
+            PrintChainItem::Call(_) | PrintChainItem::Index(_) => None,
+            PrintChainItem::OptionalCall(qd, _) | PrintChainItem::OptionalIndex(qd, _) => Some(*qd),
+            PrintChainItem::FieldAccess(..)
+            | PrintChainItem::OptionalFieldAccess(..)
+            | PrintChainItem::GenericArgs(..) => return None,
+        };
+        self.try_print_members_single_line(prefix, shape, printer)?;
+        if let Some(qd) = question_dot {
+            printer.print_raw_token(qd);
+        }
+        if printer.output.len() > shape.width {
+            return None;
+        }
+        // `shape.width` is the remaining line budget measured from the
+        // chain's start column (`width + indent + first_line_offset ==
+        // line_width`), and this sub-printer's output also starts at that
+        // column, so the args' budget is what the prefix left over.
+        let args_shape = Shape {
+            width: shape.width.saturating_sub(printer.output.len()),
+            indent: shape.indent,
+            first_line_offset: shape.first_line_offset + printer.output.len(),
+        };
+        let info = match last {
+            PrintChainItem::Call(call_args) | PrintChainItem::OptionalCall(_, call_args) => {
+                printer.print(*call_args, args_shape)
+            }
+            PrintChainItem::Index(index_args) | PrintChainItem::OptionalIndex(_, index_args) => {
+                printer.print(index_args, args_shape)
+            }
+            _ => unreachable!("checked above"),
+        };
+        // The final call/index may still overflow the prefix line: its
+        // multi-line layout keeps the opening bracket (plus any squished
+        // trivia) on that line without re-checking the budget. Reject the
+        // layout in that case so the chain breaks at call boundaries instead.
+        let first_line_len = printer.output.find('\n').unwrap_or(printer.output.len());
+        if first_line_len > shape.width {
+            return None;
+        }
+        Some(info)
+    }
 }
 
 impl Printable for PrintChain<'_> {
@@ -5554,6 +5852,7 @@ impl Printable for PrintChain<'_> {
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .or_else(|| printer.try_sub_printer(|p| self.try_print_hug(&shape, p)))
+            .or_else(|| printer.try_sub_printer(|p| self.try_print_tail_call_broken(&shape, p)))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {

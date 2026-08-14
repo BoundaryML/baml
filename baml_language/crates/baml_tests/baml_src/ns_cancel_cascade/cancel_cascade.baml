@@ -11,7 +11,7 @@
 // test body runs, so the measured window covers only the engine run. `slow`
 // is torn down explicitly so B-650's end-of-run wait doesn't stall 60s.
 function cancel_unblocks_await_on_non_descendant_fn() -> bool {
-    let started = baml.sys.now_ms();
+    let started = baml.time.Instant.now();
     let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
     let waiter = spawn { await slow };
     let _ = waiter.cancel();
@@ -19,9 +19,9 @@ function cancel_unblocks_await_on_non_descendant_fn() -> bool {
     // fires waiter's cancel token; awaiting waiter must observe Cancelled now,
     // not after `slow` settles.
     let got = (await waiter) catch (e) { baml.panics.Cancelled => 0 };
-    let elapsed = baml.sys.now_ms() - started;
+    let elapsed = started.elapsed();
     let _ = slow.cancel();
-    got == 0 && elapsed < 5000
+    got == 0 && elapsed.to_milliseconds() < 5000n
 }
 
 test "cancel_unblocks_await_on_non_descendant" {
@@ -38,7 +38,7 @@ function cancel_from_handle_then_await_catches_cancelled() -> int {
 }
 
 test "cancel_from_handle_then_await_catches_cancelled" {
-    assert.is_true(baml.deep_equals(cancel_from_handle_then_await_catches_cancelled(), 0))
+    assert.equal(cancel_from_handle_then_await_catches_cancelled(), 0)
 }
 
 // B-665 regression: `f.cancel()` must still settle a spawn whose heap `Future`
@@ -75,7 +75,7 @@ function cancel_after_gc_relocation_still_settles() -> int {
 }
 
 test "cancel_after_gc_relocation_still_settles" {
-    assert.is_true(baml.deep_equals(cancel_after_gc_relocation_still_settles(), 0))
+    assert.equal(cancel_after_gc_relocation_still_settles(), 0)
 }
 
 // State observation: after `waiter` is cancelled mid-await, its Future state
@@ -95,5 +95,5 @@ function cancelled_child_future_state_is_cancelled() -> baml.future.FutureState 
 }
 
 test "cancelled_child_future_state_is_cancelled" {
-    assert.is_true(baml.deep_equals(cancelled_child_future_state_is_cancelled(), baml.future.FutureState.Cancelled))
+    assert.equal(cancelled_child_future_state_is_cancelled(), baml.future.FutureState.Cancelled)
 }

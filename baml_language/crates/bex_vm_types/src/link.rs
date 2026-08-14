@@ -697,15 +697,6 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     sort_packages(&mut program);
 
     // ---- Whole-program tails (design §3b step 5) ----------------------------
-    // Template macros are joined by newlines, in unit (file) order.
-    let mut macros: Vec<&str> = Vec::new();
-    for unit in units {
-        for m in &unit.template_macros {
-            macros.push(m.as_str());
-        }
-    }
-    program.template_strings_macros = macros.join("\n");
-
     for unit in units {
         program.test_cases.extend(unit.test_cases.iter().cloned());
     }
@@ -901,7 +892,6 @@ mod tests {
                 globals: vec![("user.foo".to_string(), 0), ("user.bar".to_string(), 1)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            template_macros: Vec::new(),
             test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
@@ -1018,7 +1008,6 @@ mod tests {
                 globals: vec![("a.f".to_string(), 0)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            template_macros: Vec::new(),
             test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
@@ -1041,7 +1030,6 @@ mod tests {
                 globals: vec![("b.g".to_string(), 0)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            template_macros: Vec::new(),
             test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,

@@ -25,9 +25,17 @@ pub struct InterfaceData<'db> {
     /// Field signatures. Interface fields cannot have default values.
     pub fields: Vec<FieldData>,
     pub associated_types: Vec<AssociatedTypeData>,
-    /// Default methods (with bodies). Implementing classes inherit them.
+    /// EVERY method as a real function item, default and required alike
+    /// (a required method is a `Function` with `body: None`) - the
+    /// rust-analyzer shape: one item kind, uniform `function_signature`
+    /// road. THE source of truth.
+    pub methods: Vec<FunctionLoc<'db>>,
+    /// TIR-era VIEW: the bodied subset of `methods`. Derived, never
+    /// authored; deleted with TIR at the S16 cutover.
     pub default_methods: Vec<FunctionLoc<'db>>,
-    /// Required methods (no body). Implementing classes must provide one.
+    /// TIR-era VIEW: bodyless methods re-projected into the legacy sig
+    /// shape (type refs in the interface's shared store). Derived, never
+    /// authored; deleted with TIR at the S16 cutover.
     pub required_methods: Vec<InterfaceMethodSigData>,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
@@ -58,6 +66,8 @@ pub struct InterfaceMethodSigData {
 pub struct InterfaceSourceMap {
     /// Full source span of the declaration.
     pub span: TextRange,
+    /// Span of the interface's name token.
+    pub name_span: TextRange,
     /// Spans for every node in [`InterfaceData::type_refs`].
     pub type_refs: TypeRefSourceMap,
     /// Name span per field, parallel to [`InterfaceData::fields`].
@@ -155,8 +165,16 @@ fn lower<'db>(
         })
         .collect();
 
-    let required_methods = data
-        .required_methods
+    // The legacy required-sig view derives from the BODYLESS function
+    // items (the single source of truth), re-lowered into the interface's
+    // shared store so existing consumers see identical data.
+    let required_items: Vec<_> = data
+        .methods
+        .iter()
+        .filter(|&&method| item_tree[method].body.is_none())
+        .map(|&method| &item_tree[method])
+        .collect();
+    let required_methods = required_items
         .iter()
         .map(|method| InterfaceMethodSigData {
             name: method.name.clone(),
@@ -172,7 +190,10 @@ fn lower<'db>(
                 .collect(),
             return_type: method.return_type.as_ref().map(|te| type_refs.lower(te)),
             throws: method.throws.as_ref().map(|te| type_refs.lower(te)),
-            attributes: method.attributes.clone(),
+            // Function items carry no attribute list; nothing consumed
+            // required-method attributes (verified before the view was
+            // derived), so the legacy field stays empty.
+            attributes: Vec::new(),
             docstring: method.docstring.clone(),
         })
         .collect();
@@ -187,10 +208,16 @@ fn lower<'db>(
             requires,
             fields,
             associated_types,
-            default_methods: data
-                .default_methods
+            methods: data
+                .methods
                 .iter()
                 .map(|method| FunctionLoc::new(db, file, *method))
+                .collect(),
+            default_methods: data
+                .methods
+                .iter()
+                .filter(|&&method| item_tree[method].body.is_some())
+                .map(|&method| FunctionLoc::new(db, file, method))
                 .collect(),
             required_methods,
             attributes: data.attributes.clone(),
@@ -198,6 +225,11 @@ fn lower<'db>(
         },
         InterfaceSourceMap {
             span: data.span,
+            name_span: item_source_map
+                .interface_name_spans
+                .get(&interface.id(db))
+                .copied()
+                .unwrap_or_else(|| unreachable!("name span recorded at allocation")),
             type_refs: spans,
             field_name_spans,
             associated_type_spans: data
@@ -208,8 +240,7 @@ fn lower<'db>(
                     name_span: assoc.name_span,
                 })
                 .collect(),
-            required_method_spans: data
-                .required_methods
+            required_method_spans: required_items
                 .iter()
                 .enumerate()
                 .map(|(i, method)| InterfaceMethodSigSourceMap {

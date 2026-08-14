@@ -1,0 +1,24 @@
+[package]
+name = "baml_compiler2_hir_ty"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_builtins2 = { workspace = true }
+baml_compiler2_ast = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_ppir = { workspace = true }
+baml_type = { workspace = true }
+baml_type_runtime = { workspace = true }
+borsh = { workspace = true }
+ena = { workspace = true }
+num-bigint = { workspace = true }
+rustc-hash = { workspace = true }
+salsa = { workspace = true }
+smol_str = { workspace = true }
+strsim = { workspace = true }
+text-size = { workspace = true }
