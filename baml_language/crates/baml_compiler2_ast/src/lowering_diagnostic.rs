@@ -196,6 +196,11 @@ pub enum LoweringDiagnostic {
     /// are backtick templates.
     LlmJinjaPromptRemoved { span: TextRange },
 
+    /// A `${` in a quoted LLM prompt. Regular strings do not interpolate, so
+    /// the marker reaches the model as literal text — almost always a prompt
+    /// ported from a form where it did interpolate.
+    QuotedPromptInterpolation { span: TextRange },
+
     /// A legacy `template_string` declaration. Removed: use a function
     /// returning a backtick string.
     TemplateStringRemoved { span: TextRange },
@@ -586,6 +591,17 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "use a backtick prompt instead",
+            ),
+            LoweringDiagnostic::QuotedPromptInterpolation { span } => (
+                DiagnosticId::InvalidSyntax,
+                // Advisory: the prompt is well-formed and renders, it just
+                // renders the marker verbatim. Erroring would reject prompts
+                // that legitimately want a literal `${`.
+                Severity::Warning,
+                r#"`${...}` in a quoted prompt is sent to the model as literal text — `"..."` strings do not interpolate. Use a backtick prompt to interpolate, or write `\${...}` in a backtick prompt to keep the literal `${`."#
+                    .to_string(),
+                *span,
+                "literal text here, not an interpolation",
             ),
             LoweringDiagnostic::TemplateStringRemoved { span } => (
                 DiagnosticId::InvalidSyntax,

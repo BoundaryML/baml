@@ -342,7 +342,14 @@ fn lower_function(
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
         reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
-        let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
+        // A prompt is a string literal: backtick (interpolating) or quoted
+        // (inert). Both become the same tagged template below; the parser
+        // rejects every other value shape.
+        let prompt_literal = llm.prompt_field().and_then(|pf| {
+            pf.backtick_string()
+                .map(LlmPromptLiteral::Backtick)
+                .or_else(|| pf.string().map(LlmPromptLiteral::Quoted))
+        });
 
         // Jinja prompts are removed: the single-path world renders prompts as
         // plain backtick templates through the spec.
@@ -350,6 +357,10 @@ fn lower_function(
             diags.push(LoweringDiagnostic::LlmJinjaPromptRemoved {
                 span: raw_prompt.syntax().span_range(),
             });
+        }
+
+        if let Some(LlmPromptLiteral::Quoted(quoted)) = &prompt_literal {
+            warn_quoted_prompt_interpolation(quoted, diags);
         }
 
         // Resolve the client: a quoted "provider/model" string maps at
@@ -366,11 +377,11 @@ fn lower_function(
             .map(|p| p.name.clone())
             .collect();
 
-        // Build and stash the `$spec` companion body while the CST backtick
-        // is in hand (read back by `companions::llm_spec`). Skipped when the
-        // prompt or client is unusable — the migration diagnostics above are
-        // the authoritative errors then.
-        if let (Some(backtick), Some(client_spec)) = (&prompt_backtick, client_spec) {
+        // Build and stash the `$spec` companion body while the CST prompt
+        // literal is in hand (read back by `companions::llm_spec`). Skipped
+        // when the prompt or client is unusable — the migration diagnostics
+        // above are the authoritative errors then.
+        if let (Some(prompt), Some(client_spec)) = (&prompt_literal, client_spec) {
             let tools_value = tools_value_element(&llm);
             let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
                 lower_expr_body::synthesize_llm_spec_body(
@@ -379,7 +390,7 @@ fn lower_function(
                     &client_spec,
                     return_type.clone(),
                     tools_value.as_ref(),
-                    backtick,
+                    prompt,
                     llm_body_def.span,
                 );
             diags.append(&mut spec_diags);
@@ -749,6 +760,52 @@ pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'stat
         "google" => Some(("google", "GoogleClient")),
         "claude-code" => Some(("claude_code", "ClaudeCodeClient")),
         _ => None,
+    }
+}
+
+/// The prompt literal shapes an LLM function accepts.
+///
+/// Both lower through the same `` prompt`...` `` tagged template into a
+/// `PromptAst`; they differ only in how the segment list is built. A quoted
+/// prompt has no `${...}` interpolation (regular strings are inert), so it is
+/// exactly a one-text-segment template.
+pub(crate) enum LlmPromptLiteral {
+    Backtick(baml_compiler_syntax::BacktickStringLiteral),
+    Quoted(ast::StringLiteral),
+}
+
+impl LlmPromptLiteral {
+    /// The literal's source range. Doubles as the synthesized prompt lambda's
+    /// span, which must be distinct from every other lambda synthesized into
+    /// the same body (lambda scopes are located by exact span).
+    pub(crate) fn span_range(&self) -> text_size::TextRange {
+        match self {
+            Self::Backtick(lit) => lit.syntax().span_range(),
+            Self::Quoted(lit) => lit.syntax().span_range(),
+        }
+    }
+}
+
+/// Warn on each `${` in a quoted prompt.
+///
+/// A quoted prompt is inert, so a `${...}` the author meant as an
+/// interpolation reaches the model verbatim with nothing else going wrong —
+/// no parse error, no unresolved name, just a wrong prompt. The marker is
+/// searched in the *raw* token text so the span lands on the source
+/// characters; a quoted string's escapes never introduce or remove a `${`
+/// (`\$` is not an escape in this flavor, so it decodes to `\$`).
+fn warn_quoted_prompt_interpolation(
+    quoted: &ast::StringLiteral,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    let range = quoted.syntax().span_range();
+    let text = quoted.syntax().text().to_string();
+    for (offset, _) in text.match_indices("${") {
+        let offset = u32::try_from(offset).expect("prompt literal exceeds u32 length");
+        let start = range.start() + text_size::TextSize::from(offset);
+        diags.push(LoweringDiagnostic::QuotedPromptInterpolation {
+            span: text_size::TextRange::new(start, start + text_size::TextSize::of("${")),
+        });
     }
 }
 
